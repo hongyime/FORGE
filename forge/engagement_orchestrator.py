@@ -106,6 +106,7 @@ from forge.utils.artifact_package_manager_config import (
     package_manager_config_remote_filename,
 )
 from forge.utils.artifact_pulumi_config import pulumi_config_candidates
+from forge.utils.artifact_sst_config import sst_config_artifact_label, sst_config_candidates
 from forge.utils.artifact_storage_client_config import (
     storage_client_config_artifact_label,
     storage_client_config_candidates,
@@ -5613,6 +5614,9 @@ def _iac_manifest_artifact_label(value: str) -> str:
         return "pulumi-stack"
     if name == "serverless" or stem == "serverless":
         return "serverless"
+    sst_config_label = sst_config_artifact_label(normalized)
+    if sst_config_label:
+        return sst_config_label
     aws_cdk_label = aws_cdk_artifact_label(normalized)
     if aws_cdk_label:
         return aws_cdk_label
@@ -19638,6 +19642,7 @@ class ArtifactQueueProcessor:
                 "serverless",
                 "sam_config",
                 "pulumi_config",
+                "sst_config",
                 "aws_cdk",
             ),
             lambda family: self._iac_text_structured_payload_family(
@@ -19697,6 +19702,13 @@ class ArtifactQueueProcessor:
         if family == "pulumi_config":
             return "\n".join(
                 pulumi_config_candidates(
+                    text,
+                    source_hint=source_hint,
+                )
+            )
+        if family == "sst_config":
+            return "\n".join(
+                sst_config_candidates(
                     text,
                     source_hint=source_hint,
                 )
