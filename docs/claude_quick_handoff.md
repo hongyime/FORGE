@@ -1,6 +1,6 @@
 # Claude Quick Handoff
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 Use this file first. Use `docs/claude_continue_checklist.md` next if you need the longer command list.
 
@@ -10,6 +10,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] Run audit manifest checkpoint is green:
+  Completed `EngagementRunTracker.finish_run()` calls now write immutable `run_audit_manifests` rows chained by previous manifest hash. `forge/audit/manifest.py` snapshots root engagement metadata, per-run captured DB row refs/hashes, and bounded report/graph artifact SHA-256 hashes without storing raw rows, secret-shaped columns, arbitrary local paths, or oversized artifact bytes. `verify_run_audit_manifest()` verifies stored manifest JSON integrity and captured-row state without breaking old manifests when later runs append new rows. Canonical schema/migration target is now v21.
+  Verification: compile/Ruff over touched backend/test files; focused manifest/schema tests -> `11 passed`; audit hash-chain plus run-manifest tests -> `12 passed`; schema plus full cloud-validation suite -> `146 passed`; distributed/playbook/engagement-pipeline/multi-seed recursive slice -> `33 passed`; tracker-focused orchestrator tests -> `4 passed`.
+  Review: Claude first hit `Reached max turns`; the narrower retry was blocked by Anthropic's real-time cyber safeguard for cybersecurity content. Multi-agent explorer `Planck` found five real issues: manifest JSON tamper, old-run invalidation by later rows, missing root engagement metadata coverage, arbitrary artifact path leakage, and pre-commit hook latency. All were fixed with regressions.
+  Safety: evidence/auditability only. No provider endpoint expansion, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, report-gate change, exploitation, persistence, lateral movement, or post-exploitation behavior was added.
+  Handoff: `.claude/handoffs/2026-07-20-run-audit-manifest.md`.
 
 - [x] Validation-sweep leasing checkpoint is green:
   Pending key and cloud-asset validation sweeps now claim rows before any provider validation work. `validation_claims` is a canonical schema/migration table with short-lived key/asset leases, stale-lease purge, owner-scoped release, and atomic `BEGIN IMMEDIATE` claim selection. `sweep_pending_cloud_validations()` and `sweep_pending_cloud_asset_validations()` now skip already-claimed rows, preventing parallel workers from selecting the same pending rows and duplicating provider calls before persistence. Claim helpers live in `forge/phase4/validation_claims.py` to keep `cloud_validate.py` as a thin orchestration caller.

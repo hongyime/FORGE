@@ -26,6 +26,7 @@ def test_multi_seed_tables_are_canonical_on_fresh_db(tmp_path: Path) -> None:
             "engagement_seeds",
             "seed_runs",
             "engagement_runs",
+            "run_audit_manifests",
             "seed_relations",
             "artifact_queue",
             "validation_claims",

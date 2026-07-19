@@ -70,6 +70,15 @@ _REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "completed_at",
         "updated_at",
     },
+    "run_audit_manifests": {
+        "id",
+        "engagement_id",
+        "run_id",
+        "manifest_hash",
+        "previous_manifest_hash",
+        "manifest_json",
+        "generated_at",
+    },
     "seed_relations": {
         "id",
         "engagement_id",

@@ -4,6 +4,7 @@ import base64
 import html
 import ipaddress
 import json
+import logging
 import mailbox
 import plistlib
 import re
@@ -133,6 +134,8 @@ from forge.utils.intel.http_pacing import (
     web_fetch_request_delay_seconds,
     web_fetch_retry_after_seconds,
 )
+
+_LOG = logging.getLogger(__name__)
 
 _ArtifactBatchItem = TypeVar("_ArtifactBatchItem")
 _ArtifactBatchResult = TypeVar("_ArtifactBatchResult")
@@ -10463,6 +10466,23 @@ class EngagementRunTracker:
             if finalizer is not None:
                 finalizer.detach()
                 handle._finalizer = None
+            try:
+                from forge.audit.manifest import write_run_audit_manifest  # noqa: PLC0415
+
+                write_run_audit_manifest(
+                    con,
+                    db_path=Path(self._db_path),
+                    engagement_id=self._engagement_id,
+                    run_id=handle.run_id,
+                )
+                con.commit()
+            except Exception:  # noqa: BLE001
+                con.rollback()
+                _LOG.exception(
+                    "Failed to write run audit manifest for engagement_id=%s run_id=%s",
+                    self._engagement_id,
+                    handle.run_id,
+                )
         finally:
             con.close()
 

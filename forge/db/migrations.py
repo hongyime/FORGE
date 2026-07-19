@@ -985,6 +985,26 @@ def _m0020_validation_claims(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0021_run_audit_manifests(conn: sqlite3.Connection) -> None:
+    """Add immutable per-run audit manifests for evidence lineage."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS run_audit_manifests (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id          INTEGER NOT NULL REFERENCES engagements(id),
+            run_id                 INTEGER NOT NULL REFERENCES engagement_runs(id),
+            manifest_hash          TEXT    NOT NULL UNIQUE,
+            previous_manifest_hash TEXT,
+            manifest_json          TEXT    NOT NULL,
+            generated_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, run_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_run_audit_manifests_engagement
+            ON run_audit_manifests (engagement_id, id DESC);
+    """)
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -1010,6 +1030,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (18, "engagement_metadata", _m0018_engagement_metadata),
     (19, "cloud_provider_identifier", _m0019_cloud_provider_identifier),
     (20, "validation_claims", _m0020_validation_claims),
+    (21, "run_audit_manifests", _m0021_run_audit_manifests),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

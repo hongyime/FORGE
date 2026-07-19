@@ -121,6 +121,22 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         ON engagement_runs (engagement_id, status, started_at DESC)
     """,
     """
+    CREATE TABLE IF NOT EXISTS run_audit_manifests (
+        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+        engagement_id          INTEGER NOT NULL REFERENCES engagements(id),
+        run_id                 INTEGER NOT NULL REFERENCES engagement_runs(id),
+        manifest_hash          TEXT    NOT NULL UNIQUE,
+        previous_manifest_hash TEXT,
+        manifest_json          TEXT    NOT NULL,
+        generated_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (engagement_id, run_id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_run_audit_manifests_engagement
+        ON run_audit_manifests (engagement_id, id DESC)
+    """,
+    """
     CREATE TABLE IF NOT EXISTS seed_relations (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
         engagement_id  INTEGER NOT NULL REFERENCES engagements(id),
@@ -839,7 +855,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
 # Schema version
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION: int = 20
+SCHEMA_VERSION: int = 21
 
 _VERSION_TABLE: str = """
     CREATE TABLE IF NOT EXISTS _schema_version (
