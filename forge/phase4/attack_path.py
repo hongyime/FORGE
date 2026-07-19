@@ -272,7 +272,7 @@ class AttackGraphBuilder:
         self._host_by_id: dict[int, str] = {}
         self._host_by_ip: dict[str, str] = {}
         self._host_by_name: dict[str, str] = {}
-        self._cloud_by_identifier: dict[str, str] = {}
+        self._cloud_by_key: dict[tuple[str, str], str] = {}
         self._cloud_by_service: dict[str, str] = {}
         self._cloud_validation_by_key: dict[tuple[str, str], dict[str, Any]] = {}
         self._seed_node_by_id: dict[int, str] = {}
@@ -341,7 +341,7 @@ class AttackGraphBuilder:
         self._host_by_id = {}
         self._host_by_ip = {}
         self._host_by_name = {}
-        self._cloud_by_identifier = {}
+        self._cloud_by_key = {}
         self._cloud_by_service = {}
         self._cloud_validation_by_key = {}
         self._seed_node_by_id = {}
@@ -407,9 +407,10 @@ class AttackGraphBuilder:
     def _node_for_cloud(self, service: str, identifier: str | None = None) -> str:
         svc = (service or "cloud").strip().lower()
         ident = (identifier or svc).strip().lower()
+        cloud_key = (svc, ident)
         explicit_identifier = bool(identifier and ident and ident != svc)
-        if ident in self._cloud_by_identifier:
-            return self._cloud_by_identifier[ident]
+        if cloud_key in self._cloud_by_key:
+            return self._cloud_by_key[cloud_key]
         if not explicit_identifier and svc in self._cloud_by_service:
             return self._cloud_by_service[svc]
         node_id = f"CLOUD::{svc}::{ident}"
@@ -427,7 +428,7 @@ class AttackGraphBuilder:
             },
         )
         self._add_node(node)
-        self._cloud_by_identifier[ident] = node_id
+        self._cloud_by_key[cloud_key] = node_id
         if not explicit_identifier or svc not in self._cloud_by_service:
             self._cloud_by_service[svc] = node_id
         return node_id
@@ -557,8 +558,9 @@ class AttackGraphBuilder:
             (self.engagement_id,),
         ).fetchall()
         for asset_id, asset_type, identifier, provider_identifier, source in rows:
-            svc = str(asset_type or "cloud").lower()
-            ident = str(identifier or svc).lower()
+            svc = str(asset_type or "cloud").strip().lower()
+            ident = str(identifier or svc).strip().lower()
+            cloud_key = (svc, ident)
             display_identifier = str(provider_identifier or identifier or ident)
             node_id = f"CLOUD::{svc}::{ident}"
             node = AttackNode(
@@ -577,7 +579,7 @@ class AttackGraphBuilder:
                 },
             )
             self._add_node(node)
-            self._cloud_by_identifier[ident] = node_id
+            self._cloud_by_key[cloud_key] = node_id
             self._cloud_by_service[svc] = node_id
             ext_id = f"EXT::engagement-{self.engagement_id}"
             if ext_id in self._g.nodes:

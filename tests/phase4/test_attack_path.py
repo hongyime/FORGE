@@ -796,6 +796,95 @@ class TestLoadCloudAssets:
             for source, _target in cloud_edges
         )
 
+    def test_cloud_assets_with_same_identifier_are_keyed_by_asset_type(self, tmp_path: Path):
+        db = _make_db(tmp_path, "cloud-key-collision.db")
+        con = sqlite3.connect(db)
+        try:
+            con.executescript(
+                """
+                ALTER TABLE cloud_assets ADD COLUMN provider_identifier TEXT;
+                ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT;
+                ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT;
+
+                CREATE TABLE cloud_validation_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    engagement_id INTEGER NOT NULL,
+                    asset_type TEXT NOT NULL,
+                    identifier TEXT NOT NULL,
+                    provider_identifier TEXT,
+                    validation_status TEXT NOT NULL,
+                    validation_method TEXT,
+                    http_status INTEGER,
+                    checked_at TIMESTAMP
+                );
+
+                INSERT INTO cloud_assets
+                    (engagement_id, asset_type, identifier, provider_identifier, source)
+                VALUES
+                    (1, 'aws_s3', 'Shared-ID', 'AWSExactShared', 'cloud_validate'),
+                    (1, 'gcs', 'shared-id', 'GCSExactShared', 'cloud_validate');
+
+                INSERT INTO cloud_validation_results
+                    (engagement_id, asset_type, identifier, provider_identifier,
+                     validation_status, validation_method, http_status, checked_at)
+                VALUES
+                    (1, 'aws_s3', 'shared-id', 'AWSExactShared',
+                     'VALIDATED', 's3_list_bucket', 200, '2026-07-15T09:30:00+00:00'),
+                    (1, 'gcs', 'shared-id', 'GCSExactShared',
+                     'ACCESSIBLE', 'gcs_storage_get', 200, '2026-07-15T09:31:00+00:00');
+
+                INSERT INTO vulnerability_findings
+                    (engagement_id, vuln_type, target_url, parameter, severity, title,
+                     cloud_provider, resource_id)
+                VALUES
+                    (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://shared-id', 'aws_s3',
+                     'HIGH', 'AWS shared bucket exposure', 'aws', 'shared-id'),
+                    (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 'gs://shared-id', 'gcs',
+                     'HIGH', 'GCS shared bucket exposure', 'gcs', 'shared-id');
+                """
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        graph = AttackGraphBuilder(engagement_id=1, db_path=db).build()
+        cloud_nodes = [
+            node
+            for node in graph.nodes
+            if node.node_type == NodeType.CLOUD
+            and node.metadata.get("identifier") == "shared-id"
+        ]
+        nodes_by_service = {str(node.metadata.get("service")): node for node in cloud_nodes}
+
+        assert len(cloud_nodes) == 2
+        assert set(nodes_by_service) == {"aws_s3", "gcs"}
+        for service, provider_identifier, validation_method in (
+            ("aws_s3", "AWSExactShared", "s3_list_bucket"),
+            ("gcs", "GCSExactShared", "gcs_storage_get"),
+        ):
+            assert nodes_by_service[service].node_id == f"CLOUD::{service}::shared-id"
+            assert nodes_by_service[service].metadata["provider_identifier"] == provider_identifier
+            assert nodes_by_service[service].metadata["validation_method"] == validation_method
+
+        vuln_by_label = {
+            node.label: node
+            for node in graph.nodes
+            if node.node_type == NodeType.VULN
+        }
+        cloud_source_by_vuln = {
+            edge.target_node_id: edge.source_node_id
+            for edge in graph.edges
+            if edge.edge_type == "cloud_misconfig"
+        }
+        for label, service in (
+            ("AWS shared bucket exposure", "aws_s3"),
+            ("GCS shared bucket exposure", "gcs"),
+        ):
+            assert (
+                cloud_source_by_vuln[vuln_by_label[label].node_id]
+                == nodes_by_service[service].node_id
+            )
+
     def test_cloud_nodes_use_latest_validation_result_for_managed_pages_assets(
         self,
         tmp_path: Path,
