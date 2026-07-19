@@ -334,6 +334,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "cloudflare_token_verify",
         ),
         (
+            "VALIDATED:cloudflare_token_verify:Cloudflare token valid: "
+            "token_id=dummy_abcdef123456 status=active",
+            "cloudflare_token_verify",
+        ),
+        (
             "VALIDATED:vercel_user_get:Vercel user ok: "
             "user_id=usr_0000000000000000 user_profile_present=true",
             "vercel_user_get",
@@ -349,12 +354,22 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "vercel_user_get",
         ),
         (
+            "VALIDATED:vercel_user_get:Vercel user ok: "
+            "user_id=fake-user-123 user_profile_present=true",
+            "vercel_user_get",
+        ),
+        (
             "VALIDATED:netlify_current_user:Netlify user ok: user_id=netlify-user-123",
             "netlify_current_user",
         ),
         (
             "VALIDATED:netlify_current_user:Netlify user ok: "
             "user_id=netlify-placeholder user_profile_present=true",
+            "netlify_current_user",
+        ),
+        (
+            "VALIDATED:netlify_current_user:Netlify user ok: "
+            "user_id=mock-user-123 user_profile_present=true",
             "netlify_current_user",
         ),
         (
@@ -370,6 +385,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         (
             "VALIDATED:posthog_users_me:PostHog users me ok: host=preview.example.com "
             "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true",
+            "posthog_users_me",
+        ),
+        (
+            "VALIDATED:posthog_users_me:PostHog users me ok: host=eu.posthog.com "
+            "user_id=changeme-user-123 user_profile_present=true",
             "posthog_users_me",
         ),
         (

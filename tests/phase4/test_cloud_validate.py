@@ -427,6 +427,10 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "Cloudflare token valid: token_id=placeholder status=active",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
+        "cloudflare",
+        "Cloudflare token valid: token_id=dummy_abcdef123456 status=active",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
         "discord",
         "Discord bot auth ok: bot_id=000000000000000000",
     ) is None
@@ -479,6 +483,10 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "Vercel user ok: user_id=placeholder",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
+        "vercel",
+        "Vercel user ok: user_id=fake-user-123 user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
         "netlify",
         "Netlify user response missing user id",
     ) is None
@@ -513,6 +521,10 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "netlify",
         "Netlify user ok: user_id=netlify-placeholder user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "netlify",
+        "Netlify user ok: user_id=mock-user-123 user_profile_present=true",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "netlify",
@@ -561,6 +573,11 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "posthog",
         "PostHog users me ok: host=eu.posthog.com "
         "user_id=018f9b7d-placeholder user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "posthog",
+        "PostHog users me ok: host=eu.posthog.com "
+        "user_id=changeme-user-123 user_profile_present=true",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "posthog",
