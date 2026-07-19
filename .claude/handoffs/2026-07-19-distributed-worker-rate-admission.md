@@ -46,7 +46,7 @@ Distributed task execution now treats Redis/pub-sub messages as wakeups only. A 
 ## Residual Risks
 
 - Worker handler timeout still uses a daemon thread; state guards prevent the timed-out owner from changing final task status later, but the underlying handler cannot be forcibly stopped. A process-bound handler is still the stronger future fix.
-- `sweep_pending_cloud_validations()` and `sweep_pending_cloud_asset_validations()` can still select the same pending rows in separate workers before provider calls. Add pre-provider claim/lease state next.
+- Validation sweeps are now covered by `3eb8b3f fix(cloud): lease pending validation sweeps`; see `.claude/handoffs/2026-07-19-validation-sweep-claims.md`.
 
 ## Safety
 
@@ -54,5 +54,4 @@ Queue/admission control only. No new provider endpoints, live probe expansion, c
 
 ## Next Tasks
 
-- Add pre-provider validation-sweep leasing/claim state for key and cloud-asset validation sweeps.
 - Add hash-chained per-run audit manifest if evidence-grade auditability is the next priority.

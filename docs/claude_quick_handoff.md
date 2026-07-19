@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Validation-sweep leasing checkpoint is green:
+  Pending key and cloud-asset validation sweeps now claim rows before any provider validation work. `validation_claims` is a canonical schema/migration table with short-lived key/asset leases, stale-lease purge, owner-scoped release, and atomic `BEGIN IMMEDIATE` claim selection. `sweep_pending_cloud_validations()` and `sweep_pending_cloud_asset_validations()` now skip already-claimed rows, preventing parallel workers from selecting the same pending rows and duplicating provider calls before persistence. Claim helpers live in `forge/phase4/validation_claims.py` to keep `cloud_validate.py` as a thin orchestration caller.
+  Verification: compile/Ruff over schema, cloud validation, claim helpers, and tests; schema plus full cloud-validation suite -> `146 passed`; distributed/playbook/engagement-pipeline/multi-seed recursive slice -> `33 passed`.
+  Review: Claude still returned `Reached max turns`; explicit Codex GPT model retries were unsupported by the local ChatGPT-backed CLI; default Codex reviewer could not inspect because its Windows sandbox could not launch `pwsh.exe` (`CreateProcessAsUserW failed: 5`). No external code findings were available, so local tests and manual diff review are the evidence.
+  Safety: concurrency/audit-state hardening only. No new provider endpoints, live probing expansion, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive validation, report-gate change, exploitation, persistence, lateral movement, or post-exploitation behavior was added.
+  Commit: `3eb8b3f fix(cloud): lease pending validation sweeps`.
+
 - [x] Distributed worker claim/shared admission checkpoint is green:
   Distributed task execution now treats Redis/pub-sub messages as wakeups only; workers must atomically claim the matching queued DB row before running a handler. `claim_next()` and message-driven `claim_task()` use a guarded `BEGIN IMMEDIATE` claim by row id, completion/failure only succeeds for the owning running worker, and stale running rows can be requeued by an operator-tunable lease threshold. The distributed `RateLimiter` now uses one Redis Lua admission script, a thread-safe local fallback only when no Redis URL is configured, and fail-closed behavior when Redis is configured but unavailable. Scheduled `run_cloud_validate()` now honors its existing `rate_limit_bucket` / `max_requests_per_minute` before provider validation.
   Verification: compile/Ruff over touched distributed/cloud files; focused new worker/limiter/cloud admission tests -> `9 passed`; broader distributed/playbook/full cloud-validation slice -> `163 passed`.
@@ -2040,7 +2047,7 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
 ## Best next tasks
 
-- [ ] Add pre-provider validation-sweep leasing/claim state for `sweep_pending_cloud_validations()` and `sweep_pending_cloud_asset_validations()` so multiple workers cannot select the same pending key/asset rows and all hit providers before persistence.
+- [ ] Add a hash-chained per-run audit manifest if evidence-grade auditability is the next priority.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
 - [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
 - [ ] Audit MTGX entity typing/layout against the intended Maltego-first workflow before changing more graph UI.

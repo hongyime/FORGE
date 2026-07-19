@@ -50,5 +50,5 @@ This is orchestration and progress-metadata work only. It does not add live prob
 
 ## Next Tasks
 
-- Distributed worker queue claiming and shared rate-limit admission are now patched in a follow-up checkpoint. Continue with pre-provider validation-sweep leasing/claim state so multiple workers cannot select the same pending key/asset rows and all hit providers before persistence.
+- Distributed worker queue claiming/shared rate-limit admission and pre-provider validation-sweep leasing are now patched in follow-up checkpoints.
 - Add a hash-chained per-run audit manifest if evidence-grade auditability is the next priority.
