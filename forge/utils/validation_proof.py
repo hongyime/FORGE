@@ -372,7 +372,7 @@ def _stable_twilio_account_sid(value: object) -> str:
 
 def _stable_twilio_account_status(value: object) -> str:
     candidate = str(value or "").strip().lower()
-    if candidate not in {"active", "suspended", "closed"}:
+    if candidate != "active":
         return ""
     return candidate
 

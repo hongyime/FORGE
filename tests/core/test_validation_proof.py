@@ -514,6 +514,16 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "twilio_account_api",
         ),
         (
+            "VALIDATED:twilio_account_api:Twilio account accessible: "
+            "sid=AC1234567890abcdef1234567890abcdef status=suspended type=Full",
+            "twilio_account_api",
+        ),
+        (
+            "VALIDATED:twilio_account_api:Twilio account accessible: "
+            "sid=AC1234567890abcdef1234567890abcdef status=closed type=Full",
+            "twilio_account_api",
+        ),
+        (
             "VALIDATED:slack_auth_test:Slack auth ok: actor_id=U1234567 team_id=T7654321",
             "slack_auth_test",
         ),

@@ -496,6 +496,13 @@ def _stable_twilio_account_sid(value: object) -> str:
 
 def _stable_twilio_account_status(value: object) -> str:
     candidate = str(value or "").strip().lower()
+    if candidate != "active":
+        return ""
+    return candidate
+
+
+def _twilio_account_status_label(value: object) -> str:
+    candidate = str(value or "").strip().lower()
     if candidate not in {"active", "suspended", "closed"}:
         return ""
     return candidate
@@ -2391,7 +2398,7 @@ class TwilioKeyValidator(BaseKeyValidator):
         if not isinstance(payload, dict):
             return f"Twilio account accessible: sid={account_sid}"
         sid = str(payload.get("sid") or account_sid).strip() or account_sid
-        status = _stable_twilio_account_status(payload.get("status"))
+        status = _twilio_account_status_label(payload.get("status"))
         account_type = str(payload.get("type") or "").strip()
         parts = [f"sid={sid}"]
         if status:
@@ -2408,6 +2415,21 @@ class TwilioKeyValidator(BaseKeyValidator):
         sid = _stable_twilio_account_sid(payload.get("sid"))
         status = _stable_twilio_account_status(payload.get("status"))
         return bool(expected_sid and sid and status) and sid.lower() == expected_sid.lower()
+
+    @staticmethod
+    def _has_matching_non_active_account(account_sid: str, payload: object) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        expected_sid = _stable_twilio_account_sid(account_sid)
+        sid = _stable_twilio_account_sid(payload.get("sid"))
+        status = _twilio_account_status_label(payload.get("status"))
+        return bool(
+            expected_sid
+            and sid
+            and status
+            and status != "active"
+            and sid.lower() == expected_sid.lower()
+        )
 
     def validate(
         self, key: str, auth_token: Optional[str] = None, proxy: Optional[str] = None, **kwargs
@@ -2445,6 +2467,11 @@ class TwilioKeyValidator(BaseKeyValidator):
                 except Exception:  # noqa: BLE001
                     payload = {}
                 if not self._has_account_proof(key, payload):
+                    if self._has_matching_non_active_account(key, payload):
+                        return ValidationResult(
+                            state=ValidationState.UNCONFIRMED,
+                            detail=f"Twilio account not active: {self._account_detail(key, payload)}",
+                        )
                     return ValidationResult(
                         state=ValidationState.UNCONFIRMED,
                         detail="Twilio account response missing matching SID/status proof",

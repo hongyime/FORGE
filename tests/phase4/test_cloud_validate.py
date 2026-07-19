@@ -305,6 +305,14 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=unknown",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
+        "twilio",
+        "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=suspended",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "twilio",
+        "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=closed",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
         "sendgrid",
         "SendGrid profile ok: proof=profile",
     ) is None
@@ -703,6 +711,10 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "twilio",
         "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=active",
     ) == "AC1234567890abcdef1234567890abcdef"
+    assert cloud_validate._validated_identifier_from_detail(
+        "twilio",
+        "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=suspended",
+    ) is None
 
 
 class _FirebaseMetadataOnlyShallowClient:
