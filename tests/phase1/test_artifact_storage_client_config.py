@@ -6,8 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from forge.db.migrations import run_migrations
-from forge.db.schema import apply_schema
 from forge.engagement_orchestrator import (
     ArtifactQueueProcessor,
     _artifact_format_label,
@@ -18,23 +16,7 @@ from forge.utils.artifact_storage_client_config import (
     storage_client_config_artifact_label,
     storage_client_config_candidates,
 )
-
-
-def _bootstrap_engagement(db_path: Path, engagement_id: int = 1001) -> None:
-    con = sqlite3.connect(db_path)
-    try:
-        apply_schema(con)
-        run_migrations(con)
-        con.execute(
-            """
-            INSERT INTO engagements (id, name, scope_json, status, operator)
-            VALUES (?, 'Storage Client Config Test', '{}', 'ACTIVE', 'tester')
-            """,
-            (engagement_id,),
-        )
-        con.commit()
-    finally:
-        con.close()
+from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
 @pytest.mark.parametrize(
@@ -98,7 +80,7 @@ def test_artifact_queue_processor_extracts_storage_client_configs(tmp_path: Path
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifact_storage_clients"
     artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
+    bootstrap_engagement(db_path, name="Storage Client Config Test")
 
     s3cfg_path = artifact_root / ".s3cfg"
     s3cfg_path.write_text(
