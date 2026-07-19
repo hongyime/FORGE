@@ -25727,25 +25727,22 @@ class ArtifactQueueProcessor:
             "urls",
         }
 
-        lines: list[str] = []
-        seen: set[str] = set()
+        raw_candidates: list[str] = []
         in_value_array = False
 
-        def _append_candidate(raw_value: str) -> None:
-            value = self._parse_key_value_scalar(str(raw_value or "").strip())
+        def _append_raw_candidate(raw_value: str) -> None:
+            if len(raw_candidates) >= 4096:
+                return
+            value = str(raw_value or "").strip()
             if not value:
                 return
-            candidate = _artifact_package_registry_host_or_url_candidate(value)
-            if not candidate or candidate.lower() in seen:
-                return
-            seen.add(candidate.lower())
-            lines.append(candidate)
+            raw_candidates.append(value)
 
         def _append_structured_value(raw_value: Any) -> None:
-            if len(lines) >= 4096:
+            if len(raw_candidates) >= 4096:
                 return
             if isinstance(raw_value, (str, int, float)):
-                _append_candidate(str(raw_value))
+                _append_raw_candidate(str(raw_value))
                 return
             if isinstance(raw_value, list):
                 for item in raw_value[:4096]:
@@ -25756,7 +25753,7 @@ class ArtifactQueueProcessor:
                     _append_structured_value(item)
 
         def _walk_structured_document(raw_value: Any) -> None:
-            if len(lines) >= 4096:
+            if len(raw_candidates) >= 4096:
                 return
             if isinstance(raw_value, dict):
                 for raw_key, child in list(raw_value.items())[:4096]:
@@ -25812,9 +25809,30 @@ class ArtifactQueueProcessor:
                         candidate_values.append(bare_value)
 
             for candidate_value in candidate_values:
-                _append_candidate(candidate_value)
+                _append_raw_candidate(candidate_value)
+
+        candidate_entries = self._run_ordered_local_batch(
+            raw_candidates,
+            self._security_scanner_config_candidate_entry,
+            default_factory=str,
+        )
+        lines: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidate_entries:
+            normalized = str(candidate or "").strip()
+            if not normalized or normalized.lower() in seen:
+                continue
+            seen.add(normalized.lower())
+            lines.append(normalized)
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _security_scanner_config_candidate_entry(raw_value: Any) -> str:
+        value = ArtifactQueueProcessor._parse_key_value_scalar(str(raw_value or "").strip())
+        if not value:
+            return ""
+        return _artifact_package_registry_host_or_url_candidate(value)
 
     def _recon_tool_output_structured_payload_text(
         self,
