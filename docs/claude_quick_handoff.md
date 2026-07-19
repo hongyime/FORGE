@@ -2013,12 +2013,15 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [x] Generic config/text artifacts no longer silently drop key evidence when encryption is unavailable: missing `FORGE_ENGAGEMENT_KEY` now yields redacted `UNCONFIRMED` key rows with `key_enc=NULL` and an explicit validation prerequisite instead of losing the scanner output.
 - [x] Engagement creation now uses a shared monotonic SQLite sequence in `.forge_data/engagements/master.db` for both API/dashboard creation and CLI `kill-chain` auto-ID creation; API/dashboard enumeration skips `master.db`, and regressions prove deleting a just-created engagement DB does not cause ID reuse.
 - [x] The combined local+remote artifact/social-recursion/auto-template fallback kill-chain path is already covered and green, but slow: the main combined fixture passed in 188.76s, and the second-hop multiple-remote-APK fixture passed in 163.43s. Both are now marked `slow`.
+- [x] Social-profile URL/host pivot enrichment now uses the bounded ordered worker-pool path inside `_social_profile_pivot_family()` instead of serial per-entry loops. Ordering and output semantics are preserved for stored profile URL/host recursion. Verification: compile/Ruff for `forge/engagement_orchestrator.py` and focused social-profile pivot tests (`11 passed, 773 deselected`). Commit: `655ad36 perf(identity): batch social profile pivot entries`.
+- [x] Attack graph cloud resources are now keyed by `(asset_type, identifier)` instead of identifier alone, so same-name resources from different providers do not collapse into one CLOUD node or misroute validation/finding edges. Verification: compile/Ruff for `forge/phase4/attack_path.py` and focused cloud graph tests (`6 passed, 100 deselected`). Commit: `317817a fix(phase4): key cloud graph nodes by asset type`.
 
 ## Still partial
 
 - [ ] Provider coverage is still selective rather than exhaustive. The strongest deterministic coverage is Firebase, Supabase, S3/GCS/Azure/DO, Google/Gemini API keys, Hugging Face, Discord bot tokens, Telegram bot tokens, Notion tokens, Datadog API keys, GitHub, GitLab, Mailchimp, Stripe, SendGrid, Slack, Azure Storage connection strings, and co-located Twilio/AWS key-pair validation.
 - [ ] The engagement detail UI is sectioned, not literally tabbed. Treat that as a polish decision unless product now requires strict tabs.
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
+- [ ] Deterministic cloud-exposure report gating is still open: stale `DETERMINISTIC_CLOUD_EXPOSURE` rows should be excluded from Phase 6 narrative/raw exports unless the latest matching cloud validation status is `VALIDATED`. A worker is assigned to this gap; verify markdown, JSON, and CSV exports before closing it.
 
 ## Best next tasks
 
