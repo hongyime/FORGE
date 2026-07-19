@@ -12603,7 +12603,7 @@ class EngagementSynthesisEngine:
             normalized = text.split(":", 1)[1].strip().lower().strip(".")
             return normalized, "subdomain"
         if lowered.startswith("phone:"):
-            normalized = text.split(":", 1)[1].strip()
+            normalized = _normalize_phone_seed_value(text.split(":", 1)[1])
             return normalized, "phone"
         if lowered.startswith("name:"):
             normalized = text.split(":", 1)[1].strip()
