@@ -1,11 +1,28 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse
 
-_SUPPRESSED_PREFIXES = ("otpauth://", "wifi:")
+_SUPPRESSED_PREFIXES = (
+    "begin:vcard",
+    "bitcoin:",
+    "ethereum:",
+    "litecoin:",
+    "mecard:",
+    "monero:",
+    "otpauth://",
+    "solana:",
+    "vcard:",
+    "wifi:",
+)
 _MAX_PAYLOAD_CHARS = 2048
+
+
+def barcode_decoder_backend_names() -> tuple[str, ...]:
+    return _available_backend_names()
 
 
 def barcode_payloads_from_path(path: Path, *, max_bytes: int) -> list[str]:
@@ -19,9 +36,41 @@ def barcode_payloads_from_bytes(data: bytes) -> list[str]:
     if not data:
         return []
     payloads: list[str] = []
-    payloads.extend(_decode_with_pyzbar(data))
-    payloads.extend(_decode_with_opencv(data))
+    if "pyzbar" in _available_backend_names():
+        payloads.extend(_decode_with_pyzbar(data))
+    if "opencv" in _available_backend_names():
+        payloads.extend(_decode_with_opencv(data))
     return _dedupe_safe_payloads(payloads)
+
+
+@lru_cache(maxsize=1)
+def _available_backend_names() -> tuple[str, ...]:
+    names: list[str] = []
+    if _pyzbar_available():
+        names.append("pyzbar")
+    if _opencv_available():
+        names.append("opencv")
+    return tuple(names)
+
+
+def _pyzbar_available() -> bool:
+    try:
+        from PIL import Image  # noqa: F401
+        from pyzbar.pyzbar import decode as _decode  # noqa: F401
+
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _opencv_available() -> bool:
+    try:
+        import cv2  # noqa: F401
+        import numpy as np  # noqa: F401
+
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _dedupe_safe_payloads(payloads: list[str]) -> list[str]:
@@ -43,7 +92,51 @@ def _safe_barcode_payload(value: str) -> str:
         return ""
     if payload.lower().startswith(_SUPPRESSED_PREFIXES):
         return ""
+    payload = _sanitize_barcode_url_payload(payload)
     return payload[:_MAX_PAYLOAD_CHARS]
+
+
+def _sanitize_barcode_url_payload(value: str) -> str:
+    parsed = urlparse(value)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        return value
+    hostname = parsed.hostname.lower()
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    netloc = f"{hostname}:{port}" if port else hostname
+    safe_query = urlencode(
+        [
+            (key, item_value)
+            for key, item_value in parse_qsl(parsed.query, keep_blank_values=True)
+            if not _query_key_is_sensitive(key)
+        ],
+        doseq=True,
+    )
+    return parsed._replace(netloc=netloc, query=safe_query).geturl()
+
+
+def _query_key_is_sensitive(value: str) -> bool:
+    compact = "".join(ch for ch in str(value or "").lower() if ch.isalnum() or ch == "_")
+    return compact in {
+        "access_token",
+        "api_key",
+        "auth_token",
+        "client_secret",
+        "id_token",
+        "password",
+        "refresh_token",
+        "secret",
+        "security_token",
+        "session_token",
+        "signature",
+        "token",
+        "x_amz_signature",
+        "x_amz_security_token",
+    } or compact.endswith(("_token", "_secret"))
 
 
 def _decode_with_pyzbar(data: bytes) -> list[str]:

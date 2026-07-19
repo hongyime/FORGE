@@ -64,6 +64,10 @@ artifacts = [
     "zstandard>=0.23,<1.0",
     "brotli>=1.1,<2.0",
     "lz4>=4.3,<5.0",
+    "Pillow>=10.0,<12.0",
+    "numpy>=1.26,<3.0",
+    "opencv-python-headless>=4.10,<5.0",
+    "pyzbar>=0.1.9,<0.2",
 ]
 offensive = [
     "impacket==0.12.0",

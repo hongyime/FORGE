@@ -120,6 +120,7 @@ from forge.utils.artifact_har import (
     har_scalar_text,
 )
 from forge.utils.artifact_barcode import (
+    barcode_decoder_backend_names,
     barcode_payloads_from_bytes,
     barcode_payloads_from_path,
 )
@@ -17746,6 +17747,7 @@ class ArtifactQueueProcessor:
         self._extractor = FirebaseExtractor(age_pubkey=age_pubkey)
         self._ocr_binary = shutil.which("tesseract")
         self._pdf_raster_binary = shutil.which("pdftoppm") or shutil.which("pdftocairo")
+        self._barcode_decoder_backends = barcode_decoder_backend_names()
         self._remote_url_scope_checker = remote_url_scope_checker
         self._remote_scope_denied_callback = remote_scope_denied_callback
         resolved_workers = 2 if max_workers is None else int(max_workers)
@@ -35653,6 +35655,7 @@ class ArtifactQueueProcessor:
             "relationship_payload_count": len(relationship_payloads),
             "ocr_payload_count": len(ocr_payloads),
             "barcode_payload_count": len(barcode_payloads),
+            "barcode_decoder_backends": list(self._barcode_decoder_backends),
         }
 
     @staticmethod

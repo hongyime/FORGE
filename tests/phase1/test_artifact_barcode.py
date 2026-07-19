@@ -12,6 +12,7 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
 def _patch_barcode_decoder(monkeypatch, *payloads: str) -> None:  # noqa: ANN001
+    monkeypatch.setattr(artifact_barcode, "_available_backend_names", lambda: ("pyzbar",))
     monkeypatch.setattr(artifact_barcode, "_decode_with_pyzbar", lambda _data: list(payloads))
     monkeypatch.setattr(artifact_barcode, "_decode_with_opencv", lambda _data: [])
 
@@ -27,6 +28,24 @@ def test_barcode_payloads_suppress_sensitive_qr_schemes(monkeypatch) -> None:  #
 
     assert artifact_barcode.barcode_payloads_from_bytes(b"fake-image") == [
         "https://qr.acme.example/bootstrap"
+    ]
+
+
+def test_barcode_payloads_real_decode_path_is_safe_without_optional_backends() -> None:
+    artifact_barcode._available_backend_names.cache_clear()
+
+    assert isinstance(artifact_barcode.barcode_decoder_backend_names(), tuple)
+    assert artifact_barcode.barcode_payloads_from_bytes(b"not an image") == []
+
+
+def test_barcode_payloads_sanitize_url_userinfo_and_query(monkeypatch) -> None:  # noqa: ANN001
+    _patch_barcode_decoder(
+        monkeypatch,
+        "https://user:password@Qr.Acme.Example/bootstrap?token=secret&view=public",
+    )
+
+    assert artifact_barcode.barcode_payloads_from_bytes(b"fake-image") == [
+        "https://qr.acme.example/bootstrap?view=public"
     ]
 
 
