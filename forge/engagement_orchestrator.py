@@ -69,6 +69,10 @@ from forge.utils.artifact_connection_client import (
     connection_client_config_artifact_label,
     connection_client_host_candidates,
 )
+from forge.utils.artifact_aws_app_runner import (
+    aws_app_runner_artifact_label,
+    aws_app_runner_candidates,
+)
 from forge.utils.artifact_aws_cdk import aws_cdk_artifact_label, aws_cdk_candidates
 from forge.utils.artifact_cloudformation import (
     cloudformation_template_candidates,
@@ -5237,6 +5241,9 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         return "firebase-app-hosting-config"
     if name in {"amplify.yml", "amplify.yaml", "amplify.json", "amplifyconfiguration.json"}:
         return "amplify-config"
+    aws_app_runner_label = aws_app_runner_artifact_label(normalized)
+    if aws_app_runner_label:
+        return aws_app_runner_label
     if name in {"heroku.yml", "heroku.yaml"}:
         return "heroku-config"
     if name == "static.json":
@@ -5789,6 +5796,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if lambda_config_artifact_label(raw_lowered):
         return True
+    if aws_app_runner_artifact_label(raw_lowered):
+        return True
     if framework_config_artifact_label(raw_lowered):
         return True
     if orm_config_artifact_label(raw_lowered):
@@ -5959,6 +5968,9 @@ def _artifact_format_label(value: str | Path) -> str:
     lambda_label = lambda_config_artifact_label(str(value or ""))
     if lambda_label:
         return lambda_label
+    aws_app_runner_label = aws_app_runner_artifact_label(str(value or ""))
+    if aws_app_runner_label:
+        return aws_app_runner_label
     framework_config_label = framework_config_artifact_label(str(value or ""))
     if framework_config_label:
         return framework_config_label
@@ -6727,6 +6739,8 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
         return "config"
     if lambda_config_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
+    if aws_app_runner_artifact_label(unquote(parsed_remote.path or "")):
+        return "config"
     if framework_config_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
     if orm_config_artifact_label(unquote(parsed_remote.path or "")):
@@ -6920,6 +6934,14 @@ def _select_remote_artifact_filename(
         if candidate:
             return f"{candidate}.{lambda_label}"
         return f"lambda.{lambda_label}"
+    aws_app_runner_label = aws_app_runner_artifact_label(unquote(parsed_source.path or ""))
+    if aws_app_runner_label:
+        candidate = Path(unquote(parsed_source.path or "")).name.strip()
+        if candidate and aws_app_runner_artifact_label(candidate):
+            return candidate
+        if candidate:
+            return f"{candidate}.{aws_app_runner_label}"
+        return f"aws-app-runner.{aws_app_runner_label}"
     framework_config_label = framework_config_artifact_label(unquote(parsed_source.path or ""))
     if framework_config_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
@@ -23952,6 +23974,7 @@ class ArtifactQueueProcessor:
                 "kubernetes_secret_manifests",
                 "ecs_task_definition",
                 "lambda_config",
+                "aws_app_runner_config",
                 "amplify_client_config",
                 "gitops_manifests",
                 "workflow_manifests",
@@ -24242,6 +24265,8 @@ class ArtifactQueueProcessor:
             return ecs_task_definition_candidates(mapping)
         if family == "lambda_config":
             return lambda_config_candidates(mapping)
+        if family == "aws_app_runner_config":
+            return aws_app_runner_candidates(mapping, source_hint=source_hint)
         if family == "amplify_client_config":
             if not (
                 amplify_client_config_artifact_label(source_hint)
