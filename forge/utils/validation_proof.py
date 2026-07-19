@@ -581,6 +581,9 @@ def _sentry_org_proof_is_stable(proof: str) -> bool:
         return False
     if not re.search(r"\borg_slug_stable=true\b", proof, re.IGNORECASE):
         return False
+    hash_match = re.search(r"\borg_slug_hash=([a-f0-9]{16,64})\b", proof, re.IGNORECASE)
+    if not hash_match or _looks_repeated_compact_identifier(hash_match.group(1)):
+        return False
     return bool(_stable_numeric_identifier(match.group(1)))
 
 

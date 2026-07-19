@@ -4161,7 +4161,7 @@ def test_sentry_auth_token_validator_active_uses_orgs_without_private_detail(mon
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
         "Sentry organizations ok: org_id=4505524236910592 "
-        "org_slug_present=true org_slug_stable=true"
+        "org_slug_present=true org_slug_stable=true org_slug_hash=02330437d1a44352"
     )
     assert "sensitive-org" not in (result.detail or "")
     assert "Sensitive Org" not in (result.detail or "")

@@ -1885,7 +1885,7 @@ def test_generate_dashboard_surfaces_key_validation_proof_rows(tmp_path: Path) -
                 'sntrys_...ABCD',
                 'encrypted-secret-never-render',
                 'ACTIVE',
-                'VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=4500000000000000 org_slug_present=true org_slug_stable=true',
+                'VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=4500000000000000 org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a',
                 '2026-07-15T09:20:00',
                 '2026-07-15T09:25:00'
             )
@@ -1910,13 +1910,15 @@ def test_generate_dashboard_surfaces_key_validation_proof_rows(tmp_path: Path) -
     assert key_row["Repository"] == "mobile-drop"
     assert key_row["Validation Status"] == "VALIDATED"
     assert key_row["Validation Method"] == "sentry_list_organizations"
-    assert key_row["Validation Proof"] == (
+    validation_proof = (
         "Sentry organizations ok: org_id=4500000000000000 "
-        "org_slug_present=true org_slug_stable=true"
+        "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
     )
+    assert key_row["Validation Proof"] == f"{validation_proof[:117]}..."
     full_proof = (
         "VALIDATED:sentry_list_organizations:Sentry organizations ok: "
-        "org_id=4500000000000000 org_slug_present=true org_slug_stable=true"
+        "org_id=4500000000000000 org_slug_present=true "
+        "org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
     )
     assert key_row["Proof"] == f"{full_proof[:117]}..."
     assert key_row["Validated"] == "2026-07-15 09:25:00"

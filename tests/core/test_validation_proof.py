@@ -176,7 +176,7 @@ def test_parse_validated_detail_downgrades_unknown_validated_method() -> None:
         ),
         (
             "VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=4505524236910592 "
-            "org_slug_present=true org_slug_stable=true",
+            "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a",
             "sentry_list_organizations",
         ),
         (
@@ -324,6 +324,16 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         (
             "VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=0000000000000000 "
             "org_slug_present=true org_slug_stable=true",
+            "sentry_list_organizations",
+        ),
+        (
+            "VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=4505524236910592 "
+            "org_slug_present=true org_slug_stable=true",
+            "sentry_list_organizations",
+        ),
+        (
+            "VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=4505524236910592 "
+            "org_slug_present=true org_slug_stable=true org_slug_hash=0000000000000000",
             "sentry_list_organizations",
         ),
         (

@@ -81208,7 +81208,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             state=ValidationState.ACTIVE,
             detail=(
                 "Sentry organizations ok: org_id=4505524236910592 "
-                "org_slug_present=true org_slug_stable=true"
+                "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
             ),
         ),
     )
@@ -81482,7 +81482,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
     assert key_metadata_by_service["sentry"]["validation_state"] == "ACTIVE"
     assert key_metadata_by_service["sentry"]["validation_detail"].endswith(
         "Sentry organizations ok: org_id=4505524236910592 "
-        "org_slug_present=true org_slug_stable=true"
+        "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
     )
     assert key_metadata_by_service["cloudflare"]["validation_detail"].startswith(
         "VALIDATED:cloudflare_token_verify:Cloudflare token valid: token_id=abcdef1234567890"
@@ -81499,7 +81499,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
     assert 'key id="edge_critical"' in graphml_text
     assert (
         "Sentry organizations ok: org_id=4505524236910592 "
-        "org_slug_present=true org_slug_stable=true"
+        "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
     ) in graphml_text
     assert "Cloudflare token valid: token_id=abcdef1234567890" in graphml_text
     assert "Datadog API key valid: site=datadoghq.eu proof=valid_true" in graphml_text
@@ -81517,7 +81517,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         and node["metadata"].get("service") == "sentry"
         and str(node["metadata"].get("validation_detail") or "").endswith(
             "Sentry organizations ok: org_id=4505524236910592 "
-            "org_slug_present=true org_slug_stable=true"
+            "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
         )
         for node in mtgx_manifest.get("nodes", [])
     )

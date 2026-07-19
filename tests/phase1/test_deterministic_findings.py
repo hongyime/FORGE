@@ -306,6 +306,36 @@ def test_deterministic_findings_skip_stale_sentry_key_proof(
         con.close()
 
 
+def test_deterministic_findings_skip_sentry_key_without_slug_hash(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name,
+                 key_redacted, validation_state, validation_detail)
+            VALUES
+                (1001, '', 'sentry', 'sentry_auth_token', 'artifact', '',
+                 'mobile-config.js', 'sntrys_...ABCD', 'ACTIVE',
+                 'VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=4505524236910592 org_slug_present=true org_slug_stable=true')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = DeterministicFindingEngine(db_path, 1001).run()
+
+    assert summary.inserted == 0
+    assert summary.active_findings == 0
+    assert all(count == 0 for count in summary.severity_summary.values())
+
+
 def test_deterministic_findings_skip_active_key_without_stable_validation_proof(
     tmp_path: Path,
 ) -> None:

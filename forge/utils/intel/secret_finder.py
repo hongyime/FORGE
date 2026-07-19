@@ -2314,17 +2314,18 @@ class SentryAuthTokenValidator(BaseKeyValidator):
     result_validation_method = "sentry_list_organizations"
 
     @staticmethod
-    def _organization_identifier(payload: object) -> str:
+    def _organization_proof(payload: object) -> tuple[str, str]:
         if not isinstance(payload, list):
-            return ""
+            return "", ""
         for item in payload:
             if not isinstance(item, dict):
                 continue
             org_id = _stable_numeric_identifier(item.get("id"))
             org_slug = _stable_organization_slug_identifier(item.get("slug"), allow_dot=False)
             if org_id and org_slug:
-                return org_id
-        return ""
+                slug_hash = hashlib.sha256(org_slug.lower().encode("utf-8")).hexdigest()[:16]
+                return org_id, slug_hash
+        return "", ""
 
     @staticmethod
     def _error_detail(payload: object, fallback: str) -> str:
@@ -2360,8 +2361,8 @@ class SentryAuthTokenValidator(BaseKeyValidator):
                 payload = {}
             detail = self._error_detail(payload, f"HTTP {resp.status_code}")
             if resp.status_code == 200:
-                org_id = self._organization_identifier(payload)
-                if not org_id:
+                org_id, org_slug_hash = self._organization_proof(payload)
+                if not org_id or not org_slug_hash:
                     return ValidationResult(
                         state=ValidationState.UNCONFIRMED,
                         detail="Sentry organizations response missing organization proof",
@@ -2370,7 +2371,7 @@ class SentryAuthTokenValidator(BaseKeyValidator):
                     state=ValidationState.ACTIVE,
                     detail=(
                         f"Sentry organizations ok: org_id={org_id} "
-                        "org_slug_present=true org_slug_stable=true"
+                        f"org_slug_present=true org_slug_stable=true org_slug_hash={org_slug_hash}"
                     ),
                 )
             if resp.status_code == 401:

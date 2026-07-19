@@ -3846,11 +3846,13 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             return f"{host}/{user_id}"
     if provider_service == "sentry":
         match = re.search(r"sentry organizations ok:\s*org_id=([0-9]{3,32})\b", text, re.IGNORECASE)
-        if (
-            match
-            and re.search(r"\borg_slug_present=true\b", text, re.IGNORECASE)
-            and re.search(r"\borg_slug_stable=true\b", text, re.IGNORECASE)
-        ):
+        hash_match = re.search(r"\borg_slug_hash=([a-f0-9]{16,64})\b", text, re.IGNORECASE)
+        if match and hash_match and _looks_repeated_compact_identifier(hash_match.group(1)):
+            return None
+        has_slug_flags = re.search(
+            r"\borg_slug_present=true\b", text, re.IGNORECASE
+        ) and re.search(r"\borg_slug_stable=true\b", text, re.IGNORECASE)
+        if match and hash_match and has_slug_flags:
             return _stable_numeric_identifier(match.group(1))
     if normalized_service == "sendgrid":
         if re.search(r"sendgrid profile ok:", text, re.IGNORECASE):

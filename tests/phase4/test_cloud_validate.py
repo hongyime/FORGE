@@ -615,6 +615,16 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "Sentry organizations ok: org_id=4505524236910592 org_slug_present=true",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
+        "sentry",
+        "Sentry organizations ok: org_id=4505524236910592 "
+        "org_slug_present=true org_slug_stable=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "sentry",
+        "Sentry organizations ok: org_id=4505524236910592 "
+        f"org_slug_present=true org_slug_stable=true org_slug_hash={'0' * 64}",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
         "notion",
         "Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
         "user_profile_present=true",
@@ -626,7 +636,7 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "sentry",
         "Sentry organizations ok: org_id=4505524236910592 "
-        "org_slug_present=true org_slug_stable=true",
+        "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a",
     ) == "4505524236910592"
     assert cloud_validate._validated_identifier_from_detail(
         "google",
@@ -4923,7 +4933,7 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
             state=ValidationState.ACTIVE,
             detail=(
                 "Sentry organizations ok: org_id=4505524236910592 "
-                "org_slug_present=true org_slug_stable=true"
+                "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
             ),
         ),
     )
@@ -5294,7 +5304,10 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="Sentry organizations ok: org_id=4505524236910592",
+            detail=(
+                "Sentry organizations ok: org_id=4505524236910592 "
+                f"org_slug_present=true org_slug_stable=true org_slug_hash={'0' * 64}"
+            ),
         ),
     )
     monkeypatch.setattr(
