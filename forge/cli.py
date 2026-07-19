@@ -5764,6 +5764,8 @@ def kill_chain(
         "recent_steps": [],
         "counts": {},
         "queue_metrics": {},
+        "pending_work_counts": {},
+        "pending_work_total": 0,
         "last_iteration_delta": {},
         "last_iteration_stable": None,
     }
@@ -5847,6 +5849,9 @@ def kill_chain(
         queue_metrics = run_progress_state.get("queue_metrics")
         if not isinstance(queue_metrics, dict):
             queue_metrics = {}
+        pending_work_counts = run_progress_state.get("pending_work_counts")
+        if not isinstance(pending_work_counts, dict):
+            pending_work_counts = {}
         last_iteration_delta = run_progress_state.get("last_iteration_delta")
         if not isinstance(last_iteration_delta, dict):
             last_iteration_delta = {}
@@ -5926,6 +5931,11 @@ def kill_chain(
                 for group, values in queue_metrics.items()
                 if isinstance(values, dict)
             },
+            "pending_work_counts": {
+                str(label): int(count or 0)
+                for label, count in pending_work_counts.items()
+            },
+            "pending_work_total": int(run_progress_state.get("pending_work_total") or 0),
             "last_iteration_delta": dict(last_iteration_delta),
             "last_iteration_stable": last_iteration_stable if isinstance(last_iteration_stable, bool) else None,
         }
@@ -5952,6 +5962,8 @@ def kill_chain(
                 for group, values in queue_metrics.items()
                 if isinstance(values, dict)
             },
+            "pending_work_counts": dict(run_progress_state.get("pending_work_counts") or {}),
+            "pending_work_total": int(run_progress_state.get("pending_work_total") or 0),
             "last_iteration_delta": dict(run_progress_state.get("last_iteration_delta") or {}),
             "last_iteration_stable": run_progress_state.get("last_iteration_stable"),
             "active_batch_label": str(run_progress_state.get("active_batch_label") or ""),
@@ -12673,6 +12685,100 @@ def kill_chain(
         )
         return prioritized
 
+    def _pending_sql_count(sql: str, params: tuple[object, ...] = ()) -> int:
+        con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+        try:
+            try:
+                row = con.execute(sql, params).fetchone()
+            except _sq.OperationalError:
+                return 0
+            return int((row[0] if row else 0) or 0)
+        finally:
+            con.close()
+
+    def _pending_cloud_ref_count() -> int:
+        if skip_cloud:
+            return 0
+        pending_refs: set[str] = set()
+        for service, refs in all_cloud_refs.items():
+            service_name = str(service or "").strip()
+            if not service_name:
+                continue
+            for ref in refs or []:
+                normalized_ref = str(ref or "").strip()
+                if not normalized_ref:
+                    continue
+                key = f"{service_name}:{normalized_ref}"
+                if key not in processed_cloud_refs:
+                    pending_refs.add(key)
+        return len(pending_refs)
+
+    def _pending_url_seed_count() -> int:
+        pending_rows = _load_prioritized_seed_rows(
+            "url",
+            processed_url_seeds,
+            normalizer=_normalize_url_seed_value,
+            max_workers=parallel_workers,
+        )
+        return sum(1 for seed_value, _depth in pending_rows if _url_seed_is_in_scope(seed_value))
+
+    def _pending_work_counts() -> dict[str, int]:
+        counts = {
+            "url_seeds": _pending_url_seed_count(),
+            "emails": len(_load_new_emails(processed_emails, max_workers=parallel_workers)),
+            "social_handles": len(
+                _load_new_social_handles(processed_social_handles, max_workers=parallel_workers)
+            ),
+            "github_orgs": 0 if skip_keyscan else len(all_github_orgs - processed_github_orgs),
+            "cloud_refs": _pending_cloud_ref_count(),
+            "username_seeds": len(
+                _load_prioritized_seed_rows(
+                    "username",
+                    processed_username_seeds,
+                    normalizer=_normalize_username_value,
+                    max_workers=parallel_workers,
+                )
+            ),
+            "phone_seeds": len(
+                _load_new_seed_values("phone", processed_phone_seeds, max_workers=parallel_workers)
+            ),
+            "ip_seeds": len(
+                _load_new_seed_values("ipv4", processed_ip_seeds, max_workers=parallel_workers)
+                | _load_new_seed_values("ipv6", processed_ip_seeds, max_workers=parallel_workers)
+            ),
+            "name_seeds": len(
+                _load_new_seed_values("name", processed_name_seeds, max_workers=parallel_workers)
+            ),
+            "company_seeds": len(
+                _load_new_seed_values("company", processed_company_seeds, max_workers=parallel_workers)
+            ),
+            "artifact_queue": _pending_sql_count(
+                """
+                SELECT COUNT(*)
+                FROM artifact_queue
+                WHERE engagement_id=?
+                  AND status IN ('queued','downloaded')
+                """,
+                (engagement_id,),
+            ),
+            "cloud_asset_validations": 0
+            if skip_cloud or dry_run_all
+            else _pending_sql_count(
+                """
+                SELECT COUNT(*)
+                FROM cloud_assets ca
+                LEFT JOIN cloud_validation_results cvr
+                  ON cvr.engagement_id = ca.engagement_id
+                 AND cvr.asset_type = ca.asset_type
+                 AND cvr.identifier = ca.identifier
+                WHERE ca.engagement_id=?
+                  AND cvr.id IS NULL
+                """,
+                (engagement_id,),
+            ),
+        }
+        return {label: int(count) for label, count in counts.items() if int(count) > 0}
+
     for iteration in range(1, max_iterations + 1):
         last_iteration = iteration
         if _maybe_interrupt_run(f"iteration_{iteration}_precheck"):
@@ -16882,9 +16988,22 @@ def kill_chain(
             label: int(after[index] - before[index])
             for index, label in enumerate(_SNAPSHOT_LABELS)
         }
-        is_stable = after == before
+        counts_stable = after == before
+        pending_work_counts = _pending_work_counts() if counts_stable else {}
+        pending_work_total = sum(pending_work_counts.values())
+        run_progress_state["pending_work_counts"] = pending_work_counts
+        run_progress_state["pending_work_total"] = pending_work_total
+        is_stable = counts_stable and pending_work_total == 0
         _set_progress_counts(after, iteration_delta=iteration_delta, stable=is_stable)
-        if after == before:
+        if counts_stable and pending_work_total > 0:
+            _log(
+                f"iteration {iteration}",
+                (
+                    "[dim]no new rows but pending recursive work remains "
+                    f"({pending_work_total}) — continuing[/dim]"
+                ),
+            )
+        elif counts_stable:
             _log(f"iteration {iteration}", "[dim]no new items — spider stable, exiting loop[/dim]")
             break
         else:
