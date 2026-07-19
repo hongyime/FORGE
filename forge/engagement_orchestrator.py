@@ -104,6 +104,7 @@ from forge.utils.artifact_package_manager_config import (
     package_manager_config_artifact_label,
     package_manager_config_remote_filename,
 )
+from forge.utils.artifact_pulumi_config import pulumi_config_candidates
 from forge.utils.artifact_storage_client_config import (
     storage_client_config_artifact_label,
     storage_client_config_candidates,
@@ -19630,37 +19631,11 @@ class ArtifactQueueProcessor:
 
     def _iac_text_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
         payload_fragments = self._run_ordered_local_batch(
-            ("terraform", "bicep", "cloudformation", "serverless", "sam_config"),
-            lambda family: (
-                self._terraform_text_structured_payload_text(
-                    text,
-                    source_hint=source_hint,
-                )
-                if family == "terraform"
-                else (
-                    self._bicep_text_structured_payload_text(text)
-                    if family == "bicep"
-                    else (
-                        "\n".join(
-                            cloudformation_template_candidates(
-                                text,
-                                source_hint=source_hint,
-                            )
-                        )
-                        if family == "cloudformation"
-                        else "\n".join(
-                            (
-                                serverless_framework_candidates
-                                if family == "serverless"
-                                else sam_config_candidates
-                            )
-                            (
-                                text,
-                                source_hint=source_hint,
-                            )
-                        )
-                    )
-                )
+            ("terraform", "bicep", "cloudformation", "serverless", "sam_config", "pulumi_config"),
+            lambda family: self._iac_text_structured_payload_family(
+                family,
+                text=text,
+                source_hint=source_hint,
             ),
             default_factory=str,
         )
@@ -19675,6 +19650,50 @@ class ArtifactQueueProcessor:
                 seen.add(lowered)
                 lines.append(candidate)
         return "\n".join(lines)
+
+    def _iac_text_structured_payload_family(
+        self,
+        family: str,
+        *,
+        text: str,
+        source_hint: str,
+    ) -> str:
+        if family == "terraform":
+            return self._terraform_text_structured_payload_text(
+                text,
+                source_hint=source_hint,
+            )
+        if family == "bicep":
+            return self._bicep_text_structured_payload_text(text)
+        if family == "cloudformation":
+            return "\n".join(
+                cloudformation_template_candidates(
+                    text,
+                    source_hint=source_hint,
+                )
+            )
+        if family == "serverless":
+            return "\n".join(
+                serverless_framework_candidates(
+                    text,
+                    source_hint=source_hint,
+                )
+            )
+        if family == "sam_config":
+            return "\n".join(
+                sam_config_candidates(
+                    text,
+                    source_hint=source_hint,
+                )
+            )
+        if family == "pulumi_config":
+            return "\n".join(
+                pulumi_config_candidates(
+                    text,
+                    source_hint=source_hint,
+                )
+            )
+        return ""
 
     def _store_firebase_projects(
         self,
