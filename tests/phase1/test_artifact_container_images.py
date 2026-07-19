@@ -161,3 +161,21 @@ def test_artifact_container_image_urls_promote_jenkinsfile_docker_images() -> No
         "image 'ghcr.io/acme/source-gated:latest'",
         source_hint="README.md",
     ) == []
+
+
+def test_artifact_container_image_urls_promote_earthfile_save_image_outputs() -> None:
+    text = dedent(
+        """
+        VERSION 0.8
+        build:
+          SAVE IMAGE --push ghcr.io/acme/earth-api:prod local-output:latest
+          SAVE IMAGE "registry.earth.acme.example/platform/worker:2026"
+          SAVE IMAGE --push ${EARTH_IMAGE}
+        """
+    )
+
+    assert _extract_artifact_container_image_urls(text, source_hint="Earthfile") == [
+        "https://ghcr.io/acme/earth-api",
+        "https://registry.earth.acme.example/platform/worker",
+    ]
+    assert _extract_artifact_container_image_urls(text, source_hint="README.md") == []

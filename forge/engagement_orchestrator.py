@@ -8,6 +8,7 @@ import logging
 import mailbox
 import plistlib
 import re
+import shlex
 import shutil
 import sqlite3
 import struct
@@ -1872,11 +1873,25 @@ def _extract_artifact_container_image_urls(text: str, *, source_hint: str = "") 
         ],
         default_factory=list,
     )
+    earthfile_save_batches = ArtifactQueueProcessor._run_ordered_static_batch(
+        _artifact_container_image_earthfile_save_values(
+            raw_text,
+            source_hint=source_hint,
+        ),
+        lambda value: [
+            _artifact_container_image_url_candidate(
+                value,
+                require_explicit_registry=True,
+            )
+        ],
+        default_factory=list,
+    )
     for candidate_batch in (
         *line_batches,
         *field_batches,
         *docker_image_uri_batches,
         *jenkins_groovy_batches,
+        *earthfile_save_batches,
     ):
         for normalized in candidate_batch:
             if not normalized or normalized in seen:
@@ -1910,6 +1925,33 @@ def _artifact_container_image_jenkins_groovy_values(
             _append(match.start(), match.group("value"))
 
     return [value for _position, value in sorted(positioned_values, key=lambda item: item[0])]
+
+
+def _artifact_container_image_earthfile_save_values(
+    text: str,
+    *,
+    source_hint: str = "",
+) -> list[str]:
+    if Path(str(source_hint or "").replace("\\", "/")).name.lower() != "earthfile":
+        return []
+    values: list[str] = []
+    seen: set[str] = set()
+    for line in str(text or "").splitlines():
+        match = re.match(r"(?i)^\s*SAVE\s+IMAGE\s+(?P<body>.+?)\s*$", line)
+        if not match:
+            continue
+        try:
+            tokens = shlex.split(match.group("body"), comments=True, posix=True)
+        except ValueError:
+            tokens = re.findall(r"""["']([^"'\r\n]+)["']|([^\s#]+)""", match.group("body"))
+            tokens = [quoted or bare for quoted, bare in tokens]
+        for token in tokens:
+            candidate = str(token or "").strip()
+            if not candidate or candidate.startswith("--") or candidate.lower() in seen:
+                continue
+            seen.add(candidate.lower())
+            values.append(candidate)
+    return values
 
 
 def _artifact_container_image_ref_body_candidates(raw_body: str) -> list[str]:

@@ -23828,6 +23828,7 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
               ARG OWNER=earth-owner@acme.example
               ARG STATUS_URL=https://earth.acme.example/deploy
               ARG ARCHIVE=s3://acme-earth-bucket/releases/image.tar
+              SAVE IMAGE --push ghcr.io/acme/earth-api:prod
             """
         ).strip(),
         encoding="utf-8",
@@ -24001,6 +24002,7 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
             "https://module.acme.example/docs",
             "https://bazelrc.acme.example/build",
             "https://earth.acme.example/deploy",
+            "https://ghcr.io/acme/earth-api",
             "https://devcontainer.acme.example/status",
             "https://ghcr.io/acme/devcontainer-web",
             "https://gitpod.acme.example/status",
