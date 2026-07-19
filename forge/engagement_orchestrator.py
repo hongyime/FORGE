@@ -70,6 +70,7 @@ from forge.utils.artifact_connection_client import (
 )
 from forge.utils.artifact_database_client import (
     database_client_config_artifact_label,
+    database_client_endpoint_candidates,
     database_client_host_candidates,
 )
 from forge.utils.artifact_ecs_task_definition import (
@@ -27370,12 +27371,13 @@ class ArtifactQueueProcessor:
             return ""
         lines: list[str] = []
         seen: set[str] = set()
-        for host in database_client_host_candidates(text):
-            candidate = str(host or "").strip().strip("[]")
-            if not candidate or candidate in seen:
+        for endpoint in database_client_endpoint_candidates(text):
+            candidate = str(endpoint or "").strip()
+            lowered = candidate.lower()
+            if not candidate or lowered in seen:
                 continue
-            seen.add(candidate)
-            lines.append(f"postgres://{candidate}")
+            seen.add(lowered)
+            lines.append(candidate)
         return "\n".join(lines)
 
     def _storage_client_config_structured_payload_text(
