@@ -26624,13 +26624,16 @@ class ArtifactQueueProcessor:
             raw_values = self._api_client_pact_contract_candidate_values(document, parse_text)
         else:
             raw_values = self._api_client_document_candidate_values(document)
-        raw_values.extend(self._api_client_jmeter_text_candidate_values(parse_text))
+        text_families = ["jmeter"]
         if source_label == "k6-script":
-            raw_values.extend(self._api_client_k6_text_candidate_values(parse_text))
+            text_families.append("k6")
         if source_label == "locustfile":
-            raw_values.extend(self._api_client_locust_text_candidate_values(parse_text))
+            text_families.append("locust")
+        for values in self._api_client_text_candidate_family_batches(text_families, parse_text):
+            raw_values.extend(values)
         if not raw_values:
-            raw_values = self._api_client_text_fallback_candidate_values(parse_text)
+            fallback_batches = self._api_client_text_candidate_family_batches(("fallback",), parse_text)
+            raw_values = list(fallback_batches[0]) if fallback_batches else []
 
         candidate_entries = self._run_ordered_local_batch(
             raw_values,
@@ -26836,7 +26839,8 @@ class ArtifactQueueProcessor:
         return ""
 
     def _api_client_dredd_candidate_values(self, document: Any, text: str) -> list[str]:
-        values = self._api_client_dredd_text_candidate_values(text)
+        text_batches = self._api_client_text_candidate_family_batches(("dredd",), text)
+        values = list(text_batches[0]) if text_batches else []
         for value in self._api_client_document_candidate_values(document):
             if value not in values:
                 values.append(value)
@@ -26867,7 +26871,8 @@ class ArtifactQueueProcessor:
         return values
 
     def _api_client_schemathesis_candidate_values(self, document: Any, text: str) -> list[str]:
-        values = self._api_client_schemathesis_text_candidate_values(text)
+        text_batches = self._api_client_text_candidate_family_batches(("schemathesis",), text)
+        values = list(text_batches[0]) if text_batches else []
         for value in self._api_client_document_candidate_values(document):
             if value not in values:
                 values.append(value)
@@ -26898,11 +26903,13 @@ class ArtifactQueueProcessor:
         return values
 
     def _api_client_pactum_candidate_values(self, document: Any, text: str) -> list[str]:
-        values = self._api_client_pactum_text_candidate_values(text)
+        text_batches = self._api_client_text_candidate_family_batches(("pactum", "fallback"), text)
+        values = list(text_batches[0]) if text_batches else []
         for value in self._api_client_document_candidate_values(document):
             if value not in values:
                 values.append(value)
-        for value in self._api_client_text_fallback_candidate_values(text):
+        fallback_values = text_batches[1] if len(text_batches) > 1 else []
+        for value in fallback_values:
             if value not in values:
                 values.append(value)
         return values[:512]
@@ -26937,6 +26944,36 @@ class ArtifactQueueProcessor:
             fallback_values=self._api_client_text_fallback_candidate_values,
             is_urlish_key=self._api_client_variable_name_is_urlish,
         )
+
+    def _api_client_text_candidate_family_batches(
+        self,
+        families: Sequence[str],
+        text: str,
+    ) -> list[list[str]]:
+        return self._run_ordered_local_batch(
+            [(family, text) for family in families],
+            self._api_client_text_candidate_family_values,
+            default_factory=list,
+        )
+
+    @staticmethod
+    def _api_client_text_candidate_family_values(item: tuple[str, str]) -> list[str]:
+        family, text = item
+        if family == "dredd":
+            return ArtifactQueueProcessor._api_client_dredd_text_candidate_values(text)
+        if family == "schemathesis":
+            return ArtifactQueueProcessor._api_client_schemathesis_text_candidate_values(text)
+        if family == "pactum":
+            return ArtifactQueueProcessor._api_client_pactum_text_candidate_values(text)
+        if family == "fallback":
+            return ArtifactQueueProcessor._api_client_text_fallback_candidate_values(text)
+        if family == "jmeter":
+            return ArtifactQueueProcessor._api_client_jmeter_text_candidate_values(text)
+        if family == "k6":
+            return ArtifactQueueProcessor._api_client_k6_text_candidate_values(text)
+        if family == "locust":
+            return ArtifactQueueProcessor._api_client_locust_text_candidate_values(text)
+        return []
 
     def _api_client_url_object_candidate(self, value: Any) -> str:
         if not isinstance(value, dict):
