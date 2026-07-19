@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import queue
+import threading
+import time
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -98,11 +101,13 @@ class QueueCoordinator:
 class RateLimiter:
     """
     A simple token bucket rate limiter using Redis.
-    If Redis is not available, it uses an in-memory dictionary.
+    Without a Redis URL, it uses an in-memory dictionary for single-process runs.
+    If Redis is configured but unavailable, admission fails closed.
     """
     def __init__(self, redis_url: str | None = None):
         self._redis_url = redis_url
-        self._local_buckets: dict[str, dict[str, Any]] = {}
+        self._local_buckets: dict[str, list[float]] = {}
+        self._local_lock = threading.Lock()
         
     def acquire(self, bucket_name: str, max_requests: int, window_seconds: int = 60) -> bool:
         if self._redis_url:
@@ -110,48 +115,42 @@ class RateLimiter:
                 import redis
                 client = redis.Redis.from_url(self._redis_url)
                 return self._redis_acquire(client, bucket_name, max_requests, window_seconds)
-            except ImportError:
-                pass
+            except Exception:  # noqa: BLE001
+                return False
         return self._local_acquire(bucket_name, max_requests, window_seconds)
 
     def _redis_acquire(self, client: Any, bucket_name: str, max_requests: int, window_seconds: int) -> bool:
-        import time
-        now = int(time.time())
-        key = f"rate_limit:{bucket_name}"
-        
-        # Simple sliding window implementation using Redis ZSET
-        # Step 1: Clean up and check capacity
-        pipe = client.pipeline()
-        pipe.zremrangebyscore(key, 0, now - window_seconds)
-        pipe.zcard(key)
-        results = pipe.execute()
-        
-        current_requests = results[1]
-        if current_requests >= max_requests:
+        if max_requests <= 0 or window_seconds <= 0:
             return False
-            
-        # Step 2: Record request and refresh expiry
-        pipe = client.pipeline()
-        pipe.zadd(key, {str(now) + "-" + str(time.time()): now})
-        pipe.expire(key, window_seconds)
-        pipe.execute()
-        return True
+        now_ms = int(time.time() * 1000)
+        window_ms = int(window_seconds * 1000)
+        key = f"rate_limit:{bucket_name}"
+        script = """
+        local key = KEYS[1]
+        local now_ms = tonumber(ARGV[1])
+        local window_ms = tonumber(ARGV[2])
+        local max_requests = tonumber(ARGV[3])
+        local member = ARGV[4]
+        redis.call('ZREMRANGEBYSCORE', key, 0, now_ms - window_ms)
+        local current = redis.call('ZCARD', key)
+        if current >= max_requests then
+            redis.call('PEXPIRE', key, window_ms)
+            return 0
+        end
+        redis.call('ZADD', key, now_ms, member)
+        redis.call('PEXPIRE', key, window_ms)
+        return 1
+        """
+        return bool(client.eval(script, 1, key, now_ms, window_ms, max_requests, uuid.uuid4().hex))
 
     def _local_acquire(self, bucket_name: str, max_requests: int, window_seconds: int) -> bool:
-        import time
-        now = time.time()
-        
-        if bucket_name not in self._local_buckets:
-            self._local_buckets[bucket_name] = []
-            
-        # Clean up old requests
-        self._local_buckets[bucket_name] = [
-            req_time for req_time in self._local_buckets[bucket_name] 
-            if now - req_time < window_seconds
-        ]
-        
-        if len(self._local_buckets[bucket_name]) >= max_requests:
+        if max_requests <= 0 or window_seconds <= 0:
             return False
-            
-        self._local_buckets[bucket_name].append(now)
-        return True
+        now = time.time()
+        with self._local_lock:
+            bucket = self._local_buckets.setdefault(bucket_name, [])
+            bucket[:] = [req_time for req_time in bucket if now - req_time < window_seconds]
+            if len(bucket) >= max_requests:
+                return False
+            bucket.append(now)
+            return True

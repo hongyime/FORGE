@@ -59,8 +59,7 @@ class Worker:
             task_key = str(payload.get("task_key", ""))
             body = payload.get("payload", {})
             if engagement_id > 0 and task_key and isinstance(body, dict):
-                claimed = ScheduledTask(engagement_id=engagement_id, task_key=task_key, payload=body)
-                self.scheduler.mark_running(engagement_id, task_key, self.worker_id)
+                claimed = self.scheduler.claim_task(engagement_id, task_key, self.worker_id)
         if claimed is None:
             claimed = self.scheduler.claim_next(self.worker_id)
             if claimed is None:
@@ -76,24 +75,24 @@ class Worker:
         )
         try:
             self._run_handler_with_deadline(engagement_id, task_key, body)
-            self.scheduler.mark_done(engagement_id, task_key, self.worker_id)
+            completed = self.scheduler.mark_done(engagement_id, task_key, self.worker_id)
             self.scheduler.record_worker_heartbeat(
                 worker_id=self.worker_id,
                 status="idle",
                 engagement_id=engagement_id,
                 last_task_key=task_key,
-                completed_delta=1,
+                completed_delta=1 if completed else 0,
             )
         except Exception as exc:
             error = str(exc)
-            self.scheduler.mark_failed(engagement_id, task_key, self.worker_id, error)
+            failed = self.scheduler.mark_failed(engagement_id, task_key, self.worker_id, error)
             self.scheduler.record_worker_heartbeat(
                 worker_id=self.worker_id,
                 status="idle",
                 engagement_id=engagement_id,
                 last_task_key=task_key,
                 last_error=error,
-                failed_delta=1,
+                failed_delta=1 if failed else 0,
             )
         return True
 

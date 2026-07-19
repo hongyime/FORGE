@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -17,16 +18,26 @@ class ScheduledTask:
     priority: int = 100
 
 
+def _positive_seconds(value: object) -> float | None:
+    try:
+        seconds = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds > 0 else None
+
+
 class TaskScheduler:
     def __init__(
         self,
         db_path: Path,
         queue: QueueCoordinator,
         event_publisher: Callable[[int, str, dict[str, Any]], None] | None = None,
+        stale_task_seconds: float | None = None,
     ) -> None:
         self._db_path = db_path
         self._queue = queue
         self._event_publisher = event_publisher
+        self._stale_task_seconds = stale_task_seconds
 
     def schedule(self, task: ScheduledTask) -> None:
         con = get_engagement_db(self._db_path)
@@ -69,122 +80,135 @@ class TaskScheduler:
     def mark_running(self, engagement_id: int, task_key: str, worker_id: str) -> None:
         self._set_status(engagement_id, task_key, "running", worker_id)
 
+    def claim_task(self, engagement_id: int, task_key: str, worker_id: str) -> ScheduledTask | None:
+        return self._claim_queued_task(
+            worker_id,
+            """
+            SELECT id, engagement_id, task_key, payload, priority
+            FROM distributed_tasks
+            WHERE engagement_id=? AND task_key=? AND status='queued'
+            LIMIT 1
+            """,
+            (engagement_id, task_key),
+        )
+
     def claim_next(self, worker_id: str) -> ScheduledTask | None:
+        return self._claim_queued_task(
+            worker_id,
+            """
+            SELECT id, engagement_id, task_key, payload, priority
+            FROM distributed_tasks
+            WHERE status='queued'
+            ORDER BY priority ASC, created_at ASC
+            LIMIT 1
+            """,
+            (),
+        )
+
+    def _claim_queued_task(
+        self,
+        worker_id: str,
+        select_sql: str,
+        params: tuple[Any, ...],
+    ) -> ScheduledTask | None:
         con = get_engagement_db(self._db_path)
+        claimed: ScheduledTask | None = None
+        metrics: dict[str, int] | None = None
         try:
-            row = con.execute(
-                """
-                SELECT engagement_id, task_key, payload, priority
-                FROM distributed_tasks
-                WHERE status='queued'
-                ORDER BY priority ASC, created_at ASC
-                LIMIT 1
-                """
-            ).fetchone()
+            con.execute("BEGIN IMMEDIATE")
+            self._requeue_stale_running(con)
+            row = con.execute(select_sql, params).fetchone()
             if row is None:
+                con.rollback()
                 return None
-            engagement_id = int(row[0])
-            task_key = str(row[1])
-            payload_raw = row[2]
-            payload: dict[str, Any]
-            if isinstance(payload_raw, str) and payload_raw:
-                try:
-                    parsed = json.loads(payload_raw)
-                except json.JSONDecodeError:
-                    parsed = {}
-                payload = parsed if isinstance(parsed, dict) else {}
-            else:
-                payload = {}
-            priority = int(row[3])
-            con.execute(
-                """
-                UPDATE distributed_tasks
-                SET status='running', worker_id=?, updated_at=CURRENT_TIMESTAMP
-                WHERE engagement_id=? AND task_key=?
-                """,
-                (worker_id, engagement_id, task_key),
-            )
-            con.execute(
-                """
-                UPDATE task_progress
-                SET status='running', started_at=COALESCE(started_at, CURRENT_TIMESTAMP)
-                WHERE engagement_id=? AND task_key=?
-                """,
-                (engagement_id, task_key),
-            )
-            metrics = self._snapshot_queue_metrics(con, engagement_id)
+            claimed = self._claim_row(con, row, worker_id)
+            if claimed is None:
+                con.rollback()
+                return None
+            metrics = self._snapshot_queue_metrics(con, claimed.engagement_id)
             con.commit()
-            self._emit_event(
-                engagement_id,
-                "task_running",
-                {"task_key": task_key, "worker_id": worker_id, "queue": metrics},
-            )
-            return ScheduledTask(
-                engagement_id=engagement_id,
-                task_key=task_key,
-                payload=payload,
-                priority=priority,
-            )
         finally:
             con.close()
+        self._emit_event(
+            claimed.engagement_id,
+            "task_running",
+            {"task_key": claimed.task_key, "worker_id": worker_id, "queue": metrics or {}},
+        )
+        return claimed
 
-    def mark_done(self, engagement_id: int, task_key: str, worker_id: str) -> None:
+    def mark_done(self, engagement_id: int, task_key: str, worker_id: str) -> bool:
         con = get_engagement_db(self._db_path)
+        updated = 0
+        metrics: dict[str, int] | None = None
         try:
-            con.execute(
-                """
-                UPDATE task_progress
-                SET status='complete', completed_at=CURRENT_TIMESTAMP
-                WHERE engagement_id=? AND task_key=?
-                """,
-                (engagement_id, task_key),
-            )
-            con.execute(
+            updated = con.execute(
                 """
                 UPDATE distributed_tasks
                 SET status='done', worker_id=?, updated_at=CURRENT_TIMESTAMP
-                WHERE engagement_id=? AND task_key=?
+                WHERE engagement_id=? AND task_key=? AND status='running' AND worker_id=?
                 """,
-                (worker_id, engagement_id, task_key),
-            )
-            metrics = self._snapshot_queue_metrics(con, engagement_id)
-            con.commit()
+                (worker_id, engagement_id, task_key, worker_id),
+            ).rowcount
+            if updated:
+                con.execute(
+                    """
+                    UPDATE task_progress
+                    SET status='complete', completed_at=CURRENT_TIMESTAMP
+                    WHERE engagement_id=? AND task_key=?
+                    """,
+                    (engagement_id, task_key),
+                )
+                metrics = self._snapshot_queue_metrics(con, engagement_id)
+                con.commit()
+            else:
+                con.rollback()
         finally:
             con.close()
+        if not updated:
+            return False
         self._emit_event(
             engagement_id,
             "task_done",
-            {"task_key": task_key, "worker_id": worker_id, "queue": metrics},
+            {"task_key": task_key, "worker_id": worker_id, "queue": metrics or {}},
         )
+        return True
 
-    def mark_failed(self, engagement_id: int, task_key: str, worker_id: str, error: str) -> None:
+    def mark_failed(self, engagement_id: int, task_key: str, worker_id: str, error: str) -> bool:
         con = get_engagement_db(self._db_path)
+        updated = 0
+        metrics: dict[str, int] | None = None
         try:
-            con.execute(
-                """
-                UPDATE task_progress
-                SET status='failed', completed_at=CURRENT_TIMESTAMP, checkpoint=?
-                WHERE engagement_id=? AND task_key=?
-                """,
-                (json.dumps({"error": error}), engagement_id, task_key),
-            )
-            con.execute(
+            updated = con.execute(
                 """
                 UPDATE distributed_tasks
                 SET status='failed', worker_id=?, error=?, updated_at=CURRENT_TIMESTAMP
-                WHERE engagement_id=? AND task_key=?
+                WHERE engagement_id=? AND task_key=? AND status='running' AND worker_id=?
                 """,
-                (worker_id, error, engagement_id, task_key),
-            )
-            metrics = self._snapshot_queue_metrics(con, engagement_id)
-            con.commit()
+                (worker_id, error, engagement_id, task_key, worker_id),
+            ).rowcount
+            if updated:
+                con.execute(
+                    """
+                    UPDATE task_progress
+                    SET status='failed', completed_at=CURRENT_TIMESTAMP, checkpoint=?
+                    WHERE engagement_id=? AND task_key=?
+                    """,
+                    (json.dumps({"error": error}), engagement_id, task_key),
+                )
+                metrics = self._snapshot_queue_metrics(con, engagement_id)
+                con.commit()
+            else:
+                con.rollback()
         finally:
             con.close()
+        if not updated:
+            return False
         self._emit_event(
             engagement_id,
             "task_failed",
-            {"task_key": task_key, "worker_id": worker_id, "error": error, "queue": metrics},
+            {"task_key": task_key, "worker_id": worker_id, "error": error, "queue": metrics or {}},
         )
+        return True
 
     def record_worker_heartbeat(
         self,
@@ -280,6 +304,79 @@ class TaskScheduler:
             "task_status_updated",
             {"task_key": task_key, "status": status, "worker_id": worker_id, "queue": metrics},
         )
+
+    def _claim_row(self, con: Any, row: Any, worker_id: str) -> ScheduledTask | None:
+        task_id = int(row[0])
+        engagement_id = int(row[1])
+        task_key = str(row[2])
+        payload = self._decode_payload(row[3])
+        priority = int(row[4])
+        updated = con.execute(
+            """
+            UPDATE distributed_tasks
+            SET status='running', worker_id=?, error=NULL, updated_at=CURRENT_TIMESTAMP
+            WHERE id=? AND status='queued'
+            """,
+            (worker_id, task_id),
+        ).rowcount
+        if updated != 1:
+            return None
+        con.execute(
+            """
+            UPDATE task_progress
+            SET status='running',
+                started_at=COALESCE(started_at, CURRENT_TIMESTAMP),
+                completed_at=NULL
+            WHERE engagement_id=? AND task_key=?
+            """,
+            (engagement_id, task_key),
+        )
+        return ScheduledTask(
+            engagement_id=engagement_id,
+            task_key=task_key,
+            payload=payload,
+            priority=priority,
+        )
+
+    def _requeue_stale_running(self, con: Any) -> int:
+        stale_after_seconds = self._resolved_stale_task_seconds()
+        if stale_after_seconds is None:
+            return 0
+        return con.execute(
+            """
+            UPDATE distributed_tasks
+            SET status='queued',
+                worker_id=NULL,
+                error='requeued after stale worker claim',
+                updated_at=CURRENT_TIMESTAMP
+            WHERE status='running'
+              AND strftime('%s', 'now') - strftime('%s', updated_at) >= ?
+            """,
+            (max(1, int(stale_after_seconds)),),
+        ).rowcount
+
+    def _resolved_stale_task_seconds(self) -> float | None:
+        if self._stale_task_seconds is not None:
+            return _positive_seconds(self._stale_task_seconds)
+        raw_value = os.environ.get("FORGE_DISTRIBUTED_TASK_STALE_SECONDS")
+        if raw_value is not None:
+            return _positive_seconds(raw_value)
+        try:
+            from forge.config import ForgeConfig  # noqa: PLC0415
+
+            timeout_seconds = _positive_seconds(ForgeConfig.load().task_timeout)
+        except Exception:  # noqa: BLE001
+            timeout_seconds = None
+        return max(60.0, (timeout_seconds or 3600.0) * 2.0)
+
+    def _decode_payload(self, payload_raw: Any) -> dict[str, Any]:
+        if not isinstance(payload_raw, str) or not payload_raw:
+            return {}
+        try:
+            parsed = json.loads(payload_raw)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     def _resolve_engagement_id(self, con: Any, engagement_id: int | None) -> int | None:
         if engagement_id is not None and engagement_id > 0:

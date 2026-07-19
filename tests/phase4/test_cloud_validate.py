@@ -3115,6 +3115,66 @@ def test_run_cloud_validate_persists_result_and_updates_key_state(
         con.close()
 
 
+def test_run_cloud_validate_respects_scheduled_rate_limit_before_provider(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name, key_redacted, validation_state)
+            VALUES
+                (2, 1001, 'acme-firebase-prod', 'firebase', 'firebase_web_config', 'crawler',
+                 'https://acme-firebase-prod.firebaseapp.com/__/firebase/init.json',
+                 'webapp', 'AIza...7890', 'UNCONFIRMED')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    class _DenyLimiter:
+        def acquire(self, bucket_name: str, max_requests: int, window_seconds: int = 60) -> bool:
+            assert bucket_name == "cloud_api_global"
+            assert max_requests == 1
+            assert window_seconds == 60
+            return False
+
+    def _fail_validate_key_row_payload(row_payload, **kwargs):  # noqa: ANN001
+        del row_payload, kwargs
+        raise AssertionError("rate-limited validation must not reach provider validation")
+
+    monkeypatch.setattr(cloud_validate, "_validate_key_row_payload", _fail_validate_key_row_payload)
+
+    result = cloud_validate.run_cloud_validate(
+        2,
+        "cloud_api_global",
+        1,
+        db_path,
+        rate_limiter=_DenyLimiter(),
+    )
+
+    assert result == {
+        "status": "rate_limited",
+        "error": "rate limit bucket 'cloud_api_global' exhausted.",
+        "key_id": 2,
+        "rate_limit_bucket": "cloud_api_global",
+    }
+    con = sqlite3.connect(db_path)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM cloud_validation_results").fetchone()[0] == 0
+        assert con.execute(
+            "SELECT validation_state FROM key_scanner_findings WHERE id=2"
+        ).fetchone()[0] == "UNCONFIRMED"
+    finally:
+        con.close()
+
+
 def test_run_cloud_validate_scope_checker_skips_denied_key_row(
     tmp_path: Path,
     monkeypatch,

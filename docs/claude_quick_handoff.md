@@ -11,11 +11,17 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Distributed worker claim/shared admission checkpoint is green:
+  Distributed task execution now treats Redis/pub-sub messages as wakeups only; workers must atomically claim the matching queued DB row before running a handler. `claim_next()` and message-driven `claim_task()` use a guarded `BEGIN IMMEDIATE` claim by row id, completion/failure only succeeds for the owning running worker, and stale running rows can be requeued by an operator-tunable lease threshold. The distributed `RateLimiter` now uses one Redis Lua admission script, a thread-safe local fallback only when no Redis URL is configured, and fail-closed behavior when Redis is configured but unavailable. Scheduled `run_cloud_validate()` now honors its existing `rate_limit_bucket` / `max_requests_per_minute` before provider validation.
+  Verification: compile/Ruff over touched distributed/cloud files; focused new worker/limiter/cloud admission tests -> `9 passed`; broader distributed/playbook/full cloud-validation slice -> `163 passed`.
+  Review: sidecar explorer `Pauli` found the duplicate-claim/pub-sub/rate-limit gaps that drove this patch. Claude read-only and diff-only attempts both hit `Reached max turns` with no usable findings.
+  Safety: queue/admission control only. No new provider endpoints, live probe expansion, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive validation, report-gate change, or post-exploitation behavior was added.
+
 - [x] Latest kill-chain convergence and multi-seed E2E checkpoint is green:
   `kill_chain()` now preserves capped recursive backlog metadata instead of stopping on stable row counts, discovered GitHub-org keyscan targets use the schema-allowed `cross_reference` seed source with keyscan-origin metadata, and `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` proves mocked multi-seed recursion through web, Fan-out E, artifact queue, Firebase/Supabase validation, graph export, audit logging, and template report fallback.
   Verification: focused convergence tests -> `3 passed`; keyscan/cloud/report gate plus multi-seed E2E slice -> `7 passed`; broader affected graph/report/cloud suite -> `201 passed`; Ruff over touched kill-chain files -> `All checks passed`.
   Review: Claude diff review found no blockers on the E2E change and noted keyscan validation gating remains covered by adjacent phase4/phase6 tests.
-  Commits: `42acbac fix(kill-chain): use valid keyscan seed source`, `cb359e7 test(kill-chain): harden recursive multi-seed e2e`.
+  Commits: `634d44d fix(kill-chain): use valid keyscan seed source`, `de5c183 test(kill-chain): harden recursive multi-seed e2e`.
 
 - [x] Scheduled worker/playbook bounds checkpoint is green:
   Distributed workers now execute task handlers behind `FORGE_TASK_TIMEOUT` with a default 3600s deadline and mark timed-out tasks failed instead of hanging the queue indefinitely. Playbook `_next_steps`, triggered zero-to-DA, triggered RCE hunter, and WAF-evasion recovery now preserve ROE/scope metadata into child scheduled tasks.
@@ -2034,6 +2040,7 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
 ## Best next tasks
 
+- [ ] Add pre-provider validation-sweep leasing/claim state for `sweep_pending_cloud_validations()` and `sweep_pending_cloud_asset_validations()` so multiple workers cannot select the same pending key/asset rows and all hit providers before persistence.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
 - [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
 - [ ] Audit MTGX entity typing/layout against the intended Maltego-first workflow before changing more graph UI.

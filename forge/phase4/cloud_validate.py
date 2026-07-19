@@ -5430,9 +5430,9 @@ def run_cloud_validate(
     *,
     key_scope_checker: Callable[[dict[str, Any]], bool] | None = None,
     key_scope_denied_callback: Callable[[dict[str, Any], str], None] | None = None,
+    rate_limiter: Any | None = None,
 ) -> dict[str, Any]:
     """Validate a discovered cloud reference using deterministic, low-impact probes."""
-    del rate_limit_bucket, max_requests_per_minute
     registry = CloudValidatorRegistry()
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
@@ -5473,6 +5473,19 @@ def run_cloud_validate(
                 allowed = False
                 denial_reason = f"scope_checker_error:{type(exc).__name__}"
         if allowed:
+            if max_requests_per_minute > 0:
+                limiter = rate_limiter or _scheduled_validation_rate_limiter()
+                if limiter is not None and not limiter.acquire(
+                    rate_limit_bucket,
+                    max_requests_per_minute,
+                    window_seconds=60,
+                ):
+                    return {
+                        "status": "rate_limited",
+                        "error": f"rate limit bucket {rate_limit_bucket!r} exhausted.",
+                        "key_id": key_id,
+                        "rate_limit_bucket": rate_limit_bucket,
+                    }
             _key_id, result_engagement_id, result = _validate_key_row_payload(
                 row_payload,
                 registry=registry,
@@ -5511,3 +5524,13 @@ def run_cloud_validate(
         }
     finally:
         con.close()
+
+
+def _scheduled_validation_rate_limiter() -> Any | None:
+    try:
+        from forge.config import ForgeConfig  # noqa: PLC0415
+        from forge.distributed.coordinator import RateLimiter  # noqa: PLC0415
+
+        return RateLimiter(redis_url=ForgeConfig.load().redis_url)
+    except Exception:  # noqa: BLE001
+        return None

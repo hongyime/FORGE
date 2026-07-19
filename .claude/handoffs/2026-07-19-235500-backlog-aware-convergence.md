@@ -50,5 +50,5 @@ This is orchestration and progress-metadata work only. It does not add live prob
 
 ## Next Tasks
 
-- Audit distributed worker queue claiming and shared rate-limit admission next; current risk is at-most-once execution across workers, not recursive breadth.
+- Distributed worker queue claiming and shared rate-limit admission are now patched in a follow-up checkpoint. Continue with pre-provider validation-sweep leasing/claim state so multiple workers cannot select the same pending key/asset rows and all hit providers before persistence.
 - Add a hash-chained per-run audit manifest if evidence-grade auditability is the next priority.
