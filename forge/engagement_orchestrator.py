@@ -12602,6 +12602,37 @@ class EngagementSynthesisEngine:
             if isinstance(pivot, tuple) and len(pivot) == 5 and isinstance(pivot[4], dict)
         ]
 
+    @staticmethod
+    def _social_profile_url_pivot_entry(
+        entry: tuple[str, str, float, str],
+    ) -> tuple[str, str, str, float, dict[str, Any]] | None:
+        url, platform, base_confidence, source_label = entry
+        url_type = _classify_seed_value(url)
+        if url_type not in {"url", "apk_url"}:
+            return None
+        return (
+            url,
+            url_type,
+            "related_asset",
+            max(0.68, base_confidence - 0.02),
+            {"rule": "social_profile_url", "platform": platform, "source": source_label},
+        )
+
+    @staticmethod
+    def _social_profile_host_pivot_entry(
+        entry: tuple[str, str, str, float, str],
+    ) -> tuple[str, str, str, float, dict[str, Any]] | None:
+        host_value, host_type, platform, base_confidence, source_label = entry
+        if not host_value or not host_type:
+            return None
+        return (
+            host_value,
+            host_type,
+            "related_asset",
+            max(0.7, base_confidence - 0.01),
+            {"rule": "social_profile_host", "platform": platform, "source": source_label},
+        )
+
     def _social_profile_pivot_family(
         self,
         family: str,
@@ -12686,35 +12717,36 @@ class EngagementSynthesisEngine:
                 )
             return pivots
         if family == "urls":
-            for url in self._social_profile_urls(profile):
-                url_type = _classify_seed_value(url)
-                if url_type not in {"url", "apk_url"}:
-                    continue
-                pivots.append(
-                    (
-                        url,
-                        url_type,
-                        "related_asset",
-                        max(0.68, base_confidence - 0.02),
-                        {"rule": "social_profile_url", "platform": platform, "source": source_label},
-                    )
-                )
-            return pivots
+            pivot_entries = self._run_ordered_local_batch(
+                [
+                    (url, platform, base_confidence, source_label)
+                    for url in self._social_profile_urls(profile)
+                ],
+                self._social_profile_url_pivot_entry,
+                default_factory=lambda: None,
+            )
+            return [
+                pivot
+                for pivot in pivot_entries
+                if isinstance(pivot, tuple)
+            ]
         if family == "hosts":
             platform_profile_hosts = self._social_profile_platform_profile_hosts(profile, platform=platform)
-            for host_value, host_type in self._social_profile_related_hosts(profile):
-                if host_value in platform_profile_hosts:
-                    continue
-                pivots.append(
-                    (
-                        host_value,
-                        host_type,
-                        "related_asset",
-                        max(0.7, base_confidence - 0.01),
-                        {"rule": "social_profile_host", "platform": platform, "source": source_label},
-                    )
-                )
-            return pivots
+            host_entries = [
+                (host_value, host_type, platform, base_confidence, source_label)
+                for host_value, host_type in self._social_profile_related_hosts(profile)
+                if host_value not in platform_profile_hosts
+            ]
+            pivot_entries = self._run_ordered_local_batch(
+                host_entries,
+                self._social_profile_host_pivot_entry,
+                default_factory=lambda: None,
+            )
+            return [
+                pivot
+                for pivot in pivot_entries
+                if isinstance(pivot, tuple)
+            ]
         if family == "matrix_hosts":
             if str(platform or "").strip().lower() != "matrix":
                 return []
