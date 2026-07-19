@@ -646,6 +646,8 @@ _EPIEOS_PHONE_FIELD_KEYS = (
     "phone",
     "phone_number",
     "phoneNumber",
+    "canonical_form",
+    "canonicalForm",
     "e164",
     "e_164",
     "msisdn",

@@ -11104,6 +11104,8 @@ class EngagementSynthesisEngine:
         "phone",
         "phone_number",
         "phoneNumber",
+        "canonical_form",
+        "canonicalForm",
         "e164",
         "e_164",
         "msisdn",

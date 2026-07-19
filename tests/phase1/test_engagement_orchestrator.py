@@ -8570,6 +8570,14 @@ def test_synthesis_engine_parallelizes_social_profile_phone_direct_keys_and_pres
     ]
 
 
+def test_synthesis_engine_reads_canonical_phone_form_entries_for_phone_pivots():
+    assert EngagementSynthesisEngine._social_profile_phones(
+        {
+            "phoneNumbers": [{"canonicalForm": "+1 (555) 765-4321"}],
+        }
+    ) == ["+15557654321"]
+
+
 def test_synthesis_engine_parallelizes_contact_phone_query_keys_and_preserves_order(
     monkeypatch,
 ) -> None:

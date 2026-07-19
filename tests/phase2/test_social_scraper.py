@@ -723,6 +723,26 @@ class TestParseEpieosResponse:
             {"value": "+15551010005"},
         ]
 
+    def test_normalizes_google_people_canonical_phone_form_for_recursive_synthesis(
+        self,
+    ):
+        results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "google": {
+                    "profile_url": "https://accounts.google.com/1234567890",
+                    "name": "Alice Example",
+                    "phoneNumbers": [{"canonicalForm": "+1 (555) 765-4321"}],
+                },
+            }
+        )
+
+        google = next((row for row in results if row["platform"] == "google"), None)
+
+        assert google is not None
+        assert google["phone"] == "+15557654321"
+        assert google["phone_numbers"] == [{"value": "+15557654321"}]
+
     def test_combines_snake_case_name_aliases_for_recursive_synthesis(self):
         results = _parse_epieos_response(
             {
