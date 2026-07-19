@@ -71,6 +71,7 @@ from forge.utils.artifact_connection_client import (
 )
 from forge.utils.artifact_cloudformation import (
     cloudformation_template_candidates,
+    sam_config_candidates,
     serverless_framework_candidates,
 )
 from forge.utils.artifact_database_client import (
@@ -19629,7 +19630,7 @@ class ArtifactQueueProcessor:
 
     def _iac_text_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
         payload_fragments = self._run_ordered_local_batch(
-            ("terraform", "bicep", "cloudformation", "serverless"),
+            ("terraform", "bicep", "cloudformation", "serverless", "sam_config"),
             lambda family: (
                 self._terraform_text_structured_payload_text(
                     text,
@@ -19648,7 +19649,12 @@ class ArtifactQueueProcessor:
                         )
                         if family == "cloudformation"
                         else "\n".join(
-                            serverless_framework_candidates(
+                            (
+                                serverless_framework_candidates
+                                if family == "serverless"
+                                else sam_config_candidates
+                            )
+                            (
                                 text,
                                 source_hint=source_hint,
                             )

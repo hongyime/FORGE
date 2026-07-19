@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,18 @@ def serverless_framework_artifact_label(value: str) -> str:
     return "serverless" if name == "serverless" or stem == "serverless" else ""
 
 
+def sam_config_artifact_label(value: str) -> str:
+    name = Path(str(value or "").strip().replace("\\", "/")).name.lower()
+    if not name:
+        return ""
+    stem = name
+    for suffix in (".toml", ".yaml", ".yml", ".json"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    return "sam-config" if name == "samconfig.toml" or stem in {"sam", "samconfig"} else ""
+
+
 def cloudformation_template_candidates(text: str, *, source_hint: str = "") -> list[str]:
     if cloudformation_template_artifact_label(source_hint) not in {
         "cloudformation",
@@ -110,6 +123,17 @@ def serverless_framework_candidates(text: str, *, source_hint: str = "") -> list
     return candidates
 
 
+def sam_config_candidates(text: str, *, source_hint: str = "") -> list[str]:
+    if sam_config_artifact_label(source_hint) != "sam-config":
+        return []
+    candidates: list[str] = []
+    parsed = _safe_toml_loads(str(text or ""))
+    if isinstance(parsed, Mapping):
+        candidates.extend(_sam_config_mapping_candidates(parsed))
+    candidates.extend(_sam_config_text_candidates(text))
+    return _dedupe(candidates)
+
+
 def _load_documents(text: str) -> list[Any]:
     raw = str(text or "").strip()
     if not raw:
@@ -146,6 +170,13 @@ if yaml is not None:
 def _safe_json_loads(value: str) -> Any:
     try:
         return json.loads(value)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _safe_toml_loads(value: str) -> Any:
+    try:
+        return tomllib.loads(value)
     except Exception:  # noqa: BLE001
         return None
 
@@ -226,6 +257,40 @@ def _serverless_custom_domain_candidates(custom: Mapping[str, Any]) -> list[str]
                 walk(child, key_hint)
 
     walk(custom)
+    return _dedupe(candidates)
+
+
+def _sam_config_mapping_candidates(document: Mapping[str, Any]) -> list[str]:
+    candidates: list[str] = []
+
+    def walk(value: Any) -> None:
+        if len(candidates) >= 128:
+            return
+        if isinstance(value, Mapping):
+            for raw_key, child in value.items():
+                if _fingerprint(raw_key) == "s3bucket":
+                    bucket = _static_bucket(child)
+                    if bucket:
+                        candidates.append(f"s3://{bucket}")
+                walk(child)
+            return
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            for child in value[:128]:
+                walk(child)
+
+    walk(document)
+    return _dedupe(candidates)
+
+
+def _sam_config_text_candidates(text: str) -> list[str]:
+    candidates: list[str] = []
+    for line in str(text or "").splitlines()[:4096]:
+        match = re.match(r"""^\s*s3_bucket\s*=\s*["']?(?P<bucket>[^"'\s#]+)""", line)
+        if not match:
+            continue
+        bucket = _static_bucket(match.group("bucket"))
+        if bucket:
+            candidates.append(f"s3://{bucket}")
     return _dedupe(candidates)
 
 

@@ -8,6 +8,8 @@ from forge.engagement_orchestrator import ArtifactQueueProcessor, _artifact_form
 from forge.utils.artifact_cloudformation import (
     cloudformation_template_artifact_label,
     cloudformation_template_candidates,
+    sam_config_artifact_label,
+    sam_config_candidates,
     serverless_framework_artifact_label,
     serverless_framework_candidates,
 )
@@ -289,5 +291,87 @@ resources:
         }
         assert ("aws_s3", "acme-serverless-deploys") in cloud_assets
         assert ("aws_s3", "acme-serverless-logs") in cloud_assets
+    finally:
+        con.close()
+
+
+def test_sam_config_candidates_extract_static_deploy_bucket() -> None:
+    payload = """
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "acme-api"
+s3_bucket = "acme-sam-deploys"
+s3_prefix = "api"
+region = "us-east-1"
+
+[prod.deploy.parameters]
+s3_bucket = "acme-sam-prod-deploys"
+""".strip()
+
+    assert sam_config_artifact_label("samconfig.toml") == "sam-config"
+    assert sam_config_candidates(payload, source_hint="notes.toml") == []
+    assert sam_config_candidates(payload, source_hint="samconfig.toml") == [
+        "s3://acme-sam-deploys",
+        "s3://acme-sam-prod-deploys",
+    ]
+
+
+def test_artifact_queue_processor_extracts_samconfig_deploy_bucket(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_samconfig"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path, name="SAM Config Artifact Test")
+
+    samconfig_path = artifact_root / "samconfig.toml"
+    samconfig_path.write_text(
+        """
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "acme-api"
+s3_bucket = "acme-sam-deploys"
+s3_prefix = "api"
+support_email = "samconfig-owner@acme.example"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert _artifact_format_label(samconfig_path) == "sam-config"
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=4)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 1
+    assert summary.processed == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("samconfig-owner@acme.example", "email") in seeds
+
+        cloud_assets = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("aws_s3", "acme-sam-deploys") in cloud_assets
     finally:
         con.close()
