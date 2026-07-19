@@ -69,6 +69,7 @@ from forge.utils.artifact_connection_client import (
     connection_client_config_artifact_label,
     connection_client_host_candidates,
 )
+from forge.utils.artifact_cloudformation import cloudformation_template_candidates
 from forge.utils.artifact_database_client import (
     database_client_config_artifact_label,
     database_client_endpoint_candidates,
@@ -19326,7 +19327,7 @@ class ArtifactQueueProcessor:
         if family == "iac":
             return self._iac_text_structured_payload_text(
                 text,
-                source_hint=extract_path,
+                source_hint=source_hint,
             )
         if family == "kopia":
             return self._kopia_structured_payload_text(
@@ -19625,14 +19626,23 @@ class ArtifactQueueProcessor:
 
     def _iac_text_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
         payload_fragments = self._run_ordered_local_batch(
-            ("terraform", "bicep"),
+            ("terraform", "bicep", "cloudformation"),
             lambda family: (
                 self._terraform_text_structured_payload_text(
                     text,
                     source_hint=source_hint,
                 )
                 if family == "terraform"
-                else self._bicep_text_structured_payload_text(text)
+                else (
+                    self._bicep_text_structured_payload_text(text)
+                    if family == "bicep"
+                    else "\n".join(
+                        cloudformation_template_candidates(
+                            text,
+                            source_hint=source_hint,
+                        )
+                    )
+                )
             ),
             default_factory=str,
         )
