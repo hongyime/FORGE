@@ -223,6 +223,16 @@ def write_run_audit_manifest(
     return record
 
 
+def read_run_audit_manifest(
+    conn: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    run_id: int,
+) -> AuditManifestRecord | None:
+    """Read a stored per-run audit manifest without verifying current state."""
+    return _existing_manifest(conn, engagement_id=engagement_id, run_id=run_id)
+
+
 def verify_run_audit_manifest(
     conn: sqlite3.Connection,
     *,

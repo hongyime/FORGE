@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Run audit manifest portable-export checkpoint is green:
+  `forge.audit.manifest_bundle` writes deterministic ZIP bundles for external archival outside the mutable engagement DB. Bundles contain `manifest.json`, `verification.json`, `checksums.sha256`, and `README.md`; ZIP member order and timestamps are deterministic, and checksums cover the payload files. `forge audit manifest-export --engagement <id> [--run-id <id>] [--output <zip>] [--json]` exports the bundle and exits `2` if export-time verification fails while still preserving a failed verification receipt.
+  Verification: compile/Ruff over touched audit/CLI/test files; `tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py tests\audit\test_run_audit_manifest.py` -> `10 passed`.
+  Review: Claude read-only review at `%TEMP%\forge-claude-manifest-bundle-review-out.txt` returned only `Reached max turns (4)` with no usable findings.
+  Safety: offline evidence export only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, report-gate changes, exploitation, persistence, lateral movement, or post-exploitation behavior was added.
+  Handoff: `.claude/handoffs/2026-07-20-run-manifest-export-bundle.md`.
+
 - [x] Run audit manifest visibility checkpoint is green:
   `forge/audit/manifest.py` now exposes `summarize_run_audit_manifest()` for dashboard-safe hash/status summaries without returning `manifest_json`. Static dashboard JSON/HTML and live engagement detail/run APIs expose `audit_manifest`; web list/run endpoints default to `not_checked` to avoid repeated artifact hashing, while detail views and `verify_manifests=true` recompute hashes. The React dashboard renders short hash plus verification state, and `forge audit manifest-verify --engagement <id> [--run-id <id>] [--json]` gives operators a manual integrity check.
   Verification: compile/Ruff over touched backend/test files; focused audit/static/API tests -> `19 passed, 40 deselected`; combined focused audit/static/API tests -> `10 passed`; `npm run build` passed; `npm run lint` returned existing hook dependency warnings only.
@@ -2061,7 +2068,7 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
 ## Best next tasks
 
-- [ ] Add optional external attestation/export for run manifests if evidence-grade auditability needs a trust boundary beyond the local DB, for example signed manifest bundles or append-only export to customer storage.
+- [ ] Add optional cryptographic signing or append-only remote storage for exported run-manifest bundles if evidence-grade auditability needs a trust boundary beyond local files.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
 - [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
 - [ ] Audit MTGX entity typing/layout against the intended Maltego-first workflow before changing more graph UI.

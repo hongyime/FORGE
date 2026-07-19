@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import zipfile
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -57,6 +58,38 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
     assert ok_payload["run_id"] == run_id
     assert ok_payload["ok"] is True
     assert ok_payload["stored_hash"] == ok_payload["recomputed_hash"]
+
+    export_path = tmp_path / "manifest-export.zip"
+    exported = runner.invoke(
+        app,
+        [
+            "audit",
+            "manifest-export",
+            "--engagement",
+            "1001",
+            "--run-id",
+            str(run_id),
+            "--output",
+            str(export_path),
+            "--json",
+        ],
+    )
+    assert exported.exit_code == 0, exported.output
+    export_payload = json.loads(exported.output)
+    assert export_payload["engagement_id"] == 1001
+    assert export_payload["run_id"] == run_id
+    assert export_payload["path"] == str(export_path)
+    assert export_payload["verification_ok"] is True
+    assert export_payload["manifest_hash"] == ok_payload["stored_hash"]
+    with zipfile.ZipFile(export_path) as archive:
+        assert sorted(archive.namelist()) == [
+            "README.md",
+            "checksums.sha256",
+            "manifest.json",
+            "verification.json",
+        ]
+        receipt = json.loads(archive.read("verification.json"))
+    assert receipt["verification"]["ok"] is True
 
     con = sqlite3.connect(db_path)
     try:
