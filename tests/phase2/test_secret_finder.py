@@ -257,7 +257,8 @@ def test_github_pat_validator_active(monkeypatch):
     result = GithubPatValidator().validate("ghp_" + "a" * 36)
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "GitHub user ok: user_id=738251 login=testuser user_profile_present=true"
+        "GitHub user ok: user_id=738251 login=testuser user_profile_present=true "
+        "profile_url_matches_login=true"
     )
     assert "private@acme.io" not in (result.detail or "")
 
@@ -612,6 +613,7 @@ def test_gitlab_pat_validator_active_reads_current_user(monkeypatch):
             response.json.return_value = {
                 "id": 42,
                 "username": "delta-ops",
+                "web_url": "https://gitlab.com/delta-ops",
                 "email": "private@acme.io",
             }
             return response
@@ -621,7 +623,8 @@ def test_gitlab_pat_validator_active_reads_current_user(monkeypatch):
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "GitLab user ok: user_id=42 username=delta-ops user_profile_present=true"
+        "GitLab user ok: user_id=42 username=delta-ops user_profile_present=true "
+        "profile_url_matches_login=true"
     )
     assert "private@acme.io" not in (result.detail or "")
 

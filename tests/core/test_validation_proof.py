@@ -253,12 +253,14 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
         ),
         (
             "VALIDATED:github_user_api:GitHub user ok: "
-            "user_id=738251 login=testuser user_profile_present=true",
+            "user_id=738251 login=testuser user_profile_present=true "
+            "profile_url_matches_login=true",
             "github_user_api",
         ),
         (
             "VALIDATED:gitlab_current_user_api:GitLab user ok: "
-            "user_id=739251 username=delta-ops user_profile_present=true",
+            "user_id=739251 username=delta-ops user_profile_present=true "
+            "profile_url_matches_login=true",
             "gitlab_current_user_api",
         ),
         (
@@ -414,8 +416,30 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "github_user_api",
         ),
         (
+            "VALIDATED:github_user_api:GitHub user ok: "
+            "user_id=738251 login=testuser user_profile_present=true",
+            "github_user_api",
+        ),
+        (
+            "VALIDATED:github_user_api:GitHub user ok: "
+            "user_id=738251 login=testuser user_profile_present=true "
+            "profile_url_matches_login=false",
+            "github_user_api",
+        ),
+        (
             "VALIDATED:gitlab_current_user_api:GitLab user ok: "
             "user_id=42 username=service user_profile_present=true",
+            "gitlab_current_user_api",
+        ),
+        (
+            "VALIDATED:gitlab_current_user_api:GitLab user ok: "
+            "user_id=739251 username=delta-ops user_profile_present=true",
+            "gitlab_current_user_api",
+        ),
+        (
+            "VALIDATED:gitlab_current_user_api:GitLab user ok: "
+            "user_id=739251 username=delta-ops user_profile_present=true "
+            "profile_url_matches_login=false",
             "gitlab_current_user_api",
         ),
         (

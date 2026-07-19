@@ -3728,7 +3728,11 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             text,
             re.IGNORECASE,
         )
-        if match and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE):
+        if (
+            match
+            and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE)
+            and re.search(r"\bprofile_url_matches_login=true\b", text, re.IGNORECASE)
+        ):
             user_id = _stable_numeric_identifier(match.group(1), min_len=2, max_len=16)
             login = _stable_handle_identifier(match.group(2), allow_dot=False)
             if user_id and login:
@@ -3739,7 +3743,11 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             text,
             re.IGNORECASE,
         )
-        if match and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE):
+        if (
+            match
+            and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE)
+            and re.search(r"\bprofile_url_matches_login=true\b", text, re.IGNORECASE)
+        ):
             user_id = _stable_numeric_identifier(match.group(1), min_len=2, max_len=16)
             username = _stable_handle_identifier(match.group(2))
             if user_id and username:

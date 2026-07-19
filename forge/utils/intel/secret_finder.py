@@ -765,6 +765,16 @@ class GithubPatValidator(BaseKeyValidator):
         )
 
     @staticmethod
+    def _profile_url_matches_login(payload: object) -> bool:
+        login = GithubPatValidator._user_login(payload)
+        if not login or not isinstance(payload, dict):
+            return False
+        parsed = urlparse(str(payload.get("html_url") or ""))
+        host = str(parsed.hostname or "").lower()
+        parts = [part for part in str(parsed.path or "").split("/") if part]
+        return host == "github.com" and bool(parts) and parts[0].lower() == login.lower()
+
+    @staticmethod
     def _user_detail(payload: object) -> str:
         user_id = GithubPatValidator._user_id(payload)
         login = GithubPatValidator._user_login(payload)
@@ -772,7 +782,8 @@ class GithubPatValidator(BaseKeyValidator):
             "GitHub user ok: "
             f"user_id={user_id or 'unknown'} "
             f"login={login or 'unknown'} "
-            "user_profile_present=true"
+            "user_profile_present=true "
+            f"profile_url_matches_login={str(GithubPatValidator._profile_url_matches_login(payload)).lower()}"
         )
 
     def validate(self, key: str, proxy: Optional[str] = None, **kwargs) -> ValidationResult:
@@ -815,6 +826,11 @@ class GithubPatValidator(BaseKeyValidator):
                     return ValidationResult(
                         state=ValidationState.UNCONFIRMED,
                         detail="GitHub user response missing user proof",
+                    )
+                if not self._profile_url_matches_login(payload):
+                    return ValidationResult(
+                        state=ValidationState.UNCONFIRMED,
+                        detail="GitHub user response profile URL did not match login",
                     )
                 return ValidationResult(
                     state=ValidationState.ACTIVE,
@@ -863,6 +879,16 @@ class GitlabPatValidator(BaseKeyValidator):
         )
 
     @staticmethod
+    def _profile_url_matches_username(payload: object) -> bool:
+        username = GitlabPatValidator._user_identifier(payload)
+        if not username or not isinstance(payload, dict):
+            return False
+        parsed = urlparse(str(payload.get("web_url") or ""))
+        host = str(parsed.hostname or "").lower()
+        parts = [part for part in str(parsed.path or "").split("/") if part]
+        return host == "gitlab.com" and bool(parts) and parts[0].lower() == username.lower()
+
+    @staticmethod
     def _user_detail(payload: object) -> str:
         username = GitlabPatValidator._user_identifier(payload)
         user_id = GitlabPatValidator._user_id(payload)
@@ -870,7 +896,8 @@ class GitlabPatValidator(BaseKeyValidator):
             "GitLab user ok: "
             f"user_id={user_id or 'unknown'} "
             f"username={username or 'unknown'} "
-            "user_profile_present=true"
+            "user_profile_present=true "
+            f"profile_url_matches_login={str(GitlabPatValidator._profile_url_matches_username(payload)).lower()}"
         )
 
     def validate(self, key: str, proxy: Optional[str] = None, **kwargs) -> ValidationResult:
@@ -904,6 +931,11 @@ class GitlabPatValidator(BaseKeyValidator):
                     return ValidationResult(
                         state=ValidationState.UNCONFIRMED,
                         detail="GitLab user response missing user proof",
+                    )
+                if not self._profile_url_matches_username(payload):
+                    return ValidationResult(
+                        state=ValidationState.UNCONFIRMED,
+                        detail="GitLab user response profile URL did not match username",
                     )
                 return ValidationResult(
                     state=ValidationState.ACTIVE,

@@ -524,7 +524,11 @@ def _github_user_proof_is_stable(proof: str) -> bool:
         proof,
         re.IGNORECASE,
     )
-    if not match or not re.search(r"\buser_profile_present=true\b", proof, re.IGNORECASE):
+    if (
+        not match
+        or not re.search(r"\buser_profile_present=true\b", proof, re.IGNORECASE)
+        or not re.search(r"\bprofile_url_matches_login=true\b", proof, re.IGNORECASE)
+    ):
         return False
     return bool(
         _stable_numeric_identifier(match.group(1), min_len=2, max_len=16)
@@ -538,7 +542,11 @@ def _gitlab_user_proof_is_stable(proof: str) -> bool:
         proof,
         re.IGNORECASE,
     )
-    if not match or not re.search(r"\buser_profile_present=true\b", proof, re.IGNORECASE):
+    if (
+        not match
+        or not re.search(r"\buser_profile_present=true\b", proof, re.IGNORECASE)
+        or not re.search(r"\bprofile_url_matches_login=true\b", proof, re.IGNORECASE)
+    ):
         return False
     return bool(
         _stable_numeric_identifier(match.group(1), min_len=2, max_len=16)

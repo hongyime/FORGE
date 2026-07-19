@@ -183,6 +183,11 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "github",
         "GitHub user ok: user_id=738251 login=testuser user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "github",
+        "GitHub user ok: user_id=738251 login=testuser user_profile_present=true "
+        "profile_url_matches_login=true",
     ) == "testuser"
     assert cloud_validate._validated_identifier_from_detail(
         "gitlab",
@@ -219,6 +224,11 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "gitlab",
         "GitLab user ok: user_id=739251 username=delta-ops user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "gitlab",
+        "GitLab user ok: user_id=739251 username=delta-ops user_profile_present=true "
+        "profile_url_matches_login=true",
     ) == "delta-ops"
     assert cloud_validate._validated_identifier_from_detail(
         "google",
@@ -3937,7 +3947,10 @@ def test_sweep_pending_cloud_validations_processes_validatable_github_pat_rows_w
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="GitHub user ok: user_id=738251 login=testuser user_profile_present=true",
+            detail=(
+                "GitHub user ok: user_id=738251 login=testuser user_profile_present=true "
+                "profile_url_matches_login=true"
+            ),
         ),
     )
 
@@ -4058,7 +4071,7 @@ def test_sweep_pending_cloud_validations_downgrades_handle_provider_active_resul
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="GitHub login: aaaaaaaa",
+            detail="GitHub user ok: user_id=738251 login=testuser user_profile_present=true",
         ),
     )
     monkeypatch.setattr(
@@ -4066,7 +4079,7 @@ def test_sweep_pending_cloud_validations_downgrades_handle_provider_active_resul
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="GitLab user ok: username=000000",
+            detail="GitLab user ok: user_id=739251 username=delta-ops user_profile_present=true",
         ),
     )
 
@@ -5714,7 +5727,10 @@ def test_sweep_pending_cloud_validations_processes_validatable_gitlab_pat_rows_w
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="GitLab user ok: user_id=42 username=delta-ops user_profile_present=true",
+            detail=(
+                "GitLab user ok: user_id=739251 username=delta-ops user_profile_present=true "
+                "profile_url_matches_login=true"
+            ),
         ),
     )
 
