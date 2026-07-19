@@ -31671,7 +31671,7 @@ def test_artifact_queue_processor_strips_package_index_url_credentials(
                 """
             ).fetchall()
         }
-        assert artifact_meta[pip_conf_path.resolve().as_posix()]["format"] == "conf"
+        assert artifact_meta[pip_conf_path.resolve().as_posix()]["format"] == "pip-config"
         assert artifact_meta[condarc_path.resolve().as_posix()]["format"] == "condarc"
         assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
 
@@ -35050,7 +35050,7 @@ def test_artifact_queue_processor_extracts_cargo_credentials_without_suffix(
                 """
             ).fetchall()
         }
-        assert artifact_meta[credentials_path.resolve().as_posix()]["format"] == "credentials"
+        assert artifact_meta[credentials_path.resolve().as_posix()]["format"] == "cargo-credentials"
 
         persisted_text = json.dumps(
             {

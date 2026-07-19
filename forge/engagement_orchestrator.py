@@ -94,6 +94,10 @@ from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
 )
+from forge.utils.artifact_package_manager_config import (
+    package_manager_config_artifact_label,
+    package_manager_config_remote_filename,
+)
 from forge.utils.artifact_storage_client_config import (
     storage_client_config_artifact_label,
     storage_client_config_candidates,
@@ -5741,6 +5745,8 @@ def _looks_text_config_name(value: str) -> bool:
     raw_lowered = str(value or "").strip().replace("\\", "/").strip("/").lower()
     if _special_text_config_route_label(raw_lowered):
         return True
+    if package_manager_config_artifact_label(raw_lowered):
+        return True
     if _ai_agent_config_artifact_label(raw_lowered):
         return True
     if _looks_like_container_image_json_path(raw_lowered) and not _looks_like_container_image_blob_path(
@@ -5904,6 +5910,9 @@ def _artifact_format_label(value: str | Path) -> str:
     route_label = _special_text_config_route_label(str(value or ""))
     if route_label:
         return route_label
+    package_manager_label = package_manager_config_artifact_label(str(value or ""))
+    if package_manager_label:
+        return package_manager_label
     ai_agent_label = _ai_agent_config_artifact_label(str(value or ""))
     if ai_agent_label:
         return ai_agent_label
@@ -6688,6 +6697,8 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
     if _special_text_config_route_label(raw_url):
         return "config"
     parsed_remote = urlparse(raw_url)
+    if package_manager_config_artifact_label(unquote(parsed_remote.path or "")):
+        return "config"
     if windows_registry_hive_artifact_label(unquote(parsed_remote.path or "")):
         return "document"
     if connection_client_config_artifact_label(unquote(parsed_remote.path or "")):
@@ -6811,6 +6822,11 @@ def _select_remote_artifact_filename(
     if route_label:
         return route_label
     parsed_source = urlparse(source_url)
+    package_manager_filename = package_manager_config_remote_filename(
+        unquote(parsed_source.path or "")
+    )
+    if package_manager_filename:
+        return package_manager_filename
     if _looks_like_cloud_init_text_config_artifact_name(unquote(parsed_source.path or "")):
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate:
