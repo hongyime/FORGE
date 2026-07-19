@@ -24,6 +24,14 @@ from forge.utils.validation_proof import parse_validated_detail
 
 _MERMAID_CHAR_LIMIT = 4_000
 _DEFAULT_MAX_NODES = 150
+_DETERMINISTIC_CLOUD_ASSET_TYPES = {
+    "aws_s3",
+    "azure_blob",
+    "do_spaces",
+    "firebase",
+    "gcs",
+    "supabase",
+}
 _FORBIDDEN_KEYS = (
     "api_key",
     "apikey",
@@ -814,19 +822,27 @@ class AttackGraphBuilder:
         hint = f"{parameter} {target_url}".lower()
         if normalized in {"s3", "aws_s3"}:
             return "aws_s3"
-        if normalized == "aws" and ("aws_s3" in hint or "s3://" in hint):
+        if (normalized == "aws" and ("aws_s3" in hint or "s3://" in hint)) or (
+            not normalized and ("aws_s3" in hint or "s3://" in hint)
+        ):
             return "aws_s3"
         if normalized in {"gcs", "google_cloud_storage"}:
             return "gcs"
-        if normalized in {"gcp", "google"} and ("gcs" in hint or "gs://" in hint):
+        if (normalized in {"gcp", "google"} and ("gcs" in hint or "gs://" in hint)) or (
+            not normalized and ("gcs" in hint or "gs://" in hint)
+        ):
             return "gcs"
         if normalized in {"azure_blob", "azure_blob_storage"}:
             return "azure_blob"
-        if normalized == "azure" and "blob" in hint:
+        if (normalized == "azure" and "blob" in hint) or (
+            not normalized and ("azure_blob" in hint or "blob.core.windows.net" in hint)
+        ):
             return "azure_blob"
         if normalized in {"do_spaces", "digitalocean_spaces"}:
             return "do_spaces"
-        if normalized in {"digitalocean", "do"} and "space" in hint:
+        if (normalized in {"digitalocean", "do"} and "space" in hint) or (
+            not normalized and ("do_spaces" in hint or "digitaloceanspaces.com" in hint)
+        ):
             return "do_spaces"
         return normalized
 
@@ -835,6 +851,34 @@ class AttackGraphBuilder:
         if not validation_metadata:
             return False
         return str(validation_metadata.get("validation_status") or "").strip().upper() == "VALIDATED"
+
+    @staticmethod
+    def _vuln_is_deterministic_cloud_exposure(
+        vuln_type: str,
+        title: str,
+        validation_lookup_service: str,
+    ) -> bool:
+        if vuln_type == "DETERMINISTIC_CLOUD_EXPOSURE":
+            return True
+        if validation_lookup_service not in _DETERMINISTIC_CLOUD_ASSET_TYPES:
+            return False
+        normalized_title = str(title or "").strip().lower()
+        title_prefixes = (
+            "validated firebase data exposure",
+            "validated supabase data exposure",
+            "validated public ",
+            "externally reachable ",
+            "public ",
+        )
+        title_suffixes = (
+            " listing exposure",
+            " metadata observed",
+            " detected",
+        )
+        return normalized_title.startswith(title_prefixes) and (
+            normalized_title.endswith(title_suffixes)
+            or " data exposure" in normalized_title
+        )
 
     def _load_vulns(self, con: sqlite3.Connection) -> None:
         if not _table_exists(con, "vulnerability_findings"):
@@ -881,7 +925,11 @@ class AttackGraphBuilder:
                 else None
             )
             if (
-                vuln_type_str == "DETERMINISTIC_CLOUD_EXPOSURE"
+                self._vuln_is_deterministic_cloud_exposure(
+                    vuln_type_str,
+                    str(title or ""),
+                    validation_lookup_service,
+                )
                 and not self._cloud_exposure_is_validated(validation_metadata)
             ):
                 if validation_lookup_service and resource_id_str:

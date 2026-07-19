@@ -908,7 +908,8 @@ class TestLoadCloudAssets:
                 INSERT INTO cloud_assets (engagement_id, asset_type, identifier, source)
                 VALUES
                     (1, 'aws_s3', 'bucket-stale', 'cloud_validate'),
-                    (1, 'aws_s3', 'bucket-good', 'cloud_validate');
+                    (1, 'aws_s3', 'bucket-good', 'cloud_validate'),
+                    (1, 'gcs', 'metadata-bucket', 'cloud_validate');
 
                 INSERT INTO cloud_validation_results
                     (engagement_id, asset_type, identifier, validation_status,
@@ -921,7 +922,9 @@ class TestLoadCloudAssets:
                     (1, 'aws_s3', 'bucket-good', 'DEAD',
                      's3_list_bucket', 404, '2026-07-15T09:00:00+00:00'),
                     (1, 'aws_s3', 'bucket-good', 'VALIDATED',
-                     's3_list_bucket', 200, '2026-07-15T10:00:00+00:00');
+                     's3_list_bucket', 200, '2026-07-15T10:00:00+00:00'),
+                    (1, 'gcs', 'metadata-bucket', 'ACCESSIBLE_BUT_NO_DATA',
+                     'gcs_http_probe', 200, '2026-07-15T10:00:00+00:00');
 
                 INSERT INTO vulnerability_findings
                     (engagement_id, vuln_type, target_url, parameter, severity, title,
@@ -930,7 +933,10 @@ class TestLoadCloudAssets:
                     (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://bucket-stale', 'aws_s3',
                      'HIGH', 'Stale cloud exposure', 'aws', 'bucket-stale'),
                     (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://bucket-good', 'aws_s3',
-                     'HIGH', 'Validated cloud exposure', 'aws', 'bucket-good');
+                     'HIGH', 'Validated cloud exposure', 'aws', 'bucket-good'),
+                    (1, 'CLOUD_STORAGE_METADATA', 'gs://metadata-bucket', 'gcs',
+                     'MEDIUM', 'Public Google Cloud Storage metadata observed',
+                     NULL, 'metadata-bucket');
                 """
             )
             con.commit()
@@ -951,8 +957,10 @@ class TestLoadCloudAssets:
 
         assert cloud_nodes["bucket-stale"].metadata["validation_status"] == "HONEYPOT_SUSPECTED"
         assert cloud_nodes["bucket-good"].metadata["validation_status"] == "VALIDATED"
+        assert cloud_nodes["metadata-bucket"].metadata["validation_status"] == "ACCESSIBLE_BUT_NO_DATA"
         assert "Stale cloud exposure" not in vuln_by_label
         assert "Validated cloud exposure" in vuln_by_label
+        assert "Public Google Cloud Storage metadata observed" not in vuln_by_label
 
     def test_cloud_nodes_use_latest_validation_result_for_managed_pages_assets(
         self,
