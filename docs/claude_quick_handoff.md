@@ -11,6 +11,12 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Scheduled worker/playbook bounds checkpoint is green:
+  Distributed workers now execute task handlers behind `FORGE_TASK_TIMEOUT` with a default 3600s deadline and mark timed-out tasks failed instead of hanging the queue indefinitely. Playbook `_next_steps`, triggered zero-to-DA, triggered RCE hunter, and WAF-evasion recovery now preserve ROE/scope metadata into child scheduled tasks.
+  Verification: compile/Ruff over worker/playbook/automation tests; `tests\distributed\test_worker_timeouts.py tests\integration\test_playbooks.py` -> `11 passed`.
+  Safety: scheduling/control-plane hardening only. No new live probes, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Commit: `478d995 fix(distributed): bound scheduled task handlers`.
+
 - [x] Kill-chain recursion-budget parity checkpoint is green:
   CLI and web launch paths now share `normalize_kill_chain_max_iter()` and reject `max_iter < 1` or `> 10` before starting a run, closing the direct CLI bypass of the web launch budget.
   Verification: compile/Ruff over CLI/web/helper/tests; focused CLI range/help tests -> `2 passed`; focused web launch/range tests -> `2 passed`.
