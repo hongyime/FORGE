@@ -971,6 +971,8 @@ class AttackGraphBuilder:
         ) in rows:
             svc = str(service or "unknown").lower()
             validation_proof = parse_validated_detail(validation_detail)
+            if str(validation_proof["validation_status"] or "").upper() != "VALIDATED":
+                continue
             metadata = {
                 "service": svc,
                 "pattern_name": str(pattern_name or ""),

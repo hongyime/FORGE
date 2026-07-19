@@ -261,8 +261,8 @@ def _seed_full(db: Path) -> None:
     # Active API key
     con.execute(
         "INSERT INTO key_scanner_findings"
-        " (engagement_id, domain, service, pattern_name, source_backend, source_url, key_redacted, validation_state)"
-        " VALUES (?,?,?,?,?,?,?,?)",
+        " (engagement_id, domain, service, pattern_name, source_backend, source_url, key_redacted, validation_state, validation_detail)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
         (
             1,
             "example.com",
@@ -272,6 +272,7 @@ def _seed_full(db: Path) -> None:
             "https://github.com/example/repo/blob/main/cfg.py",
             "AKIA...XMPL",
             "ACTIVE",
+            "VALIDATED:aws_sts_get_caller_identity:AccountId=742931608514 UserId=AIDAEXAMPLE",
         ),
     )
 
@@ -927,7 +928,7 @@ class TestLoadApiKeys:
         assert "key_raw" not in key_node.metadata
         assert "AKIAIOSFODNN7EXAMPLE" not in graph.model_dump_json()
 
-    def test_apikey_node_downgrades_stale_sequential_aws_validation_proof(
+    def test_apikey_node_excludes_stale_sequential_aws_validation_proof(
         self,
         full_db: Path,
     ):
@@ -950,16 +951,8 @@ class TestLoadApiKeys:
             con.close()
 
         graph = AttackGraphBuilder(engagement_id=1, db_path=full_db).build()
-        key_node = next(node for node in graph.nodes if node.node_type == NodeType.APIKEY)
-
-        assert key_node.metadata["validation_state"] == "ACTIVE"
-        assert key_node.metadata["validation_detail"] == (
-            "VALIDATED:aws_sts_get_caller_identity:AccountId=123456789012 UserId=AIDAEXAMPLE"
-        )
-        assert key_node.metadata["validation_status"] == "UNVERIFIED"
-        assert key_node.metadata["validation_method"] == "aws_sts_get_caller_identity"
-        assert key_node.metadata["validation_proof"] == ""
-        assert key_node.metadata["validated_at"] == "2026-07-15T09:30:00+00:00"
+        assert all(node.node_type != NodeType.APIKEY for node in graph.nodes)
+        assert "VALIDATED:aws_sts_get_caller_identity" not in graph.model_dump_json()
 
 
 class TestSynthesiseImpact:
