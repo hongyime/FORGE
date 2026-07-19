@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import queue
 import signal
 import threading
 import time
@@ -11,6 +12,33 @@ from forge.distributed.scheduler import ScheduledTask, TaskScheduler
 
 
 TaskHandler = Callable[[int, str, dict[str, object]], None]
+_DEFAULT_HANDLER_TIMEOUT_SECONDS = 3600.0
+
+
+class TaskHandlerTimeoutError(TimeoutError):
+    def __init__(self, timeout_seconds: float) -> None:
+        super().__init__(f"task handler timed out after {timeout_seconds:g}s")
+        self.timeout_seconds = timeout_seconds
+
+
+def _positive_timeout_seconds(value: object) -> float | None:
+    try:
+        timeout_seconds = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if timeout_seconds <= 0:
+        return None
+    return timeout_seconds
+
+
+def _configured_handler_timeout_seconds() -> float:
+    try:
+        from forge.config import ForgeConfig  # noqa: PLC0415
+
+        timeout_seconds = _positive_timeout_seconds(ForgeConfig.load().task_timeout)
+    except Exception:  # noqa: BLE001
+        timeout_seconds = None
+    return timeout_seconds or _DEFAULT_HANDLER_TIMEOUT_SECONDS
 
 
 @dataclass(frozen=True)
@@ -19,6 +47,7 @@ class Worker:
     queue: QueueCoordinator
     scheduler: TaskScheduler
     handler: TaskHandler
+    handler_timeout_seconds: float | None = None
 
     def run_once(self) -> bool:
         self.scheduler.record_worker_heartbeat(worker_id=self.worker_id, status="idle")
@@ -46,7 +75,7 @@ class Worker:
             last_task_key=task_key,
         )
         try:
-            self.handler(engagement_id, task_key, body)
+            self._run_handler_with_deadline(engagement_id, task_key, body)
             self.scheduler.mark_done(engagement_id, task_key, self.worker_id)
             self.scheduler.record_worker_heartbeat(
                 worker_id=self.worker_id,
@@ -67,6 +96,46 @@ class Worker:
                 failed_delta=1,
             )
         return True
+
+    def _resolved_handler_timeout_seconds(self) -> float:
+        return (
+            _positive_timeout_seconds(self.handler_timeout_seconds)
+            or _configured_handler_timeout_seconds()
+        )
+
+    def _run_handler_with_deadline(
+        self,
+        engagement_id: int,
+        task_key: str,
+        body: dict[str, object],
+    ) -> None:
+        timeout_seconds = self._resolved_handler_timeout_seconds()
+        result_queue: queue.Queue[BaseException | None] = queue.Queue(maxsize=1)
+
+        def _invoke_handler() -> None:
+            try:
+                self.handler(engagement_id, task_key, body)
+            except BaseException as exc:  # noqa: BLE001
+                result_queue.put(exc)
+            else:
+                result_queue.put(None)
+
+        handler_thread = threading.Thread(
+            target=_invoke_handler,
+            name=f"forge-task-handler:{task_key}",
+            daemon=True,
+        )
+        handler_thread.start()
+        handler_thread.join(timeout_seconds)
+        if handler_thread.is_alive():
+            raise TaskHandlerTimeoutError(timeout_seconds)
+
+        try:
+            error = result_queue.get_nowait()
+        except queue.Empty as exc:
+            raise RuntimeError("task handler exited without reporting a result") from exc
+        if error is not None:
+            raise error
 
     def run_forever(self, idle_sleep_seconds: float = 0.25) -> None:
         stop = threading.Event()

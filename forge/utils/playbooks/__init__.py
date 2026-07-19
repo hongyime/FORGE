@@ -1,11 +1,29 @@
 from __future__ import annotations
 
-import json
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, List
 
 from forge.distributed.scheduler import ScheduledTask, TaskScheduler
+
+ROE_SCOPE_CONTEXT_KEYS = (
+    "roe_id",
+    "scope_manifest",
+    "require_roe",
+    "require_scope_manifest",
+)
+
+
+def inherit_roe_scope_context(
+    parent_metadata: Mapping[str, Any],
+    child_metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    inherited = dict(child_metadata)
+    for key in ROE_SCOPE_CONTEXT_KEYS:
+        if key not in inherited and key in parent_metadata:
+            inherited[key] = parent_metadata[key]
+    return inherited
 
 
 @dataclass
@@ -19,23 +37,38 @@ class PlaybookEngine:
     def __init__(self, scheduler: TaskScheduler):
         self.scheduler = scheduler
 
-    def run_recon_full(self, engagement_id: int, domain: str):
+    def run_recon_full(
+        self,
+        engagement_id: int,
+        domain: str,
+        context: Mapping[str, Any] | None = None,
+    ):
         steps = [
             PlaybookStep("recon:subdomains", {"domain": domain}),
             PlaybookStep("recon:ports", {"target": domain}),
             PlaybookStep("recon:crawl", {"target": f"http://{domain}"}),
         ]
-        self._execute_steps(engagement_id, steps)
+        self._execute_steps(engagement_id, steps, context=context)
 
-    def run_vuln_discovery(self, engagement_id: int, url: str):
+    def run_vuln_discovery(
+        self,
+        engagement_id: int,
+        url: str,
+        context: Mapping[str, Any] | None = None,
+    ):
         steps = [
             PlaybookStep("recon:crawl", {"target": url}),
             PlaybookStep("vuln:passive", {"target": url}),
             PlaybookStep("vuln:idor", {"target": url}),
         ]
-        self._execute_steps(engagement_id, steps)
+        self._execute_steps(engagement_id, steps, context=context)
 
-    def run_zero_to_da(self, engagement_id: int, credential_id: int):
+    def run_zero_to_da(
+        self,
+        engagement_id: int,
+        credential_id: int,
+        context: Mapping[str, Any] | None = None,
+    ):
         steps = [
             PlaybookStep("exploit:spray", {
                 "credential_id": credential_id,
@@ -44,7 +77,7 @@ class PlaybookEngine:
                 "requires_approval": True
             })
         ]
-        self._execute_steps(engagement_id, steps)
+        self._execute_steps(engagement_id, steps, context=context)
 
     def run_cloud_leak_loop(self, engagement_id: int, key_id: int):
         import logging
@@ -54,7 +87,12 @@ class PlaybookEngine:
             key_id,
         )
 
-    def run_waf_evasion_recon(self, engagement_id: int, target: str):
+    def run_waf_evasion_recon(
+        self,
+        engagement_id: int,
+        target: str,
+        context: Mapping[str, Any] | None = None,
+    ):
         steps = [
             PlaybookStep("recon:crawl_stealth", {
                 "target": target,
@@ -69,9 +107,15 @@ class PlaybookEngine:
                 "use_tor": True
             })
         ]
-        self._execute_steps(engagement_id, steps)
+        self._execute_steps(engagement_id, steps, context=context)
 
-    def run_rce_hunter(self, engagement_id: int, vuln_id: str, target: str):
+    def run_rce_hunter(
+        self,
+        engagement_id: int,
+        vuln_id: str,
+        target: str,
+        context: Mapping[str, Any] | None = None,
+    ):
         steps = [
             PlaybookStep("exploit:safe_check", {
                 "vuln_id": vuln_id,
@@ -84,19 +128,31 @@ class PlaybookEngine:
                 "requires_approval": True
             })
         ]
-        self._execute_steps(engagement_id, steps)
+        self._execute_steps(engagement_id, steps, context=context)
 
-    def _execute_steps(self, engagement_id: int, steps: List[PlaybookStep]):
+    def _execute_steps(
+        self,
+        engagement_id: int,
+        steps: List[PlaybookStep],
+        context: Mapping[str, Any] | None = None,
+    ):
         if not steps:
             return
         first_step = steps[0]
-        remaining_steps = [
-            {"action": s.action, "params": s.params} for s in steps[1:]
-        ]
         task_type = first_step.action.split(":")[-1]
         target = first_step.params.get("target", first_step.params.get("domain", "default"))
         task_key = f"{task_type}:{target}:{int(time.time()*1000)}"
-        payload = {"task_type": task_type, **first_step.params}
+        payload = inherit_roe_scope_context(
+            context or {},
+            {"task_type": task_type, **first_step.params},
+        )
+        remaining_steps = [
+            {
+                "action": s.action,
+                "params": inherit_roe_scope_context(payload, s.params),
+            }
+            for s in steps[1:]
+        ]
         if remaining_steps:
             payload["_next_steps"] = remaining_steps
         self.scheduler.schedule(

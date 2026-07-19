@@ -11,7 +11,11 @@ from forge.config import ForgeConfig
 from forge.db.session import get_engagement_db
 from forge.distributed.coordinator import QueueCoordinator
 from forge.distributed.scheduler import TaskScheduler
-from forge.utils.playbooks import PlaybookEngine
+from forge.utils.playbooks import (
+    PlaybookEngine,
+    ROE_SCOPE_CONTEXT_KEYS,
+    inherit_roe_scope_context,
+)
 
 
 @dataclass
@@ -60,12 +64,15 @@ class AutomationEngine:
 
     def _handle_task_done(self, engagement_id: int, task_key: str):
         # Check for chained next steps
+        parent_context: dict[str, Any] = {}
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute("SELECT payload FROM distributed_tasks WHERE engagement_id=? AND task_key=?", (engagement_id, task_key)).fetchone()
             if row and row["payload"]:
                 try:
                     payload_dict = json.loads(row["payload"])
+                    if isinstance(payload_dict, dict):
+                        parent_context = self._roe_scope_context(payload_dict)
                     next_steps = payload_dict.get("_next_steps", [])
                     if next_steps and self.scheduler:
                         next_step_data = next_steps[0]
@@ -79,9 +86,21 @@ class AutomationEngine:
                         import time
                         n_task_key = f"{n_task_type}:{n_target}:{int(time.time()*1000)}"
                         
-                        n_payload = {"task_type": n_task_type, **n_params}
+                        n_payload = inherit_roe_scope_context(
+                            payload_dict,
+                            {"task_type": n_task_type, **n_params},
+                        )
                         if remaining:
-                            n_payload["_next_steps"] = remaining
+                            n_payload["_next_steps"] = [
+                                {
+                                    "action": step["action"],
+                                    "params": inherit_roe_scope_context(
+                                        n_payload,
+                                        step["params"],
+                                    ),
+                                }
+                                for step in remaining
+                            ]
                             
                         from forge.distributed.scheduler import ScheduledTask
                         self.scheduler.schedule(
@@ -101,7 +120,11 @@ class AutomationEngine:
                 # Just get the latest credential id as a simplification for trigger
                 row = conn.execute("SELECT id FROM credentials ORDER BY id DESC LIMIT 1").fetchone()
                 if row:
-                    self.playbooks.run_zero_to_da(engagement_id, row["id"])
+                    self.playbooks.run_zero_to_da(
+                        engagement_id,
+                        row["id"],
+                        context=parent_context,
+                    )
 
         # Cloud Leak playbook trigger disabled — no cloud-secret model exists yet.
         # The credentials table has no 'description' column, and breach credentials
@@ -122,14 +145,52 @@ class AutomationEngine:
                     # simplistic target extraction
                     host_row = conn.execute("SELECT ip FROM hosts WHERE id = ?", (row["host_id"],)).fetchone()
                     if host_row:
-                        self.playbooks.run_rce_hunter(engagement_id, str(row["id"]), host_row["ip"])
+                        self.playbooks.run_rce_hunter(
+                            engagement_id,
+                            str(row["id"]),
+                            host_row["ip"],
+                            context=parent_context,
+                        )
 
     def _handle_task_failed(self, engagement_id: int, task_key: str, error: str):
         # Example triggering Playbook 3 (WAF Evasion) if a task fails due to 403
         if "403" in error or "WAF" in error or "429" in error:
             if task_key.startswith("recon:crawl:") or task_key.startswith("recon:ports:"):
                 target = task_key.split(":", 2)[-1]
-                self.playbooks.run_waf_evasion_recon(engagement_id, target)
+                self.playbooks.run_waf_evasion_recon(
+                    engagement_id,
+                    target,
+                    context=self._load_task_roe_scope_context(engagement_id, task_key),
+                )
+
+    def _load_task_roe_scope_context(
+        self,
+        engagement_id: int,
+        task_key: str,
+    ) -> dict[str, Any]:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    """
+                    SELECT payload
+                    FROM distributed_tasks
+                    WHERE engagement_id=? AND task_key=?
+                    """,
+                    (engagement_id, task_key),
+                ).fetchone()
+        except sqlite3.Error:
+            return {}
+        if not row or not row["payload"]:
+            return {}
+        try:
+            payload = json.loads(row["payload"])
+        except json.JSONDecodeError:
+            return {}
+        return self._roe_scope_context(payload if isinstance(payload, dict) else {})
+
+    def _roe_scope_context(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {key: payload[key] for key in ROE_SCOPE_CONTEXT_KEYS if key in payload}
 
     def get_suggestions(self) -> list[Suggestion]:
         if not self.db_path.exists():
