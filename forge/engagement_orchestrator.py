@@ -80,6 +80,10 @@ from forge.utils.artifact_cloudformation import (
     sam_config_candidates,
     serverless_framework_candidates,
 )
+from forge.utils.artifact_electron_update_metadata import (
+    electron_update_metadata_artifact_label,
+    electron_update_metadata_candidates,
+)
 from forge.utils.artifact_database_client import (
     database_client_config_artifact_label,
     database_client_endpoint_candidates,
@@ -5989,6 +5993,9 @@ def _artifact_format_label(value: str | Path) -> str:
     route_label = _special_text_config_route_label(str(value or ""))
     if route_label:
         return route_label
+    electron_update_label = electron_update_metadata_artifact_label(str(value or ""))
+    if electron_update_label:
+        return electron_update_label
     package_manager_label = package_manager_config_artifact_label(str(value or ""))
     if package_manager_label:
         return package_manager_label
@@ -17868,6 +17875,7 @@ class ArtifactQueueProcessor:
         "gradle_text",
         "js_runtime_text",
         "static_hosting_control_text",
+        "electron_update_metadata",
         "gitpod_text",
         "raw",
     )
@@ -19595,6 +19603,14 @@ class ArtifactQueueProcessor:
                 text,
                 source_hint=source_hint,
                 base_url=source_file,
+            )
+        if family == "electron_update_metadata":
+            return "\n".join(
+                electron_update_metadata_candidates(
+                    text,
+                    source_hint=source_hint,
+                    base_url=source_file,
+                )
             )
         if family == "gitpod_text":
             return self._gitpod_structured_payload_text(
