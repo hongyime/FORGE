@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import threading
 import time
 
@@ -21,6 +22,7 @@ from forge.cli import (
     _run_html_fetch_batch,
     _run_module_batch,
     _run_ptr_lookup_batch,
+    kill_chain,
 )
 
 
@@ -448,6 +450,66 @@ def test_kill_chain_help_exposes_auto_run_detected_option() -> None:
     assert result.exit_code == 0
     assert "--auto-run-detected" in result.stdout
     assert "--roe-id" in result.stdout
+
+
+def test_kill_chain_url_seed_with_at_query_stays_url(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+
+    seed_url = "https://acme.example/.well-known/webfinger?resource=acct:alice@acme.example"
+
+    kill_chain(
+        seed=seed_url,
+        related_seed=None,
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+        report_max_loops=0,
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        seed_row = con.execute(
+            """
+            SELECT seed_type
+            FROM engagement_seeds
+            WHERE engagement_id=1001 AND seed_value=?
+            """,
+            (seed_url,),
+        ).fetchone()
+        assert seed_row == ("url",)
+
+        email_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM emails
+            WHERE engagement_id=1001 AND email LIKE 'https://%'
+            """
+        ).fetchone()[0]
+        assert email_count == 0
+
+        artifact_row = con.execute(
+            """
+            SELECT artifact_type, discovered_from, status
+            FROM artifact_queue
+            WHERE engagement_id=1001 AND source_url=?
+            """,
+            (seed_url,),
+        ).fetchone()
+        assert artifact_row is not None
+        assert artifact_row[:2] == ("config", "engagement_seed")
+        assert artifact_row[2] in {"queued", "failed"}
+    finally:
+        con.close()
 
 
 def test_osint_emailrep_forwards_batch_arguments_to_reputation_lookup(

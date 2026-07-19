@@ -5079,13 +5079,13 @@ def kill_chain(
             return "ipv6" if parsed_ip.version == 6 else "ipv4"
         except ValueError:
             pass
-        if _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", v):
-            return "email"
         parsed = urlparse(v)
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             if _is_mobile_bundle_url(v):
                 return "apk_url"
             return "url"
+        if _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", v):
+            return "email"
         if _re.match(r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
                      v.lower()):
             return "domain"
