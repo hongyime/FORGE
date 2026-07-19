@@ -20,18 +20,12 @@ from forge.models.attack_graph_models import (
     NodeType,
     Severity,
 )
+from forge.utils.cloud_exposure_gate import is_deterministic_cloud_exposure
+from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
 _MERMAID_CHAR_LIMIT = 4_000
 _DEFAULT_MAX_NODES = 150
-_DETERMINISTIC_CLOUD_ASSET_TYPES = {
-    "aws_s3",
-    "azure_blob",
-    "do_spaces",
-    "firebase",
-    "gcs",
-    "supabase",
-}
 _FORBIDDEN_KEYS = (
     "api_key",
     "apikey",
@@ -54,7 +48,6 @@ _FORBIDDEN_KEYS = (
     "token_enc",
 )
 _MAX_NODE_LABEL_LENGTH = 120
-_MAX_VALIDATION_SUMMARY_LENGTH = 280
 _SEED_BASE_METADATA_KEYS = {
     "confidence",
     "confidence_band",
@@ -172,22 +165,6 @@ def _scrub_graph_metadata(value: Any) -> dict[str, Any]:
 
     scrubbed = _scrub(value)
     return scrubbed if isinstance(scrubbed, dict) else {}
-
-
-def _safe_validation_summary(value: Any) -> str:
-    text = " ".join(str(value or "").split())
-    if not text:
-        return ""
-    text = re.sub(
-        r"(?i)\b(password|passwd|secret|api[_-]?key|access[_-]?token|"
-        r"refresh[_-]?token|token)\s*[:=]\s*[^\s,;]+",
-        lambda match: f"{match.group(1)}=[REDACTED]",
-        text,
-    )
-    text = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*", "Bearer [REDACTED]", text)
-    if len(text) <= _MAX_VALIDATION_SUMMARY_LENGTH:
-        return text
-    return text[: _MAX_VALIDATION_SUMMARY_LENGTH - 3] + "..."
 
 
 def _append_unique_provider_sources(target: list[str], raw_value: Any) -> None:
@@ -896,26 +873,10 @@ class AttackGraphBuilder:
         title: str,
         validation_lookup_service: str,
     ) -> bool:
-        if vuln_type == "DETERMINISTIC_CLOUD_EXPOSURE":
-            return True
-        if validation_lookup_service not in _DETERMINISTIC_CLOUD_ASSET_TYPES:
-            return False
-        normalized_title = str(title or "").strip().lower()
-        title_prefixes = (
-            "validated firebase data exposure",
-            "validated supabase data exposure",
-            "validated public ",
-            "externally reachable ",
-            "public ",
-        )
-        title_suffixes = (
-            " listing exposure",
-            " metadata observed",
-            " detected",
-        )
-        return normalized_title.startswith(title_prefixes) and (
-            normalized_title.endswith(title_suffixes)
-            or " data exposure" in normalized_title
+        return is_deterministic_cloud_exposure(
+            vuln_type,
+            title,
+            (validation_lookup_service,),
         )
 
     def _load_vulns(self, con: sqlite3.Connection) -> None:

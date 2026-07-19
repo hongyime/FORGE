@@ -50,6 +50,8 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFo
 from forge.core.errors import ProviderUnavailableError
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.utils.cloud_exposure_gate import is_deterministic_cloud_exposure
+from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
 try:
@@ -118,22 +120,6 @@ _FORBIDDEN_CONTEXT_KEYS = {
     "token",
     "token_enc",
 }
-_MAX_VALIDATION_SUMMARY_LENGTH = 280
-
-
-def _safe_validation_summary(value: Any) -> str:
-    text = " ".join(str(value or "").split())
-    if not text:
-        return ""
-    text = _CRED_LEAK_RE.sub(
-        lambda match: f"{match.group(0).split('=', 1)[0].split(':', 1)[0]}=[REDACTED]",
-        text,
-    )
-    text = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*", "Bearer [REDACTED]", text)
-    if len(text) <= _MAX_VALIDATION_SUMMARY_LENGTH:
-        return text
-    return text[: _MAX_VALIDATION_SUMMARY_LENGTH - 3] + "..."
-
 _AUTO_CASCADE_DEFAULT_ORDER = (
     "kiro_cli",
     "claude_code",
@@ -144,16 +130,6 @@ _AUTO_CASCADE_DEFAULT_ORDER = (
     "llama_cpp",
     "template",
 )
-
-_DETERMINISTIC_CLOUD_ASSET_TYPES = {
-    "aws_s3",
-    "azure_blob",
-    "do_spaces",
-    "firebase",
-    "gcs",
-    "supabase",
-}
-
 
 # ── Exceptions ─────────────────────────────────────────────────────────────────
 
@@ -1372,10 +1348,10 @@ class ContextBuilder:
     @classmethod
     def _finding_is_deterministic_cloud_exposure(cls, finding: dict[str, Any]) -> bool:
         vuln_type = str(finding.get("vuln_type") or "").strip().upper()
-        if vuln_type == "DETERMINISTIC_CLOUD_EXPOSURE":
+        title = str(finding.get("title") or "").strip().lower()
+        if is_deterministic_cloud_exposure(vuln_type, title):
             return True
 
-        title = str(finding.get("title") or "").strip().lower()
         parameter_asset = cls._normalize_validation_asset_type(
             str(finding.get("parameter") or "").split(":", 1)[0]
         )
@@ -1388,28 +1364,10 @@ class ContextBuilder:
                 parsed = None
             if parsed and parsed.scheme:
                 target_asset = cls._normalize_validation_asset_type(parsed.scheme)
-        has_cloud_asset_hint = (
-            parameter_asset in _DETERMINISTIC_CLOUD_ASSET_TYPES
-            or target_asset in _DETERMINISTIC_CLOUD_ASSET_TYPES
-        )
-        if not has_cloud_asset_hint:
-            return False
-
-        deterministic_title_prefixes = (
-            "validated firebase data exposure",
-            "validated supabase data exposure",
-            "validated public ",
-            "externally reachable ",
-            "public ",
-        )
-        deterministic_title_suffixes = (
-            " listing exposure",
-            " metadata observed",
-            " detected",
-        )
-        return title.startswith(deterministic_title_prefixes) and (
-            title.endswith(deterministic_title_suffixes)
-            or " data exposure" in title
+        return is_deterministic_cloud_exposure(
+            vuln_type,
+            title,
+            (parameter_asset, target_asset),
         )
 
     def _load_post_exploit(self, con: sqlite3.Connection) -> PostExploitContext:
