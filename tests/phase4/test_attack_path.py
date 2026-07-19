@@ -954,6 +954,34 @@ class TestLoadApiKeys:
         assert all(node.node_type != NodeType.APIKEY for node in graph.nodes)
         assert "VALIDATED:aws_sts_get_caller_identity" not in graph.model_dump_json()
 
+    def test_apikey_node_excludes_bare_legacy_cloud_validation_proof(
+        self,
+        full_db: Path,
+    ):
+        con = sqlite3.connect(full_db)
+        try:
+            con.execute(
+                """
+                UPDATE key_scanner_findings
+                SET service='firebase',
+                    pattern_name='firebase_mobile_config',
+                    validation_detail=?,
+                    validated_at=?
+                WHERE engagement_id=1 AND service='aws'
+                """,
+                (
+                    "VALIDATED:firebase_database_shallow_read",
+                    "2026-07-15T09:30:00+00:00",
+                ),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        graph = AttackGraphBuilder(engagement_id=1, db_path=full_db).build()
+        assert all(node.node_type != NodeType.APIKEY for node in graph.nodes)
+        assert "VALIDATED:firebase_database_shallow_read" not in graph.model_dump_json()
+
 
 class TestSynthesiseImpact:
     """FR-4H.7 / test_4h_impact_synthesised."""

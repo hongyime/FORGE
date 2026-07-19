@@ -41,28 +41,6 @@ def test_parse_validated_detail_downgrades_aws_sts_without_account_id() -> None:
     }
 
 
-def test_parse_validated_detail_keeps_legacy_non_aws_methods() -> None:
-    proof = parse_validated_detail(
-        "VALIDATED:supabase_rest_root:Supabase REST endpoint responded successfully."
-    )
-
-    assert proof == {
-        "validation_status": "VALIDATED",
-        "validation_method": "supabase_rest_root",
-        "validation_proof": "Supabase REST endpoint responded successfully.",
-    }
-
-
-def test_parse_validated_detail_keeps_legacy_firebase_read_method() -> None:
-    proof = parse_validated_detail("VALIDATED:firebase_database_shallow_read")
-
-    assert proof == {
-        "validation_status": "VALIDATED",
-        "validation_method": "firebase_database_shallow_read",
-        "validation_proof": "",
-    }
-
-
 @pytest.mark.parametrize(
     ("detail", "method"),
     [
@@ -78,10 +56,6 @@ def test_parse_validated_detail_keeps_legacy_firebase_read_method() -> None:
         ),
         (
             "VALIDATED:supabase_rest_root:Supabase REST endpoint returned live data.",
-            "supabase_rest_root",
-        ),
-        (
-            "VALIDATED:supabase_rest_root:Supabase REST endpoint responded successfully.",
             "supabase_rest_root",
         ),
     ],
@@ -117,6 +91,14 @@ def test_parse_validated_detail_preserves_stable_legacy_cloud_read_proofs(
         ),
         (
             "VALIDATED:supabase_rest_root:provider returned 200",
+            "supabase_rest_root",
+        ),
+        ("VALIDATED:firebase_database_shallow_read", "firebase_database_shallow_read"),
+        ("VALIDATED:firebase_database_node_read:", "firebase_database_node_read"),
+        ("VALIDATED:supabase_rest_root", "supabase_rest_root"),
+        ("VALIDATED:supabase_rest_root:", "supabase_rest_root"),
+        (
+            "VALIDATED:supabase_rest_root:Supabase REST endpoint responded successfully.",
             "supabase_rest_root",
         ),
     ],

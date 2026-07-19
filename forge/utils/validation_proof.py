@@ -14,7 +14,7 @@ _AWS_ACCOUNT_ID_RE = re.compile(
     re.IGNORECASE,
 )
 _AWS_STS_METHODS = {"aws_sts_get_caller_identity"}
-_LEGACY_METHODS_ALLOWED_WITHOUT_PARSER_PROOF = {
+_LEGACY_CLOUD_READ_METHODS_REQUIRING_PROOF = {
     "firebase_database_node_read",
     "firebase_database_shallow_read",
     "supabase_rest_root",
@@ -507,10 +507,10 @@ def _azure_shared_key_proof_is_stable(proof: str) -> bool:
 def _legacy_cloud_read_proof_is_stable(method: str, proof: str) -> bool:
     normalized_method = str(method or "").strip().lower()
     normalized_proof = str(proof or "").strip().lower()
-    if normalized_method not in _LEGACY_METHODS_ALLOWED_WITHOUT_PARSER_PROOF:
+    if normalized_method not in _LEGACY_CLOUD_READ_METHODS_REQUIRING_PROOF:
         return False
     if not normalized_proof:
-        return True
+        return False
     if any(marker in normalized_proof for marker in _LOW_SIGNAL_CLOUD_READ_PROOF_MARKERS):
         return False
     if normalized_method.startswith("firebase_"):
@@ -522,7 +522,6 @@ def _legacy_cloud_read_proof_is_stable(method: str, proof: str) -> bool:
     if normalized_method == "supabase_rest_root":
         return (
             "supabase rest endpoint returned live data" in normalized_proof
-            or normalized_proof == "supabase rest endpoint responded successfully."
             or "live records observed" in normalized_proof
         )
     return False
@@ -656,7 +655,7 @@ def _validated_proof_is_reportable(method: str, proof: str) -> bool:
         return _slack_auth_proof_is_stable(proof)
     if normalized_method == "azure_blob_list_containers_shared_key":
         return _azure_shared_key_proof_is_stable(proof)
-    if normalized_method in _LEGACY_METHODS_ALLOWED_WITHOUT_PARSER_PROOF:
+    if normalized_method in _LEGACY_CLOUD_READ_METHODS_REQUIRING_PROOF:
         return _legacy_cloud_read_proof_is_stable(normalized_method, proof)
     return False
 

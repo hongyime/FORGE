@@ -44,7 +44,8 @@ def test_deterministic_findings_synthesizes_cloud_and_key_evidence(tmp_path: Pat
                 (engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name, key_redacted, validation_state, validation_detail)
             VALUES
                 (1001, 'acme-firebase-prod', 'firebase', 'firebase_mobile_config', 'mobile_config_parse',
-                 'app.apk', 'app.apk', 'AIza...7890', 'ACTIVE', 'VALIDATED:firebase_database_shallow_read')
+                 'app.apk', 'app.apk', 'AIza...7890', 'ACTIVE',
+                 'VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data.')
             """
         )
         con.commit()
@@ -82,6 +83,7 @@ def test_deterministic_findings_synthesizes_cloud_and_key_evidence(tmp_path: Pat
         assert "source=app.apk" in findings[1][5]
         assert "repo=app.apk" in findings[1][5]
         assert "validation=VALIDATED:firebase_database_shallow_read" in findings[1][5]
+        assert "non-empty data" in findings[1][5]
     finally:
         con.close()
 
@@ -130,7 +132,7 @@ def test_deterministic_findings_scores_validated_supabase_rest_access_high(tmp_p
         con.close()
 
 
-def test_deterministic_findings_keep_validated_legacy_key_only_rows_high(
+def test_deterministic_findings_keep_legacy_key_only_rows_with_live_data_high(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "engagement.db"
@@ -146,7 +148,7 @@ def test_deterministic_findings_keep_validated_legacy_key_only_rows_high(
             VALUES
                 (1001, '', 'supabase', 'supabase_mobile_config', 'artifact', '',
                  'mobile-config.js', 'eyJh...999', 'ACTIVE',
-                 'VALIDATED:supabase_rest_root:Supabase REST endpoint responded successfully.')
+                 'VALIDATED:supabase_rest_root:Supabase REST endpoint returned live data.')
             """
         )
         con.commit()
@@ -175,6 +177,36 @@ def test_deterministic_findings_keep_validated_legacy_key_only_rows_high(
         )
     finally:
         con.close()
+
+
+def test_deterministic_findings_skip_bare_legacy_cloud_key_proof(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name,
+                 key_redacted, validation_state, validation_detail)
+            VALUES
+                (1001, '', 'firebase', 'firebase_mobile_config', 'artifact', '',
+                 'mobile-config.js', 'AIza...7890', 'ACTIVE',
+                 'VALIDATED:firebase_database_shallow_read')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = DeterministicFindingEngine(db_path, 1001).run()
+
+    assert summary.inserted == 0
+    assert summary.active_findings == 0
+    assert all(count == 0 for count in summary.severity_summary.values())
 
 
 def test_deterministic_findings_skip_low_signal_supabase_key_proof(

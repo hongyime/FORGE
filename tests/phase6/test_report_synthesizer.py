@@ -453,6 +453,16 @@ def test_context_builder_counts_only_reportable_key_findings(tmp_eng_db):
             """,
             (ENGAGEMENT_ID,),
         )
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, validation_state, service, domain, validation_detail)
+            VALUES
+                (?, 'ACTIVE', 'firebase', '',
+                 'VALIDATED:firebase_database_shallow_read')
+            """,
+            (ENGAGEMENT_ID,),
+        )
         con.commit()
     finally:
         con.close()

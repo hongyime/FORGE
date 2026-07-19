@@ -439,6 +439,65 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
         con.close()
 
 
+def _insert_dashboard_key_scanner_row(
+    db_path: Path,
+    *,
+    service: str,
+    pattern_name: str,
+    key_redacted: str,
+    validation_detail: str,
+) -> None:
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE key_scanner_findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                domain TEXT,
+                service TEXT,
+                pattern_name TEXT,
+                source_backend TEXT,
+                source_url TEXT,
+                repo_name TEXT,
+                key_redacted TEXT,
+                key_enc TEXT,
+                validation_state TEXT,
+                validation_detail TEXT,
+                found_at TEXT,
+                validated_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, domain, service, pattern_name, source_backend, source_url,
+                 repo_name, key_redacted, key_enc, validation_state, validation_detail,
+                 found_at, validated_at)
+            VALUES (
+                1001,
+                'artifact://bundle/config.js',
+                ?,
+                ?,
+                'artifact_queue_ingest',
+                'artifact://bundle/config.js',
+                'mobile-drop',
+                ?,
+                'encrypted-secret-never-render',
+                'ACTIVE',
+                ?,
+                '2026-07-15T09:20:00',
+                '2026-07-15T09:25:00'
+            )
+            """,
+            (service, pattern_name, key_redacted, validation_detail),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
 def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) -> None:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"
@@ -1845,55 +1904,17 @@ def test_generate_dashboard_surfaces_key_validation_proof_rows(tmp_path: Path) -
 
     db_path = db_root / "1001.db"
     _build_minimal_engagement_db(db_path)
-
-    con = sqlite3.connect(db_path)
-    try:
-        con.executescript(
-            """
-            CREATE TABLE key_scanner_findings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                engagement_id INTEGER,
-                domain TEXT,
-                service TEXT,
-                pattern_name TEXT,
-                source_backend TEXT,
-                source_url TEXT,
-                repo_name TEXT,
-                key_redacted TEXT,
-                key_enc TEXT,
-                validation_state TEXT,
-                validation_detail TEXT,
-                found_at TEXT,
-                validated_at TEXT
-            );
-            """
-        )
-        con.execute(
-            """
-            INSERT INTO key_scanner_findings
-                (engagement_id, domain, service, pattern_name, source_backend, source_url,
-                 repo_name, key_redacted, key_enc, validation_state, validation_detail,
-                 found_at, validated_at)
-            VALUES (
-                1001,
-                'artifact://bundle/config.js',
-                'sentry',
-                'sentry_auth_token',
-                'artifact_queue_ingest',
-                'artifact://bundle/config.js',
-                'mobile-drop',
-                'sntrys_...ABCD',
-                'encrypted-secret-never-render',
-                'ACTIVE',
-                'VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=4500000000000000 org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a',
-                '2026-07-15T09:20:00',
-                '2026-07-15T09:25:00'
-            )
-            """
-        )
-        con.commit()
-    finally:
-        con.close()
+    _insert_dashboard_key_scanner_row(
+        db_path,
+        service="sentry",
+        pattern_name="sentry_auth_token",
+        key_redacted="sntrys_...ABCD",
+        validation_detail=(
+            "VALIDATED:sentry_list_organizations:Sentry organizations ok: "
+            "org_id=4500000000000000 org_slug_present=true "
+            "org_slug_stable=true org_slug_hash=d2836b7de9447c4a"
+        ),
+    )
 
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
@@ -1934,55 +1955,16 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
 
     db_path = db_root / "1001.db"
     _build_minimal_engagement_db(db_path)
-
-    con = sqlite3.connect(db_path)
-    try:
-        con.executescript(
-            """
-            CREATE TABLE key_scanner_findings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                engagement_id INTEGER,
-                domain TEXT,
-                service TEXT,
-                pattern_name TEXT,
-                source_backend TEXT,
-                source_url TEXT,
-                repo_name TEXT,
-                key_redacted TEXT,
-                key_enc TEXT,
-                validation_state TEXT,
-                validation_detail TEXT,
-                found_at TEXT,
-                validated_at TEXT
-            );
-            """
-        )
-        con.execute(
-            """
-            INSERT INTO key_scanner_findings
-                (engagement_id, domain, service, pattern_name, source_backend, source_url,
-                 repo_name, key_redacted, key_enc, validation_state, validation_detail,
-                 found_at, validated_at)
-            VALUES (
-                1001,
-                'artifact://bundle/config.js',
-                'sentry',
-                'sentry_auth_token',
-                'artifact_queue_ingest',
-                'artifact://bundle/config.js',
-                'mobile-drop',
-                'sntrys_...ABCD',
-                'encrypted-secret-never-render',
-                'ACTIVE',
-                'VALIDATED:sentry_list_organizations:Sentry organizations ok: org_id=0000000000000000 org_slug_present=true org_slug_stable=true',
-                '2026-07-15T09:20:00',
-                '2026-07-15T09:25:00'
-            )
-            """
-        )
-        con.commit()
-    finally:
-        con.close()
+    _insert_dashboard_key_scanner_row(
+        db_path,
+        service="sentry",
+        pattern_name="sentry_auth_token",
+        key_redacted="sntrys_...ABCD",
+        validation_detail=(
+            "VALIDATED:sentry_list_organizations:Sentry organizations ok: "
+            "org_id=0000000000000000 org_slug_present=true org_slug_stable=true"
+        ),
+    )
 
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
@@ -1997,6 +1979,38 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
     assert key_row["Validation Method"] == "sentry_list_organizations"
     assert key_row["Validation Proof"] == ""
     assert "VALIDATED:sentry_list_organizations" in key_row["Proof"]
+    assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
+
+
+def test_generate_dashboard_downgrades_bare_legacy_key_validation_proof_rows(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    _insert_dashboard_key_scanner_row(
+        db_path,
+        service="firebase",
+        pattern_name="firebase_mobile_config",
+        key_redacted="AIza...7890",
+        validation_detail="VALIDATED:firebase_database_shallow_read",
+    )
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    key_row = detail_payload["sections"]["key_scanner_findings"][0]
+
+    assert key_row["Validation Status"] == "UNVERIFIED"
+    assert key_row["Validation Method"] == "firebase_database_shallow_read"
+    assert key_row["Validation Proof"] == ""
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 

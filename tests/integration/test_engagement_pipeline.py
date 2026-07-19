@@ -144,7 +144,7 @@ def test_end_to_end_engagement_pipeline_generates_template_report(tmp_path: Path
             """
             UPDATE key_scanner_findings
             SET validation_state='ACTIVE',
-                validation_detail='VALIDATED:firebase_database_shallow_read'
+                validation_detail='VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data.'
             WHERE engagement_id=1001 AND service='firebase'
             """
         )
@@ -221,7 +221,7 @@ def test_end_to_end_engagement_pipeline_falls_back_to_raw_export_when_report_fam
             """
             UPDATE key_scanner_findings
             SET validation_state='ACTIVE',
-                validation_detail='VALIDATED:firebase_database_shallow_read'
+                validation_detail='VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data.'
             WHERE engagement_id=1001 AND service='firebase'
             """
         )
@@ -309,7 +309,7 @@ def test_end_to_end_engagement_pipeline_auto_provider_failure_exports_actual_tem
             """
             UPDATE key_scanner_findings
             SET validation_state='ACTIVE',
-                validation_detail='VALIDATED:firebase_database_shallow_read'
+                validation_detail='VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data.'
             WHERE engagement_id=1001 AND service='firebase'
             """
         )
@@ -428,7 +428,7 @@ def test_end_to_end_engagement_pipeline_auto_without_cloud_uses_local_llama(
             """
             UPDATE key_scanner_findings
             SET validation_state='ACTIVE',
-                validation_detail='VALIDATED:firebase_database_shallow_read'
+                validation_detail='VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data.'
             WHERE engagement_id=1001 AND service='firebase'
             """
         )
