@@ -673,6 +673,8 @@ _EPIEOS_PHONE_FIELD_KEYS = (
     "whatsappNumber",
 )
 
+_EPIEOS_TWITTER_PLATFORM_NAMES = {"twitter", "x", "twitter_x", "x_twitter"}
+
 _EPIEOS_PLATFORM_PROFILE_HOSTS = {
     "500px": ("500px.com",),
     "500px.com": ("500px.com",),
@@ -890,12 +892,14 @@ _EPIEOS_PLATFORM_PROFILE_HOSTS = {
     "thm": ("tryhackme.com",),
     "twitch": ("twitch.tv",),
     "twitter": ("x.com", "twitter.com"),
+    "twitter_x": ("x.com", "twitter.com"),
     "unsplash": ("unsplash.com",),
     "unsplash.com": ("unsplash.com",),
     "vimeo": ("vimeo.com",),
     "wellfound": ("wellfound.com",),
     "wellfound_company": ("wellfound.com",),
     "x": ("x.com", "twitter.com"),
+    "x_twitter": ("x.com", "twitter.com"),
     "yeswehack": ("yeswehack.com",),
     "youtube": ("youtube.com", "youtu.be"),
     "zenodo": ("zenodo.org",),
@@ -4132,7 +4136,7 @@ def _epieos_profile_url(platform: str, data: dict[str, Any]) -> str:
                 return people_url
         if platform_name in {"devto", "dev.to"} and not _epieos_handle_from_profile_url(explicit):
             return ""
-        if platform_name in {"twitter", "x"} and not _epieos_handle_from_profile_url(explicit):
+        if platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES and not _epieos_handle_from_profile_url(explicit):
             return ""
         if (
             platform_name
@@ -4223,7 +4227,7 @@ def _epieos_profile_url(platform: str, data: dict[str, Any]) -> str:
             return people_url
     if not handle:
         return ""
-    if platform_name in {"twitter", "x"}:
+    if platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES:
         return f"https://x.com/{handle}"
     if platform_name == "github":
         return f"https://github.com/{handle}"
@@ -4552,7 +4556,10 @@ def _epieos_handle(platform: str, data: dict[str, Any], url: str) -> str:
             normalized = ""
         elif platform_name in {"devto", "dev.to"} and handle.lower() in _DEVTO_RESERVED_PROFILE_PATHS:
             normalized = ""
-        elif platform_name in {"twitter", "x"} and handle.lower() in _TWITTER_RESERVED_PROFILE_PATHS:
+        elif (
+            platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES
+            and handle.lower() in _TWITTER_RESERVED_PROFILE_PATHS
+        ):
             normalized = ""
         elif platform_name == "bitbucket" and handle.lower() in _BITBUCKET_RESERVED_PROFILE_PATHS:
             normalized = ""
