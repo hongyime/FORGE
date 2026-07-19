@@ -2889,7 +2889,7 @@ def test_telegram_bot_token_validator_active_uses_get_me(monkeypatch):
             del exc_type, exc, tb
 
         def get(self, url: str):  # noqa: ANN001
-            assert url == "https://api.telegram.org/bot1234567890:" + "T" * 35 + "/getMe"
+            assert url == "https://api.telegram.org/bot725419863:" + "T" * 35 + "/getMe"
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {
@@ -2903,11 +2903,43 @@ def test_telegram_bot_token_validator_active_uses_get_me(monkeypatch):
             return response
 
     monkeypatch.setattr("httpx.Client", _TelegramClient)
-    result = TelegramBotTokenValidator().validate("1234567890:" + "T" * 35)
+    result = TelegramBotTokenValidator().validate("725419863:" + "T" * 35)
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == "Telegram bot auth ok: bot_id=725419863 bot_profile_present=true"
     assert "private_bot_name" not in (result.detail or "")
+
+
+def test_telegram_bot_token_validator_mismatched_bot_id_stays_unconfirmed(monkeypatch):
+    class _TelegramClient:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            del args, kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
+            del exc_type, exc, tb
+
+        def get(self, url: str):  # noqa: ANN001
+            assert url == "https://api.telegram.org/bot725419863:" + "T" * 35 + "/getMe"
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {
+                "ok": True,
+                "result": {
+                    "id": 925419863,
+                    "is_bot": True,
+                    "username": "private_bot_name",
+                },
+            }
+            return response
+
+    monkeypatch.setattr("httpx.Client", _TelegramClient)
+    result = TelegramBotTokenValidator().validate("725419863:" + "T" * 35)
+
+    assert result.state == ValidationState.UNCONFIRMED
+    assert result.detail == "Telegram getMe bot id did not match token prefix"
 
 
 def test_telegram_bot_token_validator_id_only_response_stays_unconfirmed(monkeypatch):
@@ -2922,7 +2954,7 @@ def test_telegram_bot_token_validator_id_only_response_stays_unconfirmed(monkeyp
             del exc_type, exc, tb
 
         def get(self, url: str):  # noqa: ANN001
-            assert url == "https://api.telegram.org/bot1234567890:" + "T" * 35 + "/getMe"
+            assert url == "https://api.telegram.org/bot725419863:" + "T" * 35 + "/getMe"
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {
@@ -2932,7 +2964,7 @@ def test_telegram_bot_token_validator_id_only_response_stays_unconfirmed(monkeyp
             return response
 
     monkeypatch.setattr("httpx.Client", _TelegramClient)
-    result = TelegramBotTokenValidator().validate("1234567890:" + "T" * 35)
+    result = TelegramBotTokenValidator().validate("725419863:" + "T" * 35)
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Telegram getMe response missing bot proof"
@@ -2950,7 +2982,7 @@ def test_telegram_bot_token_validator_non_bot_user_stays_unconfirmed(monkeypatch
             del exc_type, exc, tb
 
         def get(self, url: str):  # noqa: ANN001
-            assert url == "https://api.telegram.org/bot1234567890:" + "T" * 35 + "/getMe"
+            assert url == "https://api.telegram.org/bot725419863:" + "T" * 35 + "/getMe"
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {
@@ -2964,7 +2996,7 @@ def test_telegram_bot_token_validator_non_bot_user_stays_unconfirmed(monkeypatch
             return response
 
     monkeypatch.setattr("httpx.Client", _TelegramClient)
-    result = TelegramBotTokenValidator().validate("1234567890:" + "T" * 35)
+    result = TelegramBotTokenValidator().validate("725419863:" + "T" * 35)
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Telegram getMe response missing bot proof"
@@ -3060,7 +3092,7 @@ def test_telegram_bot_token_validator_generic_bot_name_stays_unconfirmed(monkeyp
             return response
 
     monkeypatch.setattr("httpx.Client", _TelegramClient)
-    result = TelegramBotTokenValidator().validate("1234567890:" + "T" * 35)
+    result = TelegramBotTokenValidator().validate("725419863:" + "T" * 35)
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Telegram getMe response missing bot proof"

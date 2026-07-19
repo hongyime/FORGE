@@ -4984,7 +4984,7 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
         if value == "ciphertext-discord":
             return "M" * 24 + "." + "A" * 6 + "." + "B" * 27
         if value == "ciphertext-telegram":
-            return "1234567890:" + "T" * 35
+            return "725419863:" + "T" * 35
         if value == "ciphertext-notion":
             return "ntn_" + "N" * 40
         if value == "ciphertext-datadog":

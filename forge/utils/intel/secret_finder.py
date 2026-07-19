@@ -1706,6 +1706,11 @@ class TelegramBotTokenValidator(BaseKeyValidator):
     result_validation_method = "telegram_get_me"
 
     @staticmethod
+    def _token_bot_identifier(token: str) -> str:
+        match = re.fullmatch(r"([0-9]{8,12}):[A-Za-z0-9_\-]{35}", str(token or "").strip())
+        return match.group(1) if match else ""
+
+    @staticmethod
     def _bot_identifier(payload: object) -> str:
         if not isinstance(payload, dict):
             return ""
@@ -1760,6 +1765,12 @@ class TelegramBotTokenValidator(BaseKeyValidator):
                     return ValidationResult(
                         state=ValidationState.UNCONFIRMED,
                         detail="Telegram getMe response missing bot id",
+                    )
+                expected_bot_id = self._token_bot_identifier(token)
+                if expected_bot_id and bot_id != expected_bot_id:
+                    return ValidationResult(
+                        state=ValidationState.UNCONFIRMED,
+                        detail="Telegram getMe bot id did not match token prefix",
                     )
                 if not self._has_bot_profile_proof(payload):
                     return ValidationResult(

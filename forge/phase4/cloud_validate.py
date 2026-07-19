@@ -3993,6 +3993,10 @@ def _secret_bound_validation_identifier(service: str, secret: str | None) -> str
         match = re.search(r"-([a-z]{2}[0-9]{1,2})$", str(secret or "").strip(), re.IGNORECASE)
         if match:
             return match.group(1).lower()
+    if normalized_service == "telegram":
+        match = re.fullmatch(r"([0-9]{8,12}):[A-Za-z0-9_\-]{35}", secret_text)
+        if match:
+            return match.group(1)
     return None
 
 
