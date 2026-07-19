@@ -108,6 +108,7 @@ def lookup_google_account(
     engagement_id: int,
     db_path: Path,
     timeout: float = 30.0,
+    proxy: Optional[str] = None,
 ) -> dict[str, Any]:
     """Enrich a Gmail address via GHunt.
 
@@ -170,12 +171,20 @@ def lookup_google_account(
     tmp_path = Path(tmp.name)
 
     try:
+        process_env = None
+        proxy_value = str(proxy or "").strip()
+        if proxy_value:
+            process_env = os.environ.copy()
+            process_env["HTTP_PROXY"] = proxy_value
+            process_env["HTTPS_PROXY"] = proxy_value
+            process_env["ALL_PROXY"] = proxy_value
         try:
             proc = subprocess.run(
                 [*command, "email", "--json", str(tmp_path), email.strip()],
                 capture_output=True,
                 timeout=timeout,
                 stdin=subprocess.DEVNULL,
+                env=process_env,
                 check=False,
             )
             # manually decode outputs

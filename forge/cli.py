@@ -2233,6 +2233,12 @@ def osint_gravatar(
         None, "--emails",
         help="Comma-separated email list. Defaults to emails already stored in the engagement DB.",
     ),
+    proxy: Optional[str] = typer.Option(
+        None,
+        "--proxy",
+        envvar="FORGE_PROXY",
+        help="Optional HTTP/SOCKS proxy for Gravatar public-profile requests.",
+    ),
 ) -> None:
     """Gravatar public-profile enrichment (Module 2-O).
 
@@ -2253,6 +2259,7 @@ def osint_gravatar(
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     eng_id = int(engagement)
+    proxy_value = str(proxy).strip() if isinstance(proxy, str) else os.environ.get("FORGE_PROXY", "").strip() or None
 
     # Determine email list
     if emails:
@@ -2281,7 +2288,7 @@ def osint_gravatar(
     identity_workers = _identity_lookup_max_workers()
     gravatar_results = _run_callable_batch(
         gravatar_inputs,
-        lambda email: (email, lookup_gravatar(email, eng_id, db_path)),
+        lambda email: (email, lookup_gravatar(email, eng_id, db_path, proxy=proxy_value)),
         max_workers=min(identity_workers, len(gravatar_inputs)),
     )
     for email, result in gravatar_results:
@@ -2315,6 +2322,12 @@ def osint_google(
         None, "--emails",
         help="Comma-separated emails. Defaults to emails in the engagement DB.",
     ),
+    proxy: Optional[str] = typer.Option(
+        None,
+        "--proxy",
+        envvar="FORGE_PROXY",
+        help="Optional HTTP/SOCKS proxy for GHunt subprocess requests.",
+    ),
 ) -> None:
     """Ghunt Google-account enrichment (Module 2-P).
 
@@ -2333,6 +2346,7 @@ def osint_google(
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     eng_id = int(engagement)
+    proxy_value = str(proxy).strip() if isinstance(proxy, str) else os.environ.get("FORGE_PROXY", "").strip() or None
 
     if not _ghunt_creds_available():
         console.print("[yellow]Ghunt creds not found.[/yellow] Run `ghunt login` "
@@ -2364,7 +2378,7 @@ def osint_google(
     identity_workers = _identity_lookup_max_workers()
     google_results = _run_callable_batch(
         google_inputs,
-        lambda email: (email, lookup_google_account(email, eng_id, db_path)),
+        lambda email: (email, lookup_google_account(email, eng_id, db_path, proxy=proxy_value)),
         max_workers=min(identity_workers, len(google_inputs)),
     )
     for email, result in google_results:

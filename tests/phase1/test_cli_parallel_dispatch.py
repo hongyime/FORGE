@@ -348,8 +348,11 @@ def test_osint_gravatar_parallelizes_lookups_but_persists_in_input_order(
     lock = threading.Lock()
     persist_order: list[str] = []
 
-    def fake_lookup(email: str, eng_id: int, db_path) -> dict:  # noqa: ANN001
+    observed_proxies: list[str | None] = []
+
+    def fake_lookup(email: str, eng_id: int, db_path, *, proxy=None) -> dict:  # noqa: ANN001
         del eng_id, db_path
+        observed_proxies.append(proxy)
         nonlocal active, peak
         with lock:
             active += 1
@@ -380,7 +383,35 @@ def test_osint_gravatar_parallelizes_lookups_but_persists_in_input_order(
     osint_gravatar(engagement="1001", emails=emails)
 
     assert persist_order == list(delays.keys())
+    assert observed_proxies == [None] * len(delays)
     assert peak == 4
+
+
+def test_osint_gravatar_passes_env_proxy_to_lookup(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import forge.utils.intel.gravatar_lookup as gravatar_lookup
+
+    class _DummyCfg:
+        def engagement_db_path(self, engagement_id: str):  # noqa: ANN001
+            return tmp_path / f"{engagement_id}.db"
+
+    monkeypatch.setenv("FORGE_PROXY", "socks5://127.0.0.1:9050")
+    monkeypatch.setattr("forge.cli.ForgeConfig.load", staticmethod(lambda: _DummyCfg()))
+
+    observed: list[tuple[str, str | None]] = []
+
+    def fake_lookup(email: str, eng_id: int, db_path, *, proxy=None) -> dict:  # noqa: ANN001
+        del eng_id, db_path
+        observed.append((email, proxy))
+        return {"found": False, "profile": {}}
+
+    monkeypatch.setattr(gravatar_lookup, "lookup_gravatar", fake_lookup)
+
+    osint_gravatar(engagement="1001", emails="alpha@acme.example")
+
+    assert observed == [("alpha@acme.example", "socks5://127.0.0.1:9050")]
 
 
 def test_osint_google_parallelizes_lookups_but_persists_in_input_order(
@@ -407,8 +438,11 @@ def test_osint_google_parallelizes_lookups_but_persists_in_input_order(
     lock = threading.Lock()
     persist_order: list[str] = []
 
-    def fake_lookup(email: str, eng_id: int, db_path) -> dict:  # noqa: ANN001
+    observed_proxies: list[str | None] = []
+
+    def fake_lookup(email: str, eng_id: int, db_path, *, proxy=None) -> dict:  # noqa: ANN001
         del eng_id, db_path
+        observed_proxies.append(proxy)
         nonlocal active, peak
         with lock:
             active += 1
@@ -439,7 +473,36 @@ def test_osint_google_parallelizes_lookups_but_persists_in_input_order(
     osint_google(engagement="1001", emails=emails)
 
     assert persist_order == list(delays.keys())
+    assert observed_proxies == [None] * len(delays)
     assert peak == 2
+
+
+def test_osint_google_passes_env_proxy_to_lookup(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import forge.utils.intel.google_account as google_account
+
+    class _DummyCfg:
+        def engagement_db_path(self, engagement_id: str):  # noqa: ANN001
+            return tmp_path / f"{engagement_id}.db"
+
+    monkeypatch.setenv("FORGE_PROXY", "socks5://127.0.0.1:9050")
+    monkeypatch.setattr("forge.cli.ForgeConfig.load", staticmethod(lambda: _DummyCfg()))
+    monkeypatch.setattr(google_account, "_ghunt_creds_available", lambda: True)
+
+    observed: list[tuple[str, str | None]] = []
+
+    def fake_lookup(email: str, eng_id: int, db_path, *, proxy=None) -> dict:  # noqa: ANN001
+        del eng_id, db_path
+        observed.append((email, proxy))
+        return {"found": False, "profile": {}}
+
+    monkeypatch.setattr(google_account, "lookup_google_account", fake_lookup)
+
+    osint_google(engagement="1001", emails="alpha@acme.example")
+
+    assert observed == [("alpha@acme.example", "socks5://127.0.0.1:9050")]
 
 
 def test_kill_chain_help_exposes_auto_run_detected_option() -> None:

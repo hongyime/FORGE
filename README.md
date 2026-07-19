@@ -225,7 +225,7 @@ Everything else is internal to kill-chain and no longer surfaced in `--help`.
 | `FORGE_IDENTITY_LOOKUP_MAX_RETRY_AFTER_SECONDS` | Cap for direct identity-provider `Retry-After` sleeps; default `300.0` |
 | `FORGE_IDENTITY_LOOKUP_RATE_LIMIT_RETRIES` | Bounded direct identity-provider 429 retries; default `1`, max `3` |
 | `FORGE_IDENTITY_LOOKUP_MAX_WORKERS` | Max concurrent direct identity-provider lookup workers in CLI/kill-chain lanes; default `1`, max `4` |
-| `FORGE_PROXY` | Optional HTTP/SOCKS proxy used by identity subprocesses that support env-based routing, including Holehe and theHarvester via `--proxy` |
+| `FORGE_PROXY` | Optional HTTP/SOCKS proxy used by supported identity lookups/subprocesses, including Gravatar direct HTTP and GHunt/Holehe/Maigret/theHarvester env-based routing via `--proxy` |
 | `FORGE_<TOOL>_VENV` | Optional per-tool OSINT venv override, e.g. `FORGE_GHUNT_VENV`, `FORGE_THEHARVESTER_VENV`, `FORGE_MAIGRET_VENV`; defaults to local FORGE state |
 | `FORGE_GHUNT_COMMAND` | Optional GHunt command prefix for an isolated tool virtualenv, e.g. `C:\tools\ghunt\.venv\Scripts\python.exe -m ghunt` |
 | `FORGE_GHUNT_BINARY` | Optional explicit GHunt executable path; lower precedence than `FORGE_GHUNT_COMMAND` |

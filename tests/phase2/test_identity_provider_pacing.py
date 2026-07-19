@@ -103,6 +103,29 @@ def test_gravatar_lookup_paces_requests_and_retries_429(monkeypatch, tmp_path) -
     assert client_cls.instances[0].calls[0][0].startswith("https://gravatar.com/")
 
 
+def test_gravatar_lookup_passes_configured_proxy_to_httpx(monkeypatch, tmp_path) -> None:
+    payload = {
+        "entry": [
+            {
+                "displayName": "Alice Ops",
+                "preferredUsername": "aliceops",
+                "profileUrl": "https://gravatar.com/aliceops",
+            }
+        ]
+    }
+    client_cls = _install_httpx_client(monkeypatch, [_Response(200, payload)])
+
+    result = lookup_gravatar(
+        "Alice@Example.com",
+        1001,
+        tmp_path / "unused.db",
+        proxy="socks5://127.0.0.1:9050",
+    )
+
+    assert result["found"] is True
+    assert client_cls.instances[0].kwargs["proxy"] == "socks5://127.0.0.1:9050"
+
+
 def test_instagram_lookup_paces_requests_and_retries_429(monkeypatch, tmp_path) -> None:
     sleeps = _configure_identity_pacing(monkeypatch)
     payload = {
