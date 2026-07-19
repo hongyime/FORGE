@@ -97,6 +97,7 @@ from forge.utils.artifact_framework_config import (
     framework_config_artifact_label,
     framework_config_host_candidates,
 )
+from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
 from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
     lambda_config_candidates,
@@ -4599,6 +4600,8 @@ def _container_orchestration_config_artifact_label(value: str) -> str:
         return "docker-compose"
     if name == "chart.yaml":
         return "helm-chart"
+    if name == "chart.lock":
+        return "helm-lock"
     if name in {"values.yaml", "values.yml"} and segments & {"chart", "charts", "helm"}:
         return "helm-values"
     if name in {"helmfile", "helmfile.yaml", "helmfile.yml"}:
@@ -4650,6 +4653,7 @@ def _container_orchestration_config_artifact_label(value: str) -> str:
 _ORCHESTRATION_STRUCTURED_LABELS = {
     "docker-compose",
     "helm-chart",
+    "helm-lock",
     "helm-values",
     "helmfile",
     "kptfile",
@@ -22996,7 +23000,8 @@ class ArtifactQueueProcessor:
         return ArtifactQueueProcessor._api_spec_url_candidate_entry(value)
 
     def _orchestration_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
-        if _container_orchestration_config_artifact_label(source_hint) not in _ORCHESTRATION_STRUCTURED_LABELS:
+        source_label = _container_orchestration_config_artifact_label(source_hint)
+        if source_label not in _ORCHESTRATION_STRUCTURED_LABELS:
             return ""
 
         candidate_batches: list[list[str]] = []
@@ -23020,7 +23025,10 @@ class ArtifactQueueProcessor:
                 documents = []
             document_batches = self._run_ordered_local_batch(
                 documents,
-                self._orchestration_document_url_candidates,
+                lambda document: self._orchestration_document_url_candidates(
+                    document,
+                    source_label=source_label,
+                ),
                 default_factory=list,
             )
             candidate_batches.extend(
@@ -23043,7 +23051,12 @@ class ArtifactQueueProcessor:
                 lines.append(normalized)
         return "\n".join(lines)
 
-    def _orchestration_document_url_candidates(self, document: Any) -> list[str]:
+    def _orchestration_document_url_candidates(
+        self,
+        document: Any,
+        *,
+        source_label: str = "",
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
 
@@ -23090,6 +23103,9 @@ class ArtifactQueueProcessor:
                     if key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS or (
                         parent_key_fingerprint in {"annotation", "annotations"}
                         and _annotation_endpointish_key(key_fingerprint)
+                    ) or (
+                        source_label in {"helm-chart", "helm-lock"}
+                        and key_fingerprint in {"repository", "repositories"}
                     ):
                         _append_endpoint_values(child)
                     if key_fingerprint in {"annotation", "annotations", "label", "labels", "match", "matches", "rule", "rules"}:
@@ -26230,6 +26246,11 @@ class ArtifactQueueProcessor:
     def _js_runtime_text_candidate_values(text: str, *, source_label: str = "") -> list[str]:
         raw_text = str(text or "")
         entries: list[tuple[int, str]] = []
+        if source_label == "firebase-hosting-config":
+            entries.extend(
+                (len(raw_text) + index, value)
+                for index, value in enumerate(firebase_hosting_site_urls(raw_text))
+            )
         for match in re.finditer(r"""["'](?P<value>(?:npm|jsr):[^"']+)["']""", raw_text):
             value = str(match.group("value") or "").strip()
             if value:

@@ -323,11 +323,12 @@ def test_api_spec_and_client_collection_content_types_map_to_config_artifact_suf
     assert _artifact_format_label("compose.override.yaml") == "docker-compose"
     assert _artifact_format_label("compose.local.yml") == "docker-compose"
     assert _artifact_format_label("compose.test.yaml") == "docker-compose"
-    assert _artifact_format_label("not-compose.override.yml") == "yaml"
-    assert _artifact_format_label("not-compose.prod.yml") == "yaml"
-    assert _artifact_format_label("my-compose.dev.yml") == "yaml"
-    assert _artifact_format_label("compose.production.backup.yml") == "yaml"
+    assert _artifact_format_label("not-compose.override.yml") == "yml"
+    assert _artifact_format_label("not-compose.prod.yml") == "yml"
+    assert _artifact_format_label("my-compose.dev.yml") == "yml"
+    assert _artifact_format_label("compose.production.backup.yml") == "yml"
     assert _artifact_format_label("Chart.yaml") == "helm-chart"
+    assert _artifact_format_label("Chart.lock") == "helm-lock"
     assert _artifact_format_label("charts/acme/values.yaml") == "helm-values"
     assert _artifact_format_label("k8s/ingress.yaml") == "kubernetes-manifest"
     assert _artifact_format_label("manifests/httproute.yaml") == "kubernetes-manifest"
@@ -406,6 +407,26 @@ spec:
         "http://ingress.acme.example",
         "http://alias.acme.example",
     ]
+
+
+def test_helm_lock_repositories_feed_orchestration_recursion(tmp_path) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+    payload = """
+dependencies:
+  - name: redis
+    repository: https://charts.bitnami.com/bitnami
+  - name: templated
+    repository: https://${HELM_REPO}/charts
+""".strip()
+
+    assert processor._orchestration_structured_payload_text(
+        payload,
+        source_hint="Chart.lock",
+    ).splitlines() == ["https://charts.bitnami.com/bitnami"]
+    assert processor._orchestration_structured_payload_text(
+        payload,
+        source_hint="notes.yaml",
+    ) == ""
 
 
 def test_recon_tool_output_artifact_format_labels_are_source_aware() -> None:
