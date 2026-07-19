@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Legacy Firebase/Supabase proof hardening checkpoint is green:
+  Bare persisted `VALIDATED:firebase_database_*` details and generic `VALIDATED:supabase_rest_root:Supabase REST endpoint responded successfully.` details now downgrade to `UNVERIFIED`. Explicit live-data wording or linked `cloud_validation_results=VALIDATED` is required before those rows can affect deterministic key findings, Phase 6 exposed-key counts, dashboard validation proof fields, or API-key graph nodes.
+  Verification: compile/Ruff over touched parser/report/test files; focused parser/findings/graph/dashboard/report tests -> `86 passed`; `tests\integration\test_engagement_pipeline.py` -> `9 passed`.
+  Review: sidecar `Feynman` found the bare legacy proof gap. Claude CLI maintainability review at `%TEMP%\forge-claude-maintainability-review.txt` returned only `Reached max turns (8)`.
+  Safety: proof parsing and report/graph gating only. No new provider calls, no live probing expansion, no credential use, no scope relaxation, no proxy/IP rotation, no rate-limit bypass, and no report-gate weakening.
+  Commit: `369e852 fix(reporting): require live data legacy cloud proof`.
+
 - [x] Sentry provider-proof hardening checkpoint is green:
   Sentry token validation now stores a stable org id plus a non-private `org_slug_hash`; `parse_validated_detail()` and Phase 4 cloud identifier parsing now require that hash and reject repeated/placeholder hashes before any Sentry key row can drive validated reports, deterministic findings, or graph identifiers.
   Verification: `.venv\Scripts\python.exe -m py_compile forge\utils\intel\secret_finder.py forge\utils\validation_proof.py forge\phase4\cloud_validate.py tests\core\test_validation_proof.py tests\phase2\test_secret_finder.py tests\phase4\test_cloud_validate.py tests\phase1\test_deterministic_findings.py tests\reporting\test_dashboard.py tests\phase1\test_engagement_orchestrator.py`; Ruff over the same files; focused Sentry/dashboard/cloud sweep proof tests -> `12 passed, 237 deselected`; graph integration -> `1 passed`.

@@ -51,6 +51,7 @@ AUDIT_RESULTS.md
 !.claude/handoffs/2026-07-19-191500-cloudflare-d1-kv-unsupported-sweep.md
 !.claude/handoffs/2026-07-19-203500-cli-at-url-seed-classifier.md
 !.claude/handoffs/2026-07-19-205223-sentry-proof-hash-gate.md
+!.claude/handoffs/2026-07-19-212407-legacy-cloud-proof-live-data.md
 
 # Dev databases at repo root
 tmp_attack.db
