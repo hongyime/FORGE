@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Storage/DB client artifact-recursion checkpoint is green:
+  `.s3cfg`, `.boto`, and `boto.cfg` are now source-gated config artifacts with passive endpoint-only extraction in `forge/utils/artifact_storage_client_config.py`; credential keys are suppressed, templated bucket URLs are sanitized before raw discovery, and endpoints feed the existing bounded structured-discovery path. DB client configs now preserve sanitized explicit DSNs and reconstruct split-field endpoints with detected schemes such as `mysql://host:port/db` instead of always emitting `postgres://`; host-only/no-driver configs retain a documented legacy fallback solely for recursive host discovery.
+  Verification: compile/Ruff over touched storage/DB/orchestrator/test files; storage helper/processor tests -> `15 passed`; adjacent parser slice -> `71 passed`; DB helper tests -> `22 passed`; selected orchestrator regressions -> `26 passed`.
+  Review: sidecar `Bernoulli` identified the missing storage-client parser; sidecar `Chandrasekhar` identified the DB scheme-loss gap. Claude CLI reviews at `%TEMP%\forge-claude-storage-client-review.txt` and `%TEMP%\forge-claude-db-client-review.txt` returned only `Reached max turns (4)` with no usable findings.
+  Safety: passive static parsing only. No DB connections, provider calls, credential use, live probing expansion, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Commits pushed to `main`: `a13c683 feat(kill-chain): parse storage client config endpoints`, `1d29b47 fix(kill-chain): preserve database client endpoint schemes`.
+
 - [x] Legacy Firebase/Supabase proof hardening checkpoint is green:
   Bare persisted `VALIDATED:firebase_database_*` details and generic `VALIDATED:supabase_rest_root:Supabase REST endpoint responded successfully.` details now downgrade to `UNVERIFIED`. Explicit live-data wording or linked `cloud_validation_results=VALIDATED` is required before those rows can affect deterministic key findings, Phase 6 exposed-key counts, dashboard validation proof fields, or API-key graph nodes.
   Verification: compile/Ruff over touched parser/report/test files; focused parser/findings/graph/dashboard/report tests -> `86 passed`; `tests\integration\test_engagement_pipeline.py` -> `9 passed`.
