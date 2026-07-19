@@ -1140,11 +1140,7 @@ class ContextBuilder:
             if (breach_count > 0 or paste_count > 0) and source:
                 breach_sources.add(source)
         try:
-            key_count = con.execute(
-                "SELECT COUNT(*) FROM key_scanner_findings WHERE engagement_id=? "
-                "AND validation_state='ACTIVE'",
-                (self._eid,),
-            ).fetchone()[0]
+            key_count = self._reportable_key_findings_count(con)
         except sqlite3.OperationalError:
             key_count = 0
         return OsintContext(
@@ -1162,6 +1158,46 @@ class ContextBuilder:
             paste_alert_count = len(paste_alerts),
             key_findings_count = key_count,
         )
+
+    def _reportable_key_findings_count(self, con: sqlite3.Connection) -> int:
+        columns = self._table_columns(con, "key_scanner_findings")
+        if not {"engagement_id", "validation_state"}.issubset(columns):
+            return 0
+        select_parts = [
+            "validation_state",
+            "service" if "service" in columns else "NULL AS service",
+            "domain" if "domain" in columns else "NULL AS domain",
+            "validation_detail" if "validation_detail" in columns else "NULL AS validation_detail",
+        ]
+        rows = con.execute(
+            f"""
+            SELECT {', '.join(select_parts)}
+            FROM key_scanner_findings
+            WHERE engagement_id=? AND validation_state='ACTIVE'
+            """,
+            (self._eid,),
+        ).fetchall()
+        validation_index = self._cloud_validation_index(con)
+        return sum(1 for row in rows if self._key_row_allowed_in_report(row, validation_index))
+
+    def _key_row_allowed_in_report(
+        self,
+        row: sqlite3.Row,
+        validation_index: dict[tuple[str, str], str],
+    ) -> bool:
+        proof = parse_validated_detail(row["validation_detail"])
+        if proof["validation_status"] == "VALIDATED":
+            return True
+        service = self._normalize_validation_asset_type(str(row["service"] or ""))
+        identifier = str(row["domain"] or "").strip().lower()
+        if not service or not identifier:
+            return False
+        direct = validation_index.get((service, identifier)) == "VALIDATED"
+        linked = any(
+            validation_index.get((asset_type, identifier)) == "VALIDATED"
+            for asset_type in self._validation_asset_types_for_provider(service)
+        )
+        return direct or linked
 
     def _load_exploits(self, con: sqlite3.Connection) -> ExploitContext:
         columns = self._table_columns(con, "vulnerability_findings")

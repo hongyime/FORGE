@@ -424,6 +424,41 @@ def test_context_builder_loads_osint_counts(tmp_eng_db):
     assert ctx.osint.breached_email_count == 1
     assert ctx.osint.reputation_alert_count == 1
     assert ctx.osint.paste_alert_count == 0
+    assert ctx.osint.key_findings_count == 0
+
+
+def test_context_builder_counts_only_reportable_key_findings(tmp_eng_db):
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN service TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN domain TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validation_detail TEXT")
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, validation_state, service, domain, validation_detail)
+            VALUES
+                (?, 'ACTIVE', 'github', '',
+                 'VALIDATED:github_user_api:github user ok: user_id=928374 login=acmebot user_profile_present=true')
+            """,
+            (ENGAGEMENT_ID,),
+        )
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, validation_state, service, domain, validation_detail)
+            VALUES
+                (?, 'ACTIVE', 'github', '',
+                 'VALIDATED:github_user_api:github user ok: user_id=111111 login=admin user_profile_present=true')
+            """,
+            (ENGAGEMENT_ID,),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+
     assert ctx.osint.key_findings_count == 1
 
 
