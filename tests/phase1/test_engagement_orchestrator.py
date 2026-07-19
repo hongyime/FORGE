@@ -77421,7 +77421,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         assert key_map[("discord", "discord_bot_token")][2] == "ACTIVE"
         assert key_map[("telegram", "telegram_bot_token")][2] == "ACTIVE"
         assert key_map[("notion", "notion_integration_token")][2] == "ACTIVE"
-        assert key_map[("datadog", "datadog_api_key")][2] == "ACTIVE"
+        assert key_map[("datadog", "datadog_api_key")][2] == "UNCONFIRMED"
         assert key_map[("cloudflare", "cloudflare_api_token")][2] == "ACTIVE"
         assert key_map[("vercel", "vercel_access_token")][2] == "ACTIVE"
         assert key_map[("netlify", "netlify_personal_access_token")][2] == "ACTIVE"
@@ -77472,10 +77472,11 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "3c90c3cc-0d44-4b50-8888-8dd25736052a",
             "VALIDATED",
         )
-        assert validation_map[("datadog", "datadog_api_key_validate")] == (
-            "datadoghq.eu",
-            "VALIDATED",
-        )
+        datadog_identifier, datadog_status = validation_map[
+            ("datadog", "datadog_api_key_validate")
+        ]
+        assert datadog_identifier.endswith("operator-keys.env")
+        assert datadog_status == "UNVERIFIED"
         assert validation_map[("cloudflare", "cloudflare_token_verify")] == (
             "abcdef1234567890abcdef1234567890",
             "VALIDATED",
@@ -77560,7 +77561,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed datadog credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -77617,7 +77618,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 16
+        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 15
     finally:
         con.close()
 
@@ -77680,13 +77681,10 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         )
         for node in mtgx_manifest.get("nodes", [])
     )
-    assert any(
+    assert not any(
         node.get("forge_node_type") == "APIKEY"
         and isinstance(node.get("metadata"), dict)
         and node["metadata"].get("service") == "datadog"
-        and str(node.get("analyst_properties", {}).get("validation_detail") or "").endswith(
-            "Datadog API key valid: site=datadoghq.eu proof=valid_true"
-        )
         for node in mtgx_manifest.get("nodes", [])
     )
     assert any(
@@ -77695,7 +77693,10 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         and node["metadata"].get("service") == "datadog"
         and node.get("analyst_properties", {}).get("validation_method")
         == "datadog_api_key_validate"
-        and node.get("analyst_properties", {}).get("identifier") == "datadoghq.eu"
+        and str(node.get("analyst_properties", {}).get("identifier") or "").endswith(
+            "operator-keys.env"
+        )
+        and node.get("analyst_properties", {}).get("validation_status") == "UNVERIFIED"
         for node in mtgx_manifest.get("nodes", [])
     )
     graph_family_text = (

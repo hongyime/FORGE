@@ -301,7 +301,7 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "datadog",
         "Datadog API key valid: site=datadoghq.eu proof=valid_true",
-    ) == "datadoghq.eu"
+    ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "twilio",
         "Twilio account accessible: sid=AC00000000000000000000000000000000 status=active",
@@ -5118,7 +5118,7 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
     assert summary["attempted"] == 10
     assert summary["succeeded"] == 10
     assert summary["failed"] == 0
-    assert summary["status_counts"]["VALIDATED"] == 10
+    assert summary["status_counts"] == {"VALIDATED": 9, "UNVERIFIED": 1}
 
     results_by_service = {str(row["asset_type"]): row for row in summary["results"]}
     assert results_by_service["cloudflare"]["identifier"] == (
@@ -5130,7 +5130,8 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
     assert results_by_service["notion"]["identifier"] == (
         "3c90c3cc-0d44-4b50-8888-8dd25736052a"
     )
-    assert results_by_service["datadog"]["identifier"] == "datadoghq.eu"
+    assert results_by_service["datadog"]["identifier"] == "observability.env"
+    assert results_by_service["datadog"]["validation_status"] == "UNVERIFIED"
     assert results_by_service["vercel"]["identifier"] == "usr_abcdefghijklmnop"
     assert results_by_service["netlify"]["identifier"] == "netlify-user-123"
     assert results_by_service["posthog"]["identifier"] == (
@@ -5157,8 +5158,8 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
             ),
             (
                 "datadog",
-                "datadoghq.eu",
-                "VALIDATED",
+                "observability.env",
+                "UNVERIFIED",
                 "datadog_api_key_validate",
             ),
             (
@@ -5223,8 +5224,8 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
         assert key_rows[0][1] == "ACTIVE"
         assert str(key_rows[0][2] or "").startswith("VALIDATED:cloudflare_token_verify:")
         assert key_rows[1][0] == "datadog"
-        assert key_rows[1][1] == "ACTIVE"
-        assert str(key_rows[1][2] or "").startswith("VALIDATED:datadog_api_key_validate:")
+        assert key_rows[1][1] == "UNCONFIRMED"
+        assert str(key_rows[1][2] or "").startswith("UNVERIFIED:datadog_api_key_validate:")
         assert key_rows[2][0] == "discord"
         assert key_rows[2][1] == "ACTIVE"
         assert str(key_rows[2][2] or "").startswith("VALIDATED:discord_current_user:")
@@ -5263,11 +5264,6 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
                 "DETERMINISTIC_KEY_EXPOSURE",
                 "HIGH",
                 "Validated exposed cloudflare credential reference",
-            ),
-            (
-                "DETERMINISTIC_KEY_EXPOSURE",
-                "HIGH",
-                "Validated exposed datadog credential reference",
             ),
             (
                 "DETERMINISTIC_KEY_EXPOSURE",

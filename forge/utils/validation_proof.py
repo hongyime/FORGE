@@ -598,12 +598,10 @@ def _model_list_proof_is_stable(
 
 
 def _datadog_site_proof_is_stable(proof: str) -> bool:
-    match = re.search(r"datadog api key valid:\s*site=([a-z0-9.-]+)\b", proof, re.IGNORECASE)
-    return bool(
-        match
-        and match.group(1).lower() in _DATADOG_VALIDATION_SITES
-        and re.search(r"\bproof=valid_true\b", proof, re.IGNORECASE)
-    )
+    # Datadog's validate endpoint proves token acceptance, but the endpoint
+    # site is caller-selected and not a provider-returned account/key identity.
+    del proof
+    return False
 
 
 def _sendgrid_proof_is_stable(proof: str) -> bool:

@@ -293,11 +293,6 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
             "telegram_get_me",
         ),
         (
-            "VALIDATED:datadog_api_key_validate:Datadog API key valid: "
-            "site=datadoghq.eu proof=valid_true",
-            "datadog_api_key_validate",
-        ),
-        (
             "VALIDATED:sendgrid_profile_api:SendGrid profile ok: "
             "proof=profile profile_hash=0123456789abcdef email_present=true",
             "sendgrid_profile_api",
@@ -488,6 +483,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         ),
         (
             "VALIDATED:datadog_api_key_validate:Datadog API key valid: site=datadoghq.eu",
+            "datadog_api_key_validate",
+        ),
+        (
+            "VALIDATED:datadog_api_key_validate:Datadog API key valid: "
+            "site=datadoghq.eu proof=valid_true",
             "datadog_api_key_validate",
         ),
         (

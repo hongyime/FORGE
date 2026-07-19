@@ -3811,18 +3811,7 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             re.IGNORECASE,
         )
         if match and re.search(r"\bproof=valid_true\b", text, re.IGNORECASE):
-            site = match.group(1).lower()
-            valid_sites = {
-                "datadoghq.com",
-                "datadoghq.eu",
-                "us3.datadoghq.com",
-                "us5.datadoghq.com",
-                "ap1.datadoghq.com",
-                "ap2.datadoghq.com",
-                "ddog-gov.com",
-            }
-            if site in valid_sites:
-                return site
+            return None
     if provider_service == "cloudflare":
         match = re.search(
             r"cloudflare token valid:\s*token_id=([a-z0-9_-]{8,32})\b",
