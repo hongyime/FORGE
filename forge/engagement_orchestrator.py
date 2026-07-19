@@ -69,6 +69,7 @@ from forge.utils.artifact_connection_client import (
     connection_client_config_artifact_label,
     connection_client_host_candidates,
 )
+from forge.utils.artifact_aws_cdk import aws_cdk_artifact_label, aws_cdk_candidates
 from forge.utils.artifact_cloudformation import (
     cloudformation_template_candidates,
     sam_config_candidates,
@@ -5612,10 +5613,9 @@ def _iac_manifest_artifact_label(value: str) -> str:
         return "pulumi-stack"
     if name == "serverless" or stem == "serverless":
         return "serverless"
-    if name in {"cdk.json", "cdk.context.json"}:
-        return "aws-cdk"
-    if name == "manifest.json" and "cdk.out" in parts:
-        return "aws-cdk-manifest"
+    aws_cdk_label = aws_cdk_artifact_label(normalized)
+    if aws_cdk_label:
+        return aws_cdk_label
     if name == "samconfig.toml" or stem in {"sam", "samconfig"}:
         return "sam-config"
     if stem in {"cloudformation", "cloudformation-template"} or name.endswith(".cfn"):
@@ -19631,7 +19631,15 @@ class ArtifactQueueProcessor:
 
     def _iac_text_structured_payload_text(self, text: str, *, source_hint: str = "") -> str:
         payload_fragments = self._run_ordered_local_batch(
-            ("terraform", "bicep", "cloudformation", "serverless", "sam_config", "pulumi_config"),
+            (
+                "terraform",
+                "bicep",
+                "cloudformation",
+                "serverless",
+                "sam_config",
+                "pulumi_config",
+                "aws_cdk",
+            ),
             lambda family: self._iac_text_structured_payload_family(
                 family,
                 text=text,
@@ -19689,6 +19697,13 @@ class ArtifactQueueProcessor:
         if family == "pulumi_config":
             return "\n".join(
                 pulumi_config_candidates(
+                    text,
+                    source_hint=source_hint,
+                )
+            )
+        if family == "aws_cdk":
+            return "\n".join(
+                aws_cdk_candidates(
                     text,
                     source_hint=source_hint,
                 )
