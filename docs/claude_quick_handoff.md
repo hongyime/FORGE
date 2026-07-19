@@ -11,6 +11,12 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Passive QR/barcode artifact-recursion checkpoint is green:
+  Raster image artifacts, embedded archive/document image members, rendered PDF page images, and SVG/data-URI image payloads now run a bounded local barcode family alongside OCR/metadata. Optional local decoders (`pyzbar` or OpenCV) are used only when installed; otherwise extraction no-ops safely. Decoded QR/barcode payloads feed the existing recursive text discovery path with sensitive URL query stripping, and `otpauth://` / `WIFI:` payloads are suppressed before persistence.
+  Verification: compile/Ruff over touched files; `tests\phase1\test_artifact_barcode.py` -> `5 passed`; existing remote image OCR regression -> `1 passed`.
+  Review: sidecar `Erdos` identified the missing QR/barcode extraction gap. Claude diff review was launched at `%TEMP%\forge-claude-barcode-review.txt`; check that file if you need the final Claude-branded output.
+  Safety: passive local parsing only. No QR decode API, provider call, credential validation/use, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+
 - [x] Storage/DB client artifact-recursion checkpoint is green:
   `.s3cfg`, `.boto`, and `boto.cfg` are now source-gated config artifacts with passive endpoint-only extraction in `forge/utils/artifact_storage_client_config.py`; credential keys are suppressed, templated bucket URLs are sanitized before raw discovery, and endpoints feed the existing bounded structured-discovery path. DB client configs now preserve sanitized explicit DSNs and reconstruct split-field endpoints with detected schemes such as `mysql://host:port/db` instead of always emitting `postgres://`; host-only/no-driver configs retain a documented legacy fallback solely for recursive host discovery.
   Verification: compile/Ruff over touched storage/DB/orchestrator/test files; storage helper/processor tests -> `15 passed`; adjacent parser slice -> `71 passed`; DB helper tests -> `22 passed`; selected orchestrator regressions -> `26 passed`.

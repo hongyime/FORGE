@@ -115,6 +115,10 @@ from forge.utils.artifact_har import (
     har_content_text,
     har_scalar_text,
 )
+from forge.utils.artifact_barcode import (
+    barcode_payloads_from_bytes,
+    barcode_payloads_from_path,
+)
 from forge.utils.artifact_shell_history import shell_history_artifact_label
 from forge.utils.artifact_windows_registry import windows_registry_hive_artifact_label
 from forge.utils.intel.http_pacing import (
@@ -19517,6 +19521,9 @@ class ArtifactQueueProcessor:
         ocr_text = self._ocr_image_bytes(bounded, suffix)
         if ocr_text.strip():
             payloads.append(f"data_uri_image_{index}#ocr\n{ocr_text.strip()}")
+        barcode_payload = self._barcode_image_bytes_payload(bounded)
+        if barcode_payload.strip():
+            payloads.append(f"data_uri_image_{index}#barcode\n{barcode_payload.strip()}")
         metadata_payload = self._image_metadata_payload(bounded)
         if metadata_payload.strip():
             payloads.append(f"data_uri_image_{index}#image-metadata\n{metadata_payload.strip()}")
@@ -34838,15 +34845,19 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not self._ocr_binary or not self._pdf_raster_binary or not path.exists():
+        if not self._pdf_raster_binary or not path.exists():
             return []
 
-        def _ocr_page(index: int, image_path: Path) -> tuple[str, str, str] | None:
+        def _page_payloads(index: int, image_path: Path) -> list[tuple[str, str, str]]:
             try:
+                payloads: list[tuple[str, str, str]] = []
                 ocr_text = self._ocr_image_path(image_path)
-                if not ocr_text.strip():
-                    return None
-                return (source_file, f"{member_name}#ocr-page-{index}", ocr_text)
+                if ocr_text.strip():
+                    payloads.append((source_file, f"{member_name}#ocr-page-{index}", ocr_text))
+                barcode_payload = self._barcode_image_path_payload(image_path)
+                if barcode_payload.strip():
+                    payloads.append((source_file, f"{member_name}#barcode-page-{index}", barcode_payload))
+                return payloads
             finally:
                 image_path.unlink(missing_ok=True)
 
@@ -34864,13 +34875,13 @@ class ArtifactQueueProcessor:
             return []
         ordered_payloads = self._run_ordered_local_batch(
             page_images,
-            lambda page_image: _ocr_page(*page_image),
-            default_factory=lambda: None,
+            lambda page_image: _page_payloads(*page_image),
+            default_factory=list,
         )
         prepared_payloads = self._run_ordered_local_batch(
             [
-                (page_index, [page_payload] if page_payload is not None else [])
-                for page_index, page_payload in enumerate(ordered_payloads)
+                (page_index, page_payloads if isinstance(page_payloads, list) else [])
+                for page_index, page_payloads in enumerate(ordered_payloads)
             ],
             self._artifact_payload_tuple_batch_entries,
             default_factory=list,
@@ -34953,7 +34964,7 @@ class ArtifactQueueProcessor:
 
     def _extract_image_payloads(self, path: Path) -> list[tuple[str, str, str]]:
         family_payloads = self._run_ordered_local_batch(
-            ("ocr", "metadata"),
+            ("ocr", "barcode", "metadata"),
             lambda family: self._extract_image_payload_family(family, path),
             default_factory=list,
         )
@@ -34974,7 +34985,7 @@ class ArtifactQueueProcessor:
         data: bytes,
     ) -> list[tuple[str, str, str]]:
         family_payloads = self._run_ordered_local_batch(
-            ("ocr", "metadata"),
+            ("ocr", "barcode", "metadata"),
             lambda family: self._extract_image_member_payload_family(
                 family,
                 source_file=source_file,
@@ -35003,6 +35014,11 @@ class ArtifactQueueProcessor:
             if not ocr_text.strip():
                 return []
             return [(str(path), f"{path.name}#ocr", ocr_text)]
+        if family == "barcode":
+            barcode_payload = self._barcode_image_path_payload(path)
+            if not barcode_payload:
+                return []
+            return [(str(path), f"{path.name}#barcode", barcode_payload)]
         if family == "metadata":
             try:
                 data = path.read_bytes()[:_MAX_OCR_IMAGE_BYTES]
@@ -35027,6 +35043,11 @@ class ArtifactQueueProcessor:
             if not ocr_text.strip():
                 return []
             return [(source_file, f"{member_name}#ocr", ocr_text)]
+        if family == "barcode":
+            barcode_payload = self._barcode_image_bytes_payload(data)
+            if not barcode_payload:
+                return []
+            return [(source_file, f"{member_name}#barcode", barcode_payload)]
         if family == "metadata":
             metadata_payload = self._image_metadata_payload(data[:_MAX_OCR_IMAGE_BYTES])
             if not metadata_payload:
@@ -35038,6 +35059,12 @@ class ArtifactQueueProcessor:
         # EXIF/XMP/PNG text chunks are often enough for passive pivot extraction
         # even when OCR is unavailable on the operator workstation.
         return self._binary_string_payload(data)
+
+    def _barcode_image_path_payload(self, path: Path) -> str:
+        return "\n".join(barcode_payloads_from_path(path, max_bytes=_MAX_OCR_IMAGE_BYTES))
+
+    def _barcode_image_bytes_payload(self, data: bytes) -> str:
+        return "\n".join(barcode_payloads_from_bytes(data[:_MAX_OCR_IMAGE_BYTES]))
 
     def _ocr_image_path(self, path: Path) -> str:
         if not self._ocr_binary or not path.exists():
@@ -35601,6 +35628,7 @@ class ArtifactQueueProcessor:
         metadata_payloads = [extract_path for _, extract_path, _ in payloads if "#" in extract_path]
         relationship_payloads = [value for value in metadata_payloads if value.endswith("#relationships")]
         ocr_payloads = [value for value in metadata_payloads if "#ocr" in value]
+        barcode_payloads = [value for value in metadata_payloads if "#barcode" in value]
         return {
             "parser": artifact_type,
             "format": _artifact_format_label(path),
@@ -35608,6 +35636,7 @@ class ArtifactQueueProcessor:
             "metadata_payload_count": len(metadata_payloads),
             "relationship_payload_count": len(relationship_payloads),
             "ocr_payload_count": len(ocr_payloads),
+            "barcode_payload_count": len(barcode_payloads),
         }
 
     @staticmethod
@@ -35771,6 +35800,7 @@ class ArtifactQueueProcessor:
             "metadata_payload_count",
             "relationship_payload_count",
             "ocr_payload_count",
+            "barcode_payload_count",
             "hostname",
             "scan_domain",
             "scan_id",
