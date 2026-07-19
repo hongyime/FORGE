@@ -92,8 +92,8 @@ class AdaptiveRateLimiter(RateLimiter):
         min_delay: float = 0.5,
         jitter: float = 1.0,
         tor_manager: Optional[object] = None,
-        rotate_tor_on_rate_limit: bool = False,
         adjustment_factor: float = 0.1,
+        rotate_tor_on_rate_limit: bool = False,
     ):
         super().__init__(
             base_delay,

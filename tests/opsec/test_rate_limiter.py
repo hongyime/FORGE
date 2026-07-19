@@ -40,3 +40,10 @@ def test_adaptive_rate_limiter_preserves_no_rotation_default() -> None:
 
     assert tor.rotations == 0
     assert limiter.base_delay > limiter.min_delay
+
+
+def test_adaptive_rate_limiter_keeps_positional_adjustment_factor_compatibility() -> None:
+    limiter = AdaptiveRateLimiter(2.0, 30.0, 0.5, 1.0, None, 0.25)
+
+    assert limiter.adjustment_factor == 0.25
+    assert limiter._rotate_tor_on_rate_limit is False  # noqa: SLF001
