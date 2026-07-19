@@ -949,6 +949,42 @@ def _m0019_cloud_provider_identifier(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0020_validation_claims(conn: sqlite3.Connection) -> None:
+    """Add short-lived claims for concurrent validation sweeps."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS validation_claims (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+            claim_type    TEXT    NOT NULL
+                         CHECK (claim_type IN ('key','asset')),
+            key_id        INTEGER,
+            asset_type    TEXT,
+            identifier    TEXT,
+            owner         TEXT    NOT NULL,
+            claimed_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at    TIMESTAMP NOT NULL,
+            updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CHECK (
+                (claim_type='key' AND key_id IS NOT NULL AND asset_type IS NULL AND identifier IS NULL)
+                OR
+                (claim_type='asset' AND key_id IS NULL AND asset_type IS NOT NULL AND identifier IS NOT NULL)
+            )
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_validation_claims_key
+            ON validation_claims (engagement_id, claim_type, key_id)
+            WHERE claim_type='key';
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_validation_claims_asset
+            ON validation_claims (engagement_id, claim_type, asset_type, identifier)
+            WHERE claim_type='asset';
+
+        CREATE INDEX IF NOT EXISTS idx_validation_claims_expiry
+            ON validation_claims (claim_type, expires_at);
+    """)
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -973,6 +1009,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (17, "cloud_provider_enum_expansion", _m0017_cloud_provider_enum_expansion),
     (18, "engagement_metadata", _m0018_engagement_metadata),
     (19, "cloud_provider_identifier", _m0019_cloud_provider_identifier),
+    (20, "validation_claims", _m0020_validation_claims),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

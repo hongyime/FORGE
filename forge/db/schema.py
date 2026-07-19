@@ -569,6 +569,40 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     CREATE INDEX IF NOT EXISTS idx_cloud_validation_engagement
         ON cloud_validation_results (engagement_id, validation_status, checked_at DESC)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS validation_claims (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+        claim_type    TEXT    NOT NULL
+                     CHECK (claim_type IN ('key','asset')),
+        key_id        INTEGER,
+        asset_type    TEXT,
+        identifier    TEXT,
+        owner         TEXT    NOT NULL,
+        claimed_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at    TIMESTAMP NOT NULL,
+        updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CHECK (
+            (claim_type='key' AND key_id IS NOT NULL AND asset_type IS NULL AND identifier IS NULL)
+            OR
+            (claim_type='asset' AND key_id IS NULL AND asset_type IS NOT NULL AND identifier IS NOT NULL)
+        )
+    )
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_validation_claims_key
+        ON validation_claims (engagement_id, claim_type, key_id)
+        WHERE claim_type='key'
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_validation_claims_asset
+        ON validation_claims (engagement_id, claim_type, asset_type, identifier)
+        WHERE claim_type='asset'
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_validation_claims_expiry
+        ON validation_claims (claim_type, expires_at)
+    """,
     # ------------------------------------------------------------------
     # v7.2 schemas — Module 4-H (Attack Path Visualizer)
     # graph_json stores AttackGraph.model_dump_json() — no credential material.
@@ -805,7 +839,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
 # Schema version
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION: int = 19
+SCHEMA_VERSION: int = 20
 
 _VERSION_TABLE: str = """
     CREATE TABLE IF NOT EXISTS _schema_version (

@@ -27,6 +27,12 @@ import httpx
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.deterministic_findings import DeterministicFindingEngine
+from forge.phase4.validation_claims import (
+    claim_pending_cloud_asset_rows,
+    claim_pending_cloud_key_rows,
+    release_validation_asset_claims,
+    release_validation_key_claims,
+)
 from forge.utils.intel.http_pacing import key_validation_get, key_validation_head
 
 _LOG = logging.getLogger(__name__)
@@ -5022,49 +5028,22 @@ def sweep_pending_cloud_validations(
     ]
     pattern_clause = " OR ".join("(service=? AND pattern_name=?)" for _ in validatable_patterns) or "0"
     cloud_service_placeholders = ",".join("?" for _ in _CLOUD_SECRET_BACKED_SERVICES)
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        apply_schema(con)
-        run_migrations(con)
-        rows = con.execute(
-            f"""
-            SELECT id,
-                   engagement_id,
-                   domain,
-                   service,
-                   pattern_name,
-                   source_backend,
-                   source_url,
-                   repo_name,
-                   key_enc,
-                   validation_detail
-            FROM key_scanner_findings
-            WHERE engagement_id=?
-              AND (
-                    service IN ({cloud_service_placeholders})
-                    OR ({pattern_clause})
-                  )
-              AND COALESCE(validation_state, 'UNCONFIRMED') IN ('UNCONFIRMED', 'ERROR')
-              AND (? = 0 OR validated_at IS NULL)
-            ORDER BY id ASC
-            LIMIT ?
-            """,
-            (
-                engagement_id,
-                *_CLOUD_SECRET_BACKED_SERVICES,
-                *[
-                    value
-                    for pattern in validatable_patterns
-                    for value in (pattern.service.lower(), pattern.name)
-                ],
-                1 if only_unattempted else 0,
-                max(0, int(limit)),
-            ),
-        ).fetchall()
-        rows = [dict(row) for row in rows]
-    finally:
-        con.close()
+    rows, claim_owner, claimed_key_ids = claim_pending_cloud_key_rows(
+        engagement_id,
+        db_path,
+        cloud_service_placeholders=cloud_service_placeholders,
+        pattern_clause=pattern_clause,
+        query_tail_params=(
+            *_CLOUD_SECRET_BACKED_SERVICES,
+            *[
+                value
+                for pattern in validatable_patterns
+                for value in (pattern.service.lower(), pattern.name)
+            ],
+        ),
+        only_unattempted=only_unattempted,
+        limit=limit,
+    )
 
     summary = CloudValidationSweepSummary(attempted=len(rows))
     if not rows:
@@ -5246,6 +5225,12 @@ def sweep_pending_cloud_validations(
     finally:
         con.close()
 
+    release_validation_key_claims(
+        engagement_id,
+        db_path,
+        owner=claim_owner,
+        key_ids=claimed_key_ids,
+    )
     DeterministicFindingEngine(db_path, engagement_id).run()
 
     return {
@@ -5272,33 +5257,18 @@ def sweep_pending_cloud_asset_validations(
 ) -> dict[str, Any]:
     """Validate discovered cloud_assets rows that do not yet have results."""
     worker_count = _resolve_validation_max_workers(max_workers)
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        apply_schema(con)
-        run_migrations(con)
-        rows = con.execute(
-            """
-            SELECT ca.asset_type,
-                   ca.identifier,
-                   COALESCE(NULLIF(ca.provider_identifier, ''), ca.identifier) AS provider_identifier
-            FROM cloud_assets ca
-            LEFT JOIN cloud_validation_results cvr
-              ON cvr.engagement_id = ca.engagement_id
-             AND cvr.asset_type = ca.asset_type
-             AND cvr.identifier = ca.identifier
-            WHERE ca.engagement_id=?
-              AND cvr.id IS NULL
-            ORDER BY ca.id ASC
-            LIMIT ?
-            """,
-            (engagement_id, max(0, int(limit))),
-        ).fetchall()
-    finally:
-        con.close()
+    rows, claim_owner, claimed_assets = claim_pending_cloud_asset_rows(
+        engagement_id,
+        db_path,
+        limit=limit,
+    )
 
     assets = [
-        (str(row["asset_type"] or ""), str(row["provider_identifier"] or row["identifier"] or ""))
+        {
+            "asset_type": str(row["asset_type"] or ""),
+            "identifier": str(row["identifier"] or ""),
+            "provider_identifier": str(row["provider_identifier"] or row["identifier"] or ""),
+        }
         for row in rows
         if str(row["asset_type"] or "").strip() and str(row["identifier"] or "").strip()
     ]
@@ -5314,10 +5284,11 @@ def sweep_pending_cloud_asset_validations(
         }
 
     def _scope_gate_pending_cloud_asset_entry(
-        item: tuple[int, tuple[str, str]],
+        item: tuple[int, dict[str, str]],
     ) -> dict[str, Any]:
         index, asset = item
-        asset_type, provider_identifier = asset
+        asset_type = asset["asset_type"]
+        provider_identifier = asset["provider_identifier"]
         identifier = str(provider_identifier or "").strip().lower()
         allowed = True
         denial_reason = "scope_manifest_denied"
@@ -5387,9 +5358,15 @@ def sweep_pending_cloud_asset_validations(
             con.commit()
         finally:
             con.close()
-        DeterministicFindingEngine(db_path, engagement_id).run()
 
     if not allowed_assets:
+        release_validation_asset_claims(
+            engagement_id,
+            db_path,
+            owner=claim_owner,
+            assets=claimed_assets,
+        )
+        DeterministicFindingEngine(db_path, engagement_id).run()
         return {
             "status": "success",
             "engagement_id": engagement_id,
@@ -5400,14 +5377,22 @@ def sweep_pending_cloud_asset_validations(
             "results": denied_payload_results,
         }
 
-    batch = run_cloud_asset_validate_batch(
-        engagement_id,
-        allowed_assets,
-        db_path,
-        max_workers=worker_count,
-        progress_label=progress_label,
-        progress_callback=progress_callback,
-    )
+    try:
+        batch = run_cloud_asset_validate_batch(
+            engagement_id,
+            allowed_assets,
+            db_path,
+            max_workers=worker_count,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
+    finally:
+        release_validation_asset_claims(
+            engagement_id,
+            db_path,
+            owner=claim_owner,
+            assets=claimed_assets,
+        )
     status_counts = dict(batch.get("status_counts") or {})
     for key, value in denied_status_counts.items():
         status_counts[str(key)] = int(status_counts.get(str(key), 0) or 0) + int(value or 0)

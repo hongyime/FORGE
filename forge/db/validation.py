@@ -154,6 +154,18 @@ _REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "notes",
         "checked_at",
     },
+    "validation_claims": {
+        "id",
+        "engagement_id",
+        "claim_type",
+        "key_id",
+        "asset_type",
+        "identifier",
+        "owner",
+        "claimed_at",
+        "expires_at",
+        "updated_at",
+    },
     "attack_graph_snapshots": {"id", "engagement_id", "snapshot_at", "node_count", "edge_count", "critical_path_weight", "min_severity", "pruned", "graph_json", "mermaid_output", "dot_output"},
     "command_center_actions": {
         "action_id",

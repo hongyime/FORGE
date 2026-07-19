@@ -11996,6 +11996,154 @@ def test_sweep_pending_cloud_validations_emits_progress_metrics(
     assert float(progress_events[-1][1]["eta_seconds"] or 0.0) == 0.0
 
 
+def test_sweep_pending_cloud_validations_claims_rows_before_provider_call(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name, key_redacted, validation_state)
+            VALUES
+                (31, 1001, 'acme-firebase-prod', 'firebase', 'firebase_web_config', 'crawler',
+                 'https://acme-firebase-prod.firebaseapp.com/__/firebase/init.json',
+                 'webapp', 'AIza...7890', 'UNCONFIRMED')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    nested_summaries: list[dict[str, object]] = []
+    provider_calls: list[int] = []
+
+    def _fake_validate_key_row_payload(row_payload, **kwargs):  # noqa: ANN001, ANN003
+        del kwargs
+        provider_calls.append(int(row_payload["id"]))
+        if len(provider_calls) == 1:
+            nested_summaries.append(
+                cloud_validate.sweep_pending_cloud_validations(
+                    1001,
+                    db_path,
+                    limit=10,
+                    max_workers=1,
+                )
+            )
+        return (
+            int(row_payload["id"]),
+            int(row_payload["engagement_id"]),
+            cloud_validate.CloudValidationResult(
+                asset_type="firebase",
+                identifier="acme-firebase-prod",
+                validation_status="ACCESSIBLE_BUT_NO_DATA",
+                validation_method="stub_provider",
+                evidence="stub",
+                notes="stubbed provider response",
+            ),
+        )
+
+    monkeypatch.setattr(cloud_validate, "_validate_key_row_payload", _fake_validate_key_row_payload)
+
+    summary = cloud_validate.sweep_pending_cloud_validations(
+        1001,
+        db_path,
+        limit=10,
+        max_workers=1,
+    )
+
+    assert [item["attempted"] for item in nested_summaries] == [0]
+    assert provider_calls == [31]
+    assert summary["attempted"] == 1
+    assert summary["succeeded"] == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM validation_claims").fetchone()[0] == 0
+    finally:
+        con.close()
+
+
+def test_sweep_pending_cloud_asset_validations_claims_assets_before_provider_batch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO cloud_assets (engagement_id, asset_type, identifier, source)
+            VALUES (1001, 'aws_s3', 'acme-public-assets', 'artifact_s3_uri')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    nested_summaries: list[dict[str, object]] = []
+    provider_batches: list[list[tuple[str, str]]] = []
+
+    def _fake_validate_batch(engagement_id, assets, batch_db_path, **kwargs):  # noqa: ANN001
+        del batch_db_path, kwargs
+        normalized_assets = [(str(asset[0]), str(asset[1])) for asset in assets]
+        provider_batches.append(normalized_assets)
+        nested_summaries.append(
+            cloud_validate.sweep_pending_cloud_asset_validations(
+                int(engagement_id),
+                db_path,
+                limit=10,
+                max_workers=1,
+            )
+        )
+        return {
+            "status": "success",
+            "engagement_id": int(engagement_id),
+            "attempted": len(normalized_assets),
+            "succeeded": len(normalized_assets),
+            "failed": 0,
+            "status_counts": {"VALIDATED": len(normalized_assets)},
+            "results": [
+                {
+                    "status": "success",
+                    "engagement_id": int(engagement_id),
+                    "asset_type": asset_type,
+                    "identifier": identifier,
+                    "provider_identifier": identifier,
+                    "validation_status": "VALIDATED",
+                    "validation_method": "stub_provider",
+                }
+                for asset_type, identifier in normalized_assets
+            ],
+        }
+
+    monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", _fake_validate_batch)
+
+    summary = cloud_validate.sweep_pending_cloud_asset_validations(
+        1001,
+        db_path,
+        limit=10,
+        max_workers=1,
+    )
+
+    assert [item["attempted"] for item in nested_summaries] == [0]
+    assert provider_batches == [[("aws_s3", "acme-public-assets")]]
+    assert summary["attempted"] == 1
+    assert summary["succeeded"] == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM validation_claims").fetchone()[0] == 0
+    finally:
+        con.close()
+
+
 def test_sweep_pending_cloud_asset_validations_processes_unvalidated_digitalocean_spaces_assets(
     tmp_path: Path,
     monkeypatch,

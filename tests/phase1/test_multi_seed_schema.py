@@ -28,6 +28,7 @@ def test_multi_seed_tables_are_canonical_on_fresh_db(tmp_path: Path) -> None:
             "engagement_runs",
             "seed_relations",
             "artifact_queue",
+            "validation_claims",
         } <= tables
 
         version = con.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0]
