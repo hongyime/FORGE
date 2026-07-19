@@ -130,6 +130,15 @@ _AUTO_CASCADE_DEFAULT_ORDER = (
     "template",
 )
 
+_DETERMINISTIC_CLOUD_ASSET_TYPES = {
+    "aws_s3",
+    "azure_blob",
+    "do_spaces",
+    "firebase",
+    "gcs",
+    "supabase",
+}
+
 
 # ── Exceptions ─────────────────────────────────────────────────────────────────
 
@@ -589,24 +598,36 @@ class ContextBuilder:
         return ordered
 
     def _cloud_validation_index(self, con: sqlite3.Connection) -> dict[tuple[str, str], str]:
+        columns = self._table_columns(con, "cloud_validation_results")
+        if not {"asset_type", "identifier", "validation_status"}.issubset(columns):
+            return {}
+        order_checked_at_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
+        order_id_expr = "id" if "id" in columns else "0"
         try:
             rows = con.execute(
-                """
+                f"""
                 SELECT asset_type, identifier, validation_status
                 FROM cloud_validation_results
                 WHERE engagement_id=?
+                ORDER BY asset_type ASC,
+                         identifier ASC,
+                         {order_checked_at_expr} ASC,
+                         {order_id_expr} ASC
                 """,
                 (self._eid,),
             ).fetchall()
         except sqlite3.OperationalError:
             return {}
-        return {
-            (
-                str(row["asset_type"] or "").strip().lower(),
-                str(row["identifier"] or "").strip().lower(),
-            ): str(row["validation_status"] or "").strip().upper()
-            for row in rows
-        }
+        validation_index: dict[tuple[str, str], str] = {}
+        for row in rows:
+            asset_type = self._normalize_validation_asset_type(str(row["asset_type"] or ""))
+            identifier = str(row["identifier"] or "").strip().lower()
+            if not asset_type or not identifier:
+                continue
+            validation_index[(asset_type, identifier)] = str(
+                row["validation_status"] or ""
+            ).strip().upper()
+        return validation_index
 
     @staticmethod
     def _normalize_validation_asset_type(value: str) -> str:
@@ -652,10 +673,14 @@ class ContextBuilder:
             "notes" if "notes" in columns else "NULL AS notes",
             "checked_at" if "checked_at" in columns else "NULL AS checked_at",
         ]
+        order_checked_at_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
+        order_id_expr = "id" if "id" in columns else "0"
         try:
             rows = con.execute(
                 f"SELECT {', '.join(select_parts)} FROM cloud_validation_results "
-                "WHERE engagement_id=?",
+                "WHERE engagement_id=? "
+                f"ORDER BY asset_type ASC, identifier ASC, {order_checked_at_expr} ASC, "
+                f"{order_id_expr} ASC",
                 (self._eid,),
             ).fetchall()
         except sqlite3.OperationalError:
@@ -1251,6 +1276,8 @@ class ContextBuilder:
             finding.update(structured_validation)
             if self._finding_is_unvalidated_key_exposure(finding):
                 continue
+            if self._finding_is_unvalidated_deterministic_cloud_exposure(finding):
+                continue
             exploited.append(finding)
         severity_order = {
             "CRITICAL": 0,
@@ -1291,6 +1318,58 @@ class ContextBuilder:
         if vuln_type != "DETERMINISTIC_KEY_EXPOSURE" and not title.startswith("active exposed "):
             return False
         return str(finding.get("validation_status") or "").strip().upper() != "VALIDATED"
+
+    @classmethod
+    def _finding_is_unvalidated_deterministic_cloud_exposure(
+        cls,
+        finding: dict[str, Any],
+    ) -> bool:
+        if not cls._finding_is_deterministic_cloud_exposure(finding):
+            return False
+        return str(finding.get("validation_status") or "").strip().upper() != "VALIDATED"
+
+    @classmethod
+    def _finding_is_deterministic_cloud_exposure(cls, finding: dict[str, Any]) -> bool:
+        vuln_type = str(finding.get("vuln_type") or "").strip().upper()
+        if vuln_type == "DETERMINISTIC_CLOUD_EXPOSURE":
+            return True
+
+        title = str(finding.get("title") or "").strip().lower()
+        parameter_asset = cls._normalize_validation_asset_type(
+            str(finding.get("parameter") or "").split(":", 1)[0]
+        )
+        target_url = str(finding.get("target_url") or "").strip()
+        target_asset = ""
+        if target_url:
+            try:
+                parsed = urlsplit(target_url)
+            except ValueError:
+                parsed = None
+            if parsed and parsed.scheme:
+                target_asset = cls._normalize_validation_asset_type(parsed.scheme)
+        has_cloud_asset_hint = (
+            parameter_asset in _DETERMINISTIC_CLOUD_ASSET_TYPES
+            or target_asset in _DETERMINISTIC_CLOUD_ASSET_TYPES
+        )
+        if not has_cloud_asset_hint:
+            return False
+
+        deterministic_title_prefixes = (
+            "validated firebase data exposure",
+            "validated supabase data exposure",
+            "validated public ",
+            "externally reachable ",
+            "public ",
+        )
+        deterministic_title_suffixes = (
+            " listing exposure",
+            " metadata observed",
+            " detected",
+        )
+        return title.startswith(deterministic_title_prefixes) and (
+            title.endswith(deterministic_title_suffixes)
+            or " data exposure" in title
+        )
 
     def _load_post_exploit(self, con: sqlite3.Connection) -> PostExploitContext:
         try:
