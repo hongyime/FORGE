@@ -27,6 +27,14 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.utils.intel.social_profile_hosts import (
+    epieos_host_matches as _epieos_host_matches,
+    epieos_is_federated_instance_candidate_host as _shared_federated_instance_candidate_host,
+    epieos_is_mastodon_like_host as _is_mastodon_like_host,
+    epieos_is_stack_exchange_profile_host as _shared_stack_exchange_profile_host,
+    epieos_is_supported_profile_host as _shared_supported_profile_host,
+    epieos_profile_alias_host_matches as _shared_profile_alias_host_matches,
+)
 
 try:
     from curl_cffi.requests import AsyncSession  # type: ignore[import]
@@ -899,13 +907,6 @@ _EPIEOS_DISCORD_PLATFORM_NAMES = {
     "discord_invite",
 }
 
-_STACK_EXCHANGE_NETWORK_HOSTS = {
-    "askubuntu.com",
-    "mathoverflow.net",
-    "serverfault.com",
-    "stackapps.com",
-    "superuser.com",
-}
 _INSTAGRAM_RESERVED_PROFILE_PATHS = {
     "about",
     "accounts",
@@ -3806,21 +3807,11 @@ def _epieos_related_account_entries(platform: str, data: dict[str, Any]) -> list
 
 
 def _epieos_profile_alias_host_matches(platform_name: str, url: str) -> bool:
-    parsed = urlparse(str(url or "").strip())
-    hostname = str(parsed.hostname or "").strip().lower()
-    if hostname.startswith("www."):
-        hostname = hostname[4:]
-    if not hostname:
-        return False
-    if platform_name in {"stackoverflow", "stack_overflow", "stackexchange", "stack_exchange"}:
-        return _epieos_is_stack_exchange_profile_host(hostname)
-    expected_hosts = _EPIEOS_PLATFORM_PROFILE_HOSTS.get(platform_name, ())
-    if expected_hosts:
-        return any(
-            _epieos_host_matches(hostname, expected_host)
-            for expected_host in expected_hosts
-        )
-    return _epieos_is_supported_profile_host(hostname)
+    return _shared_profile_alias_host_matches(
+        platform_name,
+        url,
+        _EPIEOS_PLATFORM_PROFILE_HOSTS,
+    )
 
 
 def _epieos_youtube_channel_id(value: Any) -> str:
@@ -5113,16 +5104,7 @@ def _epieos_stack_exchange_host(data: dict[str, Any]) -> str:
 
 
 def _epieos_is_stack_exchange_profile_host(hostname: str) -> bool:
-    host = str(hostname or "").strip().lower()
-    if host.startswith("www."):
-        host = host[4:]
-    return (
-        host in _STACK_EXCHANGE_NETWORK_HOSTS
-        or host == "stackoverflow.com"
-        or host.endswith(".stackoverflow.com")
-        or host == "stackexchange.com"
-        or host.endswith(".stackexchange.com")
-    )
+    return _shared_stack_exchange_profile_host(hostname)
 
 
 def _epieos_mastodon_instance(data: dict[str, Any], handle: str) -> str:
@@ -5157,197 +5139,15 @@ def _epieos_mastodon_instance(data: dict[str, Any], handle: str) -> str:
     return ""
 
 
-def _epieos_host_matches(hostname: str, expected_host: str) -> bool:
-    host = str(hostname or "").strip().lower().lstrip(".")
-    expected = str(expected_host or "").strip().lower().lstrip(".")
-    if host.startswith("www."):
-        host = host[4:]
-    if expected.startswith("www."):
-        expected = expected[4:]
-    return bool(host and expected and (host == expected or host.endswith(f".{expected}")))
-
-
 def _epieos_is_supported_profile_host(hostname: str) -> bool:
-    host = str(hostname or "").strip().lower()
-    if not host:
-        return False
-    if host.startswith("www."):
-        host = host[4:]
-    if any(
-        _epieos_host_matches(host, supported_host)
-        for supported_host in (
-            "500px.com",
-            "about.me",
-            "artstation.com",
-            "academia.edu",
-            "adplist.org",
-            "allmylinks.com",
-            "bandcamp.com",
-            "beacons.ai",
-            "bento.me",
-            "behance.net",
-            "bio.link",
-            "bio.site",
-            "bitbucket.org",
-            "bsky.app",
-            "bsky.social",
-            "buymeacoffee.com",
-            "cal.com",
-            "calendly.com",
-            "campsite.bio",
-            "carrd.co",
-            "codeberg.org",
-            "codepen.io",
-            "codesandbox.io",
-            "contra.com",
-            "crates.io",
-            "credly.com",
-            "dev.to",
-            "deviantart.com",
-            "devpost.com",
-            "discord.com",
-            "discord.gg",
-            "discordapp.com",
-            "dribbble.com",
-            "facebook.com",
-            "figma.com",
-            "figshare.com",
-            "flickr.com",
-            "github.com",
-            "gitlab.com",
-            "accounts.google.com",
-            "gravatar.com",
-            "hashnode.com",
-            "hub.docker.com",
-            "huggingface.co",
-            "hex.pm",
-            "hoo.be",
-            "instagram.com",
-            "indiehackers.com",
-            "intigriti.com",
-            "kaggle.com",
-            "keybase.io",
-            "ko-fi.com",
-            "launchpad.net",
-            "last.fm",
-            "letterboxd.com",
-            "liberapay.com",
-            "linkedin.com",
-            "linktr.ee",
-            "lnk.bio",
-            "medium.com",
-            "matrix.to",
-            "mixcloud.com",
-            "muckrack.com",
-            "msha.ke",
-            "npmjs.com",
-            "nuget.org",
-            "nostr.com",
-            "nostrudel.ninja",
-            "njump.me",
-            "primal.net",
-            "iris.to",
-            "snort.social",
-            "yakihonne.com",
-            "openbugbounty.org",
-            "opencollective.com",
-            "orcid.org",
-            "packagist.org",
-            "patreon.com",
-            "pinterest.com",
-            "producthunt.com",
-            "polywork.com",
-            "quora.com",
-            "pypi.org",
-            "reddit.com",
-            "read.cv",
-            "replit.com",
-            "researchgate.net",
-            "rubygems.org",
-            "solo.to",
-            "speakerdeck.com",
-            "sourceforge.net",
-            "slideshare.net",
-            "soundcloud.com",
-            "scholar.google.com",
-            "semanticscholar.org",
-            "open.spotify.com",
-            "spotify.com",
-            "strava.com",
-            "sr.ht",
-            "steamcommunity.com",
-            "stackexchange.com",
-            "stackoverflow.com",
-            "wellfound.com",
-            "telegram.me",
-            "threads.com",
-            "threads.net",
-            "tiktok.com",
-            "tryhackme.com",
-            "twitch.tv",
-            "unsplash.com",
-            "twitter.com",
-            "vimeo.com",
-            "x.com",
-            "yeswehack.com",
-            "youtube.com",
-            "zenodo.org",
-            "angel.co",
-            "angellist.com",
-            "substack.com",
-            "taplink.cc",
-            "taplink.ws",
-        )
-    ):
-        return True
-    if host == "t.me" or host.endswith(".t.me"):
-        return True
-    if _epieos_is_stack_exchange_profile_host(host):
-        return True
-    return _is_mastodon_like_host(host)
+    return _shared_supported_profile_host(hostname, _EPIEOS_PLATFORM_PROFILE_HOSTS)
 
 
 def _epieos_is_federated_instance_candidate_host(hostname: str) -> bool:
-    host = str(hostname or "").strip().lower().strip(".")
-    if host.startswith("www."):
-        host = host[4:]
-    if not host or "." not in host:
-        return False
-    return not (_epieos_is_supported_profile_host(host) and not _is_mastodon_like_host(host))
-
-
-def _is_mastodon_like_host(hostname: str) -> bool:
-    host = str(hostname or "").strip().lower()
-    if not host:
-        return False
-    if host.startswith("www."):
-        host = host[4:]
-    if host in {
-        "chaos.social",
-        "fosstodon.org",
-        "hachyderm.io",
-        "indieweb.social",
-        "infosec.exchange",
-        "kolektiva.social",
-        "mas.to",
-        "mastodonapp.uk",
-        "mastodon.cloud",
-        "mastodon.online",
-        "mastodon.social",
-        "mastodon.world",
-        "masto.ai",
-        "me.dm",
-        "mstdn.ca",
-        "mstdn.party",
-        "mstdn.social",
-        "sfba.social",
-        "social.coop",
-        "techhub.social",
-        "toot.community",
-        "universeodon.com",
-    }:
-        return True
-    return host.startswith("mastodon.") or host.startswith("mstdn.")
+    return _shared_federated_instance_candidate_host(
+        hostname,
+        _EPIEOS_PLATFORM_PROFILE_HOSTS,
+    )
 
 
 def _epieos_string_list(
