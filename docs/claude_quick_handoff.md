@@ -17,6 +17,12 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
   Safety: scheduling/control-plane hardening only. No new live probes, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
   Commit: `478d995 fix(distributed): bound scheduled task handlers`.
 
+- [x] Rate-limit safety checkpoint is green:
+  `forge/opsec/rate_limiter.py` no longer rotates Tor circuits on HTTP 429 by default. The default behavior is to increase per-domain backoff and wait; Tor rotation requires explicit constructor opt-in for legacy tooling.
+  Verification: compile/Ruff over rate-limiter files; `tests\opsec\test_rate_limiter.py tests\integration\test_playbooks.py::test_playbook_2_rate_limiter_integration` -> `4 passed`.
+  Safety: closes implicit IP-rotation behavior. No proxy/IP bypass, live probing expansion, scope relaxation, destructive behavior, or report-gate change.
+  Commit: `bc95829 fix(opsec): avoid implicit tor rotation on rate limits`.
+
 - [x] Kill-chain recursion-budget parity checkpoint is green:
   CLI and web launch paths now share `normalize_kill_chain_max_iter()` and reject `max_iter < 1` or `> 10` before starting a run, closing the direct CLI bypass of the web launch budget.
   Verification: compile/Ruff over CLI/web/helper/tests; focused CLI range/help tests -> `2 passed`; focused web launch/range tests -> `2 passed`.
