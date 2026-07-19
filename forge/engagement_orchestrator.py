@@ -4525,6 +4525,11 @@ def _container_orchestration_config_artifact_label(value: str) -> str:
         "compose.override.yaml",
     }:
         return "docker-compose"
+    if re.fullmatch(
+        r"(?:docker-compose|compose)\.(?:dev|prod|production|staging|test|local|override)\.ya?ml",
+        name,
+    ):
+        return "docker-compose"
     if name == "chart.yaml":
         return "helm-chart"
     if name in {"values.yaml", "values.yml"} and segments & {"chart", "charts", "helm"}:
