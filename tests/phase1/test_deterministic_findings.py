@@ -306,6 +306,47 @@ def test_deterministic_findings_skip_stale_sentry_key_proof(
         con.close()
 
 
+def test_deterministic_findings_skip_active_key_without_stable_validation_proof(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend,
+                 source_url, repo_name, key_redacted, validation_state, validation_detail)
+            VALUES
+                (101, 1001, 'api.acme.example', 'github', 'github_pat_classic',
+                 'artifact', 'https://github.com/acme/repo/blob/main/.env',
+                 'acme/repo', 'ghp_...AAAA', 'ACTIVE',
+                 'ACTIVE:github_user_api:token accepted but no stable user id')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = DeterministicFindingEngine(db_path, 1001).run()
+
+    assert summary.inserted == 0
+    con = sqlite3.connect(db_path)
+    try:
+        findings = con.execute(
+            """
+            SELECT title
+            FROM vulnerability_findings
+            WHERE engagement_id=1001 AND vuln_type='DETERMINISTIC_KEY_EXPOSURE'
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    assert findings == []
+
+
 def test_deterministic_findings_removes_stale_unvalidated_key_finding_by_repo_target(
     tmp_path: Path,
 ) -> None:

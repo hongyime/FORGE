@@ -10,7 +10,6 @@ import pytest
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
-from forge.deterministic_findings import DeterministicFindingEngine
 from forge.phase4 import cloud_validate
 from forge.utils.intel import http_pacing
 
@@ -3048,47 +3047,6 @@ def _bootstrap_db(db_path: Path) -> None:
         con.commit()
     finally:
         con.close()
-
-
-def test_deterministic_findings_skip_active_key_without_stable_validation_proof(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_db(db_path)
-
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            INSERT INTO key_scanner_findings
-                (id, engagement_id, domain, service, pattern_name, source_backend,
-                 source_url, repo_name, key_redacted, validation_state, validation_detail)
-            VALUES
-                (101, 1001, 'api.acme.example', 'github', 'github_pat_classic',
-                 'artifact', 'https://github.com/acme/repo/blob/main/.env',
-                 'acme/repo', 'ghp_...AAAA', 'ACTIVE',
-                 'ACTIVE:github_user_api:token accepted but no stable user id')
-            """
-        )
-        con.commit()
-    finally:
-        con.close()
-
-    summary = DeterministicFindingEngine(db_path, 1001).run()
-
-    assert summary.inserted == 0
-    con = sqlite3.connect(db_path)
-    try:
-        findings = con.execute(
-            """
-            SELECT title
-            FROM vulnerability_findings
-            WHERE engagement_id=1001 AND vuln_type='DETERMINISTIC_KEY_EXPOSURE'
-            """
-        ).fetchall()
-    finally:
-        con.close()
-    assert findings == []
 
 
 def test_run_cloud_validate_persists_result_and_updates_key_state(
