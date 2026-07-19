@@ -29,6 +29,12 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
   Safety: validation-state/auditability hardening only. Unsupported types do not trigger provider calls and do not create deterministic findings.
   Commit: `4955108 fix(cloud-validation): terminate unsupported asset types`.
 
+- [x] Artifact helper test split checkpoint is green:
+  25 pure artifact helper/classification tests moved out of `tests\phase1\test_engagement_orchestrator.py` into `tests\phase1\test_artifact_helpers.py`, reducing the mega test to `89644` lines while keeping the new focused file at `560` lines.
+  Verification: compile/Ruff over both test files; `tests\phase1\test_artifact_helpers.py` -> `25 passed`.
+  Safety: test-only refactor. No runtime behavior change.
+  Commit: `2b84b3f refactor(tests): split artifact helper tests`.
+
 - [x] Kill-chain recursion-budget parity checkpoint is green:
   CLI and web launch paths now share `normalize_kill_chain_max_iter()` and reject `max_iter < 1` or `> 10` before starting a run, closing the direct CLI bypass of the web launch budget.
   Verification: compile/Ruff over CLI/web/helper/tests; focused CLI range/help tests -> `2 passed`; focused web launch/range tests -> `2 passed`.
