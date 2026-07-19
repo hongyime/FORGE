@@ -1266,8 +1266,8 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
 
     assert validation_summary["attempted"] == 8
     assert validation_summary["succeeded"] == 8
-    assert validation_summary["status_counts"]["VALIDATED"] == 7
-    assert validation_summary["status_counts"]["UNVERIFIED"] == 1
+    assert validation_summary["status_counts"]["VALIDATED"] == 6
+    assert validation_summary["status_counts"]["UNVERIFIED"] == 2
 
     con = sqlite3.connect(db_path)
     try:
@@ -1296,7 +1296,10 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
             "t9b2d6f4/u7a3c9k2",
             "VALIDATED",
         )
-        assert validation_by_method[("mailchimp", "mailchimp_ping_api")] == ("us1", "VALIDATED")
+        assert validation_by_method[("mailchimp", "mailchimp_ping_api")] == (
+            "us1",
+            "UNVERIFIED",
+        )
         assert validation_by_method[("sendgrid", "sendgrid_profile_api")] == (
             "profile/0123456789abcdef",
             "VALIDATED",
@@ -1352,7 +1355,7 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed mailchimp credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -1400,7 +1403,7 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
     assert "Validated Firebase data exposure" in report_text
     assert "Validated exposed aws credential reference" in report_text
     assert "Validated exposed slack credential reference" in report_text
-    assert "Validated exposed mailchimp credential reference" in report_text
+    assert "Validated exposed mailchimp credential reference" not in report_text
     assert "Validated exposed sendgrid credential reference" in report_text
     assert "Validated exposed gitlab credential reference" in report_text
     assert "Validated exposed google credential reference" not in report_text
@@ -1411,3 +1414,4 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
     assert '"requested_provider": "auto"' in json_payload
     assert '"fallback_reason": "quota exceeded"' in json_payload
     assert "Validated exposed google credential reference" not in json_payload
+    assert "Validated exposed mailchimp credential reference" not in json_payload

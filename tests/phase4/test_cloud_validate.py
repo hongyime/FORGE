@@ -683,7 +683,7 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "mailchimp",
         "Mailchimp ping ok: dc=us1 health=Everything's Chimpy!",
-    ) == "us1"
+    ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "slack",
         "Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4",
@@ -5776,7 +5776,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_gitlab_pat_rows_w
         con.close()
 
 
-def test_sweep_pending_cloud_validations_processes_validatable_mailchimp_key_rows_without_cloud_finding(
+def test_sweep_pending_cloud_validations_downgrades_mailchimp_ping_only_proof(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -5829,9 +5829,9 @@ def test_sweep_pending_cloud_validations_processes_validatable_mailchimp_key_row
     assert summary["attempted"] == 1
     assert summary["succeeded"] == 1
     assert summary["failed"] == 0
-    assert summary["status_counts"]["VALIDATED"] == 1
+    assert summary["status_counts"] == {"UNVERIFIED": 1}
     assert summary["results"][0]["key_id"] == 18
-    assert summary["results"][0]["validation_status"] == "VALIDATED"
+    assert summary["results"][0]["validation_status"] == "UNVERIFIED"
     assert summary["results"][0]["validation_method"] == "mailchimp_ping_api"
     assert summary["results"][0]["identifier"] == "us1"
 
@@ -5844,7 +5844,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_mailchimp_key_row
             WHERE engagement_id=1001
             """
         ).fetchone()
-        assert validation_row == ("mailchimp", "us1", "VALIDATED", "mailchimp_ping_api")
+        assert validation_row == ("mailchimp", "us1", "UNVERIFIED", "mailchimp_ping_api")
 
         key_row = con.execute(
             """
@@ -5853,8 +5853,8 @@ def test_sweep_pending_cloud_validations_processes_validatable_mailchimp_key_row
             WHERE id=18
             """
         ).fetchone()
-        assert key_row[0] == "ACTIVE"
-        assert str(key_row[1] or "").startswith("VALIDATED:mailchimp_ping_api:")
+        assert key_row[0] == "UNCONFIRMED"
+        assert str(key_row[1] or "").startswith("UNVERIFIED:mailchimp_ping_api:")
 
         findings = con.execute(
             """
@@ -5864,13 +5864,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_mailchimp_key_row
             ORDER BY vuln_type, title
             """
         ).fetchall()
-        assert findings == [
-            (
-                "DETERMINISTIC_KEY_EXPOSURE",
-                "HIGH",
-                "Validated exposed mailchimp credential reference",
-            )
-        ]
+        assert findings == []
     finally:
         con.close()
 

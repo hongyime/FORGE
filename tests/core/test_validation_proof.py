@@ -294,10 +294,6 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
             "stripe_balance_api",
         ),
         (
-            "VALIDATED:mailchimp_ping_api:Mailchimp ping ok: dc=us1 health=Everything's Chimpy!",
-            "mailchimp_ping_api",
-        ),
-        (
             "VALIDATED:twilio_account_api:Twilio account accessible: "
             "sid=AC1234567890abcdef1234567890abcdef status=active type=Full",
             "twilio_account_api",
@@ -526,6 +522,10 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "VALIDATED:stripe_balance_api:Stripe balance accessible: "
             "mode=live currencies=usd,unknown balances=available:1,pending:0",
             "stripe_balance_api",
+        ),
+        (
+            "VALIDATED:mailchimp_ping_api:Mailchimp ping ok: dc=us1 health=Everything's Chimpy!",
+            "mailchimp_ping_api",
         ),
         (
             "VALIDATED:mailchimp_ping_api:Mailchimp ping ok: "

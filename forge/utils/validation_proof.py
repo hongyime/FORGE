@@ -626,14 +626,10 @@ def _stripe_balance_proof_is_stable(proof: str) -> bool:
 
 
 def _mailchimp_ping_proof_is_stable(proof: str) -> bool:
-    dc_match = re.search(r"\bdc=([a-z]{2}[0-9]{1,2})\b", proof, re.IGNORECASE)
-    health_match = re.search(r"\bhealth=([^\r\n]+)", proof, re.IGNORECASE)
-    return bool(
-        dc_match
-        and health_match
-        and _stable_mailchimp_datacenter(dc_match.group(1))
-        and _stable_mailchimp_health_status(health_match.group(1))
-    )
+    del proof
+    # Ping only returns a generic health phrase plus datacenter routing. It is
+    # useful validation inventory, but not enough to promote a report finding.
+    return False
 
 
 def _twilio_account_proof_is_stable(proof: str) -> bool:

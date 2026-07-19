@@ -3868,10 +3868,10 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
         if match and status_match and _stable_twilio_account_status(status_match.group(1)):
             return _stable_twilio_account_sid(match.group(1))
     if normalized_service == "mailchimp":
-        match = re.search(r"\bdc=([a-z]{2}[0-9]{1,2})\b", text, re.IGNORECASE)
-        health_match = re.search(r"\bhealth=([^\r\n]+)", text, re.IGNORECASE)
-        if match and health_match and _stable_mailchimp_health_status(health_match.group(1)):
-            return _stable_mailchimp_datacenter(match.group(1))
+        # The Mailchimp ping endpoint only proves key acceptance and region routing.
+        # It does not return an account/list/audience identity or permission-bearing
+        # resource proof, so keep it out of deterministic reportable findings.
+        return None
     if normalized_service == "azure":
         match = re.search(r"\baccount=([a-z0-9]{3,24})\b", text, re.IGNORECASE)
         containers_match = re.search(r"\bcontainers=([0-9]+)\b", text, re.IGNORECASE)

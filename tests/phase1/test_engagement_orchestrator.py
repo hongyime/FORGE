@@ -72155,7 +72155,7 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
         assert key_map[("aws", "aws_access_key_id")][2] == "ACTIVE"
         assert key_map[("aws", "aws_secret_access_key")][2] == "UNCONFIRMED"
         assert key_map[("slack", "slack_bot_token")][2] == "ACTIVE"
-        assert key_map[("mailchimp", "mailchimp_api_key")][2] == "ACTIVE"
+        assert key_map[("mailchimp", "mailchimp_api_key")][2] == "UNCONFIRMED"
         assert key_map[("azure", "azure_storage_key")][2] == "ACTIVE"
 
         validation_rows = {
@@ -72195,7 +72195,7 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
         assert (
             "mailchimp",
             "us1",
-            "VALIDATED",
+            "UNVERIFIED",
             "mailchimp_ping_api",
         ) in validation_rows
         assert (
@@ -72239,7 +72239,7 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed mailchimp credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -72286,7 +72286,7 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
         metadata = json.loads(str(metadata_row[0] or "{}"))
         assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
         assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 6
+        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 5
     finally:
         con.close()
 
@@ -72317,7 +72317,7 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
     assert "Validated Supabase data exposure" in report_text
     assert "Validated exposed aws credential reference" in report_text
     assert "Validated exposed slack credential reference" in report_text
-    assert "Validated exposed mailchimp credential reference" in report_text
+    assert "Validated exposed mailchimp credential reference" not in report_text
     assert "Validated exposed azure credential reference" in report_text
     assert "template mode, no LLM" in report_text
     assert report_path.with_suffix(".json").is_file()
@@ -73143,7 +73143,7 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
         assert (
             "mailchimp",
             "us1",
-            "VALIDATED",
+            "UNVERIFIED",
             "mailchimp_ping_api",
         ) in validation_rows
         assert (
@@ -73205,7 +73205,7 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed mailchimp credential reference",
-        ) in finding_titles
+        ) not in finding_titles
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -73261,7 +73261,7 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
         assert int(artifact_cumulative_metrics.get("processed", 0)) >= 2
         assert int(artifact_cumulative_metrics.get("invocations", 0)) >= 2
         assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 7
+        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 6
     finally:
         con.close()
 
@@ -73292,7 +73292,7 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
     assert "Validated Supabase data exposure" in report_text
     assert "Validated exposed aws credential reference" in report_text
     assert "Validated exposed slack credential reference" in report_text
-    assert "Validated exposed mailchimp credential reference" in report_text
+    assert "Validated exposed mailchimp credential reference" not in report_text
     assert "Validated exposed azure credential reference" in report_text
     assert "template mode, no LLM" in report_text
     assert report_path.with_suffix(".json").is_file()
@@ -77416,7 +77416,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         assert key_map[("aws", "aws_access_key_id")][2] == "ACTIVE"
         assert key_map[("aws", "aws_secret_access_key")][2] == "UNCONFIRMED"
         assert key_map[("slack", "slack_bot_token")][2] == "ACTIVE"
-        assert key_map[("mailchimp", "mailchimp_api_key")][2] == "ACTIVE"
+        assert key_map[("mailchimp", "mailchimp_api_key")][2] == "UNCONFIRMED"
         assert key_map[("openai", "openai_project_api_key")][2] == "UNCONFIRMED"
         assert key_map[("anthropic", "anthropic_api_key")][2] == "UNCONFIRMED"
         assert key_map[("huggingface", "huggingface_token")][2] == "ACTIVE"
@@ -77445,7 +77445,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             for row in validation_rows
         }
         assert validation_map[("aws", "aws_sts_get_caller_identity")][1] == "VALIDATED"
-        assert validation_map[("mailchimp", "mailchimp_ping_api")] == ("us1", "VALIDATED")
+        assert validation_map[("mailchimp", "mailchimp_ping_api")] == ("us1", "UNVERIFIED")
         assert validation_map[("slack", "slack_auth_test")] == (
             "t9b2d6f4/u7a3c9k2",
             "VALIDATED",
@@ -77522,7 +77522,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed mailchimp credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -77619,7 +77619,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 12
+        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 11
     finally:
         con.close()
 
@@ -78854,6 +78854,15 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
                 )
             if url == "https://api.stripe.com/v1/balance":
                 return _FakeResponse(200, '{"object":"balance"}')
+            if url == "https://api.sendgrid.com/v3/user/profile":
+                return _FakeResponse(200, '{"email":"sender@delta-client.io"}')
+            if url == "https://api.sendgrid.com/v3/scopes":
+                return _FakeResponse(200, '["mail.send"]')
+            if url == "https://api.twilio.com/2010-04-01/Accounts/AC1234567890abcdef1234567890abcdef.json":
+                return _FakeResponse(
+                    200,
+                    '{"sid":"AC1234567890abcdef1234567890abcdef","status":"active"}',
+                )
             return _FakeResponse(404, "missing")
 
     class _FakeCurlSession:
@@ -78869,7 +78878,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
         def get(self, url: str, **kwargs):  # noqa: ANN003
             del kwargs
             if url == "https://api.sendgrid.com/v3/user/profile":
-                return _FakeResponse(200, '{"email":"sender@acme.example"}')
+                return _FakeResponse(200, '{"email":"sender@delta-client.io"}')
             if url == "https://api.sendgrid.com/v3/scopes":
                 return _FakeResponse(200, '["mail.send"]')
             if url == "https://api.twilio.com/2010-04-01/Accounts/AC1234567890abcdef1234567890abcdef.json":
@@ -79165,7 +79174,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
         key_map = {(str(row[0]), str(row[1])): row for row in key_rows}
         assert str(key_map[("aws", "aws_access_key_id")][2]) == "ACTIVE"
         assert str(key_map[("slack", "slack_bot_token")][2]) == "ACTIVE"
-        assert str(key_map[("mailchimp", "mailchimp_api_key")][2]) == "ACTIVE"
+        assert str(key_map[("mailchimp", "mailchimp_api_key")][2]) == "UNCONFIRMED"
         assert str(key_map[("azure", "azure_storage_key")][2]) == "ACTIVE"
         assert str(key_map[("github", "github_pat_classic")][2]) == "ACTIVE"
         assert str(key_map[("stripe", "stripe_live_secret_key")][2]) == "ACTIVE"
@@ -79235,7 +79244,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
         assert (
             "mailchimp",
             "us1",
-            "VALIDATED",
+            "UNVERIFIED",
             "mailchimp_ping_api",
         ) in validation_rows
         assert (
@@ -79284,7 +79293,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed mailchimp credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -79315,7 +79324,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 9
+        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 8
     finally:
         con.close()
 
@@ -79330,7 +79339,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
     assert "Validated public Azure Blob container listing exposure" in report_text
     assert "Validated exposed aws credential reference" in report_text
     assert "Validated exposed slack credential reference" in report_text
-    assert "Validated exposed mailchimp credential reference" in report_text
+    assert "Validated exposed mailchimp credential reference" not in report_text
     assert "Validated exposed azure credential reference" in report_text
     assert "### 5.2 Finding details" in report_text
     assert "- **Provider**: firebase" in report_text
