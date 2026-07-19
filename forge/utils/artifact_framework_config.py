@@ -14,6 +14,9 @@ _SPRING_NAMES = {
     "bootstrap.yml",
     "bootstrap.yaml",
 }
+_SPRING_PROFILE_NAME_RE = re.compile(
+    r"^(?:application|bootstrap)-[a-z0-9_.-]+\.(?:properties|ya?ml)$"
+)
 _CACHE_LABEL_SUFFIXES = {
     ".rails-database-config": "rails-database-config",
     ".spring-config": "spring-config",
@@ -83,7 +86,9 @@ def framework_config_artifact_label(value: str) -> str:
         return "alembic-config"
     if name == "database.php" and "config" in segments:
         return "laravel-database-config"
-    if name in _SPRING_NAMES and (_has_sequence(parts, ("src", "main", "resources")) or _has_segment(parts, "spring")):
+    if _is_spring_config_name(name) and (
+        _has_sequence(parts, ("src", "main", "resources")) or _has_segment(parts, "spring")
+    ):
         return "spring-config"
     if name == "web.config":
         return "dotnet-web-config"
@@ -119,6 +124,10 @@ def _has_segment(parts: list[str], value: str) -> bool:
 def _has_sequence(parts: list[str], sequence: tuple[str, ...]) -> bool:
     size = len(sequence)
     return any(tuple(parts[index : index + size]) == sequence for index in range(max(0, len(parts) - size + 1)))
+
+
+def _is_spring_config_name(name: str) -> bool:
+    return name in _SPRING_NAMES or bool(_SPRING_PROFILE_NAME_RE.fullmatch(name))
 
 
 def _append(values: list[str], seen: set[str], value: str) -> None:
