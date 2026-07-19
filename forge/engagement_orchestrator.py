@@ -27230,39 +27230,44 @@ class ArtifactQueueProcessor:
         suffix = Path(str(source_hint or "").replace("\\", "/")).suffix.lower()
         return suffix in {".http", ".rest", ".hurl"}
 
-    @classmethod
-    def _http_request_text_candidate_values(cls, text: str) -> list[str]:
-        request_line_pattern = re.compile(
+    def _http_request_text_candidate_values(self, text: str) -> list[str]:
+        line_entries = self._run_ordered_local_batch(
+            str(text or "").splitlines()[:4096],
+            self._http_request_text_line_candidate_value,
+            default_factory=str,
+        )
+        return [str(value or "").strip() for value in line_entries if str(value or "").strip()]
+
+    @staticmethod
+    def _http_request_text_line_candidate_value(raw_line: str) -> str:
+        line = str(raw_line or "").strip()
+        if not line or line.startswith(("#", "//", "--")):
+            return ""
+        request_match = re.match(
             r"""
             ^\s*
             (?P<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)
             \s+
             (?P<target>[^\s#]+)
             """,
+            line,
             re.IGNORECASE | re.VERBOSE,
         )
-        variable_pattern = re.compile(
+        if request_match:
+            return str(request_match.group("target") or "").strip()
+        variable_match = re.match(
             r"""
             ^\s*@?
             (?P<key>[A-Za-z0-9_.\-]*?(?:url|uri|host|hostname|domain|endpoint|baseurl|baseuri)[A-Za-z0-9_.\-]*)
             \s*[:=]\s*
             (?P<value>[^\s#]+)
             """,
+            line,
             re.IGNORECASE | re.VERBOSE,
         )
-        values: list[str] = []
-        for raw_line in str(text or "").splitlines()[:4096]:
-            line = raw_line.strip()
-            if not line or line.startswith(("#", "//", "--")):
-                continue
-            request_match = request_line_pattern.match(line)
-            if request_match:
-                values.append(str(request_match.group("target") or "").strip())
-                continue
-            variable_match = variable_pattern.match(line)
-            if variable_match:
-                values.append(str(variable_match.group("value") or "").strip().strip("\"'"))
-        return values
+        if variable_match:
+            return str(variable_match.group("value") or "").strip().strip("\"'")
+        return ""
 
     @staticmethod
     def _http_request_url_candidate_entry(raw_value: str) -> str:
