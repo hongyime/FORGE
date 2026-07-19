@@ -87,7 +87,20 @@ type GraphPayload = {
   source?: string
 }
 
+type AuditManifest = {
+  present?: boolean
+  verified?: boolean
+  verification_status?: string
+  manifest_hash?: string
+  short_hash?: string
+  previous_manifest_hash?: string
+  generated_at?: string
+  reason?: string | null
+  recomputed_hash?: string
+}
+
 type RunSummary = {
+  id?: number
   run_kind: string
   status: string
   seed_value: string
@@ -109,6 +122,7 @@ type RunSummary = {
   post_exploitation_allowed?: boolean
   requires_explicit_roe?: boolean
   scope_gate?: string
+  audit_manifest?: AuditManifest
   error: string
   metadata: Record<string, unknown>
   started_at: string
@@ -671,6 +685,20 @@ function statusTone(status: string): string {
     return 'is-stable'
   }
   return 'is-muted'
+}
+
+function auditManifestLabel(manifest?: AuditManifest): string {
+  if (!manifest) {
+    return 'untracked'
+  }
+  if (manifest.verified) {
+    return 'verified'
+  }
+  return manifest.verification_status || 'unknown'
+}
+
+function auditManifestHash(manifest?: AuditManifest): string {
+  return manifest?.short_hash || (manifest?.manifest_hash ? manifest.manifest_hash.slice(0, 12) : '')
 }
 
 function severityTone(severity: string): string {
@@ -1630,6 +1658,9 @@ function OverviewPage({
                     iter {formatCount(item.run_summary.current_iteration)}/
                     {formatCount(item.run_summary.max_iterations)}
                   </span>
+                  <span>
+                    audit {auditManifestHash(item.run_summary.audit_manifest) || auditManifestLabel(item.run_summary.audit_manifest)}
+                  </span>
                 </div>
               ) : null}
               <div className="card-footer">
@@ -2092,6 +2123,12 @@ function DetailPage({
   const runIsActive = ['running', 'stopping', 'pausing'].includes(runStatus)
   const runIsPaused = runStatus === 'paused'
   const runMetadata = detail.run_summary?.metadata ?? {}
+  const auditManifest = detail.run_summary?.audit_manifest
+  const auditManifestStatus = auditManifestLabel(auditManifest)
+  const auditManifestShortHash = auditManifestHash(auditManifest)
+  const auditManifestSummary = auditManifestShortHash
+    ? `${auditManifestShortHash} · ${auditManifestStatus}`
+    : auditManifestStatus
   const liveExecutionPolicy =
     runMetadata.live_execution_policy &&
     typeof runMetadata.live_execution_policy === 'object' &&
@@ -2510,6 +2547,10 @@ function DetailPage({
           <span className="summary-label">Run status</span>
           <strong>{detail.run_summary?.status || 'untracked'}</strong>
         </article>
+        <article className="summary-card">
+          <span className="summary-label">Audit manifest</span>
+          <strong>{auditManifestShortHash || auditManifestStatus}</strong>
+        </article>
       </section>
 
       <nav className="section-nav" aria-label="Engagement sections">
@@ -2556,6 +2597,17 @@ function DetailPage({
                   {detail.run_summary
                     ? `${detail.run_summary.run_kind} ${detail.run_summary.status} (${detail.run_summary.current_iteration}/${detail.run_summary.max_iterations})`
                     : '-'}
+                </span>
+              </div>
+              <div className="mini-table-row">
+                <span>Audit manifest</span>
+                <span>{auditManifestShortHash || '-'}</span>
+              </div>
+              <div className="mini-table-row">
+                <span>Audit verification</span>
+                <span>
+                  {auditManifestStatus}
+                  {auditManifest?.reason ? ` · ${auditManifest.reason}` : ''}
                 </span>
               </div>
               <div className="mini-table-row">
@@ -2760,6 +2812,10 @@ function DetailPage({
                       <div className="mini-table-row">
                         <span>Phase</span>
                         <span>{stringifyUnknown(runMetadata.phase) || detail.run_summary.status || '-'}</span>
+                      </div>
+                      <div className="mini-table-row">
+                        <span>Audit manifest</span>
+                        <span>{auditManifestSummary}</span>
                       </div>
                       <div className="mini-table-row">
                         <span>ROE reference</span>

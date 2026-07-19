@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
+from forge.audit.manifest import summarize_run_audit_manifest
 from forge.utils.validation_proof import parse_validated_detail
 
 GRAPHML_NS = {"g": "http://graphml.graphdrawing.org/xmlns"}
@@ -1347,12 +1348,18 @@ def _summary_counts(con: sqlite3.Connection, engagement_id: int) -> dict[str, in
     return counts
 
 
-def _latest_engagement_run(con: sqlite3.Connection, engagement_id: int) -> dict[str, Any] | None:
+def _latest_engagement_run(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    db_path: Path | None = None,
+    verify_manifest: bool = True,
+) -> dict[str, Any] | None:
     if not _table_exists(con, "engagement_runs"):
         return None
     row = con.execute(
         """
-        SELECT run_kind,
+        SELECT id,
+               run_kind,
                status,
                seed_value,
                seed_type,
@@ -1383,6 +1390,7 @@ def _latest_engagement_run(con: sqlite3.Connection, engagement_id: int) -> dict[
         attack_mode=bool(row["attack_mode"]),
     )
     return {
+        "id": int(row["id"]),
         "run_kind": str(row["run_kind"] or ""),
         "status": _effective_run_status(str(row["status"] or ""), metadata),
         "seed_value": str(row["seed_value"] or ""),
@@ -1396,6 +1404,13 @@ def _latest_engagement_run(con: sqlite3.Connection, engagement_id: int) -> dict[
         **policy_summary,
         "error": _truncate(row["error"], 160),
         "metadata": metadata if isinstance(metadata, dict) else {},
+        "audit_manifest": summarize_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            run_id=int(row["id"]),
+            verify=verify_manifest and db_path is not None,
+        ),
         "started_at": _format_dt(str(row["started_at"] or "")),
         "completed_at": _format_dt(str(row["completed_at"] or "")),
         "updated_at": _format_dt(str(row["updated_at"] or "")),
@@ -1582,7 +1597,10 @@ def _email_intelligence_brief(source: str, breach_names: Any, enrichment_data: A
     return _preview_json(parsed_enrichment, limit=120)
 
 
-def _engagement_run_section_row(row: sqlite3.Row) -> dict[str, str]:
+def _engagement_run_section_row(
+    row: sqlite3.Row,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, str]:
     metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
     policy = _run_policy_summary(
         metadata,
@@ -1595,7 +1613,9 @@ def _engagement_run_section_row(row: sqlite3.Row) -> dict[str, str]:
         f"active={'yes' if policy['active_recon_allowed'] else 'no'}",
         f"creds={'yes' if policy['credential_validation_allowed'] else 'no'}",
     ]
-    return {
+    manifest = manifest or {"present": False, "verification_status": "missing"}
+    manifest_status = str(manifest.get("verification_status") or "missing")
+    result = {
         "Kind": str(row["run_kind"] or ""),
         "Status": _effective_run_status(str(row["status"] or ""), metadata),
         "Seed": str(row["seed_value"] or ""),
@@ -1614,9 +1634,16 @@ def _engagement_run_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Completed": _format_dt(str(row["completed_at"] or "")),
         "Error": _truncate(row["error"], 96),
     }
+    result["Manifest"] = str(manifest.get("short_hash") or "-")
+    result["Manifest OK"] = "yes" if manifest.get("verified") is True else manifest_status
+    return result
 
 
-def _detail_sections(con: sqlite3.Connection, engagement_id: int) -> dict[str, list[dict[str, str]]]:
+def _detail_sections(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    db_path: Path | None = None,
+) -> dict[str, list[dict[str, str]]]:
     sections: dict[str, list[dict[str, str]]] = {}
 
     sections["hosts"] = [
@@ -1831,32 +1858,43 @@ def _detail_sections(con: sqlite3.Connection, engagement_id: int) -> dict[str, l
         )
     ]
 
+    engagement_run_rows = _fetch_rows(
+        con,
+        """
+        SELECT id,
+               run_kind,
+               status,
+               seed_value,
+               seed_type,
+               seed_count,
+               max_iterations,
+               current_iteration,
+               resume_enabled,
+               dry_run,
+               attack_mode,
+               metadata_json,
+               started_at,
+               completed_at,
+               error
+        FROM engagement_runs
+        WHERE engagement_id=?
+        ORDER BY started_at DESC, id DESC
+        LIMIT ?
+        """,
+        (engagement_id, max(SECTION_LIMIT, 10)),
+    )
     sections["engagement_runs"] = [
-        _engagement_run_section_row(row)
-        for row in _fetch_rows(
-            con,
-            """
-            SELECT run_kind,
-                   status,
-                   seed_value,
-                   seed_type,
-                   seed_count,
-                   max_iterations,
-                   current_iteration,
-                   resume_enabled,
-                   dry_run,
-                   attack_mode,
-                   metadata_json,
-                   started_at,
-                   completed_at,
-                   error
-            FROM engagement_runs
-            WHERE engagement_id=?
-            ORDER BY started_at DESC, id DESC
-            LIMIT ?
-            """,
-            (engagement_id, max(SECTION_LIMIT, 10)),
+        _engagement_run_section_row(
+            row,
+            summarize_run_audit_manifest(
+                con,
+                db_path=db_path,
+                engagement_id=engagement_id,
+                run_id=int(row["id"]),
+                verify=db_path is not None,
+            ),
         )
+        for row in engagement_run_rows
     ]
 
     sections["services"] = [
@@ -2236,8 +2274,8 @@ def _engagement_summary(db_path: Path) -> dict[str, Any]:
         summary["counts"] = _summary_counts(con, engagement_id)
         summary["severity_summary"] = _severity_summary(con, engagement_id)
         summary["highest_severity"] = _highest_severity(summary["severity_summary"])
-        summary["sections"] = _detail_sections(con, engagement_id)
-        summary["run_summary"] = _latest_engagement_run(con, engagement_id)
+        summary["sections"] = _detail_sections(con, engagement_id, db_path=db_path)
+        summary["run_summary"] = _latest_engagement_run(con, engagement_id, db_path=db_path)
         summary["seed_graph_summary"] = _seed_graph_summary(con, engagement_id)
         summary["seeds"] = _seed_list(con, engagement_id, summary["scope"])
         summary["primary_seed"] = summary["seeds"][0] if summary["seeds"] else ""

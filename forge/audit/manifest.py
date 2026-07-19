@@ -76,6 +76,80 @@ def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def summarize_run_audit_manifest(
+    conn: sqlite3.Connection,
+    *,
+    db_path: Path | None,
+    engagement_id: int,
+    run_id: int,
+    verify: bool = True,
+) -> dict[str, Any]:
+    """Return dashboard-safe manifest metadata without exposing manifest_json."""
+    payload: dict[str, Any] = {
+        "present": False,
+        "verified": False,
+        "verification_status": "missing",
+        "manifest_hash": "",
+        "short_hash": "",
+        "previous_manifest_hash": "",
+        "generated_at": "",
+        "reason": "manifest not found",
+    }
+    if run_id <= 0:
+        return payload
+    if not _table_exists(conn, "run_audit_manifests"):
+        payload["verification_status"] = "unavailable"
+        payload["reason"] = "manifest table not found"
+        return payload
+
+    row = conn.execute(
+        """
+        SELECT manifest_hash,
+               previous_manifest_hash,
+               generated_at
+        FROM run_audit_manifests
+        WHERE engagement_id=? AND run_id=?
+        """,
+        (engagement_id, run_id),
+    ).fetchone()
+    if row is None:
+        if _run_is_in_progress(conn, engagement_id=engagement_id, run_id=run_id):
+            payload["verification_status"] = "pending"
+            payload["reason"] = "run has not finished"
+        return payload
+
+    manifest_hash = str(row[0] or "")
+    payload.update(
+        {
+            "present": True,
+            "manifest_hash": manifest_hash,
+            "short_hash": manifest_hash[:12],
+            "previous_manifest_hash": str(row[1] or GENESIS_HASH),
+            "generated_at": str(row[2] or ""),
+            "verification_status": "not_checked",
+            "reason": None,
+        }
+    )
+    if not verify or db_path is None:
+        return payload
+
+    result = verify_run_audit_manifest(
+        conn,
+        db_path=db_path,
+        engagement_id=engagement_id,
+        run_id=run_id,
+    )
+    payload.update(
+        {
+            "verified": result.ok,
+            "verification_status": "verified" if result.ok else "failed",
+            "reason": result.reason,
+            "recomputed_hash": result.recomputed_hash or "",
+        }
+    )
+    return payload
+
+
 def build_run_audit_manifest(
     conn: sqlite3.Connection,
     *,
@@ -238,6 +312,8 @@ def _existing_manifest(
     engagement_id: int,
     run_id: int,
 ) -> AuditManifestRecord | None:
+    if not _table_exists(conn, "run_audit_manifests"):
+        return None
     row = conn.execute(
         """
         SELECT engagement_id, run_id, manifest_hash, previous_manifest_hash, manifest_json
@@ -255,6 +331,35 @@ def _existing_manifest(
         previous_manifest_hash=str(row[3] or GENESIS_HASH),
         manifest_json=str(row[4]),
     )
+
+
+def _run_is_in_progress(
+    conn: sqlite3.Connection,
+    *,
+    engagement_id: int,
+    run_id: int,
+) -> bool:
+    if not _table_exists(conn, "engagement_runs"):
+        return False
+    row = conn.execute(
+        """
+        SELECT status
+        FROM engagement_runs
+        WHERE engagement_id=? AND id=?
+        """,
+        (engagement_id, run_id),
+    ).fetchone()
+    if row is None:
+        return False
+    return str(row[0] or "").strip().lower() in {
+        "created",
+        "pending",
+        "queued",
+        "running",
+        "pausing",
+        "paused",
+        "stopping",
+    }
 
 
 def _latest_manifest_hash(

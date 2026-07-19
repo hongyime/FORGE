@@ -1199,6 +1199,7 @@ web_app = _make_sub("web", "Web Interface — Orchestration and Visibility")
 auth_app = _make_sub("auth", "Authentication Testing — Brute and Bypass")
 post_app = _make_sub("post", "Phase 5 — Advanced Operations")
 report_app = _make_sub("report", "Phase 6 — Reporting")
+audit_app = _make_sub("audit", "Audit Evidence — Manifest Verification")
 
 # Public groups (visible in `forge --help`): kb, graph, report.
 # Internal groups (hidden but still functional): recon, osint, evasion,
@@ -1215,6 +1216,7 @@ app.add_typer(web_app, hidden=True)
 app.add_typer(auth_app, hidden=True)
 app.add_typer(post_app, hidden=True)
 app.add_typer(report_app)
+app.add_typer(audit_app)
 
 
 # ---------------------------------------------------------------------------
@@ -4695,6 +4697,91 @@ def report_generate(
         "report_generate_complete", target=str(result_path) if result_path else None,
         result=f"success provider={provider or 'llama_cpp'}",
     )
+
+
+# ---------------------------------------------------------------------------
+# Audit Evidence
+# ---------------------------------------------------------------------------
+
+
+@audit_app.command("manifest-verify")
+def audit_manifest_verify(
+    engagement: str = typer.Option(..., "--engagement", "-e"),
+    run_id: Optional[int] = typer.Option(
+        None,
+        "--run-id",
+        help="Engagement run id to verify. Defaults to the latest engagement run.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON instead of a compact text summary.",
+    ),
+) -> None:
+    """Verify a stored per-run audit manifest against current DB/artifact state."""
+    from forge.audit.manifest import verify_run_audit_manifest  # noqa: PLC0415
+
+    cfg = ForgeConfig.load()
+    db_path = cfg.engagement_db_path(engagement)
+    if not db_path.exists():
+        typer.echo(f"engagement DB not found: {db_path}", err=True)
+        raise typer.Exit(1)
+    try:
+        engagement_id = int(engagement)
+    except ValueError as exc:
+        typer.echo("--engagement must be a numeric engagement id", err=True)
+        raise typer.Exit(1) from exc
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        selected_run_id = run_id
+        if selected_run_id is None:
+            row = con.execute(
+                """
+                SELECT id
+                FROM engagement_runs
+                WHERE engagement_id=?
+                ORDER BY started_at DESC, id DESC
+                LIMIT 1
+                """,
+                (engagement_id,),
+            ).fetchone()
+            if row is None:
+                typer.echo("no engagement run found", err=True)
+                raise typer.Exit(1)
+            selected_run_id = int(row["id"])
+        result = verify_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            run_id=int(selected_run_id),
+        )
+    finally:
+        con.close()
+
+    payload = {
+        "engagement_id": engagement_id,
+        "run_id": int(selected_run_id),
+        "ok": result.ok,
+        "stored_hash": result.stored_hash,
+        "recomputed_hash": result.recomputed_hash,
+        "reason": result.reason,
+    }
+    if json_output:
+        typer.echo(json.dumps(payload, sort_keys=True))
+    elif result.ok:
+        typer.echo(
+            f"OK engagement={engagement_id} run={selected_run_id} "
+            f"hash={(result.stored_hash or '')[:12]}"
+        )
+    else:
+        typer.echo(
+            f"FAIL engagement={engagement_id} run={selected_run_id} "
+            f"reason={result.reason or 'unknown'}",
+            err=True,
+        )
+    raise typer.Exit(0 if result.ok else 2)
 
 
 # ---------------------------------------------------------------------------

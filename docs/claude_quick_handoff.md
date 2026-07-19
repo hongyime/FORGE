@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Run audit manifest visibility checkpoint is green:
+  `forge/audit/manifest.py` now exposes `summarize_run_audit_manifest()` for dashboard-safe hash/status summaries without returning `manifest_json`. Static dashboard JSON/HTML and live engagement detail/run APIs expose `audit_manifest`; web list/run endpoints default to `not_checked` to avoid repeated artifact hashing, while detail views and `verify_manifests=true` recompute hashes. The React dashboard renders short hash plus verification state, and `forge audit manifest-verify --engagement <id> [--run-id <id>] [--json]` gives operators a manual integrity check.
+  Verification: compile/Ruff over touched backend/test files; focused audit/static/API tests -> `19 passed, 40 deselected`; combined focused audit/static/API tests -> `10 passed`; `npm run build` passed; `npm run lint` returned existing hook dependency warnings only.
+  Review: the prior explorer recommended the `audit_manifest` contract and no `manifest_json` leakage. Claude retry hit `Reached max turns (5)` with no usable findings.
+  Safety: evidence visibility/auditability only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, report-gate changes, exploitation, persistence, lateral movement, or post-exploitation behavior was added.
+  Handoff: `.claude/handoffs/2026-07-20-run-manifest-visibility.md`.
+
 - [x] Run audit manifest checkpoint is green:
   Completed `EngagementRunTracker.finish_run()` calls now write immutable `run_audit_manifests` rows chained by previous manifest hash. `forge/audit/manifest.py` snapshots root engagement metadata, per-run captured DB row refs/hashes, and bounded report/graph artifact SHA-256 hashes without storing raw rows, secret-shaped columns, arbitrary local paths, or oversized artifact bytes. `verify_run_audit_manifest()` verifies stored manifest JSON integrity and captured-row state without breaking old manifests when later runs append new rows. Canonical schema/migration target is now v21.
   Verification: compile/Ruff over touched backend/test files; focused manifest/schema tests -> `11 passed`; audit hash-chain plus run-manifest tests -> `12 passed`; schema plus full cloud-validation suite -> `146 passed`; distributed/playbook/engagement-pipeline/multi-seed recursive slice -> `33 passed`; tracker-focused orchestrator tests -> `4 passed`.
@@ -2054,7 +2061,7 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
 ## Best next tasks
 
-- [ ] Add a hash-chained per-run audit manifest if evidence-grade auditability is the next priority.
+- [ ] Add optional external attestation/export for run manifests if evidence-grade auditability needs a trust boundary beyond the local DB, for example signed manifest bundles or append-only export to customer storage.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
 - [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
 - [ ] Audit MTGX entity typing/layout against the intended Maltego-first workflow before changing more graph UI.

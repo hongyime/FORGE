@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
 
+from forge.audit.manifest import summarize_run_audit_manifest
 from forge.config import ForgeConfig
 from forge.db.session import get_engagement_db
 from forge.distributed.coordinator import QueueCoordinator
@@ -511,7 +512,13 @@ def create_app() -> Any:
             )
         return items
 
-    def _engagement_run_rows(con: sqlite3.Connection, engagement_id: int) -> list[dict[str, Any]]:
+    def _engagement_run_rows(
+        con: sqlite3.Connection,
+        engagement_id: int,
+        *,
+        db_path: Path | None = None,
+        verify_manifests: bool = False,
+    ) -> list[dict[str, Any]]:
         rows = con.execute(
             """
             SELECT id,
@@ -561,6 +568,13 @@ def create_app() -> Any:
                     **policy_summary,
                     "error": str(row["error"] or "") or None,
                     "metadata": metadata if isinstance(metadata, dict) else {},
+                    "audit_manifest": summarize_run_audit_manifest(
+                        con,
+                        db_path=db_path,
+                        engagement_id=engagement_id,
+                        run_id=int(row["id"]),
+                        verify=verify_manifests and db_path is not None,
+                    ),
                     "started_at": _format_dt(str(row["started_at"] or "")),
                     "completed_at": _format_dt(str(row["completed_at"] or "")),
                     "updated_at": _format_dt(str(row["updated_at"] or "")),
@@ -869,7 +883,12 @@ def create_app() -> Any:
             "severity_summary": severity_summary,
             "highest_severity": _highest_severity(severity_summary),
             "graph_summary": graph_summary,
-            "run_summary": _latest_engagement_run(con, engagement_id),
+            "run_summary": _latest_engagement_run(
+                con,
+                engagement_id,
+                db_path=db_file,
+                verify_manifest=False,
+            ),
             "seed_graph_summary": _seed_graph_summary(con, engagement_id),
             "report_count": len(report_files),
             "graph_count": len(graph_files),
@@ -901,7 +920,8 @@ def create_app() -> Any:
             "size_bytes": int(db_file.stat().st_size),
             "size_label": _format_size(int(db_file.stat().st_size)),
             "scope": scope_list,
-            "sections": _detail_sections(con, engagement_id),
+            "run_summary": _latest_engagement_run(con, engagement_id, db_path=db_file),
+            "sections": _detail_sections(con, engagement_id, db_path=db_file),
             "artifacts": artifacts,
             "report_previews": [_report_preview_payload(path) for path in preview_files],
             "report_count": len(report_files),
@@ -1765,6 +1785,7 @@ def create_app() -> Any:
     @app.get("/api/engagements/{engagement_ref}/runs")
     def list_engagement_runs(
         engagement_ref: str,
+        verify_manifests: bool = False,
         _subject: str = Depends(_auth_subject),
     ) -> dict[str, list[dict[str, Any]]]:
         resolved = _resolve_engagement_db(engagement_ref)
@@ -1774,7 +1795,14 @@ def create_app() -> Any:
         con = sqlite3.connect(db_path)
         con.row_factory = sqlite3.Row
         try:
-            return {"items": _engagement_run_rows(con, engagement_id)}
+            return {
+                "items": _engagement_run_rows(
+                    con,
+                    engagement_id,
+                    db_path=db_path,
+                    verify_manifests=verify_manifests,
+                )
+            }
         finally:
             con.close()
 

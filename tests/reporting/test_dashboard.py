@@ -6,6 +6,7 @@ import sqlite3
 import zipfile
 from pathlib import Path
 
+from forge.audit.manifest import write_run_audit_manifest
 from forge.reporting.dashboard import _relation_evidence_preview, generate_dashboard
 
 
@@ -169,6 +170,15 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
                 started_at TEXT,
                 completed_at TEXT,
                 updated_at TEXT
+            );
+            CREATE TABLE run_audit_manifests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                run_id INTEGER,
+                manifest_hash TEXT,
+                previous_manifest_hash TEXT,
+                manifest_json TEXT,
+                generated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE vulnerability_findings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -439,6 +449,29 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
         con.close()
 
 
+def _write_run_manifest(db_path: Path, engagement_id: int = 1001) -> str:
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        run_id = int(
+            con.execute(
+                "SELECT id FROM engagement_runs WHERE engagement_id=? ORDER BY id DESC LIMIT 1",
+                (engagement_id,),
+            ).fetchone()[0]
+        )
+        record = write_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            run_id=run_id,
+            generated_at="2026-07-09T09:44:13+00:00",
+        )
+        con.commit()
+        return record.manifest_hash
+    finally:
+        con.close()
+
+
 def _insert_dashboard_key_scanner_row(
     db_path: Path,
     *,
@@ -507,6 +540,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
 
     db_path = db_root / "1001.db"
     _build_minimal_engagement_db(db_path)
+    manifest_hash = _write_run_manifest(db_path)
     (reports_dir / "engagement_1001_report_20260709T014412.md").write_text(
         "# Executive Summary\nDeterministic reporting preview.\n",
         encoding="utf-8",
@@ -588,6 +622,9 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["counts"]["account_existence"] == 2
     assert overview_payload["items"][0]["run_summary"]["status"] == "completed"
     assert overview_payload["items"][0]["run_summary"]["metadata"]["phase"] == "completed"
+    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["verification_status"] == "verified"
+    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["verified"] is True
+    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["short_hash"] == manifest_hash[:12]
     assert overview_payload["items"][0]["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
     assert overview_payload["items"][0]["run_summary"]["roe_present"] is True
     assert overview_payload["items"][0]["run_summary"]["roe_missing"] is False
@@ -634,6 +671,8 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert snapshot_nodes["VULN::firebase"]["metadata"]["validation_status"] == "VALIDATED"
     assert detail_payload["sections"]["seed_runs"][0]["Loop"] == "fanout_a_subdomains"
     assert detail_payload["sections"]["engagement_runs"][0]["Kind"] == "kill_chain"
+    assert detail_payload["sections"]["engagement_runs"][0]["Manifest"] == manifest_hash[:12]
+    assert detail_payload["sections"]["engagement_runs"][0]["Manifest OK"] == "yes"
     assert detail_payload["sections"]["engagement_runs"][0]["ROE"] == "ROE-ACME-2026-07"
     assert detail_payload["sections"]["engagement_runs"][0]["ROE Missing"] == "no"
     assert detail_payload["sections"]["engagement_runs"][0]["Live"] == (
@@ -670,6 +709,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["seed_graph_summary"]["relations"] == 2
     assert detail_payload["run_summary"]["current_iteration"] == 2
     assert detail_payload["run_summary"]["metadata"]["phase"] == "completed"
+    assert detail_payload["run_summary"]["audit_manifest"]["verification_status"] == "verified"
     assert detail_payload["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
     assert detail_payload["run_summary"]["scope_gate"] == "engagement_scope_json_root_domains"
     assert detail_payload["run_summary"]["live_probing_allowed"] is True
@@ -687,6 +727,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "Email Intelligence" in detail_html
     assert "Fallback reason: quota exceeded" in detail_html
     assert "Report JSON" in detail_html
+    assert manifest_hash[:12] in detail_html
 
 
 def test_generate_dashboard_surfaces_compiled_artifact_review_metadata(

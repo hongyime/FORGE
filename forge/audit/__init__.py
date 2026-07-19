@@ -5,6 +5,7 @@ from forge.audit.manifest import (
     AuditManifestRecord,
     AuditManifestVerification,
     build_run_audit_manifest,
+    summarize_run_audit_manifest,
     verify_run_audit_manifest,
     write_run_audit_manifest,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "MetricCategory",
     "TelemetryCollector",
     "build_run_audit_manifest",
+    "summarize_run_audit_manifest",
     "verify_run_audit_manifest",
     "write_run_audit_manifest",
 ]

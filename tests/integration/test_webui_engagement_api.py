@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 pytest.importorskip("jose")
 
+from forge.audit.manifest import write_run_audit_manifest
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.webui.app import create_app
@@ -201,6 +202,24 @@ def _build_engagement(tmp_path: Path) -> Path:
                  '2026-07-09T09:40:01')
             """
         )
+        run_id = int(
+            con.execute(
+                """
+                SELECT id
+                FROM engagement_runs
+                WHERE engagement_id=1001
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()[0]
+        )
+        write_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=run_id,
+            generated_at="2026-07-09T09:44:13+00:00",
+        )
         con.commit()
     finally:
         con.close()
@@ -279,6 +298,10 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["counts"]["email_intelligence"] == 2
         assert items[0]["run_summary"]["status"] == "completed"
         assert items[0]["run_summary"]["metadata"]["phase"] == "completed"
+        list_manifest = items[0]["run_summary"]["audit_manifest"]
+        assert list_manifest["present"] is True
+        assert list_manifest["verification_status"] == "not_checked"
+        assert list_manifest["short_hash"] == list_manifest["manifest_hash"][:12]
         assert items[0]["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
         assert items[0]["run_summary"]["live_probing_allowed"] is True
         assert items[0]["run_summary"]["tool_execution_allowed"] is True
@@ -328,12 +351,17 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert "email_domain" in detail["sections"]["seed_relations"][0]["Evidence"]
         assert detail["sections"]["seed_runs"][0]["Loop"] == "fanout_a_subdomains"
         assert detail["sections"]["engagement_runs"][0]["Kind"] == "kill_chain"
+        assert detail["sections"]["engagement_runs"][0]["Manifest"] == list_manifest["short_hash"]
+        assert detail["sections"]["engagement_runs"][0]["Manifest OK"] == "yes"
         assert detail["sections"]["engagement_runs"][0]["ROE"] == "ROE-ACME-2026-07"
         assert detail["sections"]["engagement_runs"][0]["Live"] == "probe=yes tools=yes active=no creds=no"
         assert detail["sections"]["engagement_runs"][0]["Destructive"] == "no"
         assert detail["sections"]["engagement_runs"][0]["Post-Ex"] == "no"
         assert detail["run_summary"]["current_iteration"] == 1
         assert detail["run_summary"]["metadata"]["phase"] == "completed"
+        assert detail["run_summary"]["audit_manifest"]["verification_status"] == "verified"
+        assert detail["run_summary"]["audit_manifest"]["verified"] is True
+        assert detail["run_summary"]["audit_manifest"]["short_hash"] == list_manifest["short_hash"]
         assert detail["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
         assert detail["run_summary"]["scope_gate"] == "engagement_scope_json_root_domains"
         assert detail["seed_graph_summary"]["relations"] == 1
@@ -343,6 +371,19 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         id_resp = client.get("/api/engagements/1001", headers=headers)
         assert id_resp.status_code == 200, id_resp.text
         assert id_resp.json()["slug"] == detail["slug"]
+
+        runs_resp = client.get("/api/engagements/engagement-1001-acme-example/runs", headers=headers)
+        assert runs_resp.status_code == 200, runs_resp.text
+        runs = runs_resp.json()["items"]
+        assert runs[0]["audit_manifest"]["verification_status"] == "not_checked"
+        assert runs[0]["audit_manifest"]["short_hash"] == list_manifest["short_hash"]
+
+        verified_runs_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/runs?verify_manifests=true",
+            headers=headers,
+        )
+        assert verified_runs_resp.status_code == 200, verified_runs_resp.text
+        assert verified_runs_resp.json()["items"][0]["audit_manifest"]["verification_status"] == "verified"
 
         artifact_resp = client.get(
             "/api/engagements/engagement-1001-acme-example/artifacts/"

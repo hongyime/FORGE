@@ -5,7 +5,12 @@ import json
 import sqlite3
 from pathlib import Path
 
-from forge.audit.manifest import GENESIS_HASH, canonical_json, verify_run_audit_manifest
+from forge.audit.manifest import (
+    GENESIS_HASH,
+    canonical_json,
+    summarize_run_audit_manifest,
+    verify_run_audit_manifest,
+)
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.engagement_orchestrator import EngagementRunTracker
@@ -104,6 +109,88 @@ def test_engagement_finish_writes_manifest_without_secret_material(tmp_path: Pat
     finally:
         con.close()
     assert result.ok is True
+
+
+def test_manifest_summary_is_dashboard_safe_and_verifies(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap(db_path)
+    tracker = EngagementRunTracker(db_path, 1001)
+    handle = tracker.start_run(run_kind="kill_chain")
+    tracker.finish_run(handle, status="completed")
+
+    con = sqlite3.connect(db_path)
+    try:
+        summary = summarize_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=handle.run_id,
+        )
+        unchecked = summarize_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=handle.run_id,
+            verify=False,
+        )
+    finally:
+        con.close()
+
+    assert summary["present"] is True
+    assert summary["verified"] is True
+    assert summary["verification_status"] == "verified"
+    assert summary["previous_manifest_hash"] == GENESIS_HASH
+    assert summary["short_hash"] == summary["manifest_hash"][:12]
+    assert "manifest_json" not in summary
+    assert unchecked["verification_status"] == "not_checked"
+    assert unchecked["verified"] is False
+
+
+def test_manifest_summary_handles_tamper_missing_and_old_schema(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap(db_path)
+    tracker = EngagementRunTracker(db_path, 1001)
+    handle = tracker.start_run(run_kind="kill_chain")
+    tracker.finish_run(handle, status="completed")
+
+    con = sqlite3.connect(db_path)
+    try:
+        missing = summarize_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=9999,
+        )
+        con.execute("UPDATE engagements SET operator='tampered' WHERE id=1001")
+        con.commit()
+        tampered = summarize_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=handle.run_id,
+        )
+    finally:
+        con.close()
+
+    old_schema = sqlite3.connect(":memory:")
+    try:
+        old = summarize_run_audit_manifest(
+            old_schema,
+            db_path=None,
+            engagement_id=1001,
+            run_id=handle.run_id,
+        )
+    finally:
+        old_schema.close()
+
+    assert missing["present"] is False
+    assert missing["verification_status"] == "missing"
+    assert tampered["present"] is True
+    assert tampered["verified"] is False
+    assert tampered["verification_status"] == "failed"
+    assert tampered["reason"] == "manifest hash mismatch"
+    assert old["present"] is False
+    assert old["verification_status"] == "unavailable"
 
 
 def test_run_manifests_chain_and_detect_db_tamper(tmp_path: Path) -> None:
