@@ -27420,6 +27420,43 @@ class ArtifactQueueProcessor:
         candidate = _normalize_artifact_text_url(str(raw_value or "").strip().strip("\"'"))
         return ArtifactQueueProcessor._api_spec_url_candidate_entry(candidate)
 
+    def _structured_payload_lines(
+        self,
+        raw_values: Sequence[str],
+        normalizer: Callable[[str], str],
+        *,
+        casefold_seen: bool,
+    ) -> str:
+        candidate_entries = self._run_ordered_local_batch(
+            raw_values,
+            normalizer,
+            default_factory=str,
+        )
+        lines: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidate_entries:
+            normalized = str(candidate or "").strip()
+            key = normalized.lower() if casefold_seen else normalized
+            if not normalized or key in seen:
+                continue
+            seen.add(key)
+            lines.append(normalized)
+        return "\n".join(lines)
+
+    @staticmethod
+    def _ssh_payload_entry(raw_value: str) -> str:
+        candidate = str(raw_value or "").strip().strip("[]")
+        return f"ssh://{candidate}" if candidate else ""
+
+    @staticmethod
+    def _postgres_payload_entry(raw_value: str) -> str:
+        candidate = str(raw_value or "").strip().strip("[]")
+        return f"postgres://{candidate}" if candidate else ""
+
+    @staticmethod
+    def _trimmed_payload_entry(raw_value: str) -> str:
+        return str(raw_value or "").strip()
+
     def _connection_client_structured_payload_text(
         self,
         text: str,
@@ -27428,15 +27465,11 @@ class ArtifactQueueProcessor:
     ) -> str:
         if not connection_client_config_artifact_label(source_hint):
             return ""
-        lines: list[str] = []
-        seen: set[str] = set()
-        for host in connection_client_host_candidates(text):
-            candidate = str(host or "").strip().strip("[]")
-            if not candidate or candidate in seen:
-                continue
-            seen.add(candidate)
-            lines.append(f"ssh://{candidate}")
-        return "\n".join(lines)
+        return self._structured_payload_lines(
+            connection_client_host_candidates(text),
+            self._ssh_payload_entry,
+            casefold_seen=False,
+        )
 
     def _database_client_structured_payload_text(
         self,
@@ -27446,16 +27479,11 @@ class ArtifactQueueProcessor:
     ) -> str:
         if not database_client_config_artifact_label(source_hint):
             return ""
-        lines: list[str] = []
-        seen: set[str] = set()
-        for endpoint in database_client_endpoint_candidates(text):
-            candidate = str(endpoint or "").strip()
-            lowered = candidate.lower()
-            if not candidate or lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(candidate)
-        return "\n".join(lines)
+        return self._structured_payload_lines(
+            database_client_endpoint_candidates(text),
+            self._trimmed_payload_entry,
+            casefold_seen=True,
+        )
 
     def _storage_client_config_structured_payload_text(
         self,
@@ -27465,16 +27493,11 @@ class ArtifactQueueProcessor:
     ) -> str:
         if not storage_client_config_artifact_label(source_hint):
             return ""
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate in storage_client_config_candidates(text):
-            normalized = str(candidate or "").strip()
-            lowered = normalized.lower()
-            if not normalized or lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(normalized)
-        return "\n".join(lines)
+        return self._structured_payload_lines(
+            storage_client_config_candidates(text),
+            self._trimmed_payload_entry,
+            casefold_seen=True,
+        )
 
     def _amplify_client_config_structured_payload_text(
         self,
@@ -27484,16 +27507,11 @@ class ArtifactQueueProcessor:
     ) -> str:
         if not amplify_client_config_artifact_label(source_hint):
             return ""
-        lines: list[str] = []
-        seen: set[str] = set()
-        for candidate in amplify_client_config_text_candidates(text):
-            normalized = str(candidate or "").strip()
-            lowered = normalized.lower()
-            if not normalized or lowered in seen:
-                continue
-            seen.add(lowered)
-            lines.append(normalized)
-        return "\n".join(lines)
+        return self._structured_payload_lines(
+            amplify_client_config_text_candidates(text),
+            self._trimmed_payload_entry,
+            casefold_seen=True,
+        )
 
     def _orm_config_structured_payload_text(
         self,
@@ -27503,15 +27521,11 @@ class ArtifactQueueProcessor:
     ) -> str:
         if not orm_config_artifact_label(source_hint):
             return ""
-        lines: list[str] = []
-        seen: set[str] = set()
-        for host in orm_config_host_candidates(text):
-            candidate = str(host or "").strip().strip("[]")
-            if not candidate or candidate in seen:
-                continue
-            seen.add(candidate)
-            lines.append(f"postgres://{candidate}")
-        return "\n".join(lines)
+        return self._structured_payload_lines(
+            orm_config_host_candidates(text),
+            self._postgres_payload_entry,
+            casefold_seen=False,
+        )
 
     def _framework_config_structured_payload_text(
         self,
@@ -27521,15 +27535,11 @@ class ArtifactQueueProcessor:
     ) -> str:
         if not framework_config_artifact_label(source_hint):
             return ""
-        lines: list[str] = []
-        seen: set[str] = set()
-        for host in framework_config_host_candidates(text):
-            candidate = str(host or "").strip().strip("[]")
-            if not candidate or candidate in seen:
-                continue
-            seen.add(candidate)
-            lines.append(f"postgres://{candidate}")
-        return "\n".join(lines)
+        return self._structured_payload_lines(
+            framework_config_host_candidates(text),
+            self._postgres_payload_entry,
+            casefold_seen=False,
+        )
 
     def _tunnel_config_structured_payload_text(
         self,
