@@ -5310,6 +5310,8 @@ def sweep_pending_cloud_asset_validations(
                   'cloudflare_pages',
                   'cloudflare_worker',
                   'cloudflare_r2',
+                  'cloudflare_d1',
+                  'cloudflare_kv',
                   'netlify',
                   'vercel',
                   'render',

@@ -7875,6 +7875,8 @@ def test_sweep_pending_cloud_asset_validations_processes_pages_managed_hosting_a
                 (1001, "cloudflare_pages", "acme-pages", "artifact_url_extract"),
                 (1001, "cloudflare_worker", "worker.acme.workers.dev", "artifact_url_extract"),
                 (1001, "cloudflare_r2", "pub-acme.r2.dev", "artifact_url_extract"),
+                (1001, "cloudflare_d1", "acme-d1-prod", "artifact_cloudflare_config"),
+                (1001, "cloudflare_kv", "acme-kv-cache", "artifact_cloudflare_config"),
             ],
         )
         con.commit()
@@ -7915,16 +7917,19 @@ def test_sweep_pending_cloud_asset_validations_processes_pages_managed_hosting_a
     )
 
     assert summary["status"] == "success"
-    assert summary["attempted"] == 5
-    assert summary["succeeded"] == 5
+    assert summary["attempted"] == 7
+    assert summary["succeeded"] == 7
     assert summary["failed"] == 0
     assert summary["status_counts"]["ACCESSIBLE_BUT_NO_DATA"] == 5
+    assert summary["status_counts"]["UNSUPPORTED"] == 2
     assert [(item["asset_type"], item["identifier"]) for item in summary["results"]] == [
         ("github_pages", "acme.github.io"),
         ("gitlab_pages", "security.gitlab.io"),
         ("cloudflare_pages", "acme-pages"),
         ("cloudflare_worker", "worker.acme.workers.dev"),
         ("cloudflare_r2", "pub-acme.r2.dev"),
+        ("cloudflare_d1", "acme-d1-prod"),
+        ("cloudflare_kv", "acme-kv-cache"),
     ]
 
     con = sqlite3.connect(db_path)
@@ -7938,6 +7943,8 @@ def test_sweep_pending_cloud_asset_validations_processes_pages_managed_hosting_a
             """
         ).fetchall()
         assert validation_rows == [
+            ("cloudflare_d1", "acme-d1-prod", "UNSUPPORTED"),
+            ("cloudflare_kv", "acme-kv-cache", "UNSUPPORTED"),
             ("cloudflare_pages", "acme-pages", "ACCESSIBLE_BUT_NO_DATA"),
             ("cloudflare_r2", "pub-acme.r2.dev", "ACCESSIBLE_BUT_NO_DATA"),
             ("cloudflare_worker", "worker.acme.workers.dev", "ACCESSIBLE_BUT_NO_DATA"),
