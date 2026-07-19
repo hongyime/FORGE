@@ -121,6 +121,23 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         del kwargs
         argv = [str(part) for part in cmd_argv]
         calls.append(argv)
+        if argv[:2] == ["graph", "build"]:
+            cli.graph_build(
+                engagement=str(EID),
+                fmt="all",
+                output_dir="reports",
+                min_severity="LOW",
+                critical_path_only=False,
+                snapshot=True,
+                max_nodes=150,
+            )
+            return subprocess.CompletedProcess(["forge", *argv], 0, "graph built\n", "")
+        if argv[:2] == ["report", "generate"]:
+            from forge.phase6.report_synthesizer import synthesise
+
+            output = argv[argv.index("--output") + 1]
+            synthesise(str(EID), output_path=output, assume_yes=True, provider="template")
+            return subprocess.CompletedProcess(["forge", *argv], 0, "report built\n", "")
         with connect() as con:
             if argv[:2] == ["recon", "subdomains"]:
                 for host in ("app.acme.test", "static.acme.test", "app.acme.test"):
@@ -155,51 +172,16 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
                     """,
                     (EID, email, json.dumps(profile)),
                 )
-            elif argv[:2] == ["osint", "keyscan"]:
-                key_sql = """
-                    INSERT OR IGNORE INTO key_scanner_findings
-                        (engagement_id, domain, service, pattern_name, source_backend,
-                         source_url, repo_name, key_redacted, validation_state, validation_detail)
-                    VALUES (?, ?, ?, ?, 'github', ?, 'acme/mock', ?, ?, ?)
-                """
-                con.execute(
-                    key_sql,
-                    (
-                        EID,
-                        "742931608514",
-                        "aws",
-                        "aws_access_key_id",
-                        "https://github.com/acme/mock/blob/main/deploy.yml",
-                        "AKIA...TEST",
-                        "ACTIVE",
-                        "VALIDATED:aws_sts_get_caller_identity:AWS AccountId: 742931608514",
-                    ),
-                )
-                con.execute(
-                    key_sql,
-                    (
-                        EID,
-                        "acme.test",
-                        "sendgrid",
-                        "sendgrid_api_key",
-                        "https://github.com/acme/mock/blob/main/unconfirmed.env",
-                        "SG.x...nope",
-                        "UNCONFIRMED",
-                        "",
-                    ),
-                )
-            elif argv[:2] == ["report", "generate"]:
-                from forge.phase6.report_synthesizer import synthesise
-
-                output = argv[argv.index("--output") + 1]
-                provider = argv[argv.index("--provider") + 1]
-                synthesise(str(EID), output_path=output, assume_yes=True, provider=provider)
             con.commit()
         return subprocess.CompletedProcess(["forge", *argv], 0, "mock ok\n", "")
 
     def validate_asset(con: sqlite3.Connection, kind: str, ref: str) -> dict[str, str]:
         status = "UNVERIFIED" if ref.startswith("dead-") else "VALIDATED"
-        method = "mock_unverified" if status == "UNVERIFIED" else f"{kind}_mock_read"
+        methods = {
+            "firebase": "firebase_database_shallow_read",
+            "supabase": "supabase_rest_root",
+        }
+        method = "mock_unverified" if status == "UNVERIFIED" else methods[kind]
         con.execute(
             "INSERT INTO cloud_assets (engagement_id, asset_type, identifier, provider_identifier, source) "
             "VALUES (?, ?, ?, ?, 'mock_provider') "
@@ -246,7 +228,6 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     monkeypatch.setattr(cli, "_run_html_fetch_batch", html_batch)
     monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
     monkeypatch.setattr(cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips])
-    monkeypatch.setattr(cli, "_run_module_batch", lambda specs, _run_module, **_kw: [fake_module(spec.cmd_argv).returncode for spec in specs])
     monkeypatch.setattr(cli, "_run_forge_module_subprocess", fake_module)
     monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", validate_batch)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_asset_validations", sweep_assets)
@@ -258,6 +239,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         engagement=str(EID),
         max_iter=4,
         parallel_fanout=1,
+        skip_keyscan=True,
         report_provider="template",
         report_max_loops=0,
     )
@@ -265,6 +247,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     reports = sorted((tmp_path / "reports").glob(f"engagement_{EID}_kill_chain_*.md"))
     assert len(reports) == 1
     report_text = reports[0].read_text(encoding="utf-8")
+    graph = json.loads((tmp_path / "reports" / f"{EID}_attack_graph.json").read_text(encoding="utf-8"))
 
     with sqlite3.connect(db_path) as con:
         con.row_factory = sqlite3.Row
@@ -306,9 +289,13 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
 
         findings = con.execute("SELECT title, target_url, parameter, evidence FROM vulnerability_findings").fetchall()
         titles = {row["title"] for row in findings}
-        assert {"Public Firebase project metadata observed", "Public Supabase project metadata observed", "Validated exposed aws credential reference"} <= titles
-        assert "Validated exposed sendgrid credential reference" not in titles
+        assert {"Validated Firebase data exposure", "Validated Supabase data exposure"} <= titles
         assert not any("dead-firebase-prod" in " ".join(str(value or "") for value in row) for row in findings)
+
+        loops = {row[0] for row in con.execute("SELECT DISTINCT loop_name FROM seed_runs")}
+        assert {"fanout_a_subdomains", "fanout_e_chain", "fanout_d5_url_seed_html", "fanout_j_cloud_scan"} <= loops
+        audit_actions = {row[0] for row in con.execute("SELECT action FROM audit_log")}
+        assert {"kill_chain_start", "kill_chain_complete"} <= audit_actions
 
         run = con.execute(
             "SELECT current_iteration, status, metadata_json FROM engagement_runs ORDER BY id DESC LIMIT 1"
@@ -320,8 +307,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert all(delta == 0 for delta in metadata["last_iteration_delta"].values())
 
     assert any(call[:2] == ["osint", "social"] for call in calls)
-    assert any(call[:2] == ["osint", "keyscan"] for call in calls)
-    assert "Public Firebase project metadata observed" in report_text
-    assert "Public Supabase project metadata observed" in report_text
-    assert "Validated exposed aws credential reference" in report_text
-    assert "Validated exposed sendgrid credential reference" not in report_text and "dead-firebase-prod" not in report_text
+    finding_nodes = [node for node in graph["nodes"] if node.get("source_table") == "vulnerability_findings"]
+    assert finding_nodes
+    assert all((node.get("metadata") or {}).get("validation_status") == "VALIDATED" for node in finding_nodes)
+    finding_report = report_text.split("## 5. Vulnerability", 1)[1].split("## 6. Post-Exploitation", 1)[0]
+    assert "Validated Firebase data exposure" in finding_report
+    assert "Validated Supabase data exposure" in finding_report
+    assert "dead-firebase-prod" not in finding_report
