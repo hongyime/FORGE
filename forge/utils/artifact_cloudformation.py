@@ -52,6 +52,18 @@ def cloudformation_template_artifact_label(value: str) -> str:
     return ""
 
 
+def serverless_framework_artifact_label(value: str) -> str:
+    name = Path(str(value or "").strip().replace("\\", "/")).name.lower()
+    if not name:
+        return ""
+    stem = name
+    for suffix in (".yaml", ".yml", ".json"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    return "serverless" if name == "serverless" or stem == "serverless" else ""
+
+
 def cloudformation_template_candidates(text: str, *, source_hint: str = "") -> list[str]:
     if cloudformation_template_artifact_label(source_hint) not in {
         "cloudformation",
@@ -73,6 +85,28 @@ def cloudformation_template_candidates(text: str, *, source_hint: str = "") -> l
         if _looks_like_template(document):
             for candidate in _document_candidates(document):
                 append(candidate)
+    return candidates
+
+
+def serverless_framework_candidates(text: str, *, source_hint: str = "") -> list[str]:
+    if serverless_framework_artifact_label(source_hint) != "serverless":
+        return []
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def append(value: str) -> None:
+        candidate = str(value or "").strip().strip("\"'")
+        lowered = candidate.lower()
+        if not candidate or lowered in seen:
+            return
+        seen.add(lowered)
+        candidates.append(candidate)
+
+    for document in _load_documents(text):
+        if not isinstance(document, Mapping) or not _looks_like_serverless(document):
+            continue
+        for candidate in _serverless_document_candidates(document):
+            append(candidate)
     return candidates
 
 
@@ -127,6 +161,17 @@ def _looks_like_template(document: Any) -> bool:
     return any(_resource_type(resource).startswith(("aws::", "serverless::")) for resource in resources.values())
 
 
+def _looks_like_serverless(document: Mapping[str, Any]) -> bool:
+    keys = {_fingerprint(key) for key in document}
+    provider = _child(document, "provider")
+    provider_name = _ref(provider, "name").lower()
+    return "service" in keys and (
+        "functions" in keys
+        or "resources" in keys
+        or provider_name in {"aws", "amazon", "amazonwebservices"}
+    )
+
+
 def _document_candidates(document: Mapping[str, Any]) -> list[str]:
     candidates: list[str] = []
     for resource in _child(document, "Resources").values():
@@ -136,6 +181,51 @@ def _document_candidates(document: Mapping[str, Any]) -> list[str]:
     for output in outputs.values():
         if isinstance(output, Mapping):
             candidates.extend(_output_candidates(output))
+    return _dedupe(candidates)
+
+
+def _serverless_document_candidates(document: Mapping[str, Any]) -> list[str]:
+    candidates: list[str] = []
+    provider = _child(document, "provider")
+    candidates.extend(_serverless_deployment_bucket_candidates(provider))
+    custom = _child(document, "custom")
+    candidates.extend(_serverless_custom_domain_candidates(custom))
+    resources = _child(document, "resources")
+    resource_map = _child(resources, "Resources")
+    if resource_map:
+        candidates.extend(_document_candidates({"Resources": resource_map}))
+    return _dedupe(candidates)
+
+
+def _serverless_deployment_bucket_candidates(provider: Mapping[str, Any]) -> list[str]:
+    deployment_bucket = provider.get("deploymentBucket") or provider.get("deployment_bucket")
+    if isinstance(deployment_bucket, Mapping):
+        bucket = _static_bucket(_ref(deployment_bucket, "name", "bucket", "bucketName"))
+    else:
+        bucket = _static_bucket(deployment_bucket)
+    return [f"s3://{bucket}"] if bucket else []
+
+
+def _serverless_custom_domain_candidates(custom: Mapping[str, Any]) -> list[str]:
+    candidates: list[str] = []
+
+    def walk(value: Any, key_hint: str = "") -> None:
+        if len(candidates) >= 128:
+            return
+        if isinstance(value, Mapping):
+            for raw_key, child in value.items():
+                key = _fingerprint(raw_key)
+                if "domain" in key_hint and key in {"domainname", "hostedzonename", "hostname"}:
+                    candidate = _endpoint_candidate(child)
+                    if candidate:
+                        candidates.append(candidate)
+                walk(child, key)
+            return
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            for child in value[:128]:
+                walk(child, key_hint)
+
+    walk(custom)
     return _dedupe(candidates)
 
 

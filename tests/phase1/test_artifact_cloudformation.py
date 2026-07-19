@@ -8,6 +8,8 @@ from forge.engagement_orchestrator import ArtifactQueueProcessor, _artifact_form
 from forge.utils.artifact_cloudformation import (
     cloudformation_template_artifact_label,
     cloudformation_template_candidates,
+    serverless_framework_artifact_label,
+    serverless_framework_candidates,
 )
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
@@ -180,5 +182,112 @@ Outputs:
         }
         assert artifact_meta[template_path.resolve().as_posix()]["format"] == "cloudformation"
         assert artifact_meta[sam_path.resolve().as_posix()]["format"] == "sam-template"
+    finally:
+        con.close()
+
+
+def test_serverless_framework_candidates_extract_static_bucket_and_domains() -> None:
+    payload = """
+service: acme-api
+provider:
+  name: aws
+  deploymentBucket:
+    name: acme-serverless-deploys
+custom:
+  customDomain:
+    domainName: api.serverless.acme.example
+  secondaryDomains:
+    - domainName: admin.serverless.acme.example
+functions:
+  api:
+    events:
+      - httpApi:
+          path: /v1
+          method: get
+resources:
+  Resources:
+    LogsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: acme-serverless-logs
+""".strip()
+
+    assert serverless_framework_artifact_label("serverless.yml") == "serverless"
+    assert serverless_framework_candidates(payload, source_hint="notes.yml") == []
+    assert serverless_framework_candidates(payload, source_hint="serverless.yml") == [
+        "s3://acme-serverless-deploys",
+        "https://api.serverless.acme.example",
+        "https://admin.serverless.acme.example",
+        "s3://acme-serverless-logs",
+    ]
+
+
+def test_artifact_queue_processor_extracts_serverless_framework_config(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_serverless"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path, name="Serverless Artifact Test")
+
+    serverless_path = artifact_root / "serverless.yml"
+    serverless_path.write_text(
+        """
+service: acme-api
+provider:
+  name: aws
+  deploymentBucket:
+    name: acme-serverless-deploys
+  environment:
+    SUPPORT_EMAIL: serverless-owner@acme.example
+custom:
+  customDomain:
+    domainName: api.serverless.acme.example
+resources:
+  Resources:
+    LogsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: acme-serverless-logs
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert _artifact_format_label(serverless_path) == "serverless"
+
+    processor = ArtifactQueueProcessor(db_path, 1001, max_workers=4)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 1
+    assert summary.processed == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://api.serverless.acme.example", "url") in seeds
+        assert ("serverless-owner@acme.example", "email") in seeds
+
+        cloud_assets = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("aws_s3", "acme-serverless-deploys") in cloud_assets
+        assert ("aws_s3", "acme-serverless-logs") in cloud_assets
     finally:
         con.close()
