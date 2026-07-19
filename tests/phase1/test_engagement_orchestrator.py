@@ -77417,11 +77417,11 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         assert key_map[("aws", "aws_secret_access_key")][2] == "UNCONFIRMED"
         assert key_map[("slack", "slack_bot_token")][2] == "ACTIVE"
         assert key_map[("mailchimp", "mailchimp_api_key")][2] == "ACTIVE"
-        assert key_map[("openai", "openai_project_api_key")][2] == "ACTIVE"
-        assert key_map[("anthropic", "anthropic_api_key")][2] == "ACTIVE"
+        assert key_map[("openai", "openai_project_api_key")][2] == "UNCONFIRMED"
+        assert key_map[("anthropic", "anthropic_api_key")][2] == "UNCONFIRMED"
         assert key_map[("huggingface", "huggingface_token")][2] == "ACTIVE"
         assert key_map[("discord", "discord_bot_token")][2] == "ACTIVE"
-        assert key_map[("telegram", "telegram_bot_token")][2] == "ACTIVE"
+        assert key_map[("telegram", "telegram_bot_token")][2] == "UNCONFIRMED"
         assert key_map[("notion", "notion_integration_token")][2] == "ACTIVE"
         assert key_map[("datadog", "datadog_api_key")][2] == "UNCONFIRMED"
         assert key_map[("cloudflare", "cloudflare_api_token")][2] == "ACTIVE"
@@ -77450,14 +77450,14 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "t9b2d6f4/u7a3c9k2",
             "VALIDATED",
         )
-        assert validation_map[("openai", "openai_models_list")] == (
-            "api.openai.com/v1/models",
-            "VALIDATED",
-        )
-        assert validation_map[("anthropic", "anthropic_models_list")] == (
-            "api.anthropic.com/v1/models",
-            "VALIDATED",
-        )
+        openai_identifier, openai_status = validation_map[("openai", "openai_models_list")]
+        assert openai_identifier.endswith("operator-keys.env")
+        assert openai_status == "UNVERIFIED"
+        anthropic_identifier, anthropic_status = validation_map[
+            ("anthropic", "anthropic_models_list")
+        ]
+        assert anthropic_identifier.endswith("operator-keys.env")
+        assert anthropic_status == "UNVERIFIED"
         assert validation_map[("huggingface", "huggingface_whoami_v2")] == (
             "model-owner",
             "VALIDATED",
@@ -77466,10 +77466,9 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "739251864203918576",
             "VALIDATED",
         )
-        assert validation_map[("telegram", "telegram_get_me")] == (
-            "829415607",
-            "VALIDATED",
-        )
+        telegram_identifier, telegram_status = validation_map[("telegram", "telegram_get_me")]
+        assert telegram_identifier == "1234567890"
+        assert telegram_status == "UNVERIFIED"
         assert validation_map[("notion", "notion_users_me")] == (
             "3c90c3cc-0d44-4b50-8888-8dd25736052a",
             "VALIDATED",
@@ -77533,12 +77532,12 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed openai credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed anthropic credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -77553,7 +77552,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed telegram credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -77620,7 +77619,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 15
+        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 12
     finally:
         con.close()
 
@@ -77689,6 +77688,12 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         and node["metadata"].get("service") == "datadog"
         for node in mtgx_manifest.get("nodes", [])
     )
+    assert not any(
+        node.get("forge_node_type") == "APIKEY"
+        and isinstance(node.get("metadata"), dict)
+        and node["metadata"].get("service") in {"openai", "anthropic", "telegram"}
+        for node in mtgx_manifest.get("nodes", [])
+    )
     assert any(
         node.get("forge_node_type") == "CLOUD"
         and isinstance(node.get("metadata"), dict)
@@ -77698,6 +77703,13 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         and str(node.get("analyst_properties", {}).get("identifier") or "").endswith(
             "operator-keys.env"
         )
+        and node.get("analyst_properties", {}).get("validation_status") == "UNVERIFIED"
+        for node in mtgx_manifest.get("nodes", [])
+    )
+    assert any(
+        node.get("forge_node_type") == "CLOUD"
+        and isinstance(node.get("metadata"), dict)
+        and node["metadata"].get("service") in {"openai", "anthropic", "telegram"}
         and node.get("analyst_properties", {}).get("validation_status") == "UNVERIFIED"
         for node in mtgx_manifest.get("nodes", [])
     )

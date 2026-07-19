@@ -3752,38 +3752,10 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             username = _stable_handle_identifier(match.group(2))
             if user_id and username:
                 return username
-    if provider_service == "google":
-        match = re.search(
-            r"google generative language models ok:\s*models=([0-9]+)\b",
-            text,
-            re.IGNORECASE,
-        )
-        if (
-            match
-            and int(match.group(1)) > 0
-            and _stable_model_sample_from_detail(
-                text,
-                require_models_prefix=True,
-                provider_family="google",
-            )
-        ):
-            return "generativelanguage/models"
-    if provider_service == "openai":
-        match = re.search(r"openai models ok:\s*models=([0-9]+)\b", text, re.IGNORECASE)
-        if (
-            match
-            and int(match.group(1)) > 0
-            and _stable_model_sample_from_detail(text, provider_family="openai")
-        ):
-            return "api.openai.com/v1/models"
-    if provider_service == "anthropic":
-        match = re.search(r"anthropic models ok:\s*models=([0-9]+)\b", text, re.IGNORECASE)
-        if (
-            match
-            and int(match.group(1)) > 0
-            and _stable_model_sample_from_detail(text, provider_family="anthropic")
-        ):
-            return "api.anthropic.com/v1/models"
+    if provider_service in {"google", "openai", "anthropic"}:
+        # Model catalog calls prove token acceptance, not a provider-returned
+        # account/project identity. Keep them as validation inventory only.
+        return None
     if provider_service == "huggingface":
         match = re.search(r"hugging face auth ok:\s*user=([a-z0-9_.-]+)\b", text, re.IGNORECASE)
         if match and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE):

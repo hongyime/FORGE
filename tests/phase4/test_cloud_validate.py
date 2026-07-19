@@ -659,15 +659,15 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "google",
         "Google Generative Language models ok: models=2 sample=models/gemini-2.5-flash",
-    ) == "generativelanguage/models"
+    ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "openai",
         "OpenAI models ok: models=2 sample=gpt-4o-mini,text-embedding-3-small",
-    ) == "api.openai.com/v1/models"
+    ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "anthropic",
         "Anthropic models ok: models=2 sample=claude-sonnet-4-5,claude-haiku-4-5",
-    ) == "api.anthropic.com/v1/models"
+    ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "stripe",
         "Stripe balance accessible: mode=live currencies=sgd,usd balances=available:1,pending:1",
@@ -4415,7 +4415,7 @@ def test_sweep_pending_cloud_validations_uses_sendgrid_scope_hash_identifier(
         con.close()
 
 
-def test_sweep_pending_cloud_validations_processes_validatable_google_api_key_rows_without_cloud_finding(
+def test_sweep_pending_cloud_validations_records_google_model_list_as_unverified(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -4471,11 +4471,11 @@ def test_sweep_pending_cloud_validations_processes_validatable_google_api_key_ro
     assert summary["attempted"] == 1
     assert summary["succeeded"] == 1
     assert summary["failed"] == 0
-    assert summary["status_counts"]["VALIDATED"] == 1
+    assert summary["status_counts"]["UNVERIFIED"] == 1
     assert summary["results"][0]["key_id"] == 40
-    assert summary["results"][0]["validation_status"] == "VALIDATED"
+    assert summary["results"][0]["validation_status"] == "UNVERIFIED"
     assert summary["results"][0]["validation_method"] == "google_generative_language_models_list"
-    assert summary["results"][0]["identifier"] == "generativelanguage/models"
+    assert summary["results"][0]["identifier"] == "web-config.env"
 
     con = sqlite3.connect(db_path)
     try:
@@ -4488,8 +4488,8 @@ def test_sweep_pending_cloud_validations_processes_validatable_google_api_key_ro
         ).fetchone()
         assert validation_row == (
             "google",
-            "generativelanguage/models",
-            "VALIDATED",
+            "web-config.env",
+            "UNVERIFIED",
             "google_generative_language_models_list",
         )
 
@@ -4500,9 +4500,9 @@ def test_sweep_pending_cloud_validations_processes_validatable_google_api_key_ro
             WHERE id=40
             """
         ).fetchone()
-        assert key_row[0] == "ACTIVE"
+        assert key_row[0] == "UNCONFIRMED"
         assert str(key_row[1] or "").startswith(
-            "VALIDATED:google_generative_language_models_list:"
+            "UNVERIFIED:google_generative_language_models_list:"
         )
 
         findings = con.execute(
@@ -4513,18 +4513,12 @@ def test_sweep_pending_cloud_validations_processes_validatable_google_api_key_ro
             ORDER BY vuln_type, title
             """
         ).fetchall()
-        assert findings == [
-            (
-                "DETERMINISTIC_KEY_EXPOSURE",
-                "HIGH",
-                "Validated exposed google credential reference",
-            )
-        ]
+        assert findings == []
     finally:
         con.close()
 
 
-def test_sweep_pending_cloud_validations_processes_validatable_openai_key_rows_without_cloud_finding(
+def test_sweep_pending_cloud_validations_records_openai_model_list_as_unverified(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -4577,11 +4571,11 @@ def test_sweep_pending_cloud_validations_processes_validatable_openai_key_rows_w
     assert summary["attempted"] == 1
     assert summary["succeeded"] == 1
     assert summary["failed"] == 0
-    assert summary["status_counts"]["VALIDATED"] == 1
+    assert summary["status_counts"]["UNVERIFIED"] == 1
     assert summary["results"][0]["key_id"] == 42
-    assert summary["results"][0]["validation_status"] == "VALIDATED"
+    assert summary["results"][0]["validation_status"] == "UNVERIFIED"
     assert summary["results"][0]["validation_method"] == "openai_models_list"
-    assert summary["results"][0]["identifier"] == "api.openai.com/v1/models"
+    assert summary["results"][0]["identifier"] == "ai-config.env"
 
     con = sqlite3.connect(db_path)
     try:
@@ -4594,8 +4588,8 @@ def test_sweep_pending_cloud_validations_processes_validatable_openai_key_rows_w
         ).fetchone()
         assert validation_row == (
             "openai",
-            "api.openai.com/v1/models",
-            "VALIDATED",
+            "ai-config.env",
+            "UNVERIFIED",
             "openai_models_list",
         )
 
@@ -4606,8 +4600,8 @@ def test_sweep_pending_cloud_validations_processes_validatable_openai_key_rows_w
             WHERE id=42
             """
         ).fetchone()
-        assert key_row[0] == "ACTIVE"
-        assert str(key_row[1] or "").startswith("VALIDATED:openai_models_list:")
+        assert key_row[0] == "UNCONFIRMED"
+        assert str(key_row[1] or "").startswith("UNVERIFIED:openai_models_list:")
 
         findings = con.execute(
             """
@@ -4617,18 +4611,12 @@ def test_sweep_pending_cloud_validations_processes_validatable_openai_key_rows_w
             ORDER BY vuln_type, title
             """
         ).fetchall()
-        assert findings == [
-            (
-                "DETERMINISTIC_KEY_EXPOSURE",
-                "HIGH",
-                "Validated exposed openai credential reference",
-            )
-        ]
+        assert findings == []
     finally:
         con.close()
 
 
-def test_sweep_pending_cloud_validations_processes_validatable_anthropic_key_rows_without_cloud_finding(
+def test_sweep_pending_cloud_validations_records_anthropic_model_list_as_unverified(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -4681,11 +4669,11 @@ def test_sweep_pending_cloud_validations_processes_validatable_anthropic_key_row
     assert summary["attempted"] == 1
     assert summary["succeeded"] == 1
     assert summary["failed"] == 0
-    assert summary["status_counts"]["VALIDATED"] == 1
+    assert summary["status_counts"]["UNVERIFIED"] == 1
     assert summary["results"][0]["key_id"] == 43
-    assert summary["results"][0]["validation_status"] == "VALIDATED"
+    assert summary["results"][0]["validation_status"] == "UNVERIFIED"
     assert summary["results"][0]["validation_method"] == "anthropic_models_list"
-    assert summary["results"][0]["identifier"] == "api.anthropic.com/v1/models"
+    assert summary["results"][0]["identifier"] == "claude.env"
 
     con = sqlite3.connect(db_path)
     try:
@@ -4698,8 +4686,8 @@ def test_sweep_pending_cloud_validations_processes_validatable_anthropic_key_row
         ).fetchone()
         assert validation_row == (
             "anthropic",
-            "api.anthropic.com/v1/models",
-            "VALIDATED",
+            "claude.env",
+            "UNVERIFIED",
             "anthropic_models_list",
         )
 
@@ -4710,8 +4698,8 @@ def test_sweep_pending_cloud_validations_processes_validatable_anthropic_key_row
             WHERE id=43
             """
         ).fetchone()
-        assert key_row[0] == "ACTIVE"
-        assert str(key_row[1] or "").startswith("VALIDATED:anthropic_models_list:")
+        assert key_row[0] == "UNCONFIRMED"
+        assert str(key_row[1] or "").startswith("UNVERIFIED:anthropic_models_list:")
 
         findings = con.execute(
             """
@@ -4721,13 +4709,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_anthropic_key_row
             ORDER BY vuln_type, title
             """
         ).fetchall()
-        assert findings == [
-            (
-                "DETERMINISTIC_KEY_EXPOSURE",
-                "HIGH",
-                "Validated exposed anthropic credential reference",
-            )
-        ]
+        assert findings == []
     finally:
         con.close()
 

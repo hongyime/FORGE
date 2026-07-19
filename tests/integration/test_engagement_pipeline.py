@@ -1208,7 +1208,10 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="GitLab user ok: user_id=42 username=delta-ops user_profile_present=true",
+            detail=(
+                "GitLab user ok: user_id=739251 username=delta-ops "
+                "user_profile_present=true profile_url_matches_login=true"
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -1263,7 +1266,8 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
 
     assert validation_summary["attempted"] == 8
     assert validation_summary["succeeded"] == 8
-    assert validation_summary["status_counts"]["VALIDATED"] == 8
+    assert validation_summary["status_counts"]["VALIDATED"] == 7
+    assert validation_summary["status_counts"]["UNVERIFIED"] == 1
 
     con = sqlite3.connect(db_path)
     try:
@@ -1301,10 +1305,11 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
             "delta-ops",
             "VALIDATED",
         )
-        assert validation_by_method[("google", "google_generative_language_models_list")] == (
-            "generativelanguage/models",
-            "VALIDATED",
-        )
+        google_identifier, google_status = validation_by_method[
+            ("google", "google_generative_language_models_list")
+        ]
+        assert google_identifier.endswith("operator-keys.env")
+        assert google_status == "UNVERIFIED"
         assert validation_by_method[("azure", "azure_blob_list_containers_shared_key")] == (
             "comboartifactblob",
             "VALIDATED",
@@ -1313,8 +1318,8 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
         con.close()
 
     finding_summary = DeterministicFindingEngine(db_path, 1001).run()
-    assert finding_summary.active_findings >= 6
-    assert finding_summary.severity_summary["HIGH"] >= 6
+    assert finding_summary.active_findings >= 5
+    assert finding_summary.severity_summary["HIGH"] >= 5
 
     con = sqlite3.connect(db_path)
     try:
@@ -1362,7 +1367,7 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
             "Validated exposed google credential reference",
-        ) in findings
+        ) not in findings
         assert (
             "DETERMINISTIC_KEY_EXPOSURE",
             "HIGH",
@@ -1398,10 +1403,11 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
     assert "Validated exposed mailchimp credential reference" in report_text
     assert "Validated exposed sendgrid credential reference" in report_text
     assert "Validated exposed gitlab credential reference" in report_text
-    assert "Validated exposed google credential reference" in report_text
+    assert "Validated exposed google credential reference" not in report_text
     assert "Validated exposed azure credential reference" in report_text
     assert "LLM fallback engaged: quota exceeded" in report_text
     assert "Data integrity checksum (structured input)" in report_text
     assert '"provider": "template"' in json_payload
     assert '"requested_provider": "auto"' in json_payload
     assert '"fallback_reason": "quota exceeded"' in json_payload
+    assert "Validated exposed google credential reference" not in json_payload

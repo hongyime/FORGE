@@ -264,20 +264,6 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
             "gitlab_current_user_api",
         ),
         (
-            "VALIDATED:google_generative_language_models_list:Google Generative Language models ok: "
-            "models=2 sample=models/gemini-2.5-flash,models/text-embedding-004",
-            "google_generative_language_models_list",
-        ),
-        (
-            "VALIDATED:openai_models_list:OpenAI models ok: models=1 sample=gpt-4o-mini",
-            "openai_models_list",
-        ),
-        (
-            "VALIDATED:anthropic_models_list:Anthropic models ok: "
-            "models=1 sample=claude-3-5-sonnet-20241022",
-            "anthropic_models_list",
-        ),
-        (
             "VALIDATED:huggingface_whoami_v2:Hugging Face auth ok: "
             "user=model-owner user_profile_present=true",
             "huggingface_whoami_v2",
@@ -444,12 +430,26 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         ),
         (
             "VALIDATED:google_generative_language_models_list:Google Generative Language models ok: "
+            "models=2 sample=models/gemini-2.5-flash,models/text-embedding-004",
+            "google_generative_language_models_list",
+        ),
+        (
+            "VALIDATED:google_generative_language_models_list:Google Generative Language models ok: "
             "models=1 sample=models/vendor-model-alpha",
             "google_generative_language_models_list",
         ),
         (
+            "VALIDATED:openai_models_list:OpenAI models ok: models=1 sample=gpt-4o-mini",
+            "openai_models_list",
+        ),
+        (
             "VALIDATED:openai_models_list:OpenAI models ok: models=1 sample=vendor-model-alpha",
             "openai_models_list",
+        ),
+        (
+            "VALIDATED:anthropic_models_list:Anthropic models ok: "
+            "models=1 sample=claude-3-5-sonnet-20241022",
+            "anthropic_models_list",
         ),
         (
             "VALIDATED:anthropic_models_list:Anthropic models ok: "

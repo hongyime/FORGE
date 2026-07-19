@@ -7440,7 +7440,7 @@ Use this as the canonical continuation list. Older unchecked "next audit target"
   `python -m pytest tests/phase4/test_cloud_validate.py -k "filesystem_metadata or package_metadata_only or repository_metadata or scaffold_only_listing or static_site_helper" -q`
   `python -m pytest tests/phase4/test_cloud_validate.py -q`
   `python -m pytest tests/phase1/test_deterministic_findings.py -q`
-- [x] Google/Gemini API key validation is now deterministic and conservative: shared `google_api_key` pattern metadata maps to `GoogleApiKeyValidator`, the Phase 2 legacy scanner can instantiate it, and Phase 4 pending sweeps persist a `generativelanguage/models` validation identifier only after the read-only Gemini model-list endpoint confirms the key is usable. Restricted/API-disabled keys stay unconfirmed and invalid keys are marked dead.
+- [x] Google/Gemini API key validation is now deterministic and conservative: shared `google_api_key` pattern metadata maps to `GoogleApiKeyValidator`, and the Phase 2 legacy scanner can instantiate it. Gemini model-list success is retained as analyst-visible `UNVERIFIED` validation inventory only, because model catalogs prove token acceptance but not a key-bound account/project identity. Restricted/API-disabled keys stay unconfirmed, invalid keys are marked dead, and model-list-only proofs do not enter deterministic findings or reports.
   Commands:
   `python -m py_compile forge/engagement_orchestrator.py forge/utils/intel/secret_finder.py forge/phase2/key_scanner.py forge/phase4/cloud_validate.py tests/phase1/test_engagement_orchestrator.py tests/phase2/test_secret_finder.py tests/phase4/test_cloud_validate.py tests/integration/test_engagement_pipeline.py`
   `python -m pytest tests/phase2/test_secret_finder.py -k "google_api_key_pattern or google_api_key_validator" -q --color=no`
@@ -7448,6 +7448,16 @@ Use this as the canonical continuation list. Older unchecked "next audit target"
   `python -m pytest tests/integration/test_engagement_pipeline.py -q --color=no`
   `python -m pytest tests/phase4/test_cloud_validate.py -q --color=no`
   `python -m pytest tests/phase2/test_key_scanner.py -q --color=no`
+- [x] OpenAI, Anthropic, and Google/Gemini model-list-only proofs are now downgraded at every report gate: Phase 4 persists successful model-list calls as `UNVERIFIED` without deterministic HIGH findings, shared validation-proof parsing rejects those proofs as reportable, Phase 6 excludes stale model-list key-exposure rows from template/JSON output, and the mixed-key kill-chain E2E now verifies these rows remain validation inventory instead of APIKEY graph nodes.
+  Commands:
+  `python -m py_compile forge/phase4/cloud_validate.py forge/utils/validation_proof.py forge/phase6/report_synthesizer.py tests/core/test_validation_proof.py tests/phase4/test_cloud_validate.py tests/phase1/test_engagement_orchestrator.py tests/phase6/test_report_synthesizer.py tests/integration/test_engagement_pipeline.py`
+  `ruff check forge/phase4/cloud_validate.py forge/utils/validation_proof.py forge/phase6/report_synthesizer.py tests/core/test_validation_proof.py tests/phase4/test_cloud_validate.py tests/phase1/test_engagement_orchestrator.py tests/phase6/test_report_synthesizer.py tests/integration/test_engagement_pipeline.py`
+  `python -m pytest tests/core/test_validation_proof.py -k "model or provider or datadog" -q`
+  `python -m pytest tests/phase4/test_cloud_validate.py -k "model_list or newer_provider or low_signal_success_details or datadog" -q`
+  `python -m pytest tests/phase6/test_report_synthesizer.py::test_synthesizer_excludes_model_list_only_key_exposure_rows tests/phase6/test_report_synthesizer.py::test_synthesizer_excludes_unvalidated_key_exposure_rows -q`
+  `python -m pytest -m slow tests/phase1/test_engagement_orchestrator.py::test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation -q`
+  `python -m pytest tests/phase4/test_cloud_validate.py tests/phase4/test_telegram_secret_binding.py -q`
+  `python -m pytest tests/integration/test_engagement_pipeline.py::test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_template_fallback -q`
 - [x] GitLab PAT validation is now deterministic and conservative: shared `gitlab_pat` pattern metadata maps to `GitlabPatValidator`, the Phase 2 legacy duplicate pattern file points at the shared validator, and Phase 4 pending sweeps persist only the sanitized GitLab username after the read-only current-user API confirms the token works. Non-200 responses stay unconfirmed so self-managed or restricted tokens are not over-reported.
   Commands:
   `python -m py_compile forge/utils/intel/secret_finder.py forge/phase2/key_scanner.py forge/phase4/cloud_validate.py tests/phase2/test_secret_finder.py tests/phase2/test_key_scanner.py tests/phase4/test_cloud_validate.py tests/integration/test_engagement_pipeline.py`

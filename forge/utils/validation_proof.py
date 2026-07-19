@@ -585,16 +585,10 @@ def _model_list_proof_is_stable(
     require_models_prefix: bool = False,
     provider_family: str | None = None,
 ) -> bool:
-    match = re.search(rf"{re.escape(label)}:\s*models=([0-9]+)\b", proof, re.IGNORECASE)
-    if not match or int(match.group(1)) <= 0:
-        return False
-    return bool(
-        _stable_model_sample_from_detail(
-            proof,
-            require_models_prefix=require_models_prefix,
-            provider_family=provider_family,
-        )
-    )
+    # Model list endpoints prove a key can authenticate, but the returned
+    # catalog is generic and not a stable account/project/key-bound identity.
+    del proof, label, require_models_prefix, provider_family
+    return False
 
 
 def _datadog_site_proof_is_stable(proof: str) -> bool:

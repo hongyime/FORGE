@@ -1485,6 +1485,47 @@ def test_synthesizer_excludes_unvalidated_key_exposure_rows(
     assert "github_user_api:no stable user id" not in content
 
 
+def test_synthesizer_excludes_model_list_only_key_exposure_rows(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN vuln_type TEXT")
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, cve_id, title, severity, evidence)
+            VALUES (?, 'DETERMINISTIC_KEY_EXPOSURE', NULL,
+                    'Validated exposed openai credential reference', 'HIGH',
+                    'VALIDATED:openai_models_list:OpenAI models ok: models=1 sample=gpt-4o-mini')
+            """,
+            (ENGAGEMENT_ID,),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+    assert all(
+        item.get("title") != "Validated exposed openai credential reference"
+        for item in ctx.exploits.exploited
+    )
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert "Validated exposed openai credential reference" not in content
+    assert "openai_models_list" not in content
+    assert "Validated exposed openai credential reference" not in json.dumps(payload)
+
+
 def test_synthesizer_template_uses_validated_finding_and_distinct_cve_counts(
     tmp_eng_db, tmp_path, patch_confirm_approve
 ):
