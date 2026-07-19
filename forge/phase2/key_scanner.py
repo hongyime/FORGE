@@ -22,12 +22,13 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from forge.opsec.crypto import encrypt_string
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
 from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet, with_internet_retry
 from forge.opsec.scope_gate import assert_in_scope
+from forge.utils.validation_identifiers import looks_compound_placeholder_identifier
 
 _LOG = logging.getLogger(__name__)
 
@@ -134,13 +135,38 @@ def _load_patterns() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 _PLACEHOLDER_IDENTIFIERS = {
+    "admin",
+    "bot",
+    "demo",
+    "dummy",
+    "example",
+    "fake",
+    "mock",
     "unknown",
     "none",
     "null",
+    "placeholder",
+    "sample",
+    "test",
+    "user",
     "undefined",
     "na",
     "n_a",
 }
+
+
+def _looks_sequential_numeric_identifier(value: object) -> bool:
+    digits = [int(char) for char in re.sub(r"[^0-9]+", "", str(value or ""))]
+    if len(digits) < 6:
+        return False
+    return all((right - left) % 10 == 1 for left, right in zip(digits, digits[1:])) or all(
+        (left - right) % 10 == 1 for left, right in zip(digits, digits[1:])
+    )
+
+
+def _has_placeholder_identifier_token(value: object) -> bool:
+    parts = [part for part in re.split(r"[_-]+", str(value or "").strip().lower()) if part]
+    return len(parts) > 1 and any(part in _PLACEHOLDER_IDENTIFIERS for part in parts)
 
 
 def _stable_github_login(value: object) -> str:
@@ -148,6 +174,8 @@ def _stable_github_login(value: object) -> str:
     if not login or not re.search(r"[A-Za-z0-9]", login):
         return ""
     if login.lower() in _PLACEHOLDER_IDENTIFIERS:
+        return ""
+    if _has_placeholder_identifier_token(login) or looks_compound_placeholder_identifier(login):
         return ""
     compact = re.sub(r"[^A-Za-z0-9]+", "", login).lower()
     if len(compact) >= 3 and len(set(compact)) == 1:
@@ -161,7 +189,24 @@ def _stable_github_user_id(value: object) -> str:
         return ""
     if len(set(user_id)) == 1:
         return ""
+    if _looks_sequential_numeric_identifier(user_id):
+        return ""
     return user_id
+
+
+def _github_profile_url_matches_login(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    login = _stable_github_login(payload.get("login"))
+    if not login:
+        return False
+    parsed = urlparse(str(payload.get("html_url") or "").strip())
+    path_parts = [part for part in str(parsed.path or "").split("/") if part]
+    return (
+        str(parsed.hostname or "").lower() == "github.com"
+        and bool(path_parts)
+        and path_parts[0].lower() == login.lower()
+    )
 
 
 def _github_has_profile_proof(payload: object) -> bool:
@@ -274,13 +319,19 @@ class GithubPatValidator(BaseKeyValidator):
                         state=ValidationState.UNCONFIRMED,
                         detail="GitHub user response missing user proof",
                     )
+                if not _github_profile_url_matches_login(payload):
+                    return ValidationResult(
+                        state=ValidationState.UNCONFIRMED,
+                        detail="GitHub user response missing matching profile URL",
+                    )
                 return ValidationResult(
                     state=ValidationState.ACTIVE,
                     detail=(
                         "GitHub user ok: "
                         f"user_id={user_id} "
                         f"login={login} "
-                        "user_profile_present=true"
+                        "user_profile_present=true "
+                        "profile_url_matches_login=true"
                     ),
                 )
             if resp.status_code == 401:

@@ -358,7 +358,10 @@ class TestPatternFile:
                 del key, proxy
                 return legacy_key_scanner.ValidationResult(
                     state=legacy_key_scanner.ValidationState.ACTIVE,
-                    detail="GitHub user ok: user_id=123456 login=alice user_profile_present=true",
+                    detail=(
+                        "GitHub user ok: user_id=738251 login=aliceops "
+                        "user_profile_present=true profile_url_matches_login=true"
+                    ),
                 )
 
         try:
@@ -399,8 +402,72 @@ class TestPatternFile:
         assert row[0] == "ACTIVE"
         assert row[1] == (
             "VALIDATED:github_user_api:"
-            "GitHub user ok: user_id=123456 login=alice user_profile_present=true"
+            "GitHub user ok: user_id=738251 login=aliceops "
+            "user_profile_present=true profile_url_matches_login=true"
         )
+
+    def test_legacy_phase2_github_validator_emits_reportable_profile_url_proof(self):
+        from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
+        from forge.utils.validation_proof import parse_validated_detail  # noqa: PLC0415
+
+        with patch(
+            "httpx.Client.get",
+            return_value=_mock_http(
+                {
+                    "id": 738251,
+                    "login": "aliceops",
+                    "html_url": "https://github.com/aliceops",
+                },
+                status=200,
+            ),
+        ):
+            result = legacy_key_scanner.GithubPatValidator().validate("ghp_" + "a" * 36)
+
+        assert result.state == legacy_key_scanner.ValidationState.ACTIVE
+        assert result.detail == (
+            "GitHub user ok: user_id=738251 login=aliceops "
+            "user_profile_present=true profile_url_matches_login=true"
+        )
+        proof = parse_validated_detail(f"VALIDATED:github_user_api:{result.detail}")
+        assert proof["validation_status"] == "VALIDATED"
+
+    def test_legacy_phase2_github_validator_rejects_mismatched_profile_url(self):
+        from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
+
+        with patch(
+            "httpx.Client.get",
+            return_value=_mock_http(
+                {
+                    "id": 738251,
+                    "login": "aliceops",
+                    "html_url": "https://github.com/other-user",
+                },
+                status=200,
+            ),
+        ):
+            result = legacy_key_scanner.GithubPatValidator().validate("ghp_" + "a" * 36)
+
+        assert result.state == legacy_key_scanner.ValidationState.UNCONFIRMED
+        assert result.detail == "GitHub user response missing matching profile URL"
+
+    def test_legacy_phase2_github_validator_rejects_sequential_user_id(self):
+        from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
+
+        with patch(
+            "httpx.Client.get",
+            return_value=_mock_http(
+                {
+                    "id": 123456,
+                    "login": "aliceops",
+                    "html_url": "https://github.com/aliceops",
+                },
+                status=200,
+            ),
+        ):
+            result = legacy_key_scanner.GithubPatValidator().validate("ghp_" + "a" * 36)
+
+        assert result.state == legacy_key_scanner.ValidationState.UNCONFIRMED
+        assert result.detail == "GitHub user response missing user id"
 
     def test_legacy_phase2_slack_patterns_use_shared_validator(self):
         from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
