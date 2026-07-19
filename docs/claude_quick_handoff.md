@@ -2015,13 +2015,14 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [x] The combined local+remote artifact/social-recursion/auto-template fallback kill-chain path is already covered and green, but slow: the main combined fixture passed in 188.76s, and the second-hop multiple-remote-APK fixture passed in 163.43s. Both are now marked `slow`.
 - [x] Social-profile URL/host pivot enrichment now uses the bounded ordered worker-pool path inside `_social_profile_pivot_family()` instead of serial per-entry loops. Ordering and output semantics are preserved for stored profile URL/host recursion. Verification: compile/Ruff for `forge/engagement_orchestrator.py` and focused social-profile pivot tests (`11 passed, 773 deselected`). Commit: `655ad36 perf(identity): batch social profile pivot entries`.
 - [x] Attack graph cloud resources are now keyed by `(asset_type, identifier)` instead of identifier alone, so same-name resources from different providers do not collapse into one CLOUD node or misroute validation/finding edges. Verification: compile/Ruff for `forge/phase4/attack_path.py` and focused cloud graph tests (`6 passed, 100 deselected`). Commit: `317817a fix(phase4): key cloud graph nodes by asset type`.
+- [x] Phase 6 deterministic cloud-exposure report gate is complete: stale `DETERMINISTIC_CLOUD_EXPOSURE` findings are excluded from report context, markdown, JSON, forced raw JSON, and raw CSV unless the latest matching cloud validation status is `VALIDATED`. Validation-result ordering now follows the graph/dashboard latest-row convention. Verification: compile/Ruff and Phase 6 report suites (`75 passed`). Commit: `b0e44f2 fix(reporting): gate cloud exposure exports`.
+- [x] Phase 4 deterministic cloud-exposure graph gate is complete: stale `DETERMINISTIC_CLOUD_EXPOSURE` rows no longer create VULN graph nodes unless the latest matching cloud validation status is `VALIDATED`; underlying CLOUD nodes remain visible with latest validation metadata for analyst review. Verification: compile/Ruff and combined graph/report suites (`182 passed`). 
 
 ## Still partial
 
 - [ ] Provider coverage is still selective rather than exhaustive. The strongest deterministic coverage is Firebase, Supabase, S3/GCS/Azure/DO, Google/Gemini API keys, Hugging Face, Discord bot tokens, Telegram bot tokens, Notion tokens, Datadog API keys, GitHub, GitLab, Mailchimp, Stripe, SendGrid, Slack, Azure Storage connection strings, and co-located Twilio/AWS key-pair validation.
 - [ ] The engagement detail UI is sectioned, not literally tabbed. Treat that as a polish decision unless product now requires strict tabs.
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
-- [ ] Deterministic cloud-exposure report gating is still open: stale `DETERMINISTIC_CLOUD_EXPOSURE` rows should be excluded from Phase 6 narrative/raw exports unless the latest matching cloud validation status is `VALIDATED`. A worker is assigned to this gap; verify markdown, JSON, and CSV exports before closing it.
 
 ## Best next tasks
 

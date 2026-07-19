@@ -871,19 +871,88 @@ class TestLoadCloudAssets:
             for node in graph.nodes
             if node.node_type == NodeType.VULN
         }
+        assert "AWS shared bucket exposure" in vuln_by_label
+        assert "GCS shared bucket exposure" not in vuln_by_label
+
         cloud_source_by_vuln = {
             edge.target_node_id: edge.source_node_id
             for edge in graph.edges
             if edge.edge_type == "cloud_misconfig"
         }
-        for label, service in (
-            ("AWS shared bucket exposure", "aws_s3"),
-            ("GCS shared bucket exposure", "gcs"),
-        ):
-            assert (
-                cloud_source_by_vuln[vuln_by_label[label].node_id]
-                == nodes_by_service[service].node_id
+        assert (
+            cloud_source_by_vuln[vuln_by_label["AWS shared bucket exposure"].node_id]
+            == nodes_by_service["aws_s3"].node_id
+        )
+        assert all(source != nodes_by_service["gcs"].node_id for source in cloud_source_by_vuln.values())
+
+    def test_deterministic_cloud_exposure_uses_latest_validation_status(self, tmp_path: Path):
+        db = _make_db(tmp_path, "cloud-latest-validation-gating.db")
+        con = sqlite3.connect(db)
+        try:
+            con.executescript(
+                """
+                ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT;
+                ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT;
+
+                CREATE TABLE cloud_validation_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    engagement_id INTEGER NOT NULL,
+                    asset_type TEXT NOT NULL,
+                    identifier TEXT NOT NULL,
+                    validation_status TEXT NOT NULL,
+                    validation_method TEXT,
+                    http_status INTEGER,
+                    checked_at TIMESTAMP
+                );
+
+                INSERT INTO cloud_assets (engagement_id, asset_type, identifier, source)
+                VALUES
+                    (1, 'aws_s3', 'bucket-stale', 'cloud_validate'),
+                    (1, 'aws_s3', 'bucket-good', 'cloud_validate');
+
+                INSERT INTO cloud_validation_results
+                    (engagement_id, asset_type, identifier, validation_status,
+                     validation_method, http_status, checked_at)
+                VALUES
+                    (1, 'aws_s3', 'bucket-stale', 'VALIDATED',
+                     's3_list_bucket', 200, '2026-07-15T09:00:00+00:00'),
+                    (1, 'aws_s3', 'bucket-stale', 'HONEYPOT_SUSPECTED',
+                     's3_list_bucket', 200, '2026-07-15T10:00:00+00:00'),
+                    (1, 'aws_s3', 'bucket-good', 'DEAD',
+                     's3_list_bucket', 404, '2026-07-15T09:00:00+00:00'),
+                    (1, 'aws_s3', 'bucket-good', 'VALIDATED',
+                     's3_list_bucket', 200, '2026-07-15T10:00:00+00:00');
+
+                INSERT INTO vulnerability_findings
+                    (engagement_id, vuln_type, target_url, parameter, severity, title,
+                     cloud_provider, resource_id)
+                VALUES
+                    (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://bucket-stale', 'aws_s3',
+                     'HIGH', 'Stale cloud exposure', 'aws', 'bucket-stale'),
+                    (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://bucket-good', 'aws_s3',
+                     'HIGH', 'Validated cloud exposure', 'aws', 'bucket-good');
+                """
             )
+            con.commit()
+        finally:
+            con.close()
+
+        graph = AttackGraphBuilder(engagement_id=1, db_path=db).build()
+        cloud_nodes = {
+            str(node.metadata.get("identifier")): node
+            for node in graph.nodes
+            if node.node_type == NodeType.CLOUD
+        }
+        vuln_by_label = {
+            node.label: node
+            for node in graph.nodes
+            if node.node_type == NodeType.VULN
+        }
+
+        assert cloud_nodes["bucket-stale"].metadata["validation_status"] == "HONEYPOT_SUSPECTED"
+        assert cloud_nodes["bucket-good"].metadata["validation_status"] == "VALIDATED"
+        assert "Stale cloud exposure" not in vuln_by_label
+        assert "Validated cloud exposure" in vuln_by_label
 
     def test_cloud_nodes_use_latest_validation_result_for_managed_pages_assets(
         self,

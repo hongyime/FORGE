@@ -830,6 +830,12 @@ class AttackGraphBuilder:
             return "do_spaces"
         return normalized
 
+    @staticmethod
+    def _cloud_exposure_is_validated(validation_metadata: dict[str, Any] | None) -> bool:
+        if not validation_metadata:
+            return False
+        return str(validation_metadata.get("validation_status") or "").strip().upper() == "VALIDATED"
+
     def _load_vulns(self, con: sqlite3.Connection) -> None:
         if not _table_exists(con, "vulnerability_findings"):
             return
@@ -874,6 +880,13 @@ class AttackGraphBuilder:
                 if validation_lookup_service and resource_id_str
                 else None
             )
+            if (
+                vuln_type_str == "DETERMINISTIC_CLOUD_EXPOSURE"
+                and not self._cloud_exposure_is_validated(validation_metadata)
+            ):
+                if validation_lookup_service and resource_id_str:
+                    self._node_for_cloud(validation_lookup_service, resource_id_str)
+                continue
             metadata: dict[str, Any] = {
                 "vuln_type": vuln_type_str,
                 "parameter": str(parameter or ""),
