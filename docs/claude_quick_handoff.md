@@ -11,6 +11,12 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Latest kill-chain convergence and multi-seed E2E checkpoint is green:
+  `kill_chain()` now preserves capped recursive backlog metadata instead of stopping on stable row counts, discovered GitHub-org keyscan targets use the schema-allowed `cross_reference` seed source with keyscan-origin metadata, and `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` proves mocked multi-seed recursion through web, Fan-out E, artifact queue, Firebase/Supabase validation, graph export, audit logging, and template report fallback.
+  Verification: focused convergence tests -> `3 passed`; keyscan/cloud/report gate plus multi-seed E2E slice -> `7 passed`; broader affected graph/report/cloud suite -> `201 passed`; Ruff over touched kill-chain files -> `All checks passed`.
+  Review: Claude diff review found no blockers on the E2E change and noted keyscan validation gating remains covered by adjacent phase4/phase6 tests.
+  Commits: `42acbac fix(kill-chain): use valid keyscan seed source`, `cb359e7 test(kill-chain): harden recursive multi-seed e2e`.
+
 - [x] Scheduled worker/playbook bounds checkpoint is green:
   Distributed workers now execute task handlers behind `FORGE_TASK_TIMEOUT` with a default 3600s deadline and mark timed-out tasks failed instead of hanging the queue indefinitely. Playbook `_next_steps`, triggered zero-to-DA, triggered RCE hunter, and WAF-evasion recovery now preserve ROE/scope metadata into child scheduled tasks.
   Verification: compile/Ruff over worker/playbook/automation tests; `tests\distributed\test_worker_timeouts.py tests\integration\test_playbooks.py` -> `11 passed`.
@@ -2026,8 +2032,6 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [ ] Provider coverage is still selective rather than exhaustive. The strongest deterministic coverage is Firebase, Supabase, S3/GCS/Azure/DO, Google/Gemini API keys, Hugging Face, Discord bot tokens, Telegram bot tokens, Notion tokens, Datadog API keys, GitHub, GitLab, Mailchimp, Stripe, SendGrid, Slack, Azure Storage connection strings, and co-located Twilio/AWS key-pair validation.
 - [ ] The engagement detail UI is sectioned, not literally tabbed. Treat that as a polish decision unless product now requires strict tabs.
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
-- [ ] Add the missing slow multi-seed recursive kill-chain regression using mocked providers to prove domain/email/URL-or-artifact seeds jointly drive web, Fan-out E, artifact queue, cloud validation, graph export, and report fallback.
-
 ## Best next tasks
 
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
