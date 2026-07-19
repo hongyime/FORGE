@@ -26161,8 +26161,8 @@ class ArtifactQueueProcessor:
             lines.append(normalized)
         return "\n".join(lines)
 
-    @staticmethod
     def _static_hosting_control_candidate_values(
+        self,
         text: str,
         *,
         source_label: str,
@@ -26171,11 +26171,8 @@ class ArtifactQueueProcessor:
         values: list[str] = []
 
         def _append(value: object) -> None:
-            candidate = str(value or "").strip().strip("\"'`<>")
+            candidate = self._static_hosting_control_candidate_entry(value)
             if not candidate:
-                return
-            lowered = candidate.lower()
-            if lowered in {"-", "/", "/*", "/:splat", "/:path*", "200", "301", "302", "303", "307", "308"}:
                 return
             values.append(candidate)
 
@@ -26193,34 +26190,63 @@ class ArtifactQueueProcessor:
                     else:
                         _append(route)
 
-        for raw_line in raw_text.splitlines()[:4096]:
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-
-            angle_urls = re.findall(r"<([^<>\s]+)>", line)
-            for angle_url in angle_urls:
-                _append(angle_url)
-
-            parts = line.split()
-            if not parts:
-                continue
-
-            first = parts[0].strip()
-            if first.startswith(("/", "./", "../", "http://", "https://", "//")):
-                _append(first)
-
-            if source_label == "static-hosting-redirects" and len(parts) >= 2:
-                target = parts[1].strip()
-                if not re.fullmatch(r"\d{3}!?", target):
-                    _append(target)
-
-            if source_label == "static-hosting-headers":
-                for part in parts[1:]:
-                    if part.startswith(("http://", "https://", "//", "/", "./", "../")):
-                        _append(part.rstrip(";"))
-
+        line_batches = self._run_ordered_local_batch(
+            [(source_label, raw_line) for raw_line in raw_text.splitlines()[:4096]],
+            self._static_hosting_control_line_candidate_values,
+            default_factory=list,
+        )
+        for batch in line_batches:
+            values.extend(batch)
         return values[:4096]
+
+    @staticmethod
+    def _static_hosting_control_candidate_entry(value: object) -> str:
+        candidate = str(value or "").strip().strip("\"'`<>")
+        if not candidate:
+            return ""
+        lowered = candidate.lower()
+        if lowered in {"-", "/", "/*", "/:splat", "/:path*", "200", "301", "302", "303", "307", "308"}:
+            return ""
+        return candidate
+
+    @classmethod
+    def _static_hosting_control_line_candidate_values(
+        cls,
+        item: tuple[str, str],
+    ) -> list[str]:
+        source_label, raw_line = item
+        line = str(raw_line or "").strip()
+        if not line or line.startswith("#"):
+            return []
+        values: list[str] = []
+
+        def _append(value: object) -> None:
+            candidate = cls._static_hosting_control_candidate_entry(value)
+            if candidate:
+                values.append(candidate)
+
+        for angle_url in re.findall(r"<([^<>\s]+)>", line):
+            _append(angle_url)
+
+        parts = line.split()
+        if not parts:
+            return values
+
+        first = parts[0].strip()
+        if first.startswith(("/", "./", "../", "http://", "https://", "//")):
+            _append(first)
+
+        if source_label == "static-hosting-redirects" and len(parts) >= 2:
+            target = parts[1].strip()
+            if not re.fullmatch(r"\d{3}!?", target):
+                _append(target)
+
+        if source_label == "static-hosting-headers":
+            for part in parts[1:]:
+                if part.startswith(("http://", "https://", "//", "/", "./", "../")):
+                    _append(part.rstrip(";"))
+
+        return values
 
     @staticmethod
     def _static_hosting_control_url_candidate_entry(
