@@ -13,6 +13,7 @@ from forge.cli import (
     osint_emailrep,
     osint_google,
     osint_gravatar,
+    osint_usernames,
     _extract_html_surface_urls,
     _extract_passive_text_urls,
     _passive_archive_lookup_max_workers,
@@ -503,6 +504,44 @@ def test_osint_google_passes_env_proxy_to_lookup(
     osint_google(engagement="1001", emails="alpha@acme.example")
 
     assert observed == [("alpha@acme.example", "socks5://127.0.0.1:9050")]
+
+
+def test_osint_usernames_passes_env_proxy_to_handle_finder(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import forge.utils.intel.handle_finder as handle_finder
+
+    class _DummyCfg:
+        operator = "tester"
+
+        def engagement_db_path(self, engagement_id: str):  # noqa: ANN001
+            return tmp_path / f"{engagement_id}.db"
+
+    monkeypatch.setenv("FORGE_PROXY", "socks5://127.0.0.1:9050")
+    monkeypatch.setattr("forge.cli.ForgeConfig.load", staticmethod(lambda: _DummyCfg()))
+
+    observed: list[dict[str, object]] = []
+
+    def fake_run_handle_finder(**kwargs: object) -> int:
+        observed.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(handle_finder, "run_handle_finder", fake_run_handle_finder)
+
+    osint_usernames(
+        engagement="1001",
+        username="alice",
+        usernames=None,
+        backend="sherlock",
+        proxy_file=None,
+        max_workers=1,
+        dry_run=False,
+    )
+
+    assert observed[0]["usernames"] == ["alice"]
+    assert observed[0]["backend"] == "sherlock"
+    assert observed[0]["proxy"] == "socks5://127.0.0.1:9050"
 
 
 def test_kill_chain_help_exposes_auto_run_detected_option() -> None:

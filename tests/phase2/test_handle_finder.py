@@ -205,6 +205,30 @@ class TestHandleFinder:
             ["python", "-m", "whatsmyname", "-u", "alice", "-json"]
         ]
 
+    def test_whatsmyname_uses_proxy_env_and_preserves_environment(self, monkeypatch):
+        monkeypatch.setenv("FORGE_WHATSMYNAME_COMMAND", "python -m whatsmyname")
+        monkeypatch.setenv("FORGE_EXISTING_ENV", "preserved")
+        observed_envs: list[dict[str, str]] = []
+
+        def fake_run(cmd, **kwargs):  # noqa: ANN001, ANN003
+            del cmd
+            observed_envs.append(dict(kwargs.get("env") or {}))
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = "[]"
+            return m
+
+        monkeypatch.setattr("forge.utils.intel.handle_finder.subprocess.run", fake_run)
+
+        finder = HandleFinder(backend="whatsmyname")
+        rows = finder._run_whatsmyname("alice", proxy="socks5://127.0.0.1:9050")
+
+        assert rows == []
+        assert observed_envs[0]["HTTP_PROXY"] == "socks5://127.0.0.1:9050"
+        assert observed_envs[0]["HTTPS_PROXY"] == "socks5://127.0.0.1:9050"
+        assert observed_envs[0]["ALL_PROXY"] == "socks5://127.0.0.1:9050"
+        assert observed_envs[0]["FORGE_EXISTING_ENV"] == "preserved"
+
     def test_sherlock_uses_configured_command_prefix(self, monkeypatch):
         monkeypatch.setenv("FORGE_SHERLOCK_COMMAND", "python -m sherlock")
         observed_commands: list[list[str]] = []
@@ -237,6 +261,39 @@ class TestHandleFinder:
             }
         ]
         assert observed_commands[0][:4] == ["python", "-m", "sherlock", "alice"]
+
+    def test_sherlock_uses_proxy_env(self, monkeypatch):
+        monkeypatch.setenv("FORGE_SHERLOCK_COMMAND", "python -m sherlock")
+        observed_envs: list[dict[str, str]] = []
+
+        def fake_run(cmd, **kwargs):  # noqa: ANN001, ANN003
+            observed_envs.append(dict(kwargs.get("env") or {}))
+            json_path = Path(cmd[cmd.index("--json") + 1])
+            json_path.write_text(
+                json.dumps(
+                    {
+                        "GitHub": {
+                            "url": "https://github.com/alice",
+                            "status": "Claimed",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = ""
+            m.stderr = ""
+            return m
+
+        monkeypatch.setattr("forge.utils.intel.handle_finder.subprocess.run", fake_run)
+
+        rows = handle_finder._run_sherlock("alice", proxy="socks5://127.0.0.1:9050")
+
+        assert rows[0]["platform"] == "GitHub"
+        assert observed_envs[0]["HTTP_PROXY"] == "socks5://127.0.0.1:9050"
+        assert observed_envs[0]["HTTPS_PROXY"] == "socks5://127.0.0.1:9050"
+        assert observed_envs[0]["ALL_PROXY"] == "socks5://127.0.0.1:9050"
 
     def test_maigret_uses_configured_command_prefix_and_proxy_env(self, monkeypatch):
         monkeypatch.setenv("FORGE_MAIGRET_COMMAND", "python -m maigret")
@@ -414,6 +471,34 @@ class TestRunHandleFinder:
         count = con.execute("SELECT COUNT(*) FROM username_profiles").fetchone()[0]
         con.close()
         assert count == 0
+
+    def test_direct_proxy_passed_to_handle_finder(self, engagement_db):
+        observed: list[str | None] = []
+
+        def fake_find(self, username: str, **kwargs):  # noqa: ANN001, ANN003
+            del self
+            observed.append(kwargs.get("proxy_override"))
+            return [
+                UsernameProfile(
+                    username=username,
+                    platform="github",
+                    profile_url=f"https://github.com/{username}",
+                    status=ProfileStatus.CONFIRMED,
+                    source_tool="sherlock",
+                )
+            ]
+
+        with patch("forge.utils.intel.handle_finder.HandleFinder.find", fake_find):
+            written = run_handle_finder(
+                engagement_db,
+                1,
+                usernames=["alice"],
+                backend="sherlock",
+                proxy="socks5://127.0.0.1:9050",
+            )
+
+        assert written == 1
+        assert observed == ["socks5://127.0.0.1:9050"]
 
     def test_audit_log_written(self, engagement_db):
         with self._patch_finder([]):

@@ -117,6 +117,21 @@ def _tool_command(name: str, *aliases: str) -> list[str]:
     return []
 
 
+def _proxy_subprocess_env(proxy: Optional[str]) -> Optional[dict[str, str]]:
+    proxy_value = str(proxy or "").strip()
+    if not proxy_value:
+        return None
+    env = os.environ.copy()
+    env.update(
+        {
+            "HTTP_PROXY": proxy_value,
+            "HTTPS_PROXY": proxy_value,
+            "ALL_PROXY": proxy_value,
+        }
+    )
+    return env
+
+
 @dataclass
 class UsernameProfile:
     username: str
@@ -171,9 +186,7 @@ class HandleFinder:
         command = _tool_command("whatsmyname", "wmn")
         if not command:
             return []
-        env = None
-        if proxy:
-            env = {"HTTP_PROXY": proxy, "HTTPS_PROXY": proxy}
+        env = _proxy_subprocess_env(proxy)
         try:
             proc = subprocess.run(
                 [*command, "-u", username, "-json"],
@@ -190,8 +203,7 @@ class HandleFinder:
             return []
 
     def _run_sherlock(self, username: str, proxy: Optional[str] = None) -> list[dict]:
-        _ = proxy
-        return _run_sherlock(username)
+        return _run_sherlock(username, proxy=proxy)
 
     def _run_maigret(self, username: str, proxy: Optional[str] = None) -> list[dict]:
         """Run maigret and parse its NDJSON output.
@@ -200,21 +212,11 @@ class HandleFinder:
         folder. We use a temp dir and read whatever it produces.
         """
         import tempfile
-        import os
         command = _tool_command("maigret")
         if not command:
             return []
         tmp_dir = tempfile.mkdtemp(prefix="forge_maigret_")
-        env = None
-        if proxy:
-            env = os.environ.copy()
-            env.update(
-                {
-                    "HTTP_PROXY": proxy,
-                    "HTTPS_PROXY": proxy,
-                    "ALL_PROXY": proxy,
-                }
-            )
+        env = _proxy_subprocess_env(proxy)
         try:
             subprocess.run(
                 [
@@ -346,7 +348,7 @@ def _run_whatsmyname(username: str, timeout: int = 120) -> list[dict]:
     return []
 
 
-def _run_sherlock(username: str, timeout: int = 120) -> list[dict]:
+def _run_sherlock(username: str, timeout: int = 120, proxy: Optional[str] = None) -> list[dict]:
     """
     Runs: sherlock <username> --json <tmpfile>
     Returns list of {platform, url} dicts.
@@ -355,6 +357,7 @@ def _run_sherlock(username: str, timeout: int = 120) -> list[dict]:
     command = _tool_command("sherlock")
     if not command:
         return []
+    env = _proxy_subprocess_env(proxy)
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
         tmp = tf.name
     try:
@@ -364,6 +367,7 @@ def _run_sherlock(username: str, timeout: int = 120) -> list[dict]:
             capture_output=True,
             text=True,
             check=False,
+            env=env,
         )
         if proc.returncode != 0:
             err_msg = proc.stderr.strip() or proc.stdout.strip()
@@ -406,7 +410,8 @@ def _run_handle_finder_batch(
     *,
     backend: str,
     proxy_file: Optional[Path],
-    max_workers: int | None,
+    proxy: Optional[str] = None,
+    max_workers: int | None = None,
 ) -> list[list[UsernameProfile]]:
     if not usernames:
         return []
@@ -415,10 +420,11 @@ def _run_handle_finder_batch(
         proxies = [l.strip() for l in Path(proxy_file).read_text().splitlines() if l.strip()]
     else:
         proxies = []
+    direct_proxy = str(proxy or "").strip() or None
 
     def _assigned_proxy(index: int) -> Optional[str]:
         if not proxies:
-            return None
+            return direct_proxy
         return proxies[index % len(proxies)]
 
     def _worker(index_and_username: tuple[int, str]) -> tuple[int, list[UsernameProfile]]:
@@ -468,6 +474,7 @@ def run_handle_finder(
     dry_run: bool               = False,
     operator: str               = "operator",
     backend: Optional[str]      = None,
+    proxy: Optional[str]        = None,
     max_workers: int | None     = None,
 ) -> int:
     """
@@ -508,6 +515,7 @@ def run_handle_finder(
         names,
         backend=backend,
         proxy_file=proxy_file,
+        proxy=proxy,
         max_workers=(
             _handle_finder_max_workers_default()
             if max_workers is None

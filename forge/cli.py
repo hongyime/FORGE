@@ -2705,6 +2705,12 @@ def osint_usernames(
         None, "--proxy-file",
         help="Path to a newline-delimited proxy list for rotation.",
     ),
+    proxy: Optional[str] = typer.Option(
+        None,
+        "--proxy",
+        envvar="FORGE_PROXY",
+        help="Optional HTTP/SOCKS proxy for username-enumeration subprocess requests.",
+    ),
     max_workers: int = typer.Option(
         1,
         "--max-workers",
@@ -2729,6 +2735,7 @@ def osint_usernames(
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     engagement_id = int(engagement)
+    proxy_value = str(proxy).strip() if isinstance(proxy, str) else os.environ.get("FORGE_PROXY", "").strip() or None
 
     name_list: list[str] = []
     if usernames:
@@ -2744,7 +2751,7 @@ def osint_usernames(
     _cli_audit(
         db_path, engagement_id, "phase2", "handle_finder",
         "usernames_start", target=",".join(name_list),
-        result=f"dry_run={dry_run} backend={backend or 'auto'}",
+        result=f"dry_run={dry_run} backend={backend or 'auto'} proxy_configured={bool(proxy_value)}",
     )
     try:
         n = run_handle_finder(
@@ -2755,6 +2762,7 @@ def osint_usernames(
             dry_run=dry_run,
             operator=cfg.operator,
             backend=backend,
+            proxy=proxy_value,
             max_workers=max_workers,
         )
     except TypeError:
