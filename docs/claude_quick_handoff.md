@@ -23,6 +23,12 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
   Safety: closes implicit IP-rotation behavior. No proxy/IP bypass, live probing expansion, scope relaxation, destructive behavior, or report-gate change.
   Commit: `bc95829 fix(opsec): avoid implicit tor rotation on rate limits`.
 
+- [x] Validation-registry terminal-state checkpoint is green:
+  Pending cloud-asset sweeps no longer filter to a fixed allowlist. Every persisted artifact-emitted cloud asset either uses a registered validator or receives an explicit terminal `UNSUPPORTED` row, so references do not remain pending/UNVALIDATED forever.
+  Verification: compile/Ruff over `forge\phase4\cloud_validate.py` and `tests\phase4\test_cloud_validation_registry_contract.py`; `tests\phase4\test_cloud_validation_registry_contract.py tests\phase4\test_cloud_validate.py` -> `140 passed`.
+  Safety: validation-state/auditability hardening only. Unsupported types do not trigger provider calls and do not create deterministic findings.
+  Commit: `4955108 fix(cloud-validation): terminate unsupported asset types`.
+
 - [x] Kill-chain recursion-budget parity checkpoint is green:
   CLI and web launch paths now share `normalize_kill_chain_max_iter()` and reject `max_iter < 1` or `> 10` before starting a run, closing the direct CLI bypass of the web launch budget.
   Verification: compile/Ruff over CLI/web/helper/tests; focused CLI range/help tests -> `2 passed`; focused web launch/range tests -> `2 passed`.
