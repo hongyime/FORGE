@@ -11,11 +11,18 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Package-manager config source-label checkpoint is green:
+  Source-aware labels now distinguish `.npmrc`, `.pnpmrc`, `.yarnrc`, `.pypirc`, `.gemrc`, `.netrc`, pip configs, and `.cargo` configs/credentials from generic `ini`/`toml`/`credentials` artifacts. Generic `credentials` and `config.toml` stay unclassified unless package-manager source context is present.
+  Verification in `main`: compile/Ruff over touched files; `tests\phase1\test_artifact_package_manager_config.py` -> `24 passed`; cargo mega regression -> `1 passed`; pip credential mega regression -> `1 passed`.
+  Review: worker `Dirac` implemented and verified the slice in `FORGE-wt-package-labels` before cherry-pick. Commit: `6329b0f feat(artifacts): label package manager configs`.
+  Safety: passive source labeling and artifact routing only. No package-manager execution, registry calls, credential use, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+
 - [x] Passive QR/barcode artifact-recursion checkpoint is green:
   Raster image artifacts, embedded archive/document image members, rendered PDF page images, and SVG/data-URI image payloads now run a bounded local barcode family alongside OCR/metadata. Optional local decoders (`pyzbar` or OpenCV) are used only when installed; otherwise extraction no-ops safely. Decoded QR/barcode payloads feed the existing recursive text discovery path with sensitive URL query stripping, and `otpauth://` / `WIFI:` payloads are suppressed before persistence.
   Verification: compile/Ruff over touched files; `tests\phase1\test_artifact_barcode.py` -> `5 passed`; existing remote image OCR regression -> `1 passed`.
   Review: sidecar `Erdos` identified the missing QR/barcode extraction gap. Claude diff review was launched at `%TEMP%\forge-claude-barcode-review.txt`; check that file if you need the final Claude-branded output.
   Safety: passive local parsing only. No QR decode API, provider call, credential validation/use, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Commit: `60950ee feat(artifacts): decode passive barcode payloads`.
 
 - [x] Storage/DB client artifact-recursion checkpoint is green:
   `.s3cfg`, `.boto`, and `boto.cfg` are now source-gated config artifacts with passive endpoint-only extraction in `forge/utils/artifact_storage_client_config.py`; credential keys are suppressed, templated bucket URLs are sanitized before raw discovery, and endpoints feed the existing bounded structured-discovery path. DB client configs now preserve sanitized explicit DSNs and reconstruct split-field endpoints with detected schemes such as `mysql://host:port/db` instead of always emitting `postgres://`; host-only/no-driver configs retain a documented legacy fallback solely for recursive host discovery.
