@@ -10784,11 +10784,18 @@ class EngagementSynthesisEngine:
         "mobile_urls",
         "mobileUrls",
         "mobileURLs",
+        "mobile_links",
+        "mobileLinks",
+        "mobileLINKS",
         "native_urls",
         "nativeUrls",
         "nativeURLs",
+        "native_links",
+        "nativeLinks",
+        "nativeLINKS",
         "universal_links",
         "universalLinks",
+        "universalLINKS",
     )
     _SOCIAL_PROFILE_IDENTITY_URL_HINT_KEYS = (
         "@id",
