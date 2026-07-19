@@ -93,6 +93,11 @@ from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
 )
+from forge.utils.artifact_storage_client_config import (
+    storage_client_config_artifact_label,
+    storage_client_config_candidates,
+    storage_client_config_public_payload_text,
+)
 from forge.utils.artifact_secret_provider_class import secret_provider_class_candidates
 from forge.utils.artifact_tunnel_config import (
     tunnel_config_artifact_label,
@@ -5751,6 +5756,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if database_client_config_artifact_label(raw_lowered):
         return True
+    if storage_client_config_artifact_label(raw_lowered):
+        return True
     if amplify_client_config_artifact_label(raw_lowered):
         return True
     if ecs_task_definition_artifact_label(raw_lowered):
@@ -5912,6 +5919,9 @@ def _artifact_format_label(value: str | Path) -> str:
     database_client_label = database_client_config_artifact_label(str(value or ""))
     if database_client_label:
         return database_client_label
+    storage_client_label = storage_client_config_artifact_label(str(value or ""))
+    if storage_client_label:
+        return storage_client_label
     amplify_client_label = amplify_client_config_artifact_label(str(value or ""))
     if amplify_client_label:
         return amplify_client_label
@@ -6679,6 +6689,8 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
         return "config"
     if database_client_config_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
+    if storage_client_config_artifact_label(unquote(parsed_remote.path or "")):
+        return "config"
     if amplify_client_config_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
     if ecs_task_definition_artifact_label(unquote(parsed_remote.path or "")):
@@ -6841,6 +6853,14 @@ def _select_remote_artifact_filename(
         if candidate:
             return f"{candidate}.{database_client_label}"
         return f"database-client.{database_client_label}"
+    storage_client_label = storage_client_config_artifact_label(unquote(parsed_source.path or ""))
+    if storage_client_label:
+        candidate = Path(unquote(parsed_source.path or "")).name.strip()
+        if candidate and storage_client_config_artifact_label(candidate):
+            return candidate
+        if candidate:
+            return f"{candidate}.{storage_client_label}"
+        return f"storage-client.{storage_client_label}"
     amplify_client_label = amplify_client_config_artifact_label(unquote(parsed_source.path or ""))
     if amplify_client_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
@@ -17663,6 +17683,7 @@ class ArtifactQueueProcessor:
         "http_transcript_text",
         "connection_client_text",
         "database_client_text",
+        "storage_client_config_text",
         "amplify_client_config_text",
         "framework_config_text",
         "orm_config_text",
@@ -19222,6 +19243,11 @@ class ArtifactQueueProcessor:
         source_hint = f"{source_file}/{extract_path}" if source_file else extract_path
         if tunnel_config_artifact_label(source_hint):
             text = tunnel_config_public_payload_text(text)
+        if (
+            storage_client_config_artifact_label(source_hint)
+            and family != "storage_client_config_text"
+        ):
+            text = storage_client_config_public_payload_text(text)
         if family == "iac":
             return self._iac_text_structured_payload_text(
                 text,
@@ -19299,6 +19325,11 @@ class ArtifactQueueProcessor:
             )
         if family == "database_client_text":
             return self._database_client_structured_payload_text(
+                text,
+                source_hint=source_hint,
+            )
+        if family == "storage_client_config_text":
+            return self._storage_client_config_structured_payload_text(
                 text,
                 source_hint=source_hint,
             )
@@ -27345,6 +27376,25 @@ class ArtifactQueueProcessor:
                 continue
             seen.add(candidate)
             lines.append(f"postgres://{candidate}")
+        return "\n".join(lines)
+
+    def _storage_client_config_structured_payload_text(
+        self,
+        text: str,
+        *,
+        source_hint: str = "",
+    ) -> str:
+        if not storage_client_config_artifact_label(source_hint):
+            return ""
+        lines: list[str] = []
+        seen: set[str] = set()
+        for candidate in storage_client_config_candidates(text):
+            normalized = str(candidate or "").strip()
+            lowered = normalized.lower()
+            if not normalized or lowered in seen:
+                continue
+            seen.add(lowered)
+            lines.append(normalized)
         return "\n".join(lines)
 
     def _amplify_client_config_structured_payload_text(
