@@ -13,7 +13,8 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 - [x] Run audit manifest portable-export checkpoint is green:
   `forge.audit.manifest_bundle` writes deterministic ZIP bundles for external archival outside the mutable engagement DB. Bundles contain `manifest.json`, `verification.json`, `checksums.sha256`, and `README.md`; ZIP member order and timestamps are deterministic, and checksums cover the payload files. `forge audit manifest-export --engagement <id> [--run-id <id>] [--output <zip>] [--json]` exports the bundle and exits `2` if export-time verification fails while still preserving a failed verification receipt.
-  Verification: compile/Ruff over touched audit/CLI/test files; `tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py tests\audit\test_run_audit_manifest.py` -> `10 passed`.
+  The command implementation now lives in `forge/audit/cli.py`, keeping `forge/cli.py` as a thin audit Typer registrar.
+  Verification: compile/Ruff over touched audit/CLI/test files; `tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py tests\audit\test_run_audit_manifest.py` -> `10 passed`; audit help smoke confirmed `manifest-verify` and `manifest-export` remain registered.
   Review: Claude read-only review at `%TEMP%\forge-claude-manifest-bundle-review-out.txt` returned only `Reached max turns (4)` with no usable findings.
   Safety: offline evidence export only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, report-gate changes, exploitation, persistence, lateral movement, or post-exploitation behavior was added.
   Handoff: `.claude/handoffs/2026-07-20-run-manifest-export-bundle.md`.

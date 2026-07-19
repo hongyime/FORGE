@@ -8,6 +8,7 @@ Added portable export bundles for run audit manifests so operators can archive e
 
 - `forge/audit/manifest.py`
 - `forge/audit/manifest_bundle.py`
+- `forge/audit/cli.py`
 - `forge/audit/__init__.py`
 - `forge/cli.py`
 - `tests/audit/test_run_audit_manifest_bundle.py`
@@ -23,6 +24,7 @@ Added portable export bundles for run audit manifests so operators can archive e
 - New public helper: `export_run_audit_manifest_bundle(...)`.
 - New CLI command:
   `forge audit manifest-export --engagement <id> [--run-id <id>] [--output <zip>] [--json]`
+- Audit command implementations live in `forge/audit/cli.py`; `forge/cli.py` only creates/registers the audit Typer group.
 - Bundle contents:
   - `manifest.json`: stored hash-chain manifest from `run_audit_manifests`.
   - `verification.json`: export-time verification receipt with `ok`, stored hash, recomputed hash, and reason.
@@ -39,13 +41,13 @@ Added portable export bundles for run audit manifests so operators can archive e
 Commands run from `C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit`:
 
 ```powershell
-python -m compileall forge\audit\manifest.py forge\audit\manifest_bundle.py forge\audit\__init__.py forge\cli.py tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py -q
+python -m compileall forge\audit\cli.py forge\audit\manifest.py forge\audit\manifest_bundle.py forge\audit\__init__.py forge\cli.py tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py -q
 ```
 
 Result: passed.
 
 ```powershell
-ruff check forge\audit\manifest.py forge\audit\manifest_bundle.py forge\audit\__init__.py forge\cli.py tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py
+ruff check forge\audit\cli.py forge\audit\manifest.py forge\audit\manifest_bundle.py forge\audit\__init__.py forge\cli.py tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py
 ```
 
 Result: `All checks passed!`.
@@ -55,6 +57,18 @@ python -m pytest tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_
 ```
 
 Result: `10 passed`.
+
+```powershell
+@'
+from typer.testing import CliRunner
+from forge.cli import app
+r = CliRunner().invoke(app, ['audit', '--help'])
+print(r.exit_code)
+print('manifest-verify' in r.output, 'manifest-export' in r.output)
+'@ | python -
+```
+
+Result: exit code `0`, both commands present.
 
 ## Review Status
 
