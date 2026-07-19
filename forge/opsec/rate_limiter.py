@@ -36,11 +36,13 @@ class RateLimiter:
         max_delay: float = 30.0,
         jitter: float = 1.0,
         tor_manager: Optional[object] = None,
+        rotate_tor_on_rate_limit: bool = False,
     ):
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.jitter = jitter
         self._tor_manager = tor_manager
+        self._rotate_tor_on_rate_limit = rotate_tor_on_rate_limit
         self._domain_delays: dict[str, float] = {}
         self._domain_failures: dict[str, int] = {}
         self._lock = threading.RLock()
@@ -70,7 +72,7 @@ class RateLimiter:
             failures = self._domain_failures[domain]
             backoff = min(2 ** failures, self.max_delay)
             self._domain_delays[domain] = time.time() + backoff
-            if status_code == 429 and self._tor_manager:
+            if status_code == 429 and self._rotate_tor_on_rate_limit and self._tor_manager:
                 self._tor_manager.rotate_circuit()
 
     def reset_domain(self, url: str) -> None:
@@ -90,9 +92,16 @@ class AdaptiveRateLimiter(RateLimiter):
         min_delay: float = 0.5,
         jitter: float = 1.0,
         tor_manager: Optional[object] = None,
+        rotate_tor_on_rate_limit: bool = False,
         adjustment_factor: float = 0.1,
     ):
-        super().__init__(base_delay, max_delay, jitter, tor_manager)
+        super().__init__(
+            base_delay,
+            max_delay,
+            jitter,
+            tor_manager,
+            rotate_tor_on_rate_limit,
+        )
         self.min_delay = min_delay
         self.adjustment_factor = adjustment_factor
         self._domain_success_streaks: dict[str, int] = {}
