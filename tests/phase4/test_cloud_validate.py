@@ -5491,7 +5491,7 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="Hugging Face auth ok: user=demo-user user_profile_present=true",
+            detail="Hugging Face auth ok: user=model-owner user_profile_present=true",
         ),
     )
     monkeypatch.setattr(
