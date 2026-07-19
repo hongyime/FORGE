@@ -19,9 +19,10 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 - [x] Rate-limit safety checkpoint is green:
   `forge/opsec/rate_limiter.py` no longer rotates Tor circuits on HTTP 429 by default. The default behavior is to increase per-domain backoff and wait; Tor rotation requires explicit constructor opt-in for legacy tooling.
-  Verification: compile/Ruff over rate-limiter files; `tests\opsec\test_rate_limiter.py tests\integration\test_playbooks.py::test_playbook_2_rate_limiter_integration` -> `4 passed`.
+  Follow-up compatibility fix preserves the old positional `AdaptiveRateLimiter(..., adjustment_factor)` call shape.
+  Verification: compile/Ruff over rate-limiter files; focused rate-limiter/playbook tests -> `4 passed`; focused rate-limiter file after compatibility fix -> `4 passed`.
   Safety: closes implicit IP-rotation behavior. No proxy/IP bypass, live probing expansion, scope relaxation, destructive behavior, or report-gate change.
-  Commit: `bc95829 fix(opsec): avoid implicit tor rotation on rate limits`.
+  Commits: `bc95829 fix(opsec): avoid implicit tor rotation on rate limits`, `05aee28 fix(opsec): preserve adaptive limiter argument order`.
 
 - [x] Validation-registry terminal-state checkpoint is green:
   Pending cloud-asset sweeps no longer filter to a fixed allowlist. Every persisted artifact-emitted cloud asset either uses a registered validator or receives an explicit terminal `UNSUPPORTED` row, so references do not remain pending/UNVALIDATED forever.
