@@ -188,7 +188,17 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "github",
         "GitHub user ok: user_id=738251 login=testuser user_profile_present=true "
         "profile_url_matches_login=true",
-    ) == "testuser"
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "github",
+        "GitHub user ok: user_id=738251 login=placeholderuser user_profile_present=true "
+        "profile_url_matches_login=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "github",
+        "GitHub user ok: user_id=738251 login=acmebot user_profile_present=true "
+        "profile_url_matches_login=true",
+    ) == "acmebot"
     assert cloud_validate._validated_identifier_from_detail(
         "gitlab",
         "GitLab user ok: username=unknown",
@@ -305,6 +315,10 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "twilio",
         "Twilio account accessible: sid=AC00000000000000000000000000000000 status=active",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "twilio",
+        "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=active",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "twilio",
@@ -740,8 +754,8 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     ) == "acmestorage"
     assert cloud_validate._validated_identifier_from_detail(
         "twilio",
-        "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=active",
-    ) == "AC1234567890abcdef1234567890abcdef"
+        "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 status=active",
+    ) == "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3"
     assert cloud_validate._validated_identifier_from_detail(
         "twilio",
         "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef status=suspended",
@@ -3969,7 +3983,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_github_pat_rows_w
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
             detail=(
-                "GitHub user ok: user_id=738251 login=testuser user_profile_present=true "
+                "GitHub user ok: user_id=738251 login=acmebot user_profile_present=true "
                 "profile_url_matches_login=true"
             ),
         ),
@@ -3990,7 +4004,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_github_pat_rows_w
     assert summary["results"][0]["key_id"] == 28
     assert summary["results"][0]["validation_status"] == "VALIDATED"
     assert summary["results"][0]["validation_method"] == "github_user_api"
-    assert summary["results"][0]["identifier"] == "testuser"
+    assert summary["results"][0]["identifier"] == "acmebot"
 
     con = sqlite3.connect(db_path)
     try:
@@ -4001,7 +4015,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_github_pat_rows_w
             WHERE engagement_id=1001
             """
         ).fetchone()
-        assert validation_row == ("github", "testuser", "VALIDATED", "github_user_api")
+        assert validation_row == ("github", "acmebot", "VALIDATED", "github_user_api")
 
         key_row = con.execute(
             """
@@ -6407,7 +6421,7 @@ def test_sweep_pending_cloud_validations_processes_colocated_twilio_pair_without
 
     def _fake_decrypt(value: str) -> str:
         if value == "ciphertext-sid":
-            return "AC1234567890abcdef1234567890abcdef"
+            return "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3"
         if value == "ciphertext-token":
             return "abcdef1234567890abcdef1234567890"
         return value
@@ -6421,11 +6435,11 @@ def test_sweep_pending_cloud_validations_processes_colocated_twilio_pair_without
     )
 
     def _fake_twilio_validate(self, key, auth_token=None, proxy=None, **kwargs):  # noqa: ANN001, ARG001
-        if key == "AC1234567890abcdef1234567890abcdef" and auth_token == "abcdef1234567890abcdef1234567890":
+        if key == "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3" and auth_token == "abcdef1234567890abcdef1234567890":
             return ValidationResult(
                 state=ValidationState.ACTIVE,
                 detail=(
-                    "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef "
+                    "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 "
                     "status=active type=Full"
                 ),
             )
@@ -6451,7 +6465,7 @@ def test_sweep_pending_cloud_validations_processes_colocated_twilio_pair_without
     assert summary["results"][0]["key_id"] == 9
     assert summary["results"][0]["validation_status"] == "VALIDATED"
     assert summary["results"][0]["validation_method"] == "twilio_account_api"
-    assert summary["results"][0]["identifier"] == "AC1234567890abcdef1234567890abcdef"
+    assert summary["results"][0]["identifier"] == "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3"
 
     con = sqlite3.connect(db_path)
     try:
@@ -6464,7 +6478,7 @@ def test_sweep_pending_cloud_validations_processes_colocated_twilio_pair_without
         ).fetchone()
         assert validation_row == (
             "twilio",
-            "AC1234567890abcdef1234567890abcdef",
+            "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
             "VALIDATED",
             "twilio_account_api",
         )
@@ -6540,7 +6554,7 @@ def test_sweep_pending_cloud_validations_keeps_twilio_rate_limit_unverified(
 
     def _fake_decrypt(value: str) -> str:
         if value == "ciphertext-sid-rate-limited":
-            return "AC1234567890abcdef1234567890abcdef"
+            return "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3"
         if value == "ciphertext-token-rate-limited":
             return "abcdef1234567890abcdef1234567890"
         return value
@@ -6589,7 +6603,7 @@ def test_sweep_pending_cloud_validations_keeps_twilio_rate_limit_unverified(
         ).fetchone()
         assert validation_row == (
             "twilio",
-            "AC1234567890abcdef1234567890abcdef",
+            "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
             "UNVERIFIED",
             "twilio_account_api",
         )

@@ -247,8 +247,8 @@ def test_github_pat_validator_active(monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "id": 738251,
-                "login": "testuser",
-                "html_url": "https://github.com/testuser",
+                "login": "acmebot",
+                "html_url": "https://github.com/acmebot",
                 "email": "private@acme.io",
             }
             return response
@@ -257,7 +257,7 @@ def test_github_pat_validator_active(monkeypatch):
     result = GithubPatValidator().validate("ghp_" + "a" * 36)
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "GitHub user ok: user_id=738251 login=testuser user_profile_present=true "
+        "GitHub user ok: user_id=738251 login=acmebot user_profile_present=true "
         "profile_url_matches_login=true"
     )
     assert "private@acme.io" not in (result.detail or "")
@@ -280,8 +280,8 @@ def test_github_pat_validator_sequential_user_id_stays_unconfirmed(monkeypatch):
             response.status_code = 200
             response.json.return_value = {
                 "id": 123456,
-                "login": "testuser",
-                "html_url": "https://github.com/testuser",
+                "login": "acmebot",
+                "html_url": "https://github.com/acmebot",
             }
             return response
 
@@ -334,8 +334,8 @@ def test_github_pat_validator_200_without_user_id_stays_unconfirmed(monkeypatch)
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {
-                "login": "testuser",
-                "html_url": "https://github.com/testuser",
+                "login": "acmebot",
+                "html_url": "https://github.com/acmebot",
                 "email": "private@acme.io",
             }
             return response
@@ -365,7 +365,7 @@ def test_github_pat_validator_200_without_profile_proof_stays_unconfirmed(monkey
             response.status_code = 200
             response.json.return_value = {
                 "id": 738251,
-                "login": "testuser",
+                "login": "acmebot",
             }
             return response
 
@@ -393,7 +393,7 @@ def test_github_pat_validator_200_with_reserved_profile_url_stays_unconfirmed(mo
             response.status_code = 200
             response.json.return_value = {
                 "id": 738251,
-                "login": "testuser",
+                "login": "acmebot",
                 "avatar_url": "https://example.com/avatar.png",
             }
             return response
@@ -422,8 +422,8 @@ def test_github_pat_validator_200_with_reserved_profile_subdomain_stays_unconfir
             response.status_code = 200
             response.json.return_value = {
                 "id": 738251,
-                "login": "testuser",
-                "html_url": "https://profile.example.org/testuser",
+                "login": "acmebot",
+                "html_url": "https://profile.example.org/acmebot",
             }
             return response
 
@@ -457,6 +457,41 @@ def test_github_pat_validator_200_with_placeholder_login_stays_unconfirmed(monke
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "GitHub user response missing login"
+
+
+@pytest.mark.parametrize("login", ["testuser", "placeholderuser"])
+def test_github_pat_validator_200_with_compact_placeholder_login_stays_unconfirmed(
+    monkeypatch,
+    login: str,
+):
+    class _GithubClient:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            del args, kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
+            del exc_type, exc, tb
+
+        def get(self, url: str, headers=None):  # noqa: ANN001
+            del url, headers
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {
+                "id": 738251,
+                "login": login,
+                "html_url": f"https://github.com/{login}",
+                "email": "private@acme.io",
+            }
+            return response
+
+    monkeypatch.setattr("httpx.Client", _GithubClient)
+    result = GithubPatValidator().validate("ghp_" + "i" * 36)
+
+    assert result.state == ValidationState.UNCONFIRMED
+    assert result.detail == "GitHub user response missing login"
+    assert "private@acme.io" not in (result.detail or "")
 
 
 def test_github_pat_validator_200_with_repeated_login_stays_unconfirmed(monkeypatch):
@@ -1182,9 +1217,9 @@ def test_stripe_validator_rate_limited_stays_unconfirmed(monkeypatch):
 
 def test_twilio_validator_account_detail_omits_friendly_name() -> None:
     detail = TwilioKeyValidator._account_detail(
-        "AC1234567890abcdef1234567890abcdef",
+        "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
         {
-            "sid": "AC1234567890abcdef1234567890abcdef",
+            "sid": "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
             "status": "active",
             "type": "Full",
             "friendly_name": "Sensitive Customer Name",
@@ -1192,7 +1227,7 @@ def test_twilio_validator_account_detail_omits_friendly_name() -> None:
     )
 
     assert detail == (
-        "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef "
+        "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 "
         "status=active type=Full"
     )
     assert "Sensitive" not in detail
@@ -1223,7 +1258,7 @@ def test_twilio_validator_200_without_matching_sid_stays_unconfirmed(monkeypatch
     )
 
     result = TwilioKeyValidator().validate(
-        "AC1234567890abcdef1234567890abcdef",
+        "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
         auth_token="auth-token",
     )
 
@@ -1247,7 +1282,7 @@ def test_twilio_validator_matching_sid_and_status_is_active(monkeypatch):
     response = MagicMock()
     response.status_code = 200
     response.text = (
-        '{"sid":"AC1234567890abcdef1234567890abcdef",'
+        '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",'
         '"status":"active","type":"Full"}'
     )
     fake_requests = types.SimpleNamespace(Session=_SessionFactory())
@@ -1259,13 +1294,13 @@ def test_twilio_validator_matching_sid_and_status_is_active(monkeypatch):
     )
 
     result = TwilioKeyValidator().validate(
-        "AC1234567890abcdef1234567890abcdef",
+        "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
         auth_token="auth-token",
     )
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef "
+        "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 "
         "status=active type=Full"
     )
 
@@ -1285,7 +1320,7 @@ def test_twilio_validator_200_matching_sid_without_status_stays_unconfirmed(monk
 
     response = MagicMock()
     response.status_code = 200
-    response.text = '{"sid":"AC1234567890abcdef1234567890abcdef","type":"Full"}'
+    response.text = '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3","type":"Full"}'
     fake_requests = types.SimpleNamespace(Session=_SessionFactory())
     monkeypatch.setitem(sys.modules, "curl_cffi", types.SimpleNamespace(requests=fake_requests))
     monkeypatch.setitem(sys.modules, "curl_cffi.requests", fake_requests)
@@ -1295,7 +1330,7 @@ def test_twilio_validator_200_matching_sid_without_status_stays_unconfirmed(monk
     )
 
     result = TwilioKeyValidator().validate(
-        "AC1234567890abcdef1234567890abcdef",
+        "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
         auth_token="auth-token",
     )
 
@@ -1303,7 +1338,14 @@ def test_twilio_validator_200_matching_sid_without_status_stays_unconfirmed(monk
     assert "SID/status proof" in (result.detail or "")
 
 
-def test_twilio_validator_placeholder_sid_stays_unconfirmed_before_request(monkeypatch):
+@pytest.mark.parametrize(
+    "sid",
+    [
+        "AC" + "0" * 32,
+        "AC1234567890abcdef1234567890abcdef",
+    ],
+)
+def test_twilio_validator_placeholder_sid_stays_unconfirmed_before_request(monkeypatch, sid: str):
     called = False
 
     def _unexpected_call(*args, **kwargs):  # noqa: ANN002, ANN003
@@ -1314,7 +1356,7 @@ def test_twilio_validator_placeholder_sid_stays_unconfirmed_before_request(monke
     monkeypatch.setattr("forge.utils.intel.secret_finder.key_validation_get", _unexpected_call)
 
     result = TwilioKeyValidator().validate(
-        "AC" + "0" * 32,
+        sid,
         auth_token="auth-token",
     )
 
@@ -1347,7 +1389,7 @@ def test_twilio_validator_rate_limited_stays_unconfirmed(monkeypatch):
     )
 
     result = TwilioKeyValidator().validate(
-        "AC1234567890abcdef1234567890abcdef",
+        "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
         auth_token="auth-token",
     )
 

@@ -6,6 +6,10 @@ import json
 import re
 from typing import Any
 
+from forge.utils.validation_identifiers import (
+    looks_compound_placeholder_identifier as _looks_compound_placeholder_identifier,
+)
+
 _VALIDATED_DETAIL_RE = re.compile(
     r"(?:^|[;\s])(?:validation=)?VALIDATED:([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?",
     re.IGNORECASE,
@@ -270,6 +274,8 @@ def _stable_provider_identifier(value: object) -> str:
         return ""
     if _has_placeholder_identifier_token(candidate):
         return ""
+    if _looks_compound_placeholder_identifier(candidate):
+        return ""
     if _looks_repeated_compact_identifier(candidate):
         return ""
     if _looks_prefixed_repeated_identifier(candidate):
@@ -287,6 +293,8 @@ def _stable_handle_identifier(value: object, *, allow_dot: bool = True) -> str:
     if candidate.lower() in _OPAQUE_PROVIDER_PLACEHOLDER_IDENTIFIERS:
         return ""
     if _has_placeholder_identifier_token(candidate):
+        return ""
+    if _looks_compound_placeholder_identifier(candidate):
         return ""
     compact = re.sub(r"[^A-Za-z0-9]+", "", candidate)
     if len(compact) >= 3 and _looks_repeated_compact_identifier(compact):
@@ -377,7 +385,7 @@ def _stable_twilio_account_sid(value: object) -> str:
     if not re.fullmatch(r"AC[a-f0-9]{32}", candidate, re.IGNORECASE):
         return ""
     sid_body = candidate[2:].lower()
-    if len(set(sid_body)) == 1:
+    if len(set(sid_body)) == 1 or sid_body[:16] == sid_body[16:]:
         return ""
     return candidate
 

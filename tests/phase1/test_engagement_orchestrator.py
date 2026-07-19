@@ -77250,7 +77250,7 @@ def test_kill_chain_local_long_tail_key_artifacts_feed_validation_and_auto_templ
             GITHUB_PAT=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
             STRIPE_SECRET_KEY=sk_live_AbCdEfGhIjKlMnOpQrStUvWxYz1234567890ABCD
             SENDGRID_API_KEY=SG.ABCDEFGHIJKLMNOPQRSTUV.ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg
-            TWILIO_ACCOUNT_SID=AC1234567890abcdef1234567890abcdef
+            TWILIO_ACCOUNT_SID=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3
             TWILIO_AUTH_TOKEN=abcdef1234567890abcdef1234567890
             """
         ).strip(),
@@ -77348,7 +77348,10 @@ def test_kill_chain_local_long_tail_key_artifacts_feed_validation_and_auto_templ
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="GitHub user ok: user_id=738251 login=testuser user_profile_present=true",
+            detail=(
+                "GitHub user ok: user_id=738251 login=acmebot user_profile_present=true "
+                "profile_url_matches_login=true"
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -77376,13 +77379,13 @@ def test_kill_chain_local_long_tail_key_artifacts_feed_validation_and_auto_templ
 
     def _fake_twilio_validate(self, key, auth_token=None, proxy=None, **kwargs):  # noqa: ANN001, ARG001
         if (
-            key == "AC1234567890abcdef1234567890abcdef"
+            key == "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3"
             and auth_token == "abcdef1234567890abcdef1234567890"
         ):
             return ValidationResult(
                 state=ValidationState.ACTIVE,
                 detail=(
-                    "Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef "
+                    "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 "
                     "status=active type=Full"
                 ),
             )
@@ -77454,13 +77457,13 @@ def test_kill_chain_local_long_tail_key_artifacts_feed_validation_and_auto_templ
             (str(row[0]), str(row[3]), str(row[2])): str(row[1])
             for row in validation_rows
         }
-        assert validation_map[("github", "github_user_api", "VALIDATED")] == "testuser"
+        assert validation_map[("github", "github_user_api", "VALIDATED")] == "acmebot"
         assert (
             validation_map[("sendgrid", "sendgrid_profile_api", "VALIDATED")]
             == "profile/0123456789abcdef"
         )
         assert validation_map[("twilio", "twilio_account_api", "VALIDATED")] == (
-            "AC1234567890abcdef1234567890abcdef"
+            "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3"
         )
         assert validation_map[("stripe", "stripe_balance_api", "VALIDATED")] == "live/sgd,usd"
 
@@ -77651,7 +77654,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
             GITHUB_PAT=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890
             STRIPE_SECRET_KEY=sk_live_AbCdEfGhIjKlMnOpQrStUvWxYz1234567890ABCD
             SENDGRID_API_KEY=SG.ABCDEFGHIJKLMNOPQRSTUV.ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg
-            TWILIO_ACCOUNT_SID=AC1234567890abcdef1234567890abcdef
+            TWILIO_ACCOUNT_SID=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3
             TWILIO_AUTH_TOKEN=abcdef1234567890abcdef1234567890
             AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=localkeyblob;AccountKey={'A' * 86}==
             """
@@ -77741,8 +77744,8 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
                 return _FakeResponse(
                     200,
                     (
-                        '{"id":738251,"login":"testuser",'
-                        '"html_url":"https://github.com/testuser"}'
+                        '{"id":738251,"login":"acmebot",'
+                        '"html_url":"https://github.com/acmebot"}'
                     ),
                 )
             if url == "https://api.stripe.com/v1/balance":
@@ -77751,10 +77754,10 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
                 return _FakeResponse(200, '{"email":"sender@delta-client.io"}')
             if url == "https://api.sendgrid.com/v3/scopes":
                 return _FakeResponse(200, '["mail.send"]')
-            if url == "https://api.twilio.com/2010-04-01/Accounts/AC1234567890abcdef1234567890abcdef.json":
+            if url == "https://api.twilio.com/2010-04-01/Accounts/AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3.json":
                 return _FakeResponse(
                     200,
-                    '{"sid":"AC1234567890abcdef1234567890abcdef","status":"active"}',
+                    '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3","status":"active"}',
                 )
             return _FakeResponse(404, "missing")
 
@@ -77774,10 +77777,10 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
                 return _FakeResponse(200, '{"email":"sender@delta-client.io"}')
             if url == "https://api.sendgrid.com/v3/scopes":
                 return _FakeResponse(200, '["mail.send"]')
-            if url == "https://api.twilio.com/2010-04-01/Accounts/AC1234567890abcdef1234567890abcdef.json":
+            if url == "https://api.twilio.com/2010-04-01/Accounts/AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3.json":
                 return _FakeResponse(
                     200,
-                    '{"sid":"AC1234567890abcdef1234567890abcdef","status":"active"}',
+                    '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3","status":"active"}',
                 )
             return _FakeResponse(404, "missing")
 

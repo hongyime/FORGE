@@ -663,7 +663,8 @@ class TestGithubPatValidator:
             r = v.validate("ghp_" + "a" * 36)
         assert r.state == ValidationState.ACTIVE
         assert r.detail == (
-            "GitHub user ok: user_id=7382914 login=acme-secops user_profile_present=true"
+            "GitHub user ok: user_id=7382914 login=acme-secops user_profile_present=true "
+            "profile_url_matches_login=true"
         )
 
     def test_200_without_login_stays_unconfirmed(self):
@@ -1219,7 +1220,8 @@ class TestKeyStorage:
                     state=ValidationState.ACTIVE,
                     detail=(
                         "GitHub user ok: "
-                        "user_id=123456 login=testuser user_profile_present=true"
+                        "user_id=738251 login=acmebot user_profile_present=true "
+                        "profile_url_matches_login=true"
                     ),
                 ),
             ),
@@ -1327,7 +1329,7 @@ class TestKeyStorage:
 
         assert row is not None
         assert str(row[0] or "").startswith("VALIDATED:github_user_api:")
-        assert "login=testuser" in str(row[0] or "")
+        assert "login=acmebot" in str(row[0] or "")
 
     def test_primary_aws_access_key_hit_persists_adjacent_context_secret(self, engagement_db):
         finding = MagicMock()

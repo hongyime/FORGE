@@ -31,7 +31,7 @@ def test_twilio_validator_non_active_account_status_stays_unconfirmed(
     response = MagicMock()
     response.status_code = 200
     response.text = (
-        '{"sid":"AC1234567890abcdef1234567890abcdef",'
+        '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",'
         f'"status":"{status}","type":"Full"}}'
     )
     fake_requests = types.SimpleNamespace(Session=_SessionFactory())
@@ -43,13 +43,13 @@ def test_twilio_validator_non_active_account_status_stays_unconfirmed(
     )
 
     result = TwilioKeyValidator().validate(
-        "AC1234567890abcdef1234567890abcdef",
+        "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
         auth_token="auth-token",
     )
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == (
         "Twilio account not active: "
-        f"Twilio account accessible: sid=AC1234567890abcdef1234567890abcdef "
+        f"Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 "
         f"status={status} type=Full"
     )

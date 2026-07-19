@@ -40,6 +40,9 @@ from forge.db.session import get_engagement_db
 from forge.utils.intel.audit_log import insert_audit_log
 from forge.utils.intel.http_pacing import key_validation_get, key_validation_post
 from forge.utils.ssl_hygiene import restore_default_ssl_context
+from forge.utils.validation_identifiers import (
+    looks_compound_placeholder_identifier as _looks_compound_placeholder_identifier,
+)
 
 _LOG = logging.getLogger(__name__)
 try:
@@ -387,6 +390,8 @@ def _stable_provider_identifier(value: object, pattern: str) -> str:
         return ""
     if _has_placeholder_identifier_token(candidate):
         return ""
+    if _looks_compound_placeholder_identifier(candidate):
+        return ""
     if _looks_repeated_compact_identifier(candidate):
         return ""
     if _looks_prefixed_repeated_identifier(candidate):
@@ -491,7 +496,7 @@ def _stable_twilio_account_sid(value: object) -> str:
     if not re.fullmatch(r"AC[a-f0-9]{32}", candidate, re.IGNORECASE):
         return ""
     sid_body = candidate[2:].lower()
-    if len(set(sid_body)) == 1:
+    if len(set(sid_body)) == 1 or sid_body[:16] == sid_body[16:]:
         return ""
     return candidate
 
@@ -529,6 +534,8 @@ def _stable_handle_identifier(value: object, *, allow_dot: bool = True) -> str:
     if candidate.lower() in _OPAQUE_PROVIDER_PLACEHOLDER_IDENTIFIERS:
         return ""
     if _has_placeholder_identifier_token(candidate):
+        return ""
+    if _looks_compound_placeholder_identifier(candidate):
         return ""
     compact = re.sub(r"[^A-Za-z0-9]+", "", candidate)
     if len(compact) >= 3 and _looks_repeated_compact_identifier(compact):

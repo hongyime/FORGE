@@ -439,7 +439,7 @@ def test_context_builder_counts_only_reportable_key_findings(tmp_eng_db):
                 (engagement_id, validation_state, service, domain, validation_detail)
             VALUES
                 (?, 'ACTIVE', 'github', '',
-                 'VALIDATED:github_user_api:github user ok: user_id=928374 login=acmebot user_profile_present=true')
+                 'VALIDATED:github_user_api:github user ok: user_id=928374 login=acmebot user_profile_present=true profile_url_matches_login=true')
             """,
             (ENGAGEMENT_ID,),
         )

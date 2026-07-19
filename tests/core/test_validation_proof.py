@@ -253,7 +253,7 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
         ),
         (
             "VALIDATED:github_user_api:GitHub user ok: "
-            "user_id=738251 login=testuser user_profile_present=true "
+            "user_id=738251 login=acmebot user_profile_present=true "
             "profile_url_matches_login=true",
             "github_user_api",
         ),
@@ -295,7 +295,7 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
         ),
         (
             "VALIDATED:twilio_account_api:Twilio account accessible: "
-            "sid=AC1234567890abcdef1234567890abcdef status=active type=Full",
+            "sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 status=active type=Full",
             "twilio_account_api",
         ),
         (
@@ -421,6 +421,18 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "VALIDATED:github_user_api:GitHub user ok: "
             "user_id=738251 login=testuser user_profile_present=true "
             "profile_url_matches_login=false",
+            "github_user_api",
+        ),
+        (
+            "VALIDATED:github_user_api:GitHub user ok: "
+            "user_id=738251 login=testuser user_profile_present=true "
+            "profile_url_matches_login=true",
+            "github_user_api",
+        ),
+        (
+            "VALIDATED:github_user_api:GitHub user ok: "
+            "user_id=738251 login=placeholderuser user_profile_present=true "
+            "profile_url_matches_login=true",
             "github_user_api",
         ),
         (
@@ -560,6 +572,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         (
             "VALIDATED:twilio_account_api:Twilio account accessible: "
             "sid=AC00000000000000000000000000000000 status=active type=Full",
+            "twilio_account_api",
+        ),
+        (
+            "VALIDATED:twilio_account_api:Twilio account accessible: "
+            "sid=AC1234567890abcdef1234567890abcdef status=active type=Full",
             "twilio_account_api",
         ),
         (
