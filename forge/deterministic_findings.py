@@ -192,7 +192,12 @@ class DeterministicFindingEngine:
             ).fetchall():
                 spec = self._build_key_finding(row, validation_index)
                 service = _normalize_asset_type(str(row["service"] or ""))
-                target_url = str(row["source_url"] or "").strip() or f"{service}://{str(row['domain'] or '').strip()}"
+                domain = str(row["domain"] or "").strip()
+                target_url = (
+                    str(row["source_url"] or "").strip()
+                    or str(row["repo_name"] or "").strip()
+                    or (f"{service}://{domain}" if domain else f"{service}://unknown")
+                )
                 parameter = f"{service}:{str(row['pattern_name'] or '').strip()}"
                 if spec is None:
                     summary.removed += self._delete_finding(
@@ -345,8 +350,8 @@ class DeterministicFindingEngine:
         parsed_validation = parse_validated_detail(validation_detail)
         validator_confirmed = parsed_validation["validation_status"] == "VALIDATED"
         confirmed = linked_status == "VALIDATED" or validator_confirmed
-        severity = "HIGH" if confirmed else "MEDIUM"
-        title_prefix = "Validated" if confirmed else "Active"
+        if not confirmed:
+            return None
         description = (
             f"A deterministic validator marked the exposed `{service}` credential reference as ACTIVE. "
             f"The secret was discovered in `{source_url or repo_name or domain or service}` via pattern `{pattern_name}`."
@@ -366,8 +371,8 @@ class DeterministicFindingEngine:
             vuln_type="DETERMINISTIC_KEY_EXPOSURE",
             target_url=target_url,
             parameter=f"{service}:{pattern_name}",
-            severity=severity,
-            title=f"{title_prefix} exposed {service} credential reference",
+            severity="HIGH",
+            title=f"Validated exposed {service} credential reference",
             description=_truncate(description, 1024),
             evidence=_truncate(evidence, 512),
             cloud_provider=_cloud_provider(service),

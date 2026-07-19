@@ -1170,6 +1170,7 @@ class ContextBuilder:
         else:
             select_parts = [
                 "severity" if "severity" in columns else "NULL AS severity",
+                "vuln_type" if "vuln_type" in columns else "NULL AS vuln_type",
                 "cve_id" if "cve_id" in columns else "NULL AS cve_id",
                 "title" if "title" in columns else "NULL AS title",
                 "evidence" if "evidence" in columns else "NULL AS evidence",
@@ -1193,6 +1194,7 @@ class ContextBuilder:
         for r in rows:
             evidence = (r["evidence"] or "")[:512]   # V-09: evidence capped at 512 chars
             finding = {
+                "vuln_type": r["vuln_type"],
                 "cve_id":   r["cve_id"],
                 "severity": r["severity"],
                 "title":    r["title"],
@@ -1211,6 +1213,8 @@ class ContextBuilder:
                     **self._finding_key_validation_metadata(evidence),
                 }
             finding.update(structured_validation)
+            if self._finding_is_unvalidated_key_exposure(finding):
+                continue
             exploited.append(finding)
         severity_order = {
             "CRITICAL": 0,
@@ -1243,6 +1247,14 @@ class ContextBuilder:
             medium_count   = sev("MEDIUM"),
             exploited      = exploited,
         )
+
+    @staticmethod
+    def _finding_is_unvalidated_key_exposure(finding: dict[str, Any]) -> bool:
+        vuln_type = str(finding.get("vuln_type") or "").strip().upper()
+        title = str(finding.get("title") or "").strip().lower()
+        if vuln_type != "DETERMINISTIC_KEY_EXPOSURE" and not title.startswith("active exposed "):
+            return False
+        return str(finding.get("validation_status") or "").strip().upper() != "VALIDATED"
 
     def _load_post_exploit(self, con: sqlite3.Connection) -> PostExploitContext:
         try:

@@ -177,7 +177,7 @@ def test_deterministic_findings_keep_validated_legacy_key_only_rows_high(
         con.close()
 
 
-def test_deterministic_findings_downgrade_low_signal_supabase_key_proof_to_medium(
+def test_deterministic_findings_skip_low_signal_supabase_key_proof(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "engagement.db"
@@ -202,28 +202,25 @@ def test_deterministic_findings_downgrade_low_signal_supabase_key_proof_to_mediu
 
     summary = DeterministicFindingEngine(db_path, 1001).run()
 
-    assert summary.inserted == 1
-    assert summary.active_findings == 1
-    assert summary.severity_summary["MEDIUM"] == 1
+    assert summary.inserted == 0
+    assert summary.active_findings == 0
+    assert all(count == 0 for count in summary.severity_summary.values())
 
     con = sqlite3.connect(db_path)
     try:
-        finding = con.execute(
+        findings = con.execute(
             """
             SELECT severity, title, target_url, evidence
             FROM vulnerability_findings
             WHERE engagement_id=1001
             """
-        ).fetchone()
-        assert finding[0] == "MEDIUM"
-        assert finding[1] == "Active exposed supabase credential reference"
-        assert finding[2] == "mobile-config.js"
-        assert "VALIDATED:supabase_rest_root:provider returned 200" in finding[3]
+        ).fetchall()
+        assert findings == []
     finally:
         con.close()
 
 
-def test_deterministic_findings_downgrade_stale_aws_key_proof_to_medium(
+def test_deterministic_findings_skip_stale_aws_key_proof(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "engagement.db"
@@ -248,28 +245,25 @@ def test_deterministic_findings_downgrade_stale_aws_key_proof_to_medium(
 
     summary = DeterministicFindingEngine(db_path, 1001).run()
 
-    assert summary.inserted == 1
-    assert summary.active_findings == 1
-    assert summary.severity_summary["MEDIUM"] == 1
+    assert summary.inserted == 0
+    assert summary.active_findings == 0
+    assert all(count == 0 for count in summary.severity_summary.values())
 
     con = sqlite3.connect(db_path)
     try:
-        finding = con.execute(
+        findings = con.execute(
             """
             SELECT severity, title, target_url, evidence
             FROM vulnerability_findings
             WHERE engagement_id=1001
             """
-        ).fetchone()
-        assert finding[0] == "MEDIUM"
-        assert finding[1] == "Active exposed aws credential reference"
-        assert finding[2] == "mobile-config.js"
-        assert "VALIDATED:aws_sts_get_caller_identity" in finding[3]
+        ).fetchall()
+        assert findings == []
     finally:
         con.close()
 
 
-def test_deterministic_findings_downgrade_stale_sentry_key_proof_to_medium(
+def test_deterministic_findings_skip_stale_sentry_key_proof(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "engagement.db"
@@ -294,25 +288,73 @@ def test_deterministic_findings_downgrade_stale_sentry_key_proof_to_medium(
 
     summary = DeterministicFindingEngine(db_path, 1001).run()
 
-    assert summary.inserted == 1
-    assert summary.active_findings == 1
-    assert summary.severity_summary["MEDIUM"] == 1
+    assert summary.inserted == 0
+    assert summary.active_findings == 0
+    assert all(count == 0 for count in summary.severity_summary.values())
 
     con = sqlite3.connect(db_path)
     try:
-        finding = con.execute(
+        findings = con.execute(
             """
             SELECT severity, title, target_url, evidence
             FROM vulnerability_findings
             WHERE engagement_id=1001
             """
-        ).fetchone()
-        assert finding[0] == "MEDIUM"
-        assert finding[1] == "Active exposed sentry credential reference"
-        assert finding[2] == "mobile-config.js"
-        assert "VALIDATED:sentry_list_organizations" in finding[3]
+        ).fetchall()
+        assert findings == []
     finally:
         con.close()
+
+
+def test_deterministic_findings_removes_stale_unvalidated_key_finding_by_repo_target(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name,
+                 key_redacted, validation_state, validation_detail)
+            VALUES
+                (1001, '', 'aws', 'aws_access_key', 'artifact', '',
+                 'mobile-config.js', 'AKIA...MPLE', 'ACTIVE',
+                 'VALIDATED:aws_sts_get_caller_identity:AccountId=123456789012 UserId=AIDAEXAMPLE')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title, description, evidence)
+            VALUES
+                (1001, 'DETERMINISTIC_KEY_EXPOSURE', 'mobile-config.js', 'aws:aws_access_key',
+                 'MEDIUM', 'Active exposed aws credential reference',
+                 'stale unvalidated key finding', 'validation=VALIDATED:aws_sts_get_caller_identity')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = DeterministicFindingEngine(db_path, 1001).run()
+
+    assert summary.removed == 1
+    assert summary.active_findings == 0
+    con = sqlite3.connect(db_path)
+    try:
+        remaining = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM vulnerability_findings
+            WHERE engagement_id=1001 AND vuln_type='DETERMINISTIC_KEY_EXPOSURE'
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+    assert remaining == 0
 
 
 def test_deterministic_findings_remove_non_reportable_cloud_rows(tmp_path: Path) -> None:

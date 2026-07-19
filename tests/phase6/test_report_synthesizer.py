@@ -1401,6 +1401,45 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     assert "key_enc" not in json.dumps(exported_finding)
 
 
+def test_synthesizer_excludes_unvalidated_key_exposure_rows(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN vuln_type TEXT")
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, cve_id, title, severity, evidence)
+            VALUES (?, 'DETERMINISTIC_KEY_EXPOSURE', NULL,
+                    'Active exposed github credential reference', 'MEDIUM',
+                    'key=ghp_...AAAA; validation=ACTIVE:github_user_api:no stable user id')
+            """,
+            (ENGAGEMENT_ID,),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+    assert all(
+        item.get("title") != "Active exposed github credential reference"
+        for item in ctx.exploits.exploited
+    )
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+
+    assert "Active exposed github credential reference" not in content
+    assert "github_user_api:no stable user id" not in content
+
+
 def test_synthesizer_template_uses_validated_finding_and_distinct_cve_counts(
     tmp_eng_db, tmp_path, patch_confirm_approve
 ):
