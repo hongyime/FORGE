@@ -137,6 +137,12 @@ from forge.utils.artifact_har import (
     har_content_text,
     har_scalar_text,
 )
+from forge.utils.artifact_oci_image import (
+    oci_blob_member_name,
+    oci_index_manifest_digests,
+    oci_manifest_config_digest,
+    oci_manifest_layer_digests,
+)
 from forge.utils.artifact_barcode import (
     barcode_decoder_backend_names,
     barcode_payloads_from_bytes,
@@ -30883,6 +30889,104 @@ class ArtifactQueueProcessor:
             payloads.extend(member_payloads)
         return payloads
 
+    @staticmethod
+    def _tar_member_bytes(
+        tf: tarfile.TarFile,
+        member: tarfile.TarInfo,
+    ) -> bytes:
+        member_name = ArtifactQueueProcessor._safe_archive_member_name(str(member.name or ""))
+        if not member.isfile() or not member_name:
+            return b""
+        if member.size > _artifact_member_scan_byte_limit(member_name):
+            return b""
+        extracted = tf.extractfile(member)
+        if extracted is None:
+            return b""
+        return extracted.read(member.size + 1)
+
+    def _extract_oci_image_layout_tar_payloads(
+        self,
+        tf: tarfile.TarFile,
+        members: Sequence[tarfile.TarInfo],
+        source_file: str,
+        *,
+        depth: int,
+    ) -> list[tuple[str, str, str]]:
+        member_by_name = {
+            safe_name: member
+            for member in members
+            if member.isfile()
+            for safe_name in [self._safe_archive_member_name(str(member.name or ""))]
+            if safe_name
+        }
+        if "oci-layout" not in member_by_name or "index.json" not in member_by_name:
+            return []
+        index_bytes = self._tar_member_bytes(tf, member_by_name["index.json"])
+        index_payload = _safe_json_loads(self._decode_text_artifact_bytes(index_bytes))
+        manifest_digests = oci_index_manifest_digests(index_payload)
+        if not manifest_digests:
+            return []
+
+        payloads: list[tuple[str, str, str]] = []
+        seen_blob_members: set[str] = set()
+
+        def _append_member_payloads(member_name: str) -> bytes:
+            member = member_by_name.get(member_name)
+            if member is None or member_name in seen_blob_members:
+                return b""
+            member_bytes = self._tar_member_bytes(tf, member)
+            if not member_bytes:
+                return b""
+            seen_blob_members.add(member_name)
+            payloads.extend(
+                self._extract_member_data_payloads(
+                    member_bytes,
+                    source_file,
+                    member_name,
+                    depth=depth,
+                )
+            )
+            return member_bytes
+
+        for metadata_member in ("oci-layout", "index.json"):
+            _append_member_payloads(metadata_member)
+
+        for manifest_digest in manifest_digests:
+            manifest_member = oci_blob_member_name(manifest_digest)
+            manifest_bytes = _append_member_payloads(manifest_member)
+            manifest_payload = _safe_json_loads(
+                self._decode_text_artifact_bytes(manifest_bytes)
+            )
+            config_member = oci_blob_member_name(
+                oci_manifest_config_digest(manifest_payload)
+            )
+            if config_member:
+                _append_member_payloads(config_member)
+            for layer_digest in oci_manifest_layer_digests(manifest_payload):
+                layer_member = oci_blob_member_name(layer_digest)
+                member = member_by_name.get(layer_member)
+                if member is None or layer_member in seen_blob_members:
+                    continue
+                layer_bytes = self._tar_member_bytes(tf, member)
+                if not layer_bytes:
+                    continue
+                seen_blob_members.add(layer_member)
+                for layer_source, extract_path, text in self._extract_archive_bytes_payloads(
+                    layer_bytes,
+                    source_file,
+                    layer_member,
+                    depth=depth + 1,
+                ):
+                    prefixed_path = f"{layer_member}#oci-layer/{extract_path}"
+                    payloads.append(
+                        (
+                            f"{layer_source}!{prefixed_path}",
+                            prefixed_path,
+                            text,
+                        )
+                    )
+        return payloads
+
     def _extract_nested_archive_bytes(
         self,
         data: bytes,
@@ -31642,8 +31746,17 @@ class ArtifactQueueProcessor:
     ) -> list[tuple[str, str, str]]:
         try:
             with tarfile.open(fileobj=BytesIO(data), mode="r:*") as nested_tar:
-                if not any(member.isfile() for member in nested_tar.getmembers()):
+                members = nested_tar.getmembers()
+                if not any(member.isfile() for member in members):
                     return []
+                oci_payloads = self._extract_oci_image_layout_tar_payloads(
+                    nested_tar,
+                    members,
+                    source_file,
+                    depth=depth,
+                )
+                if oci_payloads:
+                    return oci_payloads
                 return self._extract_text_payloads_from_tar(
                     nested_tar,
                     source_file,
