@@ -18,6 +18,11 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
   Safety: passive static parsing only. No DB connections, provider calls, credential use, live probing expansion, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
   Commits pushed to `main`: `a13c683 feat(kill-chain): parse storage client config endpoints`, `1d29b47 fix(kill-chain): preserve database client endpoint schemes`.
 
+- [x] Test mega-file split checkpoint started:
+  DB-client and connection-client artifact processor regressions were moved from `tests/phase1/test_engagement_orchestrator.py` into focused feature test files. `tests/phase1/artifact_test_support.py` now owns the shared engagement bootstrap for focused artifact tests. The mega file dropped from about `90496` lines to `90195`; this is not enough by itself, but it establishes the pattern and avoided adding new bulk while implementing kill-chain parser work.
+  Verification: compile/Ruff; DB+storage focused tests -> `38 passed`; connection+DB+storage focused tests -> `73 passed`; old mega node lookups correctly fail.
+  Commits pushed to `main`: `74caea8 refactor(tests): move database client artifact regression`, `5747249 refactor(tests): move connection client artifact regression`.
+
 - [x] Legacy Firebase/Supabase proof hardening checkpoint is green:
   Bare persisted `VALIDATED:firebase_database_*` details and generic `VALIDATED:supabase_rest_root:Supabase REST endpoint responded successfully.` details now downgrade to `UNVERIFIED`. Explicit live-data wording or linked `cloud_validation_results=VALIDATED` is required before those rows can affect deterministic key findings, Phase 6 exposed-key counts, dashboard validation proof fields, or API-key graph nodes.
   Verification: compile/Ruff over touched parser/report/test files; focused parser/findings/graph/dashboard/report tests -> `86 passed`; `tests\integration\test_engagement_pipeline.py` -> `9 passed`.

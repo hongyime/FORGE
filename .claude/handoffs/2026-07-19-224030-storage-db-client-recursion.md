@@ -10,6 +10,8 @@ Date: 2026-07-19
 - Added DB-client endpoint reconstruction in `forge/utils/artifact_database_client.py`.
 - Updated DB structured discovery so detected engines and explicit DSNs preserve sanitized schemes such as `mysql://...` instead of defaulting everything to `postgres://...`.
 - Kept a documented host-only/no-driver DB fallback solely to preserve existing recursive host discovery for nested DB-client artifacts.
+- Moved DB-client and connection-client artifact processor regressions out of `tests/phase1/test_engagement_orchestrator.py` into focused feature test files.
+- Added `tests/phase1/artifact_test_support.py` for shared focused artifact-test engagement bootstrapping.
 
 ## Verification
 
@@ -21,6 +23,10 @@ Date: 2026-07-19
 - `ruff check forge\utils\artifact_database_client.py forge\engagement_orchestrator.py tests\phase1\test_artifact_database_client.py`
 - `python -m pytest tests\phase1\test_artifact_database_client.py -q --color=no` -> `22 passed`
 - `python -m pytest tests\phase1\test_artifact_database_client.py tests\phase1\test_engagement_orchestrator.py::test_artifact_queue_processor_extracts_database_client_configs tests\phase1\test_engagement_orchestrator.py::test_artifact_network_dsn_extraction_uses_bounded_workers_and_preserves_order tests\phase1\test_engagement_orchestrator.py::test_artifact_queue_processor_parallelizes_per_payload_structured_extractors_and_preserves_order tests\phase1\test_engagement_orchestrator.py::test_artifact_queue_processor_parallelizes_structured_discovery_payload_entries_and_preserves_order -q --color=no` -> `26 passed`
+- `python -m py_compile tests\phase1\artifact_test_support.py tests\phase1\test_artifact_connection_client.py tests\phase1\test_artifact_database_client.py tests\phase1\test_artifact_storage_client_config.py tests\phase1\test_engagement_orchestrator.py`
+- `ruff check tests\phase1\artifact_test_support.py tests\phase1\test_artifact_connection_client.py tests\phase1\test_artifact_database_client.py tests\phase1\test_artifact_storage_client_config.py tests\phase1\test_engagement_orchestrator.py`
+- `python -m pytest tests\phase1\test_artifact_database_client.py tests\phase1\test_artifact_storage_client_config.py -q --color=no` -> `38 passed`
+- `python -m pytest tests\phase1\test_artifact_connection_client.py tests\phase1\test_artifact_database_client.py tests\phase1\test_artifact_storage_client_config.py -q --color=no` -> `73 passed`
 
 ## Reviews
 
@@ -37,6 +43,8 @@ Date: 2026-07-19
 
 - `a13c683 feat(kill-chain): parse storage client config endpoints`
 - `1d29b47 fix(kill-chain): preserve database client endpoint schemes`
+- `74caea8 refactor(tests): move database client artifact regression`
+- `5747249 refactor(tests): move connection client artifact regression`
 
 ## Next Suggested Work
 
