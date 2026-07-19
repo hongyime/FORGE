@@ -1,0 +1,94 @@
+{
+  "_comment": "pcfg_rules.json — Module 2-K PCFG Domain-Derived Dictionary Generator",
+  "_version": "1.0",
+  "_description": "Rules for generating candidate passwords from target domain components. Applied by PcfgDictGenerator. Token substitution is applied to the domain base (e.g., 'acme' from 'acme.corp.local') before suffixes/prefixes are appended.",
+
+  "year_range": {
+    "_comment": "Numeric year suffixes appended to base tokens. Current year ± 3.",
+    "start": 2020,
+    "end": 2026
+  },
+
+  "numeric_suffixes": {
+    "_comment": "Common numeric strings appended after the base token or year.",
+    "values": ["1", "12", "123", "1234", "12345", "123456", "0", "01", "007", "100", "999", "2024", "2025"]
+  },
+
+  "special_suffixes": {
+    "_comment": "Special character suffixes appended to base+year combinations.",
+    "values": ["!", "@", "#", "$", "!!", "!@", "@#", "!", "1!", "123!", "@1", "$1"]
+  },
+
+  "common_suffixes": {
+    "_comment": "Word suffixes commonly appended in enterprise password policies.",
+    "values": [
+      "pass", "Pass", "password", "Password", "passwd",
+      "admin", "Admin", "root", "Root",
+      "corp", "Corp", "net", "org",
+      "secure", "Secure", "login", "Login",
+      "welcome", "Welcome", "letmein", "Letmein",
+      "summer", "Summer", "winter", "Winter",
+      "spring", "Spring", "autumn", "Autumn",
+      "qwerty", "Qwerty"
+    ]
+  },
+
+  "common_prefixes": {
+    "_comment": "Prepended before the base token.",
+    "values": [
+      "admin", "Admin", "root", "Root",
+      "test", "Test", "user", "User",
+      "password", "Password", "pass", "Pass",
+      "welcome", "Welcome", "login", "Login"
+    ]
+  },
+
+  "case_transforms": {
+    "_comment": "Case transformations applied to the raw domain base token.",
+    "lower":      true,
+    "upper":      true,
+    "title":      true,
+    "upper_first": true
+  },
+
+  "leet_substitutions": {
+    "_comment": "Single-character leet-speak substitutions. Applied selectively (not exhaustively) to avoid combinatorial explosion. Only the first matching character in the token is substituted per rule.",
+    "a": "@",
+    "e": "3",
+    "i": "1",
+    "o": "0",
+    "s": "$",
+    "t": "7",
+    "l": "1",
+    "g": "9"
+  },
+
+  "leet_apply_strategy": {
+    "_comment": "Controls how many leet substitutions are applied per candidate. 'single' applies one substitution at a time (avoids combinatorial explosion). 'all' applies all substitutions simultaneously.",
+    "strategy": "single"
+  },
+
+  "separator_chars": {
+    "_comment": "Characters inserted between token components (base + year, prefix + base, etc.).",
+    "values": ["", "_", "-", ".", "@"]
+  },
+
+  "domain_component_extraction": {
+    "_comment": "Rules for splitting a FQDN into candidate base tokens. Example: 'mail.acme-corp.co.uk' → ['mail', 'acme', 'corp', 'acmecorp']. TLDs and very short tokens (len < 3) are discarded.",
+    "split_on_hyphens": true,
+    "split_on_dots":    true,
+    "discard_tlds":     ["com", "net", "org", "co", "uk", "au", "io", "gov", "edu", "local", "internal", "corp", "lan"],
+    "min_token_length": 3,
+    "join_components":  true
+  },
+
+  "max_candidates": {
+    "_comment": "Hard cap on total candidates returned by PcfgDictGenerator.generate(). Prevents runaway generation on complex domains.",
+    "value": 2000
+  },
+
+  "dedup": {
+    "_comment": "Whether to deduplicate the final candidate list before returning.",
+    "enabled": true
+  }
+}

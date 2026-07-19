@@ -1,0 +1,463 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FORGE Command Center</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel-bg: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 12px 16px; background: var(--panel-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    h1 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+    
+    .layout {
+      display: grid;
+      grid-template-columns: 250px 1fr 300px;
+      grid-template-rows: 1fr 200px 80px;
+      gap: 12px;
+      padding: 12px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .region {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .region-header {
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .region-content {
+      padding: 12px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Target List */
+    .target-list { grid-column: 1; grid-row: 1 / 4; }
+    .asset-item {
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .asset-item:hover { background: rgba(255,255,255,0.05); }
+    .asset-item.active { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
+    
+    /* Battle Map (Control Panel) */
+    .battle-map { grid-column: 2; grid-row: 1; }
+    
+    /* Alerts */
+    .critical-alerts { grid-column: 3; grid-row: 1; }
+    .alert-card {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--danger);
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    
+    /* Active Ops & Feed */
+    .active-ops { grid-column: 2; grid-row: 2; }
+    .progress-feed { grid-column: 3; grid-row: 2; }
+    .quick-actions { grid-column: 2; grid-row: 3; }
+
+    /* UI Components */
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .badge.critical { background: var(--danger); color: white; }
+    .badge.high { background: var(--warning); color: black; }
+    .badge.medium { background: var(--warning); color: black; opacity: 0.8; }
+    .badge.low { background: var(--text-muted); color: white; }
+    .badge.success { background: var(--success); color: white; }
+
+    button {
+      background: var(--border);
+      color: var(--text);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    button:hover { background: #475569; }
+    button.primary { background: var(--accent); color: white; }
+    button.primary:hover { background: #2563eb; }
+    button.danger { background: var(--danger); color: white; }
+    button.danger:hover { background: #dc2626; }
+
+    input, select {
+      background: #0b1220;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .action-card {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .flex-row { display: flex; gap: 8px; align-items: center; }
+    .flex-col { display: flex; flex-direction: column; gap: 8px; }
+    .mt-2 { margin-top: 8px; }
+    .mb-2 { margin-bottom: 8px; }
+    
+    .timeline-event {
+      font-size: 11px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .timeline-event:last-child { border-bottom: none; }
+    .timeline-time { color: var(--text-muted); margin-right: 8px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>FORGE Command Center</h1>
+    <div class="flex-row">
+      <input id="operator" type="text" placeholder="Operator" style="width:100px;">
+      <button onclick="mintToken()">Auth</button>
+      <div style="width:1px; height:20px; background:var(--border); margin:0 8px;"></div>
+      <input id="engId" type="number" placeholder="Engagement ID" value="1001" style="width:120px;">
+      <button onclick="loadEngagement()">Load</button>
+      <div style="width:1px; height:20px; background:var(--border); margin:0 8px;"></div>
+      <button id="sentryBtn" onclick="toggleSentry()" class="badge">SENTRY: OFF</button>
+      <button onclick="emergencyStop()" class="danger">E-STOP</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- TARGET LIST -->
+    <div class="region target-list">
+      <div class="region-header">Target List</div>
+      <div class="region-content" id="targetList">
+        <div style="color:var(--text-muted); font-size:12px;">Enter an Engagement ID and click Load</div>
+      </div>
+    </div>
+
+    <!-- BATTLE MAP -->
+    <div class="region battle-map">
+      <div class="region-header">Battle Map <span id="selectedTargetLabel"></span></div>
+      <div class="region-content" id="battleMap">
+        <div style="color:var(--text-muted); font-size:12px;">Select a target to view details and actions</div>
+      </div>
+    </div>
+
+    <!-- CRITICAL ALERTS -->
+    <div class="region critical-alerts">
+      <div class="region-header">Critical Alerts</div>
+      <div class="region-content" id="alertsList">
+      </div>
+    </div>
+
+    <!-- ACTIVE OPS -->
+    <div class="region active-ops">
+      <div class="region-header">Active Ops</div>
+      <div class="region-content" id="activeOps">
+        <div id="opsList"></div>
+      </div>
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="region quick-actions">
+      <div class="region-header">Quick Actions</div>
+      <div class="region-content flex-row" style="align-items: center; overflow-x: auto;">
+        <button onclick="runQuickAction('recon_full')">Full Recon</button>
+        <button onclick="runQuickAction('vuln_discovery')">Vuln Discovery</button>
+      </div>
+    </div>
+
+    <!-- PROGRESS FEED -->
+    <div class="region progress-feed" style="grid-row: 2 / 4;">
+      <div class="region-header">Timeline Feed</div>
+      <div class="region-content" id="timelineFeed">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentEngagement = null;
+    let currentTarget = null;
+    let sentryState = { enabled: false };
+    let bearer = "";
+    let ws = null;
+
+    function connectWs() {
+      if (ws !== null && ws.readyState === WebSocket.OPEN) return;
+      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/progress");
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (!currentEngagement || Number(data.engagement_id) === Number(currentEngagement)) {
+            refreshAll();
+          }
+        } catch (_) {
+          refreshAll();
+        }
+      };
+      ws.onclose = () => {
+        setTimeout(connectWs, 3000); // Reconnect after 3s
+      };
+    }
+
+    async function mintToken() {
+      const op = document.getElementById("operator").value || "operator";
+      const res = await fetch("/api/token?operator=" + encodeURIComponent(op));
+      const data = await res.json();
+      bearer = data.token;
+      alert("Authenticated");
+    }
+
+    function authHeaders() {
+      return bearer ? { Authorization: "Bearer " + bearer } : {};
+    }
+
+    async function apiGet(path) {
+      if (!currentEngagement) return null;
+      const url = new URL(path, window.location.origin);
+      url.searchParams.append("engagement_id", currentEngagement);
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function apiPost(path, body = {}) {
+      if (!currentEngagement) return null;
+      body.engagement_id = parseInt(currentEngagement);
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function loadEngagement() {
+      currentEngagement = document.getElementById("engId").value;
+      if (!currentEngagement) return;
+      await refreshAll();
+      connectWs();
+    }
+
+    async function refreshAll() {
+      try {
+        await Promise.all([
+          loadTargets(),
+          loadTimeline(),
+          loadSentryState(),
+          loadOps()
+        ]);
+        if (currentTarget) {
+          await selectTarget(currentTarget);
+        }
+      } catch (err) {
+        console.error("Refresh error:", err);
+      }
+    }
+
+    async function loadOps() {
+      const data = await apiGet("/api/tasks");
+      const list = document.getElementById("opsList");
+      if (!data) return;
+      
+      list.innerHTML = "";
+      const running = data.filter(t => t.status === "running" || t.status === "queued");
+      if (running.length === 0) {
+        list.innerHTML = `<div style="color:var(--text-muted); font-size:12px;">No active operations.</div>`;
+        return;
+      }
+      
+      running.forEach(t => {
+        const div = document.createElement("div");
+        div.className = "mb-2 p-2";
+        div.style.border = "1px solid var(--border)";
+        div.style.borderRadius = "4px";
+        div.innerHTML = `
+          <div class="flex-row" style="justify-content:space-between; font-size:12px;">
+            <strong>${t.task_key}</strong>
+            <span class="badge ${t.status === 'running' ? 'high' : 'low'}">${t.status}</span>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    async function loadSentryState() {
+      // For simplicity, we get it from timeline or context if available
+      // or we can add a direct API endpoint if needed.
+    }
+
+    async function loadTargets() {
+      const data = await apiGet("/api/engagements/" + currentEngagement + "/asset-tree");
+      const list = document.getElementById("targetList");
+      list.innerHTML = "";
+      if (!data || !data.items) return;
+      
+      data.items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "asset-item" + (currentTarget === item.host ? " active" : "");
+        div.onclick = () => selectTarget(item.host);
+        div.innerHTML = `
+          <div style="font-weight:bold;">${item.host}</div>
+          <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">
+            ${item.ports.length} Ports | ${item.urls.length} URLs
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    async function selectTarget(host) {
+      currentTarget = host;
+      document.getElementById("selectedTargetLabel").textContent = "- " + host;
+      const data = await apiGet("/api/assets/" + host + "/context");
+      renderBattleMap(data);
+      loadTargets(); // refresh active state
+    }
+
+    function renderBattleMap(context) {
+      const map = document.getElementById("battleMap");
+      if (!context) return;
+      
+      let html = `
+        <div class="flex-row mb-2">
+          <span class="badge ${context.status === 'critical' ? 'critical' : 'success'}">${context.status.toUpperCase()}</span>
+          <span class="badge">${context.os_family || 'UNKNOWN OS'}</span>
+        </div>
+      `;
+
+      if (context.services && context.services.length > 0) {
+        html += `<div style="margin:12px 0 4px 0; font-weight:bold; font-size:12px;">Services</div><div class="flex-row" style="flex-wrap:wrap;">`;
+        context.services.forEach(s => {
+          html += `<span class="badge" style="background:#475569;">${s.port}/${s.service || 'unknown'}</span>`;
+        });
+        html += `</div>`;
+      }
+
+      if (context.actions && context.actions.length > 0) {
+        html += `<div style="margin:16px 0 8px 0; font-weight:bold; font-size:12px;">Available Actions</div>`;
+        context.actions.forEach(act => {
+          html += `
+            <div class="action-card">
+              <div class="flex-row" style="justify-content:space-between;">
+                <span style="font-weight:bold; color:var(--accent);">${act.action_type.toUpperCase()}</span>
+                <span class="badge ${act.risk_level}">${act.risk_level.toUpperCase()} RISK</span>
+              </div>
+              <div style="font-size:11px; margin:4px 0;">${act.reasoning}</div>
+              <div class="flex-row" style="margin-top:8px;">
+                <button class="primary" onclick="executeAction('${act.action_id}')">Execute</button>
+                <span style="font-size:10px; color:var(--text-muted);">Confidence: ${act.confidence_score}%</span>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      map.innerHTML = html;
+    }
+
+    async function executeAction(actionId) {
+      await apiPost("/api/actions/" + actionId + "/execute");
+      if (currentTarget) await selectTarget(currentTarget);
+      await loadTimeline();
+    }
+
+    async function toggleSentry() {
+      sentryState.enabled = !sentryState.enabled;
+      await apiPost("/api/sentry/toggle", { enabled: sentryState.enabled });
+      document.getElementById("sentryBtn").textContent = sentryState.enabled ? "SENTRY: ON" : "SENTRY: OFF";
+      document.getElementById("sentryBtn").className = sentryState.enabled ? "badge critical" : "badge";
+    }
+
+    async function emergencyStop() {
+      await apiPost("/api/sentry/emergency-stop");
+      sentryState.enabled = false;
+      document.getElementById("sentryBtn").textContent = "SENTRY: OFF";
+      document.getElementById("sentryBtn").className = "badge";
+      alert("Emergency stop triggered. All autonomous actions halted.");
+    }
+
+    async function loadTimeline() {
+      const data = await apiGet("/api/timeline");
+      const feed = document.getElementById("timelineFeed");
+      const alertsList = document.getElementById("alertsList");
+      
+      if (!data || !data.events) return;
+      
+      feed.innerHTML = "";
+      alertsList.innerHTML = "";
+      
+      data.events.forEach(ev => {
+        // Timeline feed
+        const time = new Date(ev.timestamp).toLocaleTimeString();
+        const el = document.createElement("div");
+        el.className = "timeline-event";
+        el.innerHTML = `<span class="timeline-time">${time}</span> <span>${ev.event_type}</span>`;
+        feed.appendChild(el);
+        
+        // Alerts
+        if (ev.severity === "critical" && !ev.acknowledged) {
+          const alertEl = document.createElement("div");
+          alertEl.className = "alert-card";
+          alertEl.innerHTML = `
+            <div style="font-weight:bold; font-size:12px;">${ev.event_type}</div>
+            <div style="font-size:11px; margin-top:4px;">${JSON.stringify(ev.payload)}</div>
+          `;
+          alertsList.appendChild(alertEl);
+        }
+      });
+    }
+
+    async function runQuickAction(playbook) {
+      const target = prompt("Enter target (e.g., example.com):");
+      if (!target) return;
+      await apiPost("/api/automation/playbook", { playbook, target });
+      alert("Playbook started!");
+    }
+  </script>
+</body>
+</html>

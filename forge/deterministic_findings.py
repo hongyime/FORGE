@@ -1,0 +1,505 @@
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from forge.db.migrations import run_migrations
+from forge.db.schema import apply_schema
+from forge.utils.validation_proof import parse_validated_detail
+
+SEVERITY_ORDER = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+
+
+@dataclass
+class FindingSynthesisSummary:
+    inserted: int = 0
+    updated: int = 0
+    removed: int = 0
+    active_findings: int = 0
+    severity_summary: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class FindingSpec:
+    vuln_type: str
+    target_url: str
+    parameter: str
+    severity: str
+    title: str
+    description: str
+    evidence: str
+    cloud_provider: str | None = None
+    resource_id: str | None = None
+    compliance_control: str | None = None
+    remediation_cli: str | None = None
+
+
+def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
+    try:
+        return {
+            str(row[1])
+            for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+    except sqlite3.OperationalError:
+        return set()
+
+
+def _truncate(value: str | None, limit: int) -> str:
+    return str(value or "")[:limit]
+
+
+def _normalize_asset_type(value: str) -> str:
+    text = str(value or "").strip().lower()
+    if text == "s3":
+        return "aws_s3"
+    if text == "digitalocean_spaces":
+        return "do_spaces"
+    if text == "google_cloud_storage":
+        return "gcs"
+    if text == "azure_blob_storage":
+        return "azure_blob"
+    return text
+
+
+def _cloud_provider(asset_type: str) -> str | None:
+    return {
+        "firebase": "firebase",
+        "supabase": "supabase",
+        "aws_s3": "aws",
+        "do_spaces": "digitalocean",
+        "gcs": "gcp",
+        "azure_blob": "azure",
+    }.get(asset_type)
+
+
+def _asset_label(asset_type: str) -> str:
+    return {
+        "firebase": "Firebase project",
+        "supabase": "Supabase project",
+        "aws_s3": "S3 bucket",
+        "do_spaces": "DigitalOcean Spaces bucket",
+        "gcs": "Google Cloud Storage bucket",
+        "azure_blob": "Azure Blob container",
+    }.get(asset_type, asset_type.replace("_", " ").title() or "cloud asset")
+
+
+def _recommendation_for_cloud(asset_type: str) -> str:
+    return {
+        "firebase": "Tighten Firebase rules, rotate exposed client credentials, and move sensitive access behind authenticated server-side flows.",
+        "supabase": "Review anon-key exposure, enforce row-level security, and route privileged queries through authenticated backend services.",
+        "aws_s3": "Block public bucket access, review bucket policies and ACLs, and confirm only intended principals retain object access.",
+        "do_spaces": "Disable unintended public Spaces access, review bucket permissions and CDN exposure, and confirm only approved principals can enumerate objects.",
+        "gcs": "Restrict public bucket access, review IAM bindings and signed URL policies, and confirm object exposure is intentional.",
+        "azure_blob": "Disable unintended anonymous container access, review SAS and RBAC assignments, and confirm only approved principals can enumerate blobs.",
+    }.get(
+        asset_type,
+        "Restrict external access, review exposure controls, and rotate any linked credentials before revalidating the asset.",
+    )
+
+
+def _recommendation_for_key(service: str) -> str:
+    return {
+        "aws": "Rotate the exposed AWS access key pair, review IAM permissions and CloudTrail activity, and remove long-lived credentials from distributed artifacts.",
+        "firebase": "Rotate the exposed Firebase key, audit client-side configuration, and ensure sensitive operations require authenticated backend mediation.",
+        "slack": "Rotate the exposed Slack token, review granted app scopes and workspace audit logs, and remove chat-automation credentials from distributed artifacts.",
+        "supabase": "Rotate the exposed Supabase key, verify row-level security coverage, and keep privileged keys out of distributed client artifacts.",
+        "aws_s3": "Rotate any exposed AWS credentials, review IAM policies, and confirm bucket access is not granted through embedded client secrets.",
+        "do_spaces": "Rotate any exposed DigitalOcean Spaces credentials, review bucket policies, and remove object-storage secrets from distributed client artifacts.",
+        "gcs": "Rotate any exposed Google Cloud credentials, review IAM bindings, and remove bucket access from distributed client artifacts.",
+        "azure": "Rotate the exposed Azure storage account key, review storage access policies and diagnostics, and remove long-lived storage credentials from distributed artifacts.",
+        "azure_blob": "Rotate any exposed Azure storage credentials or SAS tokens, review RBAC assignments, and remove them from distributed client artifacts.",
+    }.get(
+        service,
+        "Rotate the exposed credential, remove it from distributed artifacts, and confirm replacement secrets are scoped to least privilege.",
+    )
+
+
+def _storage_listing_title(asset_type: str) -> str:
+    return {
+        "aws_s3": "Validated public S3 bucket listing exposure",
+        "do_spaces": "Validated public DigitalOcean Spaces bucket listing exposure",
+        "gcs": "Validated public Google Cloud Storage bucket listing exposure",
+        "azure_blob": "Validated public Azure Blob container listing exposure",
+    }.get(asset_type, f"Validated public {_asset_label(asset_type)} listing exposure")
+
+
+def _is_low_signal_public_cloud_metadata(
+    asset_type: str,
+    validation_method: str,
+) -> bool:
+    method = str(validation_method or "").strip().lower()
+    asset = str(asset_type or "").strip().lower()
+    return asset == "firebase" and method in {
+        "firebase_init_json",
+        "firebase_web_app_init_json",
+    }
+
+
+def _is_reportable_cloud_validation_status(validation_status: str) -> bool:
+    return str(validation_status or "").upper().strip() == "VALIDATED"
+
+
+class DeterministicFindingEngine:
+    def __init__(self, db_path: Path, engagement_id: int) -> None:
+        self._db_path = db_path
+        self._engagement_id = engagement_id
+
+    def run(self) -> FindingSynthesisSummary:
+        summary = FindingSynthesisSummary()
+        con = sqlite3.connect(self._db_path)
+        con.row_factory = sqlite3.Row
+        try:
+            apply_schema(con)
+            run_migrations(con)
+            columns = _table_columns(con, "vulnerability_findings")
+            validation_index = self._validation_index(con)
+
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier, validation_status, validation_method, http_status, evidence, notes
+                FROM cloud_validation_results
+                WHERE engagement_id=?
+                ORDER BY id ASC
+                """,
+                (self._engagement_id,),
+            ).fetchall():
+                spec = self._build_cloud_finding(row)
+                if spec is None:
+                    summary.removed += self._delete_finding(
+                        con,
+                        "DETERMINISTIC_CLOUD_EXPOSURE",
+                        self._cloud_target_url(
+                            _normalize_asset_type(str(row["asset_type"] or "")),
+                            str(row["identifier"] or ""),
+                        ),
+                        _normalize_asset_type(str(row["asset_type"] or "")),
+                    )
+                    continue
+                inserted, updated = self._upsert_finding(con, spec, columns)
+                summary.inserted += inserted
+                summary.updated += updated
+
+            for row in con.execute(
+                """
+                SELECT service, domain, pattern_name, source_backend, source_url, repo_name, key_redacted, validation_state, validation_detail
+                FROM key_scanner_findings
+                WHERE engagement_id=?
+                ORDER BY id ASC
+                """,
+                (self._engagement_id,),
+            ).fetchall():
+                spec = self._build_key_finding(row, validation_index)
+                service = _normalize_asset_type(str(row["service"] or ""))
+                target_url = str(row["source_url"] or "").strip() or f"{service}://{str(row['domain'] or '').strip()}"
+                parameter = f"{service}:{str(row['pattern_name'] or '').strip()}"
+                if spec is None:
+                    summary.removed += self._delete_finding(
+                        con,
+                        "DETERMINISTIC_KEY_EXPOSURE",
+                        target_url,
+                        parameter,
+                    )
+                    continue
+                inserted, updated = self._upsert_finding(con, spec, columns)
+                summary.inserted += inserted
+                summary.updated += updated
+
+            summary.severity_summary = self._severity_summary(con)
+            summary.active_findings = sum(summary.severity_summary.values())
+            con.commit()
+        finally:
+            con.close()
+        return summary
+
+    def _validation_index(self, con: sqlite3.Connection) -> dict[tuple[str, str], str]:
+        rows = con.execute(
+            """
+            SELECT asset_type, identifier, validation_status
+            FROM cloud_validation_results
+            WHERE engagement_id=?
+            """,
+            (self._engagement_id,),
+        ).fetchall()
+        return {
+            (_normalize_asset_type(str(row["asset_type"] or "")), str(row["identifier"] or "").strip().lower()): str(
+                row["validation_status"] or ""
+            ).upper()
+            for row in rows
+        }
+
+    @staticmethod
+    def _cloud_target_url(asset_type: str, identifier: str) -> str:
+        return f"{asset_type}://{identifier.strip()}"
+
+    def _build_cloud_finding(self, row: sqlite3.Row) -> FindingSpec | None:
+        asset_type = _normalize_asset_type(str(row["asset_type"] or ""))
+        identifier = str(row["identifier"] or "").strip()
+        validation_status = str(row["validation_status"] or "").upper().strip()
+        validation_method = str(row["validation_method"] or "").strip()
+        evidence = _truncate(str(row["evidence"] or "").strip(), 512)
+        notes = _truncate(str(row["notes"] or "").strip(), 280)
+
+        if not asset_type or not identifier or _cloud_provider(asset_type) is None:
+            return None
+
+        title = ""
+        description = ""
+        severity = ""
+        storage_asset_types = {"aws_s3", "do_spaces", "gcs", "azure_blob"}
+        storage_listing_methods = {
+            "s3_list_bucket",
+            "do_spaces_list_bucket",
+            "gcs_list_bucket",
+            "azure_blob_list_container",
+        }
+        storage_metadata_methods = {
+            "s3_head_probe",
+            "do_spaces_head_probe",
+            "gcs_http_probe",
+            "azure_blob_http_probe",
+        }
+        if not _is_reportable_cloud_validation_status(validation_status):
+            return None
+
+        if validation_status == "VALIDATED":
+            if asset_type == "firebase" and validation_method in {
+                "firebase_database_shallow_read",
+                "firebase_database_node_read",
+            }:
+                severity = "HIGH"
+                title = "Validated Firebase data exposure"
+                description = (
+                    f"Deterministic validation confirmed that the Firebase database for `{identifier}` "
+                    f"returned live data through `{validation_method}` without requiring an authenticated session."
+                )
+            elif asset_type == "supabase" and validation_method == "supabase_rest_root":
+                severity = "HIGH"
+                title = "Validated Supabase data exposure"
+                description = (
+                    f"Deterministic validation confirmed that the Supabase REST endpoint for `{identifier}` "
+                    f"returned live data through `{validation_method}` using the discovered project credential."
+                )
+            elif _is_low_signal_public_cloud_metadata(asset_type, validation_method):
+                return None
+            elif asset_type in storage_asset_types and validation_method in storage_listing_methods:
+                severity = "HIGH"
+                title = _storage_listing_title(asset_type)
+                description = (
+                    f"Deterministic validation confirmed that `{identifier}` allowed unauthenticated enumeration "
+                    f"of real object metadata through `{validation_method}`."
+                )
+            elif asset_type in storage_asset_types and validation_method in storage_metadata_methods:
+                severity = "LOW"
+                title = f"Externally reachable {_asset_label(asset_type)} detected"
+                description = (
+                    f"Deterministic validation confirmed that `{identifier}` responded successfully "
+                    f"to a low-impact probe. Additional policy review is required before escalating beyond metadata exposure."
+                )
+            else:
+                severity = "LOW"
+                title = f"Public {_asset_label(asset_type)} metadata observed"
+                description = (
+                    f"Deterministic validation confirmed that `{identifier}` exposed externally reachable "
+                    f"configuration or metadata through `{validation_method}`."
+                )
+        else:
+            return None
+
+        if notes:
+            description = f"{description} {notes}"
+
+        return FindingSpec(
+            vuln_type="DETERMINISTIC_CLOUD_EXPOSURE",
+            target_url=self._cloud_target_url(asset_type, identifier),
+            parameter=asset_type,
+            severity=severity,
+            title=title,
+            description=_truncate(description, 1024),
+            evidence=evidence or _truncate(f"validation_method={validation_method} status={validation_status}", 512),
+            cloud_provider=_cloud_provider(asset_type),
+            resource_id=identifier,
+            compliance_control="ACCESS_CONTROL",
+            remediation_cli=_recommendation_for_cloud(asset_type),
+        )
+
+    def _build_key_finding(
+        self,
+        row: sqlite3.Row,
+        validation_index: dict[tuple[str, str], str],
+    ) -> FindingSpec | None:
+        service = _normalize_asset_type(str(row["service"] or ""))
+        domain = str(row["domain"] or "").strip()
+        pattern_name = str(row["pattern_name"] or "").strip()
+        source_backend = str(row["source_backend"] or "").strip()
+        source_url = str(row["source_url"] or "").strip()
+        repo_name = str(row["repo_name"] or "").strip()
+        key_redacted = str(row["key_redacted"] or "").strip()
+        validation_state = str(row["validation_state"] or "").upper().strip()
+        validation_detail = _truncate(str(row["validation_detail"] or "").strip(), 280)
+        if validation_state != "ACTIVE" or not service:
+            return None
+
+        linked_status = validation_index.get((service, domain.lower()))
+        parsed_validation = parse_validated_detail(validation_detail)
+        validator_confirmed = parsed_validation["validation_status"] == "VALIDATED"
+        confirmed = linked_status == "VALIDATED" or validator_confirmed
+        severity = "HIGH" if confirmed else "MEDIUM"
+        title_prefix = "Validated" if confirmed else "Active"
+        description = (
+            f"A deterministic validator marked the exposed `{service}` credential reference as ACTIVE. "
+            f"The secret was discovered in `{source_url or repo_name or domain or service}` via pattern `{pattern_name}`."
+        )
+        if validation_detail:
+            description = f"{description} {validation_detail}"
+        target_url = source_url or repo_name or (f"{service}://{domain}" if domain else f"{service}://unknown")
+        evidence_parts = [
+            f"key={key_redacted}" if key_redacted else f"pattern={pattern_name}",
+            f"backend={source_backend}" if source_backend else "",
+            f"source={source_url}" if source_url else "",
+            f"repo={repo_name}" if repo_name else "",
+            f"validation={validation_detail}" if validation_detail else "",
+        ]
+        evidence = "; ".join(part for part in evidence_parts if part)
+        return FindingSpec(
+            vuln_type="DETERMINISTIC_KEY_EXPOSURE",
+            target_url=target_url,
+            parameter=f"{service}:{pattern_name}",
+            severity=severity,
+            title=f"{title_prefix} exposed {service} credential reference",
+            description=_truncate(description, 1024),
+            evidence=_truncate(evidence, 512),
+            cloud_provider=_cloud_provider(service),
+            resource_id=domain or None,
+            compliance_control="SECRET_MANAGEMENT",
+            remediation_cli=_recommendation_for_key(service),
+        )
+
+    def _delete_finding(
+        self,
+        con: sqlite3.Connection,
+        vuln_type: str,
+        target_url: str,
+        parameter: str,
+    ) -> int:
+        before = con.total_changes
+        con.execute(
+            """
+            DELETE FROM vulnerability_findings
+            WHERE engagement_id=? AND vuln_type=? AND target_url=? AND parameter=?
+            """,
+            (self._engagement_id, vuln_type, target_url, parameter),
+        )
+        return 1 if con.total_changes > before else 0
+
+    def _upsert_finding(
+        self,
+        con: sqlite3.Connection,
+        spec: FindingSpec,
+        columns: set[str],
+    ) -> tuple[int, int]:
+        row = con.execute(
+            """
+            SELECT severity, title, description, evidence
+            FROM vulnerability_findings
+            WHERE engagement_id=? AND vuln_type=? AND target_url=? AND parameter=?
+            """,
+            (self._engagement_id, spec.vuln_type, spec.target_url, spec.parameter),
+        ).fetchone()
+
+        payload: dict[str, Any] = {
+            "engagement_id": self._engagement_id,
+            "vuln_type": spec.vuln_type,
+            "target_url": spec.target_url,
+            "parameter": spec.parameter,
+            "severity": spec.severity,
+            "title": spec.title,
+            "description": spec.description,
+            "evidence": spec.evidence,
+            "cvss_score": None,
+        }
+        if "cloud_provider" in columns:
+            payload["cloud_provider"] = spec.cloud_provider
+        if "resource_id" in columns:
+            payload["resource_id"] = spec.resource_id
+        if "compliance_control" in columns:
+            payload["compliance_control"] = spec.compliance_control
+        if "remediation_cli" in columns:
+            payload["remediation_cli"] = spec.remediation_cli
+
+        if row is None:
+            cols = ", ".join(payload.keys())
+            placeholders = ", ".join("?" for _ in payload)
+            con.execute(
+                f"INSERT INTO vulnerability_findings ({cols}) VALUES ({placeholders})",
+                tuple(payload.values()),
+            )
+            return 1, 0
+
+        if (
+            str(row["severity"] or "") == spec.severity
+            and str(row["title"] or "") == spec.title
+            and str(row["description"] or "") == spec.description
+            and str(row["evidence"] or "") == spec.evidence
+        ):
+            return 0, 0
+
+        assignments = ", ".join(
+            f"{key}=?" for key in payload.keys() if key not in {"engagement_id", "vuln_type", "target_url", "parameter"}
+        )
+        update_values = [
+            value
+            for key, value in payload.items()
+            if key not in {"engagement_id", "vuln_type", "target_url", "parameter"}
+        ]
+        con.execute(
+            f"""
+            UPDATE vulnerability_findings
+            SET {assignments}, found_at=CURRENT_TIMESTAMP
+            WHERE engagement_id=? AND vuln_type=? AND target_url=? AND parameter=?
+            """,
+            (
+                *update_values,
+                self._engagement_id,
+                spec.vuln_type,
+                spec.target_url,
+                spec.parameter,
+            ),
+        )
+        return 0, 1
+
+    def _severity_summary(self, con: sqlite3.Connection) -> dict[str, int]:
+        counts = {severity: 0 for severity in SEVERITY_ORDER}
+        for row in con.execute(
+            """
+            SELECT UPPER(COALESCE(severity, 'INFO')) AS severity, COUNT(*)
+            FROM vulnerability_findings
+            WHERE engagement_id=?
+            GROUP BY UPPER(COALESCE(severity, 'INFO'))
+            """,
+            (self._engagement_id,),
+        ).fetchall():
+            severity = str(row[0] or "INFO").upper()
+            if severity not in counts:
+                counts[severity] = 0
+            counts[severity] += int(row[1] or 0)
+
+        try:
+            passive_rows = con.execute(
+                """
+                SELECT UPPER(COALESCE(severity, 'INFO')) AS severity, COUNT(*)
+                FROM passive_vulns
+                WHERE engagement_id=? AND COALESCE(false_positive, 0)=0
+                GROUP BY UPPER(COALESCE(severity, 'INFO'))
+                """,
+                (self._engagement_id,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            passive_rows = []
+        for row in passive_rows:
+            severity = str(row[0] or "INFO").upper()
+            if severity not in counts:
+                counts[severity] = 0
+            counts[severity] += int(row[1] or 0)
+        return counts

