@@ -28238,8 +28238,7 @@ class ArtifactQueueProcessor:
             lines.append(normalized)
         return "\n".join(lines)
 
-    @staticmethod
-    def _interface_definition_text_candidate_values(text: str) -> list[str]:
+    def _interface_definition_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
         if not parse_text.strip():
             return []
@@ -28278,13 +28277,31 @@ class ArtifactQueueProcessor:
         )
 
         candidates: list[tuple[int, str]] = []
-        for pattern in (key_value_pattern, xml_attr_pattern, proto_option_pattern):
-            for match in pattern.finditer(parse_text):
-                value = str(match.group("value") or "").strip()
-                if value:
-                    candidates.append((match.start(), value))
+        pattern_batches = self._run_ordered_local_batch(
+            [
+                ("key_value", key_value_pattern, parse_text),
+                ("xml_attr", xml_attr_pattern, parse_text),
+                ("proto_option", proto_option_pattern, parse_text),
+            ],
+            self._interface_definition_pattern_candidates,
+            default_factory=list,
+        )
+        for batch in pattern_batches:
+            candidates.extend(batch)
         candidates.sort(key=lambda item: item[0])
         return [value for _position, value in candidates[:512]]
+
+    @staticmethod
+    def _interface_definition_pattern_candidates(
+        item: tuple[str, Any, str],
+    ) -> list[tuple[int, str]]:
+        _name, pattern, parse_text = item
+        candidates: list[tuple[int, str]] = []
+        for match in pattern.finditer(parse_text):
+            value = str(match.group("value") or "").strip()
+            if value:
+                candidates.append((match.start(), value))
+        return candidates
 
     @staticmethod
     def _interface_definition_url_candidate_entry(raw_value: str) -> str:
