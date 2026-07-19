@@ -1,0 +1,59 @@
+# docker-compose.test.yml
+# Local + CI bring-up for the SSH/SMB containers used by the 12 integration
+# tests that currently skip when the containers are absent. Ports and creds
+# MUST match the values hardcoded in tests/integration/test_credential_validator.py
+# (MOCK_SSH_PORT=2222, MOCK_SMB_PORT=4445, user=testuser, pass=testpass).
+#
+# Bring up:   docker compose -f docker-compose.test.yml up -d --wait
+# Tear down:  docker compose -f docker-compose.test.yml down -v
+#
+# The --wait flag on `up` blocks until every service reports healthy.
+services:
+  mock-ssh:
+    image: linuxserver/openssh-server:9.3_p2-r1-ls145
+    container_name: forge-test-ssh
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Etc/UTC
+      PASSWORD_ACCESS: "true"
+      USER_NAME: testuser
+      USER_PASSWORD: testpass
+      SUDO_ACCESS: "false"
+    ports:
+      - "2222:2222"
+    healthcheck:
+      # Container ships bash + nc; probe the SSH listener itself.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 2222 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  mock-smb:
+    # dperson/samba:2022-11-21 was removed from Docker Hub upstream 2026.
+    # Switched to crazymax/samba which is actively maintained.
+    # crazymax/samba uses env-var config instead of positional flags.
+    image: crazymax/samba:latest
+    container_name: forge-test-smb
+    environment:
+      TZ: Etc/UTC
+      # User: testuser / testpass (same as CI expects)
+      SAMBA_USER: "testuser"
+      SAMBA_PASSWORD: "testpass"
+      # Share config: name=test, path=/tmp, browsable, writable
+      SAMBA_SHARE_NAME: "test"
+      SAMBA_SHARE_PATH: "/tmp"
+    ports:
+      - "4445:445"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 445 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+# No named volumes — everything is ephemeral. Both containers write only to
+# their own tmpfs / /tmp, which is discarded on `down -v`.

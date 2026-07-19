@@ -1,0 +1,117 @@
+version: "3.9"
+
+# FORGE Autonomous Security Platform - Docker Compose stack.
+# Validates Requirements 12.1, 12.2, 12.3, 12.4, 12.5.
+#
+# Services:
+#   redis        - shared message bus
+#   forge-api    - FastAPI gateway (uvicorn) exposing /health, /workflows, /reports
+#   forge-worker - AgentLoop runner consuming bus messages and dispatching agents
+#
+# Horizontal scaling:
+#   docker compose up --scale forge-worker=3
+#
+# Worker resumes incomplete workflows on restart via
+# WorkflowEngine.resume_incomplete_workflows().
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: forge-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - forge-net
+
+  forge-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: forge-api
+    command:
+      - uvicorn
+      - forge.api.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ports:
+      - "8000:8000"
+    environment:
+      FORGE_REDIS_URL: redis://redis:6379/0
+      FORGE_STATE_DB_URL: sqlite:////data/forge_state.db
+      FORGE_AUDIT_DB_URL: sqlite:////data/forge_audit.db
+      FORGE_PLUGIN_DIR: /app/plugins
+      FORGE_LLM_PROVIDER: ${FORGE_LLM_PROVIDER:-llama_cpp}
+      FORGE_LLM_MODEL_PATH: ${FORGE_LLM_MODEL_PATH:-}
+      FORGE_PROVIDER_TIMEOUT: ${FORGE_PROVIDER_TIMEOUT:-5}
+      FORGE_HEARTBEAT_INTERVAL: ${FORGE_HEARTBEAT_INTERVAL:-30}
+      FORGE_SAFE_MODE: ${FORGE_SAFE_MODE:-1}
+      FORGE_SCOPE_JSON: ${FORGE_SCOPE_JSON:-}
+      FORGE_GOVERNANCE_RULES: ${FORGE_GOVERNANCE_RULES:-}
+      FORGE_TELEMETRY_THRESHOLD_MS: ${FORGE_TELEMETRY_THRESHOLD_MS:-5000}
+      FORGE_MESSAGE_RETRY_MAX: ${FORGE_MESSAGE_RETRY_MAX:-3}
+      FORGE_MESSAGE_ACK_TIMEOUT: ${FORGE_MESSAGE_ACK_TIMEOUT:-60}
+      FORGE_LOG_LEVEL: ${FORGE_LOG_LEVEL:-INFO}
+    volumes:
+      - forge-data:/data
+      - ./plugins:/app/plugins:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'python -c "import urllib.request, sys; urllib.request.urlopen(''http://localhost:8000/health'', timeout=3); sys.exit(0)" || exit 1'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - forge-net
+    restart: unless-stopped
+
+  forge-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "forge.core.runner"]
+    environment:
+      FORGE_REDIS_URL: redis://redis:6379/0
+      FORGE_STATE_DB_URL: sqlite:////data/forge_state.db
+      FORGE_AUDIT_DB_URL: sqlite:////data/forge_audit.db
+      FORGE_PLUGIN_DIR: /app/plugins
+      FORGE_LLM_PROVIDER: ${FORGE_LLM_PROVIDER:-llama_cpp}
+      FORGE_LLM_MODEL_PATH: ${FORGE_LLM_MODEL_PATH:-}
+      FORGE_PROVIDER_TIMEOUT: ${FORGE_PROVIDER_TIMEOUT:-5}
+      FORGE_HEARTBEAT_INTERVAL: ${FORGE_HEARTBEAT_INTERVAL:-30}
+      FORGE_SAFE_MODE: ${FORGE_SAFE_MODE:-1}
+      FORGE_SCOPE_JSON: ${FORGE_SCOPE_JSON:-}
+      FORGE_GOVERNANCE_RULES: ${FORGE_GOVERNANCE_RULES:-}
+      FORGE_TELEMETRY_THRESHOLD_MS: ${FORGE_TELEMETRY_THRESHOLD_MS:-5000}
+      FORGE_MESSAGE_RETRY_MAX: ${FORGE_MESSAGE_RETRY_MAX:-3}
+      FORGE_MESSAGE_ACK_TIMEOUT: ${FORGE_MESSAGE_ACK_TIMEOUT:-60}
+      FORGE_LOG_LEVEL: ${FORGE_LOG_LEVEL:-INFO}
+    volumes:
+      - forge-data:/data
+      - ./plugins:/app/plugins:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - forge-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${FORGE_WORKER_REPLICAS:-1}
+
+volumes:
+  forge-data:
+
+networks:
+  forge-net:
+    driver: bridge

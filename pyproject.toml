@@ -1,0 +1,274 @@
+# pyproject.toml — FORGE Toolkit v7.2
+# Python 3.11+ required.
+
+[build-system]
+requires      = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+# ── Project metadata ──────────────────────────────────────────────────────────
+
+[project]
+name            = "forge-toolkit"
+version         = "7.2.0"
+description     = "Modular, CPU-optimised, full-spectrum offensive security platform for authorised red team operations."
+readme          = "README.md"
+license         = { text = "Proprietary" }
+requires-python = ">=3.11"
+authors         = [{ name = "FORGE Engineering" }]
+
+dependencies = [
+    "questionary==2.1.1",
+    "rich==13.9.4",
+    "click==8.1.8",
+    "typer==0.17.5",
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.1",
+    "curl_cffi>=0.7.4,<1.0",
+    "jinja2>=3.1.4,<4.0",
+    "markupsafe==3.0.2",
+    "playwright>=1.50.0,<2.0",
+    "playwright-stealth==1.0.6",
+    "packaging==24.2",
+    "llama-cpp-python==0.3.8",
+    "pycryptodome==3.21.0",
+    "anyio==4.8.0",
+    "dnspython>=2.7.0,<3.0",
+    "huggingface-hub==0.28.1",
+    "sqlalchemy[asyncio]==2.0.37",
+    "ftfy==6.3.1",
+    "httpx==0.28.1",
+    "requests==2.33.1",
+    "aiohttp>=3.10,<4.0",
+    "boto3==1.37.5",
+    "azure-core==1.32.0",
+    "azure-identity==1.19.0",
+    "azure-mgmt-authorization==4.0.0",
+    "azure-mgmt-keyvault==10.3.1",
+    "azure-mgmt-resource==23.2.0",
+    "azure-mgmt-sql==3.0.1",
+    "azure-mgmt-storage==22.1.0",
+    "azure-mgmt-web==7.2.0",
+    "fastapi==0.135.3",
+    "kubernetes==29.0.0",
+    "redis==7.4.0",
+    "aiosqlite==0.20.0",
+    "uvicorn==0.43.0",
+    "python-jose[cryptography]==3.3.0",
+    "phonenumbers>=8.13,<9.0",
+]
+
+[project.optional-dependencies]
+artifacts = [
+    "py7zr>=0.21,<1.0",
+    "zstandard>=0.23,<1.0",
+    "brotli>=1.1,<2.0",
+    "lz4>=4.3,<5.0",
+]
+offensive = [
+    "impacket==0.12.0",
+    "asyncssh==2.18.0",
+    "pywinrm==0.4.3",
+    "smbprotocol==1.14.0",
+    "pyperclip==1.9.0",
+    "psutil==6.1.1",
+]
+graph = [
+    "networkx>=3.0,<4.0",
+]
+dev = [
+    "pytest==8.3.5",
+    "pytest-asyncio==0.25.3",
+    "pytest-recording==0.13.2",
+    "vcrpy==6.0.2",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "responses==0.25.3",
+    "pytest-httpserver==1.1.0",
+    "hypothesis==6.119.3",
+    "ruff==0.9.4",
+    "mypy==1.14.1",
+    "bandit==1.8.3",
+    "pyinstaller==6.11.1",
+]
+
+[project.scripts]
+forge = "forge.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["forge*"]
+exclude = ["tests*", "data*", "latest_logs*", "archived_logs*"]
+
+
+# ── Ruff ──────────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+target-version = "py311"
+line-length    = 100
+src            = ["forge", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E9",   # Syntax errors
+    "F63",  # Invalid % formatting
+    "F7",   # Runtime syntax issues
+    "F82",  # Undefined names in __all__
+]
+
+ignore = [
+    "ANN401",   # Any is acceptable in limited contexts (phase5 templates)
+    "S101",     # assert: used deliberately in evasion assertion tests
+    "S603",     # subprocess call: intentional in Module 2-E (theHarvester)
+    "S607",     # partial executable path: intentional in Module 2-E
+    "TRY003",   # long exception messages are intentional for OPSEC context
+    "ERA001",   # commented-out LOLBin reference tables (Phase 0)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use assert, fixed strings, and other patterns that are fine in test context
+"tests/**/*.py"    = ["S", "ANN", "ERA"]
+"forge/phase6/templates/*.md" = ["ALL"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["forge"]
+
+[tool.ruff.format]
+quote-style              = "double"
+indent-style             = "space"
+skip-magic-trailing-comma = false
+
+
+# ── mypy ──────────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+python_version           = "3.11"
+strict                   = true
+ignore_missing_imports   = true
+warn_unused_configs      = true
+warn_redundant_casts     = true
+warn_unused_ignores      = true
+disallow_any_generics    = true
+disallow_untyped_defs    = true
+disallow_incomplete_defs = true
+check_untyped_defs       = true
+no_implicit_optional     = true
+show_error_codes         = true
+
+[[tool.mypy.overrides]]
+module = [
+    "forge.phase0.*",
+    "forge.phase1.*",
+    "forge.phase2.*",
+    "forge.phase3.*",
+    "forge.phase4.*",
+    "forge.phase6.*",
+    "forge.utils.intel.*",
+    "forge.utils.post.*",
+    "forge.cli",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "forge.config",
+    "forge.opsec.scope_gate",
+    "forge.models.pydantic_models",
+    "forge.models.attack_graph_models",
+]
+ignore_errors = true
+
+# Modules with intentional dynamic patterns (llama_cpp lazy import, template rendering)
+[[tool.mypy.overrides]]
+module = [
+    "forge.phase6.report_synthesizer",
+    "forge.phase6.__init__",
+    "forge.utils.post.__init__",
+]
+disallow_any_generics = false
+
+# External packages without stubs
+[[tool.mypy.overrides]]
+module = [
+    "llama_cpp.*",
+    "curl_cffi.*",
+    "impacket.*",
+    "asyncssh.*",
+    "pywinrm.*",
+    "questionary.*",
+    "playwright.*",
+    "vcrpy.*",
+    "ftfy.*",
+    "pyperclip.*",
+]
+ignore_missing_imports = true
+
+
+# ── pytest ────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+minversion      = "8.0"
+testpaths       = ["tests"]
+python_files    = ["test_*.py"]
+python_classes  = ["Test*"]
+python_functions= ["test_*"]
+asyncio_mode    = "auto"
+required_plugins = ["pytest-recording"]
+addopts         = [
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+    "--record-mode=none",
+    "-ra",
+    "-m",
+    "not chaos and not slow",
+]
+markers = [
+    "opsec: evasion and OPSEC invariant tests",
+    "integration: tests requiring Docker services or real network (skipped in strict offline)",
+    "slow: tests taking > 10 s (LLM inference, full ETL pipeline)",
+    "chaos: fault-injection / chaos scenarios; opt-in via -m chaos",
+    "chaos_unit: unit tests for chaos harness safety helpers; run by default",
+    "phase0: Phase 0 knowledge base tests",
+    "phase2: Phase 2 OSINT tests",
+    "phase3: Phase 3 evasion tests",
+    "phase4: Phase 4 exploit correlation tests",
+    "phase5: Phase 5 post-exploitation tests",
+    "phase6: Phase 6 LLM reporting tests",
+]
+
+# ── Coverage ──────────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+source   = ["forge"]
+omit     = [
+    "forge/phase6/templates/*",
+    "forge/migrations/*",
+    "forge/cli.py",            # CLI wiring tested via integration; excluded from unit cov
+]
+branch   = true
+
+[tool.coverage.report]
+show_missing      = true
+skip_covered      = false
+fail_under        = 75
+exclude_lines     = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@overload",
+]
+
+
+# ── bandit ────────────────────────────────────────────────────────────────────
+
+[tool.bandit]
+exclude_dirs = ["tests", "forge/phase6/templates"]
+skips        = [
+    "B101",   # assert_used: deliberate in evasion assertion tests
+    "B603",   # subprocess_without_shell_equals_true: controlled in Module 2-E
+    "B607",   # start_process_with_partial_path: controlled in Module 2-E
+]

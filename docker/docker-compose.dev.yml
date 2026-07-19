@@ -1,0 +1,94 @@
+# FORGE evidence + test infrastructure stack.
+#
+# Purpose: stable forge-* containers for evidence harnesses, integration
+# tests, and local development. NOT for production deployment - that's
+# the job of docker-compose.yml.
+#
+# Usage:
+#   # Bring everything up
+#   docker compose -f docker-compose.dev.yml up -d
+#
+#   # Bring up only Postgres (for state-store work)
+#   docker compose -f docker-compose.dev.yml up -d postgres
+#
+#   # Include Ollama (opt-in via profile - pulls a 400MB model)
+#   docker compose -f docker-compose.dev.yml --profile llm up -d
+#
+#   # Tear everything down (preserves volumes by default)
+#   docker compose -f docker-compose.dev.yml down
+#
+#   # Tear down + wipe data
+#   docker compose -f docker-compose.dev.yml down -v
+#
+# Each container uses a stable forge-* name so it shows up cleanly in
+# `docker ps` next to the production stack.
+
+services:
+
+  # ---- State store (sprint #4: now the default backend) -----------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: forge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: forge_dev_only
+      POSTGRES_DB: forge
+    ports:
+      - "5433:5432"
+    volumes:
+      - forge-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "forge", "-d", "forge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - forge-dev-net
+
+  # ---- Message bus for evidence harnesses + integration tests ----------
+  soak-redis:
+    image: redis:7-alpine
+    container_name: forge-soak-redis
+    restart: unless-stopped
+    ports:
+      - "6390:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - forge-dev-net
+
+  # ---- Optional local LLM (profile-gated - won't start by default) ----
+  ollama:
+    image: ollama/ollama:latest
+    container_name: forge-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - forge-ollama-data:/root/.ollama
+    profiles: ["llm"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - forge-dev-net
+
+volumes:
+  forge-postgres-data:
+    name: forge-postgres-data
+  forge-ollama-data:
+    name: forge-ollama-data
+
+networks:
+  forge-dev-net:
+    name: forge-dev-net
+    driver: bridge

@@ -1,0 +1,108 @@
+---
+# .github/workflows/forge-chaos.yml
+# FORGE Toolkit — Chaos / Fault-Injection CI
+#
+# Runs the deterministic fault-injection chaos harness (tools/evidence_chaos.py)
+# via the `pytest -m chaos` opt-in marker registered in pyproject.toml.
+#
+# Trigger policy (Requirement 3.27 of audit-cleanup-and-chaos):
+#   - workflow_dispatch: manual, on-demand
+#   - schedule:          once per calendar week at 06:00 UTC on Mondays
+#   - NEVER on `push` or `pull_request` — chaos runs are slow and can flap
+#     under CI runner contention. This workflow file has no `push` or
+#     `pull_request` trigger, so it is structurally impossible for those
+#     events to start a chaos run.
+#
+# Notification routing (see Risks table in design.md): if this job fails,
+# route the notification to the dedicated chaos-alerts channel rather than
+# the default CI notification target; a chaos failure never blocks a normal
+# PR, but it MUST surface as a new P0/P1 item in AUDIT.md.
+
+name: FORGE Chaos
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_tmpfs_scenario:
+        description: "Mount an 8 MiB tmpfs and run the real-ENOSPC variant (default: true)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+  schedule:
+    # Mondays at 06:00 UTC — fires exactly once per calendar week.
+    # The scheduled run ALWAYS mounts the tmpfs (see the mount step's
+    # `if:` guard below) so the primary CI signal exercises real ENOSPC
+    # on the aiosqlite commit path, not just the simulated variant.
+    - cron: "0 6 * * 1"
+
+env:
+  PYTHON_VERSION: "3.11"
+  # Chaos scenarios spawn a real redis-server and drive real subprocesses,
+  # so strict-offline mode is disabled for this job only.
+  FORGE_OFFLINE_STRICT: "0"
+
+jobs:
+  chaos:
+    name: Chaos — Fault Injection
+    runs-on: ubuntu-24.04
+    # Belt-and-braces: even if a fork adds an extra trigger by mistake, this
+    # guard refuses to run the job on push or pull_request events.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install redis-server (required by chaos scenarios)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+          redis-server --version
+
+      - name: Install Python dependencies (dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # Requirement 20 of chaos-harness-hardening: tmpfs mount for the
+      # real-ENOSPC variant. Enabled by default now that the review of
+      # this workflow flagged the simulated fault as testing the wrong
+      # layer (session-open vs. aiosqlite commit); with tmpfs mounted,
+      # ``run_disk_full_tmpfs_optional`` exercises the production
+      # ``StateStore.save_checkpoint`` translator on a real ENOSPC.
+      # The tmpfs is 8 MiB — well under the scenario's 32 MiB safe-cap.
+      # Fires on both the scheduled cron and manual dispatch (unless
+      # explicitly disabled via the `run_tmpfs_scenario=false` input).
+      - name: Mount tmpfs for real ENOSPC scenario
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_tmpfs_scenario == 'true')
+        run: |
+          mkdir -p "$RUNNER_TEMP/forge_chaos_tmpfs"
+          sudo mount -t tmpfs -o size=8m,mode=0777 tmpfs "$RUNNER_TEMP/forge_chaos_tmpfs"
+          echo "FORGE_CHAOS_TMPFS_ROOT=$RUNNER_TEMP/forge_chaos_tmpfs" >> "$GITHUB_ENV"
+
+      - name: Run chaos scenarios
+        run: pytest -m chaos -v --tb=short
+
+      - name: Unmount tmpfs (cleanup)
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_tmpfs_scenario == 'true'))
+        run: |
+          sudo umount "$RUNNER_TEMP/forge_chaos_tmpfs" || true
+          rmdir "$RUNNER_TEMP/forge_chaos_tmpfs" || true
+
+      - name: Upload chaos result artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-results
+          path: |
+            .forge_data/chaos_results.json
+            .forge_data/chaos_results.xml
+          if-no-files-found: ignore
+          retention-days: 30

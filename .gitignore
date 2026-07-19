@@ -1,0 +1,69 @@
+# Secrets — never commit
+.env
+.env.local
+*.key
+*.pem
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Type / lint caches
+.mypy_cache/
+.mypy_cache_tmp/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+node_modules/
+coverage/
+.coverage
+htmlcov/
+
+# Generated outputs
+reports/
+chunks/
+downloads/
+archive/
+archived_logs/
+latest_logs/
+_audit_logs/
+*.log
+*_attack_graph.json
+engagement_*_report_*.md
+bryanseah234.txt
+AUDIT_RESULTS.md
+.kiro/
+.claude/handoffs/*
+!.claude/handoffs/2026-07-19-173416-aws-client-reference-validation.md
+!.claude/handoffs/2026-07-19-190802-har-epieos-recursive-guard.md
+
+# Dev databases at repo root
+tmp_attack.db
+data/*.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Live data (real DBs, caches — not for VCS)
+.forge_data/
+
+# Binary bundles
+*.tar.gz
+*.zip
+vendor/tor/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
