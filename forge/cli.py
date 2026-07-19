@@ -12779,6 +12779,14 @@ def kill_chain(
         }
         return {label: int(count) for label, count in counts.items() if int(count) > 0}
 
+    def _refresh_pending_work_state() -> dict[str, int]:
+        counts = _pending_work_counts()
+        run_progress_state["pending_work_counts"] = counts
+        run_progress_state["pending_work_total"] = sum(counts.values())
+        if counts:
+            run_progress_state["last_iteration_stable"] = False
+        return counts
+
     for iteration in range(1, max_iterations + 1):
         last_iteration = iteration
         if _maybe_interrupt_run(f"iteration_{iteration}_precheck"):
@@ -16996,11 +17004,13 @@ def kill_chain(
         is_stable = counts_stable and pending_work_total == 0
         _set_progress_counts(after, iteration_delta=iteration_delta, stable=is_stable)
         if counts_stable and pending_work_total > 0:
+            exhausted = iteration >= max_iterations
             _log(
                 f"iteration {iteration}",
                 (
                     "[dim]no new rows but pending recursive work remains "
-                    f"({pending_work_total}) — continuing[/dim]"
+                    f"({pending_work_total}) — "
+                    f"{'max iterations exhausted' if exhausted else 'continuing'}[/dim]"
                 ),
             )
         elif counts_stable:
@@ -17294,6 +17304,7 @@ def kill_chain(
     except Exception as _exc:  # noqa: BLE001
         console.print(f"[dim]Dashboard refresh skipped: {_exc}[/dim]")
 
+    _refresh_pending_work_state()
     _set_progress_counts()
     engagement_run_tracker.finish_run(
         engagement_run_handle,
