@@ -38,7 +38,11 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 from forge.utils.intel.http_pacing import record_rate_limit_cooldown, sleep_rate_limit_cooldown
-from forge.utils.intel.provider_urls import persist_provider_url_candidate
+from forge.utils.intel.provider_urls import (
+    normalize_provider_url,
+    persist_provider_url_candidate,
+    provider_url_in_scope,
+)
 
 
 _SHODAN_BASE = "https://api.shodan.io"
@@ -194,6 +198,62 @@ def _shodan_service_hostnames(service: dict[str, Any], *, scope_domain: str) -> 
     ][:8]
 
 
+def _shodan_service_base_url(scheme: str, port: int, hostname: str) -> str:
+    default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
+    netloc = hostname if default_port else f"{hostname}:{port}"
+    return f"{scheme}://{netloc}"
+
+
+def _shodan_http_url_value_candidates(value: Any) -> list[str]:
+    values: list[str] = []
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            values.extend(_shodan_http_url_value_candidates(item))
+    elif isinstance(value, dict):
+        for key in ("url", "href", "location", "redirect"):
+            if key in value:
+                values.extend(_shodan_http_url_value_candidates(value.get(key)))
+    else:
+        text = str(value or "").strip()
+        if text:
+            values.append(text)
+    return list(dict.fromkeys(values))
+
+
+def _shodan_service_http_urls(
+    service: dict[str, Any],
+    *,
+    scheme: str,
+    port: int,
+    hostnames: list[str],
+    scope_domain: str,
+) -> list[tuple[str, str]]:
+    http = service.get("http")
+    if not isinstance(http, dict):
+        return []
+    raw_values: list[tuple[str, str]] = []
+    for field in ("location", "redirect"):
+        raw_values.extend((field, value) for value in _shodan_http_url_value_candidates(http.get(field)))
+
+    candidates: list[tuple[str, str]] = []
+    for field, raw_value in raw_values:
+        text = str(raw_value or "").strip()
+        if not text:
+            continue
+        if text.startswith("//"):
+            text = f"{scheme}:{text}"
+        raw_urls: list[str] = []
+        if text.startswith("/"):
+            raw_urls.extend(f"{_shodan_service_base_url(scheme, port, hostname)}{text}" for hostname in hostnames)
+        elif "://" in text:
+            raw_urls.append(text)
+        for raw_url in raw_urls:
+            normalized = normalize_provider_url(raw_url)
+            if normalized and provider_url_in_scope(normalized, scope_domain):
+                candidates.append((normalized, field))
+    return list(dict.fromkeys(candidates))[:8]
+
+
 def _shodan_web_service_url_candidates(
     target: str,
     host: dict[str, Any],
@@ -222,16 +282,15 @@ def _shodan_web_service_url_candidates(
         scheme = _service_web_scheme(service)
         if not scheme:
             continue
-        default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
         service_hostnames = _shodan_service_hostnames(service, scope_domain=scope_domain)
         if not service_hostnames and not hostnames:
             continue
         service_hostnames = list(dict.fromkeys([*service_hostnames, *hostnames]))[:8]
         for hostname in service_hostnames:
-            netloc = hostname if default_port else f"{hostname}:{port}"
+            url = _shodan_service_base_url(scheme, port, hostname)
             candidates.append(
                 (
-                    f"{scheme}://{netloc}",
+                    url,
                     {
                         "source": "shodan_host",
                         "provider_sources": ["shodan"],
@@ -240,6 +299,28 @@ def _shodan_web_service_url_candidates(
                         "port": port,
                         "scheme": scheme,
                         "service": str(service.get("service") or "").strip()[:80],
+                    },
+                )
+            )
+        for url, field in _shodan_service_http_urls(
+            service,
+            scheme=scheme,
+            port=port,
+            hostnames=service_hostnames,
+            scope_domain=scope_domain,
+        ):
+            candidates.append(
+                (
+                    url,
+                    {
+                        "source": "shodan_host",
+                        "provider_sources": ["shodan"],
+                        "hostname": str(urlparse(url).hostname or "").strip().lower(),
+                        "ip": str(host.get("ip") or "").strip(),
+                        "port": port,
+                        "scheme": scheme,
+                        "service": str(service.get("service") or "").strip()[:80],
+                        "shodan_http_field": field,
                     },
                 )
             )

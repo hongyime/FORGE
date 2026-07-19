@@ -162,6 +162,82 @@ def test_persist_shodan_findings_promotes_web_services_to_recursive_url_seeds(
     assert crawl_rows["https://www.acme.example"]["provider_sources"] == ["shodan"]
 
 
+def test_persist_shodan_findings_preserves_in_scope_http_location_paths(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "eng.db"
+    _bootstrap_engagement(db_path)
+
+    stats = persist_shodan_findings(
+        "203.0.113.30",
+        1001,
+        db_path,
+        host_result={
+            "ip": "203.0.113.30",
+            "found": True,
+            "host": {
+                "ip": "203.0.113.30",
+                "hostnames": [],
+                "ports": [443],
+                "services": [
+                    {
+                        "port": 443,
+                        "protocol": "tcp",
+                        "service": "https",
+                        "http": {
+                            "host": "portal.acme.example",
+                            "location": (
+                                "https://portal.acme.example/login?"
+                                "token=shodan-token-do-not-store&view=public"
+                            ),
+                            "redirect": "https://outside.example/login",
+                        },
+                    },
+                ],
+                "cves": [],
+            },
+        },
+        domain_result={"domain": "acme.example", "subdomains": [], "records": [], "tags": []},
+    )
+
+    assert stats["url_seeds_inserted"] == 2
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = {
+            (str(row[0]), str(row[1])): json.loads(str(row[2] or "{}"))
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, metadata_json
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        crawl_rows = {
+            str(row[0]): json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT final_url, tech_stack_json
+                FROM crawl_results
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    location_url = "https://portal.acme.example/login?view=public"
+    assert ("https://portal.acme.example", "url") in seed_rows
+    assert (location_url, "url") in seed_rows
+    assert all("outside.example" not in url for url, _seed_type in seed_rows)
+    assert all("shodan-token-do-not-store" not in url for url, _seed_type in seed_rows)
+    assert seed_rows[(location_url, "url")]["provider_sources"] == ["shodan"]
+    assert seed_rows[(location_url, "url")]["shodan_http_field"] == "location"
+    assert crawl_rows[location_url]["discovered_from"] == "shodan_host_service"
+    assert crawl_rows[location_url]["provider_sources"] == ["shodan"]
+
+
 def test_persist_shodan_findings_promotes_service_level_hostnames_to_recursive_url_seeds(
     tmp_path: Path,
 ) -> None:
