@@ -50,6 +50,7 @@ AUDIT_RESULTS.md
 !.claude/handoffs/2026-07-19-190802-har-epieos-recursive-guard.md
 !.claude/handoffs/2026-07-19-191500-cloudflare-d1-kv-unsupported-sweep.md
 !.claude/handoffs/2026-07-19-203500-cli-at-url-seed-classifier.md
+!.claude/handoffs/2026-07-19-205223-sentry-proof-hash-gate.md
 
 # Dev databases at repo root
 tmp_attack.db
