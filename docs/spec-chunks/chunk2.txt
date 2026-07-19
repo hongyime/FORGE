@@ -1,0 +1,518 @@
+# FORGE Toolkit – Review Commentary: Chunk 2
+# Phase 1 — Reconnaissance Wizard
+**Review Scope:** Architectural gaps, host-context enrichment, cross-phase data contracts  
+**Priority:** High — Phase 1 output quality directly determines evasion fidelity in Phases 3 and 5
+
+---
+
+## 1. What's Working
+
+Phase 1 establishes the correct foundation: a wizard-driven engagement initialisation, 
+`LongRunningTask` resume semantics, and structured output into a shared SQLite engagement DB. 
+The decision to scope all recon under a named engagement ID is sound — it enforces isolation 
+between operations and makes the state portable.
+
+The reliance on `crt.sh`, subdomain brute-forcing, and banner-based port scanning is appropriate 
+for an offline-first toolkit. These are noise-tolerant, retry-safe, and produce structured output.
+
+---
+
+## 2. Critical Gap: Host Context Deficit
+
+### 2.1 The Core Problem
+
+Phase 1 currently answers: *"What exists?"*  
+Phases 3 and 5 need to know: *"What does this host look like from the inside?"*
+
+Without host context, downstream modules are forced to make blind decisions:
+
+| Phase | Module | Blind Decision Without Context |
+|-------|--------|-------------------------------|
+| 3 | Evasion engine | Which User-Agent to spoof in payload HTTP requests |
+| 3 | LOTS selector | Which CDN the target already trusts |
+| 5 | Module 5-I (Persistence) | Which scheduled task names will blend in |
+| 5 | Module 5-G (C2 Beacon) | What beacon interval looks like legitimate traffic |
+| 5 | Module 5-J (Lateral Movement) | What auth protocols are in use |
+
+This is not a minor gap — it means every evasion decision in Phase 3 and Phase 5 defaults to 
+generic heuristics rather than target-specific intelligence. The result is detectable payloads.
+
+---
+
+## 3. Recommended Additions to Phase 1
+
+### 3.1 `host_context` JSON Schema
+
+Introduce a `host_context` JSONB column on the `hosts` table (or a separate `host_context` 
+table with a FK to `host_id`). Populate it incrementally as recon tasks complete.
+```json
+{
+  "host_id": "uuid-v4",
+  "ip": "10.0.1.45",
+  "hostname": "srv-dc01.corp.internal",
+  "os": {
+    "family": "windows",
+    "version": "Server 2019",
+    "build": "17763",
+    "confidence": "high",
+    "source": "smb_banner"
+  },
+  "web": {
+    "server_header": "Microsoft-IIS/10.0",
+    "x_powered_by": "ASP.NET",
+    "likely_browser": "chrome_122",
+    "tls_fingerprint": "ja3_hash_here",
+    "cdn_indicators": ["cloudflare", "akamai"]
+  },
+  "network": {
+    "open_ports": [80, 443, 445, 3389],
+    "filtered_ports": [22],
+    "detected_services": {
+      "445": {"service": "smb", "version": "SMB 3.1.1"},
+      "3389": {"service": "rdp", "version": "RDP 10.0"},
+      "443": {"service": "https", "server": "Microsoft-IIS/10.0"}
+    }
+  },
+  "scheduled_tasks": {
+    "available": false,
+    "reason": "no_credentials",
+    "names": []
+  },
+  "evasion_hints": {
+    "suggested_ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "suggested_beacon_interval_s": 300,
+    "existing_task_pattern": "^Microsoft\\\\",
+    "trusted_cdn_domains": ["ajax.windows.net", "download.microsoft.com"]
+  },
+  "meta": {
+    "collected_at": "2025-01-15T14:32:00Z",
+    "tasks_completed": ["banner_grab", "ua_resolution", "cdn_fingerprint"],
+    "tasks_skipped": ["scheduled_tasks"]
+  }
+}
+```
+
+**Design note:** Store as SQLite JSON column with `json_extract()` queries. Do not normalise 
+into columns — the schema will evolve per engagement. Index only on `host_id`.
+
+---
+
+### 3.2 New Task: `enrich_host_context`
+
+Wrap the following sub-tasks under a single `LongRunningTask` subclass that runs 
+post-port-scan and pre-Phase-2 handoff.
+```python
+# forge/phase1/host_enrichment.py
+
+import json
+import re
+import sqlite3
+from dataclasses import dataclass, field
+from typing import Optional
+import httpx
+from forge.phase0.kb import KnowledgeBase
+
+
+UA_LOOKUP: dict[str, dict[str, str]] = {
+    # server_header_pattern -> (os_family, os_version, likely_browser)
+    r"Microsoft-IIS/10\.0":  {"os": "windows", "ver": "Server 2016/2019", "browser": "chrome_122"},
+    r"Microsoft-IIS/8\.5":   {"os": "windows", "ver": "Server 2012 R2",   "browser": "ie_11"},
+    r"nginx/1\.1[89]":       {"os": "linux",   "ver": "ubuntu_20",         "browser": "firefox_124"},
+    r"nginx/1\.2[0-9]":      {"os": "linux",   "ver": "ubuntu_22",         "browser": "chrome_122"},
+    r"Apache/2\.4":          {"os": "linux",   "ver": "debian",            "browser": "firefox_124"},
+    r"lighttpd":             {"os": "linux",   "ver": "generic",           "browser": "chrome_old"},
+}
+
+CDN_INDICATORS: dict[str, list[str]] = {
+    "cloudflare":  ["cf-ray", "server: cloudflare"],
+    "akamai":      ["x-akamai-transformed", "x-check-cacheable"],
+    "fastly":      ["x-served-by", "fastly-restarts"],
+    "aws-cf":      ["x-amz-cf-id", "x-amz-request-id"],
+    "azure-cdn":   ["x-azure-ref", "x-msedge-ref"],
+}
+
+TRUSTED_CDN_DOMAINS: dict[str, list[str]] = {
+    "windows": [
+        "download.microsoft.com",
+        "ajax.windows.net",
+        "update.microsoft.com",
+        "assets.msn.com",
+    ],
+    "linux": [
+        "packages.debian.org",
+        "security.ubuntu.com",
+        "cdn.jsdelivr.net",
+    ],
+}
+
+
+@dataclass
+class HostContext:
+    host_id: str
+    ip: str
+    os_family: str = "unknown"
+    os_version: str = "unknown"
+    os_confidence: str = "low"
+    os_source: str = "none"
+    web_server: str = ""
+    likely_browser: str = "chrome_122"
+    cdn_indicators: list[str] = field(default_factory=list)
+    trusted_cdn_domains: list[str] = field(default_factory=list)
+    suggested_ua: str = ""
+    task_names: list[str] = field(default_factory=list)
+    tasks_completed: list[str] = field(default_factory=list)
+
+    def to_json(self) -> str:
+        return json.dumps(self.__dict__, default=str)
+
+
+class HostEnricher:
+    """
+    Enriches a discovered host with OS, UA, CDN, and task-name context
+    for downstream use by Phase 3 (evasion) and Phase 5 (persistence/C2).
+
+    Inputs:  hosts table (post port-scan), optional credentials
+    Outputs: host_context JSON blob persisted to hosts table
+    """
+
+    def __init__(self, db_path: str, kb: KnowledgeBase, timeout: int = 8):
+        self.db_path = db_path
+        self.kb = kb
+        self.timeout = timeout
+        self._client = httpx.Client(
+            timeout=timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; probe/1.0)"},
+            verify=False,  # noqa: S501 — intentional for internal targets
+        )
+
+    # ------------------------------------------------------------------
+    # Task 1: Banner-based OS fingerprinting
+    # ------------------------------------------------------------------
+    def fingerprint_os(self, host: dict) -> tuple[str, str, str, str]:
+        """
+        Returns (os_family, os_version, confidence, source).
+        Priority: SMB banner > HTTP Server header > SSH banner > nmap guess.
+        """
+        services = host.get("detected_services", {})
+
+        # SMB banner — highest fidelity on Windows targets
+        smb = services.get("445", {})
+        if smb.get("service") == "smb":
+            smb_ver = smb.get("version", "")
+            if "3.1.1" in smb_ver or "3.0" in smb_ver:
+                return "windows", "Server 2016+", "high", "smb_banner"
+            if "2.1" in smb_ver:
+                return "windows", "Server 2008 R2", "high", "smb_banner"
+
+        # SSH banner
+        ssh = services.get("22", {})
+        banner = ssh.get("banner", "")
+        if "Ubuntu" in banner:
+            ver = re.search(r"Ubuntu-(\S+)", banner)
+            return "linux", f"ubuntu_{ver.group(1) if ver else 'unknown'}", "medium", "ssh_banner"
+        if "Debian" in banner:
+            return "linux", "debian", "medium", "ssh_banner"
+
+        # HTTP Server header fallback
+        http = services.get("80", services.get("443", {}))
+        server = http.get("server", "")
+        for pattern, meta in UA_LOOKUP.items():
+            if re.search(pattern, server, re.IGNORECASE):
+                return meta["os"], meta["ver"], "medium", "http_server_header"
+
+        return "unknown", "unknown", "low", "none"
+
+    # ------------------------------------------------------------------
+    # Task 2: Resolve realistic User-Agent from OS + Server header
+    # ------------------------------------------------------------------
+    def resolve_user_agent(self, os_family: str, web_server: str) -> tuple[str, str]:
+        """
+        Returns (likely_browser_key, full_ua_string).
+        Pulls full UA strings from Phase 0 KB ua_profiles table.
+        Falls back to static map if KB has no match.
+        """
+        for pattern, meta in UA_LOOKUP.items():
+            if re.search(pattern, web_server, re.IGNORECASE):
+                browser_key = meta["browser"]
+                ua_string = self.kb.get_ua_string(os_family, browser_key)
+                return browser_key, ua_string
+
+        # Default: modern Chrome on Windows
+        return "chrome_122", self.kb.get_ua_string("windows", "chrome_122")
+
+    # ------------------------------------------------------------------
+    # Task 3: CDN fingerprinting via HTTP headers
+    # ------------------------------------------------------------------
+    def fingerprint_cdn(self, ip: str, port: int = 443) -> tuple[list[str], list[str]]:
+        """
+        Issues a HEAD request to the web service.
+        Returns (detected_cdns, trusted_domains_for_os).
+
+        OPSEC note: This generates one outbound HTTP request per host.
+        Disable with --no-cdn-probe if operating in high-noise environments.
+        """
+        detected: list[str] = []
+        try:
+            scheme = "https" if port == 443 else "http"
+            resp = self._client.head(f"{scheme}://{ip}:{port}/", timeout=self.timeout)
+            headers_lower = {k.lower(): v.lower() for k, v in resp.headers.items()}
+
+            for cdn, indicators in CDN_INDICATORS.items():
+                if any(ind.split(": ")[0] in headers_lower for ind in indicators):
+                    detected.append(cdn)
+        except (httpx.RequestError, httpx.HTTPStatusError):
+            pass
+
+        return detected, []
+
+    # ------------------------------------------------------------------
+    # Task 4: Scheduled task enumeration (credential-gated)
+    # ------------------------------------------------------------------
+    def list_scheduled_tasks(
+        self,
+        ip: str,
+        credentials: Optional[dict] = None,
+    ) -> tuple[bool, list[str], str]:
+        """
+        Attempts remote scheduled task listing via WMI (Win32_ScheduledJob)
+        or schtasks /query /FO CSV over SMB named pipe.
+
+        Returns (success, task_names, reason).
+        Only runs if credentials are available and target is Windows.
+
+        OPSEC risk: WMI queries over 135/tcp are logged by most EDR solutions.
+        Prefer SMB named pipe approach (port 445) — lower profile.
+        Fallback: pull task names from Phase 0 KB `schtasks_legit_names` table.
+        """
+        if not credentials:
+            return False, [], "no_credentials"
+
+        # Implementation: use impacket's wmiquery or smbprotocol pipe exec
+        # Placeholder — full implementation in Module 5-I integration
+        raise NotImplementedError("Credential-gated task listing: see Module 5-I")
+
+    # ------------------------------------------------------------------
+    # Orchestrator
+    # ------------------------------------------------------------------
+    def enrich(self, host: dict, credentials: Optional[dict] = None) -> HostContext:
+        ctx = HostContext(host_id=host["id"], ip=host["ip"])
+
+        os_f, os_v, os_c, os_src = self.fingerprint_os(host)
+        ctx.os_family, ctx.os_version = os_f, os_v
+        ctx.os_confidence, ctx.os_source = os_c, os_src
+        ctx.tasks_completed.append("os_fingerprint")
+
+        web_port = 443 if 443 in host.get("open_ports", []) else 80
+        web_svc = host.get("detected_services", {}).get(str(web_port), {})
+        ctx.web_server = web_svc.get("server", "")
+
+        browser_key, ua = self.resolve_user_agent(os_f, ctx.web_server)
+        ctx.likely_browser = browser_key
+        ctx.suggested_ua = ua
+        ctx.tasks_completed.append("ua_resolution")
+
+        if web_port in host.get("open_ports", []):
+            cdns, _ = self.fingerprint_cdn(host["ip"], web_port)
+            ctx.cdn_indicators = cdns
+            ctx.tasks_completed.append("cdn_fingerprint")
+
+        ctx.trusted_cdn_domains = TRUSTED_CDN_DOMAINS.get(os_f, [])
+
+        try:
+            available, names, reason = self.list_scheduled_tasks(host["ip"], credentials)
+            ctx.task_names = names
+        except NotImplementedError:
+            # Fall back to KB-sourced plausible names
+            ctx.task_names = self.kb.get_plausible_task_names(os_f)
+
+        return ctx
+
+    def persist(self, ctx: HostContext, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            "UPDATE hosts SET host_context = ? WHERE id = ?",
+            (ctx.to_json(), ctx.host_id),
+        )
+        conn.commit()
+```
+
+---
+
+### 3.3 Phase 0 KB Extensions Required
+
+The enrichment tasks above depend on two new Phase 0 tables:
+
+#### Table: `ua_profiles`
+```sql
+CREATE TABLE ua_profiles (
+    id          INTEGER PRIMARY KEY,
+    os_family   TEXT NOT NULL,           -- 'windows', 'linux', 'macos'
+    browser_key TEXT NOT NULL,           -- 'chrome_122', 'firefox_124', 'ie_11'
+    ua_string   TEXT NOT NULL,
+    platform    TEXT,                    -- 'Win64', 'MacIntel', 'Linux x86_64'
+    updated_at  TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX uix_ua_profiles ON ua_profiles(os_family, browser_key);
+```
+
+**Seed source:** Scrape `https://www.useragents.me` during Phase 0 ETL. Refresh monthly.  
+**Query interface:** `kb.get_ua_string(os_family, browser_key) -> str`
+
+#### Table: `schtasks_legit_names`
+```sql
+CREATE TABLE schtasks_legit_names (
+    id          INTEGER PRIMARY KEY,
+    os_family   TEXT NOT NULL,
+    task_name   TEXT NOT NULL,
+    task_path   TEXT,                    -- e.g. '\Microsoft\Windows\UpdateOrchestrator\'
+    frequency   TEXT,                   -- 'daily', 'boot', 'logon'
+    source      TEXT NOT NULL           -- 'microsoft_docs', 'lolbas', 'manual'
+);
+```
+
+**Seed source:** Microsoft Task Scheduler documentation + community lolbas task inventories.  
+**Query interface:** `kb.get_plausible_task_names(os_family, n=10) -> list[str]`
+
+---
+
+## 4. Integration Points
+
+### 4.1 Data Flow After Enrichment
+```
+Phase 1: Recon
+├── subdomain_enum()        → hosts table (ip, hostname, ports)
+├── port_scan()             → hosts table (detected_services)
+└── enrich_host_context()   → hosts.host_context (JSON blob)
+         │
+         ├──► Phase 3 — Evasion Engine
+         │    └── ObfuscationEngine reads host_context.evasion_hints
+         │        ├── suggested_ua       → spoofed UA in payload HTTP calls
+         │        └── trusted_cdn_domains → LOTS domain selection
+         │
+         └──► Phase 5 — Post-Exploitation
+              ├── Module 5-G (C2 Beacon)
+              │   └── suggested_beacon_interval_s → jitter baseline
+              ├── Module 5-I (Persistence)
+              │   └── task_names → camouflage task names
+              └── Module 5-J (Lateral Movement)
+                  └── os_family, detected_services → protocol selection
+```
+
+### 4.2 Consuming `host_context` in Phase 3
+```python
+# forge/phase3/obfuscation_engine.py (excerpt)
+
+def resolve_delivery_ua(self, host_id: str) -> str:
+    row = self.db.execute(
+        "SELECT json_extract(host_context, '$.evasion_hints.suggested_ua') FROM hosts WHERE id = ?",
+        (host_id,)
+    ).fetchone()
+    return row[0] if row and row[0] else DEFAULT_UA
+
+def resolve_lots_domain(self, host_id: str) -> str:
+    domains = self.db.execute(
+        "SELECT json_extract(host_context, '$.evasion_hints.trusted_cdn_domains') FROM hosts WHERE id = ?",
+        (host_id,)
+    ).fetchone()
+    candidates = json.loads(domains[0]) if domains and domains[0] else LOTS_FALLBACK_DOMAINS
+    return random.choice(candidates)
+```
+
+### 4.3 Consuming `host_context` in Module 5-I (Persistence)
+```python
+# forge/phase5/persistence.py (excerpt)
+
+def select_task_name(self, host_id: str) -> str:
+    """
+    Prefers names already present on the target.
+    Falls back to KB-sourced plausible names.
+    Avoids names already used by this engagement.
+    """
+    used = self._get_used_task_names(host_id)
+    
+    existing = self.db.execute(
+        "SELECT json_extract(host_context, '$.scheduled_tasks.names') FROM hosts WHERE id = ?",
+        (host_id,)
+    ).fetchone()
+    
+    if existing and existing[0]:
+        candidates = [n for n in json.loads(existing[0]) if n not in used]
+        if candidates:
+            return random.choice(candidates)
+    
+    # KB fallback
+    os_f = self._get_os_family(host_id)
+    return self.kb.get_plausible_task_names(os_f, n=20)[0]
+```
+
+---
+
+## 5. OPSEC Considerations
+
+| Task | Risk | Mitigation |
+|------|------|-----------|
+| `fingerprint_cdn` HEAD request | One active HTTP probe per host — logged by WAFs | Add `--no-cdn-probe` flag; default OFF in high-stealth profiles |
+| SMB banner grab (port 445) | Logged by most EDR on failed auth attempts | Use connection-level banner only; do not attempt auth |
+| SSH banner grab | Low risk — passive read of banner string | No mitigation required |
+| `list_scheduled_tasks` via WMI | WMI calls over 135/tcp trigger EDR alerts | Default disabled; require explicit `--enumerate-tasks` flag and valid credentials |
+| `list_scheduled_tasks` via SMB pipe | Lower profile than WMI; still logged | Prefer KB fallback unless tasked explicitly |
+
+**General principle:** Phase 1 enrichment must remain predominantly passive. Active probes 
+(CDN HEAD request, task enumeration) must be gated behind explicit CLI flags and should 
+not run in the default `forge recon` invocation.
+
+---
+
+## 6. CLI Interface
+```bash
+# Default: passive enrichment only (OS fingerprint + UA resolution from banners)
+forge recon --engagement acme-001 --modules subdomain,portscan,email_harvest,enrich
+
+# With CDN probe (one HEAD request per host)
+forge recon --engagement acme-001 --modules enrich --cdn-probe
+
+# With task enumeration (requires credentials; high OPSEC risk)
+forge recon --engagement acme-001 --modules enrich \
+  --enumerate-tasks \
+  --creds-file /secure/creds.json
+
+# Query enriched context after the fact
+forge recon show-context --engagement acme-001 --host 10.0.1.45
+```
+
+---
+
+## 7. Functional Requirements Summary
+
+| ID | Requirement |
+|----|-------------|
+| FR-1E.1 | `enrich_host_context` runs as a `LongRunningTask` after port scan completes |
+| FR-1E.2 | OS fingerprinting uses SMB > SSH > HTTP header priority chain |
+| FR-1E.3 | UA resolution queries Phase 0 `ua_profiles` KB table; static fallback if absent |
+| FR-1E.4 | CDN fingerprinting issues one HEAD request per web-enabled host; gated by `--cdn-probe` |
+| FR-1E.5 | Scheduled task enumeration requires explicit `--enumerate-tasks` flag and valid credentials |
+| FR-1E.6 | KB fallback for task names reads `schtasks_legit_names` table; filters names used in current engagement |
+| FR-1E.7 | All enrichment output persisted to `hosts.host_context` JSON column |
+| FR-1E.8 | Phase 3 `ObfuscationEngine` reads `evasion_hints` from `host_context` |
+| FR-1E.9 | Module 5-I persistence reads `scheduled_tasks.names` from `host_context` |
+| FR-1E.10 | All enrichment tasks logged to `task_log` with duration, status, and source |
+| FR-1E.11 | Phase 0 ETL extended to populate `ua_profiles` and `schtasks_legit_names` tables |
+
+---
+
+## 8. Anti-Patterns to Avoid
+
+- **Do not embed UA strings as hardcoded constants in Phase 3.** This creates a toolkit 
+  fingerprint. All UAs must come from the KB and be selected based on target context.
+
+- **Do not run `list_scheduled_tasks` by default.** Even with valid credentials, WMI 
+  queries are high-signal events. This capability should be explicitly invoked.
+
+- **Do not store `host_context` as separate normalised columns.** The schema will grow per 
+  engagement type. A JSON blob with `json_extract()` indexing is the correct trade-off 
+  between flexibility and queryability.
+
+- **Do not conflate "OS guess" with "confirmed OS."** Always carry the `confidence` field 
+  (`high`/`medium`/`low`) and `source` through to consuming modules so they can make 
+  risk-weighted decisions.

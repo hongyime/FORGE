@@ -1,0 +1,1970 @@
+# FORGE Toolkit — Chunk 5 Expansion
+## Phase 4: Exploit Correlation & Vulnerability Discovery — HashBuster Correlation + Web & Cloud Vulnerability Modules
+
+> **Document type:** Incremental expansion to Chunk 5 (v8.0 → v7.2). All sections below are
+> additive unless marked as a replacement. Insert after existing §9.4
+> (Credential-to-Exploit Integration). Update §9.1.3 (Priority Scoring Matrix) and
+> §9.5 (CLI Interface) using the replacement tables and code blocks provided.
+> Modules 4-D through 4-G (IDOR, Firebase Agneyastra, Firebase Extract, Supabase) are
+> appended after §9.12.
+
+---
+
+## CHANGELOG (This Expansion)
+
+| Section      | Change Type | Summary                                                                                      |
+|--------------|-------------|----------------------------------------------------------------------------------------------|
+| §9.1.3       | Replace     | Priority scoring matrix — 2 new scoring signals: hash available, hash cracked               |
+| §9.4         | Extend      | Credential-to-Exploit Integration — hash-bearing credential resolution via Phase 2          |
+| §9.4A        | New         | Module 4-C: Hash-Aware Exploit Correlator — full implementation                             |
+| §9.4B        | New         | Hash attack class taxonomy — NTLM relay, PTH, Kerberoasting, hash injection                 |
+| §9.4C        | New         | `HashCredentialBridge` — Phase 2 ↔ Phase 4 interface contract                              |
+| §9.5         | Extend      | CLI Interface — new `--hash-context` and `--require-cracked` flags                          |
+| §9.10        | New         | OPSEC considerations for hash-aware correlation                                              |
+| §9.11        | New         | Testing strategy — fixtures, VCR cassettes, evasion assertions                              |
+| §9.12        | New         | Implementation task table with effort estimates (Module 4-C: 10 days)                       |
+| **§9.13**    | **New**     | **Shared Phase 4 Vulnerability Discovery schemas — `vulnerability_findings`, `cloud_assets`**|
+| **§9.14**    | **New**     | **Module 4-D: IDOR Scanner — BFS crawler + ID parameter substitution**                      |
+| **§9.15**    | **New**     | **Module 4-E: Firebase Agneyastra — misconfiguration audit wrapper**                        |
+| **§9.16**    | **New**     | **Module 4-F: Firebase Extract — passive APK/IPA project ID extraction**                    |
+| **§9.17**    | **New**     | **Module 4-G: Supabase RLS Scanner — PostgREST anonymous access testing**                   |
+| **§9.18**    | **New**     | **Phase 4 cumulative effort summary and OPSEC notes for new modules**                        |
+
+---
+
+## §9.1.3 — Priority Scoring Matrix (Replacement)
+
+Replace the existing scoring table in full. New rows are **bolded**.
+
+| Condition                                                                     | Points Added |
+|-------------------------------------------------------------------------------|:------------:|
+| `cvss_score >= 9.0` (Critical)                                               | +40          |
+| `cvss_score >= 7.0` (High)                                                   | +25          |
+| `cvss_score >= 4.0` (Medium)                                                 | +10          |
+| Exploit type is `remote`                                                     | +20          |
+| Exploit has public PoC (`exploit_path` not null)                             | +15          |
+| Host has ≥ 1 validated plaintext credential (`validated=1`)                  | +25          |
+| Exploit platform matches host OS                                             | +10          |
+| **Exploit class is hash-based AND a raw hash exists for the target account** | **+15**      |
+| **Exploit class is hash-based AND hash has been cracked to plaintext**       | **+25**      |
+
+> **`attack_path_class` mapping (unchanged):**
+> score ≥ 80 → `CRITICAL` | 60–79 → `HIGH` | 40–59 → `MEDIUM` | <40 → `LOW`
+
+> **Scoring note:** The two new hash-signal rows are mutually exclusive. If a hash has been
+> cracked, the `+25 (cracked)` row applies and supersedes the `+15 (hash_exists)` signal.
+> Both signals require the exploit's `hash_attack_class` to be non-null (see §9.4B).
+
+---
+
+## §9.4 Extension — Hash-Bearing Credentials in Exploit Correlation
+
+The existing Phase 4 credential integration (§9.4.1) only surfaces **plaintext-validated**
+credentials (`validated=1`). However, Phase 2 breach ingestion (Module 2-A) and credential
+validation (Module 2-B) may produce credentials where the password field contains a raw
+hash — NTLM, MD5, SHA-1, bcrypt — that was never cracked prior to the correlation run.
+
+Three classes of exploit are directly actionable with a hash alone, without requiring
+plaintext recovery:
+
+1. **NTLM Relay / Pass-the-Hash (PTH):** The NTLM protocol allows direct authentication
+   using the NT hash of a password. Tools such as Impacket's `psexec.py`,
+   `wmiexec.py`, and `smbexec.py` accept an NT hash in place of a plaintext password.
+   EDB entries of type `remote` targeting Windows SMB/WMI/RPC are candidates.
+
+2. **Kerberoasting + Offline Crack:** A Kerberos TGS ticket hash (RC4/AES) captured
+   during Phase 1 or Phase 2 enumeration can be cracked offline (hashcat mode 13100).
+   Phase 4 should surface this path when the exploit requires a service account and an
+   uncracked TGS hash is present in credentials.
+
+3. **Hash Injection / Token Impersonation:** Some exploits (local privilege escalation,
+   token manipulation) require a hash for impersonation rather than remote authentication.
+   These are primarily `local` exploit types targeting Windows platforms.
+
+The expanded Phase 4 correlator must:
+
+- Detect whether a correlated exploit belongs to one of these hash attack classes.
+- Query the credential store for hash-bearing records associated with the target host.
+- Determine if Module 2-B's HashBuster integration has already cracked the hash to
+  plaintext (field: `hash_plaintext IS NOT NULL`).
+- Apply the appropriate priority bonus and annotate the suggestion with actionable
+  guidance for the operator.
+
+---
+
+## §9.4A — Module 4-C: Hash-Aware Exploit Correlator
+
+### 9.4A.1 Schema Additions
+
+Append the following columns to `exploit_suggestions`. These are additive; existing rows
+default to NULL.
+
+```sql
+-- Migration: forge/migrations/0005_exploit_hash_context.sql
+ALTER TABLE exploit_suggestions ADD COLUMN hash_attack_class  TEXT;
+    -- Enum: 'NTLM_RELAY' | 'PASS_THE_HASH' | 'KERBEROAST' | 'HASH_INJECTION' | NULL
+ALTER TABLE exploit_suggestions ADD COLUMN hash_credential_ids TEXT;
+    -- JSON array of credentials.id where password_hash IS NOT NULL for this host
+ALTER TABLE exploit_suggestions ADD COLUMN cracked_credential_ids TEXT;
+    -- JSON array of credentials.id where hash_plaintext IS NOT NULL
+ALTER TABLE exploit_suggestions ADD COLUMN hash_attack_ready  INTEGER DEFAULT 0;
+    -- Denormalised flag: 1 if any hash or cracked plaintext is available
+ALTER TABLE exploit_suggestions ADD COLUMN hash_crack_pending INTEGER DEFAULT 0;
+    -- 1 if hash exists but hash_plaintext is NULL → operator should run --crack-hashes
+
+CREATE INDEX IF NOT EXISTS idx_exploit_sugg_hash_ready
+    ON exploit_suggestions(hash_attack_ready);
+```
+
+Append the following columns to `credentials` (if not already present from Module 2-B
+expansion):
+
+```sql
+-- Migration: forge/migrations/0006_credential_hash_fields.sql
+-- These may already exist from Module 2-B. Apply only if absent.
+ALTER TABLE credentials ADD COLUMN password_hash      TEXT;   -- raw hash value, if any
+ALTER TABLE credentials ADD COLUMN hash_type          TEXT;   -- 'NTLM' | 'MD5' | 'SHA1' | 'BCRYPT' | 'KRB5TGS' | NULL
+ALTER TABLE credentials ADD COLUMN hash_plaintext     TEXT;   -- cracked plaintext (age-encrypted at rest)
+ALTER TABLE credentials ADD COLUMN hash_cracked_at    TIMESTAMP;
+ALTER TABLE credentials ADD COLUMN hash_crack_source  TEXT;   -- 'hashbuster_online' | 'hashcat_offline' | NULL
+```
+
+> **Encryption note:** `hash_plaintext` must be treated identically to the `password`
+> field — age-encrypted at rest, never written in cleartext to disk outside the
+> engagement DB. The `CredentialStore` accessor must decrypt on read.
+
+---
+
+### 9.4A.2 Hash Attack Class Taxonomy
+
+```python
+# forge/phase4/hash_taxonomy.py
+"""
+Maps exploit metadata patterns to hash attack classes.
+
+Classification is based on:
+  - exploit type ('remote' | 'local')
+  - exploit platform ('windows' | 'linux' | 'multi')
+  - keyword matching against exploit title and description
+  - service context (SMB port 445, WMI port 135, RPC port 135)
+
+Each classifier is a pure function accepting an sqlite3.Row from exploit_cache.db
+and a ServiceVersion from the engagement state store, returning a HashAttackClass
+enum member or None.
+"""
+from __future__ import annotations
+from enum import Enum
+from typing import Optional
+import sqlite3
+
+
+class HashAttackClass(str, Enum):
+    NTLM_RELAY     = "NTLM_RELAY"
+    PASS_THE_HASH  = "PASS_THE_HASH"
+    KERBEROAST     = "KERBEROAST"
+    HASH_INJECTION = "HASH_INJECTION"
+
+
+# Title/description keyword sets — kept as frozensets for O(1) lookup.
+_NTLM_RELAY_KEYWORDS: frozenset[str] = frozenset({
+    "ntlm relay", "ntlmrelayx", "smb relay", "responder",
+    "llmnr", "nbt-ns", "mdns poisoning",
+})
+_PTH_KEYWORDS: frozenset[str] = frozenset({
+    "pass-the-hash", "pass the hash", "pth", "psexec",
+    "wmiexec", "smbexec", "atexec", "impacket",
+    "overpass-the-hash", "opth",
+})
+_KERBEROAST_KEYWORDS: frozenset[str] = frozenset({
+    "kerberoast", "kerberos tgs", "spn", "rc4 ticket",
+    "hashcat 13100", "tgs-rep", "service ticket",
+})
+_HASH_INJECTION_KEYWORDS: frozenset[str] = frozenset({
+    "token impersonation", "hash injection", "lsa secrets",
+    "sekurlsa", "mimikatz logonpasswords",
+})
+
+# SMB/WMI/RPC ports that indicate NTLM/PTH opportunity
+_NTLM_PORTS: frozenset[int] = frozenset({139, 445, 135, 593})
+
+
+def classify_hash_attack(
+    exploit: sqlite3.Row,
+    port: Optional[int] = None,
+) -> Optional[HashAttackClass]:
+    """
+    Return the HashAttackClass for this exploit, or None if not hash-based.
+
+    Priority order: NTLM_RELAY > PASS_THE_HASH > KERBEROAST > HASH_INJECTION.
+    This order reflects decreasing operational prevalence and decreasing
+    detection risk (NTLM relay is highest impact/noisiest; hash injection
+    is narrow scope/quietest).
+    """
+    title_desc = (
+        (exploit["title"] or "") + " " + (exploit.get("description") or "")
+    ).lower()
+
+    def _matches(keywords: frozenset[str]) -> bool:
+        return any(kw in title_desc for kw in keywords)
+
+    # Port-context hint: SMB/WMI port + Windows platform elevates NTLM likelihood
+    port_is_ntlm_candidate = port is not None and port in _NTLM_PORTS
+    platform_is_windows    = "windows" in (exploit["platform"] or "").lower()
+
+    if _matches(_NTLM_RELAY_KEYWORDS) or (port_is_ntlm_candidate and platform_is_windows):
+        return HashAttackClass.NTLM_RELAY
+
+    if _matches(_PTH_KEYWORDS):
+        return HashAttackClass.PASS_THE_HASH
+
+    if _matches(_KERBEROAST_KEYWORDS):
+        return HashAttackClass.KERBEROAST
+
+    if _matches(_HASH_INJECTION_KEYWORDS) and exploit["type"] == "local":
+        return HashAttackClass.HASH_INJECTION
+
+    return None
+```
+
+---
+
+### 9.4A.3 HashCredentialBridge — Phase 2 ↔ Phase 4 Interface
+
+```python
+# forge/phase4/hash_credential_bridge.py
+"""
+HashCredentialBridge
+
+Queries the engagement credential store to resolve:
+  1. All hash-bearing credentials for a given host.
+  2. The subset of those credentials that have been cracked (hash_plaintext IS NOT NULL).
+  3. Whether any uncracked hashes remain — surfaced as a crack_pending signal.
+
+This module is the single authoritative interface between Phase 4 correlation
+and the Phase 2 hash-cracking subsystem. Phase 4 never calls Module 2-B directly;
+it reads results from the credential store.
+
+Design constraints:
+  - Read-only. Phase 4 never writes to the credentials table.
+  - Returns typed dataclasses; callers must not access sqlite3.Row directly.
+  - hash_plaintext values are returned in-memory only and must not be
+    logged or written to any non-encrypted output path.
+"""
+from __future__ import annotations
+import json
+import sqlite3
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+from forge.shared.db import get_engagement_db
+
+
+@dataclass(frozen=True)
+class HashCredential:
+    credential_id:     int
+    email:             str
+    hash_type:         str                    # 'NTLM' | 'MD5' | 'SHA1' | 'KRB5TGS' etc.
+    password_hash:     str                    # raw hash string
+    hash_plaintext:    Optional[str] = None   # populated if cracked; in-memory only
+    hash_crack_source: Optional[str] = None   # 'hashbuster_online' | 'hashcat_offline'
+    validated_service: Optional[str] = None
+
+
+@dataclass
+class HashCredentialSet:
+    """Aggregated hash credential context for a single host, consumed by Phase 4."""
+    host_ip:       str
+    all_hashes:    list[HashCredential] = field(default_factory=list)
+    cracked:       list[HashCredential] = field(default_factory=list)   # has plaintext
+    pending_crack: list[HashCredential] = field(default_factory=list)   # no plaintext yet
+
+    @property
+    def has_any_hash(self) -> bool:
+        return bool(self.all_hashes)
+
+    @property
+    def has_cracked(self) -> bool:
+        return bool(self.cracked)
+
+    @property
+    def crack_pending(self) -> bool:
+        return bool(self.pending_crack)
+
+    @property
+    def all_hash_ids(self) -> list[int]:
+        return [c.credential_id for c in self.all_hashes]
+
+    @property
+    def cracked_ids(self) -> list[int]:
+        return [c.credential_id for c in self.cracked]
+
+
+class HashCredentialBridge:
+    def __init__(self, db_path: Path, engagement_id: int) -> None:
+        self._con:           sqlite3.Connection = get_engagement_db(db_path)
+        self._engagement_id: int                = engagement_id
+
+    def get_hash_credentials(self, host_ip: str) -> HashCredentialSet:
+        """
+        Return all hash-bearing credentials for host_ip in this engagement.
+
+        A credential is considered hash-bearing when password_hash IS NOT NULL.
+        Cracked credentials additionally have hash_plaintext IS NOT NULL.
+        """
+        rows = self._con.execute(
+            """
+            SELECT id, email, hash_type, password_hash,
+                   hash_plaintext, hash_crack_source, validated_service
+            FROM   credentials
+            WHERE  engagement_id  = ?
+              AND  validated_host = ?
+              AND  password_hash  IS NOT NULL
+            """,
+            (self._engagement_id, host_ip),
+        ).fetchall()
+
+        result = HashCredentialSet(host_ip=host_ip)
+        for row in rows:
+            hc = HashCredential(
+                credential_id     = row["id"],
+                email             = row["email"],
+                hash_type         = row["hash_type"]  or "UNKNOWN",
+                password_hash     = row["password_hash"],
+                hash_plaintext    = row["hash_plaintext"],
+                hash_crack_source = row["hash_crack_source"],
+                validated_service = row["validated_service"],
+            )
+            result.all_hashes.append(hc)
+            if hc.hash_plaintext:
+                result.cracked.append(hc)
+            else:
+                result.pending_crack.append(hc)
+
+        return result
+
+    def engagement_crack_coverage(self) -> dict:
+        """
+        Returns a summary dict of hash cracking coverage across the entire engagement.
+        Consumed by Phase 6 context builder for the credential coverage section.
+        """
+        row = self._con.execute(
+            """
+            SELECT
+                COUNT(*)                                                    AS total_hashes,
+                SUM(CASE WHEN hash_plaintext IS NOT NULL THEN 1 ELSE 0 END) AS cracked,
+                SUM(CASE WHEN hash_plaintext IS NULL     THEN 1 ELSE 0 END) AS pending
+            FROM credentials
+            WHERE engagement_id = ?
+              AND password_hash  IS NOT NULL
+            """,
+            (self._engagement_id,),
+        ).fetchone()
+        return {
+            "total_hashes": row["total_hashes"] or 0,
+            "cracked":      row["cracked"]      or 0,
+            "pending":      row["pending"]      or 0,
+        }
+```
+
+---
+
+### 9.4A.4 ExploitCorrelator Integration — Hash-Scoring Extension
+
+The following diff extends `ExploitCorrelator._score()` and `correlate_all()` to integrate
+hash context. Only the modified sections are shown; unmodified logic is preserved verbatim.
+
+```python
+# forge/phase4/correlator.py — modified sections only
+
+# ── Add to imports ─────────────────────────────────────────────────────────────────────
+from forge.phase4.hash_taxonomy          import classify_hash_attack, HashAttackClass
+from forge.phase4.hash_credential_bridge import HashCredentialBridge, HashCredentialSet
+
+# ── Extend ExploitCorrelator.__init__ ──────────────────────────────────────────────────
+class ExploitCorrelator:
+    def __init__(self, db_path: Path, engagement_id: int) -> None:
+        # ... existing init ...
+        self._hash_bridge = HashCredentialBridge(db_path, engagement_id)
+
+# ── Extend _score() signature and body ────────────────────────────────────────────────
+    @staticmethod
+    def _score(
+        cvss:      Optional[float],
+        exploit:   sqlite3.Row,
+        host_os:   Optional[str],
+        has_creds: bool,
+        hash_ctx:  Optional[HashCredentialSet] = None,    # NEW
+        port:      Optional[int] = None,                  # NEW
+    ) -> tuple[int, str, Optional[HashAttackClass]]:       # return type extended
+        score = 0
+        parts: list[str] = []
+        hash_attack_class: Optional[HashAttackClass] = None
+
+        # --- Existing scoring logic (unchanged) ---
+        if cvss is not None:
+            if cvss >= 9.0:
+                score += 40; parts.append(f"CVSS={cvss}(+40)")
+            elif cvss >= 7.0:
+                score += 25; parts.append(f"CVSS={cvss}(+25)")
+            elif cvss >= 4.0:
+                score += 10; parts.append(f"CVSS={cvss}(+10)")
+
+        if exploit["type"] == "remote":
+            score += 20; parts.append("remote(+20)")
+
+        if exploit["path"]:
+            score += 15; parts.append("public_poc(+15)")
+
+        if has_creds:
+            score += 25; parts.append("validated_creds(+25)")
+
+        if host_os and exploit["platform"] and host_os.lower() in exploit["platform"].lower():
+            score += 10; parts.append("os_match(+10)")
+
+        # --- NEW: Hash-aware scoring ---
+        hash_attack_class = classify_hash_attack(exploit, port=port)
+
+        if hash_attack_class is not None and hash_ctx is not None and hash_ctx.has_any_hash:
+            if hash_ctx.has_cracked:
+                # Best case: hash resolved to plaintext — treat as near-equivalent to
+                # validated credential. Score bonus is lower than full cred (+25) because
+                # the cracked plaintext is not yet confirmed valid against the live target.
+                score += 25; parts.append(f"hash_cracked(+25,{hash_attack_class.value})")
+            else:
+                # Hash exists but not cracked — still actionable for PTH/NTLM relay,
+                # which do not require plaintext.
+                score += 15; parts.append(f"hash_available(+15,{hash_attack_class.value})")
+
+        return min(score, 100), " | ".join(parts), hash_attack_class
+
+# ── Extend _persist() to store hash context columns ──────────────────────────────────
+    def _persist(
+        self,
+        suggestion: ExploitSuggestion,
+        hash_ctx:   Optional[HashCredentialSet],
+        hash_class: Optional[HashAttackClass],
+    ) -> None:
+        self._engagement_con.execute(
+            """
+            INSERT INTO exploit_suggestions (
+                vulnerability_id, host_id, engagement_id,
+                exploit_db_id, exploit_title, exploit_type, exploit_platform, exploit_path,
+                cvss_score, priority, priority_reason,
+                credential_ids, has_validated_creds, attack_path_class,
+                hash_attack_class, hash_credential_ids, cracked_credential_ids,
+                hash_attack_ready, hash_crack_pending
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                suggestion.vulnerability_id, suggestion.host_id, suggestion.engagement_id,
+                suggestion.exploit_db_id, suggestion.exploit_title,
+                suggestion.exploit_type, suggestion.exploit_platform, suggestion.exploit_path,
+                suggestion.cvss_score, suggestion.priority, suggestion.priority_reason,
+                json.dumps(suggestion.credential_ids), int(suggestion.has_validated_creds),
+                suggestion.attack_path_class,
+                # --- new hash context columns ---
+                hash_class.value if hash_class else None,
+                json.dumps(hash_ctx.all_hash_ids)  if hash_ctx else "[]",
+                json.dumps(hash_ctx.cracked_ids)   if hash_ctx else "[]",
+                int(hash_ctx.has_any_hash)          if hash_ctx else 0,
+                int(hash_ctx.crack_pending)         if hash_ctx else 0,
+            ),
+        )
+
+# ── Extend correlate_all() to pass hash context ───────────────────────────────────────
+    def correlate_all(self) -> list[ExploitSuggestion]:
+        contexts = self._build_contexts()
+        suggestions: list[ExploitSuggestion] = []
+
+        for ctx in contexts:
+            # NEW: resolve hash credentials once per host (single query, re-used per exploit)
+            hash_ctx = self._hash_bridge.get_hash_credentials(ctx.host_ip)
+
+            for svc in ctx.services:
+                exploits = self._query_exploits(svc)
+                cred_ids = [c.credential_id for c in ctx.validated_creds]
+
+                for exploit in exploits:
+                    cvss = self._query_nvd(exploit["edb_id"])
+
+                    score, reason, hash_class = self._score(
+                        cvss      = cvss,
+                        exploit   = exploit,
+                        host_os   = ctx.host_os,
+                        has_creds = bool(cred_ids),
+                        hash_ctx  = hash_ctx,
+                        port      = svc.port,
+                    )
+                    suggestion = ExploitSuggestion(
+                        vulnerability_id    = svc.service_id,
+                        host_id             = ctx.host_id,
+                        engagement_id       = self.engagement_id,
+                        exploit_db_id       = exploit["edb_id"],
+                        exploit_title       = exploit["title"],
+                        exploit_type        = exploit["type"],
+                        exploit_platform    = exploit["platform"],
+                        exploit_path        = exploit["path"],
+                        cvss_score          = cvss,
+                        priority            = score,
+                        priority_reason     = reason,
+                        credential_ids      = cred_ids,
+                        has_validated_creds = bool(cred_ids),
+                        attack_path_class   = self._classify(score),
+                    )
+                    self._persist(suggestion, hash_ctx, hash_class)
+                    suggestions.append(suggestion)
+
+                    # Audit log: IDs only — never raw hash values
+                    audit_log(
+                        self.db_path,
+                        action        = "exploit_correlated",
+                        detail        = (
+                            f"host={ctx.host_ip} edb={exploit['edb_id']} "
+                            f"priority={suggestion.priority} creds={cred_ids} "
+                            f"hash_class={hash_class.value if hash_class else 'none'} "
+                            f"hash_ready={int(hash_ctx.has_any_hash)} "
+                            f"crack_pending={int(hash_ctx.crack_pending)}"
+                        ),
+                        engagement_id = self.engagement_id,
+                    )
+
+        return suggestions
+```
+
+---
+
+## §9.4B — Hash Attack Class Taxonomy Reference
+
+| Class             | Auth Method        | Plaintext Required? | Typical Exploit Types        | Impacket Tool(s)               | Sigma Rule Coverage              |
+|-------------------|--------------------|:-------------------:|------------------------------|--------------------------------|----------------------------------|
+| `NTLM_RELAY`      | Net-NTLMv2 capture | No                  | Remote, WebApps              | `ntlmrelayx.py`, `responder`   | High (event 4624/4625 + network) |
+| `PASS_THE_HASH`   | NT hash direct     | No                  | Remote (SMB/WMI/RPC)         | `psexec.py`, `wmiexec.py`      | High (Sigma: pass-the-hash)      |
+| `KERBEROAST`      | TGS ticket hash    | No (offline crack)  | Remote, Local (priv esc)     | `GetUserSPNs.py`, `hashcat`    | Medium (event 4769)              |
+| `HASH_INJECTION`  | Token impersonation| No                  | Local (Windows priv esc)     | `mimikatz`, `Rubeus`           | High (LSASS access telemetry)    |
+
+> **OPSEC guidance:** `NTLM_RELAY` and `PASS_THE_HASH` generate Windows Security
+> Event IDs 4624 (Type 3 logon) and 4625 (failure). Any SIEM with Sigma coverage for
+> lateral movement will alert on these patterns. Prefer Kerberos PTT post-crack when the
+> environment has confirmed Kerberos delegation. Document the chosen technique in the
+> engagement brief and risk register.
+
+---
+
+## §9.4C — Credential-Hash-Exploit Chain Examples
+
+### Example 1: NTLM Hash Available, Not Cracked
+
+```
+Host: 10.0.1.55 (Windows Server 2016)
+├─ Breach Credential: jsmith@target.com [NTLM hash: aad3b435...] [cred_id=12]
+│   hash_plaintext: NULL → crack_pending=True
+├─ Correlated Exploit: EDB-43970 "MS17-010 EternalBlue SMB RCE"
+│   CVSS: 9.8 | Type: remote | Platform: windows | Port: 445
+│   Hash Attack Class: PASS_THE_HASH
+│   Score: 40 (CVSS) + 20 (remote) + 15 (PoC) + 15 (hash_available) + 10 (OS) = 100
+│   attack_path_class: CRITICAL
+│   hash_credential_ids: [12]
+│   cracked_credential_ids: []
+│   hash_crack_pending: True
+└─ Phase 6 report output:
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │  [CRITICAL]  10.0.1.55  EDB-43970  CVSSv3: 9.8  [HASH: PTH, id=12]     │
+   │  jsmith@target.com has an uncracked NTLM hash (id=12). This exploit     │
+   │  is directly actionable via Pass-the-Hash using psexec.py/wmiexec.py    │
+   │  without plaintext recovery.                                            │
+   │  To recover plaintext: forge osint crack-hashes --cred-id 12            │
+   └──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Example 2: Hash Cracked to Plaintext
+
+```
+Host: 10.0.1.55 (Windows Server 2016)
+├─ Breach Credential: jsmith@target.com [NTLM hash: aad3b435...] [cred_id=12]
+│   hash_plaintext: "Summer2023!" (source: hashbuster_online)
+│   hash_cracked_at: 2025-03-01T09:14:22
+├─ Correlated Exploit: EDB-43970 "MS17-010 EternalBlue SMB RCE"
+│   Hash Attack Class: PASS_THE_HASH
+│   Score: 40 (CVSS) + 20 (remote) + 15 (PoC) + 25 (hash_cracked) + 10 (OS) = 100
+│   attack_path_class: CRITICAL
+│   cracked_credential_ids: [12]
+│   hash_crack_pending: False
+└─ Phase 6 report output:
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │  [CRITICAL]  10.0.1.55  EDB-43970  CVSSv3: 9.8  [HASH: cracked, id=12] │
+   │  jsmith@target.com — NTLM hash cracked. Authenticate via SMB with       │
+   │  plaintext or NT hash. Recommend: validate against target, then         │
+   │  exploit in a single composed action.                                   │
+   └──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Example 3: Kerberoastable Service Account
+
+```
+Host: 10.0.1.20 (DC — Windows Server 2022)
+├─ Credential: SVC_SQL / TGS hash (RC4-HMAC, hashcat 13100) [cred_id=18]
+│   hash_type: KRB5TGS
+│   hash_plaintext: NULL → crack_pending=True
+├─ Correlated Exploit: EDB-PRIV-001 "SQL Service Account Local Admin via SPN"
+│   Type: local | Platform: windows
+│   Hash Attack Class: KERBEROAST
+│   Score: 25 (CVSS 7.5) + 15 (PoC) + 15 (hash_available) + 10 (OS) = 65
+│   attack_path_class: HIGH
+└─ Phase 6 output:
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │  [HIGH]  10.0.1.20  EDB-PRIV-001  CVSSv3: 7.5  [HASH: KERBEROAST]      │
+   │  SVC_SQL has a capturable TGS ticket (id=18). Hash not yet cracked.     │
+   │  Run: forge osint crack-hashes --cred-id 18 --mode kerberoast           │
+   │  On success, re-run: forge exploits correlate --engagement <id>         │
+   └──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## §9.5 Extension — CLI Interface
+
+Extend the existing `forge exploits` command group with the following flags and subcommands.
+
+```bash
+# Filter: only show exploits where a hash is present (cracked or pending)
+forge exploits list --engagement <id> --hash-context
+
+# Filter: only show exploits where the hash has been cracked to plaintext
+forge exploits list --engagement <id> --require-cracked
+
+# Show suggestions with hash context column in the output table
+forge exploits suggest --engagement <id> [--top 5] [--hash-context]
+
+# Trigger Phase 2 hash cracking for all pending hashes linked to an engagement's
+# exploit suggestions. Delegates to Module 2-B --crack-hashes.
+forge exploits crack-pending --engagement <id> [--offline-only] [--crack-timeout 30]
+
+# Re-run correlation after hash cracking to update scores and classifications
+forge exploits recorrelate --engagement <id>
+```
+
+### Extended `forge exploits suggest` Output (with `--hash-context`)
+
+```
+┌──────┬────────────────┬──────────┬──────┬───────────────────────────────────────┬──────────────────────┐
+│ Pri  │ Host           │ Class    │ CVSS │ Exploit                               │ Tags                 │
+├──────┼────────────────┼──────────┼──────┼───────────────────────────────────────┼──────────────────────┤
+│ 100  │ 10.0.1.45      │ CRITICAL │  9.8 │ EDB-44769 EternalBlue SMB RCE         │ [CRED] [HASH:cracked]│
+│ 100  │ 10.0.1.55      │ CRITICAL │  9.8 │ EDB-43970 MS17-010 EternalBlue        │ [HASH:PTH,pending]   │
+│  85  │ 10.0.1.12      │ CRITICAL │  9.1 │ EDB-50064 Log4Shell RCE               │ [CRED]               │
+│  65  │ 10.0.1.20      │ HIGH     │  7.5 │ EDB-PRIV-001 SPN Local Admin          │ [HASH:kerberoast]    │
+│  60  │ 10.0.1.33      │ HIGH     │  8.1 │ EDB-43970 Apache Struts RCE           │                      │
+└──────┴────────────────┴──────────┴──────┴───────────────────────────────────────┴──────────────────────┘
+
+Tag legend:
+  [CRED]              ≥ 1 validated plaintext credential
+  [HASH:cracked]      Hash cracked to plaintext; ready to authenticate
+  [HASH:PTH,pending]  NT hash available; directly usable for PTH without cracking
+  [HASH:kerberoast]   TGS hash captured; crack with: forge exploits crack-pending
+```
+
+---
+
+## §9.10 — OPSEC Considerations for Hash-Aware Correlation
+
+| Risk                                                         | Mitigation                                                                                                    |
+|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| Hash values emitted to plaintext audit trail                 | `audit_log()` must **never** include `password_hash` or `hash_plaintext`; log credential IDs only.           |
+| Online hash lookup (HashBuster) correlates IP to target hash | Always invoke via `--proxy`. Separate infrastructure from engagement. Prefer `--offline-only` first.         |
+| NTLM relay generates detectable 4624/4625 events             | Gate relay attacks behind `--window` (same as lateral movement). Default: 09:00–17:00.                       |
+| Kerberoasting generates event 4769 at the DC                 | Request RC4 tickets (`--enc-type rc4`); AES-only 4769 events are higher-fidelity anomalies.                  |
+| Re-correlation extends engagement DB write window            | `forge exploits recorrelate` is idempotent — updates existing `exploit_suggestions` rows in-place.           |
+| Hash plaintext leaking into LLM prompt                       | `build_exploit_context()` must strip `hash_plaintext` from all dicts before prompt injection. See §9.9.      |
+| Cracked hash stored unencrypted in state DB                  | `hash_plaintext` column must be age-encrypted via the same `CredentialStore` accessor as `password`.        |
+
+> **Critical — LLM context redaction:** `forge/phase6/context_builder.py`
+> `build_exploit_context()` must be updated to exclude `hash_plaintext` from the dict
+> passed to the LLM prompt. The model receives credential IDs and `hash_crack_source`
+> only. Plaintext passwords must never appear in unencrypted LLM prompts or report
+> artifacts, regardless of report classification level.
+
+---
+
+## §9.11 — Testing Strategy
+
+### Unit Tests
+
+| Test ID  | Target                                       | Method                                                                                                           |
+|----------|----------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| `4C.1`   | `classify_hash_attack()`                     | Parametrise over exploit title/platform/port combos; assert correct `HashAttackClass` or `None`.               |
+| `4C.2`   | `HashCredentialBridge.get_hash_credentials`  | SQLite fixture with 3 credentials: 1 plaintext-only, 1 uncracked hash, 1 cracked hash. Assert set membership.  |
+| `4C.3`   | `ExploitCorrelator._score()` hash bonuses    | Pass mock `HashCredentialSet` with `has_cracked=True` / `has_any_hash=True` / both False. Assert score delta.  |
+| `4C.4`   | `_persist()` hash columns                    | After persist, SELECT `hash_attack_class`, `hash_crack_pending` and assert non-null where expected.             |
+| `4C.5`   | Audit log redaction                          | Assert `audit_log()` call args contain no string matching 32-char hex pattern (`[a-f0-9]{32}`).                 |
+| `4C.6`   | `build_exploit_context()` plaintext redaction | Assert returned dict contains no `hash_plaintext` key at any nesting depth.                                    |
+
+### Integration Test: End-to-End Hash Correlation
+
+```python
+# tests/phase4/test_hash_correlation_integration.py
+"""
+Integration test: breach record with NTLM hash → Phase 4 correlation → CRITICAL suggestion
+with hash_attack_ready=True and hash_crack_pending=True.
+
+Uses an in-memory SQLite engagement DB and fixture exploit_cache.db.
+No network calls.
+"""
+import pytest, re, shutil
+from pathlib import Path
+from forge.phase4.correlator import ExploitCorrelator
+
+FIXTURE_DB           = Path("tests/fixtures/engagement_hash_test.db")
+FIXTURE_EXPLOIT_CACHE = Path("tests/fixtures/exploit_cache_smb.db")
+
+
+@pytest.fixture
+def engagement_with_ntlm_hash(tmp_path):
+    """
+    Fixture DB contains:
+      - 1 host: 10.0.1.55, Windows Server 2016
+      - 1 service: port 445/tcp (SMB)
+      - 1 credential: password_hash='aad3b435...', hash_type='NTLM', hash_plaintext=NULL
+    """
+    db = tmp_path / "engagement.db"
+    shutil.copy(FIXTURE_DB, db)
+    return db
+
+
+def test_ntlm_hash_exploit_correlation(engagement_with_ntlm_hash):
+    correlator = ExploitCorrelator(
+        db_path       = engagement_with_ntlm_hash,
+        engagement_id = 1,
+        exploit_cache = FIXTURE_EXPLOIT_CACHE,
+    )
+    suggestions = correlator.correlate_all()
+
+    critical = [s for s in suggestions if s.attack_path_class == "CRITICAL"]
+    assert len(critical) >= 1, "Expected at least one CRITICAL suggestion"
+
+    smb_sugg = next(
+        (s for s in critical if "EternalBlue" in s.exploit_title or "SMB" in s.exploit_title),
+        None,
+    )
+    assert smb_sugg is not None,           "Expected SMB-correlated CRITICAL suggestion"
+    assert smb_sugg.hash_attack_ready,     "hash_attack_ready must be True"
+    assert smb_sugg.hash_crack_pending,    "hash_crack_pending must be True (hash not yet cracked)"
+    assert smb_sugg.hash_attack_class == "PASS_THE_HASH"
+
+
+def test_audit_log_no_raw_hash_values(engagement_with_ntlm_hash, caplog):
+    """Regression: audit_log must never emit raw hash strings."""
+    correlator = ExploitCorrelator(
+        db_path       = engagement_with_ntlm_hash,
+        engagement_id = 1,
+        exploit_cache = FIXTURE_EXPLOIT_CACHE,
+    )
+    correlator.correlate_all()
+    hash_pattern = re.compile(r"[a-f0-9]{32}", re.IGNORECASE)
+    for record in caplog.records:
+        assert not hash_pattern.search(record.message), \
+            f"Raw hash found in audit log: {record.message}"
+```
+
+---
+
+## §9.12 — Implementation Task Table
+
+| Task ID  | Description                                                                                   | Est. Effort |
+|----------|-----------------------------------------------------------------------------------------------|-------------|
+| `4C.1`   | DB migrations 0005 + 0006: `exploit_suggestions` hash columns + `credentials` hash fields    | 0.5 days    |
+| `4C.2`   | `hash_taxonomy.py`: `HashAttackClass` enum + `classify_hash_attack()`                        | 1 day       |
+| `4C.3`   | `hash_credential_bridge.py`: `HashCredentialBridge` + `HashCredentialSet` dataclasses        | 1 day       |
+| `4C.4`   | `ExploitCorrelator._score()` extension: two hash bonus signals                                | 0.5 days    |
+| `4C.5`   | `ExploitCorrelator._persist()` extension: 5 new hash context columns                         | 0.5 days    |
+| `4C.6`   | `ExploitCorrelator.correlate_all()` extension: hash context pass-through per host             | 0.5 days    |
+| `4C.7`   | `ExploitSuggestion` Pydantic model: 5 new hash fields with validators                        | 0.5 days    |
+| `4C.8`   | CLI: `--hash-context`, `--require-cracked`, `crack-pending`, `recorrelate` subcommands       | 1 day       |
+| `4C.9`   | `build_exploit_context()` update: hash context block + `hash_plaintext` redaction            | 0.5 days    |
+| `4C.10`  | Unit tests `4C.1`–`4C.6` as specified in §9.11                                               | 2 days      |
+| `4C.11`  | Integration test: end-to-end hash correlation fixture (§9.11)                                 | 1 day       |
+| `4C.12`  | VCR cassette: `forge exploits crack-pending` → Module 2-B bridge (no live network)           | 1 day       |
+| **Total**|                                                                                               | **10 days** |
+
+---
+
+## Summary: What Changed and Why
+
+| Concern                          | Before This Expansion                                     | After This Expansion                                                              |
+|----------------------------------|-----------------------------------------------------------|-----------------------------------------------------------------------------------|
+| Hash-bearing credentials         | Silently skipped by Phase 4 scorer                        | Detected, classified, and scored (+15 or +25 depending on crack status)          |
+| PTH / NTLM relay exploits        | Correlated but no credential signal if only hash present  | Classified as `PASS_THE_HASH` or `NTLM_RELAY`; actionable without cracking       |
+| Kerberoasting paths              | Not surfaced by Phase 4                                   | Classified as `KERBEROAST`; `crack_pending` signal directs operator to Module 2-B|
+| Operator guidance on hashes      | None                                                      | Inline report guidance: use PTH directly or run `crack-pending` first            |
+| Phase 2 → Phase 4 data contract  | Implicit (`validated=1` flag only)                        | Explicit `HashCredentialBridge` read-only interface                               |
+| LLM prompt safety                | Credential IDs only in context                            | `hash_plaintext` explicitly excluded from all LLM context dicts; enforced in §9.9|
+| Web vulnerability discovery      | Not in Phase 4                                            | Module 4-D: IDOR Scanner with BFS crawler + ID substitution probes               |
+| Cloud misconfiguration discovery | Not in Phase 4                                            | Modules 4-E, 4-F, 4-G: Firebase + Supabase audit; feeds `vulnerability_findings` |
+
+---
+
+## §9.13 — Shared Phase 4 Vulnerability Discovery Schemas (v7.2)
+
+These tables are written by Modules 4-D, 4-E, 4-F, and 4-G. They are defined canonically
+in Chunk 0 §4.5 and reproduced here for Phase 4 implementers.
+
+### `vulnerability_findings` (Modules 4-D, 4-E, 4-G)
+
+```sql
+CREATE TABLE IF NOT EXISTS vulnerability_findings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    engagement_id   INTEGER NOT NULL REFERENCES engagements(id),
+    vuln_type       TEXT NOT NULL,       -- 'IDOR' | 'FIREBASE_MISCONFIG' | 'SUPABASE_RLS'
+    target_url      TEXT NOT NULL,
+    parameter       TEXT,                -- vulnerable parameter (IDOR)
+    severity        TEXT NOT NULL
+                    CHECK (severity IN ('CRITICAL','HIGH','MEDIUM','LOW','INFO')),
+    title           TEXT NOT NULL,
+    description     TEXT,
+    evidence        TEXT,                -- response snippet ≤ 512 chars
+    cvss_score      REAL,
+    found_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(engagement_id, vuln_type, target_url, parameter)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vuln_findings_engagement
+    ON vulnerability_findings(engagement_id, severity, vuln_type);
+```
+
+### `cloud_assets` (Modules 4-E, 4-F, 4-G)
+
+```sql
+CREATE TABLE IF NOT EXISTS cloud_assets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    engagement_id   INTEGER NOT NULL REFERENCES engagements(id),
+    asset_type      TEXT NOT NULL,       -- 'firebase' | 'supabase' | 'aws_s3' etc.
+    identifier      TEXT NOT NULL,       -- project ID, project ref, bucket name
+    source          TEXT NOT NULL,       -- 'manual' | 'firebase_extract' | 'recon'
+    discovered_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(engagement_id, asset_type, identifier)
+);
+```
+
+> **Migration file:** `forge/migrations/0007_vulnerability_findings_cloud_assets.sql`
+
+---
+
+## §9.14 — Module 4-D: IDOR Scanner
+
+### 9.14.1 Purpose
+
+Automated discovery of Insecure Direct Object Reference (IDOR) vulnerabilities in
+in-scope web applications. Uses a BFS crawler to discover URL patterns containing
+integer or UUID-style ID parameters, then probes substituted values to detect
+unintended data access.
+
+Distinct from active exploitation: the scanner detects and records — it does not
+extract, store, or replay sensitive data beyond a 512-character evidence snippet.
+
+> **Scope gate:** Every URL fetched by the crawler is checked against
+> `engagement.scope` before the request is issued. The crawler will not follow
+> redirects to out-of-scope hosts. CLI exits with `ScopeViolationError` if
+> `--target-url` hostname is not in scope.
+
+---
+
+### 9.14.2 Functional Requirements
+
+| ID | Requirement |
+|----|-------------|
+| FR-4D.1 | Accept `--target-url` as crawl seed; scope gate on every URL resolved during BFS. |
+| FR-4D.2 | BFS crawler: follow same-origin `<a href>`, `<form action>`, JSON response URLs. Max depth: `--depth` (default 3). |
+| FR-4D.3 | ID parameter extraction: detect integer and UUID path segments and query params (`?id=`, `?user_id=`, `?order=`, etc.). |
+| FR-4D.4 | Probe substitutions per parameter: original±1, original+100, random UUID (for UUID params), 0, 99999. |
+| FR-4D.5 | Response comparison: flag as finding if any of — status code differs, body length delta > 5%, JSON structure differs from baseline. |
+| FR-4D.6 | Severity assignment: CRITICAL/HIGH if PII or financial fields present in divergent response; MEDIUM if object data visible; LOW if status-only difference. |
+| FR-4D.7 | No headless browser. Pure `curl_cffi` with UA sourced from Phase 1 host context. |
+| FR-4D.8 | `--cookie cookies.txt` (Netscape/JSON format) for authenticated scans. |
+| FR-4D.9 | `--delay` (default 1.5 s) between each probe. Randomised ±20% via `random.uniform`. |
+| FR-4D.10 | `questionary.confirm()` required before crawl begins; display target URL and estimated probe count. |
+| FR-4D.11 | Write findings to `vulnerability_findings` (vuln_type=`'IDOR'`). |
+| FR-4D.12 | Evidence field: first 512 chars of divergent response body only. Never store full response. |
+| FR-4D.13 | `--dry-run`: print discovered ID parameters and planned probes; make zero probe requests. |
+| FR-4D.14 | Log all probe URLs and result codes to `audit_log`; never log response body. |
+
+---
+
+### 9.14.3 Core Implementation
+
+```python
+# forge/phase4/idor_scanner.py
+"""
+Module 4-D — IDOR Scanner.
+
+BFS crawler + ID parameter substitution prober. Identifies endpoints where
+substituting an object identifier exposes unintended data.
+
+No headless browser. All HTTP via curl_cffi for TLS fingerprint consistency.
+Scope gate enforced at EVERY URL fetch, not only on the seed URL.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import random
+import re
+import sqlite3
+import time
+import uuid
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Optional
+from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode
+
+import questionary
+from curl_cffi import requests as cffi_requests
+
+from forge.opsec.scope_gate import assert_in_scope
+from forge.shared.audit import audit_log
+
+logger = logging.getLogger(__name__)
+
+# Patterns for ID-like path segments and query params
+_INT_PARAM_RE  = re.compile(r'\b(?:id|user_id|order_id|account_id|doc_id|record_id|item_id|ref)\b', re.I)
+_UUID_PARAM_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.I)
+_INT_PATH_RE   = re.compile(r'/(\d{1,12})(?:/|$|\?)')
+
+# PII / financial field names that elevate severity
+_SENSITIVE_FIELDS = frozenset({
+    'email', 'phone', 'ssn', 'dob', 'address', 'card', 'cc_number',
+    'bank', 'routing', 'balance', 'salary', 'password', 'token', 'secret',
+})
+
+PROBE_DELAY_BASE = 1.5   # seconds; randomised ±20%
+
+
+@dataclass
+class IdorFinding:
+    target_url:  str
+    parameter:   str
+    severity:    str
+    title:       str
+    description: str
+    evidence:    str
+
+
+def _jitter(base: float, pct: float = 0.2) -> float:
+    return base * random.uniform(1 - pct, 1 + pct)
+
+
+def _contains_sensitive(obj, depth: int = 0) -> bool:
+    """Recursively check JSON for PII/financial field names."""
+    if depth > 5:
+        return False
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k.lower() in _SENSITIVE_FIELDS:
+                return True
+            if _contains_sensitive(v, depth + 1):
+                return True
+    elif isinstance(obj, list):
+        return any(_contains_sensitive(i, depth + 1) for i in obj)
+    return False
+
+
+def _assess_severity(baseline_body: str, probe_body: str) -> str:
+    try:
+        baseline_json = json.loads(baseline_body)
+        probe_json    = json.loads(probe_body)
+        if _contains_sensitive(probe_json):
+            return 'HIGH'
+        if baseline_json != probe_json:
+            return 'MEDIUM'
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return 'LOW'
+
+
+def _build_probes(url: str, param: str, value: str, is_uuid: bool) -> list[str]:
+    """Return list of probe URLs with substituted parameter values."""
+    probes = []
+    parsed = urlparse(url)
+    qs     = parse_qs(parsed.query, keep_blank_values=True)
+
+    if is_uuid:
+        candidates = [str(uuid.uuid4()), '00000000-0000-0000-0000-000000000000']
+    else:
+        try:
+            v = int(value)
+            candidates = [str(v + 1), str(v - 1), str(v + 100), '0', '99999']
+        except ValueError:
+            candidates = ['0', '1', '99999']
+
+    for c in candidates:
+        qs[param] = [c]
+        new_qs  = urlencode(qs, doseq=True)
+        new_url = urlunparse(parsed._replace(query=new_qs))
+        probes.append(new_url)
+    return probes
+
+
+def run_idor_scan(
+    engagement_id: int,
+    db_path,
+    target_url:    str,
+    depth:         int,
+    delay:         float,
+    cookie_file:   Optional[str],
+    dry_run:       bool,
+    ua:            str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+) -> list[IdorFinding]:
+
+    assert_in_scope(target_url)
+
+    confirmed = questionary.confirm(
+        f"[Module 4-D] IDOR scan of {target_url} (depth={depth}). Proceed?"
+    ).ask()
+    if not confirmed:
+        raise RuntimeError("Operator cancelled.")
+
+    session_kwargs = {"impersonate": "chrome110", "headers": {"User-Agent": ua}}
+    if cookie_file:
+        # Load Netscape or JSON cookies — implementation detail omitted for brevity
+        pass
+
+    visited:  set[str] = set()
+    queue:    deque    = deque([(target_url, 0)])
+    findings: list[IdorFinding] = []
+    con = sqlite3.connect(db_path)
+
+    with cffi_requests.Session(**session_kwargs) as session:
+        while queue:
+            url, current_depth = queue.popleft()
+            if url in visited or current_depth > depth:
+                continue
+
+            try:
+                assert_in_scope(url)   # enforce scope at EVERY fetch
+            except Exception:
+                logger.warning("Scope gate blocked: %s", url)
+                continue
+
+            visited.add(url)
+
+            try:
+                resp = session.get(url, timeout=10, allow_redirects=True)
+            except Exception as e:
+                logger.debug("Fetch error %s: %s", url, e)
+                continue
+
+            body     = resp.text
+            baseline = body
+
+            # Discover ID parameters in this URL's query string
+            parsed   = urlparse(url)
+            qs_params = parse_qs(parsed.query)
+            for param, values in qs_params.items():
+                if not (_INT_PARAM_RE.search(param) or _UUID_PARAM_RE.search(values[0] if values else '')):
+                    continue
+
+                is_uuid = bool(_UUID_PARAM_RE.search(values[0] if values else ''))
+                probes  = _build_probes(url, param, values[0] if values else '0', is_uuid)
+
+                for probe_url in probes:
+                    if dry_run:
+                        logger.info("[DRY-RUN] Would probe: %s", probe_url)
+                        continue
+
+                    time.sleep(_jitter(delay))
+                    try:
+                        probe_resp = session.get(probe_url, timeout=10)
+                    except Exception:
+                        continue
+
+                    audit_log(db_path, "idor_probe",
+                              f"url={probe_url} status={probe_resp.status_code}",
+                              engagement_id)
+
+                    # Compare: status, length delta, JSON structure
+                    len_delta = abs(len(probe_resp.text) - len(baseline)) / max(len(baseline), 1)
+                    status_diff = probe_resp.status_code != resp.status_code
+
+                    if status_diff or len_delta > 0.05:
+                        severity = _assess_severity(baseline, probe_resp.text)
+                        evidence = probe_resp.text[:512]
+                        title    = f"IDOR: {param} parameter on {urlparse(url).path}"
+                        finding  = IdorFinding(
+                            target_url  = probe_url,
+                            parameter   = param,
+                            severity    = severity,
+                            title       = title,
+                            description = (
+                                f"Substituting {param}={probe_url.split(param+'=')[-1].split('&')[0]}"
+                                f" returned HTTP {probe_resp.status_code} with "
+                                f"{'PII fields detected' if severity == 'HIGH' else 'different content'}."
+                            ),
+                            evidence    = evidence,
+                        )
+                        findings.append(finding)
+                        _store_finding(con, engagement_id, finding)
+
+            # BFS: extract child links
+            if current_depth < depth:
+                for href in re.findall(r'href=["\']([^"\']+)["\']', body):
+                    abs_url = urljoin(url, href)
+                    if abs_url not in visited:
+                        queue.append((abs_url, current_depth + 1))
+
+    con.close()
+    logger.info("Module 4-D: %d IDOR findings in %d URLs crawled", len(findings), len(visited))
+    return findings
+
+
+def _store_finding(con: sqlite3.Connection, engagement_id: int, f: IdorFinding) -> None:
+    con.execute(
+        """INSERT OR IGNORE INTO vulnerability_findings
+           (engagement_id, vuln_type, target_url, parameter, severity,
+            title, description, evidence)
+           VALUES (?, 'IDOR', ?, ?, ?, ?, ?, ?)""",
+        (engagement_id, f.target_url, f.parameter, f.severity,
+         f.title, f.description, f.evidence),
+    )
+    con.commit()
+```
+
+---
+
+### 9.14.4 CLI
+
+```bash
+# Dry-run first — mandatory workflow
+forge vuln idor \
+  --engagement acme-001 \
+  --target-url https://app.example.com \
+  --dry-run
+
+# Authenticated scan
+forge vuln idor \
+  --engagement acme-001 \
+  --target-url https://app.example.com \
+  --depth 3 \
+  --delay 2.0 \
+  --cookie cookies.txt
+```
+
+---
+
+### 9.14.5 Implementation Tasks
+
+| Task | Description | Est. Effort |
+|------|-------------|-------------|
+| 4D.1 | BFS crawler: same-origin link extraction, depth gate, scope gate per fetch | 2.5 days |
+| 4D.2 | ID parameter extraction: query params + integer path segments | 1 day |
+| 4D.3 | Probe substitution: ±1, +100, UUID, 0, 99999 variants | 1 day |
+| 4D.4 | Response comparison: status, length delta, JSON structural diff | 1 day |
+| 4D.5 | Severity assessment: PII field detection, `_contains_sensitive()` recursive check | 1 day |
+| 4D.6 | Cookie loading: Netscape + JSON formats | 0.5 days |
+| 4D.7 | `_store_finding()` → `vulnerability_findings` | 0.5 days |
+| 4D.8 | CLI command + `questionary.confirm()` + `--dry-run` | 1 day |
+| 4D.9 | Unit tests: probe URL construction, severity logic, scope gate blocking | 2 days |
+| 4D.10 | Integration tests: mock HTTP server with deliberate IDOR; assert finding recorded | 2 days |
+| **TOTAL** | | **~12.5 days** |
+
+---
+
+## §9.15 — Module 4-E: Firebase Agneyastra
+
+### 9.15.1 Purpose
+
+Wraps the `agneyastra` Go binary (github.com/redhuntlabs/Agneyastra) to perform
+comprehensive Firebase security audits against an in-scope Firebase project. Tests
+include: authentication bypass, Realtime Database rules, Firestore rules, Cloud
+Storage permissions, Cloud Functions exposure, and Remote Config access.
+
+Cross-references `key_scanner_findings` (Module 2-J): if an active Firebase API key
+exists for the project, it is automatically passed to Agneyastra as `--api-key`.
+
+> **Prerequisite:** `agneyastra >= 1.0.0` must be on `PATH`. CLI raises `ToolVersionError`
+> if absent. See Chunk 0 §13.3.
+
+---
+
+### 9.15.2 Functional Requirements
+
+| ID | Requirement |
+|----|-------------|
+| FR-4E.1 | Accept `--project-id` as the Firebase GCP project identifier. Scope gate: project domain must match engagement scope. |
+| FR-4E.2 | Invoke `agneyastra` binary via subprocess; capture JSON output. Register output file with cleanup manager before invocation. |
+| FR-4E.3 | `assert_tool_version("agneyastra", "1.0.0")` at module init; raise `ToolVersionError` if absent or outdated. |
+| FR-4E.4 | Auto-inject API key: query `key_scanner_findings` for ACTIVE Firebase keys matching the project; pass as `--api-key` without operator intervention. |
+| FR-4E.5 | Test selection via `--tests` (comma-separated): `auth`, `database`, `firestore`, `storage`, `functions`, `remote_config`. Default: all. |
+| FR-4E.6 | Persist each Agneyastra finding to `vulnerability_findings` (vuln_type=`'FIREBASE_MISCONFIG'`) with appropriate severity mapping. |
+| FR-4E.7 | Persist project to `cloud_assets` (asset_type=`'firebase'`, source=`'firebase_agneyastra'`). |
+| FR-4E.8 | Delete Agneyastra JSON output file immediately after parsing. Register it for `forge clean` as fallback. |
+| FR-4E.9 | `--timeout` (default 600 s) for the subprocess call. |
+| FR-4E.10 | `questionary.confirm()` before first test run; display project ID and selected tests. |
+| FR-4E.11 | `--dry-run`: print planned Agneyastra invocation; do not execute. |
+| FR-4E.12 | Log binary invocation args (redacting API key value) and finding count to `audit_log`. |
+
+---
+
+### 9.15.3 Severity Mapping
+
+| Agneyastra Finding Category | FORGE Severity |
+|-----------------------------|---------------|
+| Auth bypass / unauthenticated write to Realtime DB | CRITICAL |
+| Unauthenticated read of Realtime DB with data | HIGH |
+| Firestore rules allow public read/write | HIGH |
+| Cloud Storage bucket world-readable | HIGH |
+| Cloud Functions unauthenticated invocation | MEDIUM |
+| Remote Config accessible without auth | MEDIUM |
+| Informational / config disclosure | INFO |
+
+---
+
+### 9.15.4 Core Implementation
+
+```python
+# forge/phase4/firebase_agneyastra.py
+"""
+Module 4-E — Firebase Agneyastra Wrapper.
+
+Invokes the redhuntlabs/Agneyastra Go binary for Firebase security audits.
+All network activity is Agneyastra's; this module is a subprocess orchestrator.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import sqlite3
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Optional
+
+import questionary
+
+from forge.opsec.scope_gate import assert_in_scope
+from forge.shared.audit import audit_log
+from forge.shared.cleanup import register_cleanup_file
+from forge.utils.tool_version import assert_tool_version, ToolVersionError
+
+logger = logging.getLogger(__name__)
+
+BINARY      = "agneyastra"
+MIN_VERSION = "1.0.0"
+
+_SEVERITY_MAP = {
+    "auth_bypass":           "CRITICAL",
+    "rtdb_public_write":     "CRITICAL",
+    "rtdb_public_read":      "HIGH",
+    "firestore_public":      "HIGH",
+    "storage_public":        "HIGH",
+    "functions_unauth":      "MEDIUM",
+    "remote_config_unauth":  "MEDIUM",
+}
+
+
+def _resolve_api_key(con: sqlite3.Connection, engagement_id: int, project_id: str) -> Optional[str]:
+    """
+    Look up an ACTIVE Firebase API key in key_scanner_findings for this project.
+    Returns age-decrypted key value, or None if not found.
+    """
+    from forge.opsec.crypto import decrypt_string
+    row = con.execute(
+        """SELECT key_enc FROM key_scanner_findings
+           WHERE engagement_id=? AND service='firebase'
+             AND validation_state='ACTIVE'
+             AND (repo_name LIKE ? OR source_url LIKE ?)
+           LIMIT 1""",
+        (engagement_id, f"%{project_id}%", f"%{project_id}%"),
+    ).fetchone()
+    if row and row["key_enc"]:
+        return decrypt_string(row["key_enc"])
+    return None
+
+
+def run_firebase_audit(
+    engagement_id: int,
+    db_path:       Path,
+    project_id:    str,
+    tests:         list[str],
+    timeout:       int,
+    dry_run:       bool,
+) -> int:
+    """Returns count of findings written to vulnerability_findings."""
+    assert_in_scope(project_id + ".firebaseapp.com")
+    assert_tool_version(BINARY, MIN_VERSION)
+
+    con = sqlite3.connect(db_path)
+    api_key = _resolve_api_key(con, engagement_id, project_id)
+
+    confirmed = questionary.confirm(
+        f"[Module 4-E] Firebase audit: project={project_id}, tests={','.join(tests)}\n"
+        f"  API key from key_scanner_findings: {'yes (ACTIVE)' if api_key else 'none'}\n"
+        f"Continue?"
+    ).ask()
+    if not confirmed:
+        raise RuntimeError("Operator cancelled.")
+
+    # Persist project to cloud_assets
+    con.execute(
+        """INSERT OR IGNORE INTO cloud_assets
+           (engagement_id, asset_type, identifier, source)
+           VALUES (?, 'firebase', ?, 'firebase_agneyastra')""",
+        (engagement_id, project_id),
+    )
+    con.commit()
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        output_path = Path(tmp.name)
+
+    register_cleanup_file(output_path)
+
+    cmd = [BINARY, "--project-id", project_id, "--output", str(output_path),
+           "--format", "json"]
+    if tests:
+        cmd += ["--tests", ",".join(tests)]
+    if api_key:
+        cmd += ["--api-key", api_key]
+
+    log_cmd = [c if c != api_key else "***REDACTED***" for c in cmd]
+
+    if dry_run:
+        logger.info("[DRY-RUN] Would run: %s", " ".join(log_cmd))
+        output_path.unlink(missing_ok=True)
+        return 0
+
+    audit_log(db_path, "firebase_audit_start",
+              f"project={project_id} cmd={' '.join(log_cmd)}", engagement_id)
+
+    try:
+        subprocess.run(cmd, timeout=timeout, check=True,
+                       capture_output=True, text=True)
+    except subprocess.TimeoutExpired:
+        logger.error("Agneyastra timed out after %ds", timeout)
+        output_path.unlink(missing_ok=True)
+        return 0
+    except subprocess.CalledProcessError as e:
+        logger.error("Agneyastra exited %d: %s", e.returncode, e.stderr[:500])
+        output_path.unlink(missing_ok=True)
+        return 0
+
+    count = _parse_and_store(con, engagement_id, project_id, output_path)
+    output_path.unlink(missing_ok=True)   # delete immediately after parse
+
+    audit_log(db_path, "firebase_audit_complete",
+              f"project={project_id} findings={count}", engagement_id)
+    con.close()
+    return count
+
+
+def _parse_and_store(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    project_id: str,
+    output_path: Path,
+) -> int:
+    try:
+        data = json.loads(output_path.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error("Failed to parse Agneyastra output: %s", e)
+        return 0
+
+    count = 0
+    for finding in data.get("findings", []):
+        category = finding.get("category", "unknown")
+        severity  = _SEVERITY_MAP.get(category, "INFO")
+        con.execute(
+            """INSERT OR IGNORE INTO vulnerability_findings
+               (engagement_id, vuln_type, target_url, severity, title, description, evidence)
+               VALUES (?, 'FIREBASE_MISCONFIG', ?, ?, ?, ?, ?)""",
+            (
+                engagement_id,
+                f"https://{project_id}.firebaseapp.com",
+                severity,
+                finding.get("title", category),
+                finding.get("description", ""),
+                json.dumps(finding.get("detail", {}))[:512],
+            ),
+        )
+        count += 1
+    con.commit()
+    return count
+```
+
+---
+
+### 9.15.5 Implementation Tasks
+
+| Task | Description | Est. Effort |
+|------|-------------|-------------|
+| 4E.1 | `assert_tool_version("agneyastra", "1.0.0")` at init | 0.5 days |
+| 4E.2 | `_resolve_api_key()` — query `key_scanner_findings` for ACTIVE Firebase key | 0.5 days |
+| 4E.3 | Subprocess invocation + stdout/stderr capture + timeout | 1 day |
+| 4E.4 | `register_cleanup_file()` + immediate post-parse deletion of JSON output | 0.5 days |
+| 4E.5 | `_parse_and_store()` — severity mapping, INSERT to `vulnerability_findings` | 1 day |
+| 4E.6 | `cloud_assets` insert for project | 0.5 days |
+| 4E.7 | API key redaction in audit log | 0.5 days |
+| 4E.8 | CLI command + `questionary.confirm()` + `--dry-run` | 1 day |
+| 4E.9 | Unit tests: subprocess mock, severity mapping, cleanup file deleted post-parse | 2 days |
+| 4E.10 | Integration test: fixture Agneyastra JSON → assert findings in DB | 1 day |
+| **TOTAL** | | **~8.5 days** |
+
+---
+
+## §9.16 — Module 4-F: Firebase Extract
+
+### 9.16.1 Purpose
+
+Passive, offline extraction of Firebase project identifiers from APK and IPA mobile
+application binaries. No network activity. Outputs project IDs, API keys, and RTDB
+URLs that feed Module 4-E and are stored in `cloud_assets`.
+
+This module requires no scope gate (no outbound requests are made) and no
+`questionary.confirm()` (no target interaction occurs).
+
+---
+
+### 9.16.2 Functional Requirements
+
+| ID | Requirement |
+|----|-------------|
+| FR-4F.1 | Accept `--apk` and/or `--ipa` file paths. Accept both in a single invocation. |
+| FR-4F.2 | APK extraction: unzip APK → locate `google-services.json` → parse `project_info.project_id` and `client[].api_key[].current_key`. |
+| FR-4F.3 | APK fallback: regex-scan `res/values/strings.xml` for RTDB URLs (`*.firebaseio.com`). |
+| FR-4F.4 | IPA extraction: unzip IPA → locate `GoogleService-Info.plist` → parse `PROJECT_ID`, `API_KEY`, `DATABASE_URL`. |
+| FR-4F.5 | IPA fallback: regex-scan all `.plist` files for RTDB URL pattern. |
+| FR-4F.6 | Deduplicate findings by `(project_id, source_file)` before storage. |
+| FR-4F.7 | Store each discovered project in `cloud_assets` (asset_type=`'firebase'`, source=`'firebase_extract'`). |
+| FR-4F.8 | Age-encrypt API key values before storage; never write plaintext API keys to `cloud_assets`. |
+| FR-4F.9 | `--output-json <path>`: write structured JSON of all findings for downstream processing by Module 4-E. |
+| FR-4F.10 | If `--engagement` supplied, write to `cloud_assets`; if omitted, write to `--output-json` only. |
+| FR-4F.11 | Log file paths processed and project IDs found (not API key values) to `audit_log`. |
+
+---
+
+### 9.16.3 Core Implementation
+
+```python
+# forge/phase4/firebase_extract.py
+"""
+Module 4-F — Firebase Project ID Extraction from APK/IPA.
+
+Passive offline analysis. No network activity. No scope gate required.
+Extracts Firebase project IDs, API keys, and RTDB URLs from mobile binaries.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import re
+import zipfile
+import plistlib
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+from forge.opsec.crypto import encrypt_string
+
+logger = logging.getLogger(__name__)
+
+_RTDB_URL_RE = re.compile(r'https://[a-zA-Z0-9\-]+\.firebaseio\.com', re.I)
+
+
+@dataclass
+class FirebaseProject:
+    project_id:   str
+    api_key_enc:  Optional[str]   # age-encrypted; None if not found
+    rtdb_url:     Optional[str]
+    source_file:  str
+    extract_path: str             # path within archive
+
+
+def extract_from_apk(apk_path: Path, age_pubkey: str) -> list[FirebaseProject]:
+    projects: list[FirebaseProject] = []
+    try:
+        with zipfile.ZipFile(apk_path) as zf:
+            names = zf.namelist()
+
+            # Primary: google-services.json
+            gsj_candidates = [n for n in names if n.endswith('google-services.json')]
+            for gsj_path in gsj_candidates:
+                try:
+                    data = json.loads(zf.read(gsj_path))
+                    pid  = data.get('project_info', {}).get('project_id')
+                    if not pid:
+                        continue
+                    rtdb = data.get('project_info', {}).get('firebase_url')
+                    # Extract first available API key
+                    raw_key = None
+                    for client in data.get('client', []):
+                        for ak in client.get('api_key', []):
+                            raw_key = ak.get('current_key')
+                            if raw_key:
+                                break
+                        if raw_key:
+                            break
+                    projects.append(FirebaseProject(
+                        project_id   = pid,
+                        api_key_enc  = encrypt_string(raw_key, age_pubkey) if raw_key else None,
+                        rtdb_url     = rtdb,
+                        source_file  = str(apk_path),
+                        extract_path = gsj_path,
+                    ))
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.debug("Could not parse %s: %s", gsj_path, e)
+
+            # Fallback: strings.xml RTDB URL regex
+            xml_candidates = [n for n in names if n.endswith('strings.xml')]
+            for xml_path in xml_candidates:
+                content = zf.read(xml_path).decode('utf-8', errors='ignore')
+                for m in _RTDB_URL_RE.finditer(content):
+                    rtdb_url   = m.group(0)
+                    project_id = rtdb_url.split('//')[1].split('.')[0]
+                    if not any(p.project_id == project_id for p in projects):
+                        projects.append(FirebaseProject(
+                            project_id   = project_id,
+                            api_key_enc  = None,
+                            rtdb_url     = rtdb_url,
+                            source_file  = str(apk_path),
+                            extract_path = xml_path,
+                        ))
+    except zipfile.BadZipFile:
+        logger.error("Not a valid APK/ZIP: %s", apk_path)
+    return projects
+
+
+def extract_from_ipa(ipa_path: Path, age_pubkey: str) -> list[FirebaseProject]:
+    projects: list[FirebaseProject] = []
+    try:
+        with zipfile.ZipFile(ipa_path) as zf:
+            names = zf.namelist()
+
+            # Primary: GoogleService-Info.plist
+            plist_candidates = [n for n in names if n.endswith('GoogleService-Info.plist')]
+            for pl_path in plist_candidates:
+                try:
+                    data = plistlib.loads(zf.read(pl_path))
+                    pid  = data.get('PROJECT_ID')
+                    if not pid:
+                        continue
+                    raw_key = data.get('API_KEY')
+                    projects.append(FirebaseProject(
+                        project_id   = pid,
+                        api_key_enc  = encrypt_string(raw_key, age_pubkey) if raw_key else None,
+                        rtdb_url     = data.get('DATABASE_URL'),
+                        source_file  = str(ipa_path),
+                        extract_path = pl_path,
+                    ))
+                except (plistlib.InvalidFileException, KeyError) as e:
+                    logger.debug("Could not parse %s: %s", pl_path, e)
+
+            # Fallback: all .plist files for RTDB URL
+            other_plists = [n for n in names if n.endswith('.plist')
+                            and not n.endswith('GoogleService-Info.plist')]
+            for pl_path in other_plists:
+                content = zf.read(pl_path).decode('utf-8', errors='ignore')
+                for m in _RTDB_URL_RE.finditer(content):
+                    rtdb_url   = m.group(0)
+                    project_id = rtdb_url.split('//')[1].split('.')[0]
+                    if not any(p.project_id == project_id for p in projects):
+                        projects.append(FirebaseProject(
+                            project_id   = project_id,
+                            api_key_enc  = None,
+                            rtdb_url     = rtdb_url,
+                            source_file  = str(ipa_path),
+                            extract_path = pl_path,
+                        ))
+    except zipfile.BadZipFile:
+        logger.error("Not a valid IPA/ZIP: %s", ipa_path)
+    return projects
+
+
+def store_projects(
+    projects:     list[FirebaseProject],
+    engagement_id: int,
+    db_path:      Path,
+) -> None:
+    import sqlite3
+    con = sqlite3.connect(db_path)
+    for p in projects:
+        con.execute(
+            """INSERT OR IGNORE INTO cloud_assets
+               (engagement_id, asset_type, identifier, source)
+               VALUES (?, 'firebase', ?, 'firebase_extract')""",
+            (engagement_id, p.project_id),
+        )
+    con.commit()
+    con.close()
+```
+
+---
+
+### 9.16.4 CLI
+
+```bash
+# Extract from APK only
+forge cloud firebase-extract \
+  --apk /path/to/app.apk \
+  --engagement acme-001 \
+  --output-json /tmp/firebase_projects.json
+
+# Extract from both APK and IPA
+forge cloud firebase-extract \
+  --apk /path/to/app.apk \
+  --ipa /path/to/app.ipa \
+  --engagement acme-001
+```
+
+---
+
+### 9.16.5 Implementation Tasks
+
+| Task | Description | Est. Effort |
+|------|-------------|-------------|
+| 4F.1 | `extract_from_apk()`: ZIP open, `google-services.json` parse, API key extraction | 1 day |
+| 4F.2 | APK fallback: `strings.xml` RTDB URL regex scan | 0.5 days |
+| 4F.3 | `extract_from_ipa()`: `GoogleService-Info.plist` parse via `plistlib` | 1 day |
+| 4F.4 | IPA fallback: all `.plist` RTDB URL regex scan | 0.5 days |
+| 4F.5 | Age-encrypt API keys at extraction; never write plaintext | 0.5 days |
+| 4F.6 | `store_projects()` → `cloud_assets` | 0.5 days |
+| 4F.7 | `--output-json` writer | 0.5 days |
+| 4F.8 | CLI command | 0.5 days |
+| 4F.9 | Unit tests: fixture APK + fixture IPA; assert project IDs extracted; assert API key age-encrypted | 1.5 days |
+| **TOTAL** | | **~6.5 days** |
+
+---
+
+## §9.17 — Module 4-G: Supabase RLS Scanner
+
+### 9.17.1 Purpose
+
+Tests Supabase projects for Row Level Security (RLS) misconfigurations by probing the
+PostgREST REST API with anonymous (no auth) and optionally authenticated requests.
+Detects tables accessible without authentication, with particular severity escalation
+when sensitive column names are present.
+
+> **OPSEC:** The write probe (POST) may create a traceable record in the target database.
+> Use a clearly marked probe payload (`__forge_probe__`). `--dry-run` suppresses all
+> write probes entirely.
+
+---
+
+### 9.17.2 Functional Requirements
+
+| ID | Requirement |
+|----|-------------|
+| FR-4G.1 | Accept `--project-ref` (Supabase project reference, e.g. `xyzxyzxyz`) and optional `--anon-key`. |
+| FR-4G.2 | Scope gate: `<project-ref>.supabase.co` must be in engagement scope. |
+| FR-4G.3 | Anonymous read test: `GET /rest/v1/<table>?limit=1` with `apikey: <anon-key>` header (or no auth if `--anon-key` omitted). |
+| FR-4G.4 | Table discovery: `GET /rest/v1/` returns OpenAPI schema; extract table names. |
+| FR-4G.5 | Sensitive column detection: if response JSON contains keys matching: `email`, `password`, `token`, `secret`, `ssn`, `card`, `phone` — escalate severity. |
+| FR-4G.6 | Severity matrix: anon_read + sensitive_cols → CRITICAL; anon_read only → HIGH; anon_write → HIGH; anon_read + no sensitive → HIGH. |
+| FR-4G.7 | Anonymous write test (unless `--dry-run`): `POST /rest/v1/<table>` with `{"__forge_probe__": true}`. Store HTTP status only. |
+| FR-4G.8 | Authenticated differential (if `--auth-token <jwt>`): re-run same probes with Bearer token; record delta. |
+| FR-4G.9 | Persist findings to `vulnerability_findings` (vuln_type=`'SUPABASE_RLS'`). |
+| FR-4G.10 | Persist project to `cloud_assets` (asset_type=`'supabase'`, source=`'supabase_scanner'`). |
+| FR-4G.11 | `questionary.confirm()` before write probes; display table names and warning about traceable records. |
+| FR-4G.12 | `--dry-run`: read probes only; suppress all write probes; log intended writes to stdout. |
+| FR-4G.13 | Rate limit: 1 req/s with 1.0 s delay between table probes. |
+| FR-4G.14 | Log table name, probe type, HTTP status to `audit_log`. Never log response body. |
+
+---
+
+### 9.17.3 Severity Matrix
+
+| Condition | Severity |
+|-----------|----------|
+| Anon read succeeds + sensitive column names present | CRITICAL |
+| Anon read succeeds + no sensitive columns | HIGH |
+| Anon write succeeds (201/200) | HIGH |
+| Auth-only read returns data that anon request also returns | MEDIUM |
+| Anon read returns empty array (no data but accessible) | LOW |
+
+---
+
+### 9.17.4 Core Implementation
+
+```python
+# forge/phase4/supabase_scanner.py
+"""
+Module 4-G — Supabase RLS Policy Scanner.
+
+Probes Supabase PostgREST API for anonymous and authenticated access
+violations indicating missing or misconfigured Row Level Security policies.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import sqlite3
+import time
+from dataclasses import dataclass
+from typing import Optional
+
+import questionary
+from curl_cffi import requests as cffi_requests
+
+from forge.opsec.scope_gate import assert_in_scope
+from forge.shared.audit import audit_log
+
+logger = logging.getLogger(__name__)
+
+_SENSITIVE_COLS = frozenset({
+    'email', 'password', 'token', 'secret', 'ssn',
+    'card', 'cc_number', 'phone', 'api_key',
+})
+
+PROBE_DELAY = 1.0   # seconds between table probes
+
+
+@dataclass
+class SupabaseFinding:
+    table:       str
+    severity:    str
+    title:       str
+    description: str
+    evidence:    str   # first 512 chars of anon response
+
+
+def _base_url(project_ref: str) -> str:
+    return f"https://{project_ref}.supabase.co"
+
+
+def _auth_headers(anon_key: Optional[str], jwt: Optional[str]) -> dict:
+    h = {"Content-Type": "application/json"}
+    if jwt:
+        h["Authorization"] = f"Bearer {jwt}"
+    if anon_key:
+        h["apikey"] = anon_key
+    return h
+
+
+def _has_sensitive(data) -> bool:
+    if isinstance(data, list) and data:
+        return any(k.lower() in _SENSITIVE_COLS for k in data[0].keys())
+    if isinstance(data, dict):
+        return any(k.lower() in _SENSITIVE_COLS for k in data.keys())
+    return False
+
+
+def _assess_severity(has_data: bool, has_sensitive: bool) -> str:
+    if has_data and has_sensitive:
+        return 'CRITICAL'
+    if has_data:
+        return 'HIGH'
+    return 'LOW'
+
+
+def run_supabase_scan(
+    engagement_id: int,
+    db_path:       Path,
+    project_ref:   str,
+    anon_key:      Optional[str],
+    auth_token:    Optional[str],
+    dry_run:       bool,
+    delay:         float = PROBE_DELAY,
+) -> list[SupabaseFinding]:
+    from pathlib import Path
+    base = _base_url(project_ref)
+    assert_in_scope(f"{project_ref}.supabase.co")
+
+    con = sqlite3.connect(db_path)
+    # Persist to cloud_assets
+    con.execute(
+        """INSERT OR IGNORE INTO cloud_assets
+           (engagement_id, asset_type, identifier, source)
+           VALUES (?, 'supabase', ?, 'supabase_scanner')""",
+        (engagement_id, project_ref),
+    )
+    con.commit()
+
+    findings: list[SupabaseFinding] = []
+
+    with cffi_requests.Session(impersonate="chrome110") as session:
+        # Discover tables via OpenAPI
+        schema_resp = session.get(
+            f"{base}/rest/v1/",
+            headers=_auth_headers(anon_key, None),
+            timeout=10,
+        )
+        if schema_resp.status_code not in (200, 206):
+            logger.warning("Could not retrieve PostgREST schema: HTTP %d", schema_resp.status_code)
+            return findings
+
+        try:
+            schema = schema_resp.json()
+            tables = list(schema.get("definitions", {}).keys())
+        except (json.JSONDecodeError, AttributeError):
+            logger.warning("Could not parse OpenAPI schema response")
+            return findings
+
+        for table in tables:
+            time.sleep(delay)
+            table_url = f"{base}/rest/v1/{table}?limit=1"
+
+            # Anonymous read
+            anon_resp = session.get(
+                table_url,
+                headers=_auth_headers(anon_key, None),
+                timeout=10,
+            )
+            audit_log(db_path, "supabase_anon_read",
+                      f"table={table} status={anon_resp.status_code}", engagement_id)
+
+            anon_data = None
+            has_data  = False
+            if anon_resp.status_code == 200:
+                try:
+                    anon_data = anon_resp.json()
+                    has_data  = bool(anon_data)
+                except json.JSONDecodeError:
+                    pass
+
+            has_sensitive = _has_sensitive(anon_data) if anon_data else False
+            severity      = _assess_severity(has_data, has_sensitive)
+
+            if anon_resp.status_code == 200:
+                evidence = anon_resp.text[:512]
+                finding  = SupabaseFinding(
+                    table       = table,
+                    severity    = severity,
+                    title       = f"Supabase RLS: anonymous read on '{table}'",
+                    description = (
+                        f"Table '{table}' is readable without authentication."
+                        + (" Sensitive column names detected." if has_sensitive else "")
+                    ),
+                    evidence    = evidence,
+                )
+                findings.append(finding)
+                _store_finding(con, engagement_id, project_ref, finding)
+
+            # Anonymous write (unless dry-run)
+            if not dry_run:
+                confirmed_write = questionary.confirm(
+                    f"[Module 4-G] Write probe to '{table}' (will create a traceable record). Proceed?"
+                ).ask()
+                if confirmed_write:
+                    write_resp = session.post(
+                        f"{base}/rest/v1/{table}",
+                        headers=_auth_headers(anon_key, None),
+                        json={"__forge_probe__": True},
+                        timeout=10,
+                    )
+                    audit_log(db_path, "supabase_anon_write",
+                              f"table={table} status={write_resp.status_code}", engagement_id)
+                    if write_resp.status_code in (200, 201):
+                        finding = SupabaseFinding(
+                            table       = table,
+                            severity    = 'HIGH',
+                            title       = f"Supabase RLS: anonymous write on '{table}'",
+                            description = f"Table '{table}' accepts unauthenticated writes.",
+                            evidence    = f"HTTP {write_resp.status_code}",
+                        )
+                        findings.append(finding)
+                        _store_finding(con, engagement_id, project_ref, finding)
+            else:
+                logger.info("[DRY-RUN] Would write probe to %s", f"{base}/rest/v1/{table}")
+
+    con.close()
+    logger.info("Module 4-G: %d Supabase findings for project %s", len(findings), project_ref)
+    return findings
+
+
+def _store_finding(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    project_ref: str,
+    f: SupabaseFinding,
+) -> None:
+    con.execute(
+        """INSERT OR IGNORE INTO vulnerability_findings
+           (engagement_id, vuln_type, target_url, parameter, severity,
+            title, description, evidence)
+           VALUES (?, 'SUPABASE_RLS', ?, ?, ?, ?, ?, ?)""",
+        (
+            engagement_id,
+            f"https://{project_ref}.supabase.co/rest/v1/{f.table}",
+            f.table,
+            f.severity,
+            f.title,
+            f.description,
+            f.evidence,
+        ),
+    )
+    con.commit()
+```
+
+---
+
+### 9.17.5 CLI
+
+```bash
+# Read-only scan (--dry-run suppresses write probes)
+forge cloud supabase \
+  --engagement acme-001 \
+  --project-ref xyzxyzxyz \
+  --anon-key eyJhbGci... \
+  --dry-run
+
+# Full scan with write probes and authenticated differential
+forge cloud supabase \
+  --engagement acme-001 \
+  --project-ref xyzxyzxyz \
+  --anon-key eyJhbGci... \
+  --auth-token eyJhbGci...
+```
+
+---
+
+### 9.17.6 Implementation Tasks
+
+| Task | Description | Est. Effort |
+|------|-------------|-------------|
+| 4G.1 | OpenAPI schema discovery: `GET /rest/v1/` → table name extraction | 1 day |
+| 4G.2 | Anonymous read probe per table + status + JSON parse | 1 day |
+| 4G.3 | `_has_sensitive()` column detection | 0.5 days |
+| 4G.4 | `_assess_severity()` matrix | 0.5 days |
+| 4G.5 | Anonymous write probe + `questionary.confirm()` per write | 1 day |
+| 4G.6 | Authenticated differential mode (`--auth-token`) | 1 day |
+| 4G.7 | `_store_finding()` → `vulnerability_findings` | 0.5 days |
+| 4G.8 | `cloud_assets` insert | 0.5 days |
+| 4G.9 | CLI command + `--dry-run` suppression of write probes | 1 day |
+| 4G.10 | Unit tests: severity matrix, sensitive column detection, VCR read probes | 2 days |
+| 4G.11 | VCR cassettes: anon read 200 with data, 200 empty, 401 forbidden; write 201, 401 | 2 days |
+| **TOTAL** | | **~11 days** |
+
+---
+
+## §9.18 — Phase 4 Cumulative Effort Summary & OPSEC Notes (v7.2)
+
+### Effort Table
+
+| Module | Description | Effort |
+|--------|-------------|--------|
+| 4-A | Exploit cache ETL (existing) | — |
+| 4-B | Exploit correlator core (existing) | — |
+| 4-C | Hash-Aware Correlator (this expansion) | 10 days |
+| **4-D** | **IDOR Scanner** | **~12.5 days** |
+| **4-E** | **Firebase Agneyastra** | **~8.5 days** |
+| **4-F** | **Firebase Extract** | **~6.5 days** |
+| **4-G** | **Supabase RLS Scanner** | **~11 days** |
+| **Phase 4 Total (new modules only)** | | **~48.5 days** |
+
+> At two parallel engineering tracks: approximately **4–5 calendar weeks** of additional
+> capacity required for Modules 4-D through 4-G beyond the existing Phase 4 baseline.
+
+---
+
+### OPSEC Notes — Modules 4-D through 4-G
+
+| Risk | Module | Mitigation |
+|------|--------|------------|
+| IDOR probes create server-side request logs | 4-D | Respect `--delay`; route through engagement proxy if available; confirm before crawl |
+| Crawling off-domain via redirect | 4-D | Scope gate enforced at every URL fetch, not just seed URL |
+| Agneyastra JSON output persists sensitive Firebase data | 4-E | `register_cleanup_file()` pre-invocation; delete immediately post-parse; `forge clean` fallback |
+| Active Firebase API key passed to Agneyastra subprocess | 4-E | Redact from audit log; in-memory only; not written to `cloud_assets` |
+| Firebase API key from APK stored plaintext | 4-F | Age-encrypt at extraction; `cloud_assets.identifier` stores project ID only, not key |
+| Supabase write probe creates traceable DB record | 4-G | `questionary.confirm()` per table before write; `--dry-run` suppresses all writes |
+| Supabase anon key in `--anon-key` flag visible in process list | 4-G | Read from env var or file; never pass raw key via shell argument in production |
+| Module 4-G findings include raw response data | 4-G | Evidence truncated to 512 chars; full response never logged or stored |
+
+---
+
+*END OF CHUNK 5 EXPANSION — PHASE 4: EXPLOIT CORRELATION & VULNERABILITY DISCOVERY (v7.2)*

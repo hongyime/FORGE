@@ -1,0 +1,77 @@
+@echo off
+:: FORGE - Guided OSINT Sweep (LIGHT)
+::
+:: This launcher runs a linear, single-pass sweep. For a proper
+:: depth-first spider that chains every discovery back into more
+:: OSINT (subdomains -> emails -> Epieos social -> Sherlock usernames
+:: -> cloud discovery -> vuln passive -> attack-path graph -> report),
+:: use forge-kill-chain.bat instead. It's the recommended entry point.
+
+setlocal EnableExtensions EnableDelayedExpansion
+cd /d "%~dp0"
+set FORGE_NO_TOR=1
+
+if not exist ".venv\Scripts\python.exe" (
+    echo [ERROR] Run setup.bat once first.
+    pause & exit /b 1
+)
+
+echo ================================================================
+echo  FORGE Toolkit - LIGHT OSINT Sweep
+echo ================================================================
+echo.
+echo For the FULL automated spider (recommended), close this window
+echo and run  forge-kill-chain.bat  instead.
+echo.
+echo This LIGHT sweep runs a single pass of:
+echo   1. Subdomain enum (passive)
+echo   2. XposedOrNot   (breach exposure for target emails)
+echo   3. HIBP          (Have I Been Pwned - free domain tier)
+echo   4. Holehe        (account-existence for target emails)
+echo   5. GitHub keyscan (dry-run only)
+echo.
+set /p CONTINUE="Continue with LIGHT sweep? [y/N]: "
+if /i not "%CONTINUE%"=="y" (
+    echo [CANCELLED] Use forge-kill-chain.bat for the full spider.
+    pause & exit /b 0
+)
+
+set /p ENGAGEMENT="Engagement ID: "
+if "%ENGAGEMENT%"=="" ( echo [CANCELLED] & pause & exit /b 1 )
+
+set /p DOMAIN="Target domain (e.g. example.com): "
+if "%DOMAIN%"=="" ( echo [CANCELLED] & pause & exit /b 1 )
+
+set /p EMAILS="Seed emails (comma-separated, or blank to skip email OSINT): "
+
+echo.
+echo [1/5] Passive subdomain enumeration...
+.venv\Scripts\forge.exe --no-tor recon subdomains --engagement %ENGAGEMENT% --domain %DOMAIN%
+echo.
+
+if not "%EMAILS%"=="" (
+    echo [2/5] XposedOrNot breach exposure...
+    .venv\Scripts\forge.exe --no-tor osint xposed --engagement %ENGAGEMENT% --emails "%EMAILS%"
+    echo.
+    echo [4/5] Holehe account-existence check...
+    .venv\Scripts\forge.exe --no-tor osint accounts --engagement %ENGAGEMENT% --emails "%EMAILS%"
+    echo.
+) else (
+    echo [2/5] XposedOrNot skipped - no emails supplied.
+    echo [4/5] Holehe skipped - no emails supplied.
+)
+
+echo [3/5] HIBP domain breach check...
+.venv\Scripts\forge.exe --no-tor osint hibp --engagement %ENGAGEMENT%
+echo.
+
+echo [5/5] GitHub keyscan (dry-run only)...
+.venv\Scripts\forge.exe --no-tor osint keyscan --engagement %ENGAGEMENT% --domain %DOMAIN% --no-validate --dry-run
+echo.
+
+echo ================================================================
+echo  LIGHT sweep complete.
+echo  For the full spider next time, run forge-kill-chain.bat
+echo  Generate a report:  forge-report.bat
+echo ================================================================
+pause
