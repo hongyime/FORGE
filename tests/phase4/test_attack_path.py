@@ -902,6 +902,8 @@ class TestLoadCloudAssets:
                     validation_status TEXT NOT NULL,
                     validation_method TEXT,
                     http_status INTEGER,
+                    evidence TEXT,
+                    notes TEXT,
                     checked_at TIMESTAMP
                 );
 
@@ -909,6 +911,7 @@ class TestLoadCloudAssets:
                 VALUES
                     (1, 'aws_s3', 'bucket-stale', 'cloud_validate'),
                     (1, 'aws_s3', 'bucket-good', 'cloud_validate'),
+                    (1, 'stripe', 'acct-unsupported', 'cloud_validate'),
                     (1, 'gcs', 'metadata-bucket', 'cloud_validate');
 
                 INSERT INTO cloud_validation_results
@@ -923,8 +926,15 @@ class TestLoadCloudAssets:
                      's3_list_bucket', 404, '2026-07-15T09:00:00+00:00'),
                     (1, 'aws_s3', 'bucket-good', 'VALIDATED',
                      's3_list_bucket', 200, '2026-07-15T10:00:00+00:00'),
+                    (1, 'stripe', 'acct-unsupported', 'UNSUPPORTED',
+                     'registry_dispatch', NULL, '2026-07-15T10:00:00+00:00'),
                     (1, 'gcs', 'metadata-bucket', 'ACCESSIBLE_BUT_NO_DATA',
                      'gcs_http_probe', 200, '2026-07-15T10:00:00+00:00');
+
+                UPDATE cloud_validation_results
+                SET notes='Probe notes token=raw-secret-value',
+                    evidence='HTTP response api_key=raw-key-value was bounded'
+                WHERE identifier IN ('bucket-good', 'acct-unsupported');
 
                 INSERT INTO vulnerability_findings
                     (engagement_id, vuln_type, target_url, parameter, severity, title,
@@ -957,10 +967,18 @@ class TestLoadCloudAssets:
 
         assert cloud_nodes["bucket-stale"].metadata["validation_status"] == "HONEYPOT_SUSPECTED"
         assert cloud_nodes["bucket-good"].metadata["validation_status"] == "VALIDATED"
+        assert cloud_nodes["acct-unsupported"].metadata["validation_status"] == "UNSUPPORTED"
         assert cloud_nodes["metadata-bucket"].metadata["validation_status"] == "ACCESSIBLE_BUT_NO_DATA"
+        assert cloud_nodes["bucket-good"].metadata["validation_notes"] == (
+            "Probe notes token=[REDACTED]"
+        )
+        assert cloud_nodes["bucket-good"].metadata["validation_evidence_summary"] == (
+            "HTTP response api_key=[REDACTED] was bounded"
+        )
         assert "Stale cloud exposure" not in vuln_by_label
         assert "Validated cloud exposure" in vuln_by_label
         assert "Public Google Cloud Storage metadata observed" not in vuln_by_label
+        assert all("acct-unsupported" not in node.label for node in vuln_by_label.values())
 
     def test_cloud_nodes_use_latest_validation_result_for_managed_pages_assets(
         self,

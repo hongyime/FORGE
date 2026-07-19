@@ -54,6 +54,7 @@ _FORBIDDEN_KEYS = (
     "token_enc",
 )
 _MAX_NODE_LABEL_LENGTH = 120
+_MAX_VALIDATION_SUMMARY_LENGTH = 280
 _SEED_BASE_METADATA_KEYS = {
     "confidence",
     "confidence_band",
@@ -171,6 +172,22 @@ def _scrub_graph_metadata(value: Any) -> dict[str, Any]:
 
     scrubbed = _scrub(value)
     return scrubbed if isinstance(scrubbed, dict) else {}
+
+
+def _safe_validation_summary(value: Any) -> str:
+    text = " ".join(str(value or "").split())
+    if not text:
+        return ""
+    text = re.sub(
+        r"(?i)\b(password|passwd|secret|api[_-]?key|access[_-]?token|"
+        r"refresh[_-]?token|token)\s*[:=]\s*[^\s,;]+",
+        lambda match: f"{match.group(1)}=[REDACTED]",
+        text,
+    )
+    text = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*", "Bearer [REDACTED]", text)
+    if len(text) <= _MAX_VALIDATION_SUMMARY_LENGTH:
+        return text
+    return text[: _MAX_VALIDATION_SUMMARY_LENGTH - 3] + "..."
 
 
 def _append_unique_provider_sources(target: list[str], raw_value: Any) -> None:
@@ -452,6 +469,8 @@ class AttackGraphBuilder:
             if "provider_identifier" in columns
             else "identifier AS provider_identifier"
         )
+        notes_expr = "notes" if "notes" in columns else "NULL AS notes"
+        evidence_expr = "evidence" if "evidence" in columns else "NULL AS evidence"
         order_checked_at_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
         order_id_expr = "id" if "id" in columns else "0"
         rows = con.execute(
@@ -463,7 +482,9 @@ class AttackGraphBuilder:
                    validation_status,
                    validation_method,
                    http_status,
-                   {checked_at_expr}
+                   {checked_at_expr},
+                   {notes_expr},
+                   {evidence_expr}
             FROM cloud_validation_results
             WHERE engagement_id=?
             ORDER BY asset_type ASC,
@@ -473,7 +494,18 @@ class AttackGraphBuilder:
             """,
             (self.engagement_id,),
         ).fetchall()
-        for _row_id, asset_type, identifier, provider_identifier, status, method, http_status, checked_at in rows:
+        for (
+            _row_id,
+            asset_type,
+            identifier,
+            provider_identifier,
+            status,
+            method,
+            http_status,
+            checked_at,
+            notes,
+            evidence,
+        ) in rows:
             svc = str(asset_type or "cloud").strip().lower()
             ident = str(identifier or svc).strip().lower()
             metadata: dict[str, Any] = {
@@ -487,6 +519,12 @@ class AttackGraphBuilder:
                     metadata["http_status"] = int(http_status)
                 except (TypeError, ValueError):
                     metadata["http_status"] = str(http_status)
+            safe_notes = _safe_validation_summary(notes)
+            safe_evidence = _safe_validation_summary(evidence)
+            if safe_notes:
+                metadata["validation_notes"] = safe_notes
+            if safe_evidence:
+                metadata["validation_evidence_summary"] = safe_evidence
             self._cloud_validation_by_key[(svc, ident)] = metadata
 
     def _load_hosts(self, con: sqlite3.Connection) -> None:

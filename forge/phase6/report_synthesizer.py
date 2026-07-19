@@ -118,6 +118,21 @@ _FORBIDDEN_CONTEXT_KEYS = {
     "token",
     "token_enc",
 }
+_MAX_VALIDATION_SUMMARY_LENGTH = 280
+
+
+def _safe_validation_summary(value: Any) -> str:
+    text = " ".join(str(value or "").split())
+    if not text:
+        return ""
+    text = _CRED_LEAK_RE.sub(
+        lambda match: f"{match.group(0).split('=', 1)[0].split(':', 1)[0]}=[REDACTED]",
+        text,
+    )
+    text = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*", "Bearer [REDACTED]", text)
+    if len(text) <= _MAX_VALIDATION_SUMMARY_LENGTH:
+        return text
+    return text[: _MAX_VALIDATION_SUMMARY_LENGTH - 3] + "..."
 
 _AUTO_CASCADE_DEFAULT_ORDER = (
     "kiro_cli",
@@ -234,6 +249,7 @@ class ReportContext:
     osint:               OsintContext
     exploits:            ExploitContext
     post_exploitation:   PostExploitContext
+    cloud_validation_inventory: list[dict[str, Any]] = field(default_factory=list)
     seed_summary:        SeedSummaryContext = field(default_factory=SeedSummaryContext)
     ongoing_intelligence: OngoingIntelligenceContext = field(
         default_factory=OngoingIntelligenceContext
@@ -297,6 +313,7 @@ class ContextBuilder:
                 osint               = self._load_osint(con),
                 exploits            = self._load_exploits(con),
                 post_exploitation   = self._load_post_exploit(con),
+                cloud_validation_inventory=self._cloud_validation_inventory(con),
                 seed_summary        = self._load_seed_summary(con),
                 ongoing_intelligence= self._load_ongoing_intel(con),
             )
@@ -671,6 +688,7 @@ class ContextBuilder:
             "validation_method" if "validation_method" in columns else "NULL AS validation_method",
             "http_status" if "http_status" in columns else "NULL AS http_status",
             "notes" if "notes" in columns else "NULL AS notes",
+            "evidence" if "evidence" in columns else "NULL AS evidence",
             "checked_at" if "checked_at" in columns else "NULL AS checked_at",
         ]
         order_checked_at_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
@@ -697,10 +715,30 @@ class ContextBuilder:
                 "validation_status": str(row["validation_status"] or "").strip().upper(),
                 "validation_method": str(row["validation_method"] or "").strip(),
                 "validation_http_status": row["http_status"],
-                "validation_notes": str(row["notes"] or "").strip()[:280],
+                "validation_notes": _safe_validation_summary(row["notes"]),
+                "validation_evidence_summary": _safe_validation_summary(row["evidence"]),
                 "validation_checked_at": str(row["checked_at"] or "").strip(),
             }
         return metadata
+
+    def _cloud_validation_inventory(self, con: sqlite3.Connection) -> list[dict[str, Any]]:
+        metadata = self._cloud_validation_metadata_index(con)
+        inventory = [
+            {
+                "asset_type": asset_type,
+                "identifier": identifier,
+                "provider_identifier": str(item.get("provider_identifier") or identifier),
+                "validation_status": str(item.get("validation_status") or ""),
+                "method": str(item.get("validation_method") or ""),
+                "http_status": item.get("validation_http_status"),
+                "checked_at": str(item.get("validation_checked_at") or ""),
+                "notes": str(item.get("validation_notes") or ""),
+                "evidence_summary": str(item.get("validation_evidence_summary") or ""),
+            }
+            for (asset_type, identifier), item in metadata.items()
+        ]
+        inventory.sort(key=lambda item: (str(item["asset_type"]), str(item["identifier"])))
+        return inventory
 
     def _finding_validation_candidates(self, row: sqlite3.Row) -> list[tuple[str, str]]:
         asset_types: list[str] = []
@@ -762,6 +800,7 @@ class ContextBuilder:
             "validation_method": "",
             "validation_http_status": None,
             "validation_notes": "",
+            "validation_evidence_summary": "",
             "validation_checked_at": "",
         }
         for candidate in self._finding_validation_candidates(row):
@@ -779,6 +818,7 @@ class ContextBuilder:
                 "validation_method": "",
                 "validation_http_status": None,
                 "validation_notes": "",
+                "validation_evidence_summary": "",
                 "validation_checked_at": "",
             }
         return {
@@ -786,6 +826,7 @@ class ContextBuilder:
             "validation_method": proof["validation_method"],
             "validation_http_status": None,
             "validation_notes": proof["validation_proof"],
+            "validation_evidence_summary": "",
             "validation_checked_at": "",
         }
 
@@ -2494,6 +2535,33 @@ class ReportSynthesizer:
                     "key_findings_count": ctx.osint.key_findings_count,
                 }
             )
+        for validation in ctx.cloud_validation_inventory:
+            rows.append(
+                {
+                    "record_type": "cloud_validation",
+                    "engagement_id": ctx.engagement_id,
+                    "engagement_name": ctx.engagement_name,
+                    "overall_risk": ctx.overall_risk,
+                    "validation_status": str(validation.get("validation_status") or ""),
+                    "validation_method": str(validation.get("method") or ""),
+                    "validation_http_status": str(validation.get("http_status") or ""),
+                    "cloud_asset_type": str(validation.get("asset_type") or ""),
+                    "cloud_identifier": str(validation.get("identifier") or ""),
+                    "cloud_provider_identifier": str(
+                        validation.get("provider_identifier") or ""
+                    ),
+                    "validation_checked_at": str(validation.get("checked_at") or ""),
+                    "validation_notes": str(validation.get("notes") or ""),
+                    "validation_evidence_summary": str(
+                        validation.get("evidence_summary") or ""
+                    ),
+                    "emails_found": ctx.osint.emails_found,
+                    "hosts_found": len(ctx.recon.hosts),
+                    "subdomains_found": len(ctx.recon.subdomains),
+                    "open_ports_found": len(ctx.recon.open_ports),
+                    "key_findings_count": ctx.osint.key_findings_count,
+                }
+            )
         for seed in ctx.seed_summary.seeds:
             rows.append(
                 {
@@ -2597,9 +2665,39 @@ class ReportSynthesizer:
             "archive_root_domain": "",
             "archive_discovered_from": "",
         }
+        cloud_validation_defaults = {
+            "cloud_asset_type": "",
+            "cloud_identifier": "",
+            "cloud_provider_identifier": "",
+            "validation_checked_at": "",
+            "validation_notes": "",
+            "validation_evidence_summary": "",
+        }
         for row in rows:
             for key, value in archive_defaults.items():
                 row.setdefault(key, value)
+            for key, value in cloud_validation_defaults.items():
+                row.setdefault(key, value)
+            for key in (
+                "severity",
+                "cve_id",
+                "title",
+                "evidence",
+                "validation_status",
+                "validation_method",
+                "validation_http_status",
+                "seed_type",
+                "seed_value",
+                "seed_source",
+                "seed_depth",
+                "seed_confidence",
+                "relation_source",
+                "relation_type",
+                "relation_target",
+                "relation_confidence",
+                "relation_evidence",
+            ):
+                row.setdefault(key, "")
         if rows:
             return rows
         return [
@@ -2629,6 +2727,12 @@ class ReportSynthesizer:
                 "archive_sources": "",
                 "archive_root_domain": "",
                 "archive_discovered_from": "",
+                "cloud_asset_type": "",
+                "cloud_identifier": "",
+                "cloud_provider_identifier": "",
+                "validation_checked_at": "",
+                "validation_notes": "",
+                "validation_evidence_summary": "",
                 "emails_found": ctx.osint.emails_found,
                 "hosts_found": len(ctx.recon.hosts),
                 "subdomains_found": len(ctx.recon.subdomains),

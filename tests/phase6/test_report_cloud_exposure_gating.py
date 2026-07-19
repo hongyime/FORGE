@@ -123,6 +123,15 @@ def _create_cloud_exposure_db(path: Path) -> None:
                 "2026-07-02T00:00:00Z",
             ),
             (
+                "stripe",
+                "acct-unsupported",
+                "UNSUPPORTED",
+                "registry_dispatch",
+                None,
+                "token=raw-validation-secret unsupported provider",
+                "2026-07-02T00:00:00Z",
+            ),
+            (
                 "aws_s3",
                 "stale-bucket",
                 "VALIDATED",
@@ -177,6 +186,24 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert "Latest validated public S3 bucket listing exposure" in context_titles
     assert "Stale validated public S3 bucket listing exposure" not in context_titles
     assert "Public Google Cloud Storage metadata observed" not in context_titles
+    inventory_by_identifier = {
+        str(item["identifier"]): item for item in ctx.cloud_validation_inventory
+    }
+    assert inventory_by_identifier["acct-unsupported"]["validation_status"] == "UNSUPPORTED"
+    assert inventory_by_identifier["acct-unsupported"]["evidence_summary"] == (
+        "token=[REDACTED] unsupported provider"
+    )
+    assert inventory_by_identifier["validated-bucket"]["evidence_summary"] == (
+        "latest object metadata listing"
+    )
+    validated_finding = next(
+        item
+        for item in ctx.exploits.exploited
+        if item.get("resource_id") == "validated-bucket"
+    )
+    assert validated_finding["validation_evidence_summary"] == (
+        "latest object metadata listing"
+    )
 
     csv_titles = {
         str(row["title"])
@@ -184,6 +211,17 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         if row["record_type"] == "finding"
     }
     assert csv_titles == {"Latest validated public S3 bucket listing exposure"}
+    validation_csv_rows = [
+        row
+        for row in ReportSynthesizer._raw_export_csv_rows(ctx)
+        if row["record_type"] == "cloud_validation"
+    ]
+    assert {row["cloud_identifier"] for row in validation_csv_rows} >= {
+        "validated-bucket",
+        "stale-bucket",
+        "metadata-bucket",
+        "acct-unsupported",
+    }
 
     synth = ReportSynthesizer(
         db_path=db_path,
@@ -203,6 +241,11 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert "Stale validated public S3 bucket listing exposure" not in markdown
     assert "Public Google Cloud Storage metadata observed" not in markdown
     assert exported_titles == {"Latest validated public S3 bucket listing exposure"}
+    assert {
+        item["validation_status"]
+        for item in payload["context"]["cloud_validation_inventory"]
+        if item["identifier"] == "acct-unsupported"
+    } == {"UNSUPPORTED"}
 
     raw_synth = ReportSynthesizer(
         db_path=db_path,
@@ -227,7 +270,19 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
             for row in csv.DictReader(handle)
             if row["record_type"] == "finding"
         }
+    with raw_path.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
+        raw_validation_rows = [
+            row
+            for row in csv.DictReader(handle)
+            if row["record_type"] == "cloud_validation"
+        ]
 
     assert raw_payload["format"] == "raw_export"
     assert raw_titles == {"Latest validated public S3 bucket listing exposure"}
     assert raw_csv_titles == {"Latest validated public S3 bucket listing exposure"}
+    assert any(
+        row["cloud_identifier"] == "acct-unsupported"
+        and row["validation_status"] == "UNSUPPORTED"
+        for row in raw_validation_rows
+    )
+    assert "raw-validation-secret" not in json.dumps(raw_payload)

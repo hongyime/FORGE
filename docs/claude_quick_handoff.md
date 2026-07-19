@@ -2017,12 +2017,15 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [x] Attack graph cloud resources are now keyed by `(asset_type, identifier)` instead of identifier alone, so same-name resources from different providers do not collapse into one CLOUD node or misroute validation/finding edges. Verification: compile/Ruff for `forge/phase4/attack_path.py` and focused cloud graph tests (`6 passed, 100 deselected`). Commit: `317817a fix(phase4): key cloud graph nodes by asset type`.
 - [x] Phase 6 deterministic cloud-exposure report gate is complete: stale `DETERMINISTIC_CLOUD_EXPOSURE` findings are excluded from report context, markdown, JSON, forced raw JSON, and raw CSV unless the latest matching cloud validation status is `VALIDATED`. Validation-result ordering now follows the graph/dashboard latest-row convention. Verification: compile/Ruff and Phase 6 report suites (`75 passed`). Commit: `b0e44f2 fix(reporting): gate cloud exposure exports`.
 - [x] Phase 4 deterministic cloud-exposure graph gate is complete: stale `DETERMINISTIC_CLOUD_EXPOSURE` rows no longer create VULN graph nodes unless the latest matching cloud validation status is `VALIDATED`; underlying CLOUD nodes remain visible with latest validation metadata for analyst review. Verification: compile/Ruff and combined graph/report suites (`182 passed`). 
+- [x] Cloud validation auditability is stronger: Phase 4 CLOUD nodes and Phase 6 JSON/CSV exports now carry scrubbed latest validation notes/evidence summaries, and Phase 6 emits non-finding `cloud_validation` inventory rows so unsupported/dead/suspect assets remain reviewable without entering findings. Verification: compile/Ruff, focused inventory slice (`3 passed, 105 deselected`), and combined graph/report suites (`182 passed`).
 
 ## Still partial
 
 - [ ] Provider coverage is still selective rather than exhaustive. The strongest deterministic coverage is Firebase, Supabase, S3/GCS/Azure/DO, Google/Gemini API keys, Hugging Face, Discord bot tokens, Telegram bot tokens, Notion tokens, Datadog API keys, GitHub, GitLab, Mailchimp, Stripe, SendGrid, Slack, Azure Storage connection strings, and co-located Twilio/AWS key-pair validation.
 - [ ] The engagement detail UI is sectioned, not literally tabbed. Treat that as a polish decision unless product now requires strict tabs.
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
+- [ ] Refactor deterministic cloud-exposure gate hints into one shared helper/module for Phase 4 graph and Phase 6 report paths; Claude patch review flagged duplicated heuristics as a future drift risk.
+- [ ] Add the missing slow multi-seed recursive kill-chain regression using mocked providers to prove domain/email/URL-or-artifact seeds jointly drive web, Fan-out E, artifact queue, cloud validation, graph export, and report fallback.
 
 ## Best next tasks
 
