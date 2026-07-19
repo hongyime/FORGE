@@ -24,12 +24,21 @@ Added portable export bundles for run audit manifests so operators can archive e
 - New public helper: `export_run_audit_manifest_bundle(...)`.
 - New CLI command:
   `forge audit manifest-export --engagement <id> [--run-id <id>] [--output <zip>] [--json]`
+- New signed-bundle verifier:
+  `forge audit manifest-bundle-verify --bundle <zip> --signing-key-env <ENV> [--json]`
 - Audit command implementations live in `forge/audit/cli.py`; `forge/cli.py` only creates/registers the audit Typer group.
 - Bundle contents:
   - `manifest.json`: stored hash-chain manifest from `run_audit_manifests`.
   - `verification.json`: export-time verification receipt with `ok`, stored hash, recomputed hash, and reason.
   - `checksums.sha256`: checksums for payload files in the ZIP.
   - `README.md`: operator-readable bundle summary.
+- Optional signed bundle contents:
+  - `signature.json`: HMAC-SHA256 signature over canonical payload file checksums.
+- Signing is explicit: `forge audit manifest-export --sign --signing-key-env <ENV>`.
+- Signing keys are read from the selected environment variable and are never written to disk.
+- Missing or empty signing env vars fail closed with exit `1`.
+- Signed-bundle verification is offline and does not require the engagement DB.
+- Signed-bundle verification fails closed for malformed signatures, duplicate ZIP entries, unsigned extra files, missing bundles, and signature mismatches.
 - ZIP member order and timestamps are deterministic.
 - Default output path is `reports/engagement_<id>_run_<run>_manifest_<hash>.zip`.
 - CLI exits `0` when export-time verification succeeds.
@@ -56,7 +65,7 @@ Result: `All checks passed!`.
 python -m pytest tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py tests\audit\test_run_audit_manifest.py -q --color=no
 ```
 
-Result: `10 passed`.
+Result: `15 passed`.
 
 ```powershell
 @'
@@ -64,15 +73,19 @@ from typer.testing import CliRunner
 from forge.cli import app
 r = CliRunner().invoke(app, ['audit', '--help'])
 print(r.exit_code)
-print('manifest-verify' in r.output, 'manifest-export' in r.output)
+print(
+    'manifest-verify' in r.output,
+    'manifest-export' in r.output,
+    'manifest-bundle-verify' in r.output,
+)
 '@ | python -
 ```
 
-Result: exit code `0`, both commands present.
+Result: exit code `0`, all three commands present.
 
 ## Review Status
 
-Claude read-only review at `%TEMP%\forge-claude-manifest-bundle-review-out.txt` returned only `Reached max turns (4)` with no usable findings. The prompt asked Claude to check raw data leakage, nondeterminism, verification semantics, CLI exit codes, unsafe output behavior, and missing tests.
+Claude read-only review at `%TEMP%\forge-claude-manifest-sign-review.txt` returned only `Reached max turns (4)` with no usable findings. The prompt asked Claude to check security correctness, tamper-evidence gaps, CLI behavior, and missing regression tests.
 
 ## Safety Notes
 
@@ -80,6 +93,5 @@ This checkpoint is offline evidence export only. It does not add provider calls,
 
 ## Next Tasks
 
-- Add optional cryptographic signing for exported bundles if operators need tamper-evident proof beyond hashes.
 - Add append-only remote archival support only if scoped customer storage is explicitly configured.
 - Continue reducing mega-file test footprint when touching adjacent artifact/orchestrator areas.

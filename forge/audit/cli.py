@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,7 @@ from forge.config import ForgeConfig
 def register_audit_commands(audit_app: typer.Typer) -> None:
     audit_app.command("manifest-verify")(_manifest_verify)
     audit_app.command("manifest-export")(_manifest_export)
+    audit_app.command("manifest-bundle-verify")(_manifest_bundle_verify)
 
 
 def _manifest_target(engagement: str, run_id: Optional[int]) -> tuple[Path, int, int]:
@@ -122,11 +124,27 @@ def _manifest_export(
         "--json",
         help="Emit machine-readable JSON instead of a compact text summary.",
     ),
+    sign: bool = typer.Option(
+        False,
+        "--sign",
+        help="Add signature.json using an HMAC key from --signing-key-env.",
+    ),
+    signing_key_env: str = typer.Option(
+        "FORGE_MANIFEST_SIGNING_KEY",
+        "--signing-key-env",
+        help="Environment variable containing the HMAC signing key when --sign is used.",
+    ),
+    signer_id: Optional[str] = typer.Option(
+        None,
+        "--signer-id",
+        help="Non-secret signer label stored in signature.json.",
+    ),
 ) -> None:
     """Export a portable per-run manifest bundle for external archival."""
     from forge.audit.manifest_bundle import export_run_audit_manifest_bundle  # noqa: PLC0415
 
     db_path, engagement_id, selected_run_id = _manifest_target(engagement, run_id)
+    signing_key = _signing_key(sign=sign, env_name=signing_key_env)
     con = sqlite3.connect(db_path)
     try:
         try:
@@ -136,6 +154,8 @@ def _manifest_export(
                 engagement_id=engagement_id,
                 run_id=selected_run_id,
                 output_path=output,
+                signing_key=signing_key,
+                signer_id=signer_id,
             )
         except ValueError as exc:
             typer.echo(str(exc), err=True)
@@ -150,6 +170,7 @@ def _manifest_export(
         "bundle_sha256": bundle.bundle_sha256,
         "manifest_hash": bundle.manifest_hash,
         "verification_ok": bundle.verification_ok,
+        "signature_present": bundle.signature_present,
         "files": list(bundle.files),
     }
     if json_output:
@@ -157,6 +178,52 @@ def _manifest_export(
     else:
         typer.echo(
             f"EXPORTED engagement={engagement_id} run={selected_run_id} "
-            f"path={bundle.path} verification={'yes' if bundle.verification_ok else 'no'}"
+            f"path={bundle.path} verification={'yes' if bundle.verification_ok else 'no'} "
+            f"signed={'yes' if bundle.signature_present else 'no'}"
         )
     raise typer.Exit(0 if bundle.verification_ok else 2)
+
+
+def _manifest_bundle_verify(
+    bundle: Path = typer.Option(..., "--bundle", "-b", help="Manifest export ZIP to verify."),
+    signing_key_env: str = typer.Option(
+        "FORGE_MANIFEST_SIGNING_KEY",
+        "--signing-key-env",
+        help="Environment variable containing the HMAC signing key.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON instead of a compact text summary.",
+    ),
+) -> None:
+    """Verify signature.json in a portable manifest bundle."""
+    from forge.audit.manifest_bundle import verify_run_audit_manifest_bundle_signature  # noqa: PLC0415
+
+    signing_key = _signing_key(sign=True, env_name=signing_key_env)
+    result = verify_run_audit_manifest_bundle_signature(bundle, signing_key=signing_key)
+    payload = {
+        "bundle": str(bundle),
+        "ok": result.ok,
+        "reason": result.reason,
+        "signer_id": result.signer_id,
+        "actual_signature": result.actual_signature,
+        "expected_signature": result.expected_signature,
+    }
+    if json_output:
+        typer.echo(json.dumps(payload, sort_keys=True))
+    elif result.ok:
+        typer.echo(f"OK bundle={bundle} signer={result.signer_id or 'unspecified'}")
+    else:
+        typer.echo(f"FAIL bundle={bundle} reason={result.reason or 'unknown'}", err=True)
+    raise typer.Exit(0 if result.ok else 2)
+
+
+def _signing_key(*, sign: bool, env_name: str) -> str | None:
+    if not sign:
+        return None
+    key = os.environ.get(env_name, "")
+    if not key:
+        typer.echo(f"signing key env var is not set: {env_name}", err=True)
+        raise typer.Exit(1)
+    return key

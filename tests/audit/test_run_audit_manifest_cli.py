@@ -91,6 +91,86 @@ def test_audit_manifest_verify_cli_reports_ok_and_tamper(
         receipt = json.loads(archive.read("verification.json"))
     assert receipt["verification"]["ok"] is True
 
+    signed_path = tmp_path / "manifest-signed.zip"
+    monkeypatch.setenv("FORGE_TEST_MANIFEST_SIGNING_KEY", "cli-signing-key")
+    signed = runner.invoke(
+        app,
+        [
+            "audit",
+            "manifest-export",
+            "--engagement",
+            "1001",
+            "--run-id",
+            str(run_id),
+            "--output",
+            str(signed_path),
+            "--sign",
+            "--signing-key-env",
+            "FORGE_TEST_MANIFEST_SIGNING_KEY",
+            "--signer-id",
+            "cli-test",
+            "--json",
+        ],
+    )
+    assert signed.exit_code == 0, signed.output
+    signed_payload = json.loads(signed.output)
+    assert signed_payload["signature_present"] is True
+    assert "signature.json" in signed_payload["files"]
+    with zipfile.ZipFile(signed_path) as archive:
+        signature = json.loads(archive.read("signature.json"))
+    assert signature["algorithm"] == "HMAC-SHA256"
+    assert signature["signer_id"] == "cli-test"
+
+    verify_signed = runner.invoke(
+        app,
+        [
+            "audit",
+            "manifest-bundle-verify",
+            "--bundle",
+            str(signed_path),
+            "--signing-key-env",
+            "FORGE_TEST_MANIFEST_SIGNING_KEY",
+            "--json",
+        ],
+    )
+    assert verify_signed.exit_code == 0, verify_signed.output
+    verify_payload = json.loads(verify_signed.output)
+    assert verify_payload["ok"] is True
+    assert verify_payload["signer_id"] == "cli-test"
+
+    monkeypatch.setenv("FORGE_TEST_MANIFEST_SIGNING_KEY", "wrong-key")
+    verify_wrong_key = runner.invoke(
+        app,
+        [
+            "audit",
+            "manifest-bundle-verify",
+            "--bundle",
+            str(signed_path),
+            "--signing-key-env",
+            "FORGE_TEST_MANIFEST_SIGNING_KEY",
+            "--json",
+        ],
+    )
+    assert verify_wrong_key.exit_code == 2, verify_wrong_key.output
+    assert json.loads(verify_wrong_key.output)["reason"] == "signature mismatch"
+
+    missing_key = runner.invoke(
+        app,
+        [
+            "audit",
+            "manifest-export",
+            "--engagement",
+            "1001",
+            "--run-id",
+            str(run_id),
+            "--sign",
+            "--signing-key-env",
+            "FORGE_MISSING_MANIFEST_SIGNING_KEY",
+        ],
+    )
+    assert missing_key.exit_code == 1
+    assert "signing key env var is not set" in missing_key.output
+
     con = sqlite3.connect(db_path)
     try:
         con.execute("UPDATE engagements SET scope_json='[\"evil.example\"]' WHERE id=1001")

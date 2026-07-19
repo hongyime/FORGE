@@ -10,7 +10,12 @@ from forge.audit.manifest import (
     verify_run_audit_manifest,
     write_run_audit_manifest,
 )
-from forge.audit.manifest_bundle import AuditManifestBundle, export_run_audit_manifest_bundle
+from forge.audit.manifest_bundle import (
+    AuditManifestBundle,
+    AuditManifestBundleSignatureVerification,
+    export_run_audit_manifest_bundle,
+    verify_run_audit_manifest_bundle_signature,
+)
 from forge.audit.models import AuditEntry, AuditEventType
 from forge.audit.telemetry import LatencyRecord, MetricCategory, TelemetryCollector
 
@@ -19,6 +24,7 @@ __all__ = [
     "AuditEventType",
     "AuditLogger",
     "AuditManifestBundle",
+    "AuditManifestBundleSignatureVerification",
     "AuditManifestRecord",
     "AuditManifestVerification",
     "LatencyRecord",
@@ -28,6 +34,7 @@ __all__ = [
     "export_run_audit_manifest_bundle",
     "read_run_audit_manifest",
     "summarize_run_audit_manifest",
+    "verify_run_audit_manifest_bundle_signature",
     "verify_run_audit_manifest",
     "write_run_audit_manifest",
 ]

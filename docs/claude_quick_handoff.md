@@ -13,9 +13,10 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 - [x] Run audit manifest portable-export checkpoint is green:
   `forge.audit.manifest_bundle` writes deterministic ZIP bundles for external archival outside the mutable engagement DB. Bundles contain `manifest.json`, `verification.json`, `checksums.sha256`, and `README.md`; ZIP member order and timestamps are deterministic, and checksums cover the payload files. `forge audit manifest-export --engagement <id> [--run-id <id>] [--output <zip>] [--json]` exports the bundle and exits `2` if export-time verification fails while still preserving a failed verification receipt.
+  Optional HMAC signing is available via `--sign --signing-key-env <ENV>`, which writes `signature.json` over canonical payload file checksums without writing the signing key to disk. `forge audit manifest-bundle-verify --bundle <zip> --signing-key-env <ENV>` verifies signed bundles offline without the engagement DB and fails closed for missing keys, malformed signatures, duplicate ZIP entries, unsigned extra files, and signature mismatches.
   The command implementation now lives in `forge/audit/cli.py`, keeping `forge/cli.py` as a thin audit Typer registrar.
-  Verification: compile/Ruff over touched audit/CLI/test files; `tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py tests\audit\test_run_audit_manifest.py` -> `10 passed`; audit help smoke confirmed `manifest-verify` and `manifest-export` remain registered.
-  Review: Claude read-only review at `%TEMP%\forge-claude-manifest-bundle-review-out.txt` returned only `Reached max turns (4)` with no usable findings.
+  Verification: compile/Ruff over touched audit/CLI/test files; `tests\audit\test_run_audit_manifest_bundle.py tests\audit\test_run_audit_manifest_cli.py tests\audit\test_run_audit_manifest.py` -> `15 passed`; audit help smoke confirmed `manifest-verify`, `manifest-export`, and `manifest-bundle-verify` remain registered.
+  Review: Claude read-only review at `%TEMP%\forge-claude-manifest-sign-review.txt` returned only `Reached max turns (4)` with no usable findings.
   Safety: offline evidence export only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, report-gate changes, exploitation, persistence, lateral movement, or post-exploitation behavior was added.
   Handoff: `.claude/handoffs/2026-07-20-run-manifest-export-bundle.md`.
 
@@ -2069,7 +2070,7 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
 ## Best next tasks
 
-- [ ] Add optional cryptographic signing or append-only remote storage for exported run-manifest bundles if evidence-grade auditability needs a trust boundary beyond local files.
+- [ ] Add append-only remote storage for exported run-manifest bundles only if scoped customer storage is explicitly configured.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
 - [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
 - [ ] Audit MTGX entity typing/layout against the intended Maltego-first workflow before changing more graph UI.
