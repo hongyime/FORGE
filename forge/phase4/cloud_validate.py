@@ -5288,40 +5288,6 @@ def sweep_pending_cloud_asset_validations(
              AND cvr.asset_type = ca.asset_type
              AND cvr.identifier = ca.identifier
             WHERE ca.engagement_id=?
-              AND ca.asset_type IN (
-                  'firebase',
-                  'supabase',
-                  'aws_s3',
-                  's3',
-                  'do_spaces',
-                  'digitalocean_spaces',
-                  'gcs',
-                  'google_cloud_storage',
-                  'azure_blob',
-                  'azure_blob_storage',
-                  'aws_cognito_user_pool',
-                  'aws_cognito_identity_pool',
-                  'aws_cognito_app_client',
-                  'aws_appsync_api',
-                  'aws_pinpoint_app',
-                  'amplify',
-                  'gcp_appspot',
-                  'gcp_cloudfunctions',
-                  'github_pages',
-                  'gitlab_pages',
-                  'cloudflare_pages',
-                  'cloudflare_worker',
-                  'cloudflare_r2',
-                  'cloudflare_d1',
-                  'cloudflare_kv',
-                  'netlify',
-                  'vercel',
-                  'render',
-                  'fly',
-                  'railway',
-                  'heroku',
-                  'azure_static_web_app'
-              )
               AND cvr.id IS NULL
             ORDER BY ca.id ASC
             LIMIT ?
