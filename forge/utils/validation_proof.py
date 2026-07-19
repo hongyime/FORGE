@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -38,6 +39,75 @@ _LOW_SIGNAL_CLOUD_READ_PROOF_MARKERS = (
     "unexpected non-json",
 )
 _POSTHOG_VALIDATION_HOSTS = {"us.posthog.com", "eu.posthog.com"}
+_CLOUD_OBJECT_PLACEHOLDER_MARKERS = {
+    "changeme",
+    "demo",
+    "dummy",
+    "example",
+    "honeypot",
+    "lorem",
+    "placeholder",
+    "sample",
+    "synthetic",
+    "test",
+}
+_CLOUD_OBJECT_LOW_SIGNAL_BASENAMES = {
+    ".ds_store",
+    ".gitkeep",
+    "asset-manifest.json",
+    "chart.lock",
+    "chart.yaml",
+    "cname",
+    "desktop.ini",
+    "favicon.ico",
+    "firebase.json",
+    "index.html",
+    "kptfile",
+    "manifest",
+    "openapi.json",
+    "package-lock.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pyproject.toml",
+    "readme.md",
+    "robots.txt",
+    "service-worker.js",
+    "site.webmanifest",
+    "sitemap.xml",
+    "tailwind.config.js",
+    "tsconfig.json",
+    "vite.config.ts",
+    "yarn.lock",
+}
+_CLOUD_STATIC_ASSET_EXTENSIONS = {
+    ".css",
+    ".eot",
+    ".gif",
+    ".ico",
+    ".jpeg",
+    ".jpg",
+    ".js",
+    ".map",
+    ".png",
+    ".svg",
+    ".ttf",
+    ".webp",
+    ".woff",
+    ".woff2",
+}
+_CLOUD_STATIC_PATH_SEGMENTS = {
+    "assets",
+    "build",
+    "chunks",
+    "css",
+    "dist",
+    "fonts",
+    "images",
+    "img",
+    "js",
+    "public",
+    "static",
+}
 _DATADOG_VALIDATION_SITES = {
     "datadoghq.com",
     "datadoghq.eu",
@@ -305,6 +375,99 @@ def _stable_twilio_account_status(value: object) -> str:
     if candidate not in {"active", "suspended", "closed"}:
         return ""
     return candidate
+
+
+def _extract_xml_tag_values(text: object, tag_name: str) -> list[str]:
+    tag = re.escape(str(tag_name or "").strip())
+    if not tag:
+        return []
+    return [
+        match.group(1).strip()
+        for match in re.finditer(
+            rf"<(?:[A-Za-z0-9_-]+:)?{tag}\b[^>]*>(.*?)</(?:[A-Za-z0-9_-]+:)?{tag}>",
+            str(text or ""),
+            re.IGNORECASE | re.DOTALL,
+        )
+        if match.group(1).strip()
+    ]
+
+
+def _stable_cloud_object_name(value: object) -> str:
+    candidate = str(value or "").strip().strip("/")
+    if not candidate or len(candidate) > 180:
+        return ""
+    if re.search(r"[\x00-\x1f\x7f]", candidate):
+        return ""
+    parts = [part for part in re.split(r"[\\/]+", candidate.lower()) if part]
+    if not parts:
+        return ""
+    if any(part in _CLOUD_OBJECT_PLACEHOLDER_MARKERS for part in parts):
+        return ""
+    basename = parts[-1]
+    if basename in _CLOUD_OBJECT_LOW_SIGNAL_BASENAMES:
+        return ""
+    if basename.startswith("._") or basename.startswith("."):
+        return ""
+    stem = basename.rsplit(".", 1)[0]
+    if stem in _CLOUD_OBJECT_PLACEHOLDER_MARKERS:
+        return ""
+    if any(marker in stem for marker in _CLOUD_OBJECT_PLACEHOLDER_MARKERS):
+        return ""
+    compact_stem = re.sub(r"[^a-z0-9]+", "", stem)
+    if len(compact_stem) >= 6 and (
+        _looks_repeated_compact_identifier(compact_stem)
+        or _looks_sequential_numeric_identifier(compact_stem)
+    ):
+        return ""
+    extension = f".{basename.rsplit('.', 1)[1]}" if "." in basename else ""
+    if extension in _CLOUD_STATIC_ASSET_EXTENSIONS and any(
+        part in _CLOUD_STATIC_PATH_SEGMENTS for part in parts[:-1]
+    ):
+        return ""
+    return candidate[:120]
+
+
+def _cloud_listing_json_names(proof: str) -> list[str]:
+    try:
+        payload = json.loads(str(proof or ""))
+    except Exception:  # noqa: BLE001
+        return []
+    if not isinstance(payload, dict):
+        return []
+    items = payload.get("items")
+    prefixes = payload.get("prefixes")
+    looks_like_gcs_listing = payload.get("kind") == "storage#objects" or isinstance(items, list)
+    if not looks_like_gcs_listing and not isinstance(prefixes, list):
+        return []
+    names: list[str] = []
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict):
+                name = str(item.get("name") or "").strip()
+                if name:
+                    names.append(name)
+    if isinstance(prefixes, list):
+        names.extend(str(item or "").strip() for item in prefixes if str(item or "").strip())
+    return names
+
+
+def _cloud_object_listing_proof_is_stable(
+    proof: str,
+    *,
+    xml_tag: str,
+    markers: tuple[str, ...],
+    allow_gcs_json: bool = False,
+) -> bool:
+    text = str(proof or "").strip()
+    lowered = text.lower()
+    if any(marker in lowered for marker in _LOW_SIGNAL_CLOUD_READ_PROOF_MARKERS):
+        return False
+    if not any(marker in lowered for marker in markers):
+        return False
+    names = _extract_xml_tag_values(text, xml_tag)
+    if allow_gcs_json:
+        names.extend(_cloud_listing_json_names(text))
+    return any(_stable_cloud_object_name(name) for name in names)
 
 
 def _stable_currency_summary(value: object) -> str:
@@ -655,6 +818,25 @@ def _validated_proof_is_reportable(method: str, proof: str) -> bool:
         return _slack_auth_proof_is_stable(proof)
     if normalized_method == "azure_blob_list_containers_shared_key":
         return _azure_shared_key_proof_is_stable(proof)
+    if normalized_method in {"s3_list_bucket", "do_spaces_list_bucket"}:
+        return _cloud_object_listing_proof_is_stable(
+            proof,
+            xml_tag="Key",
+            markers=("<listbucketresult",),
+        )
+    if normalized_method == "gcs_list_bucket":
+        return _cloud_object_listing_proof_is_stable(
+            proof,
+            xml_tag="Key",
+            markers=("<listbucketresult", '"items"', '"kind"', "storage#objects"),
+            allow_gcs_json=True,
+        )
+    if normalized_method == "azure_blob_list_container":
+        return _cloud_object_listing_proof_is_stable(
+            proof,
+            xml_tag="Name",
+            markers=("<enumerationresults", "<blobs"),
+        )
     if normalized_method in _LEGACY_CLOUD_READ_METHODS_REQUIRING_PROOF:
         return _legacy_cloud_read_proof_is_stable(normalized_method, proof)
     return False

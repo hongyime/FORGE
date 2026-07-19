@@ -132,6 +132,96 @@ def test_parse_validated_detail_downgrades_unknown_validated_method() -> None:
     ("detail", "method"),
     [
         (
+            "VALIDATED:s3_list_bucket:"
+            "<ListBucketResult><Contents><Key>prod/customer-records.csv</Key></Contents>"
+            "</ListBucketResult>",
+            "s3_list_bucket",
+        ),
+        (
+            "VALIDATED:do_spaces_list_bucket:"
+            "<ListBucketResult><Contents><Key>reports/engagement-summary.pdf</Key></Contents>"
+            "</ListBucketResult>",
+            "do_spaces_list_bucket",
+        ),
+        (
+            'VALIDATED:gcs_list_bucket:{"kind":"storage#objects","items":'
+            '[{"name":"prod/config.json","bucket":"acme-public-assets"}]}',
+            "gcs_list_bucket",
+        ),
+        (
+            "VALIDATED:azure_blob_list_container:"
+            "<EnumerationResults><Blobs><Blob><Name>exports/customer-records.csv</Name></Blob>"
+            "</Blobs></EnumerationResults>",
+            "azure_blob_list_container",
+        ),
+    ],
+)
+def test_parse_validated_detail_preserves_stable_cloud_listing_proofs(
+    detail: str,
+    method: str,
+) -> None:
+    proof = parse_validated_detail(detail)
+
+    assert proof["validation_status"] == "VALIDATED"
+    assert proof["validation_method"] == method
+    assert proof["validation_proof"]
+
+
+@pytest.mark.parametrize(
+    ("detail", "method"),
+    [
+        (
+            "VALIDATED:s3_list_bucket:"
+            "<ListBucketResult><Contents><Key>sample/test-data.json</Key></Contents>"
+            "</ListBucketResult>",
+            "s3_list_bucket",
+        ),
+        (
+            "VALIDATED:s3_list_bucket:"
+            "<ListBucketResult><Contents><Key>static/js/main.8f3ea4bd.js</Key></Contents>"
+            "</ListBucketResult>",
+            "s3_list_bucket",
+        ),
+        (
+            "VALIDATED:do_spaces_list_bucket:"
+            "<ListBucketResult><Contents><Key>index.html</Key></Contents>"
+            "</ListBucketResult>",
+            "do_spaces_list_bucket",
+        ),
+        (
+            'VALIDATED:gcs_list_bucket:{"kind":"storage#objects","items":'
+            '[{"name":"sample/test-data.json","bucket":"acme-public-assets"}]}',
+            "gcs_list_bucket",
+        ),
+        (
+            "VALIDATED:azure_blob_list_container:"
+            "<EnumerationResults><Blobs><Blob><Name>assets/logo.svg</Name></Blob>"
+            "</Blobs></EnumerationResults>",
+            "azure_blob_list_container",
+        ),
+        (
+            "VALIDATED:s3_list_bucket:Bucket listing returned object metadata.",
+            "s3_list_bucket",
+        ),
+    ],
+)
+def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
+    detail: str,
+    method: str,
+) -> None:
+    proof = parse_validated_detail(detail)
+
+    assert proof == {
+        "validation_status": "UNVERIFIED",
+        "validation_method": method,
+        "validation_proof": "",
+    }
+
+
+@pytest.mark.parametrize(
+    ("detail", "method"),
+    [
+        (
             "VALIDATED:cloudflare_token_verify:Cloudflare token valid: "
             "token_id=abcdef1234567890abcdef1234567890 status=active",
             "cloudflare_token_verify",
