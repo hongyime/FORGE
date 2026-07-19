@@ -23792,6 +23792,7 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
             firebase = "https://build-firebase.firebaseio.com"
             supabase = "https://buildvault.supabase.co/rest/v1"
             bucket = "s3://acme-build-bucket/releases/app.tar"
+            container_push(registry = "gcr.io", repository = "acme-prod/build-api")
             """
         ).strip(),
         encoding="utf-8",
@@ -23912,6 +23913,10 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
                 owner = "buck-owner@acme.example"
                 endpoint = "https://buck.acme.example/build"
                 gcs = "gs://acme-buck-gcs/artifacts/bundle.zip"
+                container_push(
+                    registry = "registry.buck.acme.example",
+                    repository = "platform/buck-worker",
+                )
                 """
             ).strip(),
         )
@@ -23921,6 +23926,7 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
                 """
                 owner = "tilt-owner@acme.example"
                 local_resource("api", serve_cmd="https://tilt.acme.example/dev")
+                docker_build("registry.tilt.acme.example/platform/api", ".")
                 supabase = "https://tiltvault.supabase.co/rest/v1"
                 """
             ).strip(),
@@ -23932,6 +23938,7 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
                 OWNER = "bzl-owner@acme.example"
                 RULES_URL = "https://bzl.acme.example/rules"
                 FIREBASE = "https://bzl-firebase.firebaseio.com"
+                custom_build("deploy", "ghcr.io/acme/bzl-deploy:2026")
                 """
             ).strip(),
         )
@@ -24018,6 +24025,10 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
             "https://tilt.acme.example/dev",
             "https://bzl.acme.example/rules",
             "https://workspace.acme.example/build",
+            "https://gcr.io/acme-prod/build-api",
+            "https://registry.buck.acme.example/platform/buck-worker",
+            "https://registry.tilt.acme.example/platform/api",
+            "https://ghcr.io/acme/bzl-deploy",
         }:
             assert (expected_url, "url") in seeds
         assert ("build-owner@acme.example", "email") in seeds

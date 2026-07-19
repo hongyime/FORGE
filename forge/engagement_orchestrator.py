@@ -143,6 +143,7 @@ from forge.utils.artifact_barcode import (
     barcode_payloads_from_path,
 )
 from forge.utils.artifact_shell_history import shell_history_artifact_label
+from forge.utils.artifact_starlark_images import starlark_container_image_values
 from forge.utils.artifact_windows_registry import windows_registry_hive_artifact_label
 from forge.utils.intel.http_pacing import (
     record_rate_limit_cooldown,
@@ -1890,12 +1891,26 @@ def _extract_artifact_container_image_urls(text: str, *, source_hint: str = "") 
         ],
         default_factory=list,
     )
+    starlark_image_batches = ArtifactQueueProcessor._run_ordered_static_batch(
+        starlark_container_image_values(
+            raw_text,
+            source_hint=source_hint,
+        ),
+        lambda value: [
+            _artifact_container_image_url_candidate(
+                value,
+                require_explicit_registry=True,
+            )
+        ],
+        default_factory=list,
+    )
     for candidate_batch in (
         *line_batches,
         *field_batches,
         *docker_image_uri_batches,
         *jenkins_groovy_batches,
         *earthfile_save_batches,
+        *starlark_image_batches,
     ):
         for normalized in candidate_batch:
             if not normalized or normalized in seen:
@@ -17876,6 +17891,7 @@ class ArtifactQueueProcessor:
         "js_runtime_text",
         "static_hosting_control_text",
         "electron_update_metadata",
+        "starlark_container_images",
         "gitpod_text",
         "raw",
     )
@@ -19612,6 +19628,16 @@ class ArtifactQueueProcessor:
                     base_url=source_file,
                 )
             )
+        if family == "starlark_container_images":
+            urls: list[str] = []
+            for value in starlark_container_image_values(text, source_hint=source_hint):
+                candidate = _artifact_container_image_url_candidate(
+                    value,
+                    require_explicit_registry=True,
+                )
+                if candidate and candidate not in urls:
+                    urls.append(candidate)
+            return "\n".join(urls)
         if family == "gitpod_text":
             return self._gitpod_structured_payload_text(
                 text,

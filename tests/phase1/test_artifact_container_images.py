@@ -179,3 +179,27 @@ def test_artifact_container_image_urls_promote_earthfile_save_image_outputs() ->
         "https://registry.earth.acme.example/platform/worker",
     ]
     assert _extract_artifact_container_image_urls(text, source_hint="README.md") == []
+
+
+def test_artifact_container_image_urls_promote_starlark_image_declarations() -> None:
+    text = dedent(
+        """
+        container_push(
+            name = "api",
+            registry = "gcr.io",
+            repository = "acme-prod/api",
+        )
+        docker_build("registry.tilt.acme.example/platform/api", ".")
+        custom_build("worker", "ghcr.io/acme/tilt-worker:2026")
+        container_push(registry = "docker.io", repository = "acme/public-api")
+        container_push(registry = "${REGISTRY}", repository = "templated/api")
+        """
+    )
+
+    assert _extract_artifact_container_image_urls(text, source_hint="services/BUILD") == [
+        "https://gcr.io/acme-prod/api",
+        "https://registry.tilt.acme.example/platform/api",
+        "https://ghcr.io/acme/tilt-worker",
+        "https://hub.docker.com/r/acme/public-api",
+    ]
+    assert _extract_artifact_container_image_urls(text, source_hint="README.md") == []
