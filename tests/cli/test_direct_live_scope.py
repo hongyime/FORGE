@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -40,6 +41,76 @@ class _FakeConfig:
 
     def engagement_db_path(self, _engagement: str) -> Path:
         return self._db_path
+
+
+def test_run_forge_module_subprocess_returns_timeout_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _timeout_run(args: list[str], **kwargs: object) -> object:
+        calls.append({"args": args, **kwargs})
+        raise subprocess.TimeoutExpired(
+            cmd=args,
+            timeout=float(kwargs["timeout"]),
+            output="partial stdout",
+            stderr=b"late stderr",
+        )
+
+    monkeypatch.setattr(cli.subprocess, "run", _timeout_run)
+
+    result = cli._run_forge_module_subprocess(
+        ["cloud", "aws", "--engagement", "1001"],
+        tor_prefix=["--tor"],
+        timeout_seconds=2.5,
+    )
+
+    assert result.returncode == 124
+    assert calls[0]["timeout"] == 2.5
+    assert calls[0]["args"][:5] == [
+        cli.sys.executable,
+        "-m",
+        "forge.cli",
+        "--tor",
+        "cloud",
+    ]
+    assert "timeout after 2.5s" in result.stderr
+    assert "late stderr" in result.stderr
+
+
+def test_detected_prereq_child_argv_adds_live_authorization_once() -> None:
+    manifest = '{"roe_id":"ROE-ACME-2026-07","domains":["acme.example"]}'
+
+    aws = cli._detected_prereq_child_argv(
+        ["cloud", "aws", "--engagement", "1001"],
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=manifest,
+    )
+    firebase_extract = cli._detected_prereq_child_argv(
+        ["cloud", "firebase-extract", "--engagement", "1001", "--apk", "client.apk"],
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=manifest,
+    )
+    already_hardened = cli._detected_prereq_child_argv(
+        [
+            "cloud",
+            "firebase",
+            "--engagement",
+            "1001",
+            "--roe-id",
+            "ROE-ACME-2026-07",
+            "--scope-manifest",
+            manifest,
+        ],
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=manifest,
+    )
+
+    assert aws[-3:] == ["--roe-id", "ROE-ACME-2026-07", "--yes"]
+    assert "--scope-manifest" not in aws
+    assert firebase_extract[-2:] == ["--scope-manifest", manifest]
+    assert already_hardened.count("--roe-id") == 1
+    assert already_hardened.count("--scope-manifest") == 1
 
 
 def _bootstrap_engagement(db_path: Path, *, scope: list[str]) -> None:
@@ -540,6 +611,40 @@ def test_direct_cloud_aws_requires_roe_before_questionary(
         )
 
 
+def test_direct_cloud_aws_yes_skips_questionary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import forge.phase4.aws_audit as aws_audit
+
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        aws_audit,
+        "run_aws_audit",
+        lambda **kwargs: calls.append(kwargs) or [],
+    )
+
+    cli.cloud_aws(
+        engagement="1001",
+        profile=None,
+        regions=None,
+        services="all",
+        dry_run=False,
+        output_format="json",
+        output_path=str(tmp_path / "aws.json"),
+        timeout=1,
+        roe_id="ROE-ACME-2026-07",
+        yes=True,
+    )
+
+    assert calls[0]["engagement_id"] == 1001
+    assert calls[0]["dry_run"] is False
+
+
 def test_direct_cloud_azure_requires_roe_before_questionary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -562,6 +667,42 @@ def test_direct_cloud_azure_requires_roe_before_questionary(
             timeout=1,
             roe_id=None,
         )
+
+
+def test_direct_cloud_azure_yes_skips_questionary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import forge.phase4.azure_audit as azure_audit
+
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        azure_audit,
+        "run_azure_audit",
+        lambda **kwargs: calls.append(kwargs) or [],
+    )
+
+    cli.cloud_azure(
+        engagement="1001",
+        subscription_id=None,
+        tenant_id=None,
+        client_id=None,
+        client_secret=None,
+        services="all",
+        dry_run=False,
+        output_format="json",
+        output_path=str(tmp_path / "azure.json"),
+        timeout=1,
+        roe_id="ROE-ACME-2026-07",
+        yes=True,
+    )
+
+    assert calls[0]["engagement_id"] == 1001
+    assert calls[0]["dry_run"] is False
 
 
 def test_direct_vuln_idor_requires_roe_before_scan(

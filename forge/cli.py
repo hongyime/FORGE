@@ -61,6 +61,8 @@ _VALIDATION_DEFAULT_MAX_WORKERS = 1
 _DNS_DEFAULT_MAX_WORKERS = 1
 _PROVIDER_DEFAULT_MAX_WORKERS = 1
 _PROVIDER_BATCH_STAGGER_DEFAULT_SECONDS = 0.0
+_MODULE_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS = 900.0
+_MODULE_SUBPROCESS_TIMEOUT_EXIT_CODE = 124
 
 
 def _cli_float_env(name: str, default: float, *, minimum: float, maximum: float) -> float:
@@ -144,6 +146,84 @@ def _provider_batch_stagger_seconds(provider_name: str) -> float:
         minimum=0.0,
         maximum=60.0,
     )
+
+
+def _module_subprocess_timeout_seconds() -> float:
+    return _cli_float_env(
+        "FORGE_MODULE_SUBPROCESS_TIMEOUT_SECONDS",
+        _MODULE_SUBPROCESS_DEFAULT_TIMEOUT_SECONDS,
+        minimum=1.0,
+        maximum=86400.0,
+    )
+
+
+def _timeout_stream_text(value: object) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value or "")
+
+
+def _run_forge_module_subprocess(
+    cmd_argv: Sequence[str],
+    *,
+    tor_prefix: Sequence[str] = (),
+    timeout_seconds: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+    args = [sys.executable, "-m", "forge.cli", *tor_prefix, *cmd_argv]
+    timeout = (
+        _module_subprocess_timeout_seconds()
+        if timeout_seconds is None
+        else max(1.0, float(timeout_seconds))
+    )
+    try:
+        return subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stderr_tail = _timeout_stream_text(exc.stderr)[-512:]
+        timeout_message = f"timeout after {timeout:g}s"
+        if stderr_tail:
+            timeout_message = f"{timeout_message}; {stderr_tail}"
+        return subprocess.CompletedProcess(
+            args,
+            _MODULE_SUBPROCESS_TIMEOUT_EXIT_CODE,
+            _timeout_stream_text(exc.stdout),
+            timeout_message,
+        )
+
+
+def _append_cli_option_once(argv: list[str], flag: str, value: str) -> list[str]:
+    if not value or flag in argv:
+        return argv
+    return [*argv, flag, value]
+
+
+def _append_cli_flag_once(argv: list[str], flag: str) -> list[str]:
+    if flag in argv:
+        return argv
+    return [*argv, flag]
+
+
+def _detected_prereq_child_argv(
+    argv: Sequence[str],
+    *,
+    roe_id: str = "",
+    scope_manifest: str = "",
+) -> list[str]:
+    hardened = [str(item) for item in argv]
+    if len(hardened) < 2:
+        return hardened
+    group, command = hardened[0], hardened[1]
+    if group == "cloud" and command in {"aws", "azure", "firebase", "supabase"}:
+        hardened = _append_cli_option_once(hardened, "--roe-id", roe_id)
+    if group == "cloud" and command in {"aws", "azure"}:
+        hardened = _append_cli_flag_once(hardened, "--yes")
+    if group == "cloud" and command in {"firebase", "firebase-extract", "supabase"}:
+        hardened = _append_cli_option_once(hardened, "--scope-manifest", scope_manifest)
+    return hardened
 
 
 def _module_provider_key(spec: ModuleDispatchSpec) -> str | None:
@@ -3147,6 +3227,11 @@ def cloud_aws(
         envvar="FORGE_ROE_ID",
         help="ROE identifier required before direct live AWS audits.",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Skip the interactive confirmation after --roe-id; intended for kill-chain auto-run.",
+    ),
 ) -> None:
     """Comprehensive AWS security audit (IAM, S3, RDS, EC2, Lambda, CloudTrail)."""
     from forge.config import ForgeConfig  # noqa: PLC0415
@@ -3176,15 +3261,17 @@ def cloud_aws(
     console.print(f"  Services: {services_value}")
     console.print(f"  Dry run: {dry_run}")
     console.print(f"  Output: {output_format}")
+    yes = yes if isinstance(yes, bool) else False
     if not dry_run:
         _direct_cli_require_roe(roe_id, command_name="cloud aws")
-        import questionary  # noqa: PLC0415
+        if not yes:
+            import questionary  # noqa: PLC0415
 
-        proceed = questionary.confirm(
-            "Run AWS audit against live APIs for this engagement?"
-        ).ask()
-        if not proceed:
-            raise typer.Exit()
+            proceed = questionary.confirm(
+                "Run AWS audit against live APIs for this engagement?"
+            ).ask()
+            if not proceed:
+                raise typer.Exit()
     
     try:
         findings = run_aws_audit(
@@ -3264,6 +3351,11 @@ def cloud_azure(
         envvar="FORGE_ROE_ID",
         help="ROE identifier required before direct live Azure audits.",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Skip the interactive confirmation after --roe-id; intended for kill-chain auto-run.",
+    ),
 ) -> None:
     """Comprehensive Azure security audit (RBAC, Storage, SQL, Key Vault, App Service)."""
     from forge.config import ForgeConfig  # noqa: PLC0415
@@ -3290,15 +3382,17 @@ def cloud_azure(
     console.print(f"  Services: {services_value}")
     console.print(f"  Dry run: {dry_run}")
     console.print(f"  Output: {output_format}")
+    yes = yes if isinstance(yes, bool) else False
     if not dry_run:
         _direct_cli_require_roe(roe_id, command_name="cloud azure")
-        import questionary  # noqa: PLC0415
+        if not yes:
+            import questionary  # noqa: PLC0415
 
-        proceed = questionary.confirm(
-            "Run Azure audit against live APIs for this engagement?"
-        ).ask()
-        if not proceed:
-            raise typer.Exit()
+            proceed = questionary.confirm(
+                "Run Azure audit against live APIs for this engagement?"
+            ).ask()
+            if not proceed:
+                raise typer.Exit()
     
     try:
         findings = run_azure_audit(
@@ -4815,6 +4909,7 @@ def kill_chain(
         parallel_workers = max(1, min(4, int(parallel_fanout or 2)))
     except (TypeError, ValueError):
         parallel_workers = 2
+    module_timeout_seconds = _module_subprocess_timeout_seconds()
     identity_lookup_workers = _identity_lookup_max_workers()
     validation_workers = _validation_max_workers()
     import sys as _sys_kc  # noqa: PLC0415
@@ -6229,6 +6324,7 @@ def kill_chain(
         base_metadata: dict[str, object] = {
             "label": label,
             "command": "forge " + " ".join(cmd_argv),
+            "timeout_seconds": module_timeout_seconds,
         }
         if metadata:
             base_metadata.update(metadata)
@@ -6257,10 +6353,10 @@ def kill_chain(
             )
             return 0
         _log(label, "starting")
-        import subprocess as _sp  # noqa: PLC0415
-        proc = _sp.run(
-            [sys.executable, "-m", "forge.cli", *_tor_prefix, *cmd_argv],
-            capture_output=True, text=True,
+        proc = _run_forge_module_subprocess(
+            cmd_argv,
+            tor_prefix=_tor_prefix,
+            timeout_seconds=module_timeout_seconds,
         )
         if proc.returncode != 0:
             _log(label, f"[yellow]exit={proc.returncode}[/yellow] "
@@ -17300,7 +17396,11 @@ def kill_chain(
         prereq_specs = _run_inprocess_batch(
             prereq_inputs,
             lambda item: ModuleDispatchSpec(
-                cmd_argv=list(item["argv"]),  # type: ignore[arg-type]
+                cmd_argv=_detected_prereq_child_argv(
+                    list(item["argv"]),  # type: ignore[arg-type]
+                    roe_id=roe_id,
+                    scope_manifest=scope_manifest,
+                ),
                 label=f"prereq: {item['label']}",
             ),
             max_workers=parallel_workers,
