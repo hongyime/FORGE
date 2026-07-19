@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from forge.engagement_orchestrator import (
+    ArtifactQueueProcessor,
     _artifact_format_label,
     _classify_artifact_name,
     _classify_remote_artifact_candidate,
@@ -315,6 +316,36 @@ def test_security_scanner_config_artifact_format_labels_are_source_aware() -> No
     assert _artifact_format_label("terrascan.toml") == "terrascan-config"
     assert _artifact_format_label("kics.config") == "kics-config"
     assert _artifact_format_label("nuclei-config.yaml") == "nuclei-config"
+
+
+def test_kubernetes_annotation_bare_hosts_feed_orchestration_recursion(tmp_path) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+    payload = """
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/upstream-vhost: upstream.acme.example
+    haproxy-ingress.github.io/server-alias: alias.acme.example
+  labels:
+    app.kubernetes.io/name: label-noise.acme.example
+spec:
+  rules:
+    - host: ingress.acme.example
+""".strip()
+
+    assert (
+        processor._orchestration_structured_payload_text(payload, source_hint="notes.yaml")
+        == ""
+    )
+    assert processor._orchestration_structured_payload_text(
+        payload,
+        source_hint="k8s/ingress.yaml",
+    ).splitlines() == [
+        "http://upstream.acme.example",
+        "http://ingress.acme.example",
+        "http://alias.acme.example",
+    ]
 
 
 def test_recon_tool_output_artifact_format_labels_are_source_aware() -> None:

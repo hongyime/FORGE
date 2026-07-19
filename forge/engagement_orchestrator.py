@@ -22725,19 +22725,29 @@ class ArtifactQueueProcessor:
                     str(keyed_match.group("value") or "")
                 )
             )
-        elif (
-            not host_rule_found
-            and (
-            "://" in line
-            or line.endswith("{")
-            or re.search(
-                r"\b(?:hdr\(host\)|host\(|hostsni\(|acl|backend|route|upstream|virtualhost)\b",
+        else:
+            scan_line = line
+            yaml_value_match = re.match(
+                r"""^(?:-\s*)?["']?[A-Za-z0-9_.\-/]+["']?\s*:\s*(?P<value>.+?)\s*$""",
                 line,
-                re.IGNORECASE,
             )
-            )
-        ):
-            raw_candidates.extend(match.group(0) for match in _EDGE_PROXY_ENDPOINT_TOKEN_RE.finditer(line))
+            if yaml_value_match:
+                scan_line = str(yaml_value_match.group("value") or "").strip()
+            if (
+                not host_rule_found
+                and (
+                    "://" in scan_line
+                    or scan_line.endswith("{")
+                    or re.search(
+                        r"\b(?:hdr\(host\)|host\(|hostsni\(|acl|backend|route|upstream|virtualhost)\b",
+                        scan_line,
+                        re.IGNORECASE,
+                    )
+                )
+            ):
+                raw_candidates.extend(
+                    match.group(0) for match in _EDGE_PROXY_ENDPOINT_TOKEN_RE.finditer(scan_line)
+                )
 
         normalized_candidates = [
             ArtifactQueueProcessor._edge_proxy_endpoint_url_candidate(candidate)
@@ -22853,19 +22863,35 @@ class ArtifactQueueProcessor:
                 for candidate in self._edge_proxy_line_url_candidates(rule_value):
                     _append(candidate)
 
-        def _walk(value: Any) -> None:
+        def _annotation_endpointish_key(key_fingerprint: str) -> bool:
+            return any(
+                marker in key_fingerprint
+                for marker in (
+                    "endpoint",
+                    "hostname",
+                    "serveralias",
+                    "vhost",
+                    "domain",
+                    "externaldns",
+                )
+            ) or key_fingerprint.endswith(("host", "url", "address"))
+
+        def _walk(value: Any, parent_key_fingerprint: str = "") -> None:
             if isinstance(value, dict):
                 for raw_key, child in value.items():
                     key_fingerprint = self._yaml_key_fingerprint(str(raw_key or ""))
-                    if key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS:
+                    if key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS or (
+                        parent_key_fingerprint in {"annotation", "annotations"}
+                        and _annotation_endpointish_key(key_fingerprint)
+                    ):
                         _append_endpoint_values(child)
                     if key_fingerprint in {"annotation", "annotations", "label", "labels", "match", "matches", "rule", "rules"}:
                         _append_routing_rule_values(child)
-                    _walk(child)
+                    _walk(child, key_fingerprint)
                 return
             if isinstance(value, list):
                 for child in value[:4096]:
-                    _walk(child)
+                    _walk(child, parent_key_fingerprint)
                 return
             if isinstance(value, str) and ("Host(" in value or "HostSNI(" in value):
                 _append_routing_rule_values(value)
