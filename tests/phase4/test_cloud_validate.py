@@ -661,7 +661,7 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "sendgrid",
         "SendGrid scopes accessible: count=2 scope_hash=0123456789abcdef",
-    ) == "scopes"
+    ) == "scopes/0123456789abcdef"
     assert cloud_validate._validated_identifier_from_detail(
         "mailchimp",
         "Mailchimp ping ok: dc=us1 health=Everything's Chimpy!",
@@ -4302,6 +4302,90 @@ def test_sweep_pending_cloud_validations_uses_sendgrid_profile_identifier_withou
             "VALIDATED",
             "sendgrid_profile_api",
         )
+    finally:
+        con.close()
+
+
+def test_sweep_pending_cloud_validations_uses_sendgrid_scope_hash_identifier(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend, source_url, repo_name, key_redacted, key_enc, validation_state)
+            VALUES
+                (63, 1001, '', 'sendgrid', 'sendgrid_api_key', 'artifact',
+                 '', 'mailer-scopes.env', 'SG...7777', 'ciphertext-sendgrid-scopes', 'UNCONFIRMED')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    monkeypatch.setattr(
+        cloud_validate,
+        "_decrypt_secret",
+        lambda _value: "SG.ABCDEFGHIJKLMNOPQRSTUV.ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg",
+    )
+    from forge.utils.intel.secret_finder import (  # noqa: PLC0415
+        SendgridKeyValidator,
+        ValidationResult,
+        ValidationState,
+    )
+
+    monkeypatch.setattr(
+        SendgridKeyValidator,
+        "validate",
+        lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
+            state=ValidationState.ACTIVE,
+            detail="SendGrid scopes accessible: count=3 scope_hash=fedcba9876543210",
+        ),
+    )
+
+    summary = cloud_validate.sweep_pending_cloud_validations(
+        1001,
+        db_path,
+        limit=10,
+        max_workers=2,
+    )
+
+    assert summary["status"] == "success"
+    assert summary["attempted"] == 1
+    assert summary["status_counts"]["VALIDATED"] == 1
+    assert summary["results"][0]["identifier"] == "scopes/fedcba9876543210"
+    assert summary["results"][0]["validation_method"] == "sendgrid_profile_api"
+
+    con = sqlite3.connect(db_path)
+    try:
+        validation_row = con.execute(
+            """
+            SELECT asset_type, identifier, validation_status, validation_method
+            FROM cloud_validation_results
+            WHERE engagement_id=1001
+            """
+        ).fetchone()
+        assert validation_row == (
+            "sendgrid",
+            "scopes/fedcba9876543210",
+            "VALIDATED",
+            "sendgrid_profile_api",
+        )
+
+        key_row = con.execute(
+            """
+            SELECT validation_state, validation_detail
+            FROM key_scanner_findings
+            WHERE id=63
+            """
+        ).fetchone()
+        assert key_row[0] == "ACTIVE"
+        assert str(key_row[1] or "").startswith("VALIDATED:sendgrid_profile_api:")
     finally:
         con.close()
 

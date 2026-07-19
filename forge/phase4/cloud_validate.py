@@ -3878,7 +3878,7 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             and scope_hash_match
             and not _looks_repeated_compact_identifier(scope_hash_match.group(1))
         ):
-            return "scopes"
+            return f"scopes/{scope_hash_match.group(1).lower()[:16]}"
     if normalized_service == "stripe":
         mode_match = re.search(r"\bmode=(live|test|unknown)\b", text, re.IGNORECASE)
         currency_match = re.search(r"\bcurrencies=([a-z0-9_,.-]+)", text, re.IGNORECASE)
