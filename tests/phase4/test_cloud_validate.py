@@ -614,6 +614,10 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
         "huggingface",
+        "Hugging Face auth ok: user=model-owner user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "huggingface",
         "Hugging Face auth ok: user=workspace user_profile_present=true",
     ) is None
     assert cloud_validate._validated_identifier_from_detail(
@@ -666,8 +670,8 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     ) == "3c90c3cc-0d44-4b50-8888-8dd25736052a"
     assert cloud_validate._validated_identifier_from_detail(
         "huggingface",
-        "Hugging Face auth ok: user=model-owner user_profile_present=true",
-    ) == "model-owner"
+        "Hugging Face auth ok: user=acme-mlops user_profile_present=true",
+    ) == "acme-mlops"
     assert cloud_validate._validated_identifier_from_detail(
         "sentry",
         "Sentry organizations ok: org_id=4505524236910592 "
@@ -5021,7 +5025,7 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="Hugging Face auth ok: user=model-owner user_profile_present=true",
+            detail="Hugging Face auth ok: user=acme-mlops user_profile_present=true",
         ),
     )
     monkeypatch.setattr(
@@ -5123,7 +5127,7 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
     assert results_by_service["cloudflare"]["identifier"] == (
         "abcdef1234567890abcdef1234567890"
     )
-    assert results_by_service["huggingface"]["identifier"] == "model-owner"
+    assert results_by_service["huggingface"]["identifier"] == "acme-mlops"
     assert results_by_service["discord"]["identifier"] == "739251864203918576"
     assert results_by_service["telegram"]["identifier"] == "725419863"
     assert results_by_service["notion"]["identifier"] == (
@@ -5169,7 +5173,7 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
             ),
             (
                 "huggingface",
-                "model-owner",
+                "acme-mlops",
                 "VALIDATED",
                 "huggingface_whoami_v2",
             ),

@@ -76182,7 +76182,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="Hugging Face auth ok: user=model-owner user_profile_present=true",
+            detail="Hugging Face auth ok: user=acme-mlops user_profile_present=true",
         ),
     )
     monkeypatch.setattr(
@@ -76352,7 +76352,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         assert anthropic_identifier.endswith("operator-keys.env")
         assert anthropic_status == "UNVERIFIED"
         assert validation_map[("huggingface", "huggingface_whoami_v2")] == (
-            "model-owner",
+            "acme-mlops",
             "VALIDATED",
         )
         assert validation_map[("discord", "discord_current_user")] == (

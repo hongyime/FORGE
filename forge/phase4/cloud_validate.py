@@ -170,6 +170,8 @@ _OPAQUE_PROVIDER_PLACEHOLDER_TOKENS = _PLACEHOLDER_IDENTIFIERS | {
     "fake",
     "lorem",
     "mock",
+    "model",
+    "models",
     "placeholder",
     "sample",
     "test",

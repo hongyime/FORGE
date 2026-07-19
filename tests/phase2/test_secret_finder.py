@@ -2511,7 +2511,7 @@ def test_huggingface_token_validator_active_uses_whoami_without_private_detail(m
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {
-                "name": "model-owner",
+                "name": "acme-mlops",
                 "email": "private@acme.io",
                 "orgs": [{"name": "sensitive-org"}],
             }
@@ -2521,7 +2521,7 @@ def test_huggingface_token_validator_active_uses_whoami_without_private_detail(m
     result = HuggingFaceTokenValidator().validate("hf_" + "H" * 36)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == "Hugging Face auth ok: user=model-owner user_profile_present=true"
+    assert result.detail == "Hugging Face auth ok: user=acme-mlops user_profile_present=true"
     assert "private@acme.io" not in (result.detail or "")
     assert "sensitive-org" not in (result.detail or "")
 
@@ -2566,7 +2566,7 @@ def test_huggingface_token_validator_200_without_user_proof_stays_unconfirmed(mo
             del url, headers
             response = MagicMock()
             response.status_code = 200
-            response.json.return_value = {"name": "model-owner"}
+            response.json.return_value = {"name": "acme-mlops"}
             return response
 
     monkeypatch.setattr("httpx.Client", _HuggingFaceClient)
@@ -2605,7 +2605,9 @@ def test_huggingface_token_validator_200_with_placeholder_user_stays_unconfirmed
     assert "missing user identifier" in (result.detail or "")
 
 
+@pytest.mark.parametrize("name", ["demo-user", "model-owner"])
 def test_huggingface_token_validator_200_with_tokenized_placeholder_user_stays_unconfirmed(
+    name: str,
     monkeypatch,
 ):
     class _HuggingFaceClient:
@@ -2623,7 +2625,7 @@ def test_huggingface_token_validator_200_with_tokenized_placeholder_user_stays_u
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {
-                "name": "demo-user",
+                "name": name,
                 "email": "owner@acme.io",
             }
             return response

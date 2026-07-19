@@ -274,6 +274,8 @@ _OPAQUE_PROVIDER_PLACEHOLDER_IDENTIFIERS = _PLACEHOLDER_IDENTIFIERS | {
 _OPAQUE_PROVIDER_PLACEHOLDER_TOKENS = _PLACEHOLDER_IDENTIFIERS | {
     "demo",
     "example",
+    "model",
+    "models",
     "placeholder",
     "sample",
     "test",

@@ -265,7 +265,7 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
         ),
         (
             "VALIDATED:huggingface_whoami_v2:Hugging Face auth ok: "
-            "user=model-owner user_profile_present=true",
+            "user=acme-mlops user_profile_present=true",
             "huggingface_whoami_v2",
         ),
         (
@@ -485,6 +485,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         (
             "VALIDATED:huggingface_whoami_v2:Hugging Face auth ok: "
             "user=test-user user_profile_present=true",
+            "huggingface_whoami_v2",
+        ),
+        (
+            "VALIDATED:huggingface_whoami_v2:Hugging Face auth ok: "
+            "user=model-owner user_profile_present=true",
             "huggingface_whoami_v2",
         ),
         (

@@ -164,6 +164,8 @@ _OPAQUE_PROVIDER_PLACEHOLDER_TOKENS = {
     "example",
     "fake",
     "lorem",
+    "model",
+    "models",
     "mock",
     "none",
     "null",
