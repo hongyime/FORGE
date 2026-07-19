@@ -1627,6 +1627,41 @@ def test_launch_engagement_kill_chain_route_rejects_live_sensitive_modes_without
         assert launched is False
 
 
+def test_launch_engagement_kill_chain_route_rejects_max_iter_out_of_range(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    _build_engagement(tmp_path)
+
+    launched = False
+
+    class _FakePopen:
+        def __init__(self, command, **kwargs) -> None:  # noqa: ANN001
+            nonlocal launched
+            del command, kwargs
+            launched = True
+            self.pid = 61919
+
+    monkeypatch.setattr("forge.webui.app.subprocess.Popen", _FakePopen)
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/engagements/engagement-1001-acme-example/runs/kill-chain",
+            json={"max_iter": 11, "dry_run": True},
+            headers=headers,
+        )
+        assert response.status_code == 400, response.text
+        assert "max_iter must be between 1 and 10" in response.text
+        assert launched is False
+
+
 def test_launch_engagement_kill_chain_route_rejects_live_sensitive_modes_without_scope_manifest(
     tmp_path: Path,
     monkeypatch,

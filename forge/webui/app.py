@@ -46,6 +46,7 @@ from forge.reporting.dashboard import (
     _table_exists,
 )
 from forge.utils.automation import AutomationEngine
+from forge.utils.kill_chain_options import normalize_kill_chain_max_iter
 from forge.utils.playbooks import PlaybookEngine
 from forge.webui.auth import mint_token, validate_jwt_secret, verify_token
 from forge.webui.command_center import CommandCenterService
@@ -1618,9 +1619,9 @@ def create_app() -> Any:
         skip_cloud = bool(options.get("skip_cloud", False))
         skip_keyscan = bool(options.get("skip_keyscan", False))
         try:
-            max_iter = int(options.get("max_iter") or 3)
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail="max_iter must be an integer.") from exc
+            max_iter = normalize_kill_chain_max_iter(options.get("max_iter"), default=3)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         report_provider = str(options.get("report_provider") or "").strip().lower() or None
         report_max_loops_raw = options.get("report_max_loops")
         if report_max_loops_raw in (None, ""):
@@ -1630,8 +1631,6 @@ def create_app() -> Any:
                 report_max_loops = int(report_max_loops_raw)
             except (TypeError, ValueError) as exc:
                 raise HTTPException(status_code=400, detail="report_max_loops must be an integer.") from exc
-        if max_iter < 1 or max_iter > 10:
-            raise HTTPException(status_code=400, detail="max_iter must be between 1 and 10.")
         if report_provider is not None and report_provider not in _VALID_REPORT_PROVIDERS:
             raise HTTPException(status_code=400, detail=f"Invalid report provider: {report_provider}")
         if report_max_loops is not None and (report_max_loops < 0 or report_max_loops > 10):

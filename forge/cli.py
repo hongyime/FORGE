@@ -51,6 +51,7 @@ from rich.console import Console
 
 from forge import VERSION
 from forge.config import ForgeConfig
+from forge.utils.kill_chain_options import normalize_kill_chain_max_iter
 
 console = Console(stderr=True)
 
@@ -4851,7 +4852,13 @@ def kill_chain(
     related_seed = None if _is_typer_default(related_seed) else related_seed
     engagement = None if _is_typer_default(engagement) else engagement
     resume = True if _is_typer_default(resume) else bool(resume)
-    max_iter = 7 if _is_typer_default(max_iter) else int(max_iter)
+    try:
+        max_iter = normalize_kill_chain_max_iter(
+            None if _is_typer_default(max_iter) else max_iter,
+            default=7,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     tor = False if _is_typer_default(tor) else bool(tor)
     dry_run = False if _is_typer_default(dry_run) else bool(dry_run)
     attack_mode = False if _is_typer_default(attack_mode) else bool(attack_mode)

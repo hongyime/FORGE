@@ -452,6 +452,18 @@ def test_kill_chain_help_exposes_auto_run_detected_option() -> None:
     assert "--roe-id" in result.stdout
 
 
+def test_kill_chain_rejects_max_iter_out_of_range() -> None:
+    runner = CliRunner()
+
+    low_result = runner.invoke(app, ["kill-chain", "acme.example", "--max-iter", "0", "--dry-run"])
+    high_result = runner.invoke(app, ["kill-chain", "acme.example", "--max-iter", "11", "--dry-run"])
+
+    assert low_result.exit_code != 0
+    assert high_result.exit_code != 0
+    assert "max_iter must be between 1 and 10" in low_result.output
+    assert "max_iter must be between 1 and 10" in high_result.output
+
+
 def test_kill_chain_url_seed_with_at_query_stays_url(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))

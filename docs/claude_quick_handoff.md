@@ -11,6 +11,11 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Kill-chain recursion-budget parity checkpoint is green:
+  CLI and web launch paths now share `normalize_kill_chain_max_iter()` and reject `max_iter < 1` or `> 10` before starting a run, closing the direct CLI bypass of the web launch budget.
+  Verification: compile/Ruff over CLI/web/helper/tests; focused CLI range/help tests -> `2 passed`; focused web launch/range tests -> `2 passed`.
+  Safety: option validation only. No fan-out expansion, provider calls, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, or report-gate change.
+
 - [x] Package-manager config source-label checkpoint is green:
   Source-aware labels now distinguish `.npmrc`, `.pnpmrc`, `.yarnrc`, `.pypirc`, `.gemrc`, `.netrc`, pip configs, and `.cargo` configs/credentials from generic `ini`/`toml`/`credentials` artifacts. Generic `credentials` and `config.toml` stay unclassified unless package-manager source context is present.
   Verification in `main`: compile/Ruff over touched files; `tests\phase1\test_artifact_package_manager_config.py` -> `24 passed`; cargo mega regression -> `1 passed`; pip credential mega regression -> `1 passed`.
