@@ -4514,7 +4514,16 @@ def _container_orchestration_config_artifact_label(value: str) -> str:
     suffix = Path(name).suffix.lower()
     stem = name[: -len(suffix)] if suffix else name
 
-    if name in {"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"}:
+    if name in {
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "docker-compose.override.yml",
+        "docker-compose.override.yaml",
+        "compose.yml",
+        "compose.yaml",
+        "compose.override.yml",
+        "compose.override.yaml",
+    }:
         return "docker-compose"
     if name == "chart.yaml":
         return "helm-chart"
