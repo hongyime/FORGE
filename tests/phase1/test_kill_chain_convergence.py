@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
@@ -150,3 +152,85 @@ def test_kill_chain_preserves_pending_backlog_when_max_iterations_exhaust(
     assert metadata["pending_work_counts"]["emails"] == 1
     assert metadata["pending_work_total"] == 1
     assert metadata["last_iteration_stable"] is False
+
+
+def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    _bootstrap_engagement(db_path)
+
+    import forge.cli as cli
+
+    def html_batch(specs, *_args, **_kwargs):  # noqa: ANN001
+        return [
+            '<a href="https://github.com/acmeidentity">identity</a>'
+            if (urlparse(spec.url).hostname or "").lower() == "acme.example"
+            else ""
+            for spec in specs
+        ]
+
+    def callable_batch(items, worker, **kwargs):  # noqa: ANN001, ANN003
+        label = str(kwargs.get("progress_label") or "")
+        if "DNS enrichment" in label:
+            return [{"root_domain": item, "queried_hosts": [], "cname_targets": []} for item in items]
+        if "whois/RDAP" in label:
+            return [{"root_domain": item, "rdap": {}} for item in items]
+        if "Wayback CDX" in label:
+            return [{"root_domain": item, "urls": [], "url_metadata": {}} for item in items]
+        return [worker(item) for item in items]
+
+    monkeypatch.setattr(cli, "_run_html_fetch_batch", html_batch)
+    monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
+    monkeypatch.setattr(cli, "_run_forge_module_subprocess", lambda argv, **_kwargs: subprocess.CompletedProcess(argv, 0, "", ""))
+
+    cli.kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=False,
+        parallel_fanout=1,
+        report_provider="template",
+        report_max_loops=0,
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed = con.execute(
+            """
+            SELECT source, metadata_json
+            FROM engagement_seeds
+            WHERE engagement_id=1001
+              AND seed_value='acmeidentity'
+            """
+        ).fetchone()
+        assert seed is not None
+        assert seed[0] == "cross_reference"
+
+        keyscan_run = con.execute(
+            """
+            SELECT sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_f_keyscan'
+              AND es.seed_value='acmeidentity'
+              AND sr.status='completed'
+            LIMIT 1
+            """
+        ).fetchone()
+        assert keyscan_run is not None
+        assert json.loads(keyscan_run[0])["origin"] == "keyscan_target"
+    finally:
+        con.close()

@@ -20,11 +20,12 @@ Date: 2026-07-19
 - Counts pending work for URL seeds, emails, social handles, GitHub orgs, cloud refs, username seeds, phone seeds, IP seeds, name seeds, company seeds, queued/downloaded artifacts, and pending cloud-asset validations.
 - Computes pending counts only when the snapshot is otherwise stable, avoiding extra SQL/loader work on iterations that already produced new rows.
 - Refreshes pending-work metadata before `finish_run()`, so a run that exhausts `max_iter` after a growing iteration still exposes remaining backlog to the dashboard/API.
+- Uses schema-allowed `source="cross_reference"` for discovered GitHub-org keyscan seed contexts and records `origin="keyscan_target"` in seed-run metadata.
 - Keeps the existing `max_iterations` bound, so stuck pending work cannot become an infinite loop.
 
 ## Verification
 
-- `python -m pytest tests\phase1\test_kill_chain_convergence.py -q --color=no` -> `2 passed`
+- `python -m pytest tests\phase1\test_kill_chain_convergence.py -q --color=no` -> `3 passed`
 - `python -m py_compile forge\cli.py tests\phase1\test_kill_chain_convergence.py` -> passed
 - `python -m ruff check forge\cli.py tests\phase1\test_kill_chain_convergence.py` -> `All checks passed!`
 - `python -m pytest tests\phase1\test_engagement_orchestrator.py::test_kill_chain_dry_run_populates_seed_runs_for_seeded_fanouts tests\phase1\test_engagement_orchestrator.py::test_kill_chain_persists_localpart_username_pivots_with_email_provenance tests\phase1\test_engagement_orchestrator.py::test_engagement_provider_matrix_recursion_preserves_caps_and_exports -q --color=no -m "slow or not slow"` -> `3 passed`
@@ -37,6 +38,7 @@ Date: 2026-07-19
 - Claude flagged `artifact_queue.status='downloaded'` as a possible terminal-state risk; in this codebase `downloaded` is still pending parser work and is consumed by `ArtifactQueueProcessor`.
 - Claude flagged IP seed set union as a type risk; `_load_new_seed_values()` returns `set[str]`.
 - GPT sidecar reviewer `Ohm` returned no blockers and flagged max-iteration metadata/log gaps plus a test gap. Follow-up fixed final pending metadata refresh, max-iteration exhaustion log text, and added a 41-email `max_iter=2` exhaustion regression.
+- Worker `Hooke` found a production keyscan/schema gap: discovered org keyscan used `source="keyscan_target"`, which violates the `engagement_seeds.source` enum. Follow-up changed it to `cross_reference` plus keyscan-origin metadata and added a regression.
 
 ## Safety
 

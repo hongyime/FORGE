@@ -14751,12 +14751,13 @@ def kill_chain(
                                 _seed_context(
                                     str(item["target"]),
                                     str(item["seed_type"]),
-                                    source="keyscan_target",
+                                    source="cross_reference",
                                     depth=1,
                                     confidence=0.75,
+                                    metadata={"origin": "keyscan_target"},
                                 )
                             ],
-                            metadata={"iteration": iteration},
+                            metadata={"iteration": iteration, "origin": "keyscan_target"},
                         )
                     ),
                 },
