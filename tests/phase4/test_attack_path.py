@@ -796,6 +796,61 @@ class TestLoadCloudAssets:
             for source, _target in cloud_edges
         )
 
+    def test_legacy_deterministic_cloud_exposure_uses_validated_target_identifier(
+        self,
+        tmp_path: Path,
+    ):
+        db = _make_db(tmp_path, "legacy-cloud-finding.db")
+        con = sqlite3.connect(db)
+        try:
+            con.executescript(
+                """
+                CREATE TABLE cloud_validation_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    engagement_id INTEGER NOT NULL,
+                    asset_type TEXT NOT NULL,
+                    identifier TEXT NOT NULL,
+                    validation_status TEXT NOT NULL,
+                    validation_method TEXT,
+                    http_status INTEGER,
+                    checked_at TIMESTAMP
+                );
+                """
+            )
+            con.execute(
+                """
+                INSERT INTO cloud_validation_results
+                    (engagement_id, asset_type, identifier, validation_status,
+                     validation_method, http_status, checked_at)
+                VALUES (1, 'firebase', 'provider-firebase', 'VALIDATED',
+                        'firebase_database_shallow_read', 200,
+                        '2026-07-19T00:00:00+00:00')
+                """
+            )
+            con.execute(
+                """
+                INSERT INTO vulnerability_findings
+                    (engagement_id, vuln_type, target_url, parameter, severity, title)
+                VALUES (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 'provider-firebase',
+                        'firebase', 'HIGH', 'Validated Firebase data exposure')
+                """
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        graph = AttackGraphBuilder(engagement_id=1, db_path=db).build()
+        vuln_nodes = [
+            node
+            for node in graph.nodes
+            if node.node_type == NodeType.VULN
+            and node.label == "Validated Firebase data exposure"
+        ]
+
+        assert vuln_nodes
+        assert vuln_nodes[0].metadata["validation_status"] == "VALIDATED"
+        assert vuln_nodes[0].metadata["resource_id"] == "provider-firebase"
+
     def test_cloud_assets_with_same_identifier_are_keyed_by_asset_type(self, tmp_path: Path):
         db = _make_db(tmp_path, "cloud-key-collision.db")
         con = sqlite3.connect(db)

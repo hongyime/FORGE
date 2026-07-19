@@ -20,7 +20,10 @@ from forge.models.attack_graph_models import (
     NodeType,
     Severity,
 )
-from forge.utils.cloud_exposure_gate import is_deterministic_cloud_exposure
+from forge.utils.cloud_exposure_gate import (
+    is_deterministic_cloud_exposure,
+    normalize_cloud_exposure_asset_type,
+)
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
@@ -835,6 +838,12 @@ class AttackGraphBuilder:
     def _validation_lookup_service(self, provider: str, parameter: str, target_url: str) -> str:
         normalized = str(provider or "").strip().lower()
         hint = f"{parameter} {target_url}".lower()
+        if normalized in {"firebase", "supabase"}:
+            return normalized
+        if not normalized and "firebase" in hint:
+            return "firebase"
+        if not normalized and "supabase" in hint:
+            return "supabase"
         if normalized in {"s3", "aws_s3"}:
             return "aws_s3"
         if (normalized == "aws" and ("aws_s3" in hint or "s3://" in hint)) or (
@@ -859,7 +868,38 @@ class AttackGraphBuilder:
             not normalized and ("do_spaces" in hint or "digitaloceanspaces.com" in hint)
         ):
             return "do_spaces"
-        return normalized
+        return normalize_cloud_exposure_asset_type(normalized)
+
+    @staticmethod
+    def _validation_lookup_identifier(
+        service: str,
+        resource_id: str,
+        parameter: str,
+        target_url: str,
+    ) -> str:
+        explicit = str(resource_id or "").strip().lower()
+        if explicit:
+            return explicit
+        service_normalized = normalize_cloud_exposure_asset_type(service)
+        candidates = [str(target_url or "").strip(), str(parameter or "").strip()]
+        for raw_candidate in candidates:
+            candidate = raw_candidate.lower()
+            if not candidate:
+                continue
+            parsed = urlparse(candidate)
+            host = (parsed.hostname or "").lower()
+            if service_normalized == "firebase" and host.endswith(".firebaseio.com"):
+                return host.split(".", 1)[0]
+            if service_normalized == "supabase" and host.endswith(".supabase.co"):
+                return host.split(".", 1)[0]
+            if host and service_normalized in {"aws_s3", "azure_blob", "do_spaces", "gcs"}:
+                return host.split(".", 1)[0]
+            if "://" not in candidate and "/" not in candidate and " " not in candidate:
+                if normalize_cloud_exposure_asset_type(candidate) != service_normalized:
+                    return candidate
+            if service_normalized == "azure_blob" and "/" in candidate and "://" not in candidate:
+                return candidate
+        return ""
 
     @staticmethod
     def _cloud_exposure_is_validated(validation_metadata: dict[str, Any] | None) -> bool:
@@ -915,6 +955,12 @@ class AttackGraphBuilder:
             resource_id_str = str(resource_id or "").strip().lower()
             validation_lookup_service = self._validation_lookup_service(
                 cloud_provider_str,
+                str(parameter or ""),
+                str(target_url or ""),
+            )
+            resource_id_str = self._validation_lookup_identifier(
+                validation_lookup_service,
+                resource_id_str,
                 str(parameter or ""),
                 str(target_url or ""),
             )
