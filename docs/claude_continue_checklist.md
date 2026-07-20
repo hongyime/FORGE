@@ -67,6 +67,20 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Report Section 6 boundary checkpoint completed: Phase 6 mandatory
+  sections, fallback prompts, Jinja template instructions, and deterministic
+  template output now use `Validation Boundaries & Evidence Handling` instead
+  of forcing legacy post-exploitation activity into authorized ASM reports.
+  Backprop: added `SPEC.md` invariant `V12` plus bug note `B6`. Verification:
+  focused regressions first failed on the legacy section, then passed;
+  compile/Ruff for touched files; full report synthesizer suite -> `80 passed`;
+  cloud exposure report-gating -> `1 passed`; provider fallback chain ->
+  `10 passed`; dashboard report-summary/raw-export slice -> `1 passed, 16
+  deselected`; final combined adjacent report/fallback/dashboard slice ->
+  `12 passed, 16 deselected`; compact smoke -> `5 passed, 1 deselected`; cleanup left
+  `remaining_pytest_engagement_dirs=0`; persistent workspace DB inventory is
+  `1`, `5010`, `master.db`; no pytest/Python process remains. Handoff:
+  `.claude/handoffs/2026-07-20-report-section6-boundary.md`.
 - [x] Pytest engagement cleanup safety checkpoint completed: the Phase 1
   partition runner cleanup helper now leaves `pytest-of-*` owner containers in
   place and removes only actual nested `pytest-*` run directories containing

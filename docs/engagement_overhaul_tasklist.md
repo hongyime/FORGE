@@ -94,6 +94,27 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Report Section 6 boundary checkpoint: deterministic Phase 6 mandatory
+  sections, fallback prompts, Jinja template instructions, and template-rendered
+  Markdown now frame Section 6 as `Validation Boundaries & Evidence Handling`
+  instead of forcing legacy post-exploitation activity into authorized ASM
+  reports. Backprop: added `SPEC.md` invariant `V12` plus bug note `B6` so
+  deterministic reports and LLM prompts cannot reintroduce post-exploitation,
+  persistence, lateral movement, shell-access, or data-exfiltration narrative
+  requirements. Verification: focused regressions first failed on the legacy
+  `Post-Exploitation Activities` section, then passed; compile/Ruff for touched
+  Phase 6 files; full report synthesizer suite (`80 passed`); adjacent cloud
+  exposure report-gating suite (`1 passed`); provider fallback chain
+  (`10 passed`); dashboard report-summary/raw-export slice (`1 passed, 16
+  deselected`); final combined adjacent report/fallback/dashboard slice
+  (`12 passed, 16 deselected`); compact cross-phase smoke (`5 passed, 1
+  deselected`); real temp cleanup left `remaining_pytest_engagement_dirs=0`;
+  persistent workspace DB inventory remains `1`, `5010`, `master.db`; no
+  pytest/Python process remains.
+  Safety: reporting/prompt/template wording only; no live probing, provider
+  call expansion, credential use, scope relaxation, proxy/IP rotation,
+  rate-limit bypass, validation/report-gate weakening, severity change, or
+  finding creation.
 - [x] Pytest engagement cleanup safety checkpoint: the Phase 1 partition
   runner cleanup helper now treats `pytest-of-*` directories as owner
   containers and removes only actual nested `pytest-*` run directories that

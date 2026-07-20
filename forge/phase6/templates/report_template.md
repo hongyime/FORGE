@@ -10,7 +10,7 @@
    Token budget: rendered prompt must remain under 3584 tokens.
    StrictUndefined is active: missing variables raise TemplateNotFound at render.
 #}
-You are a senior penetration testing consultant writing a formal red team assessment report.
+You are a senior authorized security assessment consultant writing a formal ASM report.
 
 Write a complete, professional report using the exact section headings below.
 Observe these constraints:
@@ -65,12 +65,10 @@ Top findings (summarise in report; do not reproduce raw exploit code):
 {% endfor %}
 {% endif %}
 
-## Post-Exploitation Summary
-- Shells spawned: {{ post_exploitation.shells_spawned }}
-- Persistence mechanisms installed: {{ post_exploitation.persistence_count }}
-- Lateral movement — hosts reached: {{ post_exploitation.lateral_hosts }}
-- Data collected: {{ post_exploitation.data_collected_gb }} GB
-- Techniques used: {{ post_exploitation.techniques | join(', ') if post_exploitation.techniques else 'None' }}
+## Validation Boundaries & Evidence Handling Summary
+- Artifact family buckets: {{ post_exploitation.artifact_summary | length }}
+- Artifact type buckets: {{ post_exploitation.artifact_type_summary | length }}
+- Evidence handling: scoped discovery, static artifact analysis, and non-destructive validation records only.
 
 ### Collected Artifacts by Family
 | Artifact Family | Count |
@@ -136,12 +134,12 @@ If active API keys were discovered, state the service type and count only.]
 findings in business-risk terms. Reference CVE IDs. Do not reproduce exploit payloads
 or shellcode. Limit evidence excerpts to a maximum of 512 characters each.]
 
-## 6. Post-Exploitation Activities
+## 6. Validation Boundaries & Evidence Handling
 
-[Describe the post-exploitation chain: shell access, privilege escalation (if applicable),
-persistence mechanisms, lateral movement scope, and data collection volume.
-Reference techniques by name (e.g. COM hijack, SSH key collection). Do not include
-raw command syntax or payload content.]
+[Describe the validation boundaries, evidence handling model, static artifact
+processing, and non-destructive proof records. State when evidence was retained
+as analyst inventory rather than a reportable finding. Do not include offensive
+command syntax, raw payload content, or unauthorised activity.]
 
 ## 7. Risk Ratings & Remediation Recommendations
 

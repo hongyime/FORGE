@@ -70,6 +70,10 @@ review, and guaranteed template/raw exports when LLM providers fail.
 - V11. Automated cleanup may remove only proven test-owned engagement artifacts;
   it must not delete broad pytest owner containers or persistent engagement DBs
   that are not proven artifacts from the current test run.
+- V12. Deterministic reports and LLM prompts must frame Section 6 as validation
+  boundaries and evidence handling; they must not force post-exploitation,
+  persistence, lateral movement, shell access, or data-exfiltration narratives
+  into authorized ASM reports.
 
 ## T
 
@@ -79,7 +83,7 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | T2 | . | Continue safe recursive discovery upgrades for concrete passive parser, provider payload, identity, artifact, and source-gated metadata gaps. | V1,V3,V4,V5 |
 | T3 | . | Harden validation proof gates and report gates so only latest validated evidence can create deterministic findings. | V6,V7 |
 | T4 | . | Keep dashboard, API, graph, report, raw export, validation inventory, and audit surfaces in factual parity. | V3,V8 |
-| T5 | . | Preserve deterministic report fallback through LLM cascade failures, quota/token failures, missing keys, local/template degradation, and raw export availability. | V7,V9 |
+| T5 | . | Preserve deterministic report fallback through LLM cascade failures, quota/token failures, missing keys, local/template degradation, and raw export availability. | V7,V9,V12 |
 | T6 | . | Keep scoped active checks ROE-gated, non-destructive, bounded, paced, logged, and dry-run capable. | V3,V4,V6,V10 |
 | T7 | . | Split or wrap large legacy modules only when it reduces risk without changing verified behavior. | V1,V10 |
 | T8 | . | Commit meaningful checkpoints to `main` with docs and handoffs updated for continuation. | V3,V10 |
@@ -93,3 +97,4 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | B3 | 2026-07-20 | The locked end goal existed, but continuation docs could still require reading long sections before the one-sentence product target was obvious. | Added one-glance end-goal quick answers to the root goal file, active tasklist, and Claude continuation docs. |
 | B4 | 2026-07-20 | Broad inventory-name artifact labeling could outrank explicit multi-suffix SBOM names such as `inventory.spdx.json`, weakening deterministic artifact review metadata. | Classified explicit SBOM multi-suffix names before broad inventory heuristics; covered by V8 artifact metadata parity. |
 | B5 | 2026-07-20 | Pytest engagement cleanup treated `pytest-of-*` owner containers as removable pytest run directories when a nested `engagement.db` existed. | Added V11 and tightened cleanup to remove only actual nested `pytest-*` run directories that contain engagement DBs, leaving owner containers and persistent workspace DBs intact. |
+| B6 | 2026-07-20 | Deterministic Phase 6 reports and fallback prompts still forced a legacy post-exploitation section despite the current authorized ASM goal. | Added V12 and reframed Section 6 as validation boundaries and evidence handling in mandatory sections, fallback prompts, Jinja template instructions, and deterministic template output. |

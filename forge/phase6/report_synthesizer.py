@@ -94,7 +94,7 @@ MANDATORY_SECTIONS = [
     "## 3. Reconnaissance Findings",
     "## 4. OSINT & Credential Intelligence",
     "## 5. Vulnerability & Exploit Correlation",
-    "## 6. Post-Exploitation Activities",
+    "## 6. Validation Boundaries & Evidence Handling",
     "## 7. Risk Ratings & Remediation Recommendations",
 ]
 
@@ -1621,7 +1621,7 @@ class PromptAssembler:
             for p in ctx.recon.open_ports[:20]
         ] or ["  (no open services)"]
 
-        # Validated exploits, if any
+        # Validated findings, if any
         findings = [
             " — ".join(
                 part
@@ -1641,8 +1641,8 @@ class PromptAssembler:
         )
 
         return (
-            f"You are a senior penetration testing report writer.\n"
-            f"Produce a professional red team assessment report for engagement "
+            f"You are a senior authorized security assessment report writer.\n"
+            f"Produce a professional authorized ASM report for engagement "
             f"'{ctx.engagement_name}' (ID {ctx.engagement_id}, operator "
             f"'{ctx.operator}', overall risk {ctx.overall_risk}).\n\n"
             "SOURCE MATERIAL (from engagement database):\n"
@@ -1667,20 +1667,20 @@ class PromptAssembler:
             f"{ctx.exploits.high_count} high / "
             f"{ctx.exploits.medium_count} medium, "
             f"{ctx.exploits.cve_count} CVE reference(s) across "
-            f"{len(ctx.exploits.exploited)} validated exploit(s)."
+            f"{len(ctx.exploits.exploited)} validated finding(s)."
             + findings_block
             + "\n\n"
-            f"Post-exploitation — {len(ctx.post_exploitation.techniques)} "
-            f"technique(s), {ctx.post_exploitation.shells_spawned} shell(s), "
-            f"{ctx.post_exploitation.lateral_hosts} lateral host(s), "
-            f"{ctx.post_exploitation.persistence_count} persistence artefact(s), "
-            f"{ctx.post_exploitation.data_collected_gb:.2f} GB collected.\n\n"
+            "Evidence handling — "
+            f"{len(ctx.post_exploitation.artifact_summary)} artifact family bucket(s), "
+            f"{sum(len(rows) for rows in ctx.post_exploitation.artifact_type_summary.values())} "
+            "artifact type bucket(s), and non-destructive validation evidence "
+            "summarised from controlled engagement records.\n\n"
             "INSTRUCTIONS\n"
             "Include all mandatory sections: "
             + ", ".join(s.lstrip("# ") for s in MANDATORY_SECTIONS)
             + ".\n"
             "Write in formal British English. Do not reproduce credential "
-            "plaintexts, paste URLs, or raw exploit payloads. Reference "
+            "plaintexts, paste URLs, or raw payloads. Reference "
             "sensitive material by type and count only.\n"
             "Produce the complete Markdown report now, using the source "
             "material above. Do not ask clarifying questions."
@@ -3122,7 +3122,7 @@ class ReportSynthesizer:
         assert self._llm_provider is not None
 
         SYSTEM_DIRECTIVE = (
-            "You are a professional penetration testing report writer. "
+            "You are a professional authorized security assessment report writer. "
             "Write formal, factual prose. "
             "Never reproduce credential plaintexts, paste URLs, or raw exploit payloads. "
             "Reference sensitive data by type and count only. "
@@ -3144,7 +3144,7 @@ class ReportSynthesizer:
         assert self._llm is not None
 
         SYSTEM_DIRECTIVE = (
-            "You are a professional penetration testing report writer. "
+            "You are a professional authorized security assessment report writer. "
             "Write formal, factual prose. "
             "Never reproduce credential plaintexts, paste URLs, or raw exploit payloads. "
             "Reference sensitive data by type and count only. "
@@ -3175,7 +3175,7 @@ class ReportSynthesizer:
              pipeline never fails silently).
           3. ``dry_run=True`` for smoke tests without an LLM call.
 
-        The output is a proper Markdown red-team report grounded strictly
+        The output is a proper Markdown authorized security assessment report grounded strictly
         in the engagement DB. No hallucinated content, no OPSEC leaks
         (per-host IPs and service versions are aggregated by class).
         Prose is terse and factual — a cloud LLM produces more flowing
@@ -3363,16 +3363,16 @@ class ReportSynthesizer:
             detailed_findings_section = "\n\n".join(detail_blocks)
         else:
             exploits_section = (
-                "_No validated exploit paths in this window. "
+                "_No validated finding paths in this window. "
                 "Correlation surfaced candidates for future engagement._\n"
             )
 
-        # Post-ex activity
+        # Evidence handling summary
         pex = ctx.post_exploitation
-        techs = ", ".join(pex.techniques[:6]) if pex.techniques else "none"
+        evidence_categories = ", ".join(sorted(pex.artifact_summary)[:6]) or "none"
 
         return "\n".join([
-            "# Red Team Assessment Report",
+            "# Authorized Security Assessment Report",
             "",
             f"**Engagement:** {ctx.engagement_name} (ID {ctx.engagement_id})",
             f"**Operator:** {ctx.operator}",
@@ -3399,10 +3399,8 @@ class ReportSynthesizer:
             f"high, and {ctx.exploits.medium_count} medium-severity finding(s) "
             f"across {ctx.exploits.finding_count} validated finding(s) and "
             f"{ctx.exploits.cve_count} distinct CVE reference(s). "
-            f"Post-exploitation activity was limited to {pex.shells_spawned} "
-            f"shell(s), {pex.lateral_hosts} lateral pivot(s), "
-            f"{pex.persistence_count} persistence artefact(s), and "
-            f"{pex.data_collected_gb:.2f} GB of collected data.",
+            "Evidence handling remained bounded to scoped discovery, static "
+            "artifact analysis, and non-destructive validation records.",
             "",
             "## 2. Engagement Scope & Methodology",
             "",
@@ -3414,9 +3412,9 @@ class ReportSynthesizer:
             "The engagement followed the standard FORGE Toolkit phased "
             "methodology: Phase 0 (knowledge-base ETL), Phase 1 "
             "(reconnaissance), Phase 2 (OSINT + credential intelligence), "
-            "Phase 3 (evasion / payload preparation, if authorised), "
-            "Phase 4 (vulnerability & exploit correlation), Phase 5 "
-            "(post-exploitation, if authorised), Phase 6 (this report).",
+            "Phase 3 (scope and validation preparation), Phase 4 "
+            "(vulnerability and exposure correlation), and Phase 6 "
+            "(deterministic reporting).",
             "",
             "## 3. Reconnaissance Findings",
             "",
@@ -3490,13 +3488,15 @@ class ReportSynthesizer:
             detailed_findings_section or "_No detailed validated findings in this window._",
             "",
             "",
-            "## 6. Post-Exploitation Activities",
+            "## 6. Validation Boundaries & Evidence Handling",
             "",
-            f"**Techniques exercised:** {techs}  \n"
-            f"**Interactive shells:** {pex.shells_spawned}  \n"
-            f"**Lateral hosts:** {pex.lateral_hosts}  \n"
-            f"**Persistence artefacts:** {pex.persistence_count}  \n"
-            f"**Data collected:** {pex.data_collected_gb:.2f} GB",
+            f"**Controlled evidence categories:** {evidence_categories}  \n"
+            f"**Artifact family buckets:** {len(pex.artifact_summary)}  \n"
+            f"**Artifact type buckets:** {sum(len(rows) for rows in pex.artifact_type_summary.values())}  \n"
+            "**Validation boundary:** Reported findings are limited to scoped discovery, "
+            "static artifact analysis, and non-destructive proof records. "
+            "Unvalidated, dead, placeholder, or low-signal evidence remains analyst "
+            "inventory unless deterministic report gates classify it as reportable.",
             "",
             "## 7. Risk Ratings & Remediation Recommendations",
             "",
@@ -3514,9 +3514,9 @@ class ReportSynthesizer:
             "4. Schedule an authenticated vulnerability assessment to "
             "surface patch-level exposures not visible through "
             "unauthenticated reconnaissance.",
-            "5. Repeat this engagement with post-exploitation authorised "
-            "if the informational baseline established here needs to be "
-            "tested against realistic adversary behaviour.",
+            "5. If deeper active validation is required, document separate "
+            "rules of engagement, scope limits, pacing, and approval evidence "
+            "before expanding beyond the current non-destructive workflow.",
             "",
             "---",
             "",

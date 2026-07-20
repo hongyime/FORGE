@@ -55,6 +55,19 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Report Section 6 boundary completed: Phase 6 mandatory sections, fallback
+  prompts, Jinja template instructions, and deterministic template output now
+  use `Validation Boundaries & Evidence Handling` instead of forcing legacy
+  post-exploitation activity into authorized ASM reports. Backprop added
+  `SPEC.md` `V12` and `B6`. Verification: focused regressions failed before
+  implementation then passed, compile/Ruff, report synthesizer (`80 passed`),
+  cloud exposure report gating (`1 passed`), provider fallback chain
+  (`10 passed`), dashboard report-summary/raw-export slice (`1 passed, 16
+  deselected`), final combined adjacent slice (`12 passed, 16 deselected`),
+  compact smoke (`5 passed, 1 deselected`), cleanup
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory remains `1`,
+  `5010`, `master.db`, and no pytest/Python process remains. Handoff:
+  `.claude/handoffs/2026-07-20-report-section6-boundary.md`.
 - [x] Pytest engagement cleanup safety completed: Phase 1 partition cleanup now
   treats `pytest-of-*` as an owner container and removes only nested `pytest-*`
   run directories containing `engagement.db`. Backprop added `SPEC.md` `V11`

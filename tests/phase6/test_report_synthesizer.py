@@ -775,12 +775,22 @@ def test_prompt_assembler_credential_leak_guard_raises():
         assembler.assemble(ctx)
 
 
-def test_prompt_assembler_contains_mandatory_section_list():
+def test_v12_prompt_assembler_contains_validation_boundary_section_list():
     assembler = PromptAssembler(template_dir=Path("/nonexistent"))
     ctx       = _make_minimal_context()
     prompt    = assembler.assemble(ctx)
-    for section_name in ["Executive Summary", "Reconnaissance Findings", "Post-Exploitation"]:
+    for section_name in [
+        "Executive Summary",
+        "Reconnaissance Findings",
+        "Validation Boundaries & Evidence Handling",
+    ]:
         assert section_name in prompt or "executive" in prompt.lower()
+    assert "Post-Exploitation Activities" not in prompt
+
+
+def test_v12_mandatory_sections_do_not_force_post_exploitation_framing() -> None:
+    assert "## 6. Validation Boundaries & Evidence Handling" in MANDATORY_SECTIONS
+    assert all("Post-Exploitation" not in section for section in MANDATORY_SECTIONS)
 
 
 def test_prompt_assembler_enforces_token_budget(monkeypatch):
@@ -1637,6 +1647,24 @@ def test_synthesizer_writes_markdown_json_and_pdf_exports(
     assert "## Report Generation Lineage" in payload["report_markdown"]
     assert "- **Requested provider:** template" in payload["report_markdown"]
     assert "ACME Corp" in payload["report_markdown"]
+
+
+def test_v12_synthesizer_template_uses_validation_boundaries_not_post_exploitation(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+
+    assert "## 6. Validation Boundaries & Evidence Handling" in content
+    assert "## 6. Post-Exploitation Activities" not in content
+    assert "post-exploitation authorised" not in content.lower()
 
 
 def test_synthesizer_report_write_failure_falls_back_to_raw_exports(
