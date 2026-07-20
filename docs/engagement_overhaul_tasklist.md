@@ -70,6 +70,26 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Assetlinks Android package passive-inventory checkpoint:
+  source-aware `assetlinks.json` parsing now promotes
+  `target.namespace=android_app` / `target.package_name` values into passive
+  `mobile_android_package` resource inventory while filtering malformed package
+  strings. Existing email, URL, and Supabase recursion from the same payload is
+  preserved, and the cloud-validation registry contract now proves the new
+  resource type reaches terminal `UNSUPPORTED` state without provider calls or
+  findings. Verification: TDD focused regression failed before implementation
+  on missing package inventory, then passed (`1 passed`); compile/Ruff for
+  touched orchestrator/helper/test files; focused artifact/public metadata slice
+  (`10 passed`); adjacent assetlinks/well-known orchestrator slice (`2 passed,
+  757 deselected`); adjacent well-known metadata slice (`6 passed`); validation
+  registry terminal-state contract (`1 passed`); cleanup check found no new
+  persistent pytest DBs. Review: subagent spawn was attempted but thread limit
+  was still reached, so the audit proceeded locally. Safety: passive static
+  metadata inventory only; no Android store lookup, app download, provider call,
+  live probing, credential use, scope relaxation, proxy/IP rotation,
+  rate-limit bypass, report-gate change, severity change, or deterministic
+  finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-assetlinks-android-package-inventory.md`.
 - [x] Microsoft identity-association metadata recursion checkpoint:
   Microsoft-documented `/.well-known/microsoft-identity-association.json` and
   the extensionless fallback route now preserve source-aware format labels, and

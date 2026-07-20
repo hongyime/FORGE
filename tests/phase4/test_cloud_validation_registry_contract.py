@@ -85,6 +85,7 @@ _ARTIFACT_EMITTED_CLOUD_ASSET_TYPES = (
     "gitlab_pipeline",
     "hashicorp_vault",
     "heroku",
+    "mobile_android_package",
     "netlify",
     "railway",
     "render",

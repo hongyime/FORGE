@@ -118,6 +118,7 @@ from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_candidates,
     amplify_client_config_text_candidates,
 )
+from forge.utils.artifact_assetlinks import assetlinks_android_packages
 from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
@@ -20478,6 +20479,7 @@ class ArtifactQueueProcessor:
                     "azure_blob",
                     "azure_key_vault",
                     "azure_ad_app",
+                    "android_assetlinks",
                     "kubernetes_secret_manifests",
                     "gitops_manifests",
                     "workflow_manifests",
@@ -20486,6 +20488,7 @@ class ArtifactQueueProcessor:
                 lambda cloud_family: self._artifact_text_cloud_asset_family_candidates(
                     cloud_family,
                     text=text,
+                    source_file=source_file,
                 ),
                 default_factory=list,
             )
@@ -20585,6 +20588,7 @@ class ArtifactQueueProcessor:
         family: str,
         *,
         text: str,
+        source_file: str = "",
     ) -> list[tuple[str, str, str]]:
         if family == "aws_s3":
             candidates: list[tuple[str, str, str]] = []
@@ -20674,6 +20678,17 @@ class ArtifactQueueProcessor:
                 seen.add(candidate)
                 candidates.append(candidate)
             return candidates
+        if family == "android_assetlinks":
+            if _artifact_format_label(source_file) != "assetlinks.json":
+                return []
+            return [
+                (
+                    "mobile_android_package",
+                    package_name,
+                    "artifact_assetlinks_android_package",
+                )
+                for package_name in assetlinks_android_packages(text)
+            ]
         if family == "kubernetes_secret_manifests":
             candidates = []
             seen = set()
