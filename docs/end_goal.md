@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-20
 
-This is the detailed end-goal contract for FORGE. The compact canonical checklist lives in `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; if another doc, checklist, or agent plan conflicts with these end-goal docs, update that doc or plan before continuing implementation.
+This is the normative end-goal contract for FORGE. The compact execution checklist lives in `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; if another doc, checklist, or agent plan conflicts with this file, update that doc or plan before continuing implementation.
 
 ## One-Sentence Goal
 
@@ -15,7 +15,7 @@ FORGE is a comprehensive, deterministic, authorized attack-surface management an
 - Live probing and tool execution are allowed only when the engagement scope/config explicitly authorizes them. Live `--attack-mode` and `--auto-run-detected` execution must carry `--roe-id` or `FORGE_ROE_ID` plus `--scope-manifest` or `FORGE_SCOPE_MANIFEST`.
 - Automation must be bounded, logged, resumable, dry-run capable, and safe to stop/restart.
 - External providers and target services must be handled with bounded concurrency, timeouts, backoff, and provider-aware rate limits. Do not add IP rotation, proxy rotation, or rate-limit bypass as a way to evade limits.
-- Default automation must not perform destructive exploitation, password spraying, persistence, lateral movement, post-exploitation, data modification, or privilege escalation. Those are separate operating modes and require explicit scope, implementation, review, and audit gates before they can exist.
+- FORGE's end goal excludes destructive exploitation, password spraying, persistence, lateral movement, post-exploitation, data modification, and privilege escalation. Do not add those capabilities to the product path or continuation backlog.
 
 ## Required System Outcomes
 
@@ -67,7 +67,7 @@ FORGE is considered at the intended end state when all of these are true:
 - Do not move the goal into UI-only polish while recursive discovery, validation, and reporting gaps remain.
 - Do not claim a provider/resource is reportable unless deterministic proof gates mark it validated.
 - Do not bypass provider rate limits or target rate limits with IP/proxy rotation.
-- Do not add exploitation, credential attacks, persistence, lateral movement, or post-exploitation to the default automated path.
+- Do not add exploitation, credential attacks, persistence, lateral movement, or post-exploitation to FORGE's product path or continuation backlog.
 - Do not let LLM output control risk, proof, findings, or validation status.
 
 ## Wording To Avoid

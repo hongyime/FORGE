@@ -4,7 +4,7 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- Canonical end goal: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; detailed contract: `docs/end_goal.md`. This file tracks execution checkpoints and continuation tasks.
+- Normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. This file tracks execution checkpoints and continuation tasks.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 
@@ -5552,5 +5552,5 @@ Next: continue with another concrete backend kill-chain gap, preferably identity
 
 ## Intentionally gated
 
-- [ ] Do not silently expand the default engagement run into intrusive authenticated exploitation, password spraying, persistence, lateral movement, or post-exploitation automation.
-- [ ] Keep the automated default path focused on scoped discovery, authorized live probing/tool execution, static analysis, non-destructive validation, deterministic finding synthesis, and resilient report generation unless the operating mode is explicitly re-scoped.
+- [ ] Do not silently expand the FORGE engagement run into intrusive authenticated exploitation, password spraying, persistence, lateral movement, or post-exploitation automation.
+- [ ] Keep the automated path focused on scoped discovery, authorized live probing/tool execution, static analysis, non-destructive validation, deterministic finding synthesis, and resilient report generation. Do not add exploitation, password attacks, persistence, lateral movement, or post-exploitation to the continuation backlog.

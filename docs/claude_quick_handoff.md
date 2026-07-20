@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-20
 
-Use this file first. Canonical end goal: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`, with the detailed contract in `docs/end_goal.md`. Use `docs/claude_continue_checklist.md` next if you need the longer command list.
+Use this file first. Normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. Use `docs/claude_continue_checklist.md` next if you need the longer command list.
 
 ## Operator Notes
 

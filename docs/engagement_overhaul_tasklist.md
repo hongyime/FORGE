@@ -4,7 +4,7 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- Detailed end-goal contract: `docs/end_goal.md`. This tasklist is the execution ledger; the end-goal doc is the stable definition of what FORGE is being built to become.
+- Normative end-goal source: `docs/end_goal.md`. The `## Canonical End Goal` checklist below is the execution-facing summary derived from that contract; if they conflict, update this checklist to match `docs/end_goal.md` before continuing.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 
@@ -12,7 +12,7 @@ Last updated: 2026-07-20
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform. It must start from one or more scoped engagement seeds, recursively discover public or explicitly authorized attack surface, statically analyze discovered artifacts, validate cloud and credential evidence non-destructively before reporting, calculate risk with deterministic rules, expose the engagement through graph/dashboard/report surfaces, and always generate auditable output even when LLM providers fail.
 
-- [ ] Every live action is gated by explicit ROE/scope manifest, bounded concurrency, deterministic depth/queue budgets, audit logging, and dry-run preview.
+- [ ] Every scoped active probe, follow-on tool execution, and read-only credential/resource validation is gated by explicit ROE/scope manifest, bounded concurrency, deterministic depth/queue budgets, audit logging, and dry-run preview. Passive provider OSINT still stays scope-filtered, budgeted, logged, and provider-paced; `FORGE_REQUIRE_SCOPE_MANIFEST=1` can require a scope manifest for every non-dry-run launch.
 - [ ] Multi-seed engagements support domains, IPs, URLs, emails, phones, usernames, company names, cloud refs, and artifact URLs under one auto-incrementing engagement record.
 - [ ] Recursive discovery fans out across passive OSINT, identity enrichment, web mining, artifact parsing, cloud-reference detection, and explicitly authorized live checks.
 - [ ] Cross-reference synthesis merges duplicate entities, promotes high-confidence secondary seeds, flags conflicts, and terminates deterministically when depth, queue, or stable-snapshot conditions are met.
@@ -5853,7 +5853,7 @@ Use this as the canonical continuation list. Older unchecked "next audit target"
 
 ## Intentionally gated
 
-- [ ] Do not expand the default engagement workflow into destructive exploitation, password attacks, persistence, lateral movement, post-exploitation, or other intrusive actions without a separate explicit operating mode.
+- [ ] Do not expand the engagement workflow, product path, or continuation backlog into destructive exploitation, password attacks, persistence, lateral movement, post-exploitation, or other intrusive actions.
 - [ ] Keep newly added validation/reporting work scoped to authorized discovery, scope-gated live probing/tool execution, static analysis, non-destructive validation, deterministic scoring, and resilient report generation.
 - [ ] New live third-party credential-validation or real-service access flows must be explicit, scope-gated, rate-limited, audited, and regression-tested with mocks/local fixtures before any real target run.
 
@@ -7407,7 +7407,7 @@ Use this as the canonical continuation list. Older unchecked "next audit target"
   `python -m pytest tests/phase1/test_engagement_orchestrator.py -k "consolidates_graph_export_into_single_all_format_build or records_recent_run_telemetry_metadata or publishes_distributed_progress_events" -q`
   `python -m pytest tests/integration/test_webui_engagement_api.py -k "run_progress_bridge_publishes_step_events_from_persisted_run_metadata or run_progress_bridge_republishes_when_queue_metrics_change_without_step_change" -q`
   `python -m pytest tests/phase1/test_engagement_orchestrator.py tests/integration/test_webui_engagement_api.py tests/phase4/test_cloud_validate.py -q`
-- [x] The prereport tail is less serialized now: `vuln passive fingerprint` and `exploit correlate` dispatch together through the bounded worker-pool helper before the dependency-bound graph/report tail, and the final consolidated graph build now persists an `attack_graph_snapshots` row as part of the same deterministic finalization pass.
+- [x] The prereport tail is less serialized now: `vuln passive fingerprint` and offline exploit-reference correlation dispatch together through the bounded worker-pool helper before the dependency-bound graph/report tail, and the final consolidated graph build now persists an `attack_graph_snapshots` row as part of the same deterministic finalization pass.
   Commands:
   `python -m pytest tests/phase1/test_engagement_orchestrator.py -k "parallel_batches_prereport_finalization_modules or consolidates_graph_export_into_single_all_format_build or records_recent_run_telemetry_metadata or publishes_distributed_progress_events" -q`
   `python -m pytest tests/integration/test_webui_engagement_api.py -k "run_progress_bridge_publishes_step_events_from_persisted_run_metadata or run_progress_bridge_republishes_when_queue_metrics_change_without_step_change" -q`
@@ -7535,8 +7535,8 @@ Use this as the canonical continuation list. Older unchecked "next audit target"
 
 ## Still partial or missing
 
-- [ ] Intrusive active exploitation remains intentionally gated/manual, while authorized live probing/tool execution is part of the automated end goal when scope explicitly allows it.
-  Current state: the automated path covers discovery orchestration, static artifact parsing, scope-gated live probing/tool execution, bounded non-destructive cloud validation, deterministic finding synthesis, template/LLM report generation, and engagement telemetry. Expanding the default run chain to perform direct authenticated exploitation, password spraying, persistence, lateral movement, or post-exploitation actions would be a different operating mode and should remain explicit, operator-approved, and separately audited instead of silently becoming part of the baseline automation.
+- [ ] Intrusive active exploitation is outside the FORGE end goal, while authorized live probing/tool execution remains part of the automated ASM workflow when scope explicitly allows it.
+  Current state: the automated path covers discovery orchestration, static artifact parsing, scope-gated live probing/tool execution, bounded non-destructive cloud validation, deterministic finding synthesis, template/LLM report generation, and engagement telemetry. Do not expand the run chain to perform direct authenticated exploitation, password spraying, persistence, lateral movement, or post-exploitation actions.
 - [ ] Full per-seed parallel fan-out execution.
   Current state: bounded parallel dispatch now covers subprocess-backed passive phases, per-email E-chain provider dispatch, recursive username/phone/name/company/IP seed loops, per-handle Sherlock and Instagram social-handle enrichment, PTR reverse-DNS, DNS, RDAP, Wayback, per-host HTML/cloud fetches, recursive in-scope URL-surface fetch/mining for operator/discovered `url` seeds, direct cloud-asset validation probes, pending key-validation sweeps, the artifact-queue remote-acquisition and parse stages, bounded-parallel scanned-PDF page OCR within the artifact parser, internal multi-username handle-finder batches, internal Epieos/Gravatar/Ghunt/Holehe email lookups, a live EmailRep reputation step that stays intentionally single-worker to preserve provider rate limits, bounded-parallel PhoneInfoga-derived site mining, LinkedIn public-dork batches, full-name public-dork batches, optional credential-validation service checks, prereport vuln/exploit finalization dispatch, the engagement-backed passive-vuln sweep fed from crawl URLs then seed URLs then discovered hostnames then scope entries with scoped-target prefiltering plus bounded parallel request dispatch, the A/G/H/I/D5 dry-run and resume bookkeeping tails, the helper-side discovered email/phone/IP/hostname/crawl/profile persistence apply tails, the helper-side known-host merge plus PTR post-lookup persistence plus social-handle merge tails, the hostname-hint merge stage inside `_persist_new_hostnames()`, the post-classification artifact candidate dedupe plus ordered artifact-queue write tail, and the consolidated graph/export build plus ordered postgraph report tail with snapshot persistence; some smaller helper-local in-process enrichers still execute sequentially.
 - [ ] Full identity enrichment coverage.

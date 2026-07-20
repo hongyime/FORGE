@@ -4,7 +4,7 @@
 
 Every operation is scope-gated + hash-chain audit-logged. Zero API keys required for the recommended flow.
 
-Canonical project end goal: [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) -> `Canonical End Goal`; detailed contract: [docs/end_goal.md](docs/end_goal.md). Future implementation work should move FORGE toward that deterministic authorized ASM/kill-chain outcome and should not weaken the validation, scope, audit, or report-fallback guarantees.
+Normative project end goal: [docs/end_goal.md](docs/end_goal.md); execution-facing checklist: [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) -> `Canonical End Goal`. Future implementation work should move FORGE toward that deterministic authorized ASM/kill-chain outcome and should not weaken the validation, scope, audit, or report-fallback guarantees.
 
 ---
 
@@ -180,7 +180,7 @@ Everything else is internal to kill-chain and no longer surfaced in `--help`.
 | `FORGE_DATA_DIR` | Absolute path for cache data, logs, engagement DBs |
 | `FORGE_OPERATOR` | Callsign recorded in every `audit_log` entry |
 | `FORGE_NO_TOR` | `1` skips Tor daemon startup (10× speedup on offline commands) |
-| `FORGE_SAFE_MODE` | `1` disables Phase 3 payload gen and Phase 5 post-ex (AV-safe) |
+| `FORGE_SAFE_MODE` | `1` keeps legacy high-risk modules disabled; keep enabled for the authorized ASM workflow |
 | `FORGE_ROE_ID` | Optional ROE / written-authorization reference recorded on kill-chain runs |
 | `FORGE_SCOPE_MANIFEST` | Optional ROE/scope JSON manifest; required for live `--attack-mode` or `--auto-run-detected` |
 | `FORGE_REQUIRE_SCOPE_MANIFEST` | `1` requires a scope manifest for every non-dry-run kill-chain launch |
