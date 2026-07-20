@@ -46,6 +46,11 @@ test engagement debris. It is only acceptable when focused local/mocked E2E
 tests prove the workflow and report generation still falls back to deterministic
 template/raw exports with no working LLM provider.
 
+Before editing, state which canonical acceptance checkbox or `docs/end_goal.md`
+stage the task advances. If the answer is "none", do not edit code. Pick the
+smallest concrete kill-chain, validation, reporting fallback, dashboard review,
+or test/cleanup gap instead.
+
 ## Compact active backlog
 
 Use this as the canonical current continuation list. `docs/claude_continue_checklist.md` mirrors this for Claude handoff context, but this section wins if the two differ. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.

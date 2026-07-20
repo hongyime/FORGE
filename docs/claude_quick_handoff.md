@@ -15,6 +15,9 @@ cleanup. Before starting work, map the task to one of the acceptance stages in
 `docs/end_goal.md`: intake, discovery, recursion, artifact analysis, validation,
 scoring, review, fallback, or testing/cleanup. Do not move the goal to UI-only
 polish or provider breadth without proving the end-to-end kill-chain path.
+If no stage matches the next task, stop and re-scope before editing. Use
+subagents for independent review or disjoint work only when it saves time
+without creating competing source-of-truth docs.
 
 ## Operator Notes
 

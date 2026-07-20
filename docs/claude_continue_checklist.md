@@ -22,6 +22,12 @@ fallback guarantees. Every continuation task must map back to the acceptance
 stages in `docs/end_goal.md`: intake, discovery, recursion, artifact analysis,
 validation, scoring, review, fallback, or testing/cleanup.
 
+Before editing, state the matching acceptance stage. If no stage matches, stop
+and re-scope to a concrete deterministic kill-chain, validation, fallback,
+dashboard-review, or test/cleanup gap. Use subagents for independent review or
+disjoint implementation slices, but do not let subagents create competing goal
+documents or weaken the normative contract in `docs/end_goal.md`.
+
 ## Compact active backlog
 
 Use this as a Claude-facing mirror of the current continuation list. If this file conflicts with `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`, the engagement overhaul task list wins. Older unchecked "next audit target" breadcrumbs are historical unless they map to one of these items.

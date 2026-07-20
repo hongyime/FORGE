@@ -23,6 +23,15 @@ intake, recursion, validation, deterministic scoring, graph/dashboard/report
 review, auditability, fallback output, cleanup, or tests, it is not part of the
 current end goal.
 
+## Stop/Continue Rule
+
+Before changing code, a future agent must name the acceptance gate the change
+advances. Continue only when the work strengthens intake, discovery, recursion,
+artifact analysis, validation, scoring, review, fallback, or testing/cleanup. If
+the work is only UI polish, provider count, tool collection, or broad refactor
+without proving that engagement path, stop and choose a concrete kill-chain or
+determinism gap instead.
+
 ## End Goal In Plain English
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and

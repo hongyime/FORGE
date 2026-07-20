@@ -39,6 +39,16 @@ Acceptance is stage-gated:
 If a task cannot be tied to one of these rows, it should not be started under the
 current goal.
 
+## Stop/Continue Rule
+
+Each implementation task must declare which acceptance stage it advances before
+code changes begin. Continue only when the task improves the deterministic
+engagement path or proves it with focused tests. Stop, re-scope, or delegate a
+review when the task is merely cosmetic UI work, provider/tool accumulation,
+unbounded scanning breadth, or a refactor that does not improve intake,
+discovery, recursion, artifact analysis, validation, scoring, review, fallback,
+or testing/cleanup.
+
 ## One-Sentence Goal
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform that starts from one or more scoped engagement seeds, recursively discovers and validates public or explicitly authorized attack surface, statically analyzes discovered artifacts, produces an analyst-usable graph and dashboard, and always generates auditable reports without letting an LLM invent facts, severities, or findings.
