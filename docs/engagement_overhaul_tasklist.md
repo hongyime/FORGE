@@ -70,6 +70,27 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Apple app-site-association iOS app passive-inventory checkpoint:
+  source-aware `apple-app-site-association` parsing now promotes concrete AASA
+  `appID`, `appIDs`, and `apps` values such as `TEAMID.com.example.app` into
+  passive `mobile_ios_app` resource inventory while filtering wildcard and
+  malformed identifiers. Existing email, URL, and Supabase recursion from the
+  same payload remains intact, and provider identifiers preserve the original
+  Team ID casing while canonical storage stays lowercase. The cloud-validation
+  registry contract proves the new type reaches terminal `UNSUPPORTED` state
+  without provider calls or findings. Verification: TDD focused regression
+  failed before implementation on missing iOS app inventory, then passed (`1
+  passed`); compile/Ruff for touched orchestrator/helper/test files; adjacent
+  AASA/assetlinks/public metadata slice (`3 passed`); adjacent
+  AASA/assetlinks orchestrator slice (`2 passed, 757 deselected`); validation
+  registry terminal-state contract (`1 passed`); cleanup check found no new
+  persistent pytest DBs. Review: subagent spawn was attempted but thread limit
+  was still reached, so the audit proceeded locally. Safety: passive static
+  metadata inventory only; no App Store lookup, app download, provider call,
+  live probing, credential use, scope relaxation, proxy/IP rotation,
+  rate-limit bypass, report-gate change, severity change, or deterministic
+  finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-aasa-ios-app-inventory.md`.
 - [x] Assetlinks Android package passive-inventory checkpoint:
   source-aware `assetlinks.json` parsing now promotes
   `target.namespace=android_app` / `target.package_name` values into passive

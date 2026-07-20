@@ -118,6 +118,7 @@ from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_candidates,
     amplify_client_config_text_candidates,
 )
+from forge.utils.artifact_aasa import aasa_ios_app_ids
 from forge.utils.artifact_assetlinks import assetlinks_android_packages
 from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
@@ -20480,6 +20481,7 @@ class ArtifactQueueProcessor:
                     "azure_key_vault",
                     "azure_ad_app",
                     "android_assetlinks",
+                    "apple_app_site_association",
                     "kubernetes_secret_manifests",
                     "gitops_manifests",
                     "workflow_manifests",
@@ -20688,6 +20690,13 @@ class ArtifactQueueProcessor:
                     "artifact_assetlinks_android_package",
                 )
                 for package_name in assetlinks_android_packages(text)
+            ]
+        if family == "apple_app_site_association":
+            if _artifact_format_label(source_file) != "apple-app-site-association":
+                return []
+            return [
+                ("mobile_ios_app", app_id, "artifact_apple_app_site_association")
+                for app_id in aasa_ios_app_ids(text)
             ]
         if family == "kubernetes_secret_manifests":
             candidates = []
