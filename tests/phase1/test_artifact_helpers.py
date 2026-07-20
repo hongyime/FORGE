@@ -16,6 +16,10 @@ from forge.utils.artifact_electron_update_metadata import (
     electron_update_metadata_artifact_label,
     electron_update_metadata_candidates,
 )
+from forge.utils.artifact_hashicorp_config import (
+    hashicorp_config_artifact_label,
+    hashicorp_config_candidates,
+)
 
 
 def test_classify_seed_value_recognizes_archive_style_mobile_bundle_urls() -> None:
@@ -377,6 +381,35 @@ def test_security_scanner_config_artifact_format_labels_are_source_aware() -> No
     assert _artifact_format_label("terrascan.toml") == "terrascan-config"
     assert _artifact_format_label("kics.config") == "kics-config"
     assert _artifact_format_label("nuclei-config.yaml") == "nuclei-config"
+
+
+def test_hashicorp_vault_config_labels_are_source_gated() -> None:
+    assert hashicorp_config_artifact_label("vault/config.hcl") == "hashicorp-vault-config"
+    assert hashicorp_config_artifact_label(".vault.d/config.hcl") == "hashicorp-vault-config"
+    assert hashicorp_config_artifact_label("vault.hcl") == "hashicorp-vault-config"
+    assert hashicorp_config_artifact_label("vault-agent.hcl") == "hashicorp-vault-config"
+    assert _artifact_format_label("vault/config.hcl") == "hashicorp-vault-config"
+
+    assert hashicorp_config_artifact_label("config.hcl") == ""
+    assert hashicorp_config_artifact_label("consul/config.hcl") == ""
+    assert hashicorp_config_artifact_label("terraform/vault-policy.hcl") == ""
+
+
+def test_hashicorp_vault_config_candidates_promote_public_hostonly_endpoints() -> None:
+    payload = """
+api_addr = "vault-api.acme.example:8200"
+cluster_addr = "https://vault-cluster.acme.example:8201"
+redirect_addr = ["vault-redirect.acme.example/ui", "http://localhost:8200"]
+VAULT_ADDR = "${VAULT_ADDR}"
+vault_addr = "https://user:pass@vault-secret.acme.example"
+""".strip()
+
+    assert hashicorp_config_candidates(payload, source_hint="notes/config.hcl") == []
+    assert hashicorp_config_candidates(payload, source_hint="vault/config.hcl") == [
+        "https://vault-api.acme.example:8200",
+        "https://vault-cluster.acme.example:8201",
+        "https://vault-redirect.acme.example/ui",
+    ]
 
 
 def test_kubernetes_annotation_bare_hosts_feed_orchestration_recursion(tmp_path) -> None:

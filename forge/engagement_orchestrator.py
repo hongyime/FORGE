@@ -97,6 +97,10 @@ from forge.utils.artifact_framework_config import (
     framework_config_artifact_label,
     framework_config_host_candidates,
 )
+from forge.utils.artifact_hashicorp_config import (
+    hashicorp_config_artifact_label,
+    hashicorp_config_candidates,
+)
 from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
 from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
@@ -5893,6 +5897,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _looks_like_sops_text_config_artifact_name(raw_lowered):
         return True
+    if hashicorp_config_artifact_label(raw_lowered):
+        return True
     if _container_orchestration_config_artifact_label(raw_lowered):
         return True
     if _edge_proxy_config_artifact_label(raw_lowered):
@@ -6072,6 +6078,9 @@ def _artifact_format_label(value: str | Path) -> str:
         return "kubeconfig"
     if _looks_like_sops_text_config_artifact_name(str(value or "")):
         return "sops"
+    hashicorp_config_label = hashicorp_config_artifact_label(str(value or ""))
+    if hashicorp_config_label:
+        return hashicorp_config_label
     orchestration_label = _container_orchestration_config_artifact_label(str(value or ""))
     if orchestration_label:
         return orchestration_label
@@ -17888,6 +17897,7 @@ class ArtifactQueueProcessor:
         "database_client_text",
         "storage_client_config_text",
         "amplify_client_config_text",
+        "hashicorp_config_text",
         "framework_config_text",
         "orm_config_text",
         "tunnel_config_text",
@@ -19543,6 +19553,13 @@ class ArtifactQueueProcessor:
             return self._amplify_client_config_structured_payload_text(
                 text,
                 source_hint=source_hint,
+            )
+        if family == "hashicorp_config_text":
+            return "\n".join(
+                hashicorp_config_candidates(
+                    text,
+                    source_hint=source_hint,
+                )
             )
         if family == "framework_config_text":
             return self._framework_config_structured_payload_text(

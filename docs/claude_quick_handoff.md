@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Vault HCL config passive-recursion checkpoint is green:
+  Explicit HashiCorp Vault config artifacts such as `vault/config.hcl`, `.vault.d/config.hcl`, and `vault.hcl` now keep `hashicorp-vault-config` labels and run through a compact helper, `forge/utils/artifact_hashicorp_config.py`. Static endpoint assignments such as `api_addr`, `cluster_addr`, `redirect_addr`, and `VAULT_ADDR` promote public host-only values into recursive HTTPS URL seeds.
+  Generic `.hcl`, Consul configs, Terraform policy files, templated values, localhost/IP-only values, wildcards, and userinfo-bearing URLs stay suppressed.
+  Verification: compile/Ruff for touched helper/orchestrator/test files; full artifact helper suite -> `31 passed`; broad structured-discovery slice -> `306 passed, 455 deselected`.
+  Safety: passive static parsing only. No Vault execution, token use, authentication, validation, provider call, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-vault-hcl-config-recursion.md`.
+
 - [x] Run audit manifest portable-export checkpoint is green:
   `forge.audit.manifest_bundle` writes deterministic ZIP bundles for external archival outside the mutable engagement DB. Bundles contain `manifest.json`, `verification.json`, `checksums.sha256`, and `README.md`; ZIP member order and timestamps are deterministic, and checksums cover the payload files. `forge audit manifest-export --engagement <id> [--run-id <id>] [--output <zip>] [--json]` exports the bundle and exits `2` if export-time verification fails while still preserving a failed verification receipt.
   Optional HMAC signing is available via `--sign --signing-key-env <ENV>`, which writes `signature.json` over canonical payload file checksums without writing the signing key to disk. `forge audit manifest-bundle-verify --bundle <zip> --signing-key-env <ENV>` verifies signed bundles offline without the engagement DB and fails closed for missing keys, malformed signatures, duplicate ZIP entries, unsigned extra files, and signature mismatches.
