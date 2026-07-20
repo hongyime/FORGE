@@ -44,6 +44,26 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Web manifest related-application passive-inventory checkpoint completed:
+  source-aware Web App Manifest parsing now promotes `related_applications`
+  Android package IDs and iTunes/App Store IDs into passive
+  `mobile_android_package` and `mobile_ios_app_store_id` resource inventory while
+  filtering malformed package/store identifiers. Existing manifest email, URL,
+  and Supabase recursion is preserved, and the cloud-validation registry
+  contract proves both passive mobile resource types reach terminal
+  `UNSUPPORTED` state without provider calls or findings. Verification: TDD
+  focused regression failed before implementation on missing mobile related-app
+  inventory, then passed -> `1 passed`; compile/Ruff for touched
+  orchestrator/helper/test files; adjacent manifest/mobile/public metadata slice
+  -> `4 passed`; adjacent orchestrator manifest/mobile metadata slice -> `3
+  passed, 756 deselected`; validation registry terminal-state contract -> `1
+  passed`; cleanup check found no new persistent pytest DBs. Review: subagent
+  spawn was attempted but thread limit was still reached, so the audit proceeded
+  locally. Safety: passive static metadata inventory only; no Play Store/App
+  Store lookup, app download, provider call, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, report-gate change, severity
+  change, or deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-web-manifest-related-app-inventory.md`.
 - [x] Apple app-site-association iOS app passive-inventory checkpoint completed:
   source-aware `apple-app-site-association` parsing now promotes concrete AASA
   `appID`, `appIDs`, and `apps` values such as `TEAMID.com.example.app` into

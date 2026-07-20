@@ -87,6 +87,7 @@ _ARTIFACT_EMITTED_CLOUD_ASSET_TYPES = (
     "heroku",
     "mobile_android_package",
     "mobile_ios_app",
+    "mobile_ios_app_store_id",
     "netlify",
     "railway",
     "render",

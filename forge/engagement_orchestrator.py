@@ -166,6 +166,7 @@ from forge.utils.artifact_barcode import (
 from forge.utils.artifact_shell_history import shell_history_artifact_label
 from forge.utils.artifact_starlark_images import starlark_container_image_values
 from forge.utils.artifact_windows_registry import windows_registry_hive_artifact_label
+from forge.utils.artifact_web_manifest import web_manifest_related_application_assets
 from forge.utils.intel.http_pacing import (
     record_rate_limit_cooldown,
     sleep_rate_limit_cooldown,
@@ -20482,6 +20483,7 @@ class ArtifactQueueProcessor:
                     "azure_ad_app",
                     "android_assetlinks",
                     "apple_app_site_association",
+                    "web_manifest_related_applications",
                     "kubernetes_secret_manifests",
                     "gitops_manifests",
                     "workflow_manifests",
@@ -20698,6 +20700,10 @@ class ArtifactQueueProcessor:
                 ("mobile_ios_app", app_id, "artifact_apple_app_site_association")
                 for app_id in aasa_ios_app_ids(text)
             ]
+        if family == "web_manifest_related_applications":
+            if _artifact_format_label(source_file) not in {"manifest.json", "webmanifest"}:
+                return []
+            return web_manifest_related_application_assets(text)
         if family == "kubernetes_secret_manifests":
             candidates = []
             seen = set()
