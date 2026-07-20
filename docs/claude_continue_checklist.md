@@ -42,6 +42,20 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Multi-seed recursive fallback-lineage proof checkpoint completed: the
+  compact multi-seed kill-chain E2E fixture now proves its deterministic report
+  step emits Markdown plus JSON/PDF companion artifacts, template render
+  metadata, checksum lineage, and structured validated-only finding context.
+  This hardens the representative engagement proof across recursion,
+  validation, graph/report review, fallback, and testing/cleanup without adding
+  another heavyweight scenario. Verification: compile/Ruff for the touched
+  fixture and focused multi-seed recursive E2E test (`1 passed in 43.12s`).
+  Safety: test-only assertion hardening over an existing mocked/offline
+  fixture; no production behavior change, provider call, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation-gate change, report-gate weakening, or persistent non-test
+  engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-multiseed-fallback-lineage.md`.
 - [x] Well-known security/supply-chain metadata recursion checkpoint completed:
   IANA-listed passive routes `/.well-known/csaf`,
   `/.well-known/csaf-aggregator`, `/.well-known/sbom`,

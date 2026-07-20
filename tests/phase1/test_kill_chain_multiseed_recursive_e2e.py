@@ -246,7 +246,21 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
 
     reports = sorted((tmp_path / "reports").glob(f"engagement_{EID}_kill_chain_*.md"))
     assert len(reports) == 1
-    report_text = reports[0].read_text(encoding="utf-8")
+    report_path = reports[0]
+    report_text = report_path.read_text(encoding="utf-8")
+    report_json_path = report_path.with_suffix(".json")
+    report_pdf_path = report_path.with_suffix(".pdf")
+    assert report_json_path.exists()
+    assert report_pdf_path.exists()
+    assert report_pdf_path.read_bytes().startswith(b"%PDF-1.4")
+    report_payload = json.loads(report_json_path.read_text(encoding="utf-8"))
+    assert report_payload["provider"] == "template"
+    assert report_payload["requested_provider"] == "template"
+    assert report_payload["fallback_reason"] is None
+    assert report_payload["format"] == "markdown"
+    assert str(report_payload["findings_checksum"]).startswith("sha256:")
+    assert report_payload["report_lineage"]["rendered_provider"] == "template"
+    assert report_payload["report_lineage"]["findings_checksum"] == report_payload["findings_checksum"]
     graph = json.loads((tmp_path / "reports" / f"{EID}_attack_graph.json").read_text(encoding="utf-8"))
 
     with sqlite3.connect(db_path) as con:
@@ -314,3 +328,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert "Validated Firebase data exposure" in finding_report
     assert "Validated Supabase data exposure" in finding_report
     assert "dead-firebase-prod" not in finding_report
+    exported_findings = report_payload["context"]["exploits"]["exploited"]
+    assert exported_findings
+    assert all(finding["validation_status"] == "VALIDATED" for finding in exported_findings)
+    assert not any(
+        "dead-firebase-prod" in json.dumps(finding, sort_keys=True)
+        for finding in exported_findings
+    )
