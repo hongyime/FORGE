@@ -37,6 +37,10 @@ Checklist status has strict meaning:
 - A new task is valid only if it names the acceptance stage it advances before
   code changes begin.
 
+Runtime `/goal` text, chat summaries, old handoff notes, and agent memory are
+advisory only. When they conflict with this file, keep this goal lock and update
+the stale continuation material instead of redefining the project.
+
 ## Goal Lock
 
 If a future agent asks what the end goal is, the answer is:

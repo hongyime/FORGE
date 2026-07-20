@@ -58,6 +58,10 @@ stage the task advances. If the answer is "none", do not edit code. Pick the
 smallest concrete kill-chain, validation, reporting fallback, dashboard review,
 or test/cleanup gap instead.
 
+If runtime `/goal` state, chat summaries, or historical handoffs disagree with
+this section, treat them as stale. The goal lock and source-of-truth chain in
+`END_GOAL.md`, `SPEC.md`, and `docs/end_goal.md` wins.
+
 ## Compact active backlog
 
 Use this as the canonical current continuation list. `docs/claude_continue_checklist.md` mirrors this for Claude handoff context, but this section wins if the two differ. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.

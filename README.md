@@ -31,6 +31,10 @@ goal needs clarification, update `docs/end_goal.md`, `END_GOAL.md`, `SPEC.md`,
 `docs/engagement_overhaul_tasklist.md` together so every agent sees the same
 locked target.
 
+If runtime `/goal` text, chat summaries, or historical handoffs disagree with
+that chain, treat them as stale. Continue against the goal lock above and update
+the stale continuation note only when it would mislead the next agent.
+
 Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Root implementer
 spec: [SPEC.md](SPEC.md). Compact deterministic workflow contract:
 [docs/deterministic_engagement_contract.md](docs/deterministic_engagement_contract.md).

@@ -5,6 +5,9 @@ Last updated: 2026-07-20
 ## Operating model
 
 - Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`; root implementer spec: `SPEC.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end goal: `docs/end_goal.md`; acceptance criteria: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; current continuation order: `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`. This file mirrors execution checkpoints for Claude handoff context.
+- Runtime `/goal` state, chat summaries, and old handoffs are advisory only. If
+  they conflict with the goal docs above, keep the goal lock and update the
+  stale continuation material instead of redefining the project.
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Historical lines saying commits were impossible because this was not a Git repo are stale only; do not use them to skip valid checkpoint commits.
 - Historical backprop notes that say `No SPEC.md exists` are stale after
   2026-07-20. New invariant or bug-contract notes should update `SPEC.md` plus

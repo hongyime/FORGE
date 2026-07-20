@@ -62,6 +62,10 @@ Before editing code, state which pipeline gate the task advances. If the task
 does not improve intake, discovery, recursion, artifact analysis, validation,
 scoring, review, fallback, or testing/cleanup, stop and re-scope it.
 
+If runtime `/goal` text, chat state, or a historical handoff conflicts with this
+contract, treat the repository goal docs as authoritative. Do not create a new
+direction; correct the stale continuation material and keep the goal lock.
+
 ## Continuation Filter
 
 Use `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog` as the

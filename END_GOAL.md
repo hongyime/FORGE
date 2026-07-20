@@ -33,6 +33,11 @@ backlog entries as evidence already landed, unchecked canonical end-goal boxes
 as release criteria, and `## Compact active backlog` as the current sequence of
 work.
 
+Runtime chat goal text, `/goal` state, old handoff snippets, and agent memory
+are not authoritative when they conflict with this documentation chain. If the
+runtime goal label is stale, continue against the goal lock above and fix the
+stale doc or handoff wording only when it would mislead the next agent.
+
 ## Hard End Goal
 
 If asked "what is the end goal?", answer this directly:

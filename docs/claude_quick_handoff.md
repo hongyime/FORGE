@@ -10,6 +10,9 @@ root implementer spec: `SPEC.md`; compact workflow contract:
 `docs/deterministic_engagement_contract.md`; normative end goal:
 `docs/end_goal.md`; acceptance criteria:
 `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`.
+Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
+if they conflict with those docs, keep the goal lock and correct the stale
+continuation note instead of redefining the project.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -28,6 +28,8 @@ review, and guaranteed template/raw exports when LLM providers fail.
 - Provider failures, missing keys, quota errors, rate limits, and token limits
   are normal product paths and must degrade to deterministic template output
   plus raw exports.
+- Runtime `/goal` labels, chat summaries, and old handoff notes are advisory
+  only; repository goal docs override stale runtime state.
 - New code must stay modular. Large legacy files should receive thin adapters,
   not more embedded feature logic, when a focused helper can own the behavior.
 
@@ -84,3 +86,4 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | id | date | cause | fix |
 |---|---|---|---|
 | B1 | 2026-07-20 | Goal and invariant notes were split across long handoff/tasklist history, including stale historical text saying no root spec existed. | Added root `SPEC.md` and linked it from the active goal docs while preserving `docs/end_goal.md` as normative. |
+| B2 | 2026-07-20 | Runtime `/goal` state can be stale while repo docs contain the real goal lock, which can confuse future agents. | Recorded that repo goal docs override stale runtime/chat/handoff goal text and that stale continuation material should be corrected, not used to redefine the project. |
