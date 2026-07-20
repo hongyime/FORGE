@@ -182,6 +182,7 @@ from forge.utils.artifact_shell_history import shell_history_artifact_label
 from forge.utils.artifact_starlark_images import starlark_container_image_values
 from forge.utils.artifact_windows_registry import windows_registry_hive_artifact_label
 from forge.utils.artifact_web_manifest import web_manifest_related_application_assets
+from forge.utils.artifact_webweaver_metadata import webweaver_urls
 from forge.utils.intel.http_pacing import (
     record_rate_limit_cooldown,
     sleep_rate_limit_cooldown,
@@ -20461,6 +20462,7 @@ class ArtifactQueueProcessor:
                     "open_resource_discovery",
                     "mercure_metadata",
                     "jmap_metadata",
+                    "webweaver_metadata",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20665,6 +20667,10 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) != "jmap":
                 return []
             return jmap_urls(text, base_url=source_file)
+        if family == "webweaver_metadata":
+            if _artifact_format_label(source_file) != "webweaver.json":
+                return []
+            return webweaver_urls(text, base_url=source_file)
         if family == "helm_index":
             return helm_index_chart_package_urls(
                 text,
