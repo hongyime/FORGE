@@ -28,3 +28,26 @@ def test_epieos_twitter_x_aliases_keep_host_and_reserved_path_guards() -> None:
     )
 
     assert rows == []
+
+
+def test_epieos_profile_aliases_accept_scheme_less_known_profile_urls() -> None:
+    rows = _parse_epieos_response(
+        {
+            "github": {
+                "profileUrl": "github.com/acmeops",
+                "username": "acmeops",
+            },
+        }
+    )
+
+    assert rows == [
+        {
+            "source": "epieos",
+            "platform": "github",
+            "profile_url": "github.com/acmeops",
+            "url": "github.com/acmeops",
+            "verified": False,
+            "handle": "acmeops",
+            "username": "acmeops",
+        }
+    ]

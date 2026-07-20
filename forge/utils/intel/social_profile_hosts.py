@@ -56,8 +56,12 @@ def normalize_profile_hostname(value: object) -> str:
 
 
 def profile_url_hostname(value: str) -> str:
-    parsed = urlparse(str(value or "").strip())
-    return normalize_profile_hostname(parsed.hostname)
+    text = str(value or "").strip()
+    parsed = urlparse(text)
+    hostname = parsed.hostname
+    if not hostname and text and "://" not in text and not text.startswith("//"):
+        hostname = urlparse(f"//{text.lstrip('/')}").hostname
+    return normalize_profile_hostname(hostname)
 
 
 def epieos_host_matches(hostname: str, expected_host: str) -> bool:

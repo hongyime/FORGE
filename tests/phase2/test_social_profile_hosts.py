@@ -6,6 +6,7 @@ from forge.utils.intel.social_profile_hosts import (
     epieos_is_mastodon_like_host,
     epieos_is_supported_profile_host,
     epieos_profile_alias_host_matches,
+    profile_url_hostname,
 )
 
 _PLATFORM_HOSTS = {
@@ -38,6 +39,13 @@ def test_epieos_profile_alias_host_matches_known_platforms() -> None:
         "https://serverfault.com/users/1/acme",
         _PLATFORM_HOSTS,
     )
+
+
+def test_epieos_profile_alias_host_matches_scheme_less_profile_urls() -> None:
+    assert profile_url_hostname("github.com/acme") == "github.com"
+    assert profile_url_hostname("www.github.com/acme") == "github.com"
+    assert epieos_profile_alias_host_matches("github", "github.com/acme", _PLATFORM_HOSTS)
+    assert epieos_profile_alias_host_matches("github", "www.github.com/acme", _PLATFORM_HOSTS)
 
 
 def test_epieos_supported_and_federated_host_guards() -> None:

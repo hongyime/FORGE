@@ -24,6 +24,13 @@ polish or provider breadth without proving the end-to-end kill-chain path.
 
 ## Current green checkpoint
 
+- [x] Scheme-less social profile URL recursion checkpoint is green:
+  Epieos/social profile host guards now accept known profile URLs without a scheme, such as `github.com/acmeops` and `www.github.com/acmeops`. Provider payloads with scheme-less `profileUrl` values now preserve platform aliases and recursive handle pivots instead of being rejected by host matching.
+  Verification: compile/Ruff for touched helper/focused parser tests; focused helper/parser/social scraper suite -> `83 passed`.
+  Review: explorer `Linnaeus` found the gap.
+  Safety: passive identity parsing only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-scheme-less-profile-url-recursion.md`.
+
 - [x] Remmina connection-profile passive-recursion checkpoint is green:
   `.remmina` profiles now keep source-aware `remmina-config` labels, remote `.remmina` URLs enter artifact recursion, and Remmina host fields such as `server=rdp.acme.example:3389` plus `ssh_tunnel_server=bastion.acme.example` produce normalized recursive host seeds without port suffixes. Existing connection-client parsing still extracts owner emails, dashboard URLs, and Firebase refs through the passive artifact path.
   Verification: compile/Ruff for touched helper/focused tests; full connection-client artifact suite -> `39 passed`.
