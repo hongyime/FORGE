@@ -4,7 +4,7 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- Fast goal entry point: `END_GOAL.md`; normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. This file tracks execution checkpoints and continuation tasks.
+- Fast goal entry point: `END_GOAL.md`; normative end goal: `docs/end_goal.md`; acceptance criteria: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; current continuation order: `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`. This file mirrors execution checkpoints for Claude handoff context.
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Historical lines saying commits were impossible because this was not a Git repo are stale only; do not use them to skip valid checkpoint commits.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
@@ -21,7 +21,12 @@ close a concrete gap in that workflow and leave focused local/mocked tests.
 
 ## Compact active backlog
 
-Use this as the canonical continuation list. Older unchecked "next audit target" breadcrumbs are historical unless they map to one of these items.
+Use this as a Claude-facing mirror of the current continuation list. If this file conflicts with `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`, the engagement overhaul task list wins. Older unchecked "next audit target" breadcrumbs are historical unless they map to one of these items.
+
+Repo-status note: this checkout is now a Git repo on `main`; older completed
+checkpoint summaries in this file may still contain retained "not a git repo" or
+"no commit possible" sentences from pre-repo sessions. Treat those sentences as
+historical notes only, not as current instructions.
 
 - [x] Pixi/Conda environment passive-recursion checkpoint completed: exact `pixi.toml`, `pixi.lock`, `environment.yml`, `environment.yaml`, `conda-lock.yml`, and `conda-lock.yaml` artifacts now keep source-aware `pixi-manifest`, `pixi-lock`, `conda-environment`, and `conda-lock` formats instead of falling back to generic extension labels, while discovered package/channel URLs and owner emails continue into recursive engagement seeds and embedded URL credentials stay out of persisted DB text. Broad lookalikes such as `runtime-environment.yml` and `pixi-notes.toml` remain generic to avoid false-positive source labels. Verification: compile/Ruff for touched helper/orchestrator tests, focused package-manager config suite (`45 passed`), existing Conda/package-index orchestrator selector (`2 passed, 758 deselected`), direct classifier probe, and workspace engagement cleanup found no new pytest DBs. Safety: passive static package-manager/environment parsing only; no Pixi/Conda execution, package install/lock use, channel authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change. Handoff: `.claude/handoffs/2026-07-20-pixi-conda-environment-recursion.md`.
 - [x] Conda/Mamba config passive-recursion checkpoint completed: `.condarc`, `condarc`, `.mambarc`, `mambarc`, and cached remote `*.conda-config` / `*.mamba-config` artifacts now keep source-aware `conda-config` / `mamba-config` formats instead of falling back to generic basename labels, while package channel URLs and owner emails continue into recursive engagement seeds and embedded channel credentials stay out of persisted DB text. Verification: compile/Ruff for touched helper/orchestrator tests, focused package-manager config suite (`35 passed`), existing Conda/package-index orchestrator selector (`2 passed, 758 deselected`), and workspace engagement cleanup found no new pytest DBs. Safety: passive static package-manager config parsing only; no Conda/Mamba execution, package install/restore, channel authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change. Handoff: `.claude/handoffs/2026-07-20-conda-mamba-config-recursion.md`.
@@ -1534,6 +1539,13 @@ Next: continue with another concrete backend kill-chain gap, preferably identity
 - [x] Commit note: this workspace is intentionally not a git repo, so no commit was attempted.
 - [x] Completed next audit target: compact full-contract smoke covering report fallback, dashboard graph, cloud validation, and kill-chain recursion.
 - [x] Next audit target completed: reconciled into the Compact active backlog above and `.claude/handoffs/2026-07-15-145140-compact-kill-chain-status.md`.
+
+## Historical Audit Archive
+
+Everything below this heading is retained for audit history. Old "not a git
+repo", "no commit possible", and "next audit target" notes are stale context
+from earlier workspace states unless restated in the Compact active backlog
+above.
 
 - [x] Artifact-extracted validation/recursive handoff checkpoint is green on 2026-07-15: D5-discovered artifacts now have end-to-end regression proof that K2 queues them, K3 parses them, K3.5 validates extracted cloud assets under scope, and iteration 2 consumes artifact-extracted URL/APK seeds without manual follow-up.
 - [x] Files: `tests/phase1/test_engagement_orchestrator.py`, `docs/claude_quick_handoff.md`, `docs/claude_continue_checklist.md`, `docs/claude_audit_handoff.md`, `docs/engagement_overhaul_tasklist.md`

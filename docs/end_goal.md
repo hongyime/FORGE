@@ -2,11 +2,30 @@
 
 Last updated: 2026-07-20
 
-This is the normative end-goal contract for FORGE. The repository-root `END_GOAL.md` is the fast entry point, but this file remains the source of truth. The compact execution checklist lives in `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; if another doc, checklist, or agent plan conflicts with this file, update that doc or plan before continuing implementation.
+This is the normative end-goal contract for FORGE. The repository-root `END_GOAL.md` is the fast entry point, but this file remains the source of truth. The acceptance checklist lives in `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; unchecked boxes there are goal criteria, not live progress claims. The current continuation order lives in the same file under `## Compact active backlog`. If another doc, checklist, or agent plan conflicts with this file, update that doc or plan before continuing implementation.
+
+## Goal Lock
+
+The end goal is not "more UI", "more providers", or "more tools" in isolation.
+The end goal is a provable authorized engagement workflow that discovers,
+recurses, validates, scores, visualizes, reports, audits, and cleans up
+deterministically. A change belongs in the active task list only if it improves
+that workflow, proves it with focused tests, or removes ambiguity that would
+cause a future agent to weaken those guarantees.
 
 ## One-Sentence Goal
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform that starts from one or more scoped engagement seeds, recursively discovers and validates public or explicitly authorized attack surface, statically analyzes discovered artifacts, produces an analyst-usable graph and dashboard, and always generates auditable reports without letting an LLM invent facts, severities, or findings.
+
+## Comprehensive And Deterministic
+
+- Comprehensive means the engagement path covers intake, fan-out discovery,
+  cross-reference synthesis, recursive seed promotion, passive artifact parsing,
+  cloud/credential validation, graph export, dashboard review, reports, raw
+  exports, audit trail, and test-data cleanup.
+- Deterministic means severity, validation gates, reportability, graph/export
+  metadata, fallback behavior, and termination conditions are rule-driven and
+  testable. LLM output is never a source of truth.
 
 ## Current Execution End Goal
 

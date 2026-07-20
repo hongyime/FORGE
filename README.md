@@ -4,7 +4,36 @@
 
 Every operation is scope-gated + hash-chain audit-logged. Zero API keys required for the recommended flow.
 
-Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Normative project end goal: [docs/end_goal.md](docs/end_goal.md); execution-facing checklist: [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) -> `Canonical End Goal`. Future implementation work should move FORGE toward that deterministic authorized ASM/kill-chain outcome and should not weaken the validation, scope, audit, or report-fallback guarantees.
+## End Goal
+
+FORGE's end goal is one comprehensive, deterministic, authorized ASM workflow:
+multi-seed engagement intake, bounded recursive discovery, passive artifact and
+provider enrichment, scoped live checks only when ROE/scope explicitly allows
+them, non-destructive validation-before-reporting, deterministic risk scoring,
+graph/dashboard/report/audit review, and guaranteed template/raw exports when
+LLM/API providers fail.
+
+Implementation work should strengthen that workflow or its tests. It should not
+move the goal to UI-only polish, provider breadth without recursive value, or any
+path that weakens scope gates, validation gates, auditability, deterministic
+severity, or report fallback.
+
+Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Normative project end
+goal: [docs/end_goal.md](docs/end_goal.md). Execution-facing checklist:
+[engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) ->
+`Canonical End Goal`.
+
+Continuation order for future agents:
+
+1. Read [END_GOAL.md](END_GOAL.md) for the short goal.
+2. Treat [docs/end_goal.md](docs/end_goal.md) as the normative contract.
+3. Treat `## Canonical End Goal` in
+   [docs/engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md)
+   as acceptance criteria, not live progress.
+4. Use `## Compact active backlog` in that same task list as the current
+   continuation order.
+5. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
+   latest short resume notes.
 
 ---
 

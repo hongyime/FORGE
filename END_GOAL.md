@@ -4,6 +4,8 @@ This file is the fast entry point for the project goal. The normative contract i
 `docs/end_goal.md`; if any checklist, handoff, agent plan, or implementation task
 conflicts with that file, update the conflicting material before continuing.
 
+## End Goal In Plain English
+
 FORGE is a comprehensive, deterministic, authorized attack-surface management and
 threat-intelligence platform. It starts from one or more scoped engagement seeds,
 recursively discovers public or explicitly authorized attack surface, statically
@@ -11,6 +13,19 @@ analyzes discovered artifacts, validates cloud and credential evidence
 non-destructively before reporting, calculates risk with deterministic rules,
 exposes the engagement through graph/dashboard/report surfaces, and always
 generates auditable output even when LLM providers fail.
+
+## Determinism Means
+
+- The same scoped inputs, fixtures, config, and cached provider responses produce
+  the same findings, severity, graph exports, audit metadata, and fallback report
+  path.
+- Risk ratings and report gates are rule-engine decisions only. LLMs may improve
+  narrative wording but cannot create findings, change severity, or bless
+  unvalidated evidence.
+- Recursive discovery terminates by explicit budgets: stable snapshot, no pending
+  work, configured depth/iteration limits, or operator stop.
+- Failure is still a product path: provider errors, quota failures, token limits,
+  and missing API keys degrade to deterministic template plus raw exports.
 
 ## Current Execution End Goal
 
@@ -39,7 +54,10 @@ Required continuation rules:
 
 Read next:
 
-- `docs/end_goal.md` for the full normative contract.
-- `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for the
-  execution checklist.
-- `docs/claude_quick_handoff.md` for the latest continuation checkpoints.
+1. `docs/end_goal.md` for the full normative contract.
+2. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
+   acceptance criteria. Unchecked boxes there are goal criteria, not current live
+   status.
+3. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
+   the current implementation continuation order.
+4. `docs/claude_quick_handoff.md` for the latest short resume notes.

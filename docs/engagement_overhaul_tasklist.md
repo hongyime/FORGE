@@ -4,7 +4,7 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- Fast goal entry point: `END_GOAL.md`; normative end-goal source: `docs/end_goal.md`. The `## Canonical End Goal` checklist below is the execution-facing summary derived from that contract; if they conflict, update this checklist to match `docs/end_goal.md` before continuing.
+- Fast goal entry point: `END_GOAL.md`; normative end-goal source: `docs/end_goal.md`. The `## Canonical End Goal` checklist below is acceptance criteria derived from that contract, not live completion status; if they conflict, update this checklist to match `docs/end_goal.md` before continuing. Current implementation order lives under `## Compact active backlog`.
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Deep historical entries that say commits were impossible because the workspace was not a Git repo are stale context only; continue making meaningful commits and pushes when changes are valid.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
@@ -12,6 +12,10 @@ Last updated: 2026-07-20
 ## Canonical End Goal
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform. It must start from one or more scoped engagement seeds, recursively discover public or explicitly authorized attack surface, statically analyze discovered artifacts, validate cloud and credential evidence non-destructively before reporting, calculate risk with deterministic rules, expose the engagement through graph/dashboard/report surfaces, and always generate auditable output even when LLM providers fail.
+
+Status semantics: these unchecked boxes are end-state acceptance criteria. They
+are intentionally not a live task queue and should not override the current
+continuation order in `## Compact active backlog`.
 
 - [ ] Every scoped active probe, follow-on tool execution, and read-only credential/resource validation is gated by explicit ROE/scope manifest, bounded concurrency, deterministic depth/queue budgets, audit logging, and dry-run preview. Passive provider OSINT still stays scope-filtered, budgeted, logged, and provider-paced; `FORGE_REQUIRE_SCOPE_MANIFEST=1` can require a scope manifest for every non-dry-run launch.
 - [ ] Multi-seed engagements support domains, IPs, URLs, emails, phones, usernames, company names, cloud refs, and artifact URLs under one auto-incrementing engagement record.
@@ -38,7 +42,12 @@ template/raw exports with no working LLM provider.
 
 ## Compact active backlog
 
-Use this as the canonical continuation list. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.
+Use this as the canonical current continuation list. `docs/claude_continue_checklist.md` mirrors this for Claude handoff context, but this section wins if the two differ. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.
+
+Repo-status note: this checkout is now a Git repo on `main`; older completed
+checkpoint summaries in this backlog may still contain retained "not a git
+repo" or "no commit possible" sentences from pre-repo sessions. Treat those
+sentences as historical notes only, not as current instructions.
 
 - [x] Pixi/Conda environment passive-recursion checkpoint: exact `pixi.toml`, `pixi.lock`, `environment.yml`, `environment.yaml`, `conda-lock.yml`, and `conda-lock.yaml` artifacts now keep source-aware `pixi-manifest`, `pixi-lock`, `conda-environment`, and `conda-lock` formats instead of falling back to generic extension labels, while discovered package/channel URLs and owner emails continue into recursive engagement seeds and embedded URL credentials stay out of persisted DB text. Broad lookalikes such as `runtime-environment.yml` and `pixi-notes.toml` remain generic to avoid false-positive source labels. Verification: compile/Ruff for touched helper/orchestrator tests, focused package-manager config suite (`45 passed`), existing Conda/package-index orchestrator selector (`2 passed, 758 deselected`), and direct classifier probe. Safety: passive static package-manager/environment parsing only; no Pixi/Conda execution, package install/lock use, channel authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change. Handoff: `.claude/handoffs/2026-07-20-pixi-conda-environment-recursion.md`.
 - [x] Conda/Mamba config passive-recursion checkpoint: `.condarc`, `condarc`, `.mambarc`, `mambarc`, and cached remote `*.conda-config` / `*.mamba-config` artifacts now keep source-aware `conda-config` / `mamba-config` formats instead of falling back to generic basename labels, while package channel URLs and owner emails continue into recursive engagement seeds and embedded channel credentials stay out of persisted DB text. Verification: compile/Ruff for touched helper/orchestrator tests, focused package-manager config suite (`35 passed`), and existing Conda/package-index orchestrator selector (`2 passed, 758 deselected`). Safety: passive static package-manager config parsing only; no Conda/Mamba execution, package install/restore, channel authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change. Handoff: `.claude/handoffs/2026-07-20-conda-mamba-config-recursion.md`.
@@ -1829,8 +1838,14 @@ Use this as the canonical continuation list. Older unchecked "next audit target"
   This workspace is intentionally not a git repo, so no commit was attempted.
   Completed next:
   Compact full-contract smoke covering report fallback, dashboard graph, cloud validation, and kill-chain recursion.
-  Next:
-  Use the Compact active backlog above. The historical unchecked audit breadcrumbs below should not be treated as independent active tasks unless they map to that backlog.
+Next:
+Use the Compact active backlog above. The historical unchecked audit breadcrumbs below should not be treated as independent active tasks unless they map to that backlog.
+
+## Historical Audit Archive
+
+Everything below this heading is retained for audit history. Old "not a git
+repo", "no commit possible", and "next audit target" notes are stale context
+from earlier workspace states unless restated in `## Compact active backlog`.
 
 - [x] Artifact-extracted validation/recursive handoff checkpoint is green on 2026-07-15: D5-discovered artifacts now have end-to-end regression proof that K2 queues them, K3 parses them, K3.5 validates extracted cloud assets under scope, and iteration 2 consumes artifact-extracted URL/APK seeds without manual follow-up.
   Files:
