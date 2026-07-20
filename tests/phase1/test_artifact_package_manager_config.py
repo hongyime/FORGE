@@ -47,6 +47,8 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
         ("download.condarc.conda-config", "conda-config"),
         ("download.mambarc.mamba-config", "mamba-config"),
         ("download.nuget.config.nuget-config", "nuget-config"),
+        ("poetry.toml", "poetry-config"),
+        ("download.poetry.toml.poetry-config", "poetry-config"),
         ("pixi.toml", "pixi-manifest"),
         ("pixi.lock", "pixi-lock"),
         ("environment.yml", "conda-environment"),
@@ -88,6 +90,7 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
     assert _classify_remote_artifact_url("https://downloads.acme.example/.npmrc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.condarc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/mambarc") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/poetry.toml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/pixi.toml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/environment.yml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.nuget/NuGet.Config") == "config"
@@ -114,8 +117,10 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
     assert package_manager_config_remote_filename("environment.yml") == "environment.yml"
     assert package_manager_config_remote_filename(".nuget/NuGet.Config") == "NuGet.Config"
     assert package_manager_config_remote_filename(".cargo/credentials") == "credentials.cargo-credentials"
+    assert package_manager_config_remote_filename("poetry.toml") == "poetry.toml"
     assert _artifact_format_label(".condarc") == "conda-config"
     assert _artifact_format_label("mambarc") == "mamba-config"
+    assert _artifact_format_label("poetry.toml") == "poetry-config"
     assert _artifact_format_label("pixi.toml") == "pixi-manifest"
     assert _artifact_format_label("environment.yml") == "conda-environment"
     assert _artifact_format_label("NuGet.Config") == "nuget-config"
@@ -201,6 +206,18 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         ).strip(),
         encoding="utf-8",
     )
+    poetry_config_path = artifact_root / "poetry.toml"
+    poetry_config_path.write_text(
+        dedent(
+            """
+            [repositories.acme]
+            url = "https://poetry-user:poetry-token-do-not-store@poetry-labels.acme.example/simple"
+            owner = "poetry-owner@acme.example"
+            firebase = "https://poetry-firebase.firebaseio.com"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
     conda_environment_path = artifact_root / "environment.yml"
     conda_environment_path.write_text(
         dedent(
@@ -243,8 +260,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 10
-    assert summary.processed >= 10
+    assert queued >= 11
+    assert summary.processed >= 11
 
     con = sqlite3.connect(db_path)
     try:
@@ -263,6 +280,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert artifact_meta[cargo_credentials_path.resolve().as_posix()]["format"] == "cargo-credentials"
         assert artifact_meta[conda_config_path.resolve().as_posix()]["format"] == "conda-config"
         assert artifact_meta[mamba_config_path.resolve().as_posix()]["format"] == "mamba-config"
+        assert artifact_meta[poetry_config_path.resolve().as_posix()]["format"] == "poetry-config"
         assert artifact_meta[pixi_manifest_path.resolve().as_posix()]["format"] == "pixi-manifest"
         assert artifact_meta[conda_environment_path.resolve().as_posix()]["format"] == "conda-environment"
         assert artifact_meta[nuget_config_path.resolve().as_posix()]["format"] == "nuget-config"
@@ -282,13 +300,27 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert ("https://conda-labels.acme.example/pkgs/main", "url") in seeds
         assert ("https://conda-env.acme.example/pkgs/main", "url") in seeds
         assert ("https://mamba-labels.acme.example/conda", "url") in seeds
+        assert ("https://poetry-labels.acme.example/simple", "url") in seeds
         assert ("https://pixi.acme.example/conda", "url") in seeds
         assert ("conda-label-owner@acme.example", "email") in seeds
         assert ("conda-env-owner@acme.example", "email") in seeds
         assert ("mamba-label-owner@acme.example", "email") in seeds
+        assert ("poetry-owner@acme.example", "email") in seeds
         assert ("pixi-owner@acme.example", "email") in seeds
         assert ("https://nuget-labels.acme.example/v3/index.json", "url") in seeds
         assert ("nuget-label-owner@acme.example", "email") in seeds
+
+        cloud_assets = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("firebase", "poetry-firebase") in cloud_assets
 
         persisted_text = "\n".join(con.iterdump())
         for raw_secret in {
@@ -299,6 +331,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
             "env-token-do-not-store",
             "mamba-label-token-do-not-store",
             "nuget-label-token-do-not-store",
+            "poetry-token-do-not-store",
             "pixi-token-do-not-store",
         }:
             assert raw_secret not in persisted_text

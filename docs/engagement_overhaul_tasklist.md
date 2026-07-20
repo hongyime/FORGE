@@ -94,6 +94,23 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Python Poetry passive package-config checkpoint: `poetry.toml` now
+  classifies as `poetry-config`, including cached `*.poetry-config` remote
+  names, so Poetry repository URLs, owner emails, and cloud refs recurse through
+  existing passive artifact handling while embedded repository credentials stay
+  stripped. Verification: TDD helper regression first failed (`4 failed, 43
+  passed`) because `poetry.toml` fell back to generic `toml`, then passed;
+  focused package-manager helper suite (`47 passed`); compile/Ruff for touched
+  files; adjacent package-manager/orchestrator slice (`48 passed, 758
+  deselected`); compact cross-phase slice (`4 passed, 1 deselected`); cleanup
+  removed four pytest engagement dirs and left
+  `remaining_pytest_engagement_dirs=0`; persistent workspace DB inventory
+  remains `1`, `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-poetry-config-passive-recursion.md`.
+  Safety: passive static package-manager config classification only; no package
+  download, registry API call, provider call, target network, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, severity change, or finding creation.
 - [x] Python PDM passive package-config checkpoint: `pdm.toml` and
   `.pdm.toml` now classify as `pdm-config`, and `pdm.lock` now classifies as
   `pdm-lock`, so package index URLs, owner emails, Firebase/Supabase refs, and
