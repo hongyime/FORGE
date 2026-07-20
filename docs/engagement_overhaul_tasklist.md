@@ -81,6 +81,23 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] ATProto DID web host recursion checkpoint:
+  source-aware `.well-known/atproto-did` parsing now promotes valid line-oriented
+  `did:web:` identifiers such as `did:web:identity.acme.example` into recursive
+  subdomain/root-domain seeds through the existing host-seed persistence path.
+  Generic text files with the same `did:web:` string shape remain excluded from
+  this source-gated parser. Verification: TDD focused regression failed before
+  implementation on missing ATProto DID web host promotion, then passed
+  (`1 passed`); compile for touched orchestrator/helper/test files; Ruff for
+  touched files (`All checks passed!`); ATProto plus DID/identity/service
+  metadata slice (`6 passed`); adjacent ATProto/DID/provenance/public-metadata
+  helper slice (`15 passed`); slow remote well-known metadata fixture with
+  `-m slow` (`1 passed`); cleanup check found no new persistent pytest DBs.
+  Safety: passive static ATProto DID metadata parsing only; no DID resolution,
+  WebFinger lookup, provider call, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, report-gate change,
+  severity change, or deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-atproto-did-web-host-recursion.md`.
 - [x] DID web identifier recursive-host checkpoint:
   source-aware `did.json` and `did-configuration.json` parsing now promotes
   valid `did:web:` identifiers such as `did:web:identity.acme.example` and

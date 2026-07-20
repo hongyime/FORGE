@@ -28,6 +28,20 @@ def did_web_hosts(text: str) -> list[str]:
     return hosts
 
 
+def did_web_hosts_from_lines(text: str) -> list[str]:
+    """Extract DID web hosts from line-oriented DID metadata."""
+
+    hosts: list[str] = []
+    seen: set[str] = set()
+    for raw_line in str(text or "").splitlines():
+        host = _did_web_host(raw_line)
+        if not host or host in seen:
+            continue
+        seen.add(host)
+        hosts.append(host)
+    return hosts
+
+
 def _json_string_values(value: object) -> list[str]:
     if isinstance(value, str):
         return [value]

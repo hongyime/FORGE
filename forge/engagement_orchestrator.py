@@ -91,7 +91,7 @@ from forge.utils.artifact_database_client import (
     database_client_endpoint_candidates,
     database_client_host_candidates,
 )
-from forge.utils.artifact_did_metadata import did_web_hosts
+from forge.utils.artifact_did_metadata import did_web_hosts, did_web_hosts_from_lines
 from forge.utils.artifact_ecs_task_definition import (
     ecs_task_definition_artifact_label,
     ecs_task_definition_candidates,
@@ -20430,6 +20430,9 @@ class ArtifactQueueProcessor:
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(matrix_host))
             if _artifact_format_label(source_file) in {"did.json", "did-configuration.json"}:
                 for did_host in did_web_hosts(text):
+                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
+            if _artifact_format_label(source_file) == "atproto-did":
+                for did_host in did_web_hosts_from_lines(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
             for host_value, host_seed_type in host_candidates:
                 seed = (host_value, host_seed_type)
