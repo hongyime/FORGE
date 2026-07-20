@@ -42,6 +42,21 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Matrix client well-known metadata recursion checkpoint completed:
+  `/.well-known/matrix/client` now routes as a first-class passive config
+  artifact with `matrix-client` format/cache labels, matching the existing
+  Matrix server route and storage false-positive metadata treatment. A focused
+  DB-backed regression proves Matrix homeserver and identity-server URLs,
+  contact email, and Supabase refs feed recursive URL/email/cloud pivots through
+  the artifact queue. Verification: compile/Ruff for touched orchestrator/helper
+  tests, focused Matrix metadata tests (`2 passed`), adjacent helper/static
+  classification suite (`26 passed`), adjacent `.well-known`/Matrix orchestrator
+  selector (`4 passed, 755 deselected`), and cleanup check found no new pytest
+  DBs. Safety: passive static metadata routing only; no Matrix federation call,
+  homeserver probing, authentication, provider call, scope relaxation, proxy/IP
+  rotation, rate-limit bypass, validation/report-gate change, or persistent
+  non-test engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-matrix-client-well-known-recursion.md`.
 - [x] OIDC claim contact and userinfo recursion checkpoint completed:
   Epieos/userinfo-style `claims.email`, `claims.phone_number`, `userinfo.email`,
   `userinfo.phone_number`, `userinfo.profile`, and `userinfo.website` now stay
