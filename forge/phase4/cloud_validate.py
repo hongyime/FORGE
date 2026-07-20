@@ -1355,6 +1355,10 @@ class ManagedHostingReachabilityValidator(BaseCloudValidator):
                     resp = key_validation_head(client, url)
                     if int(getattr(resp, "status_code", 0) or 0) in {405, 501}:
                         resp = key_validation_get(client, url)
+                    elif not self._response_text(resp).strip() and int(
+                        getattr(resp, "status_code", 0) or 0
+                    ) in {200, 204, 301, 302, 307, 308, 401, 403}:
+                        resp = key_validation_get(client, url)
                 else:
                     resp = key_validation_get(client, url)
         except httpx.RequestError as exc:

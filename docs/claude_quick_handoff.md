@@ -27,6 +27,12 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Managed-hosting empty-HEAD proof checkpoint is green:
+  Managed-hosting reachability validators now follow an empty successful `HEAD` with one paced read-only `GET` before deciding `ACCESSIBLE_BUT_NO_DATA`, so placeholder/synthetic Vercel, Netlify, Cloudflare Pages/Workers, R2, and similar managed-hosting bodies cannot be missed just because `HEAD` returned no body. Body-bearing `HEAD` responses still avoid the extra `GET`.
+  Verification: compile/Ruff for touched validator/test files; focused managed-hosting tests -> `2 passed`; adjacent direct/batch/sweep managed-hosting tests -> `4 passed`; cleanup check found no new pytest engagement DBs.
+  Safety: validation proof hardening only. No credential use, provider expansion, write operation, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate weakening.
+  Handoff: `.claude/handoffs/2026-07-20-managed-hosting-empty-head-proof.md`.
+
 - [x] Framework service-endpoint artifact recursion checkpoint is green:
   Source-aware framework configs now extract sanitized Redis, Celery/AMQP, Kafka, Elasticsearch, OpenSearch, and Memcached endpoint payloads from static host/url fields, including `REDIS_HOST`, `spring.data.redis.url`, `CELERY_BROKER_HOST`, `kafka.bootstrap-servers`, and `ELASTICSEARCH_HOSTS`. These feed recursive host seeds without preserving credentials or template placeholders; bare framework `host:port` values now normalize to host-only candidates.
   Verification: compile/Ruff for touched framework/orchestrator/test files; focused framework/client-config worker tests -> `5 passed`; adjacent orchestrator framework/network selector -> `3 passed, 756 deselected`; cleanup check found no new pytest engagement DBs.
