@@ -10,6 +10,8 @@ required for the recommended deterministic template/report path.
 
 ## End Goal
 
+Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
+
 FORGE's end goal is one comprehensive, deterministic, authorized ASM workflow:
 multi-seed engagement intake, bounded recursive discovery, passive artifact and
 provider enrichment, scoped live checks only when ROE/scope explicitly allows
@@ -22,6 +24,12 @@ Implementation work should strengthen that workflow or its tests. It should not
 move the goal to UI-only polish, provider breadth without recursive value, or any
 path that weakens scope gates, validation gates, auditability, deterministic
 severity, or report fallback.
+
+Do not replace this goal with a new project direction in a task handoff. If the
+goal needs clarification, update `docs/end_goal.md`, `END_GOAL.md`,
+`docs/deterministic_engagement_contract.md`, and
+`docs/engagement_overhaul_tasklist.md` together so every agent sees the same
+locked target.
 
 Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Compact deterministic
 workflow contract:

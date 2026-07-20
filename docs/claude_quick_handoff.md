@@ -4,8 +4,9 @@ Last updated: 2026-07-20
 
 Use this file first for short resume context, then verify current continuation
 order in `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`;
-that section wins if task/status details differ. Fast goal entry point:
-`END_GOAL.md`; compact workflow contract:
+that section wins if task/status details differ. Goal lock:
+`FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`;
+compact workflow contract:
 `docs/deterministic_engagement_contract.md`; normative end goal:
 `docs/end_goal.md`; acceptance criteria:
 `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`.

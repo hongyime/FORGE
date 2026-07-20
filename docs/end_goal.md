@@ -2,6 +2,8 @@
 
 Last updated: 2026-07-20
 
+Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
+
 This is the normative end-goal contract for FORGE. The repository-root
 `END_GOAL.md` is the fast entry point, and
 `docs/deterministic_engagement_contract.md` is the compact pipeline-gate map, but
@@ -18,6 +20,10 @@ There is one goal contract. `END_GOAL.md` is the short operator answer,
 `docs/deterministic_engagement_contract.md` is the compact gate map, and
 `docs/engagement_overhaul_tasklist.md` is the execution ledger. If those files
 conflict, preserve this file and update the others.
+
+The goal lock identifier is the pinned release target. Future agents may refine
+implementation tasks, but must not replace this target with a UI-only,
+provider-count-only, scanner-collection, or exploitation/post-exploitation goal.
 
 Checklist status has strict meaning:
 
