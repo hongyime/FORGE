@@ -67,6 +67,17 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Python `uv.toml` passive package-config checkpoint completed: `uv.toml`
+  and `.uv.toml` now classify as `uv-config`, so package index URLs, owner
+  emails, Firebase refs, and Supabase refs flow through existing passive
+  artifact recursion while embedded package-index credentials stay stripped.
+  Verification: focused regression first failed with generic `toml`, then
+  passed; compile/Ruff; package-manager/Python config slice -> `2 passed, 757
+  deselected`; artifact label/package/SBOM slice -> `10 passed, 749
+  deselected`; compact slice -> `4 passed, 1 deselected`; cleanup ->
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory -> `1`, `5010`,
+  `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-uv-config-passive-recursion.md`.
 - [x] MTGX provenance analyst-property checkpoint completed: native Maltego
   workspace exports now surface safe provenance metadata as first-class
   `forge.*` analyst properties, including `provider_sources`, `root_domain`,

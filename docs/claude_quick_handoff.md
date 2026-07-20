@@ -55,6 +55,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Python `uv.toml` passive package-config completed: `uv.toml` and
+  `.uv.toml` now classify as `uv-config`, allowing package index URLs, owner
+  emails, Firebase refs, and Supabase refs to recurse through the passive
+  artifact path while embedded package-index credentials stay stripped.
+  Verification: focused regression failed before implementation then passed,
+  compile/Ruff, package-manager/Python config slice (`2 passed, 757
+  deselected`), artifact label/package/SBOM slice (`10 passed, 749
+  deselected`), compact slice (`4 passed, 1 deselected`), cleanup
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory remains `1`,
+  `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-uv-config-passive-recursion.md`.
 - [x] MTGX provenance analyst-property completed: native Maltego workspace
   exports now expose safe provenance metadata as first-class `forge.*` analyst
   properties, including `provider_sources`, `root_domain`, `format`,

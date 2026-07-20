@@ -25967,6 +25967,20 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         encoding="utf-8",
     )
 
+    uv_toml_path = artifact_root / "uv.toml"
+    uv_toml_path.write_text(
+        dedent(
+            """
+            index-url = "https://uv-user:uv-token-do-not-store@uv.acme.example/simple"
+            extra-index-url = ["https://uv-extra.acme.example/simple"]
+            owner = "uv-owner@acme.example"
+            firebase = "https://uv-firebase.firebaseio.com"
+            supabase = "https://uvvault.supabase.co/rest/v1"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
     requirements_in_path = artifact_root / "requirements.in"
     requirements_in_path.write_text(
         dedent(
@@ -26052,9 +26066,9 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 10
-    assert summary.processed >= 10
-    assert summary.discovered_seeds >= 31
+    assert queued >= 11
+    assert summary.processed >= 11
+    assert summary.discovered_seeds >= 35
 
     con = sqlite3.connect(db_path)
     try:
@@ -26097,6 +26111,8 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
             "https://pnpm.acme.example/npm",
             "https://gem.acme.example/rubygems",
             "https://nuget.acme.example/v3/index.json",
+            "https://uv.acme.example/simple",
+            "https://uv-extra.acme.example/simple",
             "https://requirements.acme.example/simple",
             "https://requirements-extra.acme.example/simple",
             "https://requirements-nosuffix.acme.example/simple",
@@ -26112,6 +26128,7 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
             assert (expected_url, "url") in seeds
         assert ("pypirc-owner@acme.example", "email") in seeds
         assert ("nuget-owner@acme.example", "email") in seeds
+        assert ("uv-owner@acme.example", "email") in seeds
         assert ("requirements-owner@acme.example", "email") in seeds
         assert ("requirements-nosuffix-owner@acme.example", "email") in seeds
         assert ("constraints-owner@acme.example", "email") in seeds
@@ -26120,6 +26137,7 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         db_dump = "\n".join(con.iterdump())
         assert "npm-token-do-not-store" not in db_dump
         assert "pnpm-token-do-not-store" not in db_dump
+        assert "uv-token-do-not-store" not in db_dump
         assert "requirements-token-do-not-store" not in db_dump
         assert "req2-token-do-not-store" not in db_dump
 
@@ -26136,11 +26154,13 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         assert ("aws_s3", "acme-yarn-bucket") in cloud_assets
         assert ("firebase", "nuget-firebase") in cloud_assets
         assert ("firebase", "pypirc-firebase") in cloud_assets
+        assert ("firebase", "uv-firebase") in cloud_assets
         assert ("firebase", "requirements-firebase") in cloud_assets
         assert ("firebase", "requirements-nosuffix-firebase") in cloud_assets
         assert ("gcs", "acme-gem-gcs") in cloud_assets
         assert ("supabase", "nestedpypi") in cloud_assets
         assert ("supabase", "pnpmvault") in cloud_assets
+        assert ("supabase", "uvvault") in cloud_assets
         assert ("supabase", "requirementsvault") in cloud_assets
         assert ("supabase", "requirementsnosuffixvault") in cloud_assets
 
@@ -26160,6 +26180,7 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         assert artifact_meta[pnpmrc_path.resolve().as_posix()]["format"] == "pnpmrc"
         assert artifact_meta[gemrc_path.resolve().as_posix()]["format"] == "gemrc"
         assert artifact_meta[nuget_path.resolve().as_posix()]["format"] == "nuget-config"
+        assert artifact_meta[uv_toml_path.resolve().as_posix()]["format"] == "uv-config"
         assert artifact_meta[requirements_in_path.resolve().as_posix()]["format"] == "python-requirements-input"
         assert artifact_meta[requirements_path.resolve().as_posix()]["format"] == "python-requirements"
         assert artifact_meta[constraints_path.resolve().as_posix()]["format"] == "python-constraints"

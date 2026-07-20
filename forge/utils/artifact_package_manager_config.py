@@ -12,6 +12,7 @@ _DIRECT_LABELS = {
     ".npmrc": "npmrc",
     ".pnpmrc": "pnpmrc",
     ".pypirc": "pypirc",
+    ".uv.toml": "uv-config",
     ".yarnrc": "yarnrc",
     "conda-lock.yaml": "conda-lock",
     "conda-lock.yml": "conda-lock",
@@ -22,6 +23,7 @@ _DIRECT_LABELS = {
     "nuget.config": "nuget-config",
     "pixi.lock": "pixi-lock",
     "pixi.toml": "pixi-manifest",
+    "uv.toml": "uv-config",
 }
 _CACHE_LABEL_SUFFIXES = {
     ".cargo-config": "cargo-config",
@@ -34,6 +36,7 @@ _CACHE_LABEL_SUFFIXES = {
     ".pip-config": "pip-config",
     ".pixi-lock": "pixi-lock",
     ".pixi-manifest": "pixi-manifest",
+    ".uv-config": "uv-config",
 }
 _PIP_CONFIG_NAMES = {"pip.conf", "pip.ini"}
 _PIP_PARENT_SEGMENTS = {".pip", "pip"}

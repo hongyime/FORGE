@@ -94,6 +94,23 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Python `uv.toml` passive package-config checkpoint: modern Python `uv`
+  config files now classify as `uv-config` instead of generic TOML, allowing
+  package index URLs, owner emails, Firebase refs, and Supabase refs to flow
+  through the existing passive artifact recursion path while stripping embedded
+  package-index credentials from persisted seeds/evidence. Verification:
+  focused package-manager config regression first failed with `toml` metadata,
+  then passed; compile/Ruff for touched files; adjacent package-manager/Python
+  config slice (`2 passed, 757 deselected`); artifact label/package/SBOM slice
+  (`10 passed, 749 deselected`); compact cross-phase slice (`4 passed, 1
+  deselected`); cleanup removed four pytest engagement dirs and left
+  `remaining_pytest_engagement_dirs=0`; persistent workspace DB inventory
+  remains `1`, `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-uv-config-passive-recursion.md`.
+  Safety: passive static package-manager config classification only; no package
+  download, registry API call, provider call, target network, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, severity change, or finding creation.
 - [x] MTGX provenance analyst-property checkpoint: native Maltego workspace
   exports now promote safe provenance fields from node metadata into first-class
   `forge.*` analyst properties, including `provider_sources`, `root_domain`,
