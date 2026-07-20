@@ -55,6 +55,19 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Python Poetry global config/auth passive package-config completed:
+  source-aware `pypoetry/config.toml` now classifies as `poetry-config`, and
+  `pypoetry/auth.toml` plus cached `*.poetry-auth` names now classify as
+  `poetry-auth`, while generic `config.toml` and `auth.toml` remain excluded.
+  Poetry auth repository URLs, owner emails, and Supabase refs recurse through
+  the passive artifact path while embedded repository credentials stay stripped.
+  Verification: TDD helper regression failed before implementation (`5 failed,
+  47 passed`) then passed, focused helper suite (`52 passed`), compile/Ruff,
+  adjacent package-manager/orchestrator slice (`53 passed, 758 deselected`),
+  compact slice (`4 passed, 1 deselected`), cleanup
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory remains `1`,
+  `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-poetry-global-auth-config-passive-recursion.md`.
 - [x] Python Poetry passive package-config completed: `poetry.toml` now
   classifies as `poetry-config`, including cached `*.poetry-config` remote
   names, allowing Poetry repository URLs, owner emails, and cloud refs to

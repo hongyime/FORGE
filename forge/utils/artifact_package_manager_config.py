@@ -37,6 +37,7 @@ _CACHE_LABEL_SUFFIXES = {
     ".mamba-config": "mamba-config",
     ".nuget-config": "nuget-config",
     ".pdm-config": "pdm-config",
+    ".poetry-auth": "poetry-auth",
     ".poetry-config": "poetry-config",
     ".pip-config": "pip-config",
     ".pixi-lock": "pixi-lock",
@@ -48,6 +49,9 @@ _PIP_PARENT_SEGMENTS = {".pip", "pip"}
 _CARGO_PARENT_SEGMENTS = {".cargo", "cargo"}
 _CARGO_CONFIG_NAMES = {"config", "config.toml"}
 _CARGO_CREDENTIAL_NAMES = {"credentials", "credentials.toml"}
+_POETRY_PARENT_SEGMENTS = {"pypoetry", ".pypoetry"}
+_POETRY_CONFIG_NAMES = {"config.toml"}
+_POETRY_AUTH_NAMES = {"auth.toml"}
 
 
 def package_manager_config_artifact_label(value: str) -> str:
@@ -67,6 +71,10 @@ def package_manager_config_artifact_label(value: str) -> str:
         return "cargo-config"
     if name in _CARGO_CREDENTIAL_NAMES and _has_immediate_parent(parts, _CARGO_PARENT_SEGMENTS):
         return "cargo-credentials"
+    if name in _POETRY_CONFIG_NAMES and _has_immediate_parent(parts, _POETRY_PARENT_SEGMENTS):
+        return "poetry-config"
+    if name in _POETRY_AUTH_NAMES and _has_immediate_parent(parts, _POETRY_PARENT_SEGMENTS):
+        return "poetry-auth"
     return ""
 
 

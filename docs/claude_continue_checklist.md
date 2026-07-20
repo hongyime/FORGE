@@ -67,6 +67,17 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Python Poetry global config/auth passive package-config checkpoint
+  completed: source-aware `pypoetry/config.toml` now classifies as
+  `poetry-config`, and `pypoetry/auth.toml` plus cached `*.poetry-auth` names
+  now classify as `poetry-auth`, while generic `config.toml` and `auth.toml`
+  remain excluded. Verification: TDD helper regression first failed -> `5
+  failed, 47 passed`; focused helper suite -> `52 passed`; compile/Ruff;
+  adjacent package-manager/orchestrator slice -> `53 passed, 758 deselected`;
+  compact slice -> `4 passed, 1 deselected`; cleanup ->
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory -> `1`, `5010`,
+  `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-poetry-global-auth-config-passive-recursion.md`.
 - [x] Python Poetry passive package-config checkpoint completed:
   `poetry.toml` now classifies as `poetry-config`, including cached
   `*.poetry-config` remote names, so Poetry repository URLs, owner emails, and

@@ -94,6 +94,24 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Python Poetry global config/auth passive package-config checkpoint:
+  source-aware `pypoetry/config.toml` now classifies as `poetry-config`, and
+  `pypoetry/auth.toml` plus cached `*.poetry-auth` names now classify as
+  `poetry-auth`, while generic `config.toml` and `auth.toml` remain excluded.
+  Poetry auth repository URLs, owner emails, and Supabase refs recurse through
+  existing passive artifact handling while embedded repository credentials stay
+  stripped. Verification: TDD helper regression first failed (`5 failed, 47
+  passed`), then passed; focused package-manager helper suite (`52 passed`);
+  compile/Ruff for touched files; adjacent package-manager/orchestrator slice
+  (`53 passed, 758 deselected`); compact cross-phase slice (`4 passed, 1
+  deselected`); cleanup removed four pytest engagement dirs and left
+  `remaining_pytest_engagement_dirs=0`; persistent workspace DB inventory
+  remains `1`, `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-poetry-global-auth-config-passive-recursion.md`.
+  Safety: passive static package-manager config classification only; no package
+  download, registry API call, provider call, target network, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, severity change, or finding creation.
 - [x] Python Poetry passive package-config checkpoint: `poetry.toml` now
   classifies as `poetry-config`, including cached `*.poetry-config` remote
   names, so Poetry repository URLs, owner emails, and cloud refs recurse through
