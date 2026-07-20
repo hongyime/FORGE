@@ -24,6 +24,12 @@ polish or provider breadth without proving the end-to-end kill-chain path.
 
 ## Current green checkpoint
 
+- [x] Electron update metadata helper-test split checkpoint is green:
+  Four Electron update metadata / ASAR helper regressions moved from `tests/phase1/test_artifact_helpers.py` into focused `tests/phase1/test_artifact_electron_update_metadata.py` (87 lines). The broad helper file dropped from 726 to 647 lines, and queue-backed Electron recursion coverage remains in `tests/phase1/test_artifact_electron_update_metadata_queue.py`.
+  Verification: compile/Ruff for touched helper/Electron test files; focused Electron helper plus queue tests -> `5 passed`; remaining artifact helper suite -> `25 passed`.
+  Safety: test-only refactor. No runtime behavior change, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-electron-helper-test-split.md`.
+
 - [x] Pact protocol-relative endpoint coverage checkpoint is green:
   Focused coverage now proves Pact contract `provider.baseUrl`, `request.url`, and URL-ish provider-state callback fields such as `//pact-provider.acme.example/api`, `//pact-cdn.acme.example/v1/status`, and `//pact-callback.acme.example/hook` normalize to `https://...` recursive URL pivots through the artifact processor path.
   Verification: compile/Ruff for touched Pact helper/orchestrator/test files; focused Pact test -> `1 passed`; adjacent API-client worker suite -> `6 passed`; existing orchestrator Pact selector -> `3 passed, 756 deselected`.
