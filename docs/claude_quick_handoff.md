@@ -88,6 +88,10 @@ delegation, continue locally against the locked goal and record the limitation.
   `docs.oasis-open.org/ns/xri` and `www.w3.org/ns/did`, preventing standards
   schema docs from becoming recursive attack-surface seeds. Handoff:
   `.claude/handoffs/2026-07-20-standards-namespace-url-suppression.md`.
+- [x] DID web identifier host recursion completed: source-aware `did.json` and
+  `did-configuration.json` now promote valid `did:web:` identifiers into
+  recursive subdomain/root-domain seeds while excluding generic JSON lookalikes.
+  Handoff: `.claude/handoffs/2026-07-20-did-web-host-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing

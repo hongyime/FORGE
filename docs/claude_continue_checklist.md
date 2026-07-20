@@ -53,6 +53,24 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] DID web identifier recursive-host checkpoint completed:
+  source-aware `did.json` and `did-configuration.json` parsing now promotes
+  valid `did:web:` identifiers such as `did:web:identity.acme.example` and
+  `did:web:profiles.acme.example:user:alice` into recursive subdomain/root-domain
+  seeds through the existing host-seed persistence path. Generic JSON files with
+  `did:web:` strings remain excluded from this source-gated parser.
+  Verification: TDD focused regression failed before implementation on missing
+  DID web host promotion, then passed -> `1 passed`; compile for touched
+  orchestrator/helper/test files; Ruff for touched files ->
+  `All checks passed!`; DID plus well-known service metadata slice ->
+  `3 passed`; adjacent DID/service/provenance/public-metadata/helper slice ->
+  `16 passed`; slow remote well-known metadata fixture with `-m slow` ->
+  `1 passed`; cleanup check found no new persistent pytest DBs. Safety: passive
+  static DID metadata parsing only; no DID resolution, WebFinger lookup,
+  provider call, live probing, credential use, scope relaxation, proxy/IP
+  rotation, rate-limit bypass, report-gate change, severity change, or
+  deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-did-web-host-recursion.md`.
 - [x] Standards namespace artifact URL suppression checkpoint completed:
   artifact URL seed persistence now rejects known standards namespace URLs from
   OASIS/W3C `ns` paths, preventing metadata schema references such as
