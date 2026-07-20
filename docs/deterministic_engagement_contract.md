@@ -22,6 +22,10 @@ The product is not done when it has more screens, providers, scanners, or
 parsers. It is done when the same scoped engagement facts move through the whole
 pipeline reproducibly and can be reviewed, exported, audited, and cleaned up.
 
+Runtime `/goal` state is not the contract. If it is stale, keep this goal lock,
+use `docs/end_goal.md` as source of truth, and update only the misleading
+continuation wording.
+
 ## Pipeline Gates
 
 1. Intake: create or select an engagement with monotonic ID, stable slug, typed

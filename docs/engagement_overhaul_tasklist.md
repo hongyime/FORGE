@@ -88,6 +88,21 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] End-goal source-of-truth refresh checkpoint: `END_GOAL.md`,
+  `docs/end_goal.md`, and `docs/deterministic_engagement_contract.md` now state
+  explicitly that stale runtime `/goal` labels do not redefine the product
+  target. The active target remains
+  `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`: one deterministic authorized
+  engagement pipeline from scoped multi-seed intake through recursive
+  discovery, static artifact enrichment, non-destructive validation,
+  rule-engine scoring, dashboard/graph/report/audit review, guaranteed
+  template/raw fallback, and test-data cleanup. Backprop: added `SPEC.md`
+  `B8`. Verification: documentation grep and source-of-truth review only.
+  Handoff: `.claude/handoffs/2026-07-20-end-goal-source-of-truth-refresh.md`.
+  Safety: docs and continuation-state clarification only; no code behavior,
+  live probing, provider calls, credential use, scope changes, validation-gate
+  changes, report-gate changes, severity changes, proxy/IP rotation, or
+  rate-limit bypass.
 - [ ] Next implementation target: audit the next concrete release-gate gap
   before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete

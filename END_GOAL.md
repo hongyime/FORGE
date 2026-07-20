@@ -4,12 +4,19 @@ Last updated: 2026-07-20
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
-If you read only one sentence:
+## Active Goal Statement
+
+The active project end goal is the locked product state below, regardless of any
+stale runtime `/goal` label:
+
 FORGE must be one deterministic authorized engagement pipeline from scoped
 multi-seed intake through bounded recursive discovery, static artifact
 enrichment, non-destructive validation, rule-engine scoring,
 graph/dashboard/report/audit review, guaranteed template/raw fallback, and
 automated test-data cleanup.
+
+That is the answer future agents should give when asked "what is the end goal?"
+It is not a UI-only goal, a provider-count goal, or a scanner collection goal.
 
 Pinned end state:
 An operator can create or resume one scoped multi-seed engagement, run the

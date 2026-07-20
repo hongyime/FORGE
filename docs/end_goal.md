@@ -41,6 +41,11 @@ Runtime `/goal` text, chat summaries, old handoff notes, and agent memory are
 advisory only. When they conflict with this file, keep this goal lock and update
 the stale continuation material instead of redefining the project.
 
+If the runtime `/goal` label is stale or vague, do not stop the implementation
+or create a replacement goal. Continue against
+`FORGE-DETERMINISTIC-ASM-PIPELINE-v1`, then patch the active continuation docs
+only if their wording would mislead the next agent.
+
 ## Goal Lock
 
 If a future agent asks what the end goal is, the answer is:

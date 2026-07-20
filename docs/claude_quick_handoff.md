@@ -55,6 +55,15 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] End-goal source-of-truth refresh completed: the active product target is
+  explicitly locked to `FORGE-DETERMINISTIC-ASM-PIPELINE-v1` even when runtime
+  `/goal` text is stale. `END_GOAL.md`, `docs/end_goal.md`,
+  `docs/deterministic_engagement_contract.md`,
+  `docs/engagement_overhaul_tasklist.md`, and
+  `docs/claude_continue_checklist.md` now all point to the same deterministic
+  authorized engagement pipeline target. Backprop added `SPEC.md` `B8`.
+  Handoff:
+  `.claude/handoffs/2026-07-20-end-goal-source-of-truth-refresh.md`.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
