@@ -15506,7 +15506,10 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _social_profile_handle_candidate(value: Any) -> str:
-        return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(value)
+        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(value)
+        if handle:
+            return handle
+        return EngagementSynthesisEngine._social_profile_handle_url_candidate(value)
 
     @staticmethod
     def _social_profile_handle_url_candidate(value: Any, *, platform: str = "") -> str:

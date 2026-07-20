@@ -7513,6 +7513,11 @@ Use this as the canonical continuation list. Older unchecked "next audit target"
   `python -m pytest tests/phase1/test_engagement_orchestrator.py -k "redacted_key_rows_when_engagement_key_missing" -q --color=no`
   `python -m pytest tests/phase1/test_engagement_orchestrator.py -k "local_generic_secret_artifacts_feed_mixed_key_validation" -q --color=no`
 
+- [x] Social profile URL-valued handle recursion checkpoint: direct profile handle fields such as `handle`, `username`, and `custom_url` now fall back to the existing social profile URL parser when bare handle normalization fails. Provider payloads like `{"handle": "https://www.youtube.com/@acmeops"}` and `{"username": "https://github.com/acmeops"}` now produce recursive username seeds, while reserved routes such as GitHub settings pages and YouTube feeds remain filtered.
+  Files: `forge/engagement_orchestrator.py`, `tests/phase1/test_social_profile_handle_url_values.py`, `docs/claude_quick_handoff.md`, `docs/claude_continue_checklist.md`, `docs/engagement_overhaul_tasklist.md`, `.claude/handoffs/2026-07-20-social-profile-url-valued-handles.md`
+  Verified: `python -m py_compile forge\engagement_orchestrator.py tests\phase1\test_social_profile_handle_url_values.py`; `ruff check forge\engagement_orchestrator.py tests\phase1\test_social_profile_handle_url_values.py` -> `All checks passed!`; focused URL-valued handle suite -> `2 passed`; full social profile URL parser suite -> `16 passed`; adjacent orchestrator social-handle selector -> `3 passed, 757 deselected`.
+  Safety note: passive identity synthesis only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+
 ## Still partial or missing
 
 - [ ] Intrusive active exploitation remains intentionally gated/manual, while authorized live probing/tool execution is part of the automated end goal when scope explicitly allows it.

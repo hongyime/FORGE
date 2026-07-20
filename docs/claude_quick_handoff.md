@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Social profile URL-valued handle recursion checkpoint is green:
+  Direct profile handle fields such as `handle`, `username`, and `custom_url` now fall back to the existing social profile URL parser when bare handle normalization fails, so provider payloads like `{"handle": "https://www.youtube.com/@acmeops"}` and `{"username": "https://github.com/acmeops"}` produce recursive username seeds. Reserved routes such as GitHub settings pages and YouTube feeds remain filtered by the existing platform guards.
+  Verification: compile/Ruff for touched orchestrator/test files; focused URL-valued handle suite -> `2 passed`; full social profile URL parser suite -> `16 passed`; adjacent orchestrator social-handle selector -> `3 passed, 757 deselected`.
+  Review: sidecar `Descartes` found the gap. Claude CLI retry reached `max turns (4)` without usable findings.
+  Safety: passive identity synthesis only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-social-profile-url-valued-handles.md`.
+
 - [x] Helm index relative chart recursion checkpoint is green:
   Remote/source-gated Helm `index.yaml` / `index.yml` payloads with Helm index shape now resolve relative chart package URLs such as `charts/api-1.2.3.tgz` and `../archive/api-1.2.3.tar.gz` against the index URL, feeding those chart archives into the existing recursive URL/artifact path. Absolute URLs remain handled by existing direct URL parsing; templated, non-chart, non-Helm, local-base, userinfo, and non-HTTP values stay suppressed.
   Verification: compile/Ruff for touched orchestrator/helper/test files; focused Helm index suite -> `4 passed`; adjacent artifact helper/API-client/HTTP-request slice -> `40 passed`; broader structured-discovery selector -> `4 passed, 756 deselected`.
