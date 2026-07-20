@@ -4,6 +4,13 @@ Last updated: 2026-07-20
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
+If you read only one sentence:
+FORGE must be one deterministic authorized engagement pipeline from scoped
+multi-seed intake through bounded recursive discovery, static artifact
+enrichment, non-destructive validation, rule-engine scoring,
+graph/dashboard/report/audit review, guaranteed template/raw fallback, and
+automated test-data cleanup.
+
 This file is the fast entry point for the project goal. The compact execution
 contract is `docs/deterministic_engagement_contract.md`; the normative contract
 is `docs/end_goal.md`. If any checklist, handoff, agent plan, or implementation

@@ -2,6 +2,14 @@
 
 Last updated: 2026-07-20
 
+End goal quick answer: FORGE must be one deterministic authorized engagement
+pipeline from scoped multi-seed intake through bounded recursive discovery,
+static artifact enrichment, non-destructive validation-before-reporting,
+rule-engine findings/severity, graph/dashboard/report/audit review, guaranteed
+template/raw fallback when LLM/API narrative providers fail, and automated
+test-data cleanup. Subagents are accelerators only; they do not redefine this
+goal.
+
 Use this file first for short resume context, then verify current continuation
 order in `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`;
 that section wins if task/status details differ. Goal lock:

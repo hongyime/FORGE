@@ -2,6 +2,16 @@
 
 Last updated: 2026-07-20
 
+## End Goal Quick Answer
+
+FORGE must be one deterministic authorized engagement pipeline from scoped
+multi-seed intake through bounded recursive discovery, static artifact
+enrichment, non-destructive validation-before-reporting, rule-engine
+findings/severity, graph/dashboard/report/audit review, guaranteed template/raw
+fallback when LLM/API narrative providers fail, and automated test-data cleanup.
+Use subagents only to accelerate bounded implementation or review; never let
+them create a competing goal or weaken the contract in `docs/end_goal.md`.
+
 ## Operating model
 
 - Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`; root implementer spec: `SPEC.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end goal: `docs/end_goal.md`; acceptance criteria: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; current continuation order: `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`. This file mirrors execution checkpoints for Claude handoff context.
