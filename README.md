@@ -4,7 +4,7 @@
 
 Every operation is scope-gated + hash-chain audit-logged. Zero API keys required for the recommended flow.
 
-Normative project end goal: [docs/end_goal.md](docs/end_goal.md); execution-facing checklist: [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) -> `Canonical End Goal`. Future implementation work should move FORGE toward that deterministic authorized ASM/kill-chain outcome and should not weaken the validation, scope, audit, or report-fallback guarantees.
+Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Normative project end goal: [docs/end_goal.md](docs/end_goal.md); execution-facing checklist: [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) -> `Canonical End Goal`. Future implementation work should move FORGE toward that deterministic authorized ASM/kill-chain outcome and should not weaken the validation, scope, audit, or report-fallback guarantees.
 
 ---
 

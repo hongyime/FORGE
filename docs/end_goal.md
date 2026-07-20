@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-20
 
-This is the normative end-goal contract for FORGE. The compact execution checklist lives in `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; if another doc, checklist, or agent plan conflicts with this file, update that doc or plan before continuing implementation.
+This is the normative end-goal contract for FORGE. The repository-root `END_GOAL.md` is the fast entry point, but this file remains the source of truth. The compact execution checklist lives in `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; if another doc, checklist, or agent plan conflicts with this file, update that doc or plan before continuing implementation.
 
 ## One-Sentence Goal
 
