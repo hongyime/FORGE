@@ -2,7 +2,15 @@
 
 Last updated: 2026-07-20
 
-This is the normative end-goal contract for FORGE. The repository-root `END_GOAL.md` is the fast entry point, but this file remains the source of truth. The acceptance checklist lives in `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; unchecked boxes there are goal criteria, not live progress claims. The current continuation order lives in the same file under `## Compact active backlog`. If another doc, checklist, or agent plan conflicts with this file, update that doc or plan before continuing implementation.
+This is the normative end-goal contract for FORGE. The repository-root
+`END_GOAL.md` is the fast entry point, and
+`docs/deterministic_engagement_contract.md` is the compact pipeline-gate map, but
+this file remains the source of truth. The acceptance checklist lives in
+`docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal`; unchecked
+boxes there are goal criteria, not live progress claims. The current
+continuation order lives in the same file under `## Compact active backlog`. If
+another doc, checklist, or agent plan conflicts with this file, update that doc
+or plan before continuing implementation.
 
 ## Goal Lock
 
@@ -13,7 +21,8 @@ pipeline that starts with scoped multi-seed intake, performs bounded recursive
 discovery, statically enriches discovered artifacts, validates evidence
 non-destructively before reporting, scores risk with rules only, exposes the
 same facts through dashboard/graph/report/audit surfaces, and always emits
-template/raw exports when LLM or API providers fail.
+template/raw exports when LLM/API narrative providers fail, hit quota, have no
+key, or exceed token limits.
 
 The end goal is not "more UI", "more providers", or "more tools" in isolation.
 The end goal is a provable authorized engagement workflow that discovers,
@@ -81,8 +90,8 @@ authorized live checks, validate evidence with non-destructive proof gates,
 calculate deterministic findings and severities, expose graph/dashboard/report
 review surfaces, export audit artifacts, and clean up test data. This workflow
 must pass focused local/mocked end-to-end tests and must still produce template
-reports plus raw JSON/CSV exports when every LLM/API provider fails, hits quota,
-or exceeds token limits.
+reports plus raw JSON/CSV exports when every LLM/API narrative provider fails,
+hits quota, has no key, or exceeds token limits.
 
 ## Operating Boundaries
 
@@ -104,7 +113,7 @@ or exceeds token limits.
 - Static artifact extraction is automatic for discovered artifacts where safe: mobile bundles, archives, documents, config files, IaC, package/build metadata, API-client files, logs, and other passive containers should feed emails, URLs, hosts, cloud refs, and key evidence back into the loop.
 - Cloud and credential evidence must be validated non-destructively before it becomes a finding. Unsupported, dead, honeypot-suspected, low-signal, or unverified evidence remains analyst inventory only.
 - Findings and risk levels are calculated by deterministic rules. The LLM must never determine severity, invent findings, weaken validation gates, or change evidence.
-- Report generation uses a cascade when configured, but must always degrade to deterministic template output and raw JSON/CSV exports if all LLM providers fail, hit quota, or exceed token limits.
+- Report generation uses a cascade when configured, but must always degrade to deterministic template output and raw JSON/CSV exports if all LLM/API narrative providers fail, hit quota, have no key, or exceed token limits.
 - Graph export is a first-class deliverable: dashboard graph, GraphML, MTGX/Maltego-compatible output, report links, and raw export metadata must remain consistent.
 - The dashboard must let an operator review engagement status, seeds, findings, validation state, graph data, reports, exports, audit logs, and run metadata without relying on raw database access.
 

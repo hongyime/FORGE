@@ -2,9 +2,11 @@
 
 Last updated: 2026-07-20
 
-This file is the fast entry point for the project goal. The normative contract is
-`docs/end_goal.md`; if any checklist, handoff, agent plan, or implementation task
-conflicts with that file, update the conflicting material before continuing.
+This file is the fast entry point for the project goal. The compact execution
+contract is `docs/deterministic_engagement_contract.md`; the normative contract
+is `docs/end_goal.md`. If any checklist, handoff, agent plan, or implementation
+task conflicts with those files, update the conflicting material before
+continuing.
 
 ## Hard End Goal
 
@@ -15,7 +17,8 @@ pipeline that starts with scoped multi-seed intake, performs bounded recursive
 discovery, statically enriches discovered artifacts, validates evidence
 non-destructively before reporting, scores risk with rules only, exposes the
 same facts through dashboard/graph/report/audit surfaces, and always emits
-template/raw exports when LLM or API providers fail.
+template/raw exports when LLM/API narrative providers fail, hit quota, have no
+key, or exceed token limits.
 
 The end goal is one reproducible authorized engagement pipeline, not a growing
 collection of unrelated scanners or UI screens.
@@ -49,7 +52,8 @@ recursively discovers public or explicitly authorized attack surface, statically
 analyzes discovered artifacts, validates cloud and credential evidence
 non-destructively before reporting, calculates risk with deterministic rules,
 exposes the engagement through graph/dashboard/report surfaces, and always
-generates auditable output even when LLM providers fail.
+generates auditable output even when LLM/API narrative providers fail, hit
+quota, have no key, or exceed token limits.
 
 ## Determinism Means
 
@@ -107,10 +111,11 @@ Required continuation rules:
 
 Read next:
 
-1. `docs/end_goal.md` for the full normative contract.
-2. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
+1. `docs/deterministic_engagement_contract.md` for the compact workflow gates.
+2. `docs/end_goal.md` for the full normative contract.
+3. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
    acceptance criteria. Unchecked boxes there are goal criteria, not current live
    status.
-3. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
+4. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
    the current implementation continuation order.
-4. `docs/claude_quick_handoff.md` for the latest short resume notes.
+5. `docs/claude_quick_handoff.md` for the latest short resume notes.

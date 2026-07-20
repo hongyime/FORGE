@@ -1,8 +1,12 @@
 # FORGE Toolkit
 
-**Depth-first OSINT spider** — feed it any scoped engagement identifier (domain, IP, email, phone, username, or full name) and it fans out through passive intel modules until nothing new is discovered or configured budgets are reached.
+**Deterministic authorized ASM pipeline** - create a scoped engagement from one
+or more typed seeds, then run bounded recursive discovery, static enrichment,
+non-destructive validation, rule-engine scoring, graph/dashboard/report review,
+and fallback exports.
 
-Every operation is scope-gated + hash-chain audit-logged. Zero API keys required for the recommended flow.
+Every operation is scope-gated and hash-chain audit-logged. Zero API keys are
+required for the recommended deterministic template/report path.
 
 ## End Goal
 
@@ -11,28 +15,35 @@ multi-seed engagement intake, bounded recursive discovery, passive artifact and
 provider enrichment, scoped live checks only when ROE/scope explicitly allows
 them, non-destructive validation-before-reporting, deterministic risk scoring,
 graph/dashboard/report/audit review, and guaranteed template/raw exports when
-LLM/API providers fail.
+LLM/API narrative providers fail, hit quota, have no key, or exceed token
+limits.
 
 Implementation work should strengthen that workflow or its tests. It should not
 move the goal to UI-only polish, provider breadth without recursive value, or any
 path that weakens scope gates, validation gates, auditability, deterministic
 severity, or report fallback.
 
-Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Normative project end
-goal: [docs/end_goal.md](docs/end_goal.md). Execution-facing checklist:
+Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Compact deterministic
+workflow contract:
+[docs/deterministic_engagement_contract.md](docs/deterministic_engagement_contract.md).
+Normative project end goal: [docs/end_goal.md](docs/end_goal.md).
+Execution-facing checklist:
 [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) ->
 `Canonical End Goal`.
 
 Continuation order for future agents:
 
 1. Read [END_GOAL.md](END_GOAL.md) for the short goal.
-2. Treat [docs/end_goal.md](docs/end_goal.md) as the normative contract.
-3. Treat `## Canonical End Goal` in
+2. Read
+   [docs/deterministic_engagement_contract.md](docs/deterministic_engagement_contract.md)
+   for the pipeline gates and stop rule.
+3. Treat [docs/end_goal.md](docs/end_goal.md) as the normative contract.
+4. Treat `## Canonical End Goal` in
    [docs/engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md)
    as acceptance criteria, not live progress.
-4. Use `## Compact active backlog` in that same task list as the current
+5. Use `## Compact active backlog` in that same task list as the current
    continuation order.
-5. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
+6. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
    latest short resume notes.
 
 ---

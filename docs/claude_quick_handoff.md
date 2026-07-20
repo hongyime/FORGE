@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-20
 
-Use this file first. Fast goal entry point: `END_GOAL.md`; normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. Use `docs/claude_continue_checklist.md` next if you need the longer command list.
+Use this file first. Fast goal entry point: `END_GOAL.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. Use `docs/claude_continue_checklist.md` next if you need the longer command list.
 
 ## End Goal To Preserve
 
@@ -10,8 +10,9 @@ FORGE must converge on one deterministic authorized engagement pipeline:
 scoped multi-seed intake, bounded recursive discovery, passive artifact/provider
 enrichment, proof-bound non-destructive validation, rule-engine severity,
 graph/dashboard/report/audit review, LLM cascade only for narrative,
-template/raw export fallback when providers fail, and automated test-data
-cleanup. Before starting work, map the task to one of the acceptance stages in
+template/raw export fallback when LLM/API narrative providers fail, hit quota,
+have no key, or exceed token limits, and automated test-data cleanup. Before
+starting work, map the task to one of the acceptance stages in
 `docs/end_goal.md`: intake, discovery, recursion, artifact analysis, validation,
 scoring, review, fallback, or testing/cleanup. Do not move the goal to UI-only
 polish or provider breadth without proving the end-to-end kill-chain path.
@@ -23,6 +24,7 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
+- [ ] Immediate next code target: `tests/phase2/test_social_scraper.py::test_normalizes_nested_stackexchange_user_profile_for_recursive_seed_quality` plus the narrow `forge/utils/intel/social_scraper.py` parser fix for provider-scoped nested StackExchange/StackOverflow `user` payloads. This advances identity enrichment and recursion only; do not add provider calls or generic nested user flattening.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint

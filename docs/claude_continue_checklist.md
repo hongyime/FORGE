@@ -4,9 +4,9 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- Fast goal entry point: `END_GOAL.md`; normative end goal: `docs/end_goal.md`; acceptance criteria: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; current continuation order: `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`. This file mirrors execution checkpoints for Claude handoff context.
+- Fast goal entry point: `END_GOAL.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end goal: `docs/end_goal.md`; acceptance criteria: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; current continuation order: `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`. This file mirrors execution checkpoints for Claude handoff context.
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Historical lines saying commits were impossible because this was not a Git repo are stale only; do not use them to skip valid checkpoint commits.
-- Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
+- Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, and tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution must carry `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 
 ## End Goal To Preserve
@@ -15,8 +15,9 @@ FORGE must converge on one deterministic authorized engagement pipeline:
 scoped multi-seed intake, bounded recursive discovery, passive artifact/provider
 enrichment, non-destructive validation-before-reporting, rule-engine risk
 scoring, graph/dashboard/report/audit review, LLM cascade for narrative only,
-template/raw export fallback when all providers fail, and automated test-data
-cleanup. Do not move the goal to UI-only polish, provider breadth without
+template/raw export fallback when LLM/API narrative providers fail, hit quota,
+have no key, or exceed token limits, and automated test-data cleanup. Do not
+move the goal to UI-only polish, provider breadth without
 recursive value, or any behavior that weakens scope, proof, report, audit, or
 fallback guarantees. Every continuation task must map back to the acceptance
 stages in `docs/end_goal.md`: intake, discovery, recursion, artifact analysis,
@@ -37,6 +38,14 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [ ] Immediate next implementation target: add the focused nested
+  StackExchange/StackOverflow `user` payload regression in
+  `tests/phase2/test_social_scraper.py`, then patch
+  `forge/utils/intel/social_scraper.py` narrowly so provider-scoped nested
+  StackExchange users with valid `user_id`, accepted site host, and
+  non-placeholder handle become public profile pivots for recursive identity
+  synthesis. Do not flatten arbitrary nested users and do not add network,
+  provider-call, auth, scope, or report-gate behavior.
 - [x] Helm index absolute chart URL recursion checkpoint completed: Helm `index.yaml` parsing now preserves safe absolute HTTP(S) chart archive URLs in `entries[].urls[]` in addition to relative chart paths, so authorized chart indexes that point at CDN/object-storage `.tgz` / `.tar.gz` packages feed recursive artifact URL pivots instead of being silently dropped. Unsafe values remain suppressed: protocol-relative URLs, non-HTTP(S) schemes, non-chart suffixes, templated strings, userinfo-bearing URLs, localhost, and private/reserved IP hosts. Verification: compile/Ruff for touched Helm parser/tests, focused Helm index suite -> `4 passed`, adjacent artifact helper/API-client/HTTP/package-manager/Helm suite -> `64 passed`, and cleanup check found no new pytest DBs. Review: subagent `Singer` identified the missed absolute chart URL gap. Safety: passive static Helm index parsing only; no Helm execution, chart download, provider call, live probing expansion, credential use, scope relaxation, rate-limit bypass, proxy/IP rotation, validation/report-gate change, or persistent non-test engagement DB mutation changed. Handoff: `.claude/handoffs/2026-07-20-helm-index-absolute-chart-urls.md`.
 - [x] Remote mobile-bundle regression modularization checkpoint completed: XAPK, APKM, and APKS seed-URL dry-run kill-chain regressions now share a compact focused helper in `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 430 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only kill-chain coverage for queued remote mobile bundles, nested APK static extraction, Firebase/Supabase cloud asset recursion, derived seed relations, and recursive email/URL seed creation. Verification: compile/Ruff for touched Phase 1 files, remote mobile-bundle wrapper set -> `3 passed`, and cleanup check found no new pytest DBs. Safety: test modularization only; no production mobile parsing behavior, live probing, provider calls, credential use, scope changes, validation/report gates, or persistent non-test engagement DB mutation changed. Handoff: `.claude/handoffs/2026-07-20-remote-mobile-bundle-test-modularization.md`.
 - [x] Remote artifact download regression modularization checkpoint completed: rate-limited remote artifact retry/backoff, extensionless remote image filename inference from `Content-Disposition`, and extensionless AVIF content-type inference moved into focused `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 268 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only remote artifact coverage for respectful `Retry-After` pacing, OCR payload recursion, downloaded filename metadata, image format detection, and recursive email/URL seed extraction. Verification: compile/Ruff for touched Phase 1 files, remote-download wrapper set -> `4 passed`, and cleanup check found no new pytest DBs. Safety: test modularization only; no production downloader behavior, live probing, provider calls, credential use, scope changes, pacing/backoff behavior, report gates, or persistent non-test engagement DB mutation changed. Handoff: `.claude/handoffs/2026-07-20-remote-artifact-download-test-modularization.md`.
