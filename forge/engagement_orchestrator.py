@@ -143,6 +143,7 @@ from forge.utils.artifact_har import (
     har_scalar_text,
 )
 from forge.utils.artifact_oci_image import (
+    docker_save_manifest_entries,
     oci_blob_member_name,
     oci_index_manifest_digests,
     oci_manifest_config_digest,
@@ -30972,11 +30973,14 @@ class ArtifactQueueProcessor:
     def _tar_member_bytes(
         tf: tarfile.TarFile,
         member: tarfile.TarInfo,
+        *,
+        limit: int | None = None,
     ) -> bytes:
         member_name = ArtifactQueueProcessor._safe_archive_member_name(str(member.name or ""))
         if not member.isfile() or not member_name:
             return b""
-        if member.size > _artifact_member_scan_byte_limit(member_name):
+        size_limit = limit if limit is not None else _artifact_member_scan_byte_limit(member_name)
+        if member.size > size_limit:
             return b""
         extracted = tf.extractfile(member)
         if extracted is None:
@@ -31046,7 +31050,11 @@ class ArtifactQueueProcessor:
                 member = member_by_name.get(layer_member)
                 if member is None or layer_member in seen_blob_members:
                     continue
-                layer_bytes = self._tar_member_bytes(tf, member)
+                layer_bytes = self._tar_member_bytes(
+                    tf,
+                    member,
+                    limit=_REMOTE_ARTIFACT_MAX_BYTES,
+                )
                 if not layer_bytes:
                     continue
                 seen_blob_members.add(layer_member)
@@ -31057,6 +31065,86 @@ class ArtifactQueueProcessor:
                     depth=depth + 1,
                 ):
                     prefixed_path = f"{layer_member}#oci-layer/{extract_path}"
+                    payloads.append(
+                        (
+                            f"{layer_source}!{prefixed_path}",
+                            prefixed_path,
+                            text,
+                        )
+                    )
+        return payloads
+
+    def _extract_docker_save_image_tar_payloads(
+        self,
+        tf: tarfile.TarFile,
+        members: Sequence[tarfile.TarInfo],
+        source_file: str,
+        *,
+        depth: int,
+    ) -> list[tuple[str, str, str]]:
+        member_by_name = {
+            safe_name: member
+            for member in members
+            if member.isfile()
+            for safe_name in [self._safe_archive_member_name(str(member.name or ""))]
+            if safe_name
+        }
+        manifest_member = member_by_name.get("manifest.json")
+        if manifest_member is None:
+            return []
+        manifest_bytes = self._tar_member_bytes(tf, manifest_member)
+        entries = docker_save_manifest_entries(
+            _safe_json_loads(self._decode_text_artifact_bytes(manifest_bytes))
+        )
+        if not entries:
+            return []
+
+        payloads: list[tuple[str, str, str]] = []
+        seen_members: set[str] = set()
+
+        def _append_member_payloads(member_name: str) -> bytes:
+            member = member_by_name.get(member_name)
+            if member is None or member_name in seen_members:
+                return b""
+            member_bytes = self._tar_member_bytes(tf, member)
+            if not member_bytes:
+                return b""
+            seen_members.add(member_name)
+            payloads.extend(
+                self._extract_member_data_payloads(
+                    member_bytes,
+                    source_file,
+                    member_name,
+                    depth=depth,
+                )
+            )
+            return member_bytes
+
+        _append_member_payloads("manifest.json")
+        for entry in entries:
+            config_member = str(entry.get("config") or "")
+            if config_member:
+                _append_member_payloads(config_member)
+            for layer_member in entry.get("layers") or []:
+                layer_name = str(layer_member or "")
+                member = member_by_name.get(layer_name)
+                if member is None or layer_name in seen_members:
+                    continue
+                layer_bytes = self._tar_member_bytes(
+                    tf,
+                    member,
+                    limit=_REMOTE_ARTIFACT_MAX_BYTES,
+                )
+                if not layer_bytes:
+                    continue
+                seen_members.add(layer_name)
+                for layer_source, extract_path, text in self._extract_archive_bytes_payloads(
+                    layer_bytes,
+                    source_file,
+                    layer_name,
+                    depth=depth + 1,
+                ):
+                    prefixed_path = f"{layer_name}#docker-layer/{extract_path}"
                     payloads.append(
                         (
                             f"{layer_source}!{prefixed_path}",
@@ -31836,6 +31924,14 @@ class ArtifactQueueProcessor:
                 )
                 if oci_payloads:
                     return oci_payloads
+                docker_save_payloads = self._extract_docker_save_image_tar_payloads(
+                    nested_tar,
+                    members,
+                    source_file,
+                    depth=depth,
+                )
+                if docker_save_payloads:
+                    return docker_save_payloads
                 return self._extract_text_payloads_from_tar(
                     nested_tar,
                     source_file,

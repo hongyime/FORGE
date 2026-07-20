@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Docker-save layer recursion checkpoint is green:
+  Passive Docker `docker save` tar archives now parse `manifest.json`, config JSON, and manifest-referenced layer tar members, so `.env`/config content inside referenced layers feeds existing recursive email/URL/cloud discovery. Unreferenced layers remain ignored, and referenced layer tar members may exceed the generic 1 MiB member cap only up to the existing remote artifact cap.
+  Verification: compile/Ruff for touched OCI/orchestrator/test files; focused OCI/Docker-save suite -> `2 passed`; adjacent artifact/container/helper suite -> `38 passed`; broader archive/container slice -> `117 passed, 643 deselected`.
+  Review: explorer `Heisenberg` found the gap.
+  Safety: static archive parsing only. No container execution, image loading, Docker invocation, registry pull/push, provider call, live probing, credential use/validation, scope relaxation, proxy/IP rotation, rate-limit bypass, report-gate change, exploitation, or destructive behavior.
+  Handoff: `.claude/handoffs/2026-07-20-docker-save-layer-recursion.md`.
+
 - [x] Bun scope parser stale-value checkpoint is green:
   Passive Bun/Deno JS-runtime config parsing no longer reuses the previous registry candidate when a non-assignment/comment-only line appears inside `[install.scopes]`, preventing duplicate/noisy recursive URL candidates from static `bunfig.toml` artifacts.
   Verification: compile/Ruff for touched parser/test files; focused JS-runtime parser slice -> `2 passed, 759 deselected`.
