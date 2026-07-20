@@ -126,6 +126,7 @@ from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_text_candidates,
 )
 from forge.utils.artifact_agent_card_metadata import agent_card_urls
+from forge.utils.artifact_api_catalog_metadata import api_catalog_urls
 from forge.utils.artifact_ad_metadata import (
     ads_txt_publisher_account_assets,
     sellers_json_seller_account_assets,
@@ -20457,6 +20458,7 @@ class ArtifactQueueProcessor:
                     "direct",
                     "relative_routes",
                     "public_metadata_links",
+                    "api_catalog_metadata",
                     "passkey_metadata",
                     "agent_card_metadata",
                     "open_resource_discovery",
@@ -20647,6 +20649,10 @@ class ArtifactQueueProcessor:
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,
             )
+        if family == "api_catalog_metadata":
+            if _artifact_format_label(source_file) != "api-catalog":
+                return []
+            return api_catalog_urls(text, base_url=source_file)
         if family == "passkey_metadata":
             if _artifact_format_label(source_file) != "passkey-endpoints":
                 return []

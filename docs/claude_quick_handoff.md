@@ -140,6 +140,11 @@ stop and pick a smaller verified kill-chain or determinism gap.
   fields against the remote artifact `source_url` into recursive URL seeds while
   excluding templated callback URLs and generic JSON lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-webweaver-relative-url-recursion.md`.
+- [x] API catalog relative URL-field recursion completed: source-aware
+  `.well-known/api-catalog` now resolves concrete relative URL and endpoint
+  fields against the remote artifact `source_url` into recursive URL seeds while
+  excluding templated callback URLs and generic JSON lookalikes. Handoff:
+  `.claude/handoffs/2026-07-20-api-catalog-relative-url-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing
