@@ -85,6 +85,7 @@ from forge.utils.artifact_electron_update_metadata import (
     electron_update_metadata_artifact_label,
     electron_update_metadata_candidates,
 )
+from forge.utils.artifact_email_security_metadata import mta_sts_mx_hosts
 from forge.utils.artifact_database_client import (
     database_client_config_artifact_label,
     database_client_endpoint_candidates,
@@ -20397,6 +20398,9 @@ class ArtifactQueueProcessor:
             )
             if _looks_like_gitreview_text_config_name(source_file):
                 host_candidates.extend(_extract_artifact_gitreview_host_seeds(text))
+            if _artifact_format_label(source_file) == "mta-sts.txt":
+                for mx_host in mta_sts_mx_hosts(text):
+                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(mx_host))
             for host_value, host_seed_type in host_candidates:
                 seed = (host_value, host_seed_type)
                 if seed in seen_host_seeds:

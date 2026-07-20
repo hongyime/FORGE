@@ -77,6 +77,25 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] MTA-STS MX host recursive-pivot checkpoint:
+  source-aware `mta-sts.txt` parsing now promotes valid `mx:` host patterns,
+  including wildcard patterns normalized without the `*.` prefix, into recursive
+  domain/subdomain seeds through the existing host-seed persistence path.
+  Existing contact email, policy URL, and Supabase recursion from the same
+  artifact is preserved, and generic text files containing `mx:` lines remain
+  excluded from this source-gated parser. Verification: TDD focused regression
+  failed before implementation on missing wildcard MX host promotion, then
+  passed (`1 passed`); compile/Ruff for touched orchestrator/helper/test files;
+  public metadata/helper/email-security slice (`10 passed`); corrected slow
+  well-known metadata selector (`1 passed, 758 deselected`); exact remote
+  well-known metadata fixture with `-m slow` (`1 passed`); cleanup check found
+  no new persistent pytest DBs. Review: subagent spawn was attempted but thread
+  limit was still reached, so the audit proceeded locally. Safety: passive
+  static MTA-STS parsing only; no DNS lookup, SMTP probing, MTA-STS policy
+  fetch, provider call, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, report-gate change, severity change, or
+  deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-mta-sts-mx-recursion.md`.
 - [x] AI plugin manifest passive-inventory checkpoint:
   source-aware `ai-plugin.json` parsing now promotes manifests with valid
   `name_for_model` plus HTTP(S) `api.url` host into passive
