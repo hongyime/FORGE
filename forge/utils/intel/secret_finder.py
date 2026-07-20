@@ -21,6 +21,7 @@ OPSEC (PRD §12.3.9):
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -1656,6 +1657,18 @@ class DiscordBotTokenValidator(BaseKeyValidator):
         return _stable_numeric_identifier(payload.get("id"), min_len=15, max_len=22)
 
     @staticmethod
+    def _token_bot_identifier(token: str) -> str:
+        prefix = str(token or "").split(".", 1)[0]
+        if not re.fullmatch(r"[A-Za-z0-9_\-]{20,30}", prefix):
+            return ""
+        padded = prefix + ("=" * ((4 - len(prefix) % 4) % 4))
+        try:
+            decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("ascii")
+        except Exception:  # noqa: BLE001
+            return ""
+        return _stable_numeric_identifier(decoded, min_len=15, max_len=22)
+
+    @staticmethod
     def _has_bot_profile_proof(payload: object) -> bool:
         if not isinstance(payload, dict):
             return False
@@ -1690,6 +1703,17 @@ class DiscordBotTokenValidator(BaseKeyValidator):
                     return ValidationResult(
                         state=ValidationState.UNCONFIRMED,
                         detail="Discord current user response missing bot id",
+                    )
+                expected_bot_id = self._token_bot_identifier(token)
+                if not expected_bot_id:
+                    return ValidationResult(
+                        state=ValidationState.UNCONFIRMED,
+                        detail="Discord bot token prefix missing bot id",
+                    )
+                if bot_id != expected_bot_id:
+                    return ValidationResult(
+                        state=ValidationState.UNCONFIRMED,
+                        detail="Discord current user bot id did not match token prefix",
                     )
                 if not self._has_bot_profile_proof(payload):
                     return ValidationResult(

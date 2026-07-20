@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
 import threading
@@ -12,6 +13,11 @@ from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.phase4 import cloud_validate
 from forge.utils.intel import http_pacing
+
+
+def _discord_token_for_bot_id(bot_id: str) -> str:
+    token_prefix = base64.urlsafe_b64encode(bot_id.encode("ascii")).decode("ascii").rstrip("=")
+    return f"{token_prefix}.AAAAAA.{'B' * 27}"
 
 
 class _FakeResponse:
@@ -4999,7 +5005,7 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
         if value == "ciphertext-huggingface":
             return "hf_" + "H" * 36
         if value == "ciphertext-discord":
-            return "M" * 24 + "." + "A" * 6 + "." + "B" * 27
+            return _discord_token_for_bot_id("739251864203918576")
         if value == "ciphertext-telegram":
             return "725419863:" + "T" * 35
         if value == "ciphertext-notion":
@@ -5392,6 +5398,14 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
                     "ciphertext-datadog-low-signal",
                 ),
                 (
+                    62,
+                    "discord",
+                    "discord_bot_token",
+                    "chat.env",
+                    "MMMM...BBBB",
+                    "ciphertext-discord-low-signal",
+                ),
+                (
                     61,
                     "huggingface",
                     "huggingface_token",
@@ -5426,6 +5440,8 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
             return "S" * 40
         if value == "ciphertext-datadog-low-signal":
             return "0123456789abcdef0123456789abcdef"
+        if value == "ciphertext-discord-low-signal":
+            return "M" * 24 + "." + "A" * 6 + "." + "B" * 27
         if value == "ciphertext-huggingface-low-signal":
             return "hf_" + "H" * 36
         if value == "ciphertext-notion-low-signal":
@@ -5436,6 +5452,7 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
     from forge.utils.intel.secret_finder import (  # noqa: PLC0415
         CloudflareApiTokenValidator,
         DatadogApiKeyValidator,
+        DiscordBotTokenValidator,
         HuggingFaceTokenValidator,
         NetlifyTokenValidator,
         NotionTokenValidator,
@@ -5501,6 +5518,17 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
         ),
     )
     monkeypatch.setattr(
+        DiscordBotTokenValidator,
+        "validate",
+        lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
+            state=ValidationState.ACTIVE,
+            detail=(
+                "Discord bot auth ok: bot_id=135792468013579246 "
+                "bot_profile_present=true"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
         HuggingFaceTokenValidator,
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
@@ -5527,14 +5555,16 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
     )
 
     assert summary["status"] == "success"
-    assert summary["attempted"] == 8
-    assert summary["succeeded"] == 8
+    assert summary["attempted"] == 9
+    assert summary["succeeded"] == 9
     assert summary["failed"] == 0
-    assert summary["status_counts"] == {"UNVERIFIED": 8}
+    assert summary["status_counts"] == {"UNVERIFIED": 9}
 
     results_by_service = {str(row["asset_type"]): row for row in summary["results"]}
     assert results_by_service["cloudflare"]["validation_method"] == "cloudflare_token_verify"
     assert results_by_service["datadog"]["validation_method"] == "datadog_api_key_validate"
+    assert results_by_service["discord"]["validation_method"] == "discord_current_user"
+    assert results_by_service["discord"]["identifier"] == "chat.env"
     assert results_by_service["huggingface"]["validation_method"] == "huggingface_whoami_v2"
     assert results_by_service["notion"]["validation_method"] == "notion_users_me"
     assert results_by_service["vercel"]["validation_method"] == "vercel_user_get"
@@ -5559,6 +5589,7 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
         assert validation_rows == [
             ("cloudflare", "UNVERIFIED", "cloudflare_token_verify"),
             ("datadog", "UNVERIFIED", "datadog_api_key_validate"),
+            ("discord", "UNVERIFIED", "discord_current_user"),
             ("huggingface", "UNVERIFIED", "huggingface_whoami_v2"),
             ("netlify", "UNVERIFIED", "netlify_current_user"),
             ("notion", "UNVERIFIED", "notion_users_me"),
@@ -5571,13 +5602,14 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
             """
             SELECT service, validation_state, validation_detail
             FROM key_scanner_findings
-            WHERE id IN (54, 55, 56, 57, 58, 59, 60, 61)
+            WHERE id IN (54, 55, 56, 57, 58, 59, 60, 61, 62)
             ORDER BY service
             """
         ).fetchall()
         assert [(row[0], row[1]) for row in key_rows] == [
             ("cloudflare", "UNCONFIRMED"),
             ("datadog", "UNCONFIRMED"),
+            ("discord", "UNCONFIRMED"),
             ("huggingface", "UNCONFIRMED"),
             ("netlify", "UNCONFIRMED"),
             ("notion", "UNCONFIRMED"),

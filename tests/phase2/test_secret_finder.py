@@ -4,7 +4,9 @@ Unit tests for Module 2-J: secret_finder.py
 """
 from __future__ import annotations
 
+import base64
 import json
+import re
 import sqlite3
 import sys
 import types
@@ -45,7 +47,11 @@ from forge.utils.intel.secret_finder import (
     run_key_scanner,
     KeyPattern,
 )
-import re
+
+
+def _discord_token_for_bot_id(bot_id: str) -> str:
+    token_prefix = base64.urlsafe_b64encode(bot_id.encode("ascii")).decode("ascii").rstrip("=")
+    return f"{token_prefix}.AAAAAA.{'B' * 27}"
 
 
 # ---------------------------------------------------------------------------
@@ -2732,13 +2738,41 @@ def test_discord_bot_token_validator_active_uses_current_user(monkeypatch):
             return response
 
     monkeypatch.setattr("httpx.Client", _DiscordClient)
-    result = DiscordBotTokenValidator().validate(
-        "M" * 24 + "." + "A" * 6 + "." + "B" * 27
-    )
+    result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("739251864203918576"))
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true"
     assert "sensitive-bot-name" not in (result.detail or "")
+
+
+def test_discord_bot_token_validator_mismatched_token_prefix_stays_unconfirmed(monkeypatch):
+    class _DiscordClient:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            del args, kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
+            del exc_type, exc, tb
+
+        def get(self, url: str, headers=None):  # noqa: ANN001
+            assert url == "https://discord.com/api/v10/users/@me"
+            assert str(headers.get("Authorization") or "").startswith("Bot ")
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {
+                "id": "739251864203918576",
+                "username": "sensitive-bot-name",
+                "bot": True,
+            }
+            return response
+
+    monkeypatch.setattr("httpx.Client", _DiscordClient)
+    result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("739251864203918577"))
+
+    assert result.state == ValidationState.UNCONFIRMED
+    assert result.detail == "Discord current user bot id did not match token prefix"
 
 
 def test_discord_bot_token_validator_id_only_response_stays_unconfirmed(monkeypatch):
@@ -2761,9 +2795,7 @@ def test_discord_bot_token_validator_id_only_response_stays_unconfirmed(monkeypa
             return response
 
     monkeypatch.setattr("httpx.Client", _DiscordClient)
-    result = DiscordBotTokenValidator().validate(
-        "M" * 24 + "." + "A" * 6 + "." + "B" * 27
-    )
+    result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("739251864203918576"))
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Discord current user response missing bot proof"
@@ -2793,9 +2825,7 @@ def test_discord_bot_token_validator_non_bot_user_stays_unconfirmed(monkeypatch)
             return response
 
     monkeypatch.setattr("httpx.Client", _DiscordClient)
-    result = DiscordBotTokenValidator().validate(
-        "M" * 24 + "." + "A" * 6 + "." + "B" * 27
-    )
+    result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("739251864203918576"))
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Discord current user response missing bot proof"
@@ -2824,9 +2854,7 @@ def test_discord_bot_token_validator_placeholder_bot_id_stays_unconfirmed(monkey
             return response
 
     monkeypatch.setattr("httpx.Client", _DiscordClient)
-    result = DiscordBotTokenValidator().validate(
-        "M" * 24 + "." + "A" * 6 + "." + "B" * 27
-    )
+    result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("739251864203918576"))
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Discord current user response missing bot id"
@@ -2855,9 +2883,7 @@ def test_discord_bot_token_validator_sequential_bot_id_stays_unconfirmed(monkeyp
             return response
 
     monkeypatch.setattr("httpx.Client", _DiscordClient)
-    result = DiscordBotTokenValidator().validate(
-        "M" * 24 + "." + "A" * 6 + "." + "B" * 27
-    )
+    result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("123456789012345678"))
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Discord current user response missing bot id"
@@ -2886,9 +2912,7 @@ def test_discord_bot_token_validator_generic_bot_name_stays_unconfirmed(monkeypa
             return response
 
     monkeypatch.setattr("httpx.Client", _DiscordClient)
-    result = DiscordBotTokenValidator().validate(
-        "M" * 24 + "." + "A" * 6 + "." + "B" * 27
-    )
+    result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("739251864203918576"))
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Discord current user response missing bot proof"

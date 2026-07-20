@@ -3977,6 +3977,15 @@ def _secret_bound_validation_identifier(service: str, secret: str | None) -> str
         match = re.fullmatch(r"([0-9]{8,12}):[A-Za-z0-9_\-]{35}", secret_text)
         if match:
             return match.group(1)
+    if normalized_service == "discord":
+        prefix = secret_text.split(".", 1)[0]
+        if re.fullmatch(r"[A-Za-z0-9_\-]{20,30}", prefix):
+            padded = prefix + ("=" * ((4 - len(prefix) % 4) % 4))
+            try:
+                decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("ascii")
+            except Exception:  # noqa: BLE001
+                return None
+            return _stable_numeric_identifier(decoded, min_len=15, max_len=22) or None
     return None
 
 
@@ -4123,6 +4132,18 @@ def _validate_existing_key_service(
     )
 
     if state == ValidationState.ACTIVE:
+        if proof_identifier and normalized_service == "discord" and not secret_bound_identifier:
+            return CloudValidationResult(
+                asset_type=normalized_service,
+                identifier=_key_validation_identifier(row, normalized_service, secret=secret),
+                validation_status="UNVERIFIED",
+                validation_method=validation_method,
+                evidence=detail[:512],
+                notes=(
+                    "Provider proof identifier was not bound to the discovered Discord "
+                    "bot token prefix."
+                ),
+            )
         if (
             proof_identifier
             and secret_bound_identifier
