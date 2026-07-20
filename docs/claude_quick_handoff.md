@@ -24,6 +24,12 @@ polish or provider breadth without proving the end-to-end kill-chain path.
 
 ## Current green checkpoint
 
+- [x] Remote/static artifact classification helper-test split checkpoint is green:
+  Package/archive, safe download metadata, firmware/binary dump, browser-profile, Git metadata, OAuth well-known, model, JVM, keystore, certificate, dump, calendar, and vCard classification regressions moved from `tests/phase1/test_artifact_helpers.py` into focused `tests/phase1/test_artifact_remote_static_classification.py` (242 lines). The broad helper file dropped from 446 to 214 lines.
+  Verification: compile/Ruff for touched helper/API/static test files; focused static classification suite -> `16 passed`; remaining artifact helper suite -> `8 passed`; combined helper/API/Electron/static slice -> `29 passed`.
+  Safety: test-only refactor. No runtime behavior change, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-remote-static-classification-test-split.md`.
+
 - [x] API artifact format-label helper-test split checkpoint is green:
   The large API spec/client collection content-type and artifact-label regression moved from `tests/phase1/test_artifact_helpers.py` into focused `tests/phase1/test_artifact_api_format_labels.py` (209 lines). The broad helper file dropped from 647 to 446 lines.
   Verification: compile/Ruff for touched helper/API/Pact test files; focused API label test -> `1 passed`; remaining artifact helper suite -> `24 passed`; adjacent API-client/Pact suite -> `7 passed`.
