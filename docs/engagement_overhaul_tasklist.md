@@ -81,6 +81,25 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Open Resource Discovery relative-resource recursion checkpoint:
+  source-aware `.well-known/open-resource-discovery` parsing now resolves
+  relative resource values such as `/ord/resource`, `./resource.json`, and
+  nested `../shared/resource` against the remote artifact `source_url`, feeding
+  recursive URL seeds through the existing artifact URL persistence path.
+  Generic JSON files with the same `resources` shape remain excluded from this
+  source-gated parser. Verification: TDD focused regression failed before
+  implementation on missing route-style ORD resource URL promotion, then passed
+  (`1 passed`); compile for touched orchestrator/helper/test files; Ruff for
+  touched files (`All checks passed!`); adjacent
+  ORD/Agent Card/passkey/security/API/public-metadata/helper slice
+  (`16 passed`); adjacent ORD/Agent Card/classification/format/public-label
+  slice (`20 passed`); slow remote well-known metadata fixture with `-m slow`
+  (`1 passed`); cleanup check found no new persistent pytest DBs. Safety:
+  passive static ORD metadata parsing only; no resource request, provider call,
+  live probing, credential use, scope relaxation, proxy/IP rotation,
+  rate-limit bypass, report-gate change, severity change, or deterministic
+  finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-open-resource-discovery-relative-recursion.md`.
 - [x] Agent Card relative-URL recursion checkpoint:
   source-aware `.well-known/agent-card.json` parsing now resolves relative URL
   fields such as `/a2a`, `./docs`, `../provider`, and nested skill URLs against

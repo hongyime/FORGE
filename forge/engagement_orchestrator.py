@@ -130,6 +130,7 @@ from forge.utils.artifact_ad_metadata import (
 )
 from forge.utils.artifact_aasa import aasa_ios_app_ids
 from forge.utils.artifact_assetlinks import assetlinks_android_packages
+from forge.utils.artifact_open_resource_discovery import open_resource_discovery_urls
 from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
@@ -20455,6 +20456,7 @@ class ArtifactQueueProcessor:
                     "public_metadata_links",
                     "passkey_metadata",
                     "agent_card_metadata",
+                    "open_resource_discovery",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20647,6 +20649,10 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) != "agent-card.json":
                 return []
             return agent_card_urls(text, base_url=source_file)
+        if family == "open_resource_discovery":
+            if _artifact_format_label(source_file) != "open-resource-discovery":
+                return []
+            return open_resource_discovery_urls(text, base_url=source_file)
         if family == "helm_index":
             return helm_index_chart_package_urls(
                 text,

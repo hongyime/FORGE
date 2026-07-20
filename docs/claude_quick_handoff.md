@@ -115,6 +115,11 @@ delegation, continue locally against the locked goal and record the limitation.
   remote artifact `source_url` into recursive URL seeds while excluding generic
   JSON lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-agent-card-relative-url-recursion.md`.
+- [x] Open Resource Discovery relative-resource recursion completed:
+  source-aware `.well-known/open-resource-discovery` now resolves relative
+  resource values against the remote artifact `source_url` into recursive URL
+  seeds while excluding generic JSON lookalikes. Handoff:
+  `.claude/handoffs/2026-07-20-open-resource-discovery-relative-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing
