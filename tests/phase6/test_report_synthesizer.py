@@ -1446,6 +1446,51 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     assert "key_enc" not in json.dumps(exported_finding)
 
 
+def test_synthesizer_does_not_promote_unlabelled_embedded_validated_evidence(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
+    proof_evidence = (
+        "key=AKIA...MPLE; status=UNVERIFIED; "
+        "VALIDATED:aws_sts_get_caller_identity:AccountId=742931608514"
+    )
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, cve_id, title, severity, evidence)
+            VALUES (?, NULL, 'Unverified AWS key note', 'MEDIUM', ?)
+            """,
+            (ENGAGEMENT_ID, proof_evidence),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+    finding = next(
+        item
+        for item in ctx.exploits.exploited
+        if item.get("title") == "Unverified AWS key note"
+    )
+
+    assert finding["validation_status"] == ""
+    assert finding["validation_method"] == ""
+    assert finding["validation_notes"] == ""
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    assert "Unverified AWS key note" in content
+    assert "- **Validation**: VALIDATED via `aws_sts_get_caller_identity`" not in content
+
+
 def test_synthesizer_excludes_unvalidated_key_exposure_rows(
     tmp_eng_db, tmp_path, patch_confirm_approve
 ):

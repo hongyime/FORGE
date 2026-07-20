@@ -41,6 +41,32 @@ def test_parse_validated_detail_downgrades_aws_sts_without_account_id() -> None:
     }
 
 
+def test_parse_validated_detail_rejects_unlabeled_embedded_validated_fragments() -> None:
+    proof = parse_validated_detail(
+        "UNVERIFIED:aws_sts_get_caller_identity:provider returned 200; "
+        "VALIDATED:aws_sts_get_caller_identity:AccountId=742931608514 UserId=AIDAEXAMPLE"
+    )
+
+    assert proof == {
+        "validation_status": "",
+        "validation_method": "",
+        "validation_proof": "",
+    }
+
+
+def test_parse_validated_detail_preserves_labelled_embedded_validation_field() -> None:
+    proof = parse_validated_detail(
+        "key=AKIA...MPLE; "
+        "validation=VALIDATED:aws_sts_get_caller_identity:AccountId=742931608514"
+    )
+
+    assert proof == {
+        "validation_status": "VALIDATED",
+        "validation_method": "aws_sts_get_caller_identity",
+        "validation_proof": "AccountId=742931608514",
+    }
+
+
 @pytest.mark.parametrize(
     ("detail", "method"),
     [
@@ -359,6 +385,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "vercel_user_get",
         ),
         (
+            "VALIDATED:vercel_user_get:Vercel user ok: "
+            "user_id=usr_testuser123 user_profile_present=true",
+            "vercel_user_get",
+        ),
+        (
             "VALIDATED:netlify_current_user:Netlify user ok: user_id=netlify-user-123",
             "netlify_current_user",
         ),
@@ -390,6 +421,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         (
             "VALIDATED:posthog_users_me:PostHog users me ok: host=eu.posthog.com "
             "user_id=changeme-user-123 user_profile_present=true",
+            "posthog_users_me",
+        ),
+        (
+            "VALIDATED:posthog_users_me:PostHog users me ok: host=eu.posthog.com "
+            "user_id=ph_testuser123 user_profile_present=true",
             "posthog_users_me",
         ),
         (

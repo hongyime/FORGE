@@ -11,7 +11,8 @@ from forge.utils.validation_identifiers import (
 )
 
 _VALIDATED_DETAIL_RE = re.compile(
-    r"(?:^|[;\s])(?:validation=)?VALIDATED:([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?",
+    r"(?:^VALIDATED:([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?"
+    r"|(?:^|;\s*)validation=VALIDATED:([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?)",
     re.IGNORECASE,
 )
 _AWS_ACCOUNT_ID_RE = re.compile(
@@ -872,8 +873,8 @@ def parse_validated_detail(value: object, *, proof_limit: int = 280) -> dict[str
     if not match:
         return _empty_proof()
 
-    method = str(match.group(1) or "").strip()
-    proof = str(match.group(2) or "").strip()[:proof_limit]
+    method = str(match.group(1) or match.group(3) or "").strip()
+    proof = str(match.group(2) or match.group(4) or "").strip()[:proof_limit]
     if not _validated_proof_is_reportable(method, proof):
         return {
             "validation_status": "UNVERIFIED",
