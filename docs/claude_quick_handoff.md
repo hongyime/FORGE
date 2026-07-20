@@ -101,6 +101,10 @@ delegation, continue locally against the locked goal and record the limitation.
   now promotes valid `ws://` and `wss://` relay endpoint hosts into recursive
   subdomain/root-domain seeds while excluding generic JSON lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-nostr-relay-host-recursion.md`.
+- [x] Nostr relay key-map recursion completed: source-aware
+  `.well-known/nostr.json` now also promotes relay endpoint URLs used as map
+  keys into recursive subdomain/root-domain seeds. Handoff:
+  `.claude/handoffs/2026-07-20-nostr-relay-key-map-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing

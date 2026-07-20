@@ -81,6 +81,24 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Nostr relay key-map host recursion checkpoint:
+  source-aware `.well-known/nostr.json` relay parsing now also promotes relay
+  endpoint URLs used as map keys, such as
+  `wss://relay-key.acme.example` and
+  `ws://relay-lab.acme.example:80/socket`, into recursive
+  subdomain/root-domain seeds through the existing host-seed persistence path.
+  Verification: TDD focused regression failed before implementation on missing
+  relay-key host promotion, then passed (`2 passed` for the focused Nostr
+  metadata file); compile for touched helper/test files; Ruff for touched files
+  (`All checks passed!`); Nostr plus ATProto/DID/identity/service metadata
+  slice (`8 passed`); adjacent Nostr/ATProto/DID/provenance/public-metadata
+  helper slice (`17 passed`); slow remote well-known metadata fixture with
+  `-m slow` (`1 passed`); cleanup check found no new persistent pytest DBs.
+  Safety: passive static Nostr metadata parsing only; no relay connection,
+  Nostr lookup, provider call, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, report-gate change, severity change, or
+  deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-nostr-relay-key-map-recursion.md`.
 - [x] Nostr relay host recursion checkpoint:
   source-aware `.well-known/nostr.json` parsing now promotes valid `ws://` and
   `wss://` relay endpoint hosts such as `wss://relay.acme.example` and

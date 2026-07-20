@@ -35,6 +35,8 @@ def _relay_values(value: object, *, under_relay_key: bool = False) -> list[str]:
         values = []
         for key, item in value.items():
             relay_key = under_relay_key or "relay" in str(key or "").lower()
+            if under_relay_key:
+                values.append(str(key or ""))
             values.extend(_relay_values(item, under_relay_key=relay_key))
         return values
     return []
