@@ -460,6 +460,17 @@ def _artifact_url_looks_templated(value: object) -> bool:
     )
 
 
+def _artifact_url_looks_standards_namespace(value: object) -> bool:
+    parsed = urlparse(str(value or "").strip())
+    host = str(parsed.hostname or "").strip().lower().rstrip(".")
+    path = unquote(str(parsed.path or "")).lower()
+    return (
+        (host == "docs.oasis-open.org" and path.startswith("/ns/"))
+        or (host == "www.w3.org" and path.startswith("/ns/"))
+        or (host == "w3.org" and path.startswith("/ns/"))
+    )
+
+
 def _normalize_artifact_network_dsn_token(value: str) -> str:
     candidate = str(value or "").strip().replace("\\/", "/")
     if not candidate:
@@ -21329,7 +21340,7 @@ class ArtifactQueueProcessor:
         *,
         relation_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
-        if _artifact_url_looks_templated(url):
+        if _artifact_url_looks_templated(url) or _artifact_url_looks_standards_namespace(url):
             return None
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:

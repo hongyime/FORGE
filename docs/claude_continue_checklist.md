@@ -53,6 +53,23 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Standards namespace artifact URL suppression checkpoint completed:
+  artifact URL seed persistence now rejects known standards namespace URLs from
+  OASIS/W3C `ns` paths, preventing metadata schema references such as
+  `http://docs.oasis-open.org/ns/xri/xrd-1.0` and
+  `https://www.w3.org/ns/did/v1` from becoming recursive URL/subdomain/domain
+  seeds. Target-owned service URLs discovered in the same metadata still recurse
+  normally. Verification: TDD focused regression failed before implementation
+  because the OASIS namespace URL inserted three seeds, then passed ->
+  `1 passed`; compile for touched orchestrator/provenance test files; Ruff for
+  touched files -> `All checks passed!`; artifact provenance file -> `4 passed`;
+  adjacent provenance/Matrix/public-metadata/helper slice -> `16 passed`; slow
+  remote well-known metadata fixture with `-m slow` -> `1 passed`; cleanup check
+  found no new persistent pytest DBs. Safety: persistence-gate hardening only;
+  no URL fetching, provider call, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, report-gate change, severity
+  change, or deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-standards-namespace-url-suppression.md`.
 - [x] Templated artifact URL persistence hardening checkpoint completed:
   artifact URL seed persistence now rejects raw or URL-decoded template markers,
   preventing malformed host-meta/WebFinger template fragments such as

@@ -149,6 +149,39 @@ def test_artifact_url_seed_persistence_rejects_templated_urls(tmp_path: Path) ->
         con.close()
 
 
+def test_artifact_url_seed_persistence_rejects_standards_namespace_urls(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap(db_path)
+    processor = ArtifactQueueProcessor(db_path, 1001)
+
+    con = sqlite3.connect(db_path)
+    try:
+        for url in (
+            "http://docs.oasis-open.org/ns/xri/xrd-1.0",
+            "https://www.w3.org/ns/did/v1",
+        ):
+            assert (
+                processor._store_artifact_url_seed(
+                    con,
+                    url,
+                    source="artifact",
+                    confidence=0.68,
+                    relation_metadata={"source_artifact": "well-known-metadata"},
+                )
+                == 0
+            )
+        rows = con.execute(
+            """
+            SELECT seed_value, seed_type
+            FROM engagement_seeds
+            WHERE engagement_id=1001
+            """
+        ).fetchall()
+        assert rows == []
+    finally:
+        con.close()
+
+
 def test_provider_origin_artifact_static_extraction_preserves_provenance_for_graph_and_report(
     tmp_path: Path,
 ) -> None:

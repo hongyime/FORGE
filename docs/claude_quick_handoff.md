@@ -83,6 +83,11 @@ delegation, continue locally against the locked goal and record the limitation.
   malformed host-meta/WebFinger fragments like `resource=%7Buri` from becoming
   recursive URL or related-host seeds. Handoff:
   `.claude/handoffs/2026-07-20-templated-url-seed-hardening.md`.
+- [x] Standards namespace artifact URL suppression completed: artifact URL seed
+  persistence now rejects known OASIS/W3C `ns` namespace references such as
+  `docs.oasis-open.org/ns/xri` and `www.w3.org/ns/did`, preventing standards
+  schema docs from becoming recursive attack-surface seeds. Handoff:
+  `.claude/handoffs/2026-07-20-standards-namespace-url-suppression.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing
