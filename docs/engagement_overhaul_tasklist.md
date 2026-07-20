@@ -66,6 +66,21 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] OIDC claim contact and userinfo recursion checkpoint: Epieos/userinfo-style
+  `claims.email`, `claims.phone_number`, `userinfo.email`,
+  `userinfo.phone_number`, `userinfo.profile`, and `userinfo.website` now stay
+  on the existing provider row as recursive contact/URL evidence instead of
+  being dropped or becoming a fake `userinfo` platform row. Token/scalar claims
+  such as `access_token` and `sub` remain suppressed. Verification: compile/Ruff
+  for touched social parser/tests, full Phase 2 social scraper suite (`79
+  passed`), Phase 1 social-profile recursion selector (`80 passed, 679
+  deselected`), and cleanup check found no new pytest engagement DBs. Review:
+  explorer `Kierkegaard` identified the `userinfo` gap. Safety: passive
+  parser-only identity enrichment; no provider calls, userinfo/JWKS fetches,
+  token validation, live probing, scope relaxation, generic claim flattening,
+  proxy/IP rotation, rate-limit bypass, validation/report-gate change, or
+  persistent non-test engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-oidc-userinfo-claim-contact-recursion.md`.
 - [x] OIDC claim URL recursion checkpoint: Epieos/userinfo-style nested
   `claims.profile` and `claims.website` values now stay on the existing provider
   row as recursive URL evidence instead of being dropped. The parser does not

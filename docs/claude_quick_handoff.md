@@ -2,7 +2,13 @@
 
 Last updated: 2026-07-20
 
-Use this file first. Fast goal entry point: `END_GOAL.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. Use `docs/claude_continue_checklist.md` next if you need the longer command list.
+Use this file first for short resume context, then verify current continuation
+order in `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`;
+that section wins if task/status details differ. Fast goal entry point:
+`END_GOAL.md`; compact workflow contract:
+`docs/deterministic_engagement_contract.md`; normative end goal:
+`docs/end_goal.md`; acceptance criteria:
+`docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`.
 
 ## End Goal To Preserve
 
@@ -24,12 +30,32 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
+- [x] OIDC claim contact/userinfo target completed: `claims.email`, `claims.phone_number`, `userinfo.email`, `userinfo.phone_number`, `userinfo.profile`, and `userinfo.website` now stay on the enclosing provider row as recursive evidence; scalar/token claims stay suppressed. Handoff: `.claude/handoffs/2026-07-20-oidc-userinfo-claim-contact-recursion.md`.
 - [x] OIDC claim URL recursion target completed: Epieos/userinfo-style `claims.profile` and `claims.website` now stay on the existing provider row as recursive URL evidence; scalar/token claims stay suppressed. Handoff: `.claude/handoffs/2026-07-20-oidc-claim-url-recursion.md`.
 - [x] Nested StackExchange user-profile target completed: provider-scoped Epieos StackExchange/StackOverflow `user` payloads now become safe public profile pivots when they include numeric `user_id`, normalized handle, and accepted/no site hint. Bad site hints are rejected. Handoff: `.claude/handoffs/2026-07-20-stackexchange-nested-user-profile.md`.
 - [ ] Immediate next code target: audit another concrete identity-provider payload shape or passive artifact/parser source shape before writing code. If no missing recursive pivot is found, switch to release-level mocked E2E/report-fallback tests or safe mega-test/module splits.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] OIDC claim contact and userinfo recursion checkpoint is green:
+  Epieos/userinfo-style `claims.email`, `claims.phone_number`,
+  `userinfo.email`, `userinfo.phone_number`, `userinfo.profile`, and
+  `userinfo.website` now stay on the existing provider row as recursive
+  contact/URL evidence instead of being dropped or becoming a fake `userinfo`
+  platform row. Token/scalar claims such as `access_token` and `sub` remain
+  suppressed.
+  Verification: compile/Ruff for touched social parser/tests; full Phase 2
+  social scraper suite -> `79 passed`; Phase 1 social-profile recursion selector
+  -> `80 passed, 679 deselected`; cleanup check found no new pytest engagement
+  DBs.
+  Review: explorer `Kierkegaard` identified the `userinfo` gap.
+  Safety: passive parser-only identity enrichment. No provider calls,
+  userinfo/JWKS fetches, token validation, live probing, scope relaxation,
+  generic claim flattening, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, or persistent non-test engagement DB mutation
+  changed.
+  Handoff: `.claude/handoffs/2026-07-20-oidc-userinfo-claim-contact-recursion.md`.
 
 - [x] OIDC claim URL recursion checkpoint is green:
   Epieos/userinfo-style nested `claims.profile` and `claims.website` values now
@@ -2336,6 +2362,10 @@ without creating competing source-of-truth docs.
 - [x] Shared cloud-exposure gate and validation sanitizer are in place: Phase 4 graph and Phase 6 report paths use one deterministic cloud-exposure helper, and validation notes/evidence summaries use one stronger sanitizer for credential assignments, presigned URL params, cookies, authorization headers, JWTs, AWS key IDs, and long token-shaped strings. Verification: compile/Ruff and helper/graph/report suites (`192 passed`).
 
 ## Still partial
+
+Status semantics: these unchecked items are candidate/risk notes, not the
+canonical active queue. Use `docs/engagement_overhaul_tasklist.md` ->
+`## Compact active backlog` for current continuation order.
 
 - [ ] Provider coverage is still selective rather than exhaustive. The strongest deterministic coverage is Firebase, Supabase, S3/GCS/Azure/DO, Google/Gemini API keys, Hugging Face, Discord bot tokens, Telegram bot tokens, Notion tokens, Datadog API keys, GitHub, GitLab, Mailchimp, Stripe, SendGrid, Slack, Azure Storage connection strings, and co-located Twilio/AWS key-pair validation.
 - [ ] The engagement detail UI is sectioned, not literally tabbed. Treat that as a polish decision unless product now requires strict tabs.

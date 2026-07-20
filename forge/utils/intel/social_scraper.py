@@ -366,6 +366,16 @@ _EPIEOS_ROOT_PROFILE_CONTAINER_KEYS = (
     *_EPIEOS_ACCOUNT_CONTAINER_KEYS,
 )
 
+_EPIEOS_IDENTITY_CLAIM_CONTAINER_KEYS = (
+    "claims",
+    "userinfo",
+    "userInfo",
+    "user_info",
+)
+_EPIEOS_IDENTITY_CLAIM_CONTAINER_KEY_SET = {
+    key.lower() for key in _EPIEOS_IDENTITY_CLAIM_CONTAINER_KEYS
+}
+
 _EPIEOS_PLATFORM_FIELD_KEYS = (
     "platform",
     "provider",
@@ -2849,7 +2859,7 @@ def _epieos_profile_entries_from_container(
             entries.append((_epieos_profile_entry_platform(value, fallback_platform), value))
             return entries
         for child_key, child_value in value.items():
-            if str(child_key or "").strip().lower() == "email":
+            if str(child_key or "").strip().lower() == "email" or _epieos_is_identity_claim_container_key(child_key):
                 continue
             child_platform = (
                 fallback_platform
@@ -3013,6 +3023,11 @@ def _parse_epieos_response(payload: dict) -> list[dict]:
         if emails:
             row["emails"] = [{"value": email} for email in emails]
             row["email"] = emails[0]
+        claim_emails = _epieos_identity_claim_email_values(data)
+        if claim_emails:
+            emails = list(dict.fromkeys([*emails, *claim_emails]))
+            row["emails"] = [{"value": email} for email in emails]
+            row["email"] = emails[0]
 
         phone_numbers = _epieos_phone_list(
             data,
@@ -3055,6 +3070,11 @@ def _parse_epieos_response(payload: dict) -> list[dict]:
             extra_values=[data.get(key) for key in _EPIEOS_PHONE_FIELD_KEYS],
         )
         if phone_numbers:
+            row["phone_numbers"] = [{"value": phone} for phone in phone_numbers]
+            row["phone"] = phone_numbers[0]
+        claim_phone_numbers = _epieos_identity_claim_phone_values(data)
+        if claim_phone_numbers:
+            phone_numbers = list(dict.fromkeys([*phone_numbers, *claim_phone_numbers]))
             row["phone_numbers"] = [{"value": phone} for phone in phone_numbers]
             row["phone"] = phone_numbers[0]
 
@@ -3197,7 +3217,7 @@ def _parse_epieos_response(payload: dict) -> list[dict]:
                 ],
             )
         )
-        discovered_urls.extend(_epieos_claim_url_values(data.get("claims"), discovered_url_nested_keys))
+        discovered_urls.extend(_epieos_identity_claim_url_values(data, discovered_url_nested_keys))
         for key in _EPIEOS_PROFILE_URL_ALIAS_KEYS:
             discovered_urls.extend(_epieos_profile_alias_candidate_urls(data.get(key)))
         discovered_urls = list(dict.fromkeys(discovered_urls))
@@ -5282,6 +5302,41 @@ def _epieos_string_list(
     return values
 
 
+def _epieos_is_identity_claim_container_key(value: Any) -> bool:
+    normalized = str(value or "").strip().lower()
+    return normalized in _EPIEOS_IDENTITY_CLAIM_CONTAINER_KEY_SET
+
+
+def _epieos_identity_claim_containers(data: dict[str, Any]) -> list[dict[str, Any]]:
+    containers: list[dict[str, Any]] = []
+    for key in _EPIEOS_IDENTITY_CLAIM_CONTAINER_KEYS:
+        value = data.get(key)
+        if isinstance(value, dict):
+            containers.append(value)
+    return containers
+
+
+def _epieos_identity_claim_email_values(data: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for claims in _epieos_identity_claim_containers(data):
+        values.extend(_epieos_claim_email_values(claims))
+    return list(dict.fromkeys(values))
+
+
+def _epieos_identity_claim_phone_values(data: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for claims in _epieos_identity_claim_containers(data):
+        values.extend(_epieos_claim_phone_values(claims))
+    return list(dict.fromkeys(values))
+
+
+def _epieos_identity_claim_url_values(data: dict[str, Any], nested_keys: tuple[str, ...]) -> list[str]:
+    values: list[str] = []
+    for claims in _epieos_identity_claim_containers(data):
+        values.extend(_epieos_claim_url_values(claims, nested_keys))
+    return list(dict.fromkeys(values))
+
+
 def _epieos_claim_url_values(value: Any, nested_keys: tuple[str, ...]) -> list[str]:
     if not isinstance(value, dict):
         return []
@@ -5305,6 +5360,26 @@ def _epieos_claim_url_values(value: Any, nested_keys: tuple[str, ...]) -> list[s
         "blog_url",
         "blogUrl",
         nested_keys=nested_keys,
+    )
+
+
+def _epieos_claim_email_values(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    return _epieos_email_list(
+        value,
+        *_EPIEOS_EMAIL_FIELD_KEYS,
+        nested_keys=("value", *_EPIEOS_EMAIL_FIELD_KEYS),
+    )
+
+
+def _epieos_claim_phone_values(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    return _epieos_phone_list(
+        value,
+        *_EPIEOS_PHONE_FIELD_KEYS,
+        nested_keys=("value", *_EPIEOS_PHONE_FIELD_KEYS),
     )
 
 

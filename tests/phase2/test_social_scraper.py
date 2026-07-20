@@ -586,7 +586,7 @@ class TestParseEpieosResponse:
         assert rows["github"]["external_url"] == "https://ops.acme.example"
         assert "result" not in rows
 
-    def test_preserves_oidc_claim_urls_for_recursive_synthesis(self):
+    def test_preserves_oidc_claim_contact_and_urls_for_recursive_synthesis(self):
         results = _parse_epieos_response(
             {
                 "email": "alice@example.com",
@@ -594,6 +594,8 @@ class TestParseEpieosResponse:
                     "profile_url": "https://accounts.google.com/1234567890",
                     "name": "Alice Example",
                     "claims": {
+                        "email": "claim.ops@acme.example",
+                        "phone_number": "+1 (555) 101-0001",
                         "profile": "https://github.com/idpclaimops",
                         "website": "https://alice.example/",
                         "picture": "https://lh3.googleusercontent.com/photo.jpg",
@@ -608,12 +610,61 @@ class TestParseEpieosResponse:
 
         assert set(rows) == {"google"}
         assert rows["google"]["profile_url"] == "https://accounts.google.com/1234567890"
+        assert rows["google"]["email"] == "claim.ops@acme.example"
+        assert rows["google"]["emails"] == [{"value": "claim.ops@acme.example"}]
+        assert rows["google"]["phone"] == "+15551010001"
+        assert rows["google"]["phone_numbers"] == [{"value": "+15551010001"}]
         assert rows["google"]["external_url"] == "https://github.com/idpclaimops"
         assert rows["google"]["urls"] == [
             {"value": "https://github.com/idpclaimops"},
             {"value": "https://alice.example/"},
         ]
         assert "claim-token-do-not-store" not in json.dumps(rows["google"])
+
+    def test_preserves_oidc_userinfo_contact_and_urls_without_userinfo_profile_row(self):
+        results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "google": {
+                    "profile_url": "https://accounts.google.com/1234567890",
+                    "name": "Alice Example",
+                    "userinfo": {
+                        "email": "userinfo.ops@acme.example",
+                        "phone_number": "+1 (555) 202-0002",
+                        "profile": "https://github.com/userinfoclaimops",
+                        "website": "https://userinfo.example/",
+                        "access_token": "userinfo-token-do-not-store",
+                    },
+                },
+            }
+        )
+        reserved_results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "google": {
+                    "userinfo": {
+                        "profile": "https://github.com/not-a-google-profile",
+                        "email": "dropped.userinfo@acme.example",
+                    },
+                },
+            }
+        )
+
+        rows = {row["platform"]: row for row in results}
+
+        assert set(rows) == {"google"}
+        assert rows["google"]["profile_url"] == "https://accounts.google.com/1234567890"
+        assert rows["google"]["email"] == "userinfo.ops@acme.example"
+        assert rows["google"]["emails"] == [{"value": "userinfo.ops@acme.example"}]
+        assert rows["google"]["phone"] == "+15552020002"
+        assert rows["google"]["phone_numbers"] == [{"value": "+15552020002"}]
+        assert rows["google"]["external_url"] == "https://github.com/userinfoclaimops"
+        assert rows["google"]["urls"] == [
+            {"value": "https://github.com/userinfoclaimops"},
+            {"value": "https://userinfo.example/"},
+        ]
+        assert "userinfo-token-do-not-store" not in json.dumps(rows["google"])
+        assert reserved_results == []
 
     def test_platform_envelope_lists_preserve_provider_context(self):
         results = _parse_epieos_response(
