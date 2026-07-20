@@ -6,7 +6,7 @@ from forge.engagement_orchestrator import ArtifactQueueProcessor
 from forge.utils.artifact_helm_index import helm_index_chart_package_urls
 
 
-def test_helm_index_resolves_relative_chart_archives_only() -> None:
+def test_helm_index_resolves_safe_chart_archives() -> None:
     payload = dedent(
         """
         apiVersion: v1
@@ -17,6 +17,11 @@ def test_helm_index_resolves_relative_chart_archives_only() -> None:
                 - charts/api-1.2.3.tgz
                 - ../archive/api-1.2.3.tar.gz
                 - https://cdn.acme.example/api-1.2.3.tgz
+                - https://cdn.acme.example/api-1.2.3.txt
+                - https://user:pass@cdn.acme.example/secret-1.2.3.tgz
+                - http://127.0.0.1/private-1.2.3.tgz
+                - //cdn.acme.example/protocol-relative-1.2.3.tgz
+                - oci://registry.acme.example/charts/api:1.2.3
                 - charts/${TENANT}.tgz
                 - charts/readme.txt
         """
@@ -29,6 +34,7 @@ def test_helm_index_resolves_relative_chart_archives_only() -> None:
     ) == [
         "https://charts.acme.example/charts/api-1.2.3.tgz",
         "https://charts.acme.example/archive/api-1.2.3.tar.gz",
+        "https://cdn.acme.example/api-1.2.3.tgz",
     ]
 
 
@@ -74,6 +80,7 @@ entries:
   api:
     - urls:
         - charts/api-1.2.3.tgz
+        - https://cdn.acme.example/api-1.2.3.tgz
         - charts/${TENANT}.tgz
 """
 
@@ -81,7 +88,10 @@ entries:
         "helm_index",
         text=payload,
         source_file="https://charts.acme.example/index.yaml",
-    ) == ["https://charts.acme.example/charts/api-1.2.3.tgz"]
+    ) == [
+        "https://charts.acme.example/charts/api-1.2.3.tgz",
+        "https://cdn.acme.example/api-1.2.3.tgz",
+    ]
 
 
 def test_generic_url_discovery_includes_helm_index_chart_urls(tmp_path) -> None:
@@ -92,6 +102,7 @@ entries:
   api:
     - urls:
         - charts/api-1.2.3.tgz
+        - https://cdn.acme.example/api-1.2.3.tgz
 """
 
     batch = processor._collect_generic_text_discovery_family(
@@ -100,4 +111,7 @@ entries:
         source_file="https://charts.acme.example/index.yaml",
     )
 
-    assert batch.urls == ["https://charts.acme.example/charts/api-1.2.3.tgz"]
+    assert batch.urls == [
+        "https://cdn.acme.example/api-1.2.3.tgz",
+        "https://charts.acme.example/charts/api-1.2.3.tgz",
+    ]

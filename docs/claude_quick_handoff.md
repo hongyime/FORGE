@@ -27,6 +27,13 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Helm index absolute chart URL recursion checkpoint is green:
+  Helm `index.yaml` parsing now preserves safe absolute HTTP(S) chart archive URLs in `entries[].urls[]` in addition to relative chart paths, so authorized chart indexes that point at CDN/object-storage `.tgz` / `.tar.gz` packages feed recursive artifact URL pivots instead of being silently dropped. Unsafe values remain suppressed: protocol-relative URLs, non-HTTP(S) schemes, non-chart suffixes, templated strings, userinfo-bearing URLs, localhost, and private/reserved IP hosts.
+  Verification: compile/Ruff for touched Helm parser/tests; focused Helm index suite -> `4 passed`; adjacent artifact helper/API-client/HTTP/package-manager/Helm suite -> `64 passed`; cleanup check found no new pytest engagement DBs.
+  Review: subagent `Singer` identified the missed absolute chart URL gap.
+  Safety: passive static Helm index parsing only. No Helm execution, chart download, provider call, live probing expansion, credential use, scope relaxation, rate-limit bypass, proxy/IP rotation, validation/report-gate change, or persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-helm-index-absolute-chart-urls.md`.
+
 - [x] Remote mobile-bundle regression modularization checkpoint is green:
   XAPK, APKM, and APKS seed-URL dry-run kill-chain regressions now share a compact focused helper in `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 430 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only kill-chain coverage for queued remote mobile bundles, nested APK static extraction, Firebase/Supabase cloud asset recursion, derived seed relations, and recursive email/URL seed creation.
   Verification: compile/Ruff for touched Phase 1 files; remote mobile-bundle wrapper set -> `3 passed`; cleanup check found no new pytest engagement DBs.

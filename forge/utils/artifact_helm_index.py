@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -47,7 +48,7 @@ def helm_index_chart_package_urls(
             if not isinstance(raw_urls, list):
                 continue
             for raw_value in raw_urls[:32]:
-                resolved = _helm_index_relative_chart_url(raw_value, base_url=base_url)
+                resolved = _helm_index_chart_url(raw_value, base_url=base_url)
                 if not resolved or resolved in seen:
                     continue
                 seen.add(resolved)
@@ -78,22 +79,49 @@ def _document_looks_like_helm_index(value: Any) -> bool:
     return bool(api_version and isinstance(value.get("entries"), dict))
 
 
-def _helm_index_relative_chart_url(value: Any, *, base_url: str) -> str:
+def _helm_index_chart_url(value: Any, *, base_url: str) -> str:
     candidate = str(value or "").strip().strip("\"'")
     if not candidate or _looks_templated(candidate):
         return ""
     parsed_candidate = urlparse(candidate)
-    if parsed_candidate.scheme or parsed_candidate.netloc or candidate.startswith("//"):
+    if candidate.startswith("//"):
         return ""
-    if not candidate.lower().split("?", 1)[0].endswith(_HELM_CHART_ARCHIVE_SUFFIXES):
+    if not parsed_candidate.path.lower().endswith(_HELM_CHART_ARCHIVE_SUFFIXES):
         return ""
-    resolved = urljoin(base_url, candidate)
+    if parsed_candidate.scheme or parsed_candidate.netloc:
+        if parsed_candidate.scheme not in {"http", "https"} or not parsed_candidate.netloc:
+            return ""
+        resolved = candidate
+    else:
+        resolved = urljoin(base_url, candidate)
     parsed_resolved = urlparse(resolved)
     if parsed_resolved.scheme not in {"http", "https"} or not parsed_resolved.netloc:
         return ""
     if parsed_resolved.username or parsed_resolved.password:
         return ""
+    if not _helm_index_chart_host_is_safe(parsed_resolved.hostname):
+        return ""
     return resolved
+
+
+def _helm_index_chart_host_is_safe(value: str | None) -> bool:
+    host = str(value or "").strip().lower().rstrip(".")
+    if not host or host in {"localhost", "localhost.localdomain"}:
+        return False
+    if host.endswith((".localhost", ".local")):
+        return False
+    try:
+        parsed_ip = ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return True
+    return not (
+        parsed_ip.is_loopback
+        or parsed_ip.is_private
+        or parsed_ip.is_link_local
+        or parsed_ip.is_multicast
+        or parsed_ip.is_reserved
+        or parsed_ip.is_unspecified
+    )
 
 
 def _looks_templated(value: str) -> bool:
