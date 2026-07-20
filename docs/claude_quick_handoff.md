@@ -73,6 +73,11 @@ delegation, continue locally against the locked goal and record the limitation.
   seeds when the artifact source URL is HTTP(S), while generic `notes.txt`
   Markdown remains excluded. Handoff:
   `.claude/handoffs/2026-07-20-public-metadata-links-recursion.md`.
+- [x] Matrix server delegated-host recursion completed: source-aware
+  `.well-known/matrix/server` metadata now promotes valid `m.server`
+  homeserver delegation values into recursive subdomain/root-domain seeds while
+  excluding generic JSON lookalikes. Handoff:
+  `.claude/handoffs/2026-07-20-matrix-server-host-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing

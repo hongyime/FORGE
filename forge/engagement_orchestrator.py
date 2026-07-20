@@ -115,6 +115,7 @@ from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
     lambda_config_candidates,
 )
+from forge.utils.artifact_matrix_metadata import matrix_server_delegated_hosts
 from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_artifact_label,
     amplify_client_config_candidates,
@@ -20402,6 +20403,9 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) == "mta-sts.txt":
                 for mx_host in mta_sts_mx_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(mx_host))
+            if _artifact_format_label(source_file) == "matrix-server":
+                for matrix_host in matrix_server_delegated_hosts(text):
+                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(matrix_host))
             for host_value, host_seed_type in host_candidates:
                 seed = (host_value, host_seed_type)
                 if seed in seen_host_seeds:

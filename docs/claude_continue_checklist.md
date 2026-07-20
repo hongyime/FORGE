@@ -53,6 +53,24 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Matrix server delegated-host recursive-pivot checkpoint completed:
+  source-aware `.well-known/matrix/server` / `matrix-server` parsing now
+  promotes valid `m.server` homeserver delegation values such as
+  `matrix-delegate.acme.example:8448` into recursive subdomain/root-domain seeds
+  through the existing host-seed persistence path. Generic JSON files with the
+  same `m.server` shape remain excluded from this source-gated parser.
+  Verification: TDD focused regression failed before implementation on missing
+  Matrix delegated host promotion, then passed -> `1 passed`; compile for
+  touched orchestrator/helper/test files; Ruff for touched files ->
+  `All checks passed!`; Matrix metadata file -> `3 passed`; adjacent
+  Matrix/public-metadata/helper slice -> `13 passed`; slow remote well-known
+  metadata fixture with `-m slow` -> `1 passed`; cleanup check found no new
+  persistent pytest DBs. Safety: passive static Matrix metadata parsing only; no
+  Matrix federation lookup, DNS/SRV lookup, homeserver probing, provider call,
+  live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, report-gate change, severity change, or deterministic finding
+  creation. Handoff:
+  `.claude/handoffs/2026-07-20-matrix-server-host-recursion.md`.
 - [x] Public metadata document-link recursive-pivot checkpoint completed:
   source-aware parsing for `llms.txt`, `ai.txt`, `humans.txt`, `security.txt`,
   and `trust.txt` now promotes Markdown links and simple metadata field links
