@@ -27676,7 +27676,7 @@ def test_artifact_queue_processor_strips_package_index_url_credentials(
             ).fetchall()
         }
         assert artifact_meta[pip_conf_path.resolve().as_posix()]["format"] == "pip-config"
-        assert artifact_meta[condarc_path.resolve().as_posix()]["format"] == "condarc"
+        assert artifact_meta[condarc_path.resolve().as_posix()]["format"] == "conda-config"
         assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
 
         db_dump = "\n".join(con.iterdump())

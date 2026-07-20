@@ -24,6 +24,10 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
     ("value", "label"),
     [
         (".npmrc", "npmrc"),
+        (".condarc", "conda-config"),
+        ("condarc", "conda-config"),
+        ("home/operator/.mambarc", "mamba-config"),
+        ("mambarc", "mamba-config"),
         ("home/operator/.pnpmrc", "pnpmrc"),
         ("project/.yarnrc", "yarnrc"),
         ("dist/.pypirc", "pypirc"),
@@ -40,6 +44,8 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
         ("cargo/credentials.toml", "cargo-credentials"),
         ("download.config.toml.cargo-config", "cargo-config"),
         ("download.credentials.cargo-credentials", "cargo-credentials"),
+        ("download.condarc.conda-config", "conda-config"),
+        ("download.mambarc.mamba-config", "mamba-config"),
         ("download.nuget.config.nuget-config", "nuget-config"),
     ],
 )
@@ -60,6 +66,8 @@ def test_package_manager_config_artifact_label_recognizes_source_paths(
         "cargo-notes/credentials",
         ".cargo-notes/config.toml",
         "credentials.toml",
+        "mycondarc",
+        "mamba-notes",
     ],
 )
 def test_package_manager_config_artifact_label_avoids_generic_configs(value: str) -> None:
@@ -68,6 +76,8 @@ def test_package_manager_config_artifact_label_avoids_generic_configs(value: str
 
 def test_package_manager_config_routes_remote_sources_without_generic_names() -> None:
     assert _classify_remote_artifact_url("https://downloads.acme.example/.npmrc") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/.condarc") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/mambarc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.nuget/NuGet.Config") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.cargo/credentials") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.cargo/config.toml") == "config"
@@ -86,8 +96,12 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
         "https://downloads.acme.example/.cargo/config.toml",
         "config",
     ) == "config.toml.cargo-config"
+    assert package_manager_config_remote_filename(".condarc") == ".condarc"
+    assert package_manager_config_remote_filename("mambarc") == "mambarc"
     assert package_manager_config_remote_filename(".nuget/NuGet.Config") == "NuGet.Config"
     assert package_manager_config_remote_filename(".cargo/credentials") == "credentials.cargo-credentials"
+    assert _artifact_format_label(".condarc") == "conda-config"
+    assert _artifact_format_label("mambarc") == "mamba-config"
     assert _artifact_format_label("NuGet.Config") == "nuget-config"
     assert _artifact_format_label("credentials.cargo-credentials") == "cargo-credentials"
     assert _artifact_format_label("config.toml.cargo-config") == "cargo-config"
@@ -138,6 +152,28 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         ).strip(),
         encoding="utf-8",
     )
+    conda_config_path = artifact_root / ".condarc"
+    conda_config_path.write_text(
+        dedent(
+            """
+            channels:
+              - https://conda-user:conda-label-token-do-not-store@conda-labels.acme.example/pkgs/main
+            owner: conda-label-owner@acme.example
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+    mamba_config_path = artifact_root / "mambarc"
+    mamba_config_path.write_text(
+        dedent(
+            """
+            channels:
+              - https://mamba-user:mamba-label-token-do-not-store@mamba-labels.acme.example/conda
+            owner: mamba-label-owner@acme.example
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
     generic_credentials_path = artifact_root / "credentials"
     generic_credentials_path.write_text("owner = generic-creds-owner@acme.example", encoding="utf-8")
     generic_config_path = artifact_root / "config.toml"
@@ -168,8 +204,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 6
-    assert summary.processed >= 6
+    assert queued >= 8
+    assert summary.processed >= 8
 
     con = sqlite3.connect(db_path)
     try:
@@ -186,6 +222,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert artifact_meta[pip_conf_path.resolve().as_posix()]["format"] == "pip-config"
         assert artifact_meta[cargo_config_path.resolve().as_posix()]["format"] == "cargo-config"
         assert artifact_meta[cargo_credentials_path.resolve().as_posix()]["format"] == "cargo-credentials"
+        assert artifact_meta[conda_config_path.resolve().as_posix()]["format"] == "conda-config"
+        assert artifact_meta[mamba_config_path.resolve().as_posix()]["format"] == "mamba-config"
         assert artifact_meta[nuget_config_path.resolve().as_posix()]["format"] == "nuget-config"
         assert artifact_meta[generic_credentials_path.resolve().as_posix()]["format"] == "credentials"
         assert artifact_meta[generic_config_path.resolve().as_posix()]["format"] == "toml"
@@ -200,6 +238,10 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
                 """
             ).fetchall()
         }
+        assert ("https://conda-labels.acme.example/pkgs/main", "url") in seeds
+        assert ("https://mamba-labels.acme.example/conda", "url") in seeds
+        assert ("conda-label-owner@acme.example", "email") in seeds
+        assert ("mamba-label-owner@acme.example", "email") in seeds
         assert ("https://nuget-labels.acme.example/v3/index.json", "url") in seeds
         assert ("nuget-label-owner@acme.example", "email") in seeds
 
@@ -208,6 +250,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
             "pip-config-token-do-not-store",
             "cargo-config-token-do-not-store",
             "cargo-credentials-token-do-not-store",
+            "conda-label-token-do-not-store",
+            "mamba-label-token-do-not-store",
             "nuget-label-token-do-not-store",
         }:
             assert raw_secret not in persisted_text

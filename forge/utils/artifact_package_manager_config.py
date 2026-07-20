@@ -5,17 +5,23 @@ from urllib.parse import unquote, urlparse
 
 
 _DIRECT_LABELS = {
+    ".condarc": "conda-config",
     ".gemrc": "gemrc",
+    ".mambarc": "mamba-config",
     ".netrc": "netrc",
     ".npmrc": "npmrc",
     ".pnpmrc": "pnpmrc",
     ".pypirc": "pypirc",
     ".yarnrc": "yarnrc",
+    "condarc": "conda-config",
+    "mambarc": "mamba-config",
     "nuget.config": "nuget-config",
 }
 _CACHE_LABEL_SUFFIXES = {
     ".cargo-config": "cargo-config",
+    ".conda-config": "conda-config",
     ".cargo-credentials": "cargo-credentials",
+    ".mamba-config": "mamba-config",
     ".nuget-config": "nuget-config",
     ".pip-config": "pip-config",
 }

@@ -22,6 +22,12 @@ kill-chain path and cleanup behavior with focused local/mocked tests.
 
 ## Current green checkpoint
 
+- [x] Conda/Mamba config passive-recursion checkpoint is green:
+  `.condarc`, `condarc`, `.mambarc`, `mambarc`, and cached remote `*.conda-config` / `*.mamba-config` artifacts now keep source-aware `conda-config` / `mamba-config` formats instead of generic basename labels. Channel URLs and owner emails still recurse into engagement seeds, while embedded channel credentials stay out of persisted DB text.
+  Verification: compile/Ruff for touched helper/orchestrator tests; focused package-manager config suite -> `35 passed`; existing Conda/package-index orchestrator selector -> `2 passed, 758 deselected`.
+  Safety: passive static package-manager config parsing only. No Conda/Mamba execution, package install/restore, channel authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-conda-mamba-config-recursion.md`.
+
 - [x] NuGet config passive-recursion checkpoint is green:
   `nuget.config`, `.nuget/NuGet.Config`, and cached remote `*.nuget-config` artifacts now keep a source-aware `nuget-config` format instead of generic `config`. Package feed URLs and owner emails still recurse into engagement seeds, while cleartext package-source passwords stay out of persisted DB text. Remote `.nuget/NuGet.Config` sources keep the NuGet filename for artifact review.
   Verification: compile/Ruff for touched helper/orchestrator tests; focused package-manager config suite -> `27 passed`; existing engagement-backed package-manager/NuGet selector -> `2 passed, 758 deselected`.
