@@ -2871,7 +2871,7 @@ def _epieos_profile_entries_from_container(
             elif isinstance(child_value, (list, tuple)):
                 entries.extend(
                     _epieos_profile_entries_from_container(
-                        str(child_key),
+                        child_platform,
                         child_value,
                         depth=depth + 1,
                     )
@@ -2918,11 +2918,16 @@ def _parse_epieos_response(payload: dict) -> list[dict]:
     if not isinstance(payload, dict):
         return []
     rows: list[dict] = []
+    seen_profiles: set[tuple[str, str]] = set()
     for platform, data in _epieos_response_profile_entries(payload):
         provider_platform = _first_non_empty_string(data.get("platform"), platform)
         url = _epieos_profile_url(provider_platform, data)
         if not url:
             continue
+        profile_key = (str(platform or "").strip().lower(), str(url or "").strip().lower())
+        if profile_key in seen_profiles:
+            continue
+        seen_profiles.add(profile_key)
         row = {
             "source": "epieos",
             "platform": platform,

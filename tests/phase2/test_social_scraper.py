@@ -586,6 +586,43 @@ class TestParseEpieosResponse:
         assert rows["github"]["external_url"] == "https://ops.acme.example"
         assert "result" not in rows
 
+    def test_platform_envelope_lists_preserve_provider_context(self):
+        results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "github": {
+                    "result": [
+                        {
+                            "profileUrl": "https://github.com/listuser",
+                            "contactEmail": "list@acme.example",
+                        }
+                    ]
+                },
+            }
+        )
+
+        assert [row["platform"] for row in results] == ["github"]
+        assert results[0]["profile_url"] == "https://github.com/listuser"
+        assert results[0]["username"] == "listuser"
+        assert results[0]["email"] == "list@acme.example"
+
+    def test_nested_account_envelopes_do_not_duplicate_profile_rows(self):
+        results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "github": {
+                    "account": {
+                        "username": "acctuser",
+                    }
+                },
+            }
+        )
+
+        assert len(results) == 1
+        assert results[0]["platform"] == "github"
+        assert results[0]["profile_url"] == "https://github.com/acctuser"
+        assert results[0]["username"] == "acctuser"
+
     def test_preserves_richer_identity_fields_for_recursive_synthesis(self):
         results = _parse_epieos_response(_rich_epieos_payload())
         github = next((r for r in results if r["platform"] == "github"), None)

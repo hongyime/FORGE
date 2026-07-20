@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Epieos envelope regression hardening checkpoint is green:
+  List-valued provider envelopes such as `github.result[]` now preserve the outer provider context, and nested account wrappers no longer duplicate identical platform/profile rows.
+  Verification: compile/Ruff for touched parser/test files; targeted envelope regressions -> `3 passed, 73 deselected`; full social scraper suite -> `76 passed`; focused Epieos synthesis slice -> `10 passed, 751 deselected`.
+  Review: sidecar `Lovelace` found both regressions after the prior checkpoint.
+  Safety: passive parser hardening only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-epieos-envelope-regression-hardening.md`.
+
 - [x] Epieos platform-envelope recursion checkpoint is green:
   Platform-scoped Epieos envelopes such as `github.result.profileUrl` now preserve the outer provider context instead of becoming fake `result` platforms or being dropped. Parsed rows retain recursive username, email, URL, subdomain, and root-domain pivots for synthesis, while direct provider/org payloads still reconstruct their existing profile URLs.
   Verification: compile/Ruff for touched parser/test files; full social scraper suite -> `74 passed`; focused Epieos synthesis slice including the new focused Phase 1 file -> `10 passed, 751 deselected`; direct parser probe confirmed the payload parses as a GitHub row with `envelopedops`, `ops@acme.example`, and `https://ops.acme.example`.
