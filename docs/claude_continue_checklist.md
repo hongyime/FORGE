@@ -57,6 +57,27 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] JMAP relative URL-field recursion checkpoint completed:
+  source-aware `.well-known/jmap` parsing now resolves concrete relative JSON
+  `*Url` values such as `apiUrl: "./api"`,
+  `eventSourceUrl: "../events"`, `uploadUrl: "/jmap/upload"`, and nested
+  capability URL fields against the remote artifact `source_url`, feeding
+  recursive URL seeds through the existing artifact URL persistence path.
+  Templated JMAP download URLs such as
+  `/download/{accountId}/{blobId}/{name}` and generic JSON lookalikes remain
+  excluded. Verification: TDD focused regression failed before implementation
+  on missing relative JMAP URL promotion, then passed -> `1 passed`; compile
+  for touched orchestrator/helper/test files; Ruff for touched files ->
+  `All checks passed!`; adjacent
+  JMAP/identity/API/Mercure/ORD/Agent Card/passkey slice -> `9 passed`;
+  adjacent JMAP/classification/format/public-label/helper slice ->
+  `27 passed`; slow remote well-known metadata fixture with `-m slow` ->
+  `1 passed`; cleanup check found no new persistent pytest DBs. Safety:
+  passive static JMAP metadata parsing only; no JMAP session request, mailbox
+  access, upload, download, event subscription, provider call, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  report-gate change, severity change, or deterministic finding creation.
+  Handoff: `.claude/handoffs/2026-07-20-jmap-relative-url-recursion.md`.
 - [x] Mercure relative-field URL recursion checkpoint completed:
   source-aware `.well-known/mercure` parsing now resolves relative line-field
   values such as `hub=/hub`, `subscribe=./subscribe`, and `publish=../publish`

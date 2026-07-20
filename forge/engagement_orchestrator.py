@@ -116,6 +116,7 @@ from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
     lambda_config_candidates,
 )
+from forge.utils.artifact_jmap_metadata import jmap_urls
 from forge.utils.artifact_matrix_metadata import matrix_server_delegated_hosts
 from forge.utils.artifact_mercure_metadata import mercure_urls
 from forge.utils.artifact_nostr_metadata import nostr_relay_hosts
@@ -20459,6 +20460,7 @@ class ArtifactQueueProcessor:
                     "agent_card_metadata",
                     "open_resource_discovery",
                     "mercure_metadata",
+                    "jmap_metadata",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20659,6 +20661,10 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) != "mercure":
                 return []
             return mercure_urls(text, base_url=source_file)
+        if family == "jmap_metadata":
+            if _artifact_format_label(source_file) != "jmap":
+                return []
+            return jmap_urls(text, base_url=source_file)
         if family == "helm_index":
             return helm_index_chart_package_urls(
                 text,

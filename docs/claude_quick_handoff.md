@@ -130,6 +130,11 @@ stop and pick a smaller verified kill-chain or determinism gap.
   field values against the remote artifact `source_url` into recursive URL seeds
   while excluding generic text lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-mercure-relative-field-recursion.md`.
+- [x] JMAP relative URL-field recursion completed: source-aware
+  `.well-known/jmap` now resolves concrete relative JSON `*Url` fields against
+  the remote artifact `source_url` into recursive URL seeds while excluding
+  templated download URLs and generic JSON lookalikes. Handoff:
+  `.claude/handoffs/2026-07-20-jmap-relative-url-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing
