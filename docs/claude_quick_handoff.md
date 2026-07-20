@@ -25,7 +25,8 @@ scoring, review, fallback, or testing/cleanup. Do not move the goal to UI-only
 polish or provider breadth without proving the end-to-end kill-chain path.
 If no stage matches the next task, stop and re-scope before editing. Use
 subagents for independent review or disjoint work only when it saves time
-without creating competing source-of-truth docs.
+without creating competing source-of-truth docs. If thread or turn caps block
+delegation, continue locally against the locked goal and record the limitation.
 
 ## Operator Notes
 

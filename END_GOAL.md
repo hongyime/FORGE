@@ -58,6 +58,11 @@ intake, recursion, validation, deterministic scoring, graph/dashboard/report
 review, auditability, fallback output, cleanup, or tests, it is not part of the
 current end goal.
 
+Subagents and Claude reviews are accelerators only. Use them for bounded
+independent review or disjoint implementation work when available; if thread or
+turn caps block them, continue locally against this contract and record the
+limitation in the handoff. Tool availability never changes the end goal.
+
 ## Stop/Continue Rule
 
 Before changing code, a future agent must name the acceptance gate the change

@@ -8,6 +8,10 @@ Last updated: 2026-07-20
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Deep historical entries that say commits were impossible because the workspace was not a Git repo are stale context only; continue making meaningful commits and pushes when changes are valid.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, and tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution must carry `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
+- Subagents and Claude are review/execution accelerators, not competing
+  source-of-truth docs. Use them for bounded independent review or disjoint work
+  when available; if thread or turn caps block them, continue locally against the
+  locked end-goal contract and record the limitation.
 
 ## Canonical End Goal
 

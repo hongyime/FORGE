@@ -187,7 +187,10 @@ engagement that demonstrates all of these in one deterministic path:
 ## What Future Agents Should Do
 
 - Prefer concrete backend kill-chain gaps over broad rewrites: passive parser coverage, recursive seed promotion, provider payload normalization, proof hardening, graph/report/dashboard surfacing, bounded worker migrations, and focused end-to-end tests.
-- Use subagents for independent review, focused exploration, and disjoint implementation tasks when it saves time without creating merge conflicts.
+- Use subagents for independent review, focused exploration, and disjoint
+  implementation tasks when it saves time without creating merge conflicts. If
+  thread or turn caps block delegation, continue locally against this contract
+  and record the limitation in the handoff.
 - Before changing behavior, write or identify the smallest failing test that proves the gap.
 - After changing behavior, run compile/lint plus focused and adjacent tests, update continuation docs, remove test engagement leftovers, commit, and push.
 

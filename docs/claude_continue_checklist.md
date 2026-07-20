@@ -26,8 +26,10 @@ validation, scoring, review, fallback, or testing/cleanup.
 Before editing, state the matching acceptance stage. If no stage matches, stop
 and re-scope to a concrete deterministic kill-chain, validation, fallback,
 dashboard-review, or test/cleanup gap. Use subagents for independent review or
-disjoint implementation slices, but do not let subagents create competing goal
-documents or weaken the normative contract in `docs/end_goal.md`.
+disjoint implementation slices when available. If thread or turn caps block
+delegation, continue locally and record the limitation. Do not let subagents
+create competing goal documents or weaken the normative contract in
+`docs/end_goal.md`.
 
 ## Compact active backlog
 
