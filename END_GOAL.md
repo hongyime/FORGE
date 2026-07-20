@@ -8,6 +8,22 @@ is `docs/end_goal.md`. If any checklist, handoff, agent plan, or implementation
 task conflicts with those files, update the conflicting material before
 continuing.
 
+## Source Of Truth
+
+There is one end goal, not several competing goals:
+
+- `docs/end_goal.md` is the normative contract.
+- This file is the required quick answer for operators and future agents.
+- `docs/deterministic_engagement_contract.md` is the compact gate checklist.
+- `docs/engagement_overhaul_tasklist.md` contains acceptance criteria and the
+  current implementation backlog.
+
+Do not create a new goal document when the goal feels unclear. Update these
+files instead, keep them consistent, and commit the clarification. Treat checked
+backlog entries as evidence already landed, unchecked canonical end-goal boxes
+as release criteria, and `## Compact active backlog` as the current sequence of
+work.
+
 ## Hard End Goal
 
 If asked "what is the end goal?", answer this directly:
@@ -108,6 +124,15 @@ Required continuation rules:
   on provider failure, missing keys, quota exhaustion, or token limits.
 - Focused and mocked end-to-end tests prove the path and automated test
   engagement cleanup leaves no debris.
+
+## Release Gate Semantics
+
+FORGE is not done because one module works in isolation. It is done only when
+one representative engagement path proves every gate together: intake,
+discovery, recursion, artifact analysis, validation, deterministic scoring,
+dashboard/graph/report/audit review, fallback exports, and cleanup. A future
+agent may improve individual modules, but must record which gate the work
+advances and verify it with focused or mocked tests.
 
 Read next:
 

@@ -12,6 +12,24 @@ continuation order lives in the same file under `## Compact active backlog`. If
 another doc, checklist, or agent plan conflicts with this file, update that doc
 or plan before continuing implementation.
 
+## Source Of Truth And Status Semantics
+
+There is one goal contract. `END_GOAL.md` is the short operator answer,
+`docs/deterministic_engagement_contract.md` is the compact gate map, and
+`docs/engagement_overhaul_tasklist.md` is the execution ledger. If those files
+conflict, preserve this file and update the others.
+
+Checklist status has strict meaning:
+
+- Checked compact-backlog entries are landed checkpoints with cited tests or
+  audit evidence.
+- Unchecked `## Canonical End Goal` entries are release criteria, not proof that
+  a feature is absent.
+- The current sequence of work comes from `## Compact active backlog` after
+  applying this end-goal contract.
+- A new task is valid only if it names the acceptance stage it advances before
+  code changes begin.
+
 ## Goal Lock
 
 If a future agent asks what the end goal is, the answer is:
@@ -139,6 +157,26 @@ FORGE is considered at the intended end state when all of these are true:
 - Test engagements created during automated tests are cleaned up or isolated, and production engagement IDs are not reused after deletion.
 - Code stays modular: new feature logic belongs in focused helpers/tests, with large legacy files limited to thin adapters when practical.
 - Work is committed to `main` in meaningful checkpoints, with continuation docs updated so another agent can audit and resume.
+
+## Minimum Release Proof
+
+The minimum proof for the end goal is a local or mocked representative
+engagement that demonstrates all of these in one deterministic path:
+
+- Multi-seed intake creates a monotonic engagement ID, stable slug, typed seeds,
+  scope metadata, and audit timestamps.
+- Bounded fan-outs recurse from initial and discovered seeds until depth, queue,
+  stable-snapshot, or operator-stop termination.
+- Static artifact parsing promotes discovered URLs, hosts, emails, cloud refs,
+  and key evidence without executing artifacts.
+- Validation inventory is visible, but only non-destructively `VALIDATED`
+  evidence can create reportable findings.
+- Rule-engine severity survives graph export, dashboard payloads, Markdown/JSON
+  reports, raw CSV/JSON exports, and audit metadata unchanged.
+- LLM/API narrative failure, missing keys, quota errors, and token-limit errors
+  fall back to deterministic template reports plus raw exports.
+- Test engagement data is cleaned up or isolated so production engagement IDs
+  remain monotonic and are never reused after deletion.
 
 ## What Future Agents Should Do
 
