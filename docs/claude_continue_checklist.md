@@ -50,6 +50,27 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Ads.txt/app-ads.txt publisher-account passive-inventory checkpoint
+  completed: source-aware `ads.txt` and `app-ads.txt` parsing now promotes valid
+  ad-system domain plus publisher-account declarations into passive
+  `ad_publisher_account` resource inventory while filtering malformed domains,
+  assignment-style metadata lines, duplicate declarations, and unsupported
+  relationship values. Existing email, URL, and Supabase recursion from the same
+  artifacts is preserved, and the cloud-validation registry contract proves the
+  new passive ad resource type reaches terminal `UNSUPPORTED` state without
+  provider calls or findings. Verification: TDD focused regression failed before
+  implementation on missing ad account inventory, then passed -> `1 passed`;
+  compile/Ruff for touched orchestrator/helper/test files; helper plus ad
+  metadata slice -> `9 passed`; validation registry terminal-state contract ->
+  `1 passed`; remote root metadata slow fixture explicitly selected with
+  `-m slow` -> `1 passed`; adjacent public metadata/mobile metadata slice ->
+  `5 passed`; cleanup check found no new persistent pytest DBs. Review:
+  subagent spawn was attempted but thread limit was still reached, so the audit
+  proceeded locally. Safety: passive static ad metadata inventory only; no ad
+  exchange lookup, sellers.json expansion, provider call, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  report-gate change, severity change, or deterministic finding creation.
+  Handoff: `.claude/handoffs/2026-07-20-ad-metadata-publisher-inventory.md`.
 - [x] Web manifest related-application passive-inventory checkpoint completed:
   source-aware Web App Manifest parsing now promotes `related_applications`
   Android package IDs and iTunes/App Store IDs into passive

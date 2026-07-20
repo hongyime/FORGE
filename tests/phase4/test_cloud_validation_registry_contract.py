@@ -22,6 +22,7 @@ _TERMINAL_SAFE_STATUSES = {
 # URI families produced by the artifact helper modules they consume.
 _ARTIFACT_EMITTED_CLOUD_ASSET_TYPES = (
     "amplify",
+    "ad_publisher_account",
     "appveyor_pipeline",
     "argo_application",
     "argo_applicationset",

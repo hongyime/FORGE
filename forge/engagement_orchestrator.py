@@ -118,6 +118,7 @@ from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_candidates,
     amplify_client_config_text_candidates,
 )
+from forge.utils.artifact_ad_metadata import ads_txt_publisher_account_assets
 from forge.utils.artifact_aasa import aasa_ios_app_ids
 from forge.utils.artifact_assetlinks import assetlinks_android_packages
 from forge.utils.artifact_orm_config import (
@@ -20481,6 +20482,8 @@ class ArtifactQueueProcessor:
                     "azure_blob",
                     "azure_key_vault",
                     "azure_ad_app",
+                    "ads_txt_publisher_accounts",
+                    "app_ads_txt_publisher_accounts",
                     "android_assetlinks",
                     "apple_app_site_association",
                     "web_manifest_related_applications",
@@ -20682,6 +20685,14 @@ class ArtifactQueueProcessor:
                 seen.add(candidate)
                 candidates.append(candidate)
             return candidates
+        if family == "ads_txt_publisher_accounts":
+            if _artifact_format_label(source_file) != "ads.txt":
+                return []
+            return ads_txt_publisher_account_assets(text)
+        if family == "app_ads_txt_publisher_accounts":
+            if _artifact_format_label(source_file) != "app-ads.txt":
+                return []
+            return ads_txt_publisher_account_assets(text, app_ads=True)
         if family == "android_assetlinks":
             if _artifact_format_label(source_file) != "assetlinks.json":
                 return []
