@@ -53079,7 +53079,10 @@ def test_artifact_queue_processor_parallelizes_json_structured_documents_and_pre
     def _fake_structured_document_lines(
         _self,
         document,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         doc_name = str(document["doc"])
         nonlocal active, peak
         with lock:
@@ -53149,7 +53152,7 @@ def test_artifact_queue_processor_parallelizes_json_structured_line_batch_entrie
         try:
             if current_entered <= 4:
                 assert gate.wait(timeout=1.0)
-            time.sleep(delays[batch_index])
+            time.sleep(delays.get(batch_index, 0.005))
             return original_entry(line_batch)
         finally:
             with lock:
@@ -53158,7 +53161,10 @@ def test_artifact_queue_processor_parallelizes_json_structured_line_batch_entrie
     def _fake_structured_document_lines(
         _self,
         document,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         doc_name = str(document["doc"])
         return {
             "one": ["alpha=one", "shared=value", ""],
@@ -53220,7 +53226,10 @@ def test_artifact_queue_processor_parallelizes_yaml_structured_documents_and_pre
     def _fake_structured_document_lines(
         _self,
         document,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         doc_name = str(document["doc"])
         nonlocal active, peak
         with lock:
@@ -53296,7 +53305,10 @@ def test_artifact_queue_processor_parallelizes_yaml_structured_line_batch_entrie
     def _fake_structured_document_lines(
         _self,
         document,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         doc_name = str(document["doc"])
         return {
             "one": ["alpha=one", "shared=value", ""],
@@ -53509,22 +53521,27 @@ def test_artifact_queue_processor_parallelizes_yaml_structured_line_subtrees_and
         _self,
         mapping,
         path,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
-        del mapping, path
+        del mapping, path, source_hint
         return []
 
     def _fake_yaml_env_list_structured_candidates(
         _self,
         entries,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
-        del entries
+        del entries, source_hint
         return []
 
     def _fake_yaml_structured_payload_line_batch(
         _self,
-        child_job: tuple[tuple[str, ...], object],
+        child_job: tuple[tuple[str, ...], object, str],
     ) -> list[str]:
-        child_path, child_value = child_job
+        child_path, child_value, source_hint = child_job
+        del source_hint
         label = child_path[-1]
         nonlocal active, peak
         with lock:
@@ -54613,7 +54630,10 @@ def test_artifact_queue_processor_parallelizes_yaml_env_candidate_families_and_p
         _self,
         env_map,
         family: str,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert env_map["OWNER_EMAIL"] == "ops@acme.example"
         nonlocal active, peak, entered
         with lock:
@@ -54818,7 +54838,10 @@ def test_artifact_queue_processor_parallelizes_yaml_env_candidate_merge_batches_
         _self,
         env_map,
         family: str,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert env_map["OWNER_EMAIL"] == "ops@acme.example"
         return {
             "firebase": ["firebase-candidate"],
@@ -54903,7 +54926,10 @@ def test_artifact_queue_processor_parallelizes_yaml_env_candidate_family_merges_
         _self,
         env_map,
         family: str,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert env_map["OWNER_EMAIL"] == "ops@acme.example"
         return {
             "firebase": ["firebase-candidate"],
@@ -54987,7 +55013,10 @@ def test_artifact_queue_processor_parallelizes_yaml_env_candidate_merge_entries_
         _self,
         env_map,
         family: str,
+        *,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert env_map["OWNER_EMAIL"] == "ops@acme.example"
         return {
             "firebase": ["firebase-candidate", ""],
@@ -55058,7 +55087,9 @@ def test_artifact_queue_processor_parallelizes_yaml_map_candidate_families_and_p
         normalized,
         path,
         path_hint: str,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert isinstance(mapping, dict)
         assert isinstance(normalized, dict)
         assert path == ("services", "config")
@@ -55148,7 +55179,9 @@ def test_artifact_queue_processor_parallelizes_yaml_map_candidate_merge_batches_
         normalized,
         path,
         path_hint: str,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert isinstance(mapping, dict)
         assert isinstance(normalized, dict)
         assert path == ("services", "config")
@@ -55244,7 +55277,9 @@ def test_artifact_queue_processor_parallelizes_yaml_map_candidate_family_merges_
         normalized,
         path,
         path_hint: str,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert isinstance(mapping, dict)
         assert isinstance(normalized, dict)
         assert path == ("services", "config")
@@ -55339,7 +55374,9 @@ def test_artifact_queue_processor_parallelizes_yaml_map_candidate_merge_entries_
         normalized,
         path,
         path_hint: str,
+        source_hint: str = "",
     ) -> list[str]:  # noqa: ANN001
+        del source_hint
         assert isinstance(mapping, dict)
         assert isinstance(normalized, dict)
         assert path == ("services", "config")
