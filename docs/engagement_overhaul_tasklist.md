@@ -81,6 +81,24 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Host-meta XML relative-href recursion checkpoint:
+  source-aware `.well-known/host-meta` XML parsing now resolves concrete
+  relative `<Link href="...">` values such as `./profile` and `../users/alice`
+  against the remote artifact `source_url`, feeding recursive URL seeds through
+  the existing artifact URL persistence path. LRDD `template` attributes and
+  generic XML lookalikes remain excluded. Verification: TDD focused regression
+  failed before implementation on missing relative host-meta link URL promotion,
+  then passed (`1 passed`); compile for touched orchestrator/helper/test files;
+  Ruff for touched files (`All checks passed!`); adjacent
+  host-meta/well-known/provenance/helper slice (`18 passed`); adjacent
+  classification/format/public-label/helper slice (`28 passed`); slow remote
+  well-known metadata fixture with `-m slow` (`1 passed`); cleanup check found
+  no new persistent pytest DBs. Safety: passive static host-meta XML parsing
+  only; no LRDD/WebFinger request, profile request, provider call, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  report-gate change, severity change, or deterministic finding creation.
+  Handoff:
+  `.claude/handoffs/2026-07-20-host-meta-relative-href-recursion.md`.
 - [x] Well-known JSON link relative-href recursion checkpoint:
   source-aware `nodeinfo`, `webfinger`, and `host-meta.json` JSON link metadata
   parsing now resolves concrete relative `href` / `url` values such as

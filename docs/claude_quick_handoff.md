@@ -151,6 +151,11 @@ stop and pick a smaller verified kill-chain or determinism gap.
   URL seeds while suppressing NodeInfo schema namespace `rel` URLs and excluding
   templated links/generic JSON lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-well-known-link-relative-href-recursion.md`.
+- [x] Host-meta XML relative-href recursion completed: source-aware
+  `.well-known/host-meta` now resolves concrete relative `<Link href="...">`
+  values against the remote artifact `source_url` into recursive URL seeds while
+  excluding LRDD templates and generic XML lookalikes. Handoff:
+  `.claude/handoffs/2026-07-20-host-meta-relative-href-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing

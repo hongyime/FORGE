@@ -111,6 +111,7 @@ from forge.utils.artifact_hashicorp_config import (
     hashicorp_config_candidates,
 )
 from forge.utils.artifact_helm_index import helm_index_chart_package_urls
+from forge.utils.artifact_host_meta_metadata import host_meta_href_urls
 from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
 from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
@@ -20460,6 +20461,7 @@ class ArtifactQueueProcessor:
                     "direct",
                     "relative_routes",
                     "public_metadata_links",
+                    "host_meta_metadata",
                     "well_known_link_metadata",
                     "api_catalog_metadata",
                     "passkey_metadata",
@@ -20652,6 +20654,10 @@ class ArtifactQueueProcessor:
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,
             )
+        if family == "host_meta_metadata":
+            if _artifact_format_label(source_file) != "host-meta":
+                return []
+            return host_meta_href_urls(text, base_url=source_file)
         if family == "well_known_link_metadata":
             if _artifact_format_label(source_file) not in {"host-meta.json", "nodeinfo", "webfinger"}:
                 return []
