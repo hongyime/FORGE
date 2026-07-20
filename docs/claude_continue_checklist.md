@@ -53,6 +53,25 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Mercure relative-field URL recursion checkpoint completed:
+  source-aware `.well-known/mercure` parsing now resolves relative line-field
+  values such as `hub=/hub`, `subscribe=./subscribe`, and `publish=../publish`
+  against the remote artifact `source_url`, feeding recursive URL seeds through
+  the existing artifact URL persistence path. Generic text files with the same
+  field shape remain excluded from this source-gated parser. Verification: TDD
+  focused regression failed before implementation on missing relative Mercure
+  field URL promotion, then passed -> `1 passed`; compile for touched
+  orchestrator/helper/test files; Ruff for touched files ->
+  `All checks passed!`; adjacent
+  Mercure/ORD/Agent Card/passkey/security/API/public-metadata/helper slice ->
+  `17 passed`; adjacent Mercure/ORD/classification/format/public-label slice
+  -> `20 passed`; slow remote well-known metadata fixture with `-m slow` ->
+  `1 passed`; cleanup check found no new persistent pytest DBs. Safety: passive
+  static Mercure metadata parsing only; no hub request, subscribe or publish
+  action, provider call, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, report-gate change, severity change, or
+  deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-mercure-relative-field-recursion.md`.
 - [x] Open Resource Discovery relative-resource recursion checkpoint completed:
   source-aware `.well-known/open-resource-discovery` parsing now resolves
   relative resource values such as `/ord/resource`, `./resource.json`, and

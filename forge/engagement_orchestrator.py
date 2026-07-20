@@ -117,6 +117,7 @@ from forge.utils.artifact_lambda_config import (
     lambda_config_candidates,
 )
 from forge.utils.artifact_matrix_metadata import matrix_server_delegated_hosts
+from forge.utils.artifact_mercure_metadata import mercure_urls
 from forge.utils.artifact_nostr_metadata import nostr_relay_hosts
 from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_artifact_label,
@@ -20457,6 +20458,7 @@ class ArtifactQueueProcessor:
                     "passkey_metadata",
                     "agent_card_metadata",
                     "open_resource_discovery",
+                    "mercure_metadata",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20653,6 +20655,10 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) != "open-resource-discovery":
                 return []
             return open_resource_discovery_urls(text, base_url=source_file)
+        if family == "mercure_metadata":
+            if _artifact_format_label(source_file) != "mercure":
+                return []
+            return mercure_urls(text, base_url=source_file)
         if family == "helm_index":
             return helm_index_chart_package_urls(
                 text,
