@@ -88,12 +88,29 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next implementation target: audit another concrete identity-provider
-  payload shape or passive artifact/parser source shape before writing code. If
-  no missing recursive pivot is found, switch to release-level mocked
-  end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
-  work mapped to identity enrichment, recursion, artifact analysis, validation,
-  review, fallback, or testing/cleanup.
+- [ ] Next implementation target: audit the next concrete release-gate gap
+  before writing code. Prefer dashboard/graph/report parity, raw export
+  fallback, cleanup proof, MTGX analyst fidelity, or a concrete
+  identity-provider/passive-artifact parser gap. Keep all work mapped to
+  identity enrichment, recursion, artifact analysis, validation, review,
+  fallback, or testing/cleanup.
+- [x] Representative multi-seed provider-failure fallback checkpoint:
+  the compact multi-seed recursive E2E now routes final report generation
+  through `provider=auto`, passes the CLI provider/max-loop flags through its
+  fake report command, forces a deterministic `ProviderUnavailableError`, and
+  asserts template fallback lineage in Markdown/JSON/PDF companions. This
+  proves the representative engagement path covers recursive discovery,
+  validation-before-reporting, graph/report review, deterministic fallback, and
+  cleanup/isolation without relying on working LLM credentials. Verification:
+  compile for the touched E2E fixture, Ruff for the touched fixture
+  (`All checks passed!`), focused multi-seed recursive E2E
+  (`1 passed in 44.60s`), adjacent Phase 6 fallback slice
+  (`4 passed, 74 deselected`), and cleanup inventory showing only existing
+  `.forge_data/engagements` entries `1`, `5010`, and `master.db`. Safety:
+  test-only hardening over an existing mocked/offline fixture; no provider
+  calls, target network, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, report-gate weakening, severity change,
+  or deterministic finding creation.
 - [x] Host-meta XML relative-href recursion checkpoint:
   source-aware `.well-known/host-meta` XML parsing now resolves concrete
   relative `<Link href="...">` values such as `./profile` and `../users/alice`

@@ -63,10 +63,25 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Immediate next implementation target: audit another concrete
-  identity-provider payload shape or passive artifact/parser source shape before
-  writing code. If no missing recursive pivot is found, switch to release-level
-  mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [ ] Immediate next implementation target: audit the next concrete release-gate
+  gap before writing code. Prefer dashboard/graph/report parity, raw export
+  fallback, cleanup proof, MTGX analyst fidelity, or a concrete
+  identity-provider/passive-artifact parser gap.
+- [x] Representative multi-seed provider-failure fallback checkpoint completed:
+  the compact multi-seed recursive E2E now routes final report generation
+  through `provider=auto`, passes the CLI provider/max-loop flags through its
+  fake report command, forces a deterministic `ProviderUnavailableError`, and
+  asserts template fallback lineage in Markdown/JSON/PDF companions.
+  Verification: compile for the touched E2E fixture; Ruff for the touched
+  fixture -> `All checks passed!`; focused multi-seed recursive E2E ->
+  `1 passed in 44.60s`; adjacent Phase 6 fallback slice ->
+  `4 passed, 74 deselected`; cleanup inventory showed only existing
+  `.forge_data/engagements` entries `1`, `5010`, and `master.db`. Safety:
+  test-only mocked/offline hardening; no provider calls, target network, live
+  probing, credential use, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, report-gate weakening, severity change, or deterministic finding
+  creation. Handoff:
+  `.claude/handoffs/2026-07-20-multiseed-provider-failure-fallback.md`.
 - [x] Host-meta XML relative-href recursion checkpoint completed:
   source-aware `.well-known/host-meta` XML parsing now resolves concrete
   relative `<Link href="...">` values such as `./profile` and `../users/alice`

@@ -55,6 +55,15 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Representative multi-seed provider-failure fallback proof completed:
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` now exercises
+  final report generation via `provider=auto`, forces a deterministic
+  `ProviderUnavailableError("mock quota exhausted")`, and asserts template
+  fallback lineage in Markdown/JSON/PDF companions. Verification: compile,
+  Ruff, focused E2E (`1 passed in 44.60s`), adjacent Phase 6 fallback slice
+  (`4 passed, 74 deselected`), and cleanup inventory (`1`, `5010`,
+  `master.db`). Handoff:
+  `.claude/handoffs/2026-07-20-multiseed-provider-failure-fallback.md`.
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
 - [x] Web manifest related-application passive inventory completed: source-aware Web App Manifest `related_applications` now promotes valid Android package IDs and iTunes/App Store IDs into `mobile_android_package` / `mobile_ios_app_store_id` resource inventory, preserves existing manifest email/URL/Supabase recursion, and validation registry marks the mobile resource types terminal `UNSUPPORTED` with no provider calls or findings. Handoff: `.claude/handoffs/2026-07-20-web-manifest-related-app-inventory.md`.

@@ -10,7 +10,9 @@ from urllib.parse import urlparse
 import pytest
 
 import forge.cli as cli
+from forge.core.errors import ProviderUnavailableError
 from forge.phase4 import cloud_validate
+from forge.phase6.report_synthesizer import ReportSynthesizer
 
 EID = 4242
 SUPABASE_JWT = (
@@ -136,7 +138,15 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             from forge.phase6.report_synthesizer import synthesise
 
             output = argv[argv.index("--output") + 1]
-            synthesise(str(EID), output_path=output, assume_yes=True, provider="template")
+            provider = argv[argv.index("--provider") + 1] if "--provider" in argv else "auto"
+            max_loops = int(argv[argv.index("--max-loops") + 1]) if "--max-loops" in argv else None
+            synthesise(
+                str(EID),
+                output_path=output,
+                assume_yes=True,
+                provider=provider,
+                max_correction_loops=max_loops,
+            )
             return subprocess.CompletedProcess(["forge", *argv], 0, "report built\n", "")
         with connect() as con:
             if argv[:2] == ["recon", "subdomains"]:
@@ -232,6 +242,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", validate_batch)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_asset_validations", sweep_assets)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_validations", lambda *_, **__: {"attempted": 0})
+    monkeypatch.setattr(ReportSynthesizer, "_ensure_provider_loaded", lambda self: None)
+    monkeypatch.setattr(
+        ReportSynthesizer,
+        "_infer",
+        lambda self, _prompt: (_ for _ in ()).throw(ProviderUnavailableError("mock quota exhausted")),
+    )
 
     cli.kill_chain(
         "acme.test",
@@ -240,7 +256,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         max_iter=4,
         parallel_fanout=1,
         skip_keyscan=True,
-        report_provider="template",
+        report_provider="auto",
         report_max_loops=0,
     )
 
@@ -255,11 +271,14 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert report_pdf_path.read_bytes().startswith(b"%PDF-1.4")
     report_payload = json.loads(report_json_path.read_text(encoding="utf-8"))
     assert report_payload["provider"] == "template"
-    assert report_payload["requested_provider"] == "template"
-    assert report_payload["fallback_reason"] is None
+    assert report_payload["requested_provider"] == "auto"
+    assert report_payload["fallback_reason"] == "mock quota exhausted"
     assert report_payload["format"] == "markdown"
     assert str(report_payload["findings_checksum"]).startswith("sha256:")
+    assert "LLM fallback engaged: mock quota exhausted" in report_text
     assert report_payload["report_lineage"]["rendered_provider"] == "template"
+    assert report_payload["report_lineage"]["requested_provider"] == "auto"
+    assert report_payload["report_lineage"]["fallback_reason"] == "mock quota exhausted"
     assert report_payload["report_lineage"]["findings_checksum"] == report_payload["findings_checksum"]
     graph = json.loads((tmp_path / "reports" / f"{EID}_attack_graph.json").read_text(encoding="utf-8"))
 
