@@ -40,6 +40,11 @@ subagents for independent review or disjoint work only when it saves time
 without creating competing source-of-truth docs. If thread or turn caps block
 delegation, continue locally against the locked goal and record the limitation.
 
+Continuation decision rule: before editing, state the deterministic gate being
+advanced. Valid gates are intake, discovery, recursion, artifact analysis,
+validation, scoring, review, fallback, and testing/cleanup. If none applies,
+stop and pick a smaller verified kill-chain or determinism gap.
+
 ## Operator Notes
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.

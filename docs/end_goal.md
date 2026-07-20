@@ -60,6 +60,18 @@ deterministically. A change belongs in the active task list only if it improves
 that workflow, proves it with focused tests, or removes ambiguity that would
 cause a future agent to weaken those guarantees.
 
+## End Goal Decision Rule
+
+Before implementing, answer this in one sentence: which deterministic pipeline
+gate does this change advance? Valid gates are intake, discovery, recursion,
+artifact analysis, validation, scoring, review, fallback, and testing/cleanup.
+If no gate applies, do not edit code under the current goal.
+
+The next useful task is the smallest verified change that makes the authorized
+kill-chain more complete, more deterministic, more reviewable, or better tested.
+Subagents, Claude reviews, worktrees, and external tools are execution aids
+only; they must not create a second goal or weaken this contract.
+
 ## Non-Negotiable Acceptance Contract
 
 This is the system target every task list must preserve:

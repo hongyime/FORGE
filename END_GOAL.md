@@ -10,6 +10,19 @@ is `docs/end_goal.md`. If any checklist, handoff, agent plan, or implementation
 task conflicts with those files, update the conflicting material before
 continuing.
 
+## End Goal Snapshot
+
+End goal: prove and maintain one deterministic authorized engagement path from
+scoped multi-seed intake through bounded recursive discovery, passive artifact
+analysis, non-destructive validation, rule-engine scoring,
+dashboard/graph/report/audit review, deterministic template/raw fallback, and
+automated test-data cleanup.
+
+This is the fixed destination for FORGE. The work is not finished by adding
+another scanner, UI panel, parser, or provider unless that change strengthens
+that engagement path, proves a missing gate with tests, or keeps the contract
+auditable for the next operator.
+
 ## Source Of Truth
 
 There is one end goal, not several competing goals:

@@ -37,6 +37,10 @@ delegation, continue locally and record the limitation. Do not let subagents
 create competing goal documents or weaken the normative contract in
 `docs/end_goal.md`.
 
+Continuation decision rule: the next valid task must advance intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or
+testing/cleanup. If it does not, it is outside the current end goal.
+
 ## Compact active backlog
 
 Use this as a Claude-facing mirror of the current continuation list. If this file conflicts with `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`, the engagement overhaul task list wins. Older unchecked "next audit target" breadcrumbs are historical unless they map to one of these items.
