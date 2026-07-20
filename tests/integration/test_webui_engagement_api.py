@@ -245,6 +245,10 @@ def _build_engagement(tmp_path: Path) -> Path:
     (reports_dir / "engagement_1001_report_20260709T014412.pdf").write_bytes(
         b"%PDF-1.4\n%FORGE\n",
     )
+    (reports_dir / "engagement_1001_report_20260709T014412.csv").write_text(
+        "record_type,engagement_id\nsummary,1001\n",
+        encoding="utf-8",
+    )
     (reports_dir / "1001_attack_graph.graphml").write_text(
         """
         <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
@@ -288,7 +292,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert len(items) == 1
         assert items[0]["slug"] == "engagement-1001-acme-example"
         assert items[0]["detail_route"] == "/engagements/engagement-1001-acme-example"
-        assert items[0]["report_count"] == 3
+        assert items[0]["report_count"] == 4
         assert items[0]["graph_count"] == 1
         assert items[0]["tags"] == ["external", "priority-high"]
         assert items[0]["highest_severity"] == "HIGH"
@@ -320,21 +324,23 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert detail["report_summary"]["requested_provider"] == "auto"
         assert detail["report_summary"]["render_backend"] == "template"
         assert detail["report_summary"]["fallback_reason"] == "quota exceeded"
-        assert detail["report_summary"]["export_count"] == 3
+        assert detail["report_summary"]["export_count"] == 4
         assert [item["label"] for item in detail["report_summary"]["available_exports"]] == [
             "Markdown",
             "PDF",
             "Report JSON",
+            "CSV",
         ]
         assert {artifact["name"] for artifact in detail["artifacts"]} >= {
             "engagement_1001_report_20260709T014412.md",
             "engagement_1001_report_20260709T014412.json",
             "engagement_1001_report_20260709T014412.pdf",
+            "engagement_1001_report_20260709T014412.csv",
         }
-        assert detail["artifacts"][0]["href"] == (
+        assert (
             "/api/engagements/engagement-1001-acme-example/artifacts/"
             "engagement_1001_report_20260709T014412.json"
-        )
+        ) in {artifact["href"] for artifact in detail["artifacts"]}
         assert detail["sections"]["hosts"][0]["Host"] == "app.acme.example"
         assert detail["sections"]["cloud_validation_results"][0]["Asset"] == "acme-firebase-prod"
         assert detail["sections"]["email_intelligence"][0]["Source"] == "emailrep"
@@ -510,8 +516,12 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
         encoding="utf-8",
     )
     (reports_dir / f"{older_stem}.pdf").write_bytes(b"%PDF-1.4\n%FORGE\n")
+    (reports_dir / f"{older_stem}.csv").write_text(
+        "record_type,engagement_id\nsummary,1001\n",
+        encoding="utf-8",
+    )
     older_timestamp = 1783551600
-    for suffix in (".md", ".json", ".pdf"):
+    for suffix in (".md", ".json", ".pdf", ".csv"):
         os.utime(reports_dir / f"{older_stem}{suffix}", (older_timestamp, older_timestamp))
 
     app = create_app()
@@ -521,7 +531,7 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
         list_resp = client.get("/api/engagements", headers=headers)
         assert list_resp.status_code == 200, list_resp.text
         items = list_resp.json()["items"]
-        assert items[0]["report_count"] == 6
+        assert items[0]["report_count"] == 8
 
         detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
         assert detail_resp.status_code == 200, detail_resp.text
@@ -534,14 +544,17 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
             "Markdown",
             "PDF",
             "Report JSON",
+            "CSV",
         ]
         assert {artifact["name"] for artifact in detail["artifacts"]} >= {
             "engagement_1001_report_20260709T014412.md",
             "engagement_1001_report_20260709T014412.json",
             "engagement_1001_report_20260709T014412.pdf",
+            "engagement_1001_report_20260709T014412.csv",
             "engagement_1001_report_20260708T230000.md",
             "engagement_1001_report_20260708T230000.json",
             "engagement_1001_report_20260708T230000.pdf",
+            "engagement_1001_report_20260708T230000.csv",
         }
 
 

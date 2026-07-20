@@ -562,6 +562,10 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     (reports_dir / "engagement_1001_report_20260709T014412.pdf").write_bytes(
         b"%PDF-1.4\n%FORGE\n",
     )
+    (reports_dir / "engagement_1001_report_20260709T014412.csv").write_text(
+        "record_type,engagement_id\nsummary,1001\n",
+        encoding="utf-8",
+    )
     (reports_dir / "1001_attack_graph.graphml").write_text(
         """
         <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
@@ -615,7 +619,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["tags"] == ["external", "priority-high"]
     assert overview_payload["items"][0]["highest_severity"] == "HIGH"
     assert overview_payload["items"][0]["severity_summary"]["HIGH"] == 1
-    assert overview_payload["items"][0]["report_count"] == 3
+    assert overview_payload["items"][0]["report_count"] == 4
     assert overview_payload["items"][0]["counts"]["seed_runs"] == 1
     assert overview_payload["items"][0]["counts"]["engagement_runs"] == 1
     assert overview_payload["items"][0]["counts"]["email_intelligence"] == 2
@@ -650,11 +654,12 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["report_summary"]["requested_provider"] == "auto"
     assert detail_payload["report_summary"]["render_backend"] == "template"
     assert detail_payload["report_summary"]["fallback_reason"] == "quota exceeded"
-    assert detail_payload["report_summary"]["export_count"] == 3
+    assert detail_payload["report_summary"]["export_count"] == 4
     assert [item["label"] for item in detail_payload["report_summary"]["available_exports"]] == [
         "Markdown",
         "PDF",
         "Report JSON",
+        "CSV",
     ]
     assert detail_payload["severity_summary"]["HIGH"] == 1
     assert detail_payload["graph_snapshot_at"] == "2026-07-09T09:40:01"
@@ -949,9 +954,13 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
             encoding="utf-8",
         )
         (reports_dir / f"{stem}.pdf").write_bytes(b"%PDF-1.4\n%FORGE\n")
+        (reports_dir / f"{stem}.csv").write_text(
+            f"record_type,engagement_id\nsummary,1001\n",
+            encoding="utf-8",
+        )
     older_timestamp = 1783551600
     newer_timestamp = 1783590252
-    for suffix in (".md", ".json", ".pdf"):
+    for suffix in (".md", ".json", ".pdf", ".csv"):
         os.utime(reports_dir / f"{older_stem}{suffix}", (older_timestamp, older_timestamp))
         os.utime(reports_dir / f"{newer_stem}{suffix}", (newer_timestamp, newer_timestamp))
     (reports_dir / "1001_attack_graph.graphml").write_text(
@@ -973,7 +982,7 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
     detail_json = site_root / "data" / "engagements" / "engagement-1001-acme-example.json"
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
-    assert detail_payload["report_count"] == 6
+    assert detail_payload["report_count"] == 8
     assert detail_payload["report_summary"]["artifact_name"] == f"{newer_stem}.json"
     assert detail_payload["report_previews"][0]["name"] == f"{newer_stem}.md"
     assert detail_payload["report_history"][0]["artifact_name"] == f"{newer_stem}.json"
@@ -982,12 +991,13 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
         "Markdown",
         "PDF",
         "Report JSON",
+        "CSV",
     ]
 
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Report History" in detail_html
     assert f"{older_stem}.json" in detail_html
-    assert detail_html.count('artifact-kind">report</span>') >= 6
+    assert detail_html.count('artifact-kind">report</span>') >= 8
     assert detail_html.count('artifact-kind">graph</span>') >= 1
 
 

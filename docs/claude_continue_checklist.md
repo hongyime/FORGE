@@ -67,6 +67,15 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Dashboard/API CSV report-family parity checkpoint completed: static
+  dashboard and live engagement-detail API fixtures now include normal
+  report-family CSV companions and assert four export descriptors
+  (`Markdown`, `PDF`, `Report JSON`, `CSV`) for current and historical report
+  generations. Verification: compile/Ruff for touched dashboard/API tests;
+  static dashboard route/history contracts -> `2 passed`; live web API
+  route/history contracts -> `2 passed, 11 warnings`; cleanup inventory
+  unchanged -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-dashboard-api-csv-report-parity.md`.
 - [x] Normal report-family raw CSV companion checkpoint completed: Phase 6 now
   writes a `.csv` raw export beside successful Markdown/JSON/PDF report
   companions and `synthesise(output_path=...)` mirrors that CSV into the

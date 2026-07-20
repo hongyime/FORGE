@@ -94,6 +94,19 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Dashboard/API CSV report-family parity checkpoint: static dashboard and
+  live engagement-detail API fixtures now include normal report-family CSV
+  companions and assert four export descriptors (`Markdown`, `PDF`,
+  `Report JSON`, `CSV`) for current and historical report generations. The API
+  artifact assertion now checks JSON artifact presence rather than incidental
+  first-item ordering after CSV became part of the report family. Verification:
+  compile/Ruff for touched dashboard/API tests; static dashboard route/history
+  contracts (`2 passed`); live web API route/history contracts
+  (`2 passed, 11 warnings`); cleanup inventory unchanged (`1`, `5010`,
+  `master.db`). Safety: test-only review-parity hardening; no runtime behavior,
+  provider calls, target network, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, report-gate weakening,
+  severity change, or deterministic finding creation.
 - [x] Normal report-family raw CSV companion checkpoint: Phase 6 now writes a
   `.csv` raw export beside successful Markdown/JSON/PDF report companions and
   `synthesise(output_path=...)` mirrors that CSV into the requested output

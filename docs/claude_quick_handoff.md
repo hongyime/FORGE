@@ -55,6 +55,13 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Dashboard/API CSV report-family parity completed: static dashboard and
+  live engagement-detail API fixtures now include CSV report companions and
+  assert four exports for current/historical report families. Verification:
+  compile/Ruff, static dashboard contracts (`2 passed`), live web API contracts
+  (`2 passed, 11 warnings`), cleanup unchanged (`1`, `5010`, `master.db`).
+  Handoff:
+  `.claude/handoffs/2026-07-20-dashboard-api-csv-report-parity.md`.
 - [x] Normal report-family raw CSV companion completed: Phase 6 successful
   Markdown/JSON/PDF report families now also include mirrored `.csv` raw export
   companions. The representative provider-failure E2E asserts validated-only
