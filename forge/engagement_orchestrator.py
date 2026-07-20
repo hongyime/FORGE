@@ -101,6 +101,7 @@ from forge.utils.artifact_hashicorp_config import (
     hashicorp_config_artifact_label,
     hashicorp_config_candidates,
 )
+from forge.utils.artifact_helm_index import helm_index_chart_package_urls
 from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
 from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
@@ -20254,7 +20255,7 @@ class ArtifactQueueProcessor:
             return batch
         if family == "urls":
             url_family_batches = self._run_ordered_local_batch(
-                ("direct", "relative_routes", "package_registry", "container_images"),
+                ("direct", "relative_routes", "helm_index", "package_registry", "container_images"),
                 lambda url_family: self._artifact_text_url_family_candidates(
                     url_family,
                     text=text,
@@ -20420,6 +20421,12 @@ class ArtifactQueueProcessor:
             return urls
         if family == "relative_routes":
             return _extract_artifact_relative_route_urls(text, base_url=source_file)
+        if family == "helm_index":
+            return helm_index_chart_package_urls(
+                text,
+                source_hint=source_file,
+                base_url=source_file,
+            )
         if family == "package_registry":
             return _extract_artifact_package_registry_urls(text)
         if family == "container_images":

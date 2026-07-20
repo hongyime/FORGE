@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Helm index relative chart recursion checkpoint is green:
+  Remote/source-gated Helm `index.yaml` / `index.yml` payloads with Helm index shape now resolve relative chart package URLs such as `charts/api-1.2.3.tgz` and `../archive/api-1.2.3.tar.gz` against the index URL, feeding those chart archives into the existing recursive URL/artifact path. Absolute URLs remain handled by existing direct URL parsing; templated, non-chart, non-Helm, local-base, userinfo, and non-HTTP values stay suppressed.
+  Verification: compile/Ruff for touched orchestrator/helper/test files; focused Helm index suite -> `4 passed`; adjacent artifact helper/API-client/HTTP-request slice -> `40 passed`; broader structured-discovery selector -> `4 passed, 756 deselected`.
+  Review: sidecar `Locke` found the gap.
+  Safety: passive static parsing only. No Helm execution, chart install, repository fetch beyond existing scoped artifact download behavior, provider call, live probing expansion, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-helm-index-chart-recursion.md`.
+
 - [x] Epieos envelope regression hardening checkpoint is green:
   List-valued provider envelopes such as `github.result[]` now preserve the outer provider context, and nested account wrappers no longer duplicate identical platform/profile rows.
   Verification: compile/Ruff for touched parser/test files; targeted envelope regressions -> `3 passed, 73 deselected`; full social scraper suite -> `76 passed`; focused Epieos synthesis slice -> `10 passed, 751 deselected`.
