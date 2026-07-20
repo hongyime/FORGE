@@ -4,7 +4,7 @@ Date: 2026-07-20
 
 ## Summary
 
-Added focused Pact contract coverage proving protocol-relative endpoint values normalize into HTTPS recursive URL pivots through the artifact processor path. The regression covers both `request.url` and URL-ish provider-state callback fields, so future Pact parser or API-client URL normalization refactors cannot silently drop `//host/path` endpoints.
+Added focused Pact contract coverage proving protocol-relative endpoint values normalize into HTTPS recursive URL pivots through the artifact processor path. The regression covers `provider.baseUrl`, `request.url`, and URL-ish provider-state callback fields, so future Pact parser or API-client URL normalization refactors cannot silently drop `//host/path` endpoints.
 
 ## Files Changed
 
@@ -27,4 +27,4 @@ Passive parser/test coverage only. No production behavior change, provider calls
 
 ## Review Source
 
-Subagent `Anscombe` identified the missing focused regression while avoiding the recent social-profile, LinkedIn alias, and remote-access artifact fixes.
+Subagent `Anscombe` identified the missing focused regression while avoiding the recent social-profile, LinkedIn alias, and remote-access artifact fixes. Claude CLI review later found the initial provider-base fixture was bare host+path instead of protocol-relative; the fixture and docs were corrected.

@@ -9,7 +9,7 @@ from forge.engagement_orchestrator import ArtifactQueueProcessor
 def test_pact_contract_protocol_relative_endpoints_normalize_to_https(tmp_path: Path) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
     payload = {
-        "provider": {"baseUrl": "pact-provider.acme.example/api"},
+        "provider": {"baseUrl": "//pact-provider.acme.example/api"},
         "interactions": [
             {
                 "providerStates": [
