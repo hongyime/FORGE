@@ -5,6 +5,7 @@ Last updated: 2026-07-20
 ## Operating model
 
 - Fast goal entry point: `END_GOAL.md`; normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. This file tracks execution checkpoints and continuation tasks.
+- Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Historical lines saying commits were impossible because this was not a Git repo are stale only; do not use them to skip valid checkpoint commits.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 
