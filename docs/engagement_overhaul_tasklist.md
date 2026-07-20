@@ -81,6 +81,25 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Passkey endpoint relative-URL recursion checkpoint:
+  source-aware `.well-known/passkey-endpoints` parsing now resolves relative
+  endpoint fields such as `/passkeys/enroll`, `/passkeys/manage`, and nested
+  `/passkeys/assertion/options` against the remote artifact `source_url`,
+  feeding recursive URL seeds through the existing artifact URL persistence
+  path. Generic JSON files with the same relative endpoint shape remain
+  excluded from this source-gated parser. Verification: TDD focused regression
+  failed before implementation on missing relative passkey endpoint URL
+  promotion, then passed (`1 passed`); compile for touched orchestrator/helper
+  test files; Ruff for touched files (`All checks passed!`); adjacent
+  passkey/security/API/public-metadata/helper slice (`14 passed`); adjacent
+  passkey/classification/format/public-label slice (`19 passed`); slow remote
+  well-known metadata fixture with `-m slow` (`1 passed`); cleanup check found
+  no new persistent pytest DBs. Safety: passive static passkey metadata parsing
+  only; no endpoint request, authentication, provider call, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  report-gate change, severity change, or deterministic finding creation.
+  Handoff:
+  `.claude/handoffs/2026-07-20-passkey-relative-endpoint-recursion.md`.
 - [x] Nostr relay key-map host recursion checkpoint:
   source-aware `.well-known/nostr.json` relay parsing now also promotes relay
   endpoint URLs used as map keys, such as

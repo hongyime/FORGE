@@ -137,6 +137,7 @@ from forge.utils.artifact_package_manager_config import (
     package_manager_config_artifact_label,
     package_manager_config_remote_filename,
 )
+from forge.utils.artifact_passkey_metadata import passkey_endpoint_urls
 from forge.utils.artifact_public_metadata_links import public_metadata_document_urls
 from forge.utils.artifact_pulumi_config import pulumi_config_candidates
 from forge.utils.artifact_sst_config import sst_config_artifact_label, sst_config_candidates
@@ -20451,6 +20452,7 @@ class ArtifactQueueProcessor:
                     "direct",
                     "relative_routes",
                     "public_metadata_links",
+                    "passkey_metadata",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20635,6 +20637,10 @@ class ArtifactQueueProcessor:
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,
             )
+        if family == "passkey_metadata":
+            if _artifact_format_label(source_file) != "passkey-endpoints":
+                return []
+            return passkey_endpoint_urls(text, base_url=source_file)
         if family == "helm_index":
             return helm_index_chart_package_urls(
                 text,
