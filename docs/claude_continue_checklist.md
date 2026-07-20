@@ -53,6 +53,23 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Nostr relay host recursion checkpoint completed:
+  source-aware `.well-known/nostr.json` parsing now promotes valid `ws://` and
+  `wss://` relay endpoint hosts such as `wss://relay.acme.example` and
+  `wss://relay2.acme.example:443/path` into recursive subdomain/root-domain
+  seeds through the existing host-seed persistence path. Generic JSON files with
+  relay-shaped WebSocket URLs remain excluded from this source-gated parser.
+  Verification: TDD focused regression failed before implementation on missing
+  Nostr relay host promotion, then passed -> `1 passed`; compile for touched
+  orchestrator/helper/test files; Ruff for touched files ->
+  `All checks passed!`; Nostr plus ATProto/DID/identity/service metadata slice
+  -> `7 passed`; adjacent Nostr/ATProto/DID/provenance/public-metadata/helper
+  slice -> `16 passed`; slow remote well-known metadata fixture with `-m slow`
+  -> `1 passed`. Safety: passive static Nostr metadata parsing only; no relay
+  connection, Nostr lookup, provider call, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, report-gate change,
+  severity change, or deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-nostr-relay-host-recursion.md`.
 - [x] ATProto DID web host recursion checkpoint completed:
   source-aware `.well-known/atproto-did` parsing now promotes valid line-oriented
   `did:web:` identifiers such as `did:web:identity.acme.example` into recursive

@@ -97,6 +97,10 @@ delegation, continue locally against the locked goal and record the limitation.
   into recursive subdomain/root-domain seeds while excluding generic text
   lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-atproto-did-web-host-recursion.md`.
+- [x] Nostr relay host recursion completed: source-aware `.well-known/nostr.json`
+  now promotes valid `ws://` and `wss://` relay endpoint hosts into recursive
+  subdomain/root-domain seeds while excluding generic JSON lookalikes. Handoff:
+  `.claude/handoffs/2026-07-20-nostr-relay-host-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing

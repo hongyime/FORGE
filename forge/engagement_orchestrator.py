@@ -117,6 +117,7 @@ from forge.utils.artifact_lambda_config import (
     lambda_config_candidates,
 )
 from forge.utils.artifact_matrix_metadata import matrix_server_delegated_hosts
+from forge.utils.artifact_nostr_metadata import nostr_relay_hosts
 from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_artifact_label,
     amplify_client_config_candidates,
@@ -20434,6 +20435,9 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) == "atproto-did":
                 for did_host in did_web_hosts_from_lines(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
+            if _artifact_format_label(source_file) == "nostr.json":
+                for relay_host in nostr_relay_hosts(text):
+                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(relay_host))
             for host_value, host_seed_type in host_candidates:
                 seed = (host_value, host_seed_type)
                 if seed in seen_host_seeds:
