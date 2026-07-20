@@ -32,14 +32,33 @@ _DB_KEY_RE = (
     r"spring\.datasource\.(?:url|jdbc-url|host)|spring\.r2dbc\.url|"
     r"sqlalchemy\.url|connection(?:strings?|[_\-.]?string)?|jdbc[_\-.]?url"
 )
+_SERVICE_KEY_RE = (
+    r"redis[_\-.]?(?:url|host)?|spring\.(?:data\.)?redis\.(?:url|host)|"
+    r"cache[_\-.]?(?:url|host)|cache\.(?:url|host)|"
+    r"celery[_\-.]?(?:broker|backend)?[_\-.]?(?:url|host)|"
+    r"(?:amqp|broker|rabbitmq)[_\-.]?(?:url|host)|"
+    r"kafka[_\-.]?(?:url|host|brokers?|bootstrap[_\-.]?servers?)|"
+    r"(?:elasticsearch|opensearch)[_\-.]?(?:url|host|hosts)|"
+    r"memcached?[_\-.]?(?:url|host)"
+)
 _VALUE = r"(?P<value>[^\"'\s,#<>]{3,2048})"
 _FIELD_RE = re.compile(
     rf"""(?im)^\s*["']?(?:[-\w.]+\.)?(?:{_DB_KEY_RE})["']?\s*(?:=>|:|=)\s*["']?{_VALUE}""",
     re.VERBOSE,
 )
+_SERVICE_FIELD_RE = re.compile(
+    rf"""(?im)^\s*["']?(?:[-\w.]+\.)?(?P<key>{_SERVICE_KEY_RE})["']?\s*
+    (?:=>|:|=)\s*["']?{_VALUE}""",
+    re.VERBOSE,
+)
 _QUOTED_FIELD_RE = re.compile(
     rf"""(?i)["'](?:[-\w.]+\.)?(?:{_DB_KEY_RE})["']\s*(?:=>|:|=)\s*["']
     (?P<value>[^"'\r\n]{{3,2048}})["']""",
+    re.VERBOSE,
+)
+_QUOTED_SERVICE_FIELD_RE = re.compile(
+    rf"""(?i)["'](?:[-\w.]+\.)?(?P<key>{_SERVICE_KEY_RE})["']\s*
+    (?:=>|:|=)\s*["'](?P<value>[^"'\r\n]{{3,2048}})["']""",
     re.VERBOSE,
 )
 _DOTNET_CONNECTION_RE = re.compile(
@@ -48,6 +67,10 @@ _DOTNET_CONNECTION_RE = re.compile(
 _XML_CONNECTION_RE = re.compile(r"""(?i)\bconnectionString=["'](?P<value>[^"']{3,2048})["']""")
 _ENV_FALLBACK_RE = re.compile(
     r"""(?i)["'](?:DB_HOST|DATABASE_HOST|DB_URL|DATABASE_URL)["']\s*,\s*["'](?P<value>[^"']{3,1024})["']"""
+)
+_SERVICE_ENV_FALLBACK_RE = re.compile(
+    rf"""(?i)["'](?P<key>{_SERVICE_KEY_RE})["']\s*,\s*["'](?P<value>[^"']{{3,1024}})["']""",
+    re.VERBOSE,
 )
 _CONNECTION_STRING_HOST_RE = re.compile(
     r"""(?ix)(?:server|host|data\s+source|address|network\s+address)\s*=\s*(?P<host>[^;,\s]+)"""
@@ -110,6 +133,20 @@ def framework_config_host_candidates(text: str) -> list[str]:
     return values
 
 
+def framework_config_service_endpoint_candidates(text: str) -> list[str]:
+    matches: list[tuple[int, str, str]] = []
+    for pattern in (_QUOTED_SERVICE_FIELD_RE, _SERVICE_FIELD_RE, _SERVICE_ENV_FALLBACK_RE):
+        matches.extend(
+            (match.start(), match.group("key"), match.group("value"))
+            for match in pattern.finditer(str(text or ""))
+        )
+    values: list[str] = []
+    seen: set[str] = set()
+    for _, key, value in sorted(matches, key=lambda item: item[0]):
+        _append_service_endpoint(values, seen, key, value)
+    return values
+
+
 def _artifact_parts(value: str) -> list[str]:
     text = str(value or "").strip().replace("\\", "/").replace("#", "/").strip("/")
     if not text:
@@ -144,6 +181,63 @@ def _append(values: list[str], seen: set[str], value: str) -> None:
     values.append(host)
 
 
+def _append_service_endpoint(values: list[str], seen: set[str], key: str, value: str) -> None:
+    raw = str(value or "").strip().strip("\"'`[]{}(),;").strip(".")
+    lowered = raw.lower()
+    if not raw or lowered in {"config", "env", "getenv", "process"}:
+        return
+    if any(marker in lowered for marker in ("${", "$(", "{{", "}}", "env(", "getenv(", "process.env", "os.getenv")):
+        return
+    host = _candidate_host(raw).strip("[]").lower().strip(".")
+    if not host or not _usable_host(host):
+        return
+    scheme = _service_endpoint_scheme(key, raw)
+    if not scheme:
+        return
+    endpoint = f"{scheme}://{host}"
+    endpoint_key = endpoint.lower()
+    if endpoint_key in seen:
+        return
+    seen.add(endpoint_key)
+    values.append(endpoint)
+
+
+def _service_endpoint_scheme(key: str, value: str) -> str:
+    lowered_value = str(value or "").strip().lower()
+    if "://" in lowered_value:
+        parsed_scheme = urlparse(lowered_value).scheme.lower()
+        if parsed_scheme in {
+            "amqp",
+            "amqps",
+            "elasticsearch",
+            "kafka",
+            "memcache",
+            "memcached",
+            "opensearch",
+            "redis",
+            "rediss",
+        }:
+            return parsed_scheme
+    normalized_key = str(key or "").lower().replace("_", "-").replace(".", "-")
+    if "redis" in normalized_key:
+        return "redis"
+    if "rabbitmq" in normalized_key or "broker" in normalized_key or "celery" in normalized_key:
+        return "amqp"
+    if "amqp" in normalized_key:
+        return "amqp"
+    if "kafka" in normalized_key:
+        return "kafka"
+    if "opensearch" in normalized_key:
+        return "opensearch"
+    if "elasticsearch" in normalized_key:
+        return "elasticsearch"
+    if "memcache" in normalized_key:
+        return "memcached"
+    if "cache" in normalized_key:
+        return "redis"
+    return ""
+
+
 def _candidate_host(value: str) -> str:
     connection_match = _CONNECTION_STRING_HOST_RE.search(value)
     if connection_match:
@@ -155,7 +249,11 @@ def _candidate_host(value: str) -> str:
     if "://" in candidate:
         parsed = urlparse(candidate)
         return parsed.hostname or ""
-    return candidate.split("/", 1)[0].split(";", 1)[0]
+    host_candidate = candidate.split("/", 1)[0].split(";", 1)[0]
+    port_match = _PORT_SUFFIX_RE.match(host_candidate)
+    if port_match:
+        return port_match.group("host")
+    return host_candidate
 
 
 def _normalize_connection_host(value: str) -> str:

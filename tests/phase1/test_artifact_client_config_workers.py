@@ -64,6 +64,11 @@ def test_client_config_structured_payloads_use_bounded_workers_and_preserve_orde
         "framework_config_host_candidates",
         lambda _: ["[fw-one.acme.example]", "fw-two.acme.example", "fw-one.acme.example"],
     )
+    monkeypatch.setattr(
+        orchestrator,
+        "framework_config_service_endpoint_candidates",
+        lambda _: ["redis://cache.acme.example", "REDIS://cache.acme.example", "amqp://mq.acme.example"],
+    )
 
     assert processor._connection_client_structured_payload_text("payload", source_hint="WinSCP.ini").splitlines() == [
         "ssh://alpha.acme.example",
@@ -88,6 +93,8 @@ def test_client_config_structured_payloads_use_bounded_workers_and_preserve_orde
     assert processor._framework_config_structured_payload_text("payload", source_hint="database.yml").splitlines() == [
         "postgres://fw-one.acme.example",
         "postgres://fw-two.acme.example",
+        "redis://cache.acme.example",
+        "amqp://mq.acme.example",
     ]
 
     assert observed_batches == [
@@ -105,4 +112,5 @@ def test_client_config_structured_payloads_use_bounded_workers_and_preserve_orde
         ],
         ["[orm-one.acme.example]", "orm-two.acme.example", "orm-one.acme.example"],
         ["[fw-one.acme.example]", "fw-two.acme.example", "fw-one.acme.example"],
+        ["redis://cache.acme.example", "REDIS://cache.acme.example", "amqp://mq.acme.example"],
     ]

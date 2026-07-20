@@ -27,6 +27,13 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Framework service-endpoint artifact recursion checkpoint is green:
+  Source-aware framework configs now extract sanitized Redis, Celery/AMQP, Kafka, Elasticsearch, OpenSearch, and Memcached endpoint payloads from static host/url fields, including `REDIS_HOST`, `spring.data.redis.url`, `CELERY_BROKER_HOST`, `kafka.bootstrap-servers`, and `ELASTICSEARCH_HOSTS`. These feed recursive host seeds without preserving credentials or template placeholders; bare framework `host:port` values now normalize to host-only candidates.
+  Verification: compile/Ruff for touched framework/orchestrator/test files; focused framework/client-config worker tests -> `5 passed`; adjacent orchestrator framework/network selector -> `3 passed, 756 deselected`; cleanup check found no new pytest engagement DBs.
+  Review: Claude CLI was attempted; `-k` is unsupported in this local build and `--print` timed out, so local tests are the evidence.
+  Safety: passive static parser coverage only. No service connection, credential use, provider call, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-framework-service-endpoints.md`.
+
 - [x] Remote/static artifact classification helper-test split checkpoint is green:
   Package/archive, safe download metadata, firmware/binary dump, browser-profile, Git metadata, OAuth well-known, model, JVM, keystore, certificate, dump, calendar, and vCard classification regressions moved from `tests/phase1/test_artifact_helpers.py` into focused `tests/phase1/test_artifact_remote_static_classification.py` (242 lines). The broad helper file dropped from 446 to 214 lines.
   Verification: compile/Ruff for touched helper/API/static test files; focused static classification suite -> `16 passed`; remaining artifact helper suite -> `8 passed`; combined helper/API/Electron/static slice -> `29 passed`.

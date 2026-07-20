@@ -96,6 +96,7 @@ from forge.utils.artifact_ecs_task_definition import (
 from forge.utils.artifact_framework_config import (
     framework_config_artifact_label,
     framework_config_host_candidates,
+    framework_config_service_endpoint_candidates,
 )
 from forge.utils.artifact_gradle_config import (
     gradle_text_config_artifact_label,
@@ -27905,11 +27906,17 @@ class ArtifactQueueProcessor:
     ) -> str:
         if not framework_config_artifact_label(source_hint):
             return ""
-        return self._structured_payload_lines(
+        db_payload = self._structured_payload_lines(
             framework_config_host_candidates(text),
             self._postgres_payload_entry,
             casefold_seen=False,
         )
+        service_payload = self._structured_payload_lines(
+            framework_config_service_endpoint_candidates(text),
+            self._trimmed_payload_entry,
+            casefold_seen=True,
+        )
+        return "\n".join(part for part in (db_payload, service_payload) if part)
 
     def _tunnel_config_structured_payload_text(
         self,

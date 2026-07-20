@@ -8,6 +8,7 @@ from forge.engagement_orchestrator import ArtifactQueueProcessor
 from forge.utils.artifact_framework_config import (
     framework_config_artifact_label,
     framework_config_host_candidates,
+    framework_config_service_endpoint_candidates,
 )
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
@@ -48,6 +49,7 @@ def test_framework_config_host_candidates_strip_credentials_and_templates() -> N
         <add name="Main" connectionString="Host=webconfig-db.acme.example;Port=5432;Password=web-password-do-not-store" />
         'host' => env('DB_HOST', 'laravel-db.acme.example'),
         DATABASES = {'default': {'HOST': 'django-db.acme.example'}}
+        DATABASE_HOST=db-port.acme.example:5432
         ignored_host = "${DB_HOST}"
         local: localhost
         """
@@ -61,6 +63,35 @@ def test_framework_config_host_candidates_strip_credentials_and_templates() -> N
         "webconfig-db.acme.example",
         "laravel-db.acme.example",
         "django-db.acme.example",
+        "db-port.acme.example",
+    ]
+
+
+def test_framework_config_service_endpoint_candidates_strip_credentials_and_templates() -> None:
+    text = dedent(
+        """
+        REDIS_HOST=cache.acme.example
+        spring.data.redis.url=redis://:redis-password-do-not-store@spring-cache.acme.example:6379/0
+        CELERY_BROKER_HOST=mq.acme.example
+        BROKER_URL=amqps://mq-user:mq-password-do-not-store@broker.acme.example/prod
+        kafka.bootstrap-servers=kafka.acme.example:9092
+        ELASTICSEARCH_HOSTS=search.acme.example
+        OPENSEARCH_URL=https://search-http.acme.example
+        MEMCACHED_HOST=memcached.acme.example
+        CACHE_HOST=${CACHE_HOST}
+        CACHE_SIZE=1000
+        """
+    )
+
+    assert framework_config_service_endpoint_candidates(text) == [
+        "redis://cache.acme.example",
+        "redis://spring-cache.acme.example",
+        "amqp://mq.acme.example",
+        "amqps://broker.acme.example",
+        "kafka://kafka.acme.example",
+        "elasticsearch://search.acme.example",
+        "opensearch://search-http.acme.example",
+        "memcached://memcached.acme.example",
     ]
 
 
@@ -85,6 +116,17 @@ def test_spring_profile_configs_feed_framework_hosts_into_recursive_seeds(
         "spring.datasource.jdbc-url=jdbc:mysql://boot:boot-password-do-not-store@spring-bootstrap-db.acme.example:3306/app\n",
         encoding="utf-8",
     )
+    (artifact_root / "application-cache.properties").write_text(
+        "\n".join(
+            [
+                "REDIS_HOST=cache.acme.example",
+                "CELERY_BROKER_HOST=mq.acme.example",
+                "spring.data.redis.url=redis://:redis-password-do-not-store@spring-cache.acme.example:6379/0",
+                "CACHE_HOST=${CACHE_HOST}",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
     queued = processor.ingest_local_artifacts([artifact_root.parent.parent.parent])
@@ -107,6 +149,9 @@ def test_spring_profile_configs_feed_framework_hosts_into_recursive_seeds(
         }
         assert ("spring-profile-db.acme.example", "subdomain") in seeds
         assert ("spring-bootstrap-db.acme.example", "subdomain") in seeds
+        assert ("cache.acme.example", "subdomain") in seeds
+        assert ("mq.acme.example", "subdomain") in seeds
+        assert ("spring-cache.acme.example", "subdomain") in seeds
 
         artifact_meta = {
             row[0]: row[1]
@@ -126,6 +171,8 @@ def test_spring_profile_configs_feed_framework_hosts_into_recursive_seeds(
         db_dump = "\n".join(con.iterdump())
         assert "prod-password-do-not-store" not in db_dump
         assert "boot-password-do-not-store" not in db_dump
+        assert "redis-password-do-not-store" not in db_dump
         assert "${DB_HOST}" not in db_dump
+        assert "${CACHE_HOST}" not in db_dump
     finally:
         con.close()
