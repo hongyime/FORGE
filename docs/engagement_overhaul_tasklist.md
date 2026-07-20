@@ -94,6 +94,16 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] SBOM label helper extraction checkpoint: the multi-suffix SBOM format
+  table/helper moved out of the oversized `engagement_orchestrator.py` into
+  `forge.utils.artifact_sbom`, keeping the orchestrator as a thin caller while
+  preserving the SBOM artifact queue behavior. Verification: compile/Ruff for
+  helper/orchestrator/test files; focused SBOM plus adjacent artifact format
+  and well-known security metadata tests (`5 passed`). Safety:
+  behavior-preserving T7 refactor only; no artifact parsing expansion, provider
+  call, target network, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, validation/report-gate change, severity
+  change, or finding creation.
 - [x] SBOM multi-suffix artifact-label checkpoint: local and remote artifact
   names such as `bom.cyclonedx.json`, `bom.cdx.json`, `bom.spdx.json`,
   `bom.spdx.yaml`, and `bom.syft.json` now retain deterministic SBOM format

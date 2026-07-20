@@ -55,6 +55,11 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] SBOM label helper extraction completed: multi-suffix SBOM label logic now
+  lives in `forge.utils.artifact_sbom`, with `engagement_orchestrator.py` kept
+  as a thin caller. Verification: compile/Ruff and focused SBOM plus adjacent
+  artifact format/security metadata tests (`5 passed`). Handoff:
+  `.claude/handoffs/2026-07-20-sbom-label-helper-extraction.md`.
 - [x] SBOM multi-suffix artifact-label checkpoint completed:
   `bom.cyclonedx.json`, `bom.cdx.json`, `bom.spdx.json`, `bom.spdx.yaml`, and
   `bom.syft.json` now retain deterministic SBOM format labels, and explicit

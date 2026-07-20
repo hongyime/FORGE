@@ -67,6 +67,13 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] SBOM label helper extraction checkpoint completed: the multi-suffix SBOM
+  format table/helper moved from `engagement_orchestrator.py` into
+  `forge.utils.artifact_sbom`, preserving behavior while shrinking the
+  orchestrator change surface. Verification: compile/Ruff for touched files;
+  focused SBOM plus adjacent artifact format/security metadata tests ->
+  `5 passed`. Handoff:
+  `.claude/handoffs/2026-07-20-sbom-label-helper-extraction.md`.
 - [x] SBOM multi-suffix artifact-label checkpoint completed: artifact names
   such as `bom.cyclonedx.json`, `bom.cdx.json`, `bom.spdx.json`,
   `bom.spdx.yaml`, and `bom.syft.json` now keep deterministic SBOM format

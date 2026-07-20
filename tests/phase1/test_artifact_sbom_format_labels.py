@@ -5,10 +5,12 @@ import sqlite3
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor, _artifact_format_label
+from forge.utils.artifact_sbom import sbom_multisuffix_format_label
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
 def test_sbom_multisuffix_artifact_format_labels() -> None:
+    assert sbom_multisuffix_format_label("bom.cyclonedx.json") == "cyclonedx"
     assert _artifact_format_label("bom.cyclonedx.json") == "cyclonedx"
     assert _artifact_format_label("bom.cyclonedx.xml") == "cyclonedx"
     assert _artifact_format_label("bom.cdx.json") == "cdx"
