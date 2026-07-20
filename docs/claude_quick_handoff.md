@@ -22,6 +22,12 @@ kill-chain path and cleanup behavior with focused local/mocked tests.
 
 ## Current green checkpoint
 
+- [x] Remmina connection-profile passive-recursion checkpoint is green:
+  `.remmina` profiles now keep source-aware `remmina-config` labels, remote `.remmina` URLs enter artifact recursion, and Remmina host fields such as `server=rdp.acme.example:3389` plus `ssh_tunnel_server=bastion.acme.example` produce normalized recursive host seeds without port suffixes. Existing connection-client parsing still extracts owner emails, dashboard URLs, and Firebase refs through the passive artifact path.
+  Verification: compile/Ruff for touched helper/focused tests; full connection-client artifact suite -> `39 passed`.
+  Safety: passive static connection-profile parsing only. No Remmina execution, RDP/SSH connection, authentication, credential use, provider calls, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-remmina-connection-profile-recursion.md`.
+
 - [x] Gradle wrapper properties passive-recursion checkpoint is green:
   `gradle-wrapper.properties` now keeps source-aware `gradle-wrapper-properties` format and static `distributionUrl=...` / repository URL properties feed sanitized recursive URL seeds, including escaped Gradle schemes such as `https\://...`. Remote wrapper downloads preserve source labels; owner emails and Firebase refs still flow through the existing passive artifact path; sensitive URL query values stay out of persisted DB text.
   Verification: compile/Ruff for touched helper/orchestrator/focused tests; focused Gradle config suite -> `12 passed`; adjacent JVM/Maven/Gradle orchestrator selector -> `3 passed, 757 deselected`.

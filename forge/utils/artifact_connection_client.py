@@ -28,10 +28,14 @@ _CACHE_LABEL_SUFFIXES = {
     ".transmit-favorites": "transmit-favorites",
     ".lftp-config": "lftp-config",
     ".ncftp-config": "ncftp-config",
+    ".remmina-config": "remmina-config",
 }
 _HOST_FIELD_RE = re.compile(
     r"""(?im)^\s*(?:[A-Za-z]:)?\s*["']?
-    (?:host\s*name|hostname|host|remotehost|remote_host|server|serverhost|sshhost|sftphost|ftphost)
+    (?:
+        host\s*name|hostname|host|remotehost|remote_host|server|serverhost|
+        ssh[_-]?tunnel[_-]?server|sshhost|sftphost|ftphost
+    )
     ["']?\s*(?::|=)\s*["']?(?P<value>[A-Za-z0-9_.:\[\]-]{3,255})
     """,
     re.VERBOSE,
@@ -101,6 +105,8 @@ def connection_client_config_artifact_label(value: str) -> str:
             return label
     if name in _DIRECT_LABELS:
         return _DIRECT_LABELS[name]
+    if name.endswith(".remmina"):
+        return "remmina-config"
     if name.endswith((".mxtsessions", ".mxtsessions.backup")):
         return "mobaxterm-sessions"
     segments = set(parts[:-1])
@@ -147,13 +153,25 @@ def _artifact_parts(value: str) -> list[str]:
 
 
 def _append(values: list[str], seen: set[str], value: str) -> None:
-    candidate = str(value or "").strip().strip("\"'[](){}.,;").lower().strip(".")
+    candidate = _normalize_host_value(value)
     if not candidate or candidate in seen:
         return
     if candidate in {"localhost", "localhost.localdomain"}:
         return
     seen.add(candidate)
     values.append(candidate)
+
+
+def _normalize_host_value(value: str) -> str:
+    candidate = str(value or "").strip().strip("\"'(){}.,;").lower().strip(".")
+    if candidate.startswith("[") and "]" in candidate:
+        host = candidate.split("]", 1)[0].strip("[]")
+        return host.strip(".")
+    if candidate.count(":") == 1:
+        host, port = candidate.rsplit(":", 1)
+        if port.isdigit():
+            candidate = host
+    return candidate.strip("[]").strip(".")
 
 
 def _client_command_host_values(command_text: str) -> list[str]:
