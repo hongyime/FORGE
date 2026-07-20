@@ -55,6 +55,13 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Long-tail SBOM package URL recursion completed: CycloneDX/SPDX package
+  URLs for Swift, CocoaPods, pub.dev, Hex.pm, CRAN, and Hugging Face now become
+  deterministic recursive URL seeds through `forge.utils.artifact_package_url`.
+  Verification: regression failed before implementation, compile/Ruff, focused
+  package URL regression (`2 passed`), adjacent package/SBOM suite
+  (`49 passed`), cleanup unchanged (`1`, `5010`, `master.db`). Handoff:
+  `.claude/handoffs/2026-07-20-long-tail-package-url-recursion.md`.
 - [x] SBOM label helper extraction completed: multi-suffix SBOM label logic now
   lives in `forge.utils.artifact_sbom`, with `engagement_orchestrator.py` kept
   as a thin caller. Verification: compile/Ruff and focused SBOM plus adjacent

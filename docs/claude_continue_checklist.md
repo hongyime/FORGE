@@ -67,6 +67,14 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Long-tail SBOM package URL recursion checkpoint completed: additional
+  package-url ecosystems now become deterministic recursive URL seeds for Swift
+  Package Index, CocoaPods, pub.dev, Hex.pm, CRAN, and Hugging Face via
+  `forge.utils.artifact_package_url`. Verification: TDD regression first
+  failed with zero recursive seeds; compile/Ruff for touched files; focused
+  package URL regression -> `2 passed`; adjacent package/SBOM suite ->
+  `49 passed`; cleanup inventory unchanged -> `1`, `5010`, `master.db`.
+  Handoff: `.claude/handoffs/2026-07-20-long-tail-package-url-recursion.md`.
 - [x] SBOM label helper extraction checkpoint completed: the multi-suffix SBOM
   format table/helper moved from `engagement_orchestrator.py` into
   `forge.utils.artifact_sbom`, preserving behavior while shrinking the

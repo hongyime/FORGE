@@ -139,6 +139,7 @@ from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
 )
+from forge.utils.artifact_package_url import long_tail_package_url_registry_candidate
 from forge.utils.artifact_package_manager_config import (
     package_manager_config_artifact_label,
     package_manager_config_remote_filename,
@@ -2322,6 +2323,9 @@ def _artifact_package_url_registry_candidate(package_type: str, body: str) -> st
         return _normalize_artifact_text_url(
             f"https://hub.docker.com/r/{quote(docker_path, safe='/._-+~')}"
         )
+    long_tail_candidate = long_tail_package_url_registry_candidate(ecosystem, package_path)
+    if long_tail_candidate:
+        return _normalize_artifact_text_url(long_tail_candidate)
     return ""
 
 
