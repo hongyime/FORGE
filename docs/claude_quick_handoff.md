@@ -30,6 +30,7 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
+- [x] Well-known API/application metadata target completed: `/.well-known/agent-card.json`, `/.well-known/api-catalog`, `/.well-known/open-resource-discovery`, `/.well-known/mercure`, and `/.well-known/webweaver.json` now classify as passive source-aware metadata and feed email/URL/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-well-known-api-metadata.md`.
 - [x] Well-known service metadata target completed: `/.well-known/did-configuration.json`, `/.well-known/keybase.txt`, `/.well-known/smart-configuration`, and `/.well-known/terraform.json` now classify as passive source-aware metadata and feed email/URL/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-well-known-service-metadata.md`.
 - [x] Well-known identity metadata target completed: `/.well-known/nostr.json`, `/.well-known/atproto-did`, and `/.well-known/jmap` now classify as passive source-aware identity metadata and feed email/URL/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-well-known-identity-metadata.md`.
 - [x] Local web manifest source-label target completed: local `manifest.json` artifacts now keep source-aware format metadata instead of generic `json`, and tracked docs now route future agents to the deterministic goal chain instead of stale handoff/source-of-truth wording. Handoff: `.claude/handoffs/2026-07-20-manifest-local-source-label.md`.
@@ -43,6 +44,26 @@ without creating competing source-of-truth docs.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] Well-known API/application metadata recursion checkpoint is green:
+  IANA-listed passive metadata routes `/.well-known/agent-card.json`,
+  `/.well-known/api-catalog`, `/.well-known/open-resource-discovery`,
+  `/.well-known/mercure`, and `/.well-known/webweaver.json` now classify as
+  source-aware config artifacts with stable route/cache/local format labels.
+  Local static fixtures prove agent-card, API catalog, open-resource-discovery,
+  Mercure hub, and WebWeaver metadata can feed recursive email, URL, and
+  Supabase cloud pivots through the existing artifact queue.
+  Verification: compile/Ruff for touched orchestrator/test files; focused
+  well-known API metadata test -> `2 passed`; combined well-known/public
+  metadata slice -> `19 passed`; adjacent orchestrator `.well-known` / metadata
+  selector -> `21 passed, 738 deselected`; cleanup check found no new pytest
+  engagement DBs.
+  Safety: passive static metadata classification and parsing only. No A2A agent
+  call, API catalog fetch, open-resource-discovery call, Mercure subscription,
+  WebWeaver call, provider call, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, validation/report-gate change, or
+  persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-well-known-api-metadata.md`.
 
 - [x] Well-known service metadata recursion checkpoint is green:
   IANA-listed passive metadata routes `/.well-known/did-configuration.json`,

@@ -66,6 +66,25 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Well-known API/application metadata recursion checkpoint: IANA-listed
+  passive metadata routes `/.well-known/agent-card.json`,
+  `/.well-known/api-catalog`, `/.well-known/open-resource-discovery`,
+  `/.well-known/mercure`, and `/.well-known/webweaver.json` now classify as
+  source-aware config artifacts with stable route/cache/local format labels.
+  Local static fixtures prove agent-card, API catalog, open-resource-discovery,
+  Mercure hub, and WebWeaver metadata can feed recursive email, URL, and
+  Supabase cloud pivots through the existing artifact queue. Verification:
+  compile/Ruff for touched orchestrator/test files, focused well-known API
+  metadata test (`2 passed`), combined well-known/public metadata slice (`19
+  passed`), adjacent orchestrator `.well-known`/metadata selector (`21 passed,
+  738 deselected`), and cleanup check found no new pytest engagement DBs.
+  Safety: passive static metadata classification and parsing only; no A2A
+  agent call, API catalog fetch, open-resource-discovery call, Mercure
+  subscription, WebWeaver call, provider call, live probing, credential use,
+  scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, or persistent non-test engagement DB mutation
+  changed. Handoff:
+  `.claude/handoffs/2026-07-20-well-known-api-metadata.md`.
 - [x] Well-known service metadata recursion checkpoint: IANA-listed passive
   metadata routes `/.well-known/did-configuration.json`,
   `/.well-known/keybase.txt`, `/.well-known/smart-configuration`, and
