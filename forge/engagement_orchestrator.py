@@ -4380,6 +4380,12 @@ _EXACT_PUBLIC_METADATA_FORMAT_NAMES = frozenset(
         "webweaver.json",
     }
 )
+_SBOM_MULTISUFFIX_FORMAT_LABELS = (
+    ((".cyclonedx.json", ".cyclonedx.xml", ".cyclonedx.yaml", ".cyclonedx.yml"), "cyclonedx"),
+    ((".cdx.json", ".cdx.xml", ".cdx.yaml", ".cdx.yml"), "cdx"),
+    ((".spdx.json", ".spdx.yaml", ".spdx.yml"), "spdx"),
+    ((".syft.json", ".syft.yaml", ".syft.yml"), "syft"),
+)
 _OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 _AR_ARCHIVE_MAGIC = b"!<arch>\n"
@@ -6207,6 +6213,9 @@ def _artifact_format_label(value: str | Path) -> str:
     ai_agent_label = _ai_agent_config_artifact_label(str(value or ""))
     if ai_agent_label:
         return ai_agent_label
+    sbom_label = _sbom_multisuffix_format_label(Path(str(value or "").strip()).name.lower())
+    if sbom_label:
+        return sbom_label
     if _looks_like_ansible_text_config_artifact_name(str(value or "")):
         return "ansible-inventory"
     if _looks_like_cloud_init_text_config_artifact_name(str(value or "")):
@@ -6420,6 +6429,14 @@ def _artifact_format_label(value: str | Path) -> str:
     if name.startswith("."):
         return name[1:]
     return name
+
+
+def _sbom_multisuffix_format_label(name: str) -> str:
+    lowered = str(name or "").strip().lower()
+    for suffixes, label in _SBOM_MULTISUFFIX_FORMAT_LABELS:
+        if any(lowered.endswith(suffix) for suffix in suffixes):
+            return label
+    return ""
 
 
 def _extract_content_disposition_filename(value: str) -> str:

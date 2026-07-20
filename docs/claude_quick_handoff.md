@@ -55,6 +55,14 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] SBOM multi-suffix artifact-label checkpoint completed:
+  `bom.cyclonedx.json`, `bom.cdx.json`, `bom.spdx.json`, `bom.spdx.yaml`, and
+  `bom.syft.json` now retain deterministic SBOM format labels, and explicit
+  SBOM labels outrank broad inventory heuristics such as `inventory.spdx.json`.
+  Verification: focused regression failed before implementation then passed
+  (`2 passed`), compile/Ruff, adjacent artifact format/security metadata slice
+  (`5 passed`), cleanup unchanged (`1`, `5010`, `master.db`). Handoff:
+  `.claude/handoffs/2026-07-20-sbom-multisuffix-format-labels.md`.
 - [x] React web UI graph/report parity completed: the engagement graph
   explorer now preserves backend edge metadata in selected-node edge evidence,
   and offline fallback samples include CSV report companions/counts/artifacts

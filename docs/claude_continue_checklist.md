@@ -67,6 +67,15 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] SBOM multi-suffix artifact-label checkpoint completed: artifact names
+  such as `bom.cyclonedx.json`, `bom.cdx.json`, `bom.spdx.json`,
+  `bom.spdx.yaml`, and `bom.syft.json` now keep deterministic SBOM format
+  labels, and explicit SBOM labels outrank broad inventory-name heuristics like
+  `inventory.spdx.json`. Verification: focused regression first failed, then
+  passed -> `2 passed`; compile/Ruff for touched files; adjacent artifact
+  format/security metadata slice -> `5 passed`; cleanup inventory unchanged ->
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-sbom-multisuffix-format-labels.md`.
 - [x] React web UI graph/report parity checkpoint completed: the engagement
   graph explorer now carries backend edge `metadata` into selected-node edge
   evidence, and the offline fallback sample engagements mirror CSV report

@@ -94,6 +94,19 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] SBOM multi-suffix artifact-label checkpoint: local and remote artifact
+  names such as `bom.cyclonedx.json`, `bom.cdx.json`, `bom.spdx.json`,
+  `bom.spdx.yaml`, and `bom.syft.json` now retain deterministic SBOM format
+  labels instead of falling back to generic `json`/`yaml`; explicit SBOM labels
+  also outrank broad inventory-name heuristics such as `inventory.spdx.json`.
+  Verification: focused regression first failed on generic `json` and
+  `ansible-inventory` labels, then passed (`2 passed`); compile/Ruff for
+  touched orchestrator/test files; adjacent artifact format/security metadata
+  slice (`5 passed`); cleanup inventory unchanged (`1`, `5010`, `master.db`).
+  Safety: passive artifact classification/reviewability only; no artifact
+  execution, provider call, target network, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, validation/report-gate
+  change, severity change, or finding creation.
 - [x] React web UI graph/report parity checkpoint: the engagement graph
   explorer now carries edge `metadata` from backend graph payloads into the
   selected-node inspector as edge evidence, so validation/provenance metadata
