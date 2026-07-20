@@ -27953,56 +27953,84 @@ class ArtifactQueueProcessor:
         return "\n".join(lines)
 
     def _browser_state_document_candidate_values(self, document: Any) -> list[str]:
+        return self._browser_state_document_candidate_values_for_path((document, ()))
+
+    def _browser_state_document_candidate_values_for_path(
+        self,
+        document_path: tuple[Any, tuple[str, ...]],
+    ) -> list[str]:
+        value, path = document_path
         candidates: list[str] = []
-        seen: set[str] = set()
 
         def _append(value: Any) -> None:
             candidate = str(value or "").strip()
-            lowered = candidate.lower()
-            if not candidate or lowered in seen:
-                return
-            seen.add(lowered)
-            candidates.append(candidate)
+            if candidate:
+                candidates.append(candidate)
 
-        def _walk(value: Any, path: tuple[str, ...]) -> None:
-            if len(candidates) >= 1024:
-                return
-            if isinstance(value, dict):
-                normalized = self._yaml_normalized_mapping(value)
-                if self._browser_state_mapping_looks_like_cookie(normalized):
-                    _append(self._yaml_ref_value(normalized, "domain", "host", "hostname"))
-                for raw_key, child in list(value.items())[:512]:
-                    key = self._yaml_key_fingerprint(str(raw_key or ""))
-                    child_path = (*path, key)
-                    is_storage_value = key == "value" and self._browser_state_path_allows_storage_value(
-                        path,
-                        normalized,
-                    )
-                    if is_storage_value:
-                        storage_name = self._yaml_ref_value(normalized, "name", "key")
-                        for storage_candidate in self._browser_state_storage_value_candidates(
-                            child,
-                            child_path,
-                            storage_name=storage_name,
-                        ):
-                            _append(storage_candidate)
-                    elif isinstance(child, (str, int, float)):
-                        child_text = str(child or "").strip()
-                        if key in _BROWSER_STATE_URLISH_FIELD_KEYS:
-                            _append(child)
-                        elif (
-                            child_text.startswith(("s3://", "gs://"))
-                            or "://" in child_text
-                            or _classify_seed_value(child_text) == "email"
-                        ):
-                            _append(child)
-                    _walk(child, child_path)
-                return
-            if isinstance(value, list):
-                for item in value[:512]:
-                    _walk(item, path)
+        if isinstance(value, dict):
+            normalized = self._yaml_normalized_mapping(value)
+            if self._browser_state_mapping_looks_like_cookie(normalized):
+                _append(self._yaml_ref_value(normalized, "domain", "host", "hostname"))
+            child_jobs = [
+                (child, path, (*path, self._yaml_key_fingerprint(str(raw_key or ""))), normalized)
+                for raw_key, child in list(value.items())[:512]
+            ]
+            child_batches = self._run_ordered_local_batch(
+                child_jobs,
+                self._browser_state_child_candidate_values,
+                default_factory=list,
+            )
+            return self._browser_state_candidate_batch_values((candidates, *child_batches))
+        if isinstance(value, list):
+            item_batches = self._run_ordered_local_batch(
+                [(item, path) for item in value[:512]],
+                self._browser_state_document_candidate_values_for_path,
+                default_factory=list,
+            )
+            return self._browser_state_candidate_batch_values(item_batches)
+        return []
 
-        _walk(document, ())
+    def _browser_state_child_candidate_values(
+        self,
+        child_job: tuple[Any, tuple[str, ...], tuple[str, ...], dict[str, Any]],
+    ) -> list[str]:
+        child, parent_path, child_path, normalized = child_job
+        key = child_path[-1] if child_path else ""
+        candidates: list[str] = []
+        if key == "value" and self._browser_state_path_allows_storage_value(parent_path, normalized):
+            storage_name = self._yaml_ref_value(normalized, "name", "key")
+            candidates.extend(
+                self._browser_state_storage_value_candidates(
+                    child,
+                    child_path,
+                    storage_name=storage_name,
+                )
+            )
+        elif isinstance(child, (str, int, float)):
+            child_text = str(child or "").strip()
+            if key in _BROWSER_STATE_URLISH_FIELD_KEYS:
+                candidates.append(child_text)
+            elif (
+                child_text.startswith(("s3://", "gs://"))
+                or "://" in child_text
+                or _classify_seed_value(child_text) == "email"
+            ):
+                candidates.append(child_text)
+        candidates.extend(self._browser_state_document_candidate_values_for_path((child, child_path)))
+        return self._browser_state_candidate_batch_values((candidates,))
+
+    @staticmethod
+    def _browser_state_candidate_batch_values(candidate_batches: Sequence[Sequence[str]]) -> list[str]:
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for batch in candidate_batches:
+            for value in batch:
+                candidate = str(value or "").strip()
+                lowered = candidate.lower()
+                if not candidate or lowered in seen:
+                    continue
+                seen.add(lowered)
+                candidates.append(candidate)
         return candidates[:1024]
 
     @staticmethod
