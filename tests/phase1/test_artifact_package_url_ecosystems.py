@@ -5,7 +5,10 @@ import sqlite3
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
-from forge.utils.artifact_package_url import long_tail_package_url_registry_candidate
+from forge.utils.artifact_package_url import (
+    long_tail_package_url_registry_candidate,
+    package_url_registry_candidate,
+)
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
@@ -27,6 +30,29 @@ def test_long_tail_package_url_registry_candidates() -> None:
     assert (
         long_tail_package_url_registry_candidate("huggingface", "bigscience/bloom")
         == "https://huggingface.co/bigscience/bloom"
+    )
+
+
+def test_package_url_registry_candidate_handles_core_and_long_tail_ecosystems() -> None:
+    assert (
+        package_url_registry_candidate(
+            "npm",
+            "%40acme/portal-ui@1.2.3?repository_url=https://repo.acme.example/portal-ui",
+        )
+        == "https://www.npmjs.com/package/@acme/portal-ui"
+    )
+    assert package_url_registry_candidate("pypi", "acme-client@0.9.0") == "https://pypi.org/project/acme-client/"
+    assert (
+        package_url_registry_candidate("maven", "com.acme/portal-core@1.4.0")
+        == "https://central.sonatype.com/artifact/com.acme/portal-core"
+    )
+    assert (
+        package_url_registry_candidate("docker", "acme/portal-worker@sha256:abcdef")
+        == "https://hub.docker.com/r/acme/portal-worker"
+    )
+    assert (
+        package_url_registry_candidate("swift", "apple/swift-nio@2.62.0")
+        == "https://swiftpackageindex.com/apple/swift-nio"
     )
 
 

@@ -139,7 +139,7 @@ from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
 )
-from forge.utils.artifact_package_url import long_tail_package_url_registry_candidate
+from forge.utils.artifact_package_url import package_url_package_path, package_url_registry_candidate
 from forge.utils.artifact_package_manager_config import (
     package_manager_config_artifact_label,
     package_manager_config_remote_filename,
@@ -2281,70 +2281,8 @@ def _artifact_templated_container_image_url_candidate(
 
 
 def _artifact_package_url_registry_candidate(package_type: str, body: str) -> str:
-    ecosystem = str(package_type or "").strip().lower()
-    package_path = _artifact_package_url_package_path(body, ecosystem=ecosystem)
-    if not ecosystem or not package_path:
-        return ""
-    encoded_path = quote(package_path, safe="@/._-+~")
-    encoded_leaf = quote(package_path.rsplit("/", 1)[-1], safe="@._-+~")
-
-    if ecosystem == "npm":
-        return _normalize_artifact_text_url(f"https://www.npmjs.com/package/{encoded_path}")
-    if ecosystem in {"pypi", "python"}:
-        return _normalize_artifact_text_url(f"https://pypi.org/project/{encoded_leaf}/")
-    if ecosystem in {"gem", "rubygems"}:
-        return _normalize_artifact_text_url(f"https://rubygems.org/gems/{encoded_leaf}")
-    if ecosystem in {"cargo", "crate", "crates"}:
-        return _normalize_artifact_text_url(f"https://crates.io/crates/{encoded_leaf}")
-    if ecosystem == "nuget":
-        return _normalize_artifact_text_url(f"https://www.nuget.org/packages/{encoded_leaf}")
-    if ecosystem == "composer":
-        return _normalize_artifact_text_url(f"https://packagist.org/packages/{encoded_path}")
-    if ecosystem == "maven":
-        parts = [part for part in package_path.split("/") if part]
-        if len(parts) >= 2:
-            group_id = quote(parts[-2], safe="._-+~")
-            artifact_id = quote(parts[-1], safe="._-+~")
-            return _normalize_artifact_text_url(
-                f"https://central.sonatype.com/artifact/{group_id}/{artifact_id}"
-            )
-        return ""
-    if ecosystem in {"github", "githubactions"}:
-        parts = [part for part in package_path.split("/") if part]
-        if len(parts) >= 2:
-            owner = quote(parts[0], safe="._-+~")
-            repo = quote(parts[1], safe="._-+~")
-            return _normalize_artifact_text_url(f"https://github.com/{owner}/{repo}")
-        return ""
-    if ecosystem in {"golang", "go"}:
-        return _normalize_artifact_text_url(f"https://pkg.go.dev/{encoded_path}")
-    if ecosystem in {"docker", "oci"}:
-        docker_path = package_path if "/" in package_path else f"library/{package_path}"
-        return _normalize_artifact_text_url(
-            f"https://hub.docker.com/r/{quote(docker_path, safe='/._-+~')}"
-        )
-    long_tail_candidate = long_tail_package_url_registry_candidate(ecosystem, package_path)
-    if long_tail_candidate:
-        return _normalize_artifact_text_url(long_tail_candidate)
-    return ""
-
-
-def _artifact_package_url_package_path(body: str, *, ecosystem: str) -> str:
-    package_path = unquote(str(body or "").strip()).strip("/")
-    if not package_path:
-        return ""
-    package_path = package_path.split("#", 1)[0].split("?", 1)[0].strip("/")
-    if not package_path:
-        return ""
-    version_index = package_path.rfind("@")
-    if version_index > 0:
-        if ecosystem == "npm" and package_path.startswith("@"):
-            namespace_slash = package_path.find("/")
-            if version_index > namespace_slash:
-                package_path = package_path[:version_index]
-        else:
-            package_path = package_path[:version_index]
-    return package_path.strip("/")
+    candidate = package_url_registry_candidate(package_type, body)
+    return _normalize_artifact_text_url(candidate) if candidate else ""
 
 
 def _extract_artifact_ip_seeds(text: str) -> list[tuple[str, str]]:
@@ -26737,7 +26675,7 @@ class ArtifactQueueProcessor:
             )
         if lowered.startswith("jsr:"):
             body = value.split(":", 1)[1]
-            package_path = _artifact_package_url_package_path(body, ecosystem="jsr")
+            package_path = package_url_package_path(body, ecosystem="jsr")
             if not package_path:
                 return ""
             return _normalize_artifact_text_url(

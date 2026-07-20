@@ -67,6 +67,17 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Package URL helper extraction checkpoint completed: core package-url
+  ecosystem mapping and package path parsing moved from
+  `engagement_orchestrator.py` into `forge.utils.artifact_package_url`, with
+  the orchestrator left as a thin normalization caller and JSR runtime
+  specifiers using the shared parser. Verification: direct helper regression
+  first failed on missing `package_url_registry_candidate`, then passed ->
+  `3 passed`; compile/Ruff for touched files; adjacent package/SBOM suite ->
+  `50 passed`; representative SBOM queue regression -> `1 passed`; cleanup
+  inventory unchanged -> `1`, `5010`, `master.db`; Claude CLI read-only review
+  found no confirmed defects and requested grep/import checks passed. Handoff:
+  `.claude/handoffs/2026-07-20-package-url-helper-extraction.md`.
 - [x] Long-tail SBOM package URL recursion checkpoint completed: additional
   package-url ecosystems now become deterministic recursive URL seeds for Swift
   Package Index, CocoaPods, pub.dev, Hex.pm, CRAN, and Hugging Face via

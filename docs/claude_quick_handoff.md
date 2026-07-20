@@ -55,6 +55,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Package URL helper extraction completed: core package-url ecosystem
+  mapping and package path parsing now live in `forge.utils.artifact_package_url`
+  instead of the oversized orchestrator; JSR runtime specifier parsing uses the
+  shared parser. Verification: direct helper regression failed before
+  implementation then passed (`3 passed`), compile/Ruff, adjacent package/SBOM
+  suite (`50 passed`), representative SBOM queue regression (`1 passed`),
+  cleanup unchanged (`1`, `5010`, `master.db`). Claude CLI read-only review
+  found no confirmed defects; its requested grep/import checks passed. Subagent
+  spawn was attempted for read-only doc/task audit but blocked by agent-thread
+  limit. Handoff:
+  `.claude/handoffs/2026-07-20-package-url-helper-extraction.md`.
 - [x] Long-tail SBOM package URL recursion completed: CycloneDX/SPDX package
   URLs for Swift, CocoaPods, pub.dev, Hex.pm, CRAN, and Hugging Face now become
   deterministic recursive URL seeds through `forge.utils.artifact_package_url`.

@@ -94,6 +94,21 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Package URL helper extraction checkpoint: core package-url ecosystem
+  mapping and package path parsing moved from the oversized
+  `engagement_orchestrator.py` into `forge.utils.artifact_package_url`, leaving
+  the orchestrator as a thin normalization caller and keeping JSR runtime
+  specifier parsing on the shared parser. Verification: direct helper
+  regression first failed on missing `package_url_registry_candidate`, then
+  passed (`3 passed`); compile/Ruff for touched helper/orchestrator/test files;
+  adjacent package/SBOM suite (`50 passed`); representative SBOM queue
+  regression (`1 passed`); cleanup inventory unchanged (`1`, `5010`,
+  `master.db`); Claude CLI read-only review found no confirmed defects and
+  requested grep/import checks passed. Safety: behavior-preserving T7 refactor
+  for passive artifact package metadata only; no package download, artifact
+  execution, registry API call, provider call, target network, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, severity change, or finding creation.
 - [x] Long-tail SBOM package URL recursion checkpoint: CycloneDX/SPDX text
   artifacts now convert additional package-url ecosystems into deterministic
   recursive URL seeds for Swift Package Index, CocoaPods, pub.dev, Hex.pm,
