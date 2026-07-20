@@ -11,6 +11,13 @@ Use this file first. Fast goal entry point: `END_GOAL.md`; normative end goal: `
 
 ## Current green checkpoint
 
+- [x] Visio package passive-recursion checkpoint is green:
+  `.vsdx`, `.vsdm`, `.vstx`, `.vstm`, `.vssx`, and `.vssm` now enter the existing zip-backed document parser, so Visio architecture diagrams can passively extract XML text, relationship targets, owner emails, URLs, Firebase/Supabase refs, and cloud pivots into recursive seeds/assets. Visio content types now select Visio suffixes for extensionless remote artifacts.
+  Verification: compile/Ruff for touched orchestrator/test files; focused Visio suite -> `2 passed`; full artifact helper suite -> `29 passed`; adjacent document/diagram/OpenDocument/EPUB artifact slice -> `4 passed`.
+  Safety: passive static ZIP/XML parsing only. No Visio rendering, macro execution, Office automation, provider calls, credential use, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-visio-package-recursion.md`.
+  Next concrete task from explorer `Nietzsche`: OpenAI-compatible provider normalization for block-style chat content plus Phase 6 provider-load smoke.
+
 - [x] Social profile URL-valued handle recursion checkpoint is green:
   Direct profile handle fields such as `handle`, `username`, and `custom_url` now fall back to the existing social profile URL parser when bare handle normalization fails, so provider payloads like `{"handle": "https://www.youtube.com/@acmeops"}` and `{"username": "https://github.com/acmeops"}` produce recursive username seeds. Reserved routes such as GitHub settings pages and YouTube feeds remain filtered by the existing platform guards.
   Verification: compile/Ruff for touched orchestrator/test files; focused URL-valued handle suite -> `2 passed`; full social profile URL parser suite -> `16 passed`; adjacent orchestrator social-handle selector -> `3 passed, 757 deselected`.

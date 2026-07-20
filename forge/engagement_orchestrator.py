@@ -3335,6 +3335,12 @@ _OPENXML_DOCUMENT_SUFFIXES = {
     ".ods",
     ".odp",
     ".epub",
+    ".vsdx",
+    ".vsdm",
+    ".vstx",
+    ".vstm",
+    ".vssx",
+    ".vssm",
 }
 _LEGACY_DOCUMENT_SUFFIXES = {".doc", ".xls", ".ppt", ".rtf", ".msg"}
 _MIME_ARCHIVE_SUFFIXES = {".mht", ".mhtml"}
@@ -6562,6 +6568,13 @@ def _suffix_from_content_type(content_type: str) -> str:
         "application/x-pcapng": ".pcapng",
         "application/pdf": ".pdf",
         "application/epub+zip": ".epub",
+        "application/vnd.ms-visio.drawing": ".vsdx",
+        "application/vnd.ms-visio.drawing.main+xml": ".vsdx",
+        "application/vnd.ms-visio.drawing.macroenabled.main+xml": ".vsdm",
+        "application/vnd.ms-visio.template.main+xml": ".vstx",
+        "application/vnd.ms-visio.template.macroenabled.main+xml": ".vstm",
+        "application/vnd.ms-visio.stencil.main+xml": ".vssx",
+        "application/vnd.ms-visio.stencil.macroenabled.main+xml": ".vssm",
         "application/vnd.ms-outlook": ".msg",
         "application/vnd.oasis.opendocument.text": ".odt",
         "application/vnd.oasis.opendocument.spreadsheet": ".ods",
