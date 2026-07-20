@@ -6,6 +6,15 @@ This is the normative end-goal contract for FORGE. The repository-root `END_GOAL
 
 ## Goal Lock
 
+If a future agent asks what the end goal is, the answer is:
+
+FORGE must become one comprehensive, deterministic, authorized engagement
+pipeline that starts with scoped multi-seed intake, performs bounded recursive
+discovery, statically enriches discovered artifacts, validates evidence
+non-destructively before reporting, scores risk with rules only, exposes the
+same facts through dashboard/graph/report/audit surfaces, and always emits
+template/raw exports when LLM or API providers fail.
+
 The end goal is not "more UI", "more providers", or "more tools" in isolation.
 The end goal is a provable authorized engagement workflow that discovers,
 recurses, validates, scores, visualizes, reports, audits, and cleans up

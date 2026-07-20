@@ -27,6 +27,12 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Cloud-validation key-runtime regression split checkpoint is green:
+  Basic `run_cloud_validate` persistence, rate-limit preflight, key scope denial, scheduled scope-manifest denial, and unsupported-key regressions moved from the Phase 4 mega validation suite into focused `tests/phase4/test_cloud_validation_key_runtime.py` (12KB), removing 311 more lines from `tests/phase4/test_cloud_validate.py` without runtime behavior changes.
+  Verification: compile/Ruff for touched validation test files; focused runtime/split files -> `10 passed`; adjacent Stripe sweep slice -> `4 passed`; full cloud-validation suite including all split files and managed-hosting reachability -> `145 passed`; cleanup check found no new pytest engagement DBs.
+  Safety: test-only refactor. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, deterministic severity change, validation-gate change, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-cloud-validation-key-runtime-test-split.md`.
+
 - [x] Cloud-validation object-filter regression split checkpoint is green:
   Pure static-site, repository-metadata, filesystem-metadata, and API-documentation object-name filter regressions moved from the Phase 4 mega validation suite into focused `tests/phase4/test_cloud_validation_object_filters.py` (15KB), removing 304 more lines from `tests/phase4/test_cloud_validate.py` without runtime behavior changes.
   Verification: compile/Ruff for touched validation test files; focused split files -> `5 passed`; full cloud-validation suite including both split files and managed-hosting reachability -> `145 passed`; cleanup check found no new pytest engagement DBs.

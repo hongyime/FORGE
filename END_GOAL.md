@@ -8,6 +8,15 @@ conflicts with that file, update the conflicting material before continuing.
 
 ## Hard End Goal
 
+If asked "what is the end goal?", answer this directly:
+
+FORGE must become one comprehensive, deterministic, authorized engagement
+pipeline that starts with scoped multi-seed intake, performs bounded recursive
+discovery, statically enriches discovered artifacts, validates evidence
+non-destructively before reporting, scores risk with rules only, exposes the
+same facts through dashboard/graph/report/audit surfaces, and always emits
+template/raw exports when LLM or API providers fail.
+
 The end goal is one reproducible authorized engagement pipeline, not a growing
 collection of unrelated scanners or UI screens.
 
