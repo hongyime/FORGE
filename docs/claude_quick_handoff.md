@@ -55,6 +55,12 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] End-goal anchor and Report Section 5 boundary completed: `END_GOAL.md`
+  and `docs/end_goal.md` now state the pinned product end state explicitly for
+  future agents, and Phase 6 report-facing Section 5 wording now uses
+  `Vulnerability & Exposure Correlation` instead of legacy exploit correlation.
+  Backprop added `SPEC.md` `V13` and `B7`. Handoff:
+  `.claude/handoffs/2026-07-20-end-goal-section5-boundary.md`.
 - [x] Report Section 6 boundary completed: Phase 6 mandatory sections, fallback
   prompts, Jinja template instructions, and deterministic template output now
   use `Validation Boundaries & Evidence Handling` instead of forcing legacy

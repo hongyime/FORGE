@@ -60,6 +60,21 @@ deterministically. A change belongs in the active task list only if it improves
 that workflow, proves it with focused tests, or removes ambiguity that would
 cause a future agent to weaken those guarantees.
 
+## Pinned Product End State
+
+FORGE is complete when an operator can create or resume one scoped multi-seed
+engagement, run bounded recursive discovery through passive OSINT, identity,
+web, artifact, cloud-reference, and explicitly authorized live-check fan-outs,
+validate evidence non-destructively, produce deterministic findings and
+severity, review the same facts through dashboard, graph, report, raw-export,
+and audit surfaces, and still receive template/raw output when every LLM/API
+narrative provider fails, hits quota, lacks keys, or exceeds token limits.
+
+That is the end goal. Future tasks may change implementation details, but must
+not replace this product target with UI-only polish, provider-count expansion,
+unbounded scanning, exploitation/post-exploitation, or any path where LLM output
+becomes truth.
+
 ## End Goal Decision Rule
 
 Before implementing, answer this in one sentence: which deterministic pipeline

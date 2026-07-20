@@ -11,6 +11,17 @@ enrichment, non-destructive validation, rule-engine scoring,
 graph/dashboard/report/audit review, guaranteed template/raw fallback, and
 automated test-data cleanup.
 
+Pinned end state:
+An operator can create or resume one scoped multi-seed engagement, run the
+authorized kill chain to deterministic convergence, review the same evidence in
+the dashboard, graph, report, raw exports, and audit log, and receive a useful
+template/raw report even when every LLM/API narrative provider is unavailable,
+quota-limited, token-limited, or misconfigured.
+
+All implementation work must make that path more complete, more deterministic,
+more reviewable, or better tested. Anything else is out of scope for the current
+goal lock.
+
 This file is the fast entry point for the project goal. The compact execution
 contract is `docs/deterministic_engagement_contract.md`; the normative contract
 is `docs/end_goal.md`. If any checklist, handoff, agent plan, or implementation

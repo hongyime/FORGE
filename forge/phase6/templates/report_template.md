@@ -52,14 +52,14 @@ Observe these constraints:
 - Breach sources: {{ osint.breach_sources | join(', ') if osint.breach_sources else 'None' }}
 - Active API keys found: {{ osint.key_findings_count }}
 
-## Vulnerability & Exploit Correlation Summary
+## Vulnerability & Exposure Correlation Summary
 - Total CVEs correlated: {{ exploits.cve_count }}
   - Critical: {{ exploits.critical_count }}
   - High:     {{ exploits.high_count }}
   - Medium:   {{ exploits.medium_count }}
 
 {% if exploits.exploited %}
-Top findings (summarise in report; do not reproduce raw exploit code):
+Top findings (summarise in report; do not reproduce raw payload code):
 {% for vuln in exploits.exploited[:10] %}
   - {{ vuln.cve_id }}: {{ vuln.title }} [{{ vuln.severity }}]
 {% endfor %}
@@ -128,10 +128,10 @@ by raw IP address where possible.]
 State counts and breach source names. Never reproduce credential values.
 If active API keys were discovered, state the service type and count only.]
 
-## 5. Vulnerability & Exploit Correlation
+## 5. Vulnerability & Exposure Correlation
 
 [Summarise the CVE correlation results by severity tier. Describe the most critical
-findings in business-risk terms. Reference CVE IDs. Do not reproduce exploit payloads
+findings in business-risk terms. Reference CVE IDs. Do not reproduce payloads
 or shellcode. Limit evidence excerpts to a maximum of 512 characters each.]
 
 ## 6. Validation Boundaries & Evidence Handling

@@ -93,7 +93,7 @@ MANDATORY_SECTIONS = [
     "## 2. Engagement Scope & Methodology",
     "## 3. Reconnaissance Findings",
     "## 4. OSINT & Credential Intelligence",
-    "## 5. Vulnerability & Exploit Correlation",
+    "## 5. Vulnerability & Exposure Correlation",
     "## 6. Validation Boundaries & Evidence Handling",
     "## 7. Risk Ratings & Remediation Recommendations",
 ]
@@ -1662,7 +1662,7 @@ class PromptAssembler:
             f"{len(ctx.osint.breach_sources)} breach source(s), "
             f"{ctx.osint.reputation_alert_count} reputation alert(s), "
             f"{ctx.osint.key_findings_count} exposed-key finding(s).\n\n"
-            f"Vulnerability correlation — "
+            f"Vulnerability and exposure correlation — "
             f"{ctx.exploits.critical_count} critical / "
             f"{ctx.exploits.high_count} high / "
             f"{ctx.exploits.medium_count} medium, "
@@ -3124,7 +3124,7 @@ class ReportSynthesizer:
         SYSTEM_DIRECTIVE = (
             "You are a professional authorized security assessment report writer. "
             "Write formal, factual prose. "
-            "Never reproduce credential plaintexts, paste URLs, or raw exploit payloads. "
+            "Never reproduce credential plaintexts, paste URLs, or raw payloads. "
             "Reference sensitive data by type and count only. "
             "Structure the report with the exact section headings provided. "
             "If an Ongoing Intelligence section is present, reference monitoring dates explicitly. "
@@ -3146,7 +3146,7 @@ class ReportSynthesizer:
         SYSTEM_DIRECTIVE = (
             "You are a professional authorized security assessment report writer. "
             "Write formal, factual prose. "
-            "Never reproduce credential plaintexts, paste URLs, or raw exploit payloads. "
+            "Never reproduce credential plaintexts, paste URLs, or raw payloads. "
             "Reference sensitive data by type and count only. "
             "Structure the report with the exact section headings provided. "
             "If an Ongoing Intelligence section is present, reference monitoring dates explicitly. "
@@ -3394,7 +3394,7 @@ class ReportSynthesizer:
             f"{ctx.osint.registered_account_count} registered-account hit(s), "
             f"{len(ctx.osint.breach_sources)} breach-corpus reference(s), and "
             f"{ctx.osint.reputation_alert_count} reputation alert(s). "
-            f"Vulnerability correlation produced "
+            f"Vulnerability and exposure correlation produced "
             f"{ctx.exploits.critical_count} critical, {ctx.exploits.high_count} "
             f"high, and {ctx.exploits.medium_count} medium-severity finding(s) "
             f"across {ctx.exploits.finding_count} validated finding(s) and "
@@ -3472,7 +3472,7 @@ class ReportSynthesizer:
             "",
             relation_table,
             "",
-            "## 5. Vulnerability & Exploit Correlation",
+            "## 5. Vulnerability & Exposure Correlation",
             "",
             f"**Critical:** {ctx.exploits.critical_count}  \n"
             f"**High:** {ctx.exploits.high_count}  \n"

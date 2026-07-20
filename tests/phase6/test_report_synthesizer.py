@@ -782,15 +782,22 @@ def test_v12_prompt_assembler_contains_validation_boundary_section_list():
     for section_name in [
         "Executive Summary",
         "Reconnaissance Findings",
+        "Vulnerability & Exposure Correlation",
         "Validation Boundaries & Evidence Handling",
     ]:
         assert section_name in prompt or "executive" in prompt.lower()
+    assert "Vulnerability & Exploit Correlation" not in prompt
     assert "Post-Exploitation Activities" not in prompt
 
 
 def test_v12_mandatory_sections_do_not_force_post_exploitation_framing() -> None:
     assert "## 6. Validation Boundaries & Evidence Handling" in MANDATORY_SECTIONS
     assert all("Post-Exploitation" not in section for section in MANDATORY_SECTIONS)
+
+
+def test_v13_mandatory_sections_use_exposure_not_exploit_framing() -> None:
+    assert "## 5. Vulnerability & Exposure Correlation" in MANDATORY_SECTIONS
+    assert all("Exploit Correlation" not in section for section in MANDATORY_SECTIONS)
 
 
 def test_prompt_assembler_enforces_token_budget(monkeypatch):
@@ -1665,6 +1672,23 @@ def test_v12_synthesizer_template_uses_validation_boundaries_not_post_exploitati
     assert "## 6. Validation Boundaries & Evidence Handling" in content
     assert "## 6. Post-Exploitation Activities" not in content
     assert "post-exploitation authorised" not in content.lower()
+
+
+def test_v13_synthesizer_template_uses_exposure_not_exploit_correlation(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+
+    assert "## 5. Vulnerability & Exposure Correlation" in content
+    assert "## 5. Vulnerability & Exploit Correlation" not in content
 
 
 def test_synthesizer_report_write_failure_falls_back_to_raw_exports(

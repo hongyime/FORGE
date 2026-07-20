@@ -15,7 +15,7 @@ Validation rules:
   V-05  Minimum section length (≥50 words each mandatory section)
   V-06  Executive Summary ≤ 500 words (avoids LLM padding)
   V-07  No paste URLs in report body
-  V-08  No raw CVE exploit payloads (shellcode, msfvenom patterns)
+  V-08  No raw CVE payloads (shellcode, msfvenom patterns)
   V-09  No evidence strings > 512 chars (passed through from DB)
   V-10  If Ongoing Intelligence present, Exec Summary references monitoring
 

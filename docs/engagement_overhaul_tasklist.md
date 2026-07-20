@@ -94,6 +94,22 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] End-goal anchor and Report Section 5 boundary checkpoint: the pinned
+  product end state is now restated at the top of `END_GOAL.md` and in
+  `docs/end_goal.md` so future agents have one explicit destination:
+  create/resume one scoped multi-seed engagement, run deterministic convergence,
+  review the same facts in dashboard/graph/report/raw exports/audit, and still
+  produce template/raw output when every LLM/API narrative provider fails or is
+  unavailable. Phase 6 mandatory sections, prompts, provider directives, Jinja
+  template instructions, and deterministic template Markdown now frame Section
+  5 as `Vulnerability & Exposure Correlation` instead of legacy exploit
+  correlation. Backprop: added `SPEC.md` invariant `V13` plus bug note `B7`.
+  Verification is recorded in
+  `.claude/handoffs/2026-07-20-end-goal-section5-boundary.md`.
+  Safety: docs and report/prompt/template wording only; no live probing,
+  provider call expansion, credential use, scope relaxation, proxy/IP
+  rotation, rate-limit bypass, validation/report-gate weakening, severity
+  change, or finding creation.
 - [x] Report Section 6 boundary checkpoint: deterministic Phase 6 mandatory
   sections, fallback prompts, Jinja template instructions, and template-rendered
   Markdown now frame Section 6 as `Validation Boundaries & Evidence Handling`
