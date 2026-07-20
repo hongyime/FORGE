@@ -13,17 +13,27 @@ _DIRECT_LABELS = {
     ".pnpmrc": "pnpmrc",
     ".pypirc": "pypirc",
     ".yarnrc": "yarnrc",
+    "conda-lock.yaml": "conda-lock",
+    "conda-lock.yml": "conda-lock",
     "condarc": "conda-config",
+    "environment.yaml": "conda-environment",
+    "environment.yml": "conda-environment",
     "mambarc": "mamba-config",
     "nuget.config": "nuget-config",
+    "pixi.lock": "pixi-lock",
+    "pixi.toml": "pixi-manifest",
 }
 _CACHE_LABEL_SUFFIXES = {
     ".cargo-config": "cargo-config",
     ".conda-config": "conda-config",
+    ".conda-environment": "conda-environment",
+    ".conda-lock": "conda-lock",
     ".cargo-credentials": "cargo-credentials",
     ".mamba-config": "mamba-config",
     ".nuget-config": "nuget-config",
     ".pip-config": "pip-config",
+    ".pixi-lock": "pixi-lock",
+    ".pixi-manifest": "pixi-manifest",
 }
 _PIP_CONFIG_NAMES = {"pip.conf", "pip.ini"}
 _PIP_PARENT_SEGMENTS = {".pip", "pip"}

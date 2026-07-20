@@ -22,6 +22,12 @@ kill-chain path and cleanup behavior with focused local/mocked tests.
 
 ## Current green checkpoint
 
+- [x] Pixi/Conda environment passive-recursion checkpoint is green:
+  Exact `pixi.toml`, `pixi.lock`, `environment.yml`, `environment.yaml`, `conda-lock.yml`, and `conda-lock.yaml` artifacts now keep source-aware `pixi-manifest`, `pixi-lock`, `conda-environment`, and `conda-lock` formats instead of generic extension labels. Package/channel URLs and owner emails still recurse into engagement seeds, while embedded URL credentials stay out of persisted DB text. Broad lookalikes such as `runtime-environment.yml` and `pixi-notes.toml` remain generic.
+  Verification: compile/Ruff for touched helper/orchestrator tests; focused package-manager config suite -> `45 passed`; existing Conda/package-index orchestrator selector -> `2 passed, 758 deselected`; direct classifier probe confirmed exact labels and generic lookalikes.
+  Safety: passive static package-manager/environment parsing only. No Pixi/Conda execution, package install/lock use, channel authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-pixi-conda-environment-recursion.md`.
+
 - [x] Conda/Mamba config passive-recursion checkpoint is green:
   `.condarc`, `condarc`, `.mambarc`, `mambarc`, and cached remote `*.conda-config` / `*.mamba-config` artifacts now keep source-aware `conda-config` / `mamba-config` formats instead of generic basename labels. Channel URLs and owner emails still recurse into engagement seeds, while embedded channel credentials stay out of persisted DB text.
   Verification: compile/Ruff for touched helper/orchestrator tests; focused package-manager config suite -> `35 passed`; existing Conda/package-index orchestrator selector -> `2 passed, 758 deselected`.
