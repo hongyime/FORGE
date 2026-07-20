@@ -4214,6 +4214,15 @@ _CACHE_PREFIXED_SPECIAL_TEXT_CONFIG_NAMES = frozenset(
         "webfinger",
     }
 )
+_EXACT_PUBLIC_METADATA_FORMAT_NAMES = frozenset(
+    {
+        "assetlinks.json",
+        "browserconfig.xml",
+        "jwks.json",
+        "mta-sts.txt",
+        "security.txt",
+    }
+)
 _OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 _AR_ARCHIVE_MAGIC = b"!<arch>\n"
@@ -6244,6 +6253,8 @@ def _artifact_format_label(value: str | Path) -> str:
     cache_special_name = _cache_prefixed_special_text_config_name(name)
     if cache_special_name:
         return cache_special_name
+    if name in _EXACT_PUBLIC_METADATA_FORMAT_NAMES:
+        return name
     if name in {"related-website-set.json", "first-party-set.json"}:
         return name
     suffix = Path(name).suffix.lower().lstrip(".")

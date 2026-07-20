@@ -42,6 +42,21 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Local public metadata source-label checkpoint completed: local/top-level
+  `assetlinks.json`, `browserconfig.xml`, `jwks.json`, `mta-sts.txt`, and
+  `security.txt` artifacts now keep source-aware `metadata_json.format` labels
+  instead of
+  generic suffix labels while preserving existing recursive URL/email/cloud
+  extraction. Verification: compile/Ruff for touched orchestrator/helper and
+  validation tests, focused public metadata label test (`1 passed`), adjacent
+  helper/static classification plus validation object-filter suite (`33
+  passed`), adjacent orchestrator metadata selector (`21 passed, 738
+  deselected`), and cleanup check found no new pytest DBs. Safety: exact local
+  artifact metadata labeling only; no new route discovery, live probing,
+  provider call, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, or persistent non-test engagement DB mutation
+  changed. Handoff:
+  `.claude/handoffs/2026-07-20-public-metadata-labels.md`.
 - [x] Apple merchant domain-association metadata recursion checkpoint completed:
   `/.well-known/apple-developer-merchantid-domain-association` now routes as a
   first-class passive config artifact with source-aware format/cache labels,
