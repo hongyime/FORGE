@@ -31,6 +31,7 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
+- [x] Microsoft identity-association metadata recursion completed: `/.well-known/microsoft-identity-association.json` and extensionless fallback route now keep source-aware labels, and `associatedApplications[].applicationId` GUIDs feed passive `azure_ad_app` cloud-asset inventory. Handoff: `.claude/handoffs/2026-07-20-microsoft-identity-association-metadata.md`.
 - [x] API-client host/path URL-object recursion completed: source-aware Postman/API-client URL objects with `host`/`hostname` plus `path`/`pathname` and no explicit protocol now default to HTTPS recursive URL pivots, while host-only/local values remain suppressed and string `url` fields avoid duplicate candidates. Handoff: `.claude/handoffs/2026-07-20-api-client-host-path-url-objects.md`.
 - [x] Multi-seed recursive fallback-lineage proof completed: the compact multi-seed kill-chain E2E fixture now asserts Markdown/JSON/PDF report companions, template render lineage, checksum continuity, and validated-only structured finding context. Handoff: `.claude/handoffs/2026-07-20-multiseed-fallback-lineage.md`.
 - [x] Well-known security/supply-chain metadata target completed: `/.well-known/csaf`, `/.well-known/csaf-aggregator`, `/.well-known/sbom`, `/.well-known/passkey-endpoints`, `/.well-known/ssh-known-hosts`, `/.well-known/sshfp`, and `/.well-known/pki-validation` now classify as passive source-aware metadata and feed email/URL/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-well-known-security-metadata.md`.
@@ -49,6 +50,26 @@ without creating competing source-of-truth docs.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] Microsoft identity-association metadata recursion is green:
+  Microsoft-documented `/.well-known/microsoft-identity-association.json` and
+  extensionless fallback route now preserve source-aware labels, and
+  `associatedApplications[].applicationId` GUIDs feed passive `azure_ad_app`
+  cloud-asset inventory through the bounded artifact cloud-asset family path.
+  Local fixtures also prove email, URL, and Supabase pivots continue to recurse
+  from the same payload. Verification: TDD focused regression failed before
+  implementation, then passed -> `2 passed`; compile/Ruff for touched
+  parser/test files; adjacent well-known/public metadata slice -> `17 passed`;
+  adjacent orchestrator metadata selector -> `21 passed, 738 deselected`;
+  cleanup check found no new persistent pytest DBs. Review: Claude sidecar
+  identified the payload-shape gap after delayed output; IANA search did not
+  verify an IANA registration, so this is documented as Microsoft-documented.
+  Safety: passive static metadata parsing/inventory only. No Microsoft Graph,
+  Entra, Azure API, app verification, provider call, live probing, credential
+  use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, or persistent non-test engagement DB mutation
+  changed. Handoff:
+  `.claude/handoffs/2026-07-20-microsoft-identity-association-metadata.md`.
 
 - [x] API-client host/path URL-object recursion is green:
   Source-aware API-client artifacts now accept Postman-style URL objects with

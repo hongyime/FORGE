@@ -2897,6 +2897,11 @@ _AZURE_KEY_VAULT_URL_RE = re.compile(
     r"(?:/(?P<family>keys|secrets|certificates)/(?P<name>[^/?#\s\"'`<>,;)\]}]+))?",
     re.IGNORECASE,
 )
+_MICROSOFT_IDENTITY_ASSOCIATION_APP_ID_RE = re.compile(
+    r"(?i)[\"']application[_-]?id[\"']\s*:\s*[\"']"
+    r"(?P<app_id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+    r"[\"']"
+)
 _KUBERNETES_SECRET_MANIFEST_ASSET_URI_RE = re.compile(
     r"\b(?P<family>"
     r"external-secret|secret-store|cluster-secret-store|sealed-secret|"
@@ -4122,6 +4127,8 @@ _SPECIAL_TEXT_CONFIG_NAMES = {
     "jmap",
     "matrix-client",
     "matrix-server",
+    "microsoft-identity-association",
+    "microsoft-identity-association.json",
     "nostr.json",
     "oauth-authorization-server",
     "oauth-protected-resource",
@@ -4178,6 +4185,8 @@ _SPECIAL_TEXT_CONFIG_ROUTE_LABELS = {
     ".well-known/open-resource-discovery": "open-resource-discovery",
     ".well-known/mercure": "mercure",
     ".well-known/webweaver.json": "webweaver.json",
+    ".well-known/microsoft-identity-association.json": "microsoft-identity-association.json",
+    ".well-known/microsoft-identity-association": "microsoft-identity-association",
     "humans.txt": "humans.txt",
     "llms.txt": "llms.txt",
     "sellers.json": "sellers.json",
@@ -4256,6 +4265,8 @@ _CACHE_PREFIXED_SPECIAL_TEXT_CONFIG_NAMES = frozenset(
         "matrix-client",
         "matrix-server",
         "mercure",
+        "microsoft-identity-association",
+        "microsoft-identity-association.json",
         "nostr.json",
         "oauth-authorization-server",
         "oauth-protected-resource",
@@ -4305,6 +4316,8 @@ _EXACT_PUBLIC_METADATA_FORMAT_NAMES = frozenset(
         "keybase.txt",
         "manifest.json",
         "mercure",
+        "microsoft-identity-association",
+        "microsoft-identity-association.json",
         "mta-sts.txt",
         "nostr.json",
         "open-resource-discovery",
@@ -20464,6 +20477,7 @@ class ArtifactQueueProcessor:
                     "gcp_kms",
                     "azure_blob",
                     "azure_key_vault",
+                    "azure_ad_app",
                     "kubernetes_secret_manifests",
                     "gitops_manifests",
                     "workflow_manifests",
@@ -20644,6 +20658,17 @@ class ArtifactQueueProcessor:
                 if family_name and key_name:
                     identifier = f"{vault}/{family_name}/{key_name}"
                 candidate = ("azure_key_vault", identifier, "artifact_azure_key_vault_url")
+                if candidate in seen:
+                    continue
+                seen.add(candidate)
+                candidates.append(candidate)
+            return candidates
+        if family == "azure_ad_app":
+            candidates = []
+            seen = set()
+            for match in _MICROSOFT_IDENTITY_ASSOCIATION_APP_ID_RE.finditer(text):
+                app_id = str(match.group("app_id") or "").lower()
+                candidate = ("azure_ad_app", app_id, "artifact_microsoft_identity_association")
                 if candidate in seen:
                     continue
                 seen.add(candidate)

@@ -42,6 +42,26 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Microsoft identity-association metadata recursion checkpoint completed:
+  Microsoft-documented `/.well-known/microsoft-identity-association.json` and
+  the extensionless fallback route now preserve source-aware format labels, and
+  `associatedApplications[].applicationId` GUIDs feed passive `azure_ad_app`
+  cloud-asset inventory through the bounded artifact cloud-asset family path.
+  Local static fixtures also prove normal email, URL, and Supabase pivots still
+  recurse from the same payload. Verification: TDD focused regression failed
+  before implementation on generic `json` labeling and missing app-ID pivots,
+  then passed (`2 passed`); compile/Ruff for touched parser/test files;
+  adjacent well-known/public metadata slice (`17 passed`); adjacent
+  orchestrator metadata selector (`21 passed, 738 deselected`); cleanup check
+  found no new persistent pytest DBs. Review: Claude sidecar identified the
+  payload-shape gap after delayed output; IANA search did not verify an IANA
+  registration, so docs intentionally describe it as Microsoft-documented.
+  Safety: passive static metadata parsing/inventory only; no Microsoft Graph,
+  Entra, Azure API, app verification, provider call, live probing, credential
+  use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, or persistent non-test engagement DB mutation
+  changed. Handoff:
+  `.claude/handoffs/2026-07-20-microsoft-identity-association-metadata.md`.
 - [x] API-client host/path URL-object recursion checkpoint completed:
   source-aware API-client artifacts now accept Postman-style URL objects that
   provide `host`/`hostname` plus `path`/`pathname` without explicit `raw` or
