@@ -55,6 +55,18 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Python PDM passive package-config completed: `pdm.toml` and `.pdm.toml`
+  now classify as `pdm-config`, and `pdm.lock` now classifies as `pdm-lock`,
+  allowing package index URLs, owner emails, Firebase/Supabase refs, and S3
+  archive refs to recurse through the passive artifact path while embedded
+  package-index credentials stay stripped. Verification: regression failed
+  before implementation then passed, compile/Ruff, focused package-manager
+  regression (`1 passed`), package/Python/SBOM slice (`11 passed, 748
+  deselected`), Terraform/IaC-adjacent slice (`6 passed, 753 deselected`),
+  compact slice (`4 passed, 1 deselected`), cleanup
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory remains `1`,
+  `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-pdm-config-passive-recursion.md`.
 - [x] Python `uv.toml` passive package-config completed: `uv.toml` and
   `.uv.toml` now classify as `uv-config`, allowing package index URLs, owner
   emails, Firebase refs, and Supabase refs to recurse through the passive

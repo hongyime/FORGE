@@ -5861,6 +5861,7 @@ def _dependency_manifest_artifact_label(value: str) -> str:
         "bun.lockb": "bun-lockb",
         "pipfile": "pipfile",
         "pipfile.lock": "pipfile-lock",
+        "pdm.lock": "pdm-lock",
         "poetry.lock": "poetry-lock",
         "uv.lock": "uv-lock",
         "pyproject.toml": "pyproject",

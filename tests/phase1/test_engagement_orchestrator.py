@@ -25981,6 +25981,34 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         encoding="utf-8",
     )
 
+    pdm_toml_path = artifact_root / "pdm.toml"
+    pdm_toml_path.write_text(
+        dedent(
+            """
+            [repository.acme]
+            url = "https://pdm-user:pdm-token-do-not-store@pdm.acme.example/simple"
+            owner = "pdm-owner@acme.example"
+            firebase = "https://pdm-firebase.firebaseio.com"
+            supabase = "https://pdmvault.supabase.co/rest/v1"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    pdm_lock_path = artifact_root / "pdm.lock"
+    pdm_lock_path.write_text(
+        dedent(
+            """
+            [[package]]
+            name = "acme-client"
+            owner = "pdm-lock-owner@acme.example"
+            repository = "https://pdm-lock.acme.example/simple"
+            archive = "s3://acme-pdm-lock-bucket/releases/acme-client.tar.gz"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
     requirements_in_path = artifact_root / "requirements.in"
     requirements_in_path.write_text(
         dedent(
@@ -26066,9 +26094,9 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 11
-    assert summary.processed >= 11
-    assert summary.discovered_seeds >= 35
+    assert queued >= 13
+    assert summary.processed >= 13
+    assert summary.discovered_seeds >= 41
 
     con = sqlite3.connect(db_path)
     try:
@@ -26085,6 +26113,8 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
             "pnpm-owner@acme.example",
             "gem-owner@acme.example",
             "nuget-owner@acme.example",
+            "pdm-owner@acme.example",
+            "pdm-lock-owner@acme.example",
             "requirements-owner@acme.example",
             "requirements-nosuffix-owner@acme.example",
             "constraints-owner@acme.example",
@@ -26113,6 +26143,8 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
             "https://nuget.acme.example/v3/index.json",
             "https://uv.acme.example/simple",
             "https://uv-extra.acme.example/simple",
+            "https://pdm.acme.example/simple",
+            "https://pdm-lock.acme.example/simple",
             "https://requirements.acme.example/simple",
             "https://requirements-extra.acme.example/simple",
             "https://requirements-nosuffix.acme.example/simple",
@@ -26129,6 +26161,8 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         assert ("pypirc-owner@acme.example", "email") in seeds
         assert ("nuget-owner@acme.example", "email") in seeds
         assert ("uv-owner@acme.example", "email") in seeds
+        assert ("pdm-owner@acme.example", "email") in seeds
+        assert ("pdm-lock-owner@acme.example", "email") in seeds
         assert ("requirements-owner@acme.example", "email") in seeds
         assert ("requirements-nosuffix-owner@acme.example", "email") in seeds
         assert ("constraints-owner@acme.example", "email") in seeds
@@ -26138,6 +26172,7 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         assert "npm-token-do-not-store" not in db_dump
         assert "pnpm-token-do-not-store" not in db_dump
         assert "uv-token-do-not-store" not in db_dump
+        assert "pdm-token-do-not-store" not in db_dump
         assert "requirements-token-do-not-store" not in db_dump
         assert "req2-token-do-not-store" not in db_dump
 
@@ -26151,14 +26186,17 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         ).fetchall()
         assert ("aws_s3", "acme-nested-config-bucket") in cloud_assets
         assert ("aws_s3", "acme-constraints-bucket") in cloud_assets
+        assert ("aws_s3", "acme-pdm-lock-bucket") in cloud_assets
         assert ("aws_s3", "acme-yarn-bucket") in cloud_assets
         assert ("firebase", "nuget-firebase") in cloud_assets
+        assert ("firebase", "pdm-firebase") in cloud_assets
         assert ("firebase", "pypirc-firebase") in cloud_assets
         assert ("firebase", "uv-firebase") in cloud_assets
         assert ("firebase", "requirements-firebase") in cloud_assets
         assert ("firebase", "requirements-nosuffix-firebase") in cloud_assets
         assert ("gcs", "acme-gem-gcs") in cloud_assets
         assert ("supabase", "nestedpypi") in cloud_assets
+        assert ("supabase", "pdmvault") in cloud_assets
         assert ("supabase", "pnpmvault") in cloud_assets
         assert ("supabase", "uvvault") in cloud_assets
         assert ("supabase", "requirementsvault") in cloud_assets
@@ -26181,6 +26219,8 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         assert artifact_meta[gemrc_path.resolve().as_posix()]["format"] == "gemrc"
         assert artifact_meta[nuget_path.resolve().as_posix()]["format"] == "nuget-config"
         assert artifact_meta[uv_toml_path.resolve().as_posix()]["format"] == "uv-config"
+        assert artifact_meta[pdm_toml_path.resolve().as_posix()]["format"] == "pdm-config"
+        assert artifact_meta[pdm_lock_path.resolve().as_posix()]["format"] == "pdm-lock"
         assert artifact_meta[requirements_in_path.resolve().as_posix()]["format"] == "python-requirements-input"
         assert artifact_meta[requirements_path.resolve().as_posix()]["format"] == "python-requirements"
         assert artifact_meta[constraints_path.resolve().as_posix()]["format"] == "python-constraints"

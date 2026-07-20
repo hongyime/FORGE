@@ -67,6 +67,18 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Python PDM passive package-config checkpoint completed: `pdm.toml` and
+  `.pdm.toml` now classify as `pdm-config`, and `pdm.lock` now classifies as
+  `pdm-lock`, so package index URLs, owner emails, Firebase/Supabase refs, and
+  S3 archive refs recurse through existing passive artifact handling while
+  embedded package-index credentials stay stripped. Verification: regression
+  first failed with generic `toml`, then passed; compile/Ruff; focused
+  package-manager config regression -> `1 passed`; package/Python/SBOM slice ->
+  `11 passed, 748 deselected`; Terraform/IaC-adjacent slice -> `6 passed, 753
+  deselected`; compact slice -> `4 passed, 1 deselected`; cleanup ->
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory -> `1`, `5010`,
+  `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-pdm-config-passive-recursion.md`.
 - [x] Python `uv.toml` passive package-config checkpoint completed: `uv.toml`
   and `.uv.toml` now classify as `uv-config`, so package index URLs, owner
   emails, Firebase refs, and Supabase refs flow through existing passive

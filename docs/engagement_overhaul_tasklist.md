@@ -94,6 +94,24 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Python PDM passive package-config checkpoint: `pdm.toml` and
+  `.pdm.toml` now classify as `pdm-config`, and `pdm.lock` now classifies as
+  `pdm-lock`, so package index URLs, owner emails, Firebase/Supabase refs, and
+  S3 archive refs flow through the existing passive artifact recursion path
+  while embedded package-index credentials stay stripped. Verification:
+  regression first failed with generic `toml`, then passed; compile/Ruff for
+  touched files; focused package-manager config regression (`1 passed`);
+  adjacent package/Python/SBOM slice (`11 passed, 748 deselected`);
+  Terraform/IaC-adjacent passive artifact slice (`6 passed, 753 deselected`);
+  compact cross-phase slice (`4 passed, 1 deselected`); cleanup removed four
+  pytest engagement dirs and left `remaining_pytest_engagement_dirs=0`;
+  persistent workspace DB inventory remains `1`, `5010`, `master.db`; no
+  Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-pdm-config-passive-recursion.md`.
+  Safety: passive static package-manager config classification only; no package
+  download, registry API call, provider call, target network, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, severity change, or finding creation.
 - [x] Python `uv.toml` passive package-config checkpoint: modern Python `uv`
   config files now classify as `uv-config` instead of generic TOML, allowing
   package index URLs, owner emails, Firebase refs, and Supabase refs to flow
