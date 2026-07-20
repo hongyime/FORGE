@@ -66,6 +66,24 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Well-known service metadata recursion checkpoint: IANA-listed passive
+  metadata routes `/.well-known/did-configuration.json`,
+  `/.well-known/keybase.txt`, `/.well-known/smart-configuration`, and
+  `/.well-known/terraform.json` now classify as source-aware config artifacts
+  with stable route/cache/local format labels. Local static fixtures prove DID
+  configuration, Keybase proof, SMART discovery, and Terraform remote service
+  discovery metadata can feed recursive email, URL, and Supabase cloud pivots
+  through the existing artifact queue. Verification: compile/Ruff for touched
+  orchestrator/test files, focused well-known service metadata test (`2
+  passed`), adjacent well-known/public metadata helper slice (`17 passed`),
+  adjacent orchestrator `.well-known`/metadata selector (`21 passed, 738
+  deselected`), and cleanup check found no new pytest engagement DBs. Safety:
+  passive static metadata classification and parsing only; no DID verification,
+  Keybase lookup, SMART/FHIR call, Terraform service call/execution, provider
+  call, live probing, credential use, scope relaxation, proxy/IP rotation,
+  rate-limit bypass, validation/report-gate change, or persistent non-test
+  engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-well-known-service-metadata.md`.
 - [x] Well-known identity metadata recursion checkpoint: passive public identity
   routes `/.well-known/nostr.json`, `/.well-known/atproto-did`, and
   `/.well-known/jmap` now classify as source-aware config artifacts with stable
