@@ -184,6 +184,7 @@ from forge.utils.artifact_starlark_images import starlark_container_image_values
 from forge.utils.artifact_windows_registry import windows_registry_hive_artifact_label
 from forge.utils.artifact_web_manifest import web_manifest_related_application_assets
 from forge.utils.artifact_webweaver_metadata import webweaver_urls
+from forge.utils.artifact_well_known_link_metadata import well_known_link_urls
 from forge.utils.intel.http_pacing import (
     record_rate_limit_cooldown,
     sleep_rate_limit_cooldown,
@@ -477,6 +478,7 @@ def _artifact_url_looks_standards_namespace(value: object) -> bool:
         (host == "docs.oasis-open.org" and path.startswith("/ns/"))
         or (host == "www.w3.org" and path.startswith("/ns/"))
         or (host == "w3.org" and path.startswith("/ns/"))
+        or (host == "nodeinfo.diaspora.software" and path.startswith("/ns/schema/"))
     )
 
 
@@ -20458,6 +20460,7 @@ class ArtifactQueueProcessor:
                     "direct",
                     "relative_routes",
                     "public_metadata_links",
+                    "well_known_link_metadata",
                     "api_catalog_metadata",
                     "passkey_metadata",
                     "agent_card_metadata",
@@ -20649,6 +20652,10 @@ class ArtifactQueueProcessor:
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,
             )
+        if family == "well_known_link_metadata":
+            if _artifact_format_label(source_file) not in {"host-meta.json", "nodeinfo", "webfinger"}:
+                return []
+            return well_known_link_urls(text, base_url=source_file)
         if family == "api_catalog_metadata":
             if _artifact_format_label(source_file) != "api-catalog":
                 return []

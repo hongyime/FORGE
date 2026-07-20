@@ -81,6 +81,28 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Well-known JSON link relative-href recursion checkpoint:
+  source-aware `nodeinfo`, `webfinger`, and `host-meta.json` JSON link metadata
+  parsing now resolves concrete relative `href` / `url` values such as
+  `./2.1`, `../nodeinfo/2.0`, `./profiles/alice`, and `../users/alice`
+  against the remote artifact `source_url`, feeding recursive URL seeds through
+  the existing artifact URL persistence path. Templated links such as
+  `/nodeinfo/{version}` and generic JSON lookalikes remain excluded, and
+  NodeInfo schema namespace `rel` URLs are suppressed as standards metadata
+  rather than recursive target seeds. Verification: TDD focused regression
+  failed before implementation on missing relative NodeInfo/WebFinger link URL
+  promotion and noisy NodeInfo namespace seeds, then passed (`1 passed`);
+  compile for touched orchestrator/helper/test files; Ruff for touched files
+  (`All checks passed!`); adjacent well-known identity/API/provenance/helper
+  slice (`17 passed`); adjacent classification/format/public-label/helper
+  slice (`27 passed`); slow remote well-known metadata fixture with `-m slow`
+  (`1 passed`); cleanup check found no new persistent pytest DBs. Safety:
+  passive static JSON link metadata parsing and persistence-gate suppression
+  only; no NodeInfo/WebFinger request, profile request, provider call, live
+  probing, credential use, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, report-gate change, severity change, or deterministic finding
+  creation. Handoff:
+  `.claude/handoffs/2026-07-20-well-known-link-relative-href-recursion.md`.
 - [x] API catalog relative URL-field recursion checkpoint:
   source-aware `.well-known/api-catalog` parsing now resolves concrete relative
   JSON URL and endpoint fields such as `url: "./openapi.json"`,

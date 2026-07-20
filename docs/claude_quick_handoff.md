@@ -145,6 +145,12 @@ stop and pick a smaller verified kill-chain or determinism gap.
   fields against the remote artifact `source_url` into recursive URL seeds while
   excluding templated callback URLs and generic JSON lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-api-catalog-relative-url-recursion.md`.
+- [x] Well-known JSON link relative-href recursion completed: source-aware
+  `nodeinfo`, `webfinger`, and `host-meta.json` now resolve concrete relative
+  `href` / `url` values against the remote artifact `source_url` into recursive
+  URL seeds while suppressing NodeInfo schema namespace `rel` URLs and excluding
+  templated links/generic JSON lookalikes. Handoff:
+  `.claude/handoffs/2026-07-20-well-known-link-relative-href-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing
