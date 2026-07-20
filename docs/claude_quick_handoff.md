@@ -49,6 +49,13 @@ delegation, continue locally against the locked goal and record the limitation.
   lines and unsupported relationships, and validation registry marks the new
   type terminal `UNSUPPORTED` with no provider calls or findings. Handoff:
   `.claude/handoffs/2026-07-20-ad-metadata-publisher-inventory.md`.
+- [x] Sellers.json seller-account passive inventory completed: source-aware
+  sellers metadata now promotes non-confidential seller entries with valid
+  `seller_id`, public domain, and accepted seller type into
+  `ad_seller_account` resource inventory, preserves existing
+  email/URL/Supabase recursion, and validation registry marks the new type
+  terminal `UNSUPPORTED` with no provider calls or findings. Handoff:
+  `.claude/handoffs/2026-07-20-sellers-json-seller-inventory.md`.
 - [x] Apple app-site-association iOS app passive inventory completed: source-aware AASA now promotes valid `TEAMID.bundle.id` values from `appID`/`appIDs`/`apps` into `mobile_ios_app` resource inventory, preserves existing email/URL/Supabase recursion, and the validation registry marks the new type terminal `UNSUPPORTED` with no provider call or finding. Handoff: `.claude/handoffs/2026-07-20-aasa-ios-app-inventory.md`.
 - [x] Assetlinks Android package passive inventory completed: source-aware `assetlinks.json` now promotes valid Android `target.package_name` values into `mobile_android_package` resource inventory, preserves existing email/URL/Supabase recursion, and the validation registry marks the new type terminal `UNSUPPORTED` with no provider call or finding. Handoff: `.claude/handoffs/2026-07-20-assetlinks-android-package-inventory.md`.
 - [x] Microsoft identity-association metadata recursion completed: `/.well-known/microsoft-identity-association.json` and extensionless fallback route now keep source-aware labels, and `associatedApplications[].applicationId` GUIDs feed passive `azure_ad_app` cloud-asset inventory. Handoff: `.claude/handoffs/2026-07-20-microsoft-identity-association-metadata.md`.

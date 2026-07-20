@@ -77,6 +77,28 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Sellers.json seller-account passive-inventory checkpoint:
+  source-aware `sellers.json` parsing now promotes non-confidential seller
+  entries with valid `seller_id`, public domain, and accepted seller type into
+  passive `ad_seller_account` resource inventory while filtering confidential,
+  malformed, missing-ID, missing-domain, and invalid seller-type entries.
+  Existing email, URL, and Supabase recursion from the same artifact is
+  preserved, and the cloud-validation registry contract proves the new passive
+  seller resource type reaches terminal `UNSUPPORTED` state without provider
+  calls or findings. Verification: TDD focused regression failed before
+  implementation on missing seller inventory, then passed (`2 passed`);
+  compile/Ruff for touched orchestrator/helper/test files; helper plus ad
+  metadata slice (`10 passed`); validation registry terminal-state contract
+  (`1 passed`); remote root metadata slow fixture explicitly selected with
+  `-m slow` (`1 passed`); adjacent public metadata/mobile metadata slice
+  (`6 passed`); cleanup check found no new persistent pytest DBs. Review:
+  subagent spawn was attempted but thread limit was still reached, so the audit
+  proceeded locally. Safety: passive static sellers.json inventory only; no
+  sellers.json expansion/crawling, ad exchange lookup, provider call, live
+  probing, credential use, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, report-gate change, severity change, or deterministic finding
+  creation. Handoff:
+  `.claude/handoffs/2026-07-20-sellers-json-seller-inventory.md`.
 - [x] Ads.txt/app-ads.txt publisher-account passive-inventory checkpoint:
   source-aware `ads.txt` and `app-ads.txt` parsing now promotes valid ad-system
   domain plus publisher-account declarations into passive
