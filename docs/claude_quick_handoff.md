@@ -24,6 +24,12 @@ polish or provider breadth without proving the end-to-end kill-chain path.
 
 ## Current green checkpoint
 
+- [x] Remote-access artifact test split checkpoint is green:
+  RDP/Citrix static artifact recursion coverage moved out of the Phase 1 mega test into focused `tests/phase1/test_artifact_remote_access.py` (134 lines). The regression still proves `.rdp` and `.ica` local artifacts plus remote content-type classification feed emails, URL seeds, host/subdomain/domain pivots, Firebase/Supabase/S3/GCS cloud assets, and artifact format metadata without executing remote-access clients.
+  Verification: compile/Ruff for the focused and mega tests; focused remote-access test -> `1 passed`; adjacent artifact helper/connection-client suites -> `68 passed`.
+  Safety: test-only refactor. No runtime behavior change, RDP/Citrix execution, authentication, provider call, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-remote-access-artifact-test-split.md`.
+
 - [x] Scheme-less social profile URL recursion checkpoint is green:
   Epieos/social profile host guards now accept known profile URLs without a scheme, such as `github.com/acmeops` and `www.github.com/acmeops`. Provider payloads with scheme-less `profileUrl` values now preserve platform aliases and recursive handle pivots instead of being rejected by host matching.
   Verification: compile/Ruff for touched helper/focused parser tests; focused helper/parser/social scraper suite -> `83 passed`.
