@@ -27419,10 +27419,13 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _api_client_url_object_looks_supported(normalized: dict[str, Any]) -> bool:
-        return "raw" in normalized or bool(
-            ({"host", "hostname"} & set(normalized))
-            and ({"protocol", "scheme"} & set(normalized))
-        )
+        keys = set(normalized)
+        if "raw" in keys:
+            return True
+        has_host = bool({"host", "hostname"} & keys)
+        has_scheme = bool({"protocol", "scheme"} & keys)
+        has_path = bool({"path", "pathname"} & keys)
+        return bool(has_host and (has_scheme or has_path))
 
     @staticmethod
     def _api_client_url_component_value(value: Any) -> str:

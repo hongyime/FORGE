@@ -66,6 +66,22 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] API-client host/path URL-object recursion checkpoint: source-aware
+  API-client artifacts now accept Postman-style URL objects that provide
+  `host`/`hostname` plus `path`/`pathname` without explicit `raw` or `protocol`,
+  defaulting those concrete host/path pivots to HTTPS. Host-only objects and
+  localhost values remain suppressed, and direct string `url` fields still use
+  the existing path to avoid duplicate raw/normalized candidates. Verification:
+  TDD focused regression failed before the fix on empty output, then passed;
+  compile/Ruff for touched parser/test files; adjacent API-client worker/label
+  suite (`8 passed`); adjacent orchestrator API-client selector (`13 passed,
+  746 deselected`); cleanup check found no new persistent pytest DBs. Claude
+  sidecar review was attempted, but the hidden wrapper produced no output file
+  and was terminated. Safety: passive static API-client parsing only; no
+  provider call, live probing, credential use, scope relaxation, proxy/IP
+  rotation, rate-limit bypass, validation/report-gate change, or persistent
+  non-test engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-api-client-host-path-url-objects.md`.
 - [x] Multi-seed recursive fallback-lineage proof checkpoint: the compact
   multi-seed kill-chain E2E fixture now proves its deterministic report step
   emits Markdown plus JSON/PDF companion artifacts, template render metadata,

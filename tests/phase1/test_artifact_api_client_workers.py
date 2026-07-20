@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from textwrap import dedent
 
@@ -183,3 +184,41 @@ def test_api_client_text_candidate_families_use_bounded_workers_and_preserve_ord
     assert observed_family_batches == expected_family_batches
     assert observed_url_batches == [expected_raw_values]
     assert result.splitlines() == expected_lines
+
+
+def test_api_client_url_objects_default_host_path_to_https_without_protocol(
+    tmp_path: Path,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = {
+        "item": [
+            {
+                "request": {
+                    "url": {
+                        "host": ["api", "acme", "example"],
+                        "path": ["v1", "users"],
+                    }
+                }
+            },
+            {
+                "request": {
+                    "url": {
+                        "hostname": "admin.acme.example",
+                        "pathname": "health",
+                    }
+                }
+            },
+            {"request": {"url": {"host": "metadata.acme.example"}}},
+            {"request": {"url": {"host": "localhost", "path": "debug"}}},
+        ]
+    }
+
+    result = processor._api_client_text_structured_payload_text(
+        json.dumps(payload),
+        source_hint="postman_collection.json",
+    )
+
+    assert result.splitlines() == [
+        "https://api.acme.example/v1/users",
+        "https://admin.acme.example/health",
+    ]
