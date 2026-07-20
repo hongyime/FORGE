@@ -94,6 +94,25 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] MTGX provenance analyst-property checkpoint: native Maltego workspace
+  exports now promote safe provenance fields from node metadata into first-class
+  `forge.*` analyst properties, including `provider_sources`, `root_domain`,
+  `format`, source/discovery fields, seed hints, and passive artifact/download
+  context. Lists and objects are serialized deterministically as compact JSON
+  strings, so analysts can filter/click these values in Maltego without digging
+  through the raw `forge.metadata_json` blob. Verification: TDD focused MTGX
+  regression first failed on missing `forge.provider_sources`, then passed;
+  compile/Ruff for touched files; adjacent graph provenance export slice
+  (`2 passed, 106 deselected`); dashboard MTGX/provider-matrix parser slice
+  (`4 passed, 13 deselected`); compact cross-phase smoke (`5 passed, 1
+  deselected`); cleanup left `remaining_pytest_engagement_dirs=0`; persistent
+  workspace DB inventory remains `1`, `5010`, `master.db`; no Python/pytest
+  process remains after follow-up check. Handoff:
+  `.claude/handoffs/2026-07-20-mtgx-provenance-analyst-properties.md`.
+  Safety: graph/export reviewability only; no target network, live probing,
+  provider call, credential use, scope relaxation, proxy/IP rotation,
+  rate-limit bypass, validation/report-gate change, severity change, or finding
+  creation.
 - [x] End-goal anchor and Report Section 5 boundary checkpoint: the pinned
   product end state is now restated at the top of `END_GOAL.md` and in
   `docs/end_goal.md` so future agents have one explicit destination:

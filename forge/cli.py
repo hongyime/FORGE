@@ -3788,9 +3788,38 @@ def graph_build(
             sort_keys=True,
         )
 
+    def _analyst_property_text(value: object) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (dict, list, tuple)):
+            try:
+                return _json.dumps(
+                    value,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                    default=str,
+                ).strip()
+            except Exception:
+                return str(value).strip()
+        return str(value).strip()
+
     def _node_analyst_properties(node) -> dict[str, str]:
         metadata = _node_metadata_for_export(node)
         ordered_keys = (
+            "source",
+            "discovery_source",
+            "seed_type",
+            "depth",
+            "confidence",
+            "root_domain",
+            "format",
+            "payload_count",
+            "archive_sources",
+            "provider_sources",
+            "content_type",
+            "download_filename",
+            "remote_download",
             "service",
             "identifier",
             "validation_status",
@@ -3810,9 +3839,7 @@ def graph_build(
         properties: dict[str, str] = {}
         for key in ordered_keys:
             value = metadata.get(key)
-            if value is None:
-                continue
-            text = str(value).strip()
+            text = _analyst_property_text(value)
             if not text:
                 continue
             properties[key] = text[:512]

@@ -2148,6 +2148,9 @@ class TestGraphBuildArtifacts:
         assert "forge.identifier" in graphml_text
         assert "forge.validation_detail" in graphml_text
         assert "forge.source_url" in graphml_text
+        assert "forge.provider_sources" in graphml_text
+        assert "forge.root_domain" in graphml_text
+        assert "forge.format" in graphml_text
         assert "VALIDATED:aws_sts_get_caller_identity" in graphml_text
         assert "AccountId=742931608514" in graphml_text
         assert "maltego.link.manual.type" in graphml_text
@@ -2181,6 +2184,11 @@ class TestGraphBuildArtifacts:
         assert seed_manifest_node["metadata"]["discovery_source"] == "historical_cdx"
         assert seed_manifest_node["metadata"]["provider_sources"] == ["wayback", "commoncrawl"]
         assert seed_manifest_node["metadata"]["root_domain"] == "example.com"
+        assert seed_manifest_node["analyst_properties"]["provider_sources"] == (
+            '["wayback","commoncrawl"]'
+        )
+        assert seed_manifest_node["analyst_properties"]["root_domain"] == "example.com"
+        assert seed_manifest_node["analyst_properties"]["format"] == "webfinger"
         seed_manifest_metadata_text = json.dumps(seed_manifest_node["metadata"], sort_keys=True)
         assert "key_enc" not in seed_manifest_metadata_text
         assert "super-secret" not in seed_manifest_metadata_text

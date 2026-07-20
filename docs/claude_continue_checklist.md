@@ -67,6 +67,17 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] MTGX provenance analyst-property checkpoint completed: native Maltego
+  workspace exports now surface safe provenance metadata as first-class
+  `forge.*` analyst properties, including `provider_sources`, `root_domain`,
+  `format`, source/discovery fields, seed hints, and passive artifact/download
+  context. Verification: focused MTGX regression first failed on missing
+  `forge.provider_sources`, then passed; compile/Ruff; adjacent graph export
+  slice -> `2 passed, 106 deselected`; dashboard MTGX/provider-matrix slice ->
+  `4 passed, 13 deselected`; compact smoke -> `5 passed, 1 deselected`;
+  cleanup -> `remaining_pytest_engagement_dirs=0`; persistent DB inventory ->
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-mtgx-provenance-analyst-properties.md`.
 - [x] End-goal anchor and Report Section 5 boundary checkpoint completed:
   `END_GOAL.md` and `docs/end_goal.md` now state the pinned product end state
   explicitly for future agents, and Phase 6 report-facing Section 5 wording now
