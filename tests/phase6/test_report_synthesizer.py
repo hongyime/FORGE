@@ -1694,6 +1694,7 @@ def test_synthesise_output_path_pdf_mirrors_report_family(
     assert target.read_bytes().startswith(b"%PDF-1.4")
     assert target.with_suffix(".md").exists()
     assert target.with_suffix(".json").exists()
+    assert target.with_suffix(".csv").exists()
 
 
 def test_synthesise_output_path_json_mirrors_raw_export_fallback(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import socket
 import sqlite3
@@ -266,8 +267,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     report_text = report_path.read_text(encoding="utf-8")
     report_json_path = report_path.with_suffix(".json")
     report_pdf_path = report_path.with_suffix(".pdf")
+    report_csv_path = report_path.with_suffix(".csv")
     assert report_json_path.exists()
     assert report_pdf_path.exists()
+    assert report_csv_path.exists()
     assert report_pdf_path.read_bytes().startswith(b"%PDF-1.4")
     report_payload = json.loads(report_json_path.read_text(encoding="utf-8"))
     assert report_payload["provider"] == "template"
@@ -353,4 +356,16 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert not any(
         "dead-firebase-prod" in json.dumps(finding, sort_keys=True)
         for finding in exported_findings
+    )
+    with report_csv_path.open(encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+    finding_rows = [row for row in csv_rows if row.get("record_type") == "finding"]
+    validation_rows = [row for row in csv_rows if row.get("record_type") == "cloud_validation"]
+    assert finding_rows
+    assert all(row["validation_status"] == "VALIDATED" for row in finding_rows)
+    assert not any("dead-firebase-prod" in json.dumps(row, sort_keys=True) for row in finding_rows)
+    assert any(
+        row.get("cloud_identifier") == "dead-firebase-prod"
+        and row.get("validation_status") == "UNVERIFIED"
+        for row in validation_rows
     )

@@ -55,6 +55,15 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Normal report-family raw CSV companion completed: Phase 6 successful
+  Markdown/JSON/PDF report families now also include mirrored `.csv` raw export
+  companions. The representative provider-failure E2E asserts validated-only
+  finding CSV rows while preserving `UNVERIFIED` dead cloud assets as
+  non-finding validation inventory. Verification: TDD mirror regression failed
+  then passed, compile/Ruff, focused Phase 6 slice (`3 passed, 75 deselected`),
+  representative E2E (`1 passed in 45.45s`), cleanup unchanged (`1`, `5010`,
+  `master.db`). Handoff:
+  `.claude/handoffs/2026-07-20-report-family-csv-companion.md`.
 - [x] Representative multi-seed provider-failure fallback proof completed:
   `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` now exercises
   final report generation via `provider=auto`, forces a deterministic

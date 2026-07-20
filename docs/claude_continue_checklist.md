@@ -67,6 +67,18 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Normal report-family raw CSV companion checkpoint completed: Phase 6 now
+  writes a `.csv` raw export beside successful Markdown/JSON/PDF report
+  companions and `synthesise(output_path=...)` mirrors that CSV into the
+  requested output family. The representative multi-seed provider-failure E2E
+  asserts the CSV exists, contains only `VALIDATED` finding rows, and still
+  includes `UNVERIFIED` dead cloud assets as non-finding validation inventory.
+  Verification: TDD report-family mirror regression failed on missing
+  `final_report.csv`, then passed; compile/Ruff for touched report/test files;
+  focused Phase 6 output/fallback slice -> `3 passed, 75 deselected`;
+  representative multi-seed E2E -> `1 passed in 45.45s`; cleanup inventory
+  unchanged -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-report-family-csv-companion.md`.
 - [x] Representative multi-seed provider-failure fallback checkpoint completed:
   the compact multi-seed recursive E2E now routes final report generation
   through `provider=auto`, passes the CLI provider/max-loop flags through its

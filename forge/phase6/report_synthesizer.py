@@ -2441,6 +2441,7 @@ class ReportSynthesizer:
         generated_at = datetime.now(tz=timezone.utc).isoformat()
         json_path = markdown_path.with_suffix(".json")
         pdf_path = markdown_path.with_suffix(".pdf")
+        csv_path = markdown_path.with_suffix(".csv")
         payload = self._report_export_payload(
             ctx,
             markdown_text,
@@ -2453,10 +2454,12 @@ class ReportSynthesizer:
             title=f"FORGE Engagement Report {ctx.engagement_id}",
             text=markdown_text,
         )
+        self._write_raw_export_csv_file(ctx, csv_path)
         return {
             "markdown": markdown_path,
             "json": json_path,
             "pdf": pdf_path,
+            "csv": csv_path,
         }
 
     @staticmethod
@@ -2699,6 +2702,15 @@ class ReportSynthesizer:
             }
         ]
 
+    @classmethod
+    def _write_raw_export_csv_file(cls, ctx: ReportContext, csv_path: Path) -> None:
+        csv_rows = cls._raw_export_csv_rows(ctx)
+        csv_columns = list(csv_rows[0].keys())
+        with csv_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=csv_columns)
+            writer.writeheader()
+            writer.writerows(csv_rows)
+
     def _write_raw_export_fallback(
         self,
         ctx: ReportContext,
@@ -2757,8 +2769,6 @@ class ReportSynthesizer:
         last_error: Exception | None = None
         ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S")
         stem = f"engagement_{ctx.engagement_id}_raw_export_{ts}"
-        csv_rows = self._raw_export_csv_rows(ctx)
-        csv_columns = list(csv_rows[0].keys())
 
         for candidate_dir in output_candidates:
             try:
@@ -2769,10 +2779,7 @@ class ReportSynthesizer:
                     json.dumps(payload, indent=2, sort_keys=True),
                     encoding="utf-8",
                 )
-                with csv_path.open("w", encoding="utf-8", newline="") as handle:
-                    writer = csv.DictWriter(handle, fieldnames=csv_columns)
-                    writer.writeheader()
-                    writer.writerows(csv_rows)
+                self._write_raw_export_csv_file(ctx, csv_path)
                 logger.warning(
                     "Report-family write failed; emitted raw export fallback to %s",
                     json_path,
@@ -3673,6 +3680,7 @@ def synthesise(
                 ".md": generated,
                 ".json": generated.with_suffix(".json"),
                 ".pdf": generated.with_suffix(".pdf"),
+                ".csv": generated.with_suffix(".csv"),
             }
         else:
             generated_family[generated.suffix.lower()] = generated
