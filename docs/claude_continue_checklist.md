@@ -42,6 +42,23 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Local web manifest source-label checkpoint completed: direct local/top-level
+  `manifest.json` artifacts now preserve source-aware `metadata_json.format`
+  labels instead of generic `json`, matching the existing remote root public
+  metadata route/cache behavior while preserving recursive URL/email/cloud
+  extraction. Tracked docs now point to the current deterministic end-goal chain
+  and no longer describe stale `.kiro` handoff material as the live source of
+  truth; the web UI README now carries FORGE dashboard/review gate context
+  instead of stock Vite template text. Verification: compile/Ruff for touched
+  artifact files, focused public metadata label test (`1 passed`), adjacent
+  artifact helper/public metadata slice (`9 passed`), adjacent orchestrator
+  public metadata/manifest selector (`14 passed, 745 deselected`), and cleanup
+  check found no new pytest DBs. Safety: source-aware local artifact labeling
+  and tracked documentation clarification only; no route discovery, live
+  probing, provider call, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, validation/report-gate change, or persistent non-test engagement DB
+  mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-manifest-local-source-label.md`.
 - [x] Local public metadata source-label checkpoint completed: local/top-level
   `assetlinks.json`, `browserconfig.xml`, `jwks.json`, `mta-sts.txt`, and
   `security.txt` artifacts now keep source-aware `metadata_json.format` labels

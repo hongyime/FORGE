@@ -18,6 +18,7 @@ def test_local_public_metadata_artifacts_keep_source_aware_labels(tmp_path: Path
         "assetlinks.json": "assetlinks.json",
         "browserconfig.xml": "browserconfig.xml",
         "jwks.json": "jwks.json",
+        "manifest.json": "manifest.json",
         "mta-sts.txt": "mta-sts.txt",
         "security.txt": "security.txt",
     }

@@ -1,32 +1,18 @@
-# React + TypeScript + Vite
+# FORGE Web UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+This React/Vite app is the dashboard surface for the deterministic FORGE
+engagement pipeline. It must expose the same engagement facts as the backend:
+metadata, seeds, recursive discoveries, validation inventory, deterministic
+findings/severity, graph exports, reports, raw exports, and audit history.
 
-Currently, two official plugins are available:
+The web UI is not a separate source of truth. Current product goal and release
+gates live in:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `END_GOAL.md`
+- `docs/end_goal.md`
+- `docs/deterministic_engagement_contract.md`
+- `docs/engagement_overhaul_tasklist.md`
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Do not add UI-only polish that weakens or bypasses scope gates,
+validation-before-reporting, rule-engine severity, deterministic fallback, or
+auditability.

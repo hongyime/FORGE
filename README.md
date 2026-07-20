@@ -312,8 +312,13 @@ Current baseline: **2,100+ passing** / 0 failing.
 ## Documentation
 
 - `README.md` (this file) — main reference
+- `END_GOAL.md` — fast end-goal entry point for operators and future agents
+- `docs/end_goal.md` — normative deterministic end-goal contract
+- `docs/deterministic_engagement_contract.md` — compact pipeline gate checklist
+- `docs/engagement_overhaul_tasklist.md` — canonical acceptance checklist and active backlog
+- `docs/claude_quick_handoff.md` — latest short resume notes
 - `DAILY_USE.md` — one-page operator cheatsheet
-- `.kiro/MORNING_HANDOFF.md` — living current-state doc
+- `.kiro/MORNING_HANDOFF.md` — historical 2026-07-06 handoff; not current source of truth
 - `.kiro/OSINT_HANDOVER_BRIEF.md` — clean handover doc if you're consuming FORGE OSINT elsewhere
 - `docs/history/` — archived AUDIT.md, PRD.md, GUIDE.md (pre-consolidation)
 

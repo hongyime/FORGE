@@ -30,6 +30,7 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
+- [x] Local web manifest source-label target completed: local `manifest.json` artifacts now keep source-aware format metadata instead of generic `json`, and tracked docs now route future agents to the deterministic goal chain instead of stale handoff/source-of-truth wording. Handoff: `.claude/handoffs/2026-07-20-manifest-local-source-label.md`.
 - [x] Local public metadata source-label target completed: local `assetlinks.json`, `browserconfig.xml`, `jwks.json`, `mta-sts.txt`, and `security.txt` artifacts now keep source-aware formats instead of generic suffix labels while preserving existing recursion. Handoff: `.claude/handoffs/2026-07-20-public-metadata-labels.md`.
 - [x] Apple merchant domain-association metadata target completed: `/.well-known/apple-developer-merchantid-domain-association` now routes as passive config metadata and can feed URL/email/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-apple-merchant-well-known-recursion.md`.
 - [x] Matrix client well-known metadata target completed: `/.well-known/matrix/client` now routes as `matrix-client` passive config metadata and feeds Matrix homeserver/identity-server URLs, contact email, and Supabase refs through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-matrix-client-well-known-recursion.md`.
@@ -40,6 +41,26 @@ without creating competing source-of-truth docs.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] Local web manifest source-label checkpoint is green:
+  Direct local/top-level `manifest.json` artifacts now preserve source-aware
+  `metadata_json.format` labels instead of generic `json`, matching existing
+  remote root public metadata route/cache behavior while preserving recursive
+  URL/email/cloud extraction.
+  Verification: compile/Ruff for touched artifact files; focused public
+  metadata label test -> `1 passed`; adjacent artifact helper/public metadata
+  slice -> `9 passed`; adjacent orchestrator public metadata/manifest selector
+  -> `14 passed, 745 deselected`; cleanup check found no new pytest engagement
+  DBs.
+  Review: explorer `Planck the 2nd` confirmed the core goal docs are
+  discoverable and flagged stale source-of-truth wording in older docs; tracked
+  docs now point to the deterministic goal chain, and ignored archive notes were
+  clarified locally but left out of the commit.
+  Safety: source-aware local artifact labeling and tracked documentation
+  clarification only. No route discovery, live probing, provider call, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, validation/report-gate
+  change, or persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-manifest-local-source-label.md`.
 
 - [x] Local public metadata source-label checkpoint is green:
   Local/top-level `assetlinks.json`, `browserconfig.xml`, `jwks.json`,

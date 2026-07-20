@@ -4219,6 +4219,7 @@ _EXACT_PUBLIC_METADATA_FORMAT_NAMES = frozenset(
         "assetlinks.json",
         "browserconfig.xml",
         "jwks.json",
+        "manifest.json",
         "mta-sts.txt",
         "security.txt",
     }
