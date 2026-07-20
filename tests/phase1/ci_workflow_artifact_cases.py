@@ -78,6 +78,80 @@ def _emails(db_path: Path) -> set[str]:
         con.close()
 
 
+def run_codebuild_buildspec_secret_refs(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_codebuild_buildspec"
+    artifact_root.mkdir()
+    bootstrap_engagement(
+        db_path,
+        name="Acme Example",
+        scope_json=(
+            '["*.acme.example","+15551234567","security@acme.example",'
+            '"https://downloads.acme.example/app.apk"]'
+        ),
+        operator="delta-one",
+    )
+
+    buildspec_path = artifact_root / "buildspec.yml"
+    buildspec_path.write_text(
+        dedent(
+            """
+            version: 0.2
+            env:
+              variables:
+                OWNER_EMAIL: codebuild-owner@acme.example
+                STATUS_URL: https://codebuild.acme.example/report
+                FIREBASE_URL: https://codebuild-firebase.firebaseio.com
+                ARTIFACT_BUCKET: s3://acme-codebuild-artifacts/reports/latest.json
+              parameter-store:
+                DOCKER_PASSWORD: /CodeBuild/dockerLoginPassword
+              secrets-manager:
+                DB_PASSWORD: prod/db/password:password
+                API_KEY: arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/api-key-AbCdEf:token
+            phases:
+              pre_build:
+                commands:
+                  - docker pull public.ecr.aws/docker/library/alpine:latest
+              build:
+                commands:
+                  - curl https://codebuild.acme.example/status
+            artifacts:
+              files:
+                - '**/*'
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 1
+    assert summary.processed >= 1
+    assert summary.firebase_projects >= 1
+    assert summary.discovered_seeds >= 4
+
+    seeds = _seed_pairs(db_path)
+    assert ("codebuild-owner@acme.example", "email") in seeds
+    assert ("https://codebuild.acme.example/report", "url") in seeds
+    assert ("https://codebuild.acme.example/status", "url") in seeds
+    assert ("https://public.ecr.aws/docker/library/alpine", "url") in seeds
+
+    cloud_assets = _cloud_assets(db_path)
+    assert ("aws_parameterstore", "codebuild/dockerloginpassword") in cloud_assets
+    assert (
+        "aws_secretsmanager",
+        "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/api-key-abcdef",
+    ) in cloud_assets
+    assert ("aws_secretsmanager", "prod/db/password") in cloud_assets
+    assert ("aws_s3", "acme-codebuild-artifacts") in cloud_assets
+    assert ("firebase", "codebuild-firebase") in cloud_assets
+
+    artifact_meta = _artifact_meta(db_path)
+    assert artifact_meta[buildspec_path.resolve().as_posix()]["format"] == "codebuild-buildspec"
+
+
 def run_ci_cd_workflow_metadata_artifacts(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifact_ci_cd_workflows"

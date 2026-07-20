@@ -27,6 +27,13 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Remote artifact download and CodeBuild regression modularization checkpoint is green:
+  Extensionless remote DEX content-type download recursion moved into focused `tests/phase1/remote_artifact_download_cases.py`, and the inline CodeBuild buildspec secret/reference regression moved into `tests/phase1/ci_workflow_artifact_cases.py`; original mega-test node IDs remain thin wrappers. This removes 231 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving artifact-analysis coverage for remote binary content-type inference, provenance, recursive email/URL/cloud assets, CodeBuild Parameter Store/Secrets Manager refs, ECR URL pivots, Firebase refs, and S3 refs.
+  Verification: compile/Ruff for touched Phase 1 files; focused DEX+CodeBuild wrappers -> `2 passed`; adjacent CI workflow wrappers -> `4 passed`; cleanup check found no new pytest engagement DBs.
+  Review: subagent `Socrates` identified the CI block; only the inline CodeBuild case was moved because the other CI tests were already shims.
+  Safety: test modularization only. No production parser behavior, live probing, provider calls, credential use, scope changes, report-gate behavior, or persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-remote-artifact-codebuild-test-modularization.md`.
+
 - [x] Cloud-validation key-runtime regression split checkpoint is green:
   Basic `run_cloud_validate` persistence, rate-limit preflight, key scope denial, scheduled scope-manifest denial, and unsupported-key regressions moved from the Phase 4 mega validation suite into focused `tests/phase4/test_cloud_validation_key_runtime.py` (12KB), removing 311 more lines from `tests/phase4/test_cloud_validate.py` without runtime behavior changes.
   Verification: compile/Ruff for touched validation test files; focused runtime/split files -> `10 passed`; adjacent Stripe sweep slice -> `4 passed`; full cloud-validation suite including all split files and managed-hosting reachability -> `145 passed`; cleanup check found no new pytest engagement DBs.
