@@ -123,6 +123,7 @@ from forge.utils.artifact_amplify_client_config import (
     amplify_client_config_candidates,
     amplify_client_config_text_candidates,
 )
+from forge.utils.artifact_agent_card_metadata import agent_card_urls
 from forge.utils.artifact_ad_metadata import (
     ads_txt_publisher_account_assets,
     sellers_json_seller_account_assets,
@@ -20453,6 +20454,7 @@ class ArtifactQueueProcessor:
                     "relative_routes",
                     "public_metadata_links",
                     "passkey_metadata",
+                    "agent_card_metadata",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20641,6 +20643,10 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) != "passkey-endpoints":
                 return []
             return passkey_endpoint_urls(text, base_url=source_file)
+        if family == "agent_card_metadata":
+            if _artifact_format_label(source_file) != "agent-card.json":
+                return []
+            return agent_card_urls(text, base_url=source_file)
         if family == "helm_index":
             return helm_index_chart_package_urls(
                 text,
