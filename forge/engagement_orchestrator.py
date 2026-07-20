@@ -134,6 +134,7 @@ from forge.utils.artifact_package_manager_config import (
     package_manager_config_artifact_label,
     package_manager_config_remote_filename,
 )
+from forge.utils.artifact_public_metadata_links import public_metadata_document_urls
 from forge.utils.artifact_pulumi_config import pulumi_config_candidates
 from forge.utils.artifact_sst_config import sst_config_artifact_label, sst_config_candidates
 from forge.utils.artifact_storage_client_config import (
@@ -20410,7 +20411,14 @@ class ArtifactQueueProcessor:
             return batch
         if family == "urls":
             url_family_batches = self._run_ordered_local_batch(
-                ("direct", "relative_routes", "helm_index", "package_registry", "container_images"),
+                (
+                    "direct",
+                    "relative_routes",
+                    "public_metadata_links",
+                    "helm_index",
+                    "package_registry",
+                    "container_images",
+                ),
                 lambda url_family: self._artifact_text_url_family_candidates(
                     url_family,
                     text=text,
@@ -20585,6 +20593,12 @@ class ArtifactQueueProcessor:
             return urls
         if family == "relative_routes":
             return _extract_artifact_relative_route_urls(text, base_url=source_file)
+        if family == "public_metadata_links":
+            return public_metadata_document_urls(
+                text,
+                source_label=_artifact_format_label(source_file),
+                base_url=source_file,
+            )
         if family == "helm_index":
             return helm_index_chart_package_urls(
                 text,

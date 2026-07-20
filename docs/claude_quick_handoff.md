@@ -66,6 +66,13 @@ delegation, continue locally against the locked goal and record the limitation.
   registry marks the new type terminal `UNSUPPORTED` with no provider calls or
   findings. Handoff:
   `.claude/handoffs/2026-07-20-ai-plugin-manifest-inventory.md`.
+- [x] Public metadata document-link recursion completed: source-aware
+  `llms.txt`, `ai.txt`, `humans.txt`, `security.txt`, and `trust.txt` parsing
+  now promotes Markdown/document field links such as
+  `[OpenAPI](./openapi.yaml)` and `Policy: ./ai-policy.txt` into recursive URL
+  seeds when the artifact source URL is HTTP(S), while generic `notes.txt`
+  Markdown remains excluded. Handoff:
+  `.claude/handoffs/2026-07-20-public-metadata-links-recursion.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing

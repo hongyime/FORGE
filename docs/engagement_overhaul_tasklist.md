@@ -81,6 +81,23 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Public metadata document-link recursive-pivot checkpoint:
+  source-aware parsing for `llms.txt`, `ai.txt`, `humans.txt`, `security.txt`,
+  and `trust.txt` now promotes Markdown links and simple metadata field links
+  such as `[OpenAPI](./openapi.yaml)` and `Policy: ./ai-policy.txt` into
+  recursive URL seeds when the artifact source URL is HTTP(S). Generic text
+  files with the same Markdown link shape remain excluded from this source-gated
+  parser. Verification: TDD focused regression failed before implementation on
+  missing `llms.txt` relative document pivots, then passed (`1 passed`);
+  compile/Ruff for touched orchestrator/helper/test files; adjacent public
+  metadata/helper/email-security slice (`11 passed`); remote root metadata slow
+  fixture with `-m slow` (`1 passed`); cleanup check found no new persistent
+  pytest DBs. Safety: passive static public-metadata link parsing only; no link
+  fetch beyond existing recursive URL seed persistence, provider call, live
+  probing, credential use, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, report-gate change, severity change, or deterministic finding
+  creation. Handoff:
+  `.claude/handoffs/2026-07-20-public-metadata-links-recursion.md`.
 - [x] MTA-STS MX host recursive-pivot checkpoint:
   source-aware `mta-sts.txt` parsing now promotes valid `mx:` host patterns,
   including wildcard patterns normalized without the `*.` prefix, into recursive
