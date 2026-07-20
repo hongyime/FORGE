@@ -14,7 +14,7 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 - [x] Vault HCL config passive-recursion checkpoint is green:
   Explicit HashiCorp Vault config artifacts such as `vault/config.hcl`, `.vault.d/config.hcl`, and `vault.hcl` now keep `hashicorp-vault-config` labels and run through a compact helper, `forge/utils/artifact_hashicorp_config.py`. Static endpoint assignments such as `api_addr`, `cluster_addr`, `redirect_addr`, and `VAULT_ADDR` promote public host-only values into recursive HTTPS URL seeds.
   Generic `.hcl`, Consul configs, Terraform policy files, templated values, localhost/IP-only values, wildcards, and userinfo-bearing URLs stay suppressed.
-  Verification: compile/Ruff for touched helper/orchestrator/test files; full artifact helper suite -> `31 passed`; broad structured-discovery slice -> `306 passed, 455 deselected`.
+  Verification: compile/Ruff for touched helper/orchestrator/test files; focused Vault artifact suite -> `3 passed`; full artifact helper suite -> `29 passed`; broad structured-discovery slice -> `305 passed, 455 deselected`.
   Safety: passive static parsing only. No Vault execution, token use, authentication, validation, provider call, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
   Handoff: `.claude/handoffs/2026-07-20-vault-hcl-config-recursion.md`.
 

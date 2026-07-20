@@ -9,7 +9,7 @@ Passive HashiCorp Vault config artifacts now promote static public Vault endpoin
 - Added `forge/utils/artifact_hashicorp_config.py` for source-gated Vault config labels and endpoint candidate extraction.
 - Wired `hashicorp_config_text` into `ArtifactQueueProcessor._STRUCTURED_DISCOVERY_FAMILIES`.
 - `_artifact_format_label()` now preserves `hashicorp-vault-config` for explicit Vault config paths/names.
-- Added focused helper and orchestrator regressions for label gating, templated/userinfo/local suppression, and structured family execution.
+- Added focused regressions in `tests/phase1/test_artifact_hashicorp_config.py` for label gating, templated/userinfo/local suppression, and structured family execution.
 
 ## Safety Boundary
 
@@ -19,10 +19,11 @@ Passive HashiCorp Vault config artifacts now promote static public Vault endpoin
 
 ## Verification
 
-- `python -m py_compile forge\utils\artifact_hashicorp_config.py forge\engagement_orchestrator.py tests\phase1\test_artifact_helpers.py tests\phase1\test_engagement_orchestrator.py`
-- `python -m ruff check forge\utils\artifact_hashicorp_config.py forge\engagement_orchestrator.py tests\phase1\test_artifact_helpers.py tests\phase1\test_engagement_orchestrator.py`
-- `python -m pytest tests\phase1\test_artifact_helpers.py -q --color=no` -> `31 passed`
-- `python -m pytest tests\phase1\test_engagement_orchestrator.py -k "structured_payload or structured_discovery or artifact_nomad or vault_config_payload or parallelizes" -q --color=no` -> `306 passed, 455 deselected`
+- `python -m py_compile forge\utils\artifact_hashicorp_config.py forge\engagement_orchestrator.py tests\phase1\test_artifact_hashicorp_config.py tests\phase1\test_artifact_helpers.py tests\phase1\test_engagement_orchestrator.py`
+- `python -m ruff check forge\utils\artifact_hashicorp_config.py forge\engagement_orchestrator.py tests\phase1\test_artifact_hashicorp_config.py tests\phase1\test_artifact_helpers.py tests\phase1\test_engagement_orchestrator.py`
+- `python -m pytest tests\phase1\test_artifact_hashicorp_config.py -q --color=no` -> `3 passed`
+- `python -m pytest tests\phase1\test_artifact_helpers.py -q --color=no` -> `29 passed`
+- `python -m pytest tests\phase1\test_engagement_orchestrator.py -k "structured_payload or structured_discovery or artifact_nomad or parallelizes" -q --color=no` -> `305 passed, 455 deselected`
 
 ## Next
 
