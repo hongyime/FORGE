@@ -42,6 +42,24 @@ historical notes only, not as current instructions.
   identity-provider payload shape or passive artifact/parser source shape before
   writing code. If no missing recursive pivot is found, switch to release-level
   mocked end-to-end/report-fallback tests or safe mega-test/module splits.
+- [x] Well-known privacy/vendor metadata recursion checkpoint completed:
+  IANA-listed passive metadata routes `/.well-known/gpc.json`,
+  `/.well-known/tdmrep.json`, `/.well-known/pubvendors.json`,
+  `/.well-known/trust.txt`, `/.well-known/dnt-policy.txt`, and
+  `/.well-known/privacy-sandbox-attestations.json` now preserve source-aware
+  route/cache/local format labels instead of generic `json`/`txt`. Local static
+  fixtures prove privacy, text/data-mining, publisher-vendor, trust, DNT, and
+  privacy-sandbox metadata can feed recursive email, URL, and Supabase cloud
+  pivots through the existing artifact queue. Verification: compile/Ruff for
+  touched orchestrator/test files, focused well-known privacy metadata test (`2
+  passed`), combined well-known/public metadata slice (`21 passed`), adjacent
+  orchestrator `.well-known`/metadata selector (`21 passed, 738 deselected`),
+  and cleanup check found no new pytest DBs. Safety: passive static metadata
+  labeling/parsing only; no policy/vendor API call, browser privacy sandbox
+  behavior, provider call, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, validation/report-gate change, or
+  persistent non-test engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-well-known-privacy-metadata.md`.
 - [x] Well-known API/application metadata recursion checkpoint completed:
   IANA-listed passive metadata routes `/.well-known/agent-card.json`,
   `/.well-known/api-catalog`, `/.well-known/open-resource-discovery`,
