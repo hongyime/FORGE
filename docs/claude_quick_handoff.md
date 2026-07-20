@@ -27,6 +27,12 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Remote mobile-bundle regression modularization checkpoint is green:
+  XAPK, APKM, and APKS seed-URL dry-run kill-chain regressions now share a compact focused helper in `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 430 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only kill-chain coverage for queued remote mobile bundles, nested APK static extraction, Firebase/Supabase cloud asset recursion, derived seed relations, and recursive email/URL seed creation.
+  Verification: compile/Ruff for touched Phase 1 files; remote mobile-bundle wrapper set -> `3 passed`; cleanup check found no new pytest engagement DBs.
+  Safety: test modularization only. No production mobile parsing behavior, live probing, provider calls, credential use, scope changes, validation/report gates, or persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-remote-mobile-bundle-test-modularization.md`.
+
 - [x] Remote artifact download regression modularization checkpoint is green:
   Rate-limited remote artifact retry/backoff, extensionless remote image filename inference from `Content-Disposition`, and extensionless AVIF content-type inference moved into focused `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 268 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only remote artifact coverage for respectful `Retry-After` pacing, OCR payload recursion, downloaded filename metadata, image format detection, and recursive email/URL seed extraction.
   Verification: compile/Ruff for touched Phase 1 files; remote-download wrapper set -> `4 passed`; cleanup check found no new pytest engagement DBs.

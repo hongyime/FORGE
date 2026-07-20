@@ -76,6 +76,7 @@ from tests.phase1.remote_artifact_download_cases import (
     run_extensionless_remote_dex_download,
     run_extensionless_remote_image_header_filename,
     run_rate_limited_remote_artifact_retry,
+    run_remote_mobile_bundle_url_seed,
 )
 from tests.phase1.security_scanner_artifact_cases import (
     run_security_scanner_control_files,
@@ -90069,451 +90070,81 @@ def test_kill_chain_dry_run_queues_seed_mobile_bundle_urls_and_processes_remote_
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
-    monkeypatch.setenv("FORGE_ENV", "test")
-
-    served_root = tmp_path / "served-mobile-bundles"
-    served_root.mkdir()
-    remote_xapk = served_root / "remote-bundle.xapk"
-
-    base_apk_bytes = BytesIO()
-    with zipfile.ZipFile(base_apk_bytes, "w") as zf:
-        zf.writestr(
-            "google-services.json",
-            """
-            {
-              "project_info": {
-                "project_id": "acme-remote-bundle-firebase",
-                "firebase_url": "https://acme-remote-bundle-firebase.firebaseio.com"
-              }
-            }
-            """.strip(),
-        )
-        zf.writestr(
-            "assets/supabase.js",
-            """
-            export const url = "https://remotebundle.supabase.co";
-            export const anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlbW90ZWJ1bmRsZSIsInJvbGUiOiJhbm9uIn0.signature123";
-            export const owner = "remote-bundle-owner@acme.example";
-            export const endpoint = "https://remotebundle.acme.example/mobile";
-            """.strip(),
-        )
-
-    with zipfile.ZipFile(remote_xapk, "w") as zf:
-        zf.writestr("manifest.json", '{"name":"Acme Remote Bundle"}')
-        zf.writestr("base.apk", base_apk_bytes.getvalue())
-
-    class _QuietHandler(SimpleHTTPRequestHandler):
-        def log_message(self, format: str, *args) -> None:  # noqa: A003
-            return None
-
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 0),
-        partial(_QuietHandler, directory=str(served_root)),
+    run_remote_mobile_bundle_url_seed(
+        tmp_path,
+        monkeypatch,
+        served_dir="served-mobile-bundles",
+        filename="remote-bundle.xapk",
+        bundle_format="xapk",
+        firebase_project="acme-remote-bundle-firebase",
+        supabase_ref="remotebundle",
+        supabase_anon=(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlbW90ZWJ1bmRsZSIsInJvbGUiOiJhbm9uIn0."
+            "signature123"
+        ),
+        owner_email="remote-bundle-owner@acme.example",
+        endpoint_url="https://remotebundle.acme.example/mobile",
+        archive_entries=(
+            ("manifest.json", '{"name":"Acme Remote Bundle"}'),
+            ("base.apk", "{base_apk}"),
+        ),
+        require_nested_count=False,
     )
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        _bootstrap_engagement(db_path)
-        source_url = f"http://127.0.0.1:{server.server_address[1]}/{remote_xapk.name}?download=1"
-
-        con = sqlite3.connect(db_path)
-        try:
-            con.execute(
-                """
-                INSERT INTO engagement_seeds
-                    (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
-                VALUES
-                    (1001, ?, 'url', 'cross_reference', 'pending', 1, 0.82, '{}')
-                """,
-                (source_url,),
-            )
-            con.commit()
-        finally:
-            con.close()
-
-        from forge.cli import kill_chain
-
-        kill_chain(
-            seed="acme.example",
-            related_seed=["security@acme.example"],
-            engagement="1001",
-            max_iter=1,
-            tor=False,
-            dry_run=True,
-            attack_mode=False,
-            skip_cloud=True,
-            skip_keyscan=True,
-        )
-
-        con = sqlite3.connect(db_path)
-        try:
-            artifact_row = con.execute(
-                """
-                SELECT status, local_path, discovered_from, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001 AND source_url=?
-                """,
-                (source_url,),
-            ).fetchone()
-            assert artifact_row is not None
-            assert artifact_row[0] == "parsed"
-            assert artifact_row[2] == "engagement_seed"
-            assert artifact_row[1]
-            assert Path(str(artifact_row[1])).exists()
-            assert json.loads(str(artifact_row[3] or "{}")).get("format") == "xapk"
-
-            cloud_assets = {
-                (row[0], row[1])
-                for row in con.execute(
-                    """
-                    SELECT asset_type, identifier
-                    FROM cloud_assets
-                    WHERE engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert ("firebase", "acme-remote-bundle-firebase") in cloud_assets
-            assert ("supabase", "remotebundle") in cloud_assets
-
-            relations = {
-                (str(row[0]), str(row[1]), str(row[2]))
-                for row in con.execute(
-                    """
-                    SELECT src.seed_value, dst.seed_value, sr.relation_type
-                    FROM seed_relations sr
-                    JOIN engagement_seeds src ON src.id=sr.source_seed_id
-                    JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-                    WHERE sr.engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert (source_url, "acme-remote-bundle-firebase", "derived_from") in relations
-            assert (source_url, "remotebundle", "derived_from") in relations
-
-            seeds = {
-                (str(row[0]), str(row[1]))
-                for row in con.execute(
-                    """
-                    SELECT seed_value, seed_type
-                    FROM engagement_seeds
-                    WHERE engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert ("remote-bundle-owner@acme.example", "email") in seeds
-            assert ("https://remotebundle.acme.example/mobile", "url") in seeds
-        finally:
-            con.close()
-    finally:
-        server.shutdown()
-        thread.join(timeout=5)
-        server.server_close()
 
 
 def test_kill_chain_dry_run_queues_seed_mobile_bundle_urls_and_processes_remote_apkm(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
-    monkeypatch.setenv("FORGE_ENV", "test")
-
-    served_root = tmp_path / "served-mobile-bundles-apkm"
-    served_root.mkdir()
-    remote_apkm = served_root / "remote-bundle.apkm"
-
-    base_apk_bytes = BytesIO()
-    with zipfile.ZipFile(base_apk_bytes, "w") as zf:
-        zf.writestr(
-            "google-services.json",
-            """
-            {
-              "project_info": {
-                "project_id": "acme-remote-apkm-firebase",
-                "firebase_url": "https://acme-remote-apkm-firebase.firebaseio.com"
-              }
-            }
-            """.strip(),
-        )
-        zf.writestr(
-            "assets/supabase.js",
-            """
-            export const url = "https://remoteapkm.supabase.co";
-            export const anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlbW90ZWFwa20iLCJyb2xlIjoiYW5vbiJ9.signature123";
-            export const owner = "remote-apkm-owner@acme.example";
-            export const endpoint = "https://remoteapkm.acme.example/mobile";
-            """.strip(),
-        )
-
-    with zipfile.ZipFile(remote_apkm, "w") as zf:
-        zf.writestr("manifest.json", '{"name":"Acme Remote APKM"}')
-        zf.writestr("base.apk", base_apk_bytes.getvalue())
-
-    class _QuietHandler(SimpleHTTPRequestHandler):
-        def log_message(self, format: str, *args) -> None:  # noqa: A003
-            return None
-
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 0),
-        partial(_QuietHandler, directory=str(served_root)),
+    run_remote_mobile_bundle_url_seed(
+        tmp_path,
+        monkeypatch,
+        served_dir="served-mobile-bundles-apkm",
+        filename="remote-bundle.apkm",
+        bundle_format="apkm",
+        firebase_project="acme-remote-apkm-firebase",
+        supabase_ref="remoteapkm",
+        supabase_anon=(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlbW90ZWFwa20iLCJyb2xlIjoiYW5vbiJ9."
+            "signature123"
+        ),
+        owner_email="remote-apkm-owner@acme.example",
+        endpoint_url="https://remoteapkm.acme.example/mobile",
+        archive_entries=(
+            ("manifest.json", '{"name":"Acme Remote APKM"}'),
+            ("base.apk", "{base_apk}"),
+        ),
+        require_nested_count=True,
     )
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        _bootstrap_engagement(db_path)
-        source_url = f"http://127.0.0.1:{server.server_address[1]}/{remote_apkm.name}?download=1"
-
-        con = sqlite3.connect(db_path)
-        try:
-            con.execute(
-                """
-                INSERT INTO engagement_seeds
-                    (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
-                VALUES
-                    (1001, ?, 'url', 'cross_reference', 'pending', 1, 0.82, '{}')
-                """,
-                (source_url,),
-            )
-            con.commit()
-        finally:
-            con.close()
-
-        from forge.cli import kill_chain
-
-        kill_chain(
-            seed="acme.example",
-            related_seed=["security@acme.example"],
-            engagement="1001",
-            max_iter=1,
-            tor=False,
-            dry_run=True,
-            attack_mode=False,
-            skip_cloud=True,
-            skip_keyscan=True,
-        )
-
-        con = sqlite3.connect(db_path)
-        try:
-            artifact_row = con.execute(
-                """
-                SELECT status, local_path, discovered_from, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001 AND source_url=?
-                """,
-                (source_url,),
-            ).fetchone()
-            assert artifact_row is not None
-            assert artifact_row[0] == "parsed"
-            assert artifact_row[2] == "engagement_seed"
-            assert artifact_row[1]
-            assert Path(str(artifact_row[1])).exists()
-            metadata = json.loads(str(artifact_row[3] or "{}"))
-            assert metadata["format"] == "apkm"
-            assert metadata["nested_mobile_member_count"] >= 1
-
-            cloud_assets = {
-                (row[0], row[1])
-                for row in con.execute(
-                    """
-                    SELECT asset_type, identifier
-                    FROM cloud_assets
-                    WHERE engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert ("firebase", "acme-remote-apkm-firebase") in cloud_assets
-            assert ("supabase", "remoteapkm") in cloud_assets
-
-            relations = {
-                (str(row[0]), str(row[1]), str(row[2]))
-                for row in con.execute(
-                    """
-                    SELECT src.seed_value, dst.seed_value, sr.relation_type
-                    FROM seed_relations sr
-                    JOIN engagement_seeds src ON src.id=sr.source_seed_id
-                    JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-                    WHERE sr.engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert (source_url, "acme-remote-apkm-firebase", "derived_from") in relations
-            assert (source_url, "remoteapkm", "derived_from") in relations
-
-            seeds = {
-                (str(row[0]), str(row[1]))
-                for row in con.execute(
-                    """
-                    SELECT seed_value, seed_type
-                    FROM engagement_seeds
-                    WHERE engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert ("remote-apkm-owner@acme.example", "email") in seeds
-            assert ("https://remoteapkm.acme.example/mobile", "url") in seeds
-        finally:
-            con.close()
-    finally:
-        server.shutdown()
-        thread.join(timeout=5)
-        server.server_close()
 
 
 def test_kill_chain_dry_run_queues_seed_mobile_bundle_urls_and_processes_remote_apks(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
-    monkeypatch.setenv("FORGE_ENV", "test")
-
-    served_root = tmp_path / "served-mobile-bundles-apks"
-    served_root.mkdir()
-    remote_apks = served_root / "remote-bundle.apks"
-
-    base_apk_bytes = BytesIO()
-    with zipfile.ZipFile(base_apk_bytes, "w") as zf:
-        zf.writestr(
-            "google-services.json",
-            """
-            {
-              "project_info": {
-                "project_id": "acme-remote-apks-firebase",
-                "firebase_url": "https://acme-remote-apks-firebase.firebaseio.com"
-              }
-            }
-            """.strip(),
-        )
-        zf.writestr(
-            "assets/supabase.js",
-            """
-            export const url = "https://remoteapks.supabase.co";
-            export const anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJyZW1vdGVhcGtzIiwicmVmIjoicmVtb3RlYXBrcyIsInJvbGUiOiJhbm9uIn0.signature123";
-            export const owner = "remote-apks-owner@acme.example";
-            export const endpoint = "https://remoteapks.acme.example/mobile";
-            """.strip(),
-        )
-
-    with zipfile.ZipFile(remote_apks, "w") as zf:
-        zf.writestr("toc.pb", b"Acme Remote APKS")
-        zf.writestr("splits/base.apk", base_apk_bytes.getvalue())
-
-    class _QuietHandler(SimpleHTTPRequestHandler):
-        def log_message(self, format: str, *args) -> None:  # noqa: A003
-            return None
-
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 0),
-        partial(_QuietHandler, directory=str(served_root)),
+    run_remote_mobile_bundle_url_seed(
+        tmp_path,
+        monkeypatch,
+        served_dir="served-mobile-bundles-apks",
+        filename="remote-bundle.apks",
+        bundle_format="apks",
+        firebase_project="acme-remote-apks-firebase",
+        supabase_ref="remoteapks",
+        supabase_anon=(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            "eyJpc3MiOiJyZW1vdGVhcGtzIiwicmVmIjoicmVtb3RlYXBrcyIsInJvbGUiOiJhbm9uIn0."
+            "signature123"
+        ),
+        owner_email="remote-apks-owner@acme.example",
+        endpoint_url="https://remoteapks.acme.example/mobile",
+        archive_entries=(
+            ("toc.pb", b"Acme Remote APKS"),
+            ("splits/base.apk", "{base_apk}"),
+        ),
+        require_nested_count=True,
     )
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        _bootstrap_engagement(db_path)
-        source_url = f"http://127.0.0.1:{server.server_address[1]}/{remote_apks.name}?download=1"
-
-        con = sqlite3.connect(db_path)
-        try:
-            con.execute(
-                """
-                INSERT INTO engagement_seeds
-                    (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
-                VALUES
-                    (1001, ?, 'url', 'cross_reference', 'pending', 1, 0.82, '{}')
-                """,
-                (source_url,),
-            )
-            con.commit()
-        finally:
-            con.close()
-
-        from forge.cli import kill_chain
-
-        kill_chain(
-            seed="acme.example",
-            related_seed=["security@acme.example"],
-            engagement="1001",
-            max_iter=1,
-            tor=False,
-            dry_run=True,
-            attack_mode=False,
-            skip_cloud=True,
-            skip_keyscan=True,
-        )
-
-        con = sqlite3.connect(db_path)
-        try:
-            artifact_row = con.execute(
-                """
-                SELECT status, local_path, discovered_from, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001 AND source_url=?
-                """,
-                (source_url,),
-            ).fetchone()
-            assert artifact_row is not None
-            assert artifact_row[0] == "parsed"
-            assert artifact_row[2] == "engagement_seed"
-            assert artifact_row[1]
-            assert Path(str(artifact_row[1])).exists()
-            metadata = json.loads(str(artifact_row[3] or "{}"))
-            assert metadata["format"] == "apks"
-            assert metadata["nested_mobile_member_count"] >= 1
-
-            cloud_assets = {
-                (row[0], row[1])
-                for row in con.execute(
-                    """
-                    SELECT asset_type, identifier
-                    FROM cloud_assets
-                    WHERE engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert ("firebase", "acme-remote-apks-firebase") in cloud_assets
-            assert ("supabase", "remoteapks") in cloud_assets
-
-            relations = {
-                (str(row[0]), str(row[1]), str(row[2]))
-                for row in con.execute(
-                    """
-                    SELECT src.seed_value, dst.seed_value, sr.relation_type
-                    FROM seed_relations sr
-                    JOIN engagement_seeds src ON src.id=sr.source_seed_id
-                    JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-                    WHERE sr.engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert (source_url, "acme-remote-apks-firebase", "derived_from") in relations
-            assert (source_url, "remoteapks", "derived_from") in relations
-
-            seeds = {
-                (str(row[0]), str(row[1]))
-                for row in con.execute(
-                    """
-                    SELECT seed_value, seed_type
-                    FROM engagement_seeds
-                    WHERE engagement_id=1001
-                    """
-                ).fetchall()
-            }
-            assert ("remote-apks-owner@acme.example", "email") in seeds
-            assert ("https://remoteapks.acme.example/mobile", "url") in seeds
-        finally:
-            con.close()
-    finally:
-        server.shutdown()
-        thread.join(timeout=5)
-        server.server_close()
 
 
 def test_kill_chain_dry_run_queues_seed_debian_package_url_and_processes_remote_artifact(
