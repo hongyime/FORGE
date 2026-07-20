@@ -55,6 +55,15 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] React web UI graph/report parity completed: the engagement graph
+  explorer now preserves backend edge metadata in selected-node edge evidence,
+  and offline fallback samples include CSV report companions/counts/artifacts
+  in line with backend report families. Verification: TDD source contract
+  failed before implementation then passed (`2 passed`), React/Vite build
+  passed, `oxlint` exited 0 with existing hook warnings, focused dashboard/web
+  UI parity slice (`4 passed, 15 deselected`), cleanup unchanged (`1`, `5010`,
+  `master.db`). Handoff:
+  `.claude/handoffs/2026-07-20-webui-graph-edge-csv-parity.md`.
 - [x] MTGX dashboard analyst-metadata fidelity completed: `.mtgx`-only
   dashboard graph fallback now retains safe non-control `forge.*` node
   properties such as `validation_detail` and safe edge metadata from

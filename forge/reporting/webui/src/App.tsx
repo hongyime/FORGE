@@ -76,6 +76,7 @@ type GraphEdge = {
   edge_type?: string
   weight?: number
   on_critical_path?: boolean
+  metadata?: Record<string, unknown>
 }
 
 type GraphPayload = {
@@ -286,7 +287,7 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       completed_at: '2026-07-09 09:44:12',
       updated_at: '2026-07-09 09:44:12',
     },
-    report_count: 1,
+    report_count: 4,
     graph_count: 3,
     detail_route: 'engagements/engagement-1001-acme-holdings/',
     detail_data: 'data/engagements/engagement-1001-acme-holdings.json',
@@ -299,6 +300,27 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
         kind: 'report',
         href: '#',
         size_label: '6.3 KB',
+        modified_at: '2026-07-09 09:44:12',
+      },
+      {
+        name: 'engagement_1001_report_20260709T014412.pdf',
+        kind: 'report',
+        href: '#',
+        size_label: '8.1 KB',
+        modified_at: '2026-07-09 09:44:12',
+      },
+      {
+        name: 'engagement_1001_report_20260709T014412.json',
+        kind: 'report',
+        href: '#',
+        size_label: '5.5 KB',
+        modified_at: '2026-07-09 09:44:12',
+      },
+      {
+        name: 'engagement_1001_report_20260709T014412.csv',
+        kind: 'report',
+        href: '#',
+        size_label: '1.4 KB',
         modified_at: '2026-07-09 09:44:12',
       },
       {
@@ -327,11 +349,12 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       fallback_reason: 'quota exceeded',
       findings_checksum: 'sha256:6fd4f11248c3f2d0b62bf951a8a9753cc7c8b5d07b3f4c489db82f6f9df54bf0',
       raw_export: false,
-      export_count: 3,
+      export_count: 4,
       available_exports: [
         { artifact_name: 'engagement_1001_report_20260709T014412.md', format: 'markdown', label: 'Markdown' },
         { artifact_name: 'engagement_1001_report_20260709T014412.pdf', format: 'pdf', label: 'PDF' },
         { artifact_name: 'engagement_1001_report_20260709T014412.json', format: 'report_json', label: 'Report JSON' },
+        { artifact_name: 'engagement_1001_report_20260709T014412.csv', format: 'csv', label: 'CSV' },
       ],
     },
     graph_payload: {
@@ -348,7 +371,18 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       edges: [
         { source_node_id: 'EXTERNAL::internet', target_node_id: 'HOST::app', edge_type: 'entry', weight: 60, on_critical_path: true },
         { source_node_id: 'HOST::app', target_node_id: 'VULN::firebase', edge_type: 'vuln_found', weight: 82, on_critical_path: true },
-        { source_node_id: 'VULN::firebase', target_node_id: 'CLOUD::bucket', edge_type: 'cloud_misconfig', weight: 96, on_critical_path: true },
+        {
+          source_node_id: 'VULN::firebase',
+          target_node_id: 'CLOUD::bucket',
+          edge_type: 'cloud_misconfig',
+          weight: 96,
+          on_critical_path: true,
+          metadata: {
+            rule: 'validated_cloud_edge',
+            validation_status: 'VALIDATED',
+            validation_detail: 'VALIDATED:firebase_database_shallow_read:records=12',
+          },
+        },
         { source_node_id: 'EMAIL::security', target_node_id: 'HOST::app', edge_type: 'credential_use', weight: 30 },
         { source_node_id: 'CLOUD::bucket', target_node_id: 'IMPACT::report', edge_type: 'impact', weight: 120, on_critical_path: true },
       ],
@@ -432,7 +466,7 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       sample_nodes: ['gmail identity', 'linkedin slug', 'github profile'],
       source: '1013_attack_graph.json',
     },
-    report_count: 1,
+    report_count: 3,
     graph_count: 1,
     detail_route: 'engagements/engagement-1013-bryan-seah/',
     detail_data: 'data/engagements/engagement-1013-bryan-seah.json',
@@ -445,6 +479,20 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
         kind: 'report',
         href: '#',
         size_label: '3.0 KB',
+        modified_at: '2026-07-09 09:43:28',
+      },
+      {
+        name: 'engagement_1013_report_20260709T014328.json',
+        kind: 'report',
+        href: '#',
+        size_label: '2.8 KB',
+        modified_at: '2026-07-09 09:43:28',
+      },
+      {
+        name: 'engagement_1013_report_20260709T014328.csv',
+        kind: 'report',
+        href: '#',
+        size_label: '1.0 KB',
         modified_at: '2026-07-09 09:43:28',
       },
     ],
@@ -465,10 +513,11 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       generated_at: '2026-07-09 09:43:28',
       findings_checksum: 'sha256:1ea5d82cc4157b90960159c54f6320a99c55435d44a4b0e6d143dddc0a4af661',
       raw_export: false,
-      export_count: 2,
+      export_count: 3,
       available_exports: [
         { artifact_name: 'engagement_1013_report_20260709T014328.md', format: 'markdown', label: 'Markdown' },
         { artifact_name: 'engagement_1013_report_20260709T014328.json', format: 'report_json', label: 'Report JSON' },
+        { artifact_name: 'engagement_1013_report_20260709T014328.csv', format: 'csv', label: 'CSV' },
       ],
     },
     graph_payload: {
@@ -923,6 +972,7 @@ type GraphExplorerEdge = {
   type: string
   weight: number
   critical: boolean
+  metadata: Record<string, unknown>
 }
 
 type GraphLayout = {
@@ -965,6 +1015,7 @@ function normalizeGraph(detail: EngagementDetail): {
       type: String(edge.edge_type ?? 'relationship'),
       weight: Number(edge.weight ?? 0),
       critical: Boolean(edge.on_critical_path),
+      metadata: edge.metadata ?? {},
     }))
     .filter((edge) => nodeMap.has(edge.source) && nodeMap.has(edge.target))
 
@@ -3365,6 +3416,16 @@ function GraphExplorer({ detail }: { detail: EngagementDetail }) {
         .map((edge) => graph.nodes.find((node) => node.id === (edge.source === selectedNode.id ? edge.target : edge.source)))
         .filter((node): node is GraphExplorerNode => Boolean(node))
     : []
+  const selectedEdgeRows = selectedEdges.map((edge) => ({
+    Connection: `${edge.source} -> ${edge.target}`,
+    Type: edge.label || edge.type,
+    Weight: String(edge.weight),
+    Critical: edge.critical ? 'yes' : 'no',
+    Evidence:
+      metadataEntries(edge.metadata)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(' · ') || '-',
+  }))
 
   return (
     <>
@@ -3538,6 +3599,11 @@ function GraphExplorer({ detail }: { detail: EngagementDetail }) {
                       <span className="muted-copy">No connected nodes match the current filter set.</span>
                     )}
                   </div>
+                </div>
+
+                <div className="scope-block">
+                  <span className="summary-label">Edge evidence</span>
+                  <DataList rows={selectedEdgeRows} emptyText="No edge metadata captured for this node." />
                 </div>
 
                 <div className="scope-block">

@@ -94,6 +94,20 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] React web UI graph/report parity checkpoint: the engagement graph
+  explorer now carries edge `metadata` from backend graph payloads into the
+  selected-node inspector as edge evidence, so validation/provenance metadata
+  no longer disappears after dashboard hydration. The offline fallback sample
+  engagements now also mirror backend report-family CSV companions and matching
+  export counts/artifacts. Verification: source-contract regression first
+  failed on missing edge metadata and missing CSV sample exports, then passed
+  (`2 passed`); React/Vite production build passed; `oxlint` exited 0 with
+  existing hook-dependency warnings; focused dashboard/web UI parity slice
+  (`4 passed, 15 deselected`); cleanup inventory unchanged (`1`, `5010`,
+  `master.db`). Safety: frontend/dashboard reviewability only; no scan
+  provider, target network, live probing, credential use, scope relaxation,
+  proxy/IP rotation, rate-limit bypass, report-gate weakening, severity change,
+  or deterministic finding creation.
 - [x] MTGX dashboard analyst-metadata fidelity checkpoint: the `.mtgx`-only
   dashboard graph fallback now preserves safe non-control `forge.*` node
   properties such as `validation_detail` and safe edge metadata from

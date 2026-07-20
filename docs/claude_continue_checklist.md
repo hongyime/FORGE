@@ -67,6 +67,15 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] React web UI graph/report parity checkpoint completed: the engagement
+  graph explorer now carries backend edge `metadata` into selected-node edge
+  evidence, and the offline fallback sample engagements mirror CSV report
+  companions plus matching export counts/artifacts. Verification: source
+  contract regression first failed, then passed -> `2 passed`; React/Vite
+  production build passed; `oxlint` exited 0 with existing hook-dependency
+  warnings; focused dashboard/web UI parity slice -> `4 passed, 15 deselected`;
+  cleanup inventory unchanged -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-webui-graph-edge-csv-parity.md`.
 - [x] MTGX dashboard analyst-metadata fidelity checkpoint completed: the
   `.mtgx`-only dashboard graph fallback now preserves safe non-control
   `forge.*` node properties such as `validation_detail` and safe edge metadata
