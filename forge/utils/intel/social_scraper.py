@@ -2850,15 +2850,20 @@ def _epieos_profile_entries_from_container(
         for child_key, child_value in value.items():
             if str(child_key or "").strip().lower() == "email":
                 continue
+            child_platform = (
+                fallback_platform
+                if str(child_key) in _EPIEOS_ROOT_PROFILE_CONTAINER_KEYS
+                else str(child_key)
+            )
             if isinstance(child_value, dict):
                 if _epieos_payload_mapping_has_profile_shape(child_value):
                     entries.append(
-                        (_epieos_profile_entry_platform(child_value, str(child_key)), child_value)
+                        (_epieos_profile_entry_platform(child_value, child_platform), child_value)
                     )
                 elif str(child_key) in _EPIEOS_ROOT_PROFILE_CONTAINER_KEYS:
                     entries.extend(
                         _epieos_profile_entries_from_container(
-                            str(child_key),
+                            child_platform,
                             child_value,
                             depth=depth + 1,
                         )
@@ -2901,6 +2906,8 @@ def _epieos_response_profile_entries(payload: dict[str, Any]) -> list[tuple[str,
             continue
         if isinstance(data, dict):
             entries.append((platform_text, data))
+            if not _epieos_payload_mapping_has_profile_shape(data):
+                entries.extend(_epieos_profile_entries_from_container(platform_text, data))
             continue
         if isinstance(data, (list, tuple)):
             entries.extend(_epieos_profile_entries_from_container(platform_text, data))

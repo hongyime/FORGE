@@ -11,6 +11,13 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Epieos platform-envelope recursion checkpoint is green:
+  Platform-scoped Epieos envelopes such as `github.result.profileUrl` now preserve the outer provider context instead of becoming fake `result` platforms or being dropped. Parsed rows retain recursive username, email, URL, subdomain, and root-domain pivots for synthesis, while direct provider/org payloads still reconstruct their existing profile URLs.
+  Verification: compile/Ruff for touched parser/test files; full social scraper suite -> `74 passed`; focused Epieos synthesis slice including the new focused Phase 1 file -> `10 passed, 751 deselected`; direct parser probe confirmed the payload parses as a GitHub row with `envelopedops`, `ops@acme.example`, and `https://ops.acme.example`.
+  Review: explorer `Franklin` recommended the focused Phase 1 synthesis regression. Claude CLI retry reached `max turns (8)` without usable findings.
+  Safety: passive identity parsing/synthesis only. No Epieos provider call expansion, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-epieos-platform-envelope-recursion.md`.
+
 - [x] Docker-save layer recursion checkpoint is green:
   Passive Docker `docker save` tar archives now parse `manifest.json`, config JSON, and manifest-referenced layer tar members, so `.env`/config content inside referenced layers feeds existing recursive email/URL/cloud discovery. Unreferenced layers remain ignored, and referenced layer tar members may exceed the generic 1 MiB member cap only up to the existing remote artifact cap.
   Verification: compile/Ruff for touched OCI/orchestrator/test files; focused OCI/Docker-save suite -> `2 passed`; adjacent artifact/container/helper suite -> `38 passed`; broader archive/container slice -> `117 passed, 643 deselected`.

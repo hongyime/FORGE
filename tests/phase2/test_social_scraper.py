@@ -564,6 +564,28 @@ class TestParseEpieosResponse:
         assert rows["gitlab"]["profile_url"] == "https://gitlab.com/rootgitlab"
         assert rows["gitlab"]["username"] == "rootgitlab"
 
+    def test_platform_envelopes_preserve_provider_context(self):
+        results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "github": {
+                    "result": {
+                        "profileUrl": "https://github.com/envelopedops",
+                        "contactEmail": "ops@acme.example",
+                        "websiteUrl": "https://ops.acme.example",
+                    }
+                },
+            }
+        )
+
+        rows = {row["platform"]: row for row in results}
+
+        assert rows["github"]["profile_url"] == "https://github.com/envelopedops"
+        assert rows["github"]["username"] == "envelopedops"
+        assert rows["github"]["email"] == "ops@acme.example"
+        assert rows["github"]["external_url"] == "https://ops.acme.example"
+        assert "result" not in rows
+
     def test_preserves_richer_identity_fields_for_recursive_synthesis(self):
         results = _parse_epieos_response(_rich_epieos_payload())
         github = next((r for r in results if r["platform"] == "github"), None)
