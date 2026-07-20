@@ -31427,7 +31427,8 @@ def test_artifact_nomad_job_orchestration_payload_uses_bounded_workers_and_prese
         source_hint="nomad/jobs/api.nomad.hcl",
     )
 
-    assert observed_line_batches == [payload.splitlines()]
+    assert observed_line_batches[0] == payload.splitlines()
+    assert any("Host(`nomad-edge.acme.example`)" in "\n".join(batch) for batch in observed_line_batches[1:])
     assert result.splitlines() == [
         "http://nomad-edge.acme.example",
         "http://nomad-check.acme.example:8080",

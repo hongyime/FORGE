@@ -11,6 +11,20 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Validation proof boundary checkpoint is green:
+  Proof parsing now rejects bare embedded `; VALIDATED:` fragments inside unverified/free-form notes and only accepts top-level `VALIDATED:<method>:<proof>` or explicit `validation=VALIDATED:<method>:<proof>` evidence fields. Shared compact-placeholder detection now also rejects placeholder+role compounds with short numeric suffixes such as `usr_testuser123` and `ph_testuser123`.
+  Verification: compile/Ruff for touched proof/report files; core validation identifier/proof suite -> `116 passed`; full Phase 6 report synthesizer -> `76 passed`; full secret-finder -> `174 passed`; full cloud-validation -> `143 passed`; dashboard proof slice -> `6 passed, 11 deselected`.
+  Review: explorer `Nash` found the embedded proof-boundary gap.
+  Safety: report-gate/parser hardening only. No provider endpoint expansion, provider-call increase, credential disclosure, live probing expansion, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or deterministic finding weakening.
+  Handoff: `.claude/handoffs/2026-07-20-validation-proof-boundaries.md`.
+
+- [x] Orchestration routing-rule worker checkpoint is green:
+  `_orchestration_document_url_candidates()` now normalizes routing-rule strings through the existing bounded ordered local worker helper while keeping traversal, caps, dedupe, and appending serial.
+  Verification: compile/Ruff for touched orchestrator/test files; focused orchestration worker/helper slice -> `3 passed, 27 deselected`; broad orchestration/parallelization slice -> `278 passed, 482 deselected`.
+  Review: explorer `Copernicus` identified the safe worker migration candidate.
+  Safety: pure local parsing/prep only. No provider call, DB write, network I/O, validation, live probing, scope relaxation, pacing/backoff change, proxy/IP rotation, rate-limit bypass, report-gate change, exploitation, or destructive behavior.
+  Handoff: `.claude/handoffs/2026-07-20-orchestration-routing-worker.md`.
+
 - [x] Vault HCL config passive-recursion checkpoint is green:
   Explicit HashiCorp Vault config artifacts such as `vault/config.hcl`, `.vault.d/config.hcl`, and `vault.hcl` now keep `hashicorp-vault-config` labels and run through a compact helper, `forge/utils/artifact_hashicorp_config.py`. Static endpoint assignments such as `api_addr`, `cluster_addr`, `redirect_addr`, and `VAULT_ADDR` promote public host-only values into recursive HTTPS URL seeds.
   Generic `.hcl`, Consul configs, Terraform policy files, templated values, localhost/IP-only values, wildcards, and userinfo-bearing URLs stay suppressed.

@@ -23098,8 +23098,13 @@ class ArtifactQueueProcessor:
                 _append(candidate)
 
         def _append_routing_rule_values(value: Any) -> None:
-            for rule_value in self._orchestration_text_values(value):
-                for candidate in self._edge_proxy_line_url_candidates(rule_value):
+            candidate_batches = self._run_ordered_local_batch(
+                self._orchestration_text_values(value),
+                self._edge_proxy_line_url_candidates,
+                default_factory=list,
+            )
+            for candidate_batch in candidate_batches:
+                for candidate in candidate_batch:
                     _append(candidate)
 
         def _annotation_endpointish_key(key_fingerprint: str) -> bool:
