@@ -30,6 +30,7 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
+- [x] Well-known identity metadata target completed: `/.well-known/nostr.json`, `/.well-known/atproto-did`, and `/.well-known/jmap` now classify as passive source-aware identity metadata and feed email/URL/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-well-known-identity-metadata.md`.
 - [x] Local web manifest source-label target completed: local `manifest.json` artifacts now keep source-aware format metadata instead of generic `json`, and tracked docs now route future agents to the deterministic goal chain instead of stale handoff/source-of-truth wording. Handoff: `.claude/handoffs/2026-07-20-manifest-local-source-label.md`.
 - [x] Local public metadata source-label target completed: local `assetlinks.json`, `browserconfig.xml`, `jwks.json`, `mta-sts.txt`, and `security.txt` artifacts now keep source-aware formats instead of generic suffix labels while preserving existing recursion. Handoff: `.claude/handoffs/2026-07-20-public-metadata-labels.md`.
 - [x] Apple merchant domain-association metadata target completed: `/.well-known/apple-developer-merchantid-domain-association` now routes as passive config metadata and can feed URL/email/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-apple-merchant-well-known-recursion.md`.
@@ -41,6 +42,25 @@ without creating competing source-of-truth docs.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] Well-known identity metadata recursion checkpoint is green:
+  Passive public identity routes `/.well-known/nostr.json`,
+  `/.well-known/atproto-did`, and `/.well-known/jmap` now classify as
+  source-aware config artifacts with stable route/cache/local format labels.
+  Local static fixtures prove Nostr NIP-05, AT Protocol DID, and JMAP discovery
+  metadata can feed recursive email, URL, and Supabase cloud pivots through the
+  existing artifact queue.
+  Verification: compile/Ruff for touched orchestrator/test files; focused
+  well-known identity metadata test -> `2 passed`; adjacent well-known/public
+  metadata helper slice -> `15 passed`; adjacent orchestrator `.well-known` /
+  metadata selector -> `21 passed, 738 deselected`; cleanup check found no new
+  pytest engagement DBs.
+  Safety: passive static metadata classification and parsing only. No Nostr
+  relay connection, AT Protocol resolution, JMAP call, provider call, live
+  probing, credential use, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, validation/report-gate change, or persistent non-test engagement DB
+  mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-well-known-identity-metadata.md`.
 
 - [x] Local web manifest source-label checkpoint is green:
   Direct local/top-level `manifest.json` artifacts now preserve source-aware
