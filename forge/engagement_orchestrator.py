@@ -26309,8 +26309,7 @@ class ArtifactQueueProcessor:
                 in_bun_scope_block = lowered in {"[install.scopes]", "[install.scope]"}
             elif in_bun_scope_block:
                 match = scope_assignment_pattern.match(line)
-                if match:
-                    value = str(match.group("value") or "").strip()
+                value = str(match.group("value") or "").strip() if match else ""
                 if value:
                     entries.append((offset + raw_line.find(value), value))
             offset += len(raw_line)

@@ -11,6 +11,12 @@ Use this file first. Use `docs/claude_continue_checklist.md` next if you need th
 
 ## Current green checkpoint
 
+- [x] Bun scope parser stale-value checkpoint is green:
+  Passive Bun/Deno JS-runtime config parsing no longer reuses the previous registry candidate when a non-assignment/comment-only line appears inside `[install.scopes]`, preventing duplicate/noisy recursive URL candidates from static `bunfig.toml` artifacts.
+  Verification: compile/Ruff for touched parser/test files; focused JS-runtime parser slice -> `2 passed, 759 deselected`.
+  Safety: passive static parser correctness only. No Bun/Deno execution, package install, registry access, provider call, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, report-gate change, exploitation, or destructive behavior.
+  Handoff: `.claude/handoffs/2026-07-20-bun-scope-parser-stale-value.md`.
+
 - [x] Validation proof boundary checkpoint is green:
   Proof parsing now rejects bare embedded `; VALIDATED:` fragments inside unverified/free-form notes and only accepts top-level `VALIDATED:<method>:<proof>` or explicit `validation=VALIDATED:<method>:<proof>` evidence fields. Shared compact-placeholder detection now also rejects placeholder+role compounds with short numeric suffixes such as `usr_testuser123` and `ph_testuser123`.
   Verification: compile/Ruff for touched proof/report files; core validation identifier/proof suite -> `116 passed`; full Phase 6 report synthesizer -> `76 passed`; full secret-finder -> `174 passed`; full cloud-validation -> `143 passed`; dashboard proof slice -> `6 passed, 11 deselected`.
