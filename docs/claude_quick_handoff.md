@@ -55,6 +55,18 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Yarn Berry `.yarnrc.yml` passive package-config completed:
+  `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
+  instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
+  registry URLs, scoped registry URLs, owner emails, and Firebase refs recurse
+  through the passive artifact path while embedded npm auth tokens stay
+  stripped. Verification: TDD helper regression failed before implementation
+  (`4 failed, 52 passed`) then passed, focused helper suite (`56 passed`),
+  compile/Ruff, adjacent package-manager/runtime-config slice (`61 passed, 754
+  deselected`), compact slice (`4 passed, 1 deselected`), cleanup
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory remains `1`,
+  `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-yarnrc-yml-passive-recursion.md`.
 - [x] Python Poetry global config/auth passive package-config completed:
   source-aware `pypoetry/config.toml` now classifies as `poetry-config`, and
   `pypoetry/auth.toml` plus cached `*.poetry-auth` names now classify as

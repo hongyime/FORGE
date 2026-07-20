@@ -67,6 +67,18 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
+  `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
+  instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
+  registry URLs, scoped registry URLs, owner emails, and Firebase refs recurse
+  through existing passive artifact handling while embedded npm auth tokens stay
+  stripped. Verification: TDD helper regression first failed -> `4 failed, 52
+  passed`; focused helper suite -> `56 passed`; compile/Ruff; adjacent
+  package-manager/runtime-config slice -> `61 passed, 754 deselected`; compact
+  slice -> `4 passed, 1 deselected`; cleanup ->
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory -> `1`, `5010`,
+  `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-yarnrc-yml-passive-recursion.md`.
 - [x] Python Poetry global config/auth passive package-config checkpoint
   completed: source-aware `pypoetry/config.toml` now classifies as
   `poetry-config`, and `pypoetry/auth.toml` plus cached `*.poetry-auth` names

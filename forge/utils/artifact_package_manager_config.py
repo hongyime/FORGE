@@ -15,6 +15,7 @@ _DIRECT_LABELS = {
     ".pypirc": "pypirc",
     ".uv.toml": "uv-config",
     ".yarnrc": "yarnrc",
+    ".yarnrc.yml": "yarnrc-yml",
     "conda-lock.yaml": "conda-lock",
     "conda-lock.yml": "conda-lock",
     "condarc": "conda-config",
@@ -43,6 +44,7 @@ _CACHE_LABEL_SUFFIXES = {
     ".pixi-lock": "pixi-lock",
     ".pixi-manifest": "pixi-manifest",
     ".uv-config": "uv-config",
+    ".yarnrc-yml": "yarnrc-yml",
 }
 _PIP_CONFIG_NAMES = {"pip.conf", "pip.ini"}
 _PIP_PARENT_SEGMENTS = {".pip", "pip"}

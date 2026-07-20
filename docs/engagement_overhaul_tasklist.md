@@ -94,6 +94,23 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
+  `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
+  instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
+  registry URLs, scoped registry URLs, owner emails, and Firebase refs recurse
+  through existing passive artifact handling while embedded npm auth tokens stay
+  stripped. Verification: TDD helper regression first failed (`4 failed, 52
+  passed`), then passed; focused package-manager helper suite (`56 passed`);
+  compile/Ruff for touched files; adjacent package-manager/runtime-config slice
+  (`61 passed, 754 deselected`); compact cross-phase slice (`4 passed, 1
+  deselected`); cleanup removed four pytest engagement dirs and left
+  `remaining_pytest_engagement_dirs=0`; persistent workspace DB inventory
+  remains `1`, `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-20-yarnrc-yml-passive-recursion.md`.
+  Safety: passive static package-manager config classification only; no package
+  download, registry API call, provider call, target network, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, severity change, or finding creation.
 - [x] Python Poetry global config/auth passive package-config checkpoint:
   source-aware `pypoetry/config.toml` now classifies as `poetry-config`, and
   `pypoetry/auth.toml` plus cached `*.poetry-auth` names now classify as

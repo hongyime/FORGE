@@ -47,6 +47,8 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
         ("download.condarc.conda-config", "conda-config"),
         ("download.mambarc.mamba-config", "mamba-config"),
         ("download.nuget.config.nuget-config", "nuget-config"),
+        ("project/.yarnrc.yml", "yarnrc-yml"),
+        ("download.yarnrc.yml.yarnrc-yml", "yarnrc-yml"),
         ("poetry.toml", "poetry-config"),
         ("home/.config/pypoetry/config.toml", "poetry-config"),
         ("AppData/Roaming/pypoetry/auth.toml", "poetry-auth"),
@@ -84,6 +86,8 @@ def test_package_manager_config_artifact_label_recognizes_source_paths(
         "mycondarc",
         "mamba-notes",
         "runtime-environment.yml",
+        "yarnrc.yml",
+        "app/yarnrc.yml",
         "pixi-notes.toml",
     ],
 )
@@ -95,6 +99,7 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
     assert _classify_remote_artifact_url("https://downloads.acme.example/.npmrc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.condarc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/mambarc") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/.yarnrc.yml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/poetry.toml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/pypoetry/auth.toml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/pixi.toml") == "config"
@@ -123,10 +128,12 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
     assert package_manager_config_remote_filename("environment.yml") == "environment.yml"
     assert package_manager_config_remote_filename(".nuget/NuGet.Config") == "NuGet.Config"
     assert package_manager_config_remote_filename(".cargo/credentials") == "credentials.cargo-credentials"
+    assert package_manager_config_remote_filename(".yarnrc.yml") == ".yarnrc.yml"
     assert package_manager_config_remote_filename("poetry.toml") == "poetry.toml"
     assert package_manager_config_remote_filename("pypoetry/auth.toml") == "auth.toml.poetry-auth"
     assert _artifact_format_label(".condarc") == "conda-config"
     assert _artifact_format_label("mambarc") == "mamba-config"
+    assert _artifact_format_label(".yarnrc.yml") == "yarnrc-yml"
     assert _artifact_format_label("poetry.toml") == "poetry-config"
     assert _artifact_format_label("pypoetry/config.toml") == "poetry-config"
     assert _artifact_format_label("pypoetry/auth.toml") == "poetry-auth"
@@ -215,6 +222,21 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         ).strip(),
         encoding="utf-8",
     )
+    yarnrc_yml_path = artifact_root / ".yarnrc.yml"
+    yarnrc_yml_path.write_text(
+        dedent(
+            """
+            npmRegistryServer: "https://yarn-token:yarn-token-do-not-store@yarn-labels.acme.example/npm"
+            owner: yarn-owner@acme.example
+            npmScopes:
+              acme:
+                npmRegistryServer: "https://yarn-scope.acme.example/npm"
+                npmAuthToken: "yarn-scope-token-do-not-store"
+            firebase: "https://yarn-firebase.firebaseio.com"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
     poetry_config_path = artifact_root / "poetry.toml"
     poetry_config_path.write_text(
         dedent(
@@ -284,8 +306,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 12
-    assert summary.processed >= 12
+    assert queued >= 13
+    assert summary.processed >= 13
 
     con = sqlite3.connect(db_path)
     try:
@@ -304,6 +326,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert artifact_meta[cargo_credentials_path.resolve().as_posix()]["format"] == "cargo-credentials"
         assert artifact_meta[conda_config_path.resolve().as_posix()]["format"] == "conda-config"
         assert artifact_meta[mamba_config_path.resolve().as_posix()]["format"] == "mamba-config"
+        assert artifact_meta[yarnrc_yml_path.resolve().as_posix()]["format"] == "yarnrc-yml"
         assert artifact_meta[poetry_config_path.resolve().as_posix()]["format"] == "poetry-config"
         assert artifact_meta[poetry_auth_path.resolve().as_posix()]["format"] == "poetry-auth"
         assert artifact_meta[pixi_manifest_path.resolve().as_posix()]["format"] == "pixi-manifest"
@@ -325,12 +348,15 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert ("https://conda-labels.acme.example/pkgs/main", "url") in seeds
         assert ("https://conda-env.acme.example/pkgs/main", "url") in seeds
         assert ("https://mamba-labels.acme.example/conda", "url") in seeds
+        assert ("https://yarn-labels.acme.example/npm", "url") in seeds
+        assert ("https://yarn-scope.acme.example/npm", "url") in seeds
         assert ("https://poetry-auth.acme.example/simple", "url") in seeds
         assert ("https://poetry-labels.acme.example/simple", "url") in seeds
         assert ("https://pixi.acme.example/conda", "url") in seeds
         assert ("conda-label-owner@acme.example", "email") in seeds
         assert ("conda-env-owner@acme.example", "email") in seeds
         assert ("mamba-label-owner@acme.example", "email") in seeds
+        assert ("yarn-owner@acme.example", "email") in seeds
         assert ("poetry-auth-owner@acme.example", "email") in seeds
         assert ("poetry-owner@acme.example", "email") in seeds
         assert ("pixi-owner@acme.example", "email") in seeds
@@ -347,6 +373,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
                 """
             ).fetchall()
         }
+        assert ("firebase", "yarn-firebase") in cloud_assets
         assert ("firebase", "poetry-firebase") in cloud_assets
         assert ("supabase", "poetryauthvault") in cloud_assets
 
@@ -359,6 +386,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
             "env-token-do-not-store",
             "mamba-label-token-do-not-store",
             "nuget-label-token-do-not-store",
+            "yarn-scope-token-do-not-store",
+            "yarn-token-do-not-store",
             "poetry-auth-token-do-not-store",
             "poetry-token-do-not-store",
             "pixi-token-do-not-store",
