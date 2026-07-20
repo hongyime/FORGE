@@ -94,6 +94,18 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] MTGX dashboard analyst-metadata fidelity checkpoint: the `.mtgx`-only
+  dashboard graph fallback now preserves safe non-control `forge.*` node
+  properties such as `validation_detail` and safe edge metadata from
+  `forge.metadata_json`, while still sanitizing sensitive metadata keys like
+  `key_enc`. Verification: TDD regression first failed on missing
+  `validation_detail`; compile/Ruff for touched dashboard parser/tests;
+  focused MTGX/GraphML/graph JSON parser contracts (`3 passed`); broader
+  MTGX/GraphML dashboard subset (`3 passed, 14 deselected`); cleanup inventory
+  unchanged (`1`, `5010`, `master.db`). Safety: dashboard parser/reviewability
+  only; no scan provider, target network, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, report-gate weakening,
+  severity change, or deterministic finding creation.
 - [x] Dashboard/API CSV report-family parity checkpoint: static dashboard and
   live engagement-detail API fixtures now include normal report-family CSV
   companions and assert four export descriptors (`Markdown`, `PDF`,

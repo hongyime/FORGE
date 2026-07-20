@@ -1145,6 +1145,8 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
                     <mtg:Property name="forge.on_critical_path" type="string"><mtg:Value>1</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.source_table" type="string"><mtg:Value>hosts</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.source_id" type="string"><mtg:Value>12</mtg:Value></mtg:Property>
+                    <mtg:Property name="forge.validation_detail" type="string"><mtg:Value>VALIDATED:firebase_database_shallow_read:records=1</mtg:Value></mtg:Property>
+                    <mtg:Property name="forge.key_enc" type="string"><mtg:Value>encrypted-secret-never-render</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.metadata_json" type="string"><mtg:Value>{"seed_type":"url","source":"mtgx-fixture","depth":1}</mtg:Value></mtg:Property>
                   </mtg:Properties>
                 </mtg:MaltegoEntity>
@@ -1169,6 +1171,7 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
                     <mtg:Property name="maltego.link.manual.type" type="string"><mtg:Value>exposes</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.edge_type" type="string"><mtg:Value>exposes</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.weight" type="string"><mtg:Value>55</mtg:Value></mtg:Property>
+                    <mtg:Property name="forge.metadata_json" type="string"><mtg:Value>{"rule":"validated_cloud_edge","validation_status":"VALIDATED","key_enc":"hidden-edge-secret"}</mtg:Value></mtg:Property>
                   </mtg:Properties>
                 </mtg:MaltegoLink>
               </data>
@@ -1192,8 +1195,15 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
     assert detail_payload["graph_payload"]["nodes"][0]["source_id"] == 12
     assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["seed_type"] == "url"
     assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["source"] == "mtgx-fixture"
+    assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_detail"] == (
+        "VALIDATED:firebase_database_shallow_read:records=1"
+    )
+    assert "key_enc" not in detail_payload["graph_payload"]["nodes"][0]["metadata"]
     assert detail_payload["graph_payload"]["edges"][0]["edge_type"] == "exposes"
     assert detail_payload["graph_payload"]["edges"][0]["weight"] == 55.0
+    assert detail_payload["graph_payload"]["edges"][0]["metadata"]["rule"] == "validated_cloud_edge"
+    assert detail_payload["graph_payload"]["edges"][0]["metadata"]["validation_status"] == "VALIDATED"
+    assert "key_enc" not in detail_payload["graph_payload"]["edges"][0]["metadata"]
     assert any(
         artifact["name"] == "1001_attack_graph.mtgx" and artifact["kind"] == "graph"
         for artifact in detail_payload["artifacts"]

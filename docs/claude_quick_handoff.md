@@ -55,6 +55,15 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] MTGX dashboard analyst-metadata fidelity completed: `.mtgx`-only
+  dashboard graph fallback now retains safe non-control `forge.*` node
+  properties such as `validation_detail` and safe edge metadata from
+  `forge.metadata_json`, while sensitive keys such as `key_enc` stay scrubbed.
+  Verification: TDD regression failed before implementation, compile/Ruff,
+  focused MTGX/GraphML/graph JSON parser contracts (`3 passed`), broader
+  MTGX/GraphML subset (`3 passed, 14 deselected`), cleanup unchanged (`1`,
+  `5010`, `master.db`). Handoff:
+  `.claude/handoffs/2026-07-20-mtgx-dashboard-analyst-property-parity.md`.
 - [x] Dashboard/API CSV report-family parity completed: static dashboard and
   live engagement-detail API fixtures now include CSV report companions and
   assert four exports for current/historical report families. Verification:

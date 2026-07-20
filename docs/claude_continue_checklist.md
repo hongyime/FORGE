@@ -67,6 +67,16 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] MTGX dashboard analyst-metadata fidelity checkpoint completed: the
+  `.mtgx`-only dashboard graph fallback now preserves safe non-control
+  `forge.*` node properties such as `validation_detail` and safe edge metadata
+  from `forge.metadata_json`, while still sanitizing sensitive metadata keys
+  like `key_enc`. Verification: TDD regression first failed on missing
+  `validation_detail`; compile/Ruff for touched dashboard parser/tests;
+  focused MTGX/GraphML/graph JSON parser contracts -> `3 passed`; broader
+  MTGX/GraphML dashboard subset -> `3 passed, 14 deselected`; cleanup
+  inventory unchanged -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-20-mtgx-dashboard-analyst-property-parity.md`.
 - [x] Dashboard/API CSV report-family parity checkpoint completed: static
   dashboard and live engagement-detail API fixtures now include normal
   report-family CSV companions and assert four export descriptors

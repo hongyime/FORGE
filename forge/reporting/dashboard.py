@@ -615,6 +615,58 @@ def _graph_link_properties(data: ElementTree.Element) -> dict[str, str]:
     return properties
 
 
+_MTGX_NODE_CONTROL_PROPERTIES = {
+    "label",
+    "metadata_json",
+    "node_type",
+    "on_critical_path",
+    "severity",
+    "source_id",
+    "source_table",
+}
+_MTGX_EDGE_CONTROL_PROPERTIES = {
+    "edge_type",
+    "metadata_json",
+    "on_critical_path",
+    "weight",
+}
+
+
+def _safe_metadata_property_value(raw: str) -> Any:
+    parsed = _safe_json_loads(raw)
+    if isinstance(parsed, dict):
+        return _safe_graph_metadata(parsed)
+    if parsed is not None:
+        return _safe_graph_metadata_value(parsed)
+    return raw
+
+
+def _merge_metadata_json(metadata: dict[str, Any], raw: str) -> None:
+    parsed_metadata = _safe_json_loads(raw)
+    if isinstance(parsed_metadata, dict):
+        metadata.update(_safe_graph_metadata(parsed_metadata))
+    else:
+        metadata["metadata_json"] = raw
+
+
+def _merge_safe_forge_property(
+    metadata: dict[str, Any],
+    raw_name: str,
+    raw_value: str,
+    *,
+    control_properties: set[str],
+) -> None:
+    if not raw_value:
+        return
+    name = str(raw_name or "").strip()
+    if not name.startswith("forge."):
+        return
+    key = name.removeprefix("forge.").strip()
+    if not key or key in control_properties or _is_sensitive_metadata_key(key):
+        return
+    metadata.setdefault(key, _safe_metadata_property_value(raw_value))
+
+
 def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generated_at: str) -> dict[str, Any] | None:
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
@@ -670,15 +722,21 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
                         node_payload["source_id"] = str(properties["forge.source_id"]).strip()
                 metadata_json = str(properties.get("forge.metadata_json") or "").strip()
                 if metadata_json:
-                    parsed_metadata = _safe_json_loads(metadata_json)
-                    if isinstance(parsed_metadata, dict):
-                        node_payload["metadata"].update(parsed_metadata)
-                    else:
-                        node_payload["metadata"]["metadata_json"] = metadata_json
+                    _merge_metadata_json(node_payload["metadata"], metadata_json)
                 node_payload["on_critical_path"] = properties.get("forge.on_critical_path") == "1"
                 node_payload["metadata"]["maltego_entity_type"] = entity_type
                 for name, value in properties.items():
-                    if not value or name.startswith("forge.") or value == node_payload["label"]:
+                    if not value:
+                        continue
+                    if name.startswith("forge."):
+                        _merge_safe_forge_property(
+                            node_payload["metadata"],
+                            name,
+                            value,
+                            control_properties=_MTGX_NODE_CONTROL_PROPERTIES,
+                        )
+                        continue
+                    if value == node_payload["label"] or _is_sensitive_metadata_key(name):
                         continue
                     node_payload["metadata"][name] = value
                 continue
@@ -706,13 +764,10 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
                 except ValueError:
                     node_payload["source_id"] = text
             elif key == "metadata_json" and text:
-                parsed_metadata = _safe_json_loads(text)
-                if isinstance(parsed_metadata, dict):
-                    node_payload["metadata"].update(parsed_metadata)
-                else:
-                    node_payload["metadata"]["metadata_json"] = text
+                _merge_metadata_json(node_payload["metadata"], text)
             elif text:
-                node_payload["metadata"][key] = text
+                if not _is_sensitive_metadata_key(key):
+                    node_payload["metadata"][key] = text
         nodes.append(node_payload)
 
     for edge in root.findall(".//g:edge", GRAPHML_NS):
@@ -726,6 +781,7 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
             "edge_type": "relationship",
             "weight": 1.0,
             "on_critical_path": False,
+            "metadata": {},
         }
         for data in edge.findall("g:data", GRAPHML_NS):
             properties = _graph_link_properties(data)
@@ -747,6 +803,16 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
                 edge_payload["on_critical_path"] = properties.get("forge.on_critical_path") == "1"
                 if properties.get("maltego.link.manual.type"):
                     edge_payload["label"] = properties["maltego.link.manual.type"]
+                metadata_json = str(properties.get("forge.metadata_json") or "").strip()
+                if metadata_json:
+                    _merge_metadata_json(edge_payload["metadata"], metadata_json)
+                for name, value in properties.items():
+                    _merge_safe_forge_property(
+                        edge_payload["metadata"],
+                        name,
+                        value,
+                        control_properties=_MTGX_EDGE_CONTROL_PROPERTIES,
+                    )
                 continue
 
             key = str(data.attrib.get("key") or "").strip().lower()
@@ -764,6 +830,10 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
                 edge_payload["on_critical_path"] = text == "1"
             elif key == "label" and text:
                 edge_payload["label"] = text
+            elif key in {"metadata_json", "edge_metadata_json"} and text:
+                _merge_metadata_json(edge_payload["metadata"], text)
+            elif text and not _is_sensitive_metadata_key(key):
+                edge_payload["metadata"][key] = text
         edges.append(edge_payload)
 
     if not nodes:
