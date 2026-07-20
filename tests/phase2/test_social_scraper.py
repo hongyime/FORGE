@@ -586,6 +586,35 @@ class TestParseEpieosResponse:
         assert rows["github"]["external_url"] == "https://ops.acme.example"
         assert "result" not in rows
 
+    def test_preserves_oidc_claim_urls_for_recursive_synthesis(self):
+        results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "google": {
+                    "profile_url": "https://accounts.google.com/1234567890",
+                    "name": "Alice Example",
+                    "claims": {
+                        "profile": "https://github.com/idpclaimops",
+                        "website": "https://alice.example/",
+                        "picture": "https://lh3.googleusercontent.com/photo.jpg",
+                        "sub": "1234567890",
+                        "access_token": "claim-token-do-not-store",
+                    },
+                },
+            }
+        )
+
+        rows = {row["platform"]: row for row in results}
+
+        assert set(rows) == {"google"}
+        assert rows["google"]["profile_url"] == "https://accounts.google.com/1234567890"
+        assert rows["google"]["external_url"] == "https://github.com/idpclaimops"
+        assert rows["google"]["urls"] == [
+            {"value": "https://github.com/idpclaimops"},
+            {"value": "https://alice.example/"},
+        ]
+        assert "claim-token-do-not-store" not in json.dumps(rows["google"])
+
     def test_platform_envelope_lists_preserve_provider_context(self):
         results = _parse_epieos_response(
             {

@@ -66,6 +66,20 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] OIDC claim URL recursion checkpoint: Epieos/userinfo-style nested
+  `claims.profile` and `claims.website` values now stay on the existing provider
+  row as recursive URL evidence instead of being dropped. The parser does not
+  create a separate `claims` platform row and does not persist scalar/token
+  claims such as `sub` or `access_token` as URL evidence. Verification:
+  compile/Ruff for touched social parser/tests, full Phase 2 social scraper
+  suite (`78 passed`), Phase 1 social-profile recursion selector (`80 passed,
+  679 deselected`), and cleanup check found no new pytest engagement DBs. Review:
+  explorer `Euclid` identified the gap. Safety: passive parser-only identity
+  enrichment; no provider calls, userinfo/JWKS fetches, token validation, live
+  probing, scope relaxation, generic claim flattening, proxy/IP rotation,
+  rate-limit bypass, validation/report-gate change, or persistent non-test
+  engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-oidc-claim-url-recursion.md`.
 - [x] Nested StackExchange user-profile recursion checkpoint:
   provider-scoped Epieos StackExchange/StackOverflow `user` payloads now become
   safe public profile pivots when they include a numeric `user_id`, a normalized

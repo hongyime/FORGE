@@ -3197,6 +3197,7 @@ def _parse_epieos_response(payload: dict) -> list[dict]:
                 ],
             )
         )
+        discovered_urls.extend(_epieos_claim_url_values(data.get("claims"), discovered_url_nested_keys))
         for key in _EPIEOS_PROFILE_URL_ALIAS_KEYS:
             discovered_urls.extend(_epieos_profile_alias_candidate_urls(data.get(key)))
         discovered_urls = list(dict.fromkeys(discovered_urls))
@@ -5279,6 +5280,32 @@ def _epieos_string_list(
     for item in extra_values or []:
         _consume(item)
     return values
+
+
+def _epieos_claim_url_values(value: Any, nested_keys: tuple[str, ...]) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    return _epieos_string_list(
+        value,
+        "profile",
+        "website",
+        "website_url",
+        "websiteUrl",
+        "websiteURL",
+        "homepage",
+        "homepage_url",
+        "homepageUrl",
+        "homepageURL",
+        "home_page",
+        "homePage",
+        "home_url",
+        "homeUrl",
+        "homeURL",
+        "blog",
+        "blog_url",
+        "blogUrl",
+        nested_keys=nested_keys,
+    )
 
 
 def _epieos_email_values(value: Any) -> list[str]:
