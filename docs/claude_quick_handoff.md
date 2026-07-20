@@ -6,13 +6,15 @@ Use this file first. Fast goal entry point: `END_GOAL.md`; normative end goal: `
 
 ## End Goal To Preserve
 
-FORGE must converge on one deterministic authorized engagement workflow:
-multi-seed engagement intake, bounded recursive discovery, passive artifact and
-provider enrichment, non-destructive validation-before-reporting, deterministic
-risk scoring, graph/dashboard/report/audit review, LLM cascade only for
-narrative, and template/raw export fallback when all providers fail. Do not move
-the goal to UI-only polish or provider breadth without proving the end-to-end
-kill-chain path and cleanup behavior with focused local/mocked tests.
+FORGE must converge on one deterministic authorized engagement pipeline:
+scoped multi-seed intake, bounded recursive discovery, passive artifact/provider
+enrichment, proof-bound non-destructive validation, rule-engine severity,
+graph/dashboard/report/audit review, LLM cascade only for narrative,
+template/raw export fallback when providers fail, and automated test-data
+cleanup. Before starting work, map the task to one of the acceptance stages in
+`docs/end_goal.md`: intake, discovery, recursion, artifact analysis, validation,
+scoring, review, fallback, or testing/cleanup. Do not move the goal to UI-only
+polish or provider breadth without proving the end-to-end kill-chain path.
 
 ## Operator Notes
 

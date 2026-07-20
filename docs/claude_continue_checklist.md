@@ -11,13 +11,16 @@ Last updated: 2026-07-20
 
 ## End Goal To Preserve
 
-FORGE must converge on one deterministic authorized engagement workflow:
-multi-seed intake, bounded recursive discovery, passive artifact/provider
-enrichment, non-destructive validation-before-reporting, deterministic risk
-scoring, graph/dashboard/report/audit review, LLM cascade for narrative only, and
-template/raw export fallback when all providers fail. Do not move the goal to
-UI-only polish or unverified provider breadth; every continuation task should
-close a concrete gap in that workflow and leave focused local/mocked tests.
+FORGE must converge on one deterministic authorized engagement pipeline:
+scoped multi-seed intake, bounded recursive discovery, passive artifact/provider
+enrichment, non-destructive validation-before-reporting, rule-engine risk
+scoring, graph/dashboard/report/audit review, LLM cascade for narrative only,
+template/raw export fallback when all providers fail, and automated test-data
+cleanup. Do not move the goal to UI-only polish, provider breadth without
+recursive value, or any behavior that weakens scope, proof, report, audit, or
+fallback guarantees. Every continuation task must map back to the acceptance
+stages in `docs/end_goal.md`: intake, discovery, recursion, artifact analysis,
+validation, scoring, review, fallback, or testing/cleanup.
 
 ## Compact active backlog
 

@@ -4,6 +4,23 @@ This file is the fast entry point for the project goal. The normative contract i
 `docs/end_goal.md`; if any checklist, handoff, agent plan, or implementation task
 conflicts with that file, update the conflicting material before continuing.
 
+## Hard End Goal
+
+The end goal is one reproducible authorized engagement pipeline, not a growing
+collection of unrelated scanners or UI screens.
+
+FORGE is done when an operator can create a scoped multi-seed engagement, run
+bounded recursive discovery, automatically parse discovered artifacts, validate
+cloud and credential evidence non-destructively, calculate deterministic
+findings and severity, review the engagement in dashboard/graph/report/audit
+surfaces, export raw evidence, and still receive a useful deterministic report
+when every LLM/API narrative provider fails.
+
+Every future task must map to at least one of those gates. If it does not improve
+intake, recursion, validation, deterministic scoring, graph/dashboard/report
+review, auditability, fallback output, cleanup, or tests, it is not part of the
+current end goal.
+
 ## End Goal In Plain English
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and
@@ -51,6 +68,22 @@ Required continuation rules:
   fail, hit quota, or exceed token limits.
 - Keep code modular, test-focused, and committed to `main` in meaningful
   checkpoints.
+
+## Done Means
+
+- One scoped engagement can be launched from CLI/API/UI and resumed safely.
+- The kill chain recursively promotes new in-scope seeds until deterministic
+  budgets, depth, stable snapshot, or operator stop ends the run.
+- Static artifact parsing feeds discovered hosts, URLs, emails, cloud refs, and
+  keys back into the loop without executing the artifact.
+- Cloud/resource/key proof gates decide what is reportable; unverified inventory
+  remains visible but cannot become a deterministic finding.
+- The dashboard shows status, seeds, evidence, validation state, graph exports,
+  reports, raw exports, audit logs, and run metadata for that engagement.
+- Reports preserve rule-engine severity and degrade to template plus raw exports
+  on provider failure, missing keys, quota exhaustion, or token limits.
+- Focused and mocked end-to-end tests prove the path and automated test
+  engagement cleanup leaves no debris.
 
 Read next:
 

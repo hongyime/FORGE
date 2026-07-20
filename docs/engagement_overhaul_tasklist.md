@@ -13,6 +13,12 @@ Last updated: 2026-07-20
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform. It must start from one or more scoped engagement seeds, recursively discover public or explicitly authorized attack surface, statically analyze discovered artifacts, validate cloud and credential evidence non-destructively before reporting, calculate risk with deterministic rules, expose the engagement through graph/dashboard/report surfaces, and always generate auditable output even when LLM providers fail.
 
+End-goal lock: the target is one reproducible authorized engagement pipeline,
+not a loose backlog of scanners, providers, or UI polish. Every active task must
+map to one of the deterministic acceptance stages in `docs/end_goal.md`:
+intake, discovery, recursion, artifact analysis, validation, scoring, review,
+fallback, or testing/cleanup.
+
 Status semantics: these unchecked boxes are end-state acceptance criteria. They
 are intentionally not a live task queue and should not override the current
 continuation order in `## Compact active backlog`.

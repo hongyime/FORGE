@@ -13,6 +13,32 @@ deterministically. A change belongs in the active task list only if it improves
 that workflow, proves it with focused tests, or removes ambiguity that would
 cause a future agent to weaken those guarantees.
 
+## Non-Negotiable Acceptance Contract
+
+This is the system target every task list must preserve:
+
+FORGE must run one authorized engagement from scoped multi-seed intake through
+bounded recursive discovery, passive artifact extraction, proof-bound validation,
+deterministic findings, graph/dashboard/report/audit review, fallback exports,
+and test-data cleanup without relying on an LLM for truth.
+
+Acceptance is stage-gated:
+
+| Stage | Required deterministic outcome |
+|---|---|
+| Intake | Engagement IDs are monotonic, slugs are stable, seeds are typed, scoped, and auditable. |
+| Discovery | Fan-outs are bounded, resumable, ordered for persistence, and scope-filtered. |
+| Recursion | Newly discovered high-value pivots become secondary seeds until explicit termination conditions are met. |
+| Artifact analysis | Discovered files are parsed statically and safely; execution is not required for recursive enrichment. |
+| Validation | Cloud/resource/key evidence needs non-destructive proof before it can become reportable. |
+| Scoring | Severity and reportability are rule-engine outputs only. |
+| Review | Dashboard, graph exports, reports, raw exports, validation inventory, and audit logs expose the same engagement facts. |
+| Fallback | LLM/API/provider failure still produces template reports and raw JSON/CSV exports with checksums and failure metadata. |
+| Testing | Focused and mocked end-to-end tests prove the whole path and clean up test engagement data. |
+
+If a task cannot be tied to one of these rows, it should not be started under the
+current goal.
+
 ## One-Sentence Goal
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform that starts from one or more scoped engagement seeds, recursively discovers and validates public or explicitly authorized attack surface, statically analyzes discovered artifacts, produces an analyst-usable graph and dashboard, and always generates auditable reports without letting an LLM invent facts, severities, or findings.
