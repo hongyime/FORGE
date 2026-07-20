@@ -59,6 +59,12 @@ def _chat_response(text: str = "hello", model: str = "test-model") -> dict[str, 
     }
 
 
+def _chat_response_blocks(content: list[object], model: str = "test-model") -> dict[str, Any]:
+    body = _chat_response("", model=model)
+    body["choices"][0]["message"]["content"] = content
+    return body
+
+
 @pytest.mark.asyncio
 async def test_complete_happy_path() -> None:
     captured: dict[str, Any] = {}
@@ -83,6 +89,26 @@ async def test_complete_happy_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_accepts_block_style_message_content() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_chat_response_blocks(
+                [
+                    {"type": "text", "text": "alpha"},
+                    {"type": "reasoning", "text": "not returned"},
+                    {"type": "output_text", "text": " beta"},
+                ]
+            ),
+        )
+
+    p = _make_provider(httpx.MockTransport(handler))
+    resp = await p.complete(CompletionRequest(prompt="hi", max_tokens=10))
+    assert resp.text == "alpha beta"
+    await p.aclose()
+
+
+@pytest.mark.asyncio
 async def test_complete_with_system_prompt() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -93,6 +119,25 @@ async def test_complete_with_system_prompt() -> None:
 
     p = _make_provider(httpx.MockTransport(handler))
     await p.complete(CompletionRequest(prompt="x", system="you are forge"))
+    await p.aclose()
+
+
+@pytest.mark.asyncio
+async def test_complete_block_style_message_content_without_text_fails_closed() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_chat_response_blocks(
+                [
+                    {"type": "reasoning", "text": "hidden chain of thought"},
+                    {"type": "tool_call", "id": "call_1"},
+                ]
+            ),
+        )
+
+    p = _make_provider(httpx.MockTransport(handler))
+    with pytest.raises(ProviderUnavailableError, match="no text blocks"):
+        await p.complete(CompletionRequest(prompt="hi", max_tokens=10))
     await p.aclose()
 
 
@@ -212,6 +257,23 @@ async def test_structured_output_strict_mode() -> None:
     )
     assert out == {"answer": 42}
     assert captured_body["response_format"]["type"] == "json_schema"
+    await p.aclose()
+
+
+@pytest.mark.asyncio
+async def test_structured_output_accepts_block_style_message_content() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_chat_response_blocks([{"type": "text", "text": '{"answer": 42}'}]),
+        )
+
+    p = _make_provider(httpx.MockTransport(handler))
+    out = await p.structured_output(
+        CompletionRequest(prompt="give me 42"),
+        {"type": "object", "properties": {"answer": {"type": "integer"}}},
+    )
+    assert out == {"answer": 42}
     await p.aclose()
 
 

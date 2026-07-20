@@ -11,6 +11,13 @@ Use this file first. Fast goal entry point: `END_GOAL.md`; normative end goal: `
 
 ## Current green checkpoint
 
+- [x] OpenAI-compatible report-provider normalization checkpoint is green:
+  OpenAI-compatible chat responses now accept block-style `message.content` arrays by concatenating text/output_text blocks while fail-closing when no text blocks exist. Phase 6 direct and auto `openai_compatible` provider construction now passes `model=` instead of invalid `model_id=`.
+  Verification: compile/Ruff for touched provider/report/test files; focused OpenAI-compatible plus Phase 6 report synthesizer suite -> `113 passed`; adjacent providers suite -> `161 passed`.
+  Review: explorer `Nietzsche` found the gap and constructor mismatch.
+  Safety: report-provider parsing/configuration only. No provider endpoint expansion, automatic provider calls, credential use, live probing, scope relaxation, proxy/IP rotation, rate-limit bypass, deterministic severity change, or report-gate weakening.
+  Handoff: `.claude/handoffs/2026-07-20-openai-compatible-block-content.md`.
+
 - [x] Visio package passive-recursion checkpoint is green:
   `.vsdx`, `.vsdm`, `.vstx`, `.vstm`, `.vssx`, and `.vssm` now enter the existing zip-backed document parser, so Visio architecture diagrams can passively extract XML text, relationship targets, owner emails, URLs, Firebase/Supabase refs, and cloud pivots into recursive seeds/assets. Visio content types now select Visio suffixes for extensionless remote artifacts.
   Verification: compile/Ruff for touched orchestrator/test files; focused Visio suite -> `2 passed`; full artifact helper suite -> `29 passed`; adjacent document/diagram/OpenDocument/EPUB artifact slice -> `4 passed`.

@@ -1776,6 +1776,47 @@ def test_synthesizer_auto_cascade_order_accepts_env_aliases(monkeypatch) -> None
     ]
 
 
+def test_synthesizer_loads_openai_compatible_provider_from_env(monkeypatch, tmp_path):
+    from forge.providers.openai_compatible import OpenAICompatibleProvider
+
+    monkeypatch.setenv("FORGE_OPENAI_BASE_URL", "https://llm.acme.example/v1")
+    monkeypatch.setenv("FORGE_OPENAI_MODEL", "acme-report-model")
+    monkeypatch.setenv("FORGE_OPENAI_API_KEY", "")
+
+    synth = ReportSynthesizer(
+        tmp_path / "engagement.db",
+        output_dir=tmp_path,
+        assume_yes=True,
+        provider="openai_compatible",
+    )
+    synth._ensure_provider_loaded()
+
+    assert isinstance(synth._llm_provider, OpenAICompatibleProvider)
+    assert synth._llm_provider.model_id == "acme-report-model"
+    assert synth._llm_provider.endpoint == "https://llm.acme.example/v1"
+
+
+def test_synthesizer_auto_chain_loads_openai_compatible_provider_from_env(
+    monkeypatch, tmp_path
+):
+    from forge.providers.fallback import FallbackChainProvider
+
+    monkeypatch.setenv("FORGE_LLM_CASCADE_ORDER", "openai_compatible")
+    monkeypatch.setenv("FORGE_OPENAI_BASE_URL", "https://llm.acme.example/v1")
+    monkeypatch.setenv("FORGE_OPENAI_MODEL", "acme-report-model")
+    monkeypatch.setenv("FORGE_OPENAI_API_KEY", "")
+
+    synth = ReportSynthesizer(
+        tmp_path / "engagement.db",
+        output_dir=tmp_path,
+        assume_yes=True,
+        provider="auto",
+    )
+    synth._ensure_provider_loaded()
+
+    assert isinstance(synth._llm_provider, FallbackChainProvider)
+
+
 def test_synthesizer_auto_uses_local_llama_when_cloud_chain_unavailable(
     tmp_eng_db, tmp_path, patch_confirm_approve, monkeypatch
 ):

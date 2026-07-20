@@ -354,8 +354,12 @@ class OpenAICompatibleProvider:
                 f"choices[0] not an object: {first!r}"
             )
         msg = first.get("message")
-        if isinstance(msg, dict) and isinstance(msg.get("content"), str):
-            return str(msg["content"])
+        if isinstance(msg, dict):
+            content = msg.get("content")
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                return OpenAICompatibleProvider._extract_text_blocks(content)
         # Some providers (older OpenAI completion endpoints, certain
         # LM Studio builds) return ``text`` instead of ``message.content``.
         if isinstance(first.get("text"), str):
@@ -363,3 +367,24 @@ class OpenAICompatibleProvider:
         raise ProviderUnavailableError(
             f"unrecognised choice shape: {first!r}"
         )
+
+    @staticmethod
+    def _extract_text_blocks(content: list[Any]) -> str:
+        chunks: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                chunks.append(block)
+                continue
+            if not isinstance(block, dict):
+                continue
+            block_type = str(block.get("type") or "").strip().lower()
+            if block_type and block_type not in {"text", "output_text"}:
+                continue
+            text = block.get("text")
+            if isinstance(text, str):
+                chunks.append(text)
+        if not chunks:
+            raise ProviderUnavailableError(
+                f"openai_compatible: no text blocks in response: {content!r}"
+            )
+        return "".join(chunks)

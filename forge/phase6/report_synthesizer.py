@@ -2998,7 +2998,7 @@ class ReportSynthesizer:
                         "must be set for --provider openai_compatible"
                     )
                 self._llm_provider = OpenAICompatibleProvider(
-                    endpoint=base_url, model_id=model, api_key=api_key or ""
+                    endpoint=base_url, model=model, api_key=api_key or ""
                 )
             elif name == "auto":
                 self._llm_provider = self._build_auto_chain()
@@ -3051,7 +3051,7 @@ class ReportSynthesizer:
                             "openai_compatible",
                             OpenAICompatibleProvider(
                                 endpoint=os.environ["FORGE_OPENAI_BASE_URL"],
-                                model_id=os.environ["FORGE_OPENAI_MODEL"],
+                                model=os.environ["FORGE_OPENAI_MODEL"],
                                 api_key=os.environ.get("FORGE_OPENAI_API_KEY", ""),
                             ),
                         )
