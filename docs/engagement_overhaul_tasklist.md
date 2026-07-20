@@ -81,6 +81,23 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Templated artifact URL persistence hardening checkpoint:
+  artifact URL seed persistence now rejects raw or URL-decoded template markers,
+  preventing malformed host-meta/WebFinger template fragments such as
+  `resource=%7Buri` from becoming recursive URL or related-host seeds. Existing
+  literal template rejection for values like `https://{tenant}.acme.example/api`
+  is preserved. Verification: TDD focused regression failed before
+  implementation because `%7Buri` inserted three seeds, then passed
+  (`1 passed`); compile for touched orchestrator/provenance test files; Ruff
+  for touched files (`All checks passed!`); artifact provenance file
+  (`3 passed`); adjacent provenance/Matrix/public-metadata/helper slice
+  (`15 passed`); slow remote well-known metadata fixture with `-m slow`
+  (`1 passed`); cleanup check found no new persistent pytest DBs. Safety:
+  persistence-gate hardening only; no URL fetching, provider call, live probing,
+  credential use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  report-gate change, severity change, or deterministic finding creation.
+  Handoff:
+  `.claude/handoffs/2026-07-20-templated-url-seed-hardening.md`.
 - [x] Matrix server delegated-host recursive-pivot checkpoint:
   source-aware `.well-known/matrix/server` / `matrix-server` parsing now
   promotes valid `m.server` homeserver delegation values such as

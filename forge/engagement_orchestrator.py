@@ -450,6 +450,16 @@ def _normalize_artifact_text_url(value: str) -> str:
     return candidate
 
 
+def _artifact_url_looks_templated(value: object) -> bool:
+    candidate = str(value or "")
+    decoded = unquote(candidate)
+    return any(
+        marker in text
+        for text in (candidate, decoded)
+        for marker in ("{", "}", "${", "$(", "{{", "}}", "<", ">")
+    )
+
+
 def _normalize_artifact_network_dsn_token(value: str) -> str:
     candidate = str(value or "").strip().replace("\\/", "/")
     if not candidate:
@@ -21319,7 +21329,7 @@ class ArtifactQueueProcessor:
         *,
         relation_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
-        if any(marker in str(url or "") for marker in ("{", "}", "${", "$(", "{{", "}}", "<", ">")):
+        if _artifact_url_looks_templated(url):
             return None
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:

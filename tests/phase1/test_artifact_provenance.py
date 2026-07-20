@@ -124,6 +124,27 @@ def test_artifact_url_seed_persistence_rejects_templated_urls(tmp_path: Path) ->
         ).fetchall()
         assert inserted == 0
         assert rows == []
+
+        inserted = processor._store_artifact_url_seed(
+            con,
+            "https://profiles.acme.example/.well-known/webfinger?resource=%7Buri",
+            source="artifact",
+            confidence=0.68,
+            relation_metadata={"source_artifact": "host-meta"},
+        )
+        rows = con.execute(
+            """
+            SELECT seed_value, seed_type
+            FROM engagement_seeds
+            WHERE engagement_id=1001
+              AND (
+                seed_value='https://profiles.acme.example/.well-known/webfinger?resource=%7Buri'
+                OR seed_value='profiles.acme.example'
+              )
+            """
+        ).fetchall()
+        assert inserted == 0
+        assert rows == []
     finally:
         con.close()
 

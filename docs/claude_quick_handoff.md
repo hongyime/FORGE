@@ -78,6 +78,11 @@ delegation, continue locally against the locked goal and record the limitation.
   homeserver delegation values into recursive subdomain/root-domain seeds while
   excluding generic JSON lookalikes. Handoff:
   `.claude/handoffs/2026-07-20-matrix-server-host-recursion.md`.
+- [x] Templated artifact URL persistence hardening completed: artifact URL seed
+  persistence now rejects raw or URL-decoded template markers, preventing
+  malformed host-meta/WebFinger fragments like `resource=%7Buri` from becoming
+  recursive URL or related-host seeds. Handoff:
+  `.claude/handoffs/2026-07-20-templated-url-seed-hardening.md`.
 - [x] MTA-STS MX host recursion completed: source-aware `mta-sts.txt` now
   promotes valid `mx:` hosts, including wildcard patterns normalized without
   `*.`, into recursive domain/subdomain seeds while preserving existing
