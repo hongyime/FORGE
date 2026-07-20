@@ -4,6 +4,16 @@ Last updated: 2026-07-20
 
 Use this file first. Fast goal entry point: `END_GOAL.md`; normative end goal: `docs/end_goal.md`; execution checklist: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`. Use `docs/claude_continue_checklist.md` next if you need the longer command list.
 
+## End Goal To Preserve
+
+FORGE must converge on one deterministic authorized engagement workflow:
+multi-seed engagement intake, bounded recursive discovery, passive artifact and
+provider enrichment, non-destructive validation-before-reporting, deterministic
+risk scoring, graph/dashboard/report/audit review, LLM cascade only for
+narrative, and template/raw export fallback when all providers fail. Do not move
+the goal to UI-only polish or provider breadth without proving the end-to-end
+kill-chain path and cleanup behavior with focused local/mocked tests.
+
 ## Operator Notes
 
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.

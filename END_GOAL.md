@@ -12,6 +12,17 @@ non-destructively before reporting, calculates risk with deterministic rules,
 exposes the engagement through graph/dashboard/report surfaces, and always
 generates auditable output even when LLM providers fail.
 
+## Current Execution End Goal
+
+The concrete end state is one reproducible authorized engagement path: create or
+select a multi-seed engagement, run bounded recursive discovery across passive
+OSINT, identity, web, artifact, cloud-reference, and explicitly authorized live
+checks, validate evidence with non-destructive proof gates, synthesize
+deterministic findings and graph exports, render dashboard/report/audit
+artifacts, and clean up test data. The project is not done until that path is
+covered by focused local/mocked end-to-end tests and still produces template and
+raw exports when every LLM/API provider is unavailable.
+
 Required continuation rules:
 
 - Improve concrete kill-chain gaps: recursive discovery, passive parser coverage,

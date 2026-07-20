@@ -8,6 +8,18 @@ This is the normative end-goal contract for FORGE. The repository-root `END_GOAL
 
 FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform that starts from one or more scoped engagement seeds, recursively discovers and validates public or explicitly authorized attack surface, statically analyzes discovered artifacts, produces an analyst-usable graph and dashboard, and always generates auditable reports without letting an LLM invent facts, severities, or findings.
 
+## Current Execution End Goal
+
+The implementation target is one complete, repeatable engagement workflow:
+create or select a multi-seed engagement, run bounded recursive discovery across
+passive OSINT, identity, web, artifact, cloud-reference, and explicitly
+authorized live checks, validate evidence with non-destructive proof gates,
+calculate deterministic findings and severities, expose graph/dashboard/report
+review surfaces, export audit artifacts, and clean up test data. This workflow
+must pass focused local/mocked end-to-end tests and must still produce template
+reports plus raw JSON/CSV exports when every LLM/API provider fails, hits quota,
+or exceeds token limits.
+
 ## Operating Boundaries
 
 - FORGE exists for authorized security assessment, OSINT, misconfiguration validation, and executive reporting.

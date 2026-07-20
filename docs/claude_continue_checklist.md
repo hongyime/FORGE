@@ -8,6 +8,16 @@ Last updated: 2026-07-20
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 
+## End Goal To Preserve
+
+FORGE must converge on one deterministic authorized engagement workflow:
+multi-seed intake, bounded recursive discovery, passive artifact/provider
+enrichment, non-destructive validation-before-reporting, deterministic risk
+scoring, graph/dashboard/report/audit review, LLM cascade for narrative only, and
+template/raw export fallback when all providers fail. Do not move the goal to
+UI-only polish or unverified provider breadth; every continuation task should
+close a concrete gap in that workflow and leave focused local/mocked tests.
+
 ## Compact active backlog
 
 Use this as the canonical continuation list. Older unchecked "next audit target" breadcrumbs are historical unless they map to one of these items.

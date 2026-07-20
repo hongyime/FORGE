@@ -23,6 +23,18 @@ FORGE is a comprehensive, deterministic, authorized attack-surface management an
 - [ ] Dashboard/detail pages expose engagement metadata, seeds, findings, graph exports, report history, validation inventory, raw exports, and hash-chain audit manifests.
 - [ ] Acceptance requires focused tests, mocked end-to-end kill-chain tests, offline-strict tests, report fallback tests, validation gate tests, dashboard contract tests, and cleanup proving no test engagements remain.
 
+## Current Execution End Goal
+
+Do not treat this as a UI-only or checklist-polish effort. The current end goal
+is a reproducible authorized kill-chain workflow that starts from a multi-seed
+engagement, recurses through passive OSINT, identity, web, artifact,
+cloud-reference, and explicitly authorized live-check fan-outs, validates
+evidence non-destructively, emits deterministic findings/severity/graph/report
+artifacts, renders the engagement for dashboard review, and leaves no automated
+test engagement debris. It is only acceptable when focused local/mocked E2E
+tests prove the workflow and report generation still falls back to deterministic
+template/raw exports with no working LLM provider.
+
 ## Compact active backlog
 
 Use this as the canonical continuation list. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.
