@@ -22,6 +22,12 @@ kill-chain path and cleanup behavior with focused local/mocked tests.
 
 ## Current green checkpoint
 
+- [x] Gradle wrapper properties passive-recursion checkpoint is green:
+  `gradle-wrapper.properties` now keeps source-aware `gradle-wrapper-properties` format and static `distributionUrl=...` / repository URL properties feed sanitized recursive URL seeds, including escaped Gradle schemes such as `https\://...`. Remote wrapper downloads preserve source labels; owner emails and Firebase refs still flow through the existing passive artifact path; sensitive URL query values stay out of persisted DB text.
+  Verification: compile/Ruff for touched helper/orchestrator/focused tests; focused Gradle config suite -> `12 passed`; adjacent JVM/Maven/Gradle orchestrator selector -> `3 passed, 757 deselected`.
+  Safety: passive static Gradle properties parsing only. No Gradle wrapper execution, dependency download, repository authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-gradle-wrapper-properties-recursion.md`.
+
 - [x] Pixi/Conda environment passive-recursion checkpoint is green:
   Exact `pixi.toml`, `pixi.lock`, `environment.yml`, `environment.yaml`, `conda-lock.yml`, and `conda-lock.yaml` artifacts now keep source-aware `pixi-manifest`, `pixi-lock`, `conda-environment`, and `conda-lock` formats instead of generic extension labels. Package/channel URLs and owner emails still recurse into engagement seeds, while embedded URL credentials stay out of persisted DB text. Broad lookalikes such as `runtime-environment.yml` and `pixi-notes.toml` remain generic.
   Verification: compile/Ruff for touched helper/orchestrator tests; focused package-manager config suite -> `45 passed`; existing Conda/package-index orchestrator selector -> `2 passed, 758 deselected`; direct classifier probe confirmed exact labels and generic lookalikes.

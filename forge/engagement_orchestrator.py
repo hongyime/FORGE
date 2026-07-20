@@ -97,6 +97,11 @@ from forge.utils.artifact_framework_config import (
     framework_config_artifact_label,
     framework_config_host_candidates,
 )
+from forge.utils.artifact_gradle_config import (
+    gradle_text_config_artifact_label,
+    gradle_text_config_remote_filename,
+    gradle_text_repository_values,
+)
 from forge.utils.artifact_hashicorp_config import (
     hashicorp_config_artifact_label,
     hashicorp_config_candidates,
@@ -5154,21 +5159,7 @@ def _maven_xml_config_artifact_label(value: str) -> str:
 
 
 def _gradle_text_config_artifact_label(value: str) -> str:
-    normalized = str(value or "").strip().replace("\\", "/").strip("/").lower()
-    if not normalized:
-        return ""
-    name = Path(normalized).name
-    if name in {"build.gradle", "build.gradle.kts"}:
-        return "gradle-build"
-    if name in {"settings.gradle", "settings.gradle.kts"}:
-        return "gradle-settings"
-    if name in {"init.gradle", "init.gradle.kts"}:
-        return "gradle-init"
-    if name == "gradle.properties":
-        return "gradle-properties"
-    if name == "libs.versions.toml":
-        return "gradle-version-catalog"
-    return ""
+    return gradle_text_config_artifact_label(value)
 
 
 def _devcontainer_config_artifact_label(value: str) -> str:
@@ -6967,6 +6958,9 @@ def _select_remote_artifact_filename(
     )
     if package_manager_filename:
         return package_manager_filename
+    gradle_filename = gradle_text_config_remote_filename(unquote(parsed_source.path or ""))
+    if gradle_filename:
+        return gradle_filename
     if _looks_like_cloud_init_text_config_artifact_name(unquote(parsed_source.path or "")):
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate:
@@ -26237,21 +26231,7 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _gradle_text_repository_values(text: str) -> list[str]:
-        raw_text = str(text or "")
-        patterns = (
-            r"""\bmaven\s*\(\s*["'](?P<value>[^"']+)["']\s*\)""",
-            r"""\burl\s*(?:=)?\s*(?:uri)?\s*\(?\s*["'](?P<value>[^"']+)["']""",
-            r"""\bsetUrl\s*\(\s*(?:uri)?\s*\(?\s*["'](?P<value>[^"']+)["']""",
-            r"""\bartifactUrls\s*(?:=)?\s*(?:uri)?\s*\(?\s*["'](?P<value>[^"']+)["']""",
-        )
-        entries: list[tuple[int, str]] = []
-        for pattern in patterns:
-            for match in re.finditer(pattern, raw_text, re.IGNORECASE):
-                value = str(match.group("value") or "").strip()
-                if value:
-                    entries.append((match.start(), value))
-        entries.sort(key=lambda item: item[0])
-        return [value for _index, value in entries]
+        return gradle_text_repository_values(text)
 
     @staticmethod
     def _gradle_text_repository_url_candidate_entry(raw_value: str) -> str:
