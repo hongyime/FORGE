@@ -66,6 +66,26 @@ def test_cleanup_only_removes_pytest_temp_dirs_with_engagement_db(tmp_path: Path
     assert keep_wrong_name.exists()
 
 
+def test_v11_cleanup_removes_nested_pytest_run_dirs_not_pytest_of_container(tmp_path: Path) -> None:
+    container = tmp_path / "pytest-of-bryan"
+    removable = container / "pytest-42"
+    removable_nested = removable / "case" / "engagement"
+    removable_nested.mkdir(parents=True)
+    (removable_nested / "engagement.db").write_text("", encoding="utf-8")
+    keep_nested = container / "pytest-keep"
+    keep_nested.mkdir(parents=True)
+
+    assert runner.pytest_engagement_temp_dirs([tmp_path]) == [removable]
+
+    removed, remaining = runner.cleanup_pytest_engagement_dbs([tmp_path])
+
+    assert removed == 1
+    assert remaining == 0
+    assert container.exists()
+    assert not removable.exists()
+    assert keep_nested.exists()
+
+
 def test_run_command_returns_124_on_timeout(monkeypatch, tmp_path: Path) -> None:
     def _timeout_run(*args, **kwargs):  # noqa: ANN001, ARG001
         raise subprocess.TimeoutExpired(cmd=["python", "-m", "pytest"], timeout=1)

@@ -55,6 +55,16 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Pytest engagement cleanup safety completed: Phase 1 partition cleanup now
+  treats `pytest-of-*` as an owner container and removes only nested `pytest-*`
+  run directories containing `engagement.db`. Backprop added `SPEC.md` `V11`
+  and `B5`. Verification: focused regression failed before implementation then
+  passed, compile/Ruff, cleanup script tests (`5 passed`), engagement-ID tests
+  (`3 passed`), compact smoke (`5 passed, 1 deselected`), real temp cleanup
+  left `remaining_pytest_engagement_dirs=0`; persistent workspace DB inventory
+  remains `1`, `5010`, `master.db`, and no pytest/Python process remains.
+  Handoff:
+  `.claude/handoffs/2026-07-20-pytest-engagement-cleanup-safety.md`.
 - [x] Package URL helper extraction completed: core package-url ecosystem
   mapping and package path parsing now live in `forge.utils.artifact_package_url`
   instead of the oversized orchestrator; JSR runtime specifier parsing uses the

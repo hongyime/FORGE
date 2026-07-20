@@ -94,6 +94,25 @@ sentences as historical notes only, not as current instructions.
   identity-provider/passive-artifact parser gap. Keep all work mapped to
   identity enrichment, recursion, artifact analysis, validation, review,
   fallback, or testing/cleanup.
+- [x] Pytest engagement cleanup safety checkpoint: the Phase 1 partition
+  runner cleanup helper now treats `pytest-of-*` directories as owner
+  containers and removes only actual nested `pytest-*` run directories that
+  contain `engagement.db`. This prevents broad deletion of a pytest owner
+  container while still proving test engagement artifacts are cleaned up.
+  Backprop: added `SPEC.md` invariant `V11` plus bug note `B5` so cleanup may
+  remove only proven test-owned engagement artifacts and must leave broad owner
+  containers and unproven persistent engagement DBs intact. Verification:
+  focused regression first failed by returning `pytest-of-bryan` instead of
+  nested `pytest-42`, then passed; compile/Ruff for touched script/test files;
+  cleanup script tests (`5 passed`); monotonic engagement-ID tests (`3 passed`);
+  compact cross-phase smoke (`5 passed, 1 deselected`); real temp cleanup
+  removed pytest engagement dirs after targeted tests and smoke, then left
+  `remaining_pytest_engagement_dirs=0`; persistent workspace DB inventory
+  remains `1`, `5010`, `master.db`; no pytest/Python process remains. Safety:
+  test cleanup tooling only; no production engagement deletion, target network,
+  live probing, provider call, credential use, scope relaxation, proxy/IP
+  rotation, rate-limit bypass, validation/report-gate change, severity change,
+  or finding creation.
 - [x] Package URL helper extraction checkpoint: core package-url ecosystem
   mapping and package path parsing moved from the oversized
   `engagement_orchestrator.py` into `forge.utils.artifact_package_url`, leaving

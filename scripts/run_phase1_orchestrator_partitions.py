@@ -60,12 +60,14 @@ def chunked(items: Sequence[str], chunk_size: int) -> list[list[str]]:
 def pytest_engagement_temp_dirs(roots: Iterable[Path] | None = None) -> list[Path]:
     """Return pytest temp dirs containing engagement DBs.
 
-    Safety guard: only directories named ``pytest-*`` directly under temp roots
-    are eligible for removal.
+    Safety guard: only pytest run directories named ``pytest-*`` are eligible
+    for removal. Pytest owner containers such as ``pytest-of-user`` are never
+    removed wholesale; their direct ``pytest-*`` children are inspected instead.
     """
 
     root_candidates = list(roots or _temp_roots())
     targets: list[Path] = []
+    seen: set[Path] = set()
     for root in root_candidates:
         try:
             resolved_root = root.resolve()
@@ -73,12 +75,31 @@ def pytest_engagement_temp_dirs(roots: Iterable[Path] | None = None) -> list[Pat
             continue
         if not resolved_root.exists() or not resolved_root.is_dir():
             continue
-        for child in resolved_root.iterdir():
-            if not child.is_dir() or not child.name.startswith("pytest-"):
-                continue
-            if any(child.rglob("engagement.db")):
-                targets.append(child)
+        for child in sorted(resolved_root.iterdir(), key=lambda path: path.name):
+            for candidate in _pytest_run_dir_candidates(child):
+                if candidate in seen or not any(candidate.rglob("engagement.db")):
+                    continue
+                seen.add(candidate)
+                targets.append(candidate)
     return targets
+
+
+def _pytest_run_dir_candidates(path: Path) -> list[Path]:
+    if not path.is_dir():
+        return []
+    if _is_pytest_run_dir(path):
+        return [path]
+    if path.name.startswith("pytest-of-"):
+        return [
+            child
+            for child in sorted(path.iterdir(), key=lambda item: item.name)
+            if _is_pytest_run_dir(child)
+        ]
+    return []
+
+
+def _is_pytest_run_dir(path: Path) -> bool:
+    return path.is_dir() and path.name.startswith("pytest-") and not path.name.startswith("pytest-of-")
 
 
 def cleanup_pytest_engagement_dbs(roots: Iterable[Path] | None = None) -> tuple[int, int]:

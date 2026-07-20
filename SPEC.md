@@ -67,12 +67,15 @@ review, and guaranteed template/raw exports when LLM providers fail.
   reports and raw JSON/CSV exports with checksums and failure metadata.
 - V10. Automated tests must clean up or isolate test engagement data and must
   not rely on real external targets unless an explicit scoped target is provided.
+- V11. Automated cleanup may remove only proven test-owned engagement artifacts;
+  it must not delete broad pytest owner containers or persistent engagement DBs
+  that are not proven artifacts from the current test run.
 
 ## T
 
 | id | status | task | cites |
 |---|---|---|---|
-| T1 | . | Prove one representative multi-seed engagement path from intake through recursion, validation, graph/report/audit review, fallback exports, and cleanup with focused mocked E2E tests. | V1,V2,V3,V4,V8,V9,V10 |
+| T1 | . | Prove one representative multi-seed engagement path from intake through recursion, validation, graph/report/audit review, fallback exports, and cleanup with focused mocked E2E tests. | V1,V2,V3,V4,V8,V9,V10,V11 |
 | T2 | . | Continue safe recursive discovery upgrades for concrete passive parser, provider payload, identity, artifact, and source-gated metadata gaps. | V1,V3,V4,V5 |
 | T3 | . | Harden validation proof gates and report gates so only latest validated evidence can create deterministic findings. | V6,V7 |
 | T4 | . | Keep dashboard, API, graph, report, raw export, validation inventory, and audit surfaces in factual parity. | V3,V8 |
@@ -89,3 +92,4 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | B2 | 2026-07-20 | Runtime `/goal` state can be stale while repo docs contain the real goal lock, which can confuse future agents. | Recorded that repo goal docs override stale runtime/chat/handoff goal text and that stale continuation material should be corrected, not used to redefine the project. |
 | B3 | 2026-07-20 | The locked end goal existed, but continuation docs could still require reading long sections before the one-sentence product target was obvious. | Added one-glance end-goal quick answers to the root goal file, active tasklist, and Claude continuation docs. |
 | B4 | 2026-07-20 | Broad inventory-name artifact labeling could outrank explicit multi-suffix SBOM names such as `inventory.spdx.json`, weakening deterministic artifact review metadata. | Classified explicit SBOM multi-suffix names before broad inventory heuristics; covered by V8 artifact metadata parity. |
+| B5 | 2026-07-20 | Pytest engagement cleanup treated `pytest-of-*` owner containers as removable pytest run directories when a nested `engagement.db` existed. | Added V11 and tightened cleanup to remove only actual nested `pytest-*` run directories that contain engagement DBs, leaving owner containers and persistent workspace DBs intact. |

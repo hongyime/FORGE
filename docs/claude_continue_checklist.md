@@ -67,6 +67,18 @@ historical notes only, not as current instructions.
   gap before writing code. Prefer dashboard/graph/report parity, raw export
   fallback, cleanup proof, MTGX analyst fidelity, or a concrete
   identity-provider/passive-artifact parser gap.
+- [x] Pytest engagement cleanup safety checkpoint completed: the Phase 1
+  partition runner cleanup helper now leaves `pytest-of-*` owner containers in
+  place and removes only actual nested `pytest-*` run directories containing
+  `engagement.db`. Backprop: added `SPEC.md` invariant `V11` plus bug note
+  `B5`. Verification: focused regression first failed by returning
+  `pytest-of-bryan` instead of nested `pytest-42`, then passed; compile/Ruff for
+  touched files; cleanup script tests -> `5 passed`; monotonic engagement-ID
+  tests -> `3 passed`; compact cross-phase smoke -> `5 passed, 1 deselected`;
+  real temp cleanup left `remaining_pytest_engagement_dirs=0`; persistent
+  workspace DB inventory is still `1`, `5010`, `master.db`; no pytest/Python
+  process remains. Handoff:
+  `.claude/handoffs/2026-07-20-pytest-engagement-cleanup-safety.md`.
 - [x] Package URL helper extraction checkpoint completed: core package-url
   ecosystem mapping and package path parsing moved from
   `engagement_orchestrator.py` into `forge.utils.artifact_package_url`, with
