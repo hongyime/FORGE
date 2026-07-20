@@ -66,6 +66,26 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Well-known security/supply-chain metadata recursion checkpoint:
+  IANA-listed passive routes `/.well-known/csaf`,
+  `/.well-known/csaf-aggregator`, `/.well-known/sbom`,
+  `/.well-known/passkey-endpoints`, `/.well-known/ssh-known-hosts`,
+  `/.well-known/sshfp`, and `/.well-known/pki-validation` now classify as
+  source-aware config artifacts with stable route/cache/local format labels.
+  Local static fixtures prove CSAF, SBOM, passkey endpoint, SSH known-hosts,
+  SSHFP, and PKI validation metadata can feed recursive email, URL, and
+  Supabase cloud pivots through the existing artifact queue. Verification:
+  compile/Ruff for touched orchestrator/test files, focused well-known security
+  metadata test (`2 passed`), combined well-known/public metadata slice (`23
+  passed`), adjacent orchestrator `.well-known`/metadata selector (`21 passed,
+  738 deselected`), and cleanup check found no new pytest engagement DBs.
+  Safety: passive static metadata classification/parsing only; no CSAF
+  aggregator fetch, SBOM fetch, passkey endpoint call, SSH key validation, SSHFP
+  DNS lookup, PKI validation request, provider call, live probing, credential
+  use, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, or persistent non-test engagement DB mutation
+  changed. Handoff:
+  `.claude/handoffs/2026-07-20-well-known-security-metadata.md`.
 - [x] Well-known privacy/vendor metadata recursion checkpoint: IANA-listed
   passive metadata routes `/.well-known/gpc.json`, `/.well-known/tdmrep.json`,
   `/.well-known/pubvendors.json`, `/.well-known/trust.txt`,
