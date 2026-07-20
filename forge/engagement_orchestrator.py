@@ -75,6 +75,7 @@ from forge.utils.artifact_aws_app_runner import (
     aws_app_runner_candidates,
 )
 from forge.utils.artifact_aws_cdk import aws_cdk_artifact_label, aws_cdk_candidates
+from forge.utils.artifact_ai_metadata import ai_plugin_manifest_assets
 from forge.utils.artifact_cloudformation import (
     cloudformation_template_candidates,
     sam_config_candidates,
@@ -20488,6 +20489,7 @@ class ArtifactQueueProcessor:
                     "ads_txt_publisher_accounts",
                     "app_ads_txt_publisher_accounts",
                     "sellers_json_seller_accounts",
+                    "ai_plugin_manifests",
                     "android_assetlinks",
                     "apple_app_site_association",
                     "web_manifest_related_applications",
@@ -20701,6 +20703,10 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) != "sellers.json":
                 return []
             return sellers_json_seller_account_assets(text)
+        if family == "ai_plugin_manifests":
+            if _artifact_format_label(source_file) != "ai-plugin.json":
+                return []
+            return ai_plugin_manifest_assets(text)
         if family == "android_assetlinks":
             if _artifact_format_label(source_file) != "assetlinks.json":
                 return []

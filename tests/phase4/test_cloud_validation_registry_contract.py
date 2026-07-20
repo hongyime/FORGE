@@ -24,6 +24,7 @@ _ARTIFACT_EMITTED_CLOUD_ASSET_TYPES = (
     "amplify",
     "ad_publisher_account",
     "ad_seller_account",
+    "ai_plugin_manifest",
     "appveyor_pipeline",
     "argo_application",
     "argo_applicationset",

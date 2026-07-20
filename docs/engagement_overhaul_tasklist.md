@@ -77,6 +77,28 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] AI plugin manifest passive-inventory checkpoint:
+  source-aware `ai-plugin.json` parsing now promotes manifests with valid
+  `name_for_model` plus HTTP(S) `api.url` host into passive
+  `ai_plugin_manifest` resource inventory keyed by API host and model name.
+  Existing contact email, API/legal URL, and Firebase recursion from the same
+  artifact is preserved, and generic JSON files containing similar fields stay
+  excluded from this source-gated inventory path. The cloud-validation registry
+  contract proves the new passive AI resource type reaches terminal
+  `UNSUPPORTED` state without provider calls or findings. Verification: TDD
+  focused regression failed before implementation on missing plugin inventory,
+  then passed (`1 passed`); compile/Ruff for touched orchestrator/helper/test
+  files; helper plus ad/AI metadata slice (`11 passed`); validation registry
+  terminal-state contract (`1 passed`); remote root metadata slow fixture
+  explicitly selected with `-m slow` (`1 passed`); adjacent public metadata,
+  ad, and mobile metadata slice (`7 passed`); cleanup check found no new
+  persistent pytest DBs. Review: subagent spawn was attempted but thread limit
+  was still reached, so the audit proceeded locally. Safety: passive static AI
+  plugin manifest inventory only; no plugin execution, OpenAPI crawling beyond
+  existing URL recursion, provider call, live probing, credential use, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, report-gate change,
+  severity change, or deterministic finding creation. Handoff:
+  `.claude/handoffs/2026-07-20-ai-plugin-manifest-inventory.md`.
 - [x] Sellers.json seller-account passive-inventory checkpoint:
   source-aware `sellers.json` parsing now promotes non-confidential seller
   entries with valid `seller_id`, public domain, and accepted seller type into
