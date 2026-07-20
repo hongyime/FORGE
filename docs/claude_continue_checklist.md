@@ -4,7 +4,7 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- End goal: fully automated authorized kill-chain automation across multi-seed fan-out, scoped live probing/tool execution, static artifact extraction, non-destructive resource validation, recursive enrichment, deterministic findings/scoring, graph export, and resilient report fallback.
+- Canonical end goal: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; detailed contract: `docs/end_goal.md`. This file tracks execution checkpoints and continuation tasks.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 

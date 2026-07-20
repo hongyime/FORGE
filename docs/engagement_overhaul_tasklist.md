@@ -4,9 +4,24 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- End goal: fully automated authorized kill-chain automation across multi-seed fan-out, scoped live probing/tool execution, static artifact extraction, non-destructive resource validation, recursive enrichment, deterministic findings/scoring, graph export, and resilient report fallback.
+- Detailed end-goal contract: `docs/end_goal.md`. This tasklist is the execution ledger; the end-goal doc is the stable definition of what FORGE is being built to become.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, carry a ROE/scope reference when available, and be tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution now require `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
+
+## Canonical End Goal
+
+FORGE is a comprehensive, deterministic, authorized attack-surface management and threat-intelligence platform. It must start from one or more scoped engagement seeds, recursively discover public or explicitly authorized attack surface, statically analyze discovered artifacts, validate cloud and credential evidence non-destructively before reporting, calculate risk with deterministic rules, expose the engagement through graph/dashboard/report surfaces, and always generate auditable output even when LLM providers fail.
+
+- [ ] Every live action is gated by explicit ROE/scope manifest, bounded concurrency, deterministic depth/queue budgets, audit logging, and dry-run preview.
+- [ ] Multi-seed engagements support domains, IPs, URLs, emails, phones, usernames, company names, cloud refs, and artifact URLs under one auto-incrementing engagement record.
+- [ ] Recursive discovery fans out across passive OSINT, identity enrichment, web mining, artifact parsing, cloud-reference detection, and explicitly authorized live checks.
+- [ ] Cross-reference synthesis merges duplicate entities, promotes high-confidence secondary seeds, flags conflicts, and terminates deterministically when depth, queue, or stable-snapshot conditions are met.
+- [ ] Static artifact analysis automatically handles mobile bundles, archives, configs, documents, mail containers, source/package metadata, Terraform/Helm/OCI/Docker-style artifacts, and other passive containers without executing them.
+- [ ] Cloud and credential validation is non-destructive, proof-bound, placeholder/honeypot-aware, provider-respectful, and validation-before-reporting is enforced.
+- [ ] Severity and report gates are deterministic rule-engine outputs only; LLMs may write narrative but cannot invent findings, alter severity, or weaken proof gates.
+- [ ] Reporting always degrades through LLM cascade, local/template fallback, and raw JSON/CSV export with checksums and render-path metadata.
+- [ ] Dashboard/detail pages expose engagement metadata, seeds, findings, graph exports, report history, validation inventory, raw exports, and hash-chain audit manifests.
+- [ ] Acceptance requires focused tests, mocked end-to-end kill-chain tests, offline-strict tests, report fallback tests, validation gate tests, dashboard contract tests, and cleanup proving no test engagements remain.
 
 ## Compact active backlog
 

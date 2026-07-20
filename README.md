@@ -1,8 +1,10 @@
 # FORGE Toolkit
 
-**Depth-first OSINT spider** — feed it any identifier (domain, IP, email, phone, username, or full name) and it fans out through 13+ passive intel modules until nothing new is discovered.
+**Depth-first OSINT spider** — feed it any scoped engagement identifier (domain, IP, email, phone, username, or full name) and it fans out through passive intel modules until nothing new is discovered or configured budgets are reached.
 
 Every operation is scope-gated + hash-chain audit-logged. Zero API keys required for the recommended flow.
+
+Canonical project end goal: [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) -> `Canonical End Goal`; detailed contract: [docs/end_goal.md](docs/end_goal.md). Future implementation work should move FORGE toward that deterministic authorized ASM/kill-chain outcome and should not weaken the validation, scope, audit, or report-fallback guarantees.
 
 ---
 
@@ -12,7 +14,7 @@ Every operation is scope-gated + hash-chain audit-logged. Zero API keys required
 # Windows
 git clone <repo> forge-toolkit
 cd forge-toolkit
-setup.bat        # picks SAFE or OFFENSIVE mode
+setup.bat        # picks safe/default or scoped active-assessment mode
 ```
 
 ```bash
@@ -36,7 +38,7 @@ theHarvester dependency pins from colliding with the main runtime.
 forge kill-chain <seed> --engagement <N>
 ```
 
-Seed can be **any** identifier — kill-chain auto-detects the type and routes:
+Seed can be any scoped identifier — kill-chain auto-detects the type and routes:
 
 | Seed | Example |
 |---|---|
@@ -66,9 +68,9 @@ Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evi
 |---|---|---|
 | `--engagement N` / `-e N` | *required* | Engagement ID (scopes findings + audit log) |
 | `--max-iter N` | `7` | Spider iterations. Loop breaks early on stable snapshot |
-| `--tor` | off | Route every subcommand through vendored Tor bundle |
+| `--tor` | off | Route supported subcommands through the vendored Tor bundle for transport privacy only; not for rate-limit bypass |
 | `--dry-run` | off | Log every intended action, execute nothing outbound |
-| `--attack-mode` | off | **ACTIVE**: port scan + credential validation. Live execution requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST` |
+| `--attack-mode` | off | **SCOPED ACTIVE ASSESSMENT**: bounded live checks plus read-only proof-bound credential/resource validation. Live execution requires `--roe-id`/`FORGE_ROE_ID` and `--scope-manifest`/`FORGE_SCOPE_MANIFEST` |
 | `--roe-id` | empty | ROE / written-authorization reference recorded with live run metadata |
 | `--scope-manifest` | empty | JSON path or inline JSON declaring authorized domains, URL prefixes, IP ranges, and exact non-network seeds for sensitive live execution |
 | `--skip-cloud` | off | Skip cloud discovery (Supabase/Firebase/Amplify/GCP/Vercel/Netlify) |
@@ -117,9 +119,9 @@ Per iteration (breaks early when snapshot stops growing):
 
 Final phase (once, after loop stabilises):
 - HIBP domain check
-- Credential validation (only with `--attack-mode`)
+- Read-only proof-bound credential/resource validation (only with `--attack-mode`)
 - vuln passive (offline CVE fingerprint)
-- exploit correlate (offline NVD + Exploit-DB join)
+- exploit-reference correlation (offline NVD + Exploit-DB metadata join; no exploitation)
 - graph build (Networkx attack-path) + Maltego workspace/GraphML export
 - report generate (Phase 6 LLM auto-cascades; falls back to template)
 - prereq detection (prompts operator for extras when TTY, auto-runs when `--auto-run-detected` was set)
