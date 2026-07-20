@@ -66,6 +66,23 @@ sentences as historical notes only, not as current instructions.
   end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
   work mapped to identity enrichment, recursion, artifact analysis, validation,
   review, fallback, or testing/cleanup.
+- [x] Apple merchant domain-association metadata recursion checkpoint:
+  `/.well-known/apple-developer-merchantid-domain-association` now routes as a
+  first-class passive config artifact with source-aware format/cache labels,
+  matching the storage false-positive metadata treatment already used for this
+  public ownership-proof file. A focused DB-backed regression proves discovered
+  Apple merchant metadata can feed recursive URL/email/cloud pivots through the
+  artifact queue. Verification: compile/Ruff for touched orchestrator/helper and
+  validation tests, focused Apple merchant metadata tests (`2 passed`), adjacent
+  helper/static classification plus validation object-filter suite (`32
+  passed`), adjacent `.well-known`/Matrix/merchant orchestrator selector (`4
+  passed, 755 deselected`), and cleanup check found no new pytest engagement
+  DBs. Safety: passive static domain-verification metadata routing only; no
+  Apple Pay validation, merchant validation request, authentication, provider
+  call, scope relaxation, proxy/IP rotation, rate-limit bypass,
+  validation/report-gate change, or persistent non-test engagement DB mutation
+  changed. Handoff:
+  `.claude/handoffs/2026-07-20-apple-merchant-well-known-recursion.md`.
 - [x] Matrix client well-known metadata recursion checkpoint:
   `/.well-known/matrix/client` now routes as a first-class passive config
   artifact with `matrix-client` format/cache labels, matching the existing

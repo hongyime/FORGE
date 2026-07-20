@@ -4045,6 +4045,7 @@ _SPECIAL_TEXT_CONFIG_NAMES = {
     "brewfile",
     "access_log",
     "apple-app-site-association",
+    "apple-developer-merchantid-domain-association",
     "api-docs",
     "api_docs",
     "authors",
@@ -4139,6 +4140,9 @@ _SPECIAL_TEXT_CONFIG_ROUTE_LABELS = {
     "llms.txt": "llms.txt",
     "sellers.json": "sellers.json",
     ".well-known/apple-app-site-association": "apple-app-site-association",
+    ".well-known/apple-developer-merchantid-domain-association": (
+        "apple-developer-merchantid-domain-association"
+    ),
     ".well-known/jwks.json": "jwks.json",
     ".well-known/oauth-authorization-server": "oauth-authorization-server",
     ".well-known/oauth-protected-resource": "oauth-protected-resource",
@@ -4181,6 +4185,7 @@ _CACHE_PREFIXED_SPECIAL_TEXT_CONFIG_NAMES = frozenset(
         "ai-plugin.json",
         "ai.txt",
         "apple-app-site-association",
+        "apple-developer-merchantid-domain-association",
         "app-ads.txt",
         "assetlinks.json",
         "browserconfig.xml",

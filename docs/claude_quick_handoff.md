@@ -30,6 +30,7 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
+- [x] Apple merchant domain-association metadata target completed: `/.well-known/apple-developer-merchantid-domain-association` now routes as passive config metadata and can feed URL/email/cloud pivots through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-apple-merchant-well-known-recursion.md`.
 - [x] Matrix client well-known metadata target completed: `/.well-known/matrix/client` now routes as `matrix-client` passive config metadata and feeds Matrix homeserver/identity-server URLs, contact email, and Supabase refs through artifact recursion. Handoff: `.claude/handoffs/2026-07-20-matrix-client-well-known-recursion.md`.
 - [x] OIDC claim contact/userinfo target completed: `claims.email`, `claims.phone_number`, `userinfo.email`, `userinfo.phone_number`, `userinfo.profile`, and `userinfo.website` now stay on the enclosing provider row as recursive evidence; scalar/token claims stay suppressed. Handoff: `.claude/handoffs/2026-07-20-oidc-userinfo-claim-contact-recursion.md`.
 - [x] OIDC claim URL recursion target completed: Epieos/userinfo-style `claims.profile` and `claims.website` now stay on the existing provider row as recursive URL evidence; scalar/token claims stay suppressed. Handoff: `.claude/handoffs/2026-07-20-oidc-claim-url-recursion.md`.
@@ -38,6 +39,24 @@ without creating competing source-of-truth docs.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] Apple merchant domain-association metadata recursion checkpoint is green:
+  `/.well-known/apple-developer-merchantid-domain-association` now routes as a
+  first-class passive config artifact with source-aware format/cache labels,
+  matching the storage false-positive metadata treatment already used for this
+  public ownership-proof file. A focused DB-backed regression proves discovered
+  Apple merchant metadata can feed recursive URL/email/cloud pivots through the
+  artifact queue.
+  Verification: compile/Ruff for touched orchestrator/helper and validation
+  tests; focused Apple merchant metadata tests -> `2 passed`; adjacent
+  helper/static classification plus validation object-filter suite -> `32
+  passed`; adjacent `.well-known`/Matrix/merchant orchestrator selector -> `4
+  passed, 755 deselected`; cleanup check found no new pytest engagement DBs.
+  Safety: passive static domain-verification metadata routing only. No Apple Pay
+  validation, merchant validation request, authentication, provider call, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, validation/report-gate
+  change, or persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-apple-merchant-well-known-recursion.md`.
 
 - [x] Matrix client well-known metadata recursion checkpoint is green:
   `/.well-known/matrix/client` now routes as a first-class passive config
