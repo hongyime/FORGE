@@ -29,6 +29,8 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
         ("dist/.pypirc", "pypirc"),
         ("ruby/.gemrc", "gemrc"),
         ("home/operator/.netrc", "netrc"),
+        ("nuget.config", "nuget-config"),
+        (".nuget/NuGet.Config", "nuget-config"),
         ("pip.conf", "pip-config"),
         ("pip/pip.ini", "pip-config"),
         (".pip/pip.conf", "pip-config"),
@@ -38,6 +40,7 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
         ("cargo/credentials.toml", "cargo-credentials"),
         ("download.config.toml.cargo-config", "cargo-config"),
         ("download.credentials.cargo-credentials", "cargo-credentials"),
+        ("download.nuget.config.nuget-config", "nuget-config"),
     ],
 )
 def test_package_manager_config_artifact_label_recognizes_source_paths(
@@ -65,8 +68,14 @@ def test_package_manager_config_artifact_label_avoids_generic_configs(value: str
 
 def test_package_manager_config_routes_remote_sources_without_generic_names() -> None:
     assert _classify_remote_artifact_url("https://downloads.acme.example/.npmrc") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/.nuget/NuGet.Config") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.cargo/credentials") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.cargo/config.toml") == "config"
+    assert _select_remote_artifact_filename(
+        76,
+        "https://downloads.acme.example/.nuget/NuGet.Config",
+        "config",
+    ) == "NuGet.Config"
     assert _select_remote_artifact_filename(
         77,
         "https://downloads.acme.example/.cargo/credentials",
@@ -77,7 +86,9 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
         "https://downloads.acme.example/.cargo/config.toml",
         "config",
     ) == "config.toml.cargo-config"
+    assert package_manager_config_remote_filename(".nuget/NuGet.Config") == "NuGet.Config"
     assert package_manager_config_remote_filename(".cargo/credentials") == "credentials.cargo-credentials"
+    assert _artifact_format_label("NuGet.Config") == "nuget-config"
     assert _artifact_format_label("credentials.cargo-credentials") == "cargo-credentials"
     assert _artifact_format_label("config.toml.cargo-config") == "cargo-config"
     assert _artifact_format_label("notes/credentials") == "credentials"
@@ -131,13 +142,34 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
     generic_credentials_path.write_text("owner = generic-creds-owner@acme.example", encoding="utf-8")
     generic_config_path = artifact_root / "config.toml"
     generic_config_path.write_text("owner = generic-config-owner@acme.example", encoding="utf-8")
+    nuget_dir = artifact_root / ".nuget"
+    nuget_dir.mkdir()
+    nuget_config_path = nuget_dir / "NuGet.Config"
+    nuget_config_path.write_text(
+        dedent(
+            """
+            <configuration>
+              <packageSources>
+                <add key="acme" value="https://nuget-labels.acme.example/v3/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <acme>
+                  <add key="Username" value="nuget-label-owner@acme.example" />
+                  <add key="ClearTextPassword" value="nuget-label-token-do-not-store" />
+                </acme>
+              </packageSourceCredentials>
+            </configuration>
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 5
-    assert summary.processed >= 5
+    assert queued >= 6
+    assert summary.processed >= 6
 
     con = sqlite3.connect(db_path)
     try:
@@ -154,14 +186,29 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert artifact_meta[pip_conf_path.resolve().as_posix()]["format"] == "pip-config"
         assert artifact_meta[cargo_config_path.resolve().as_posix()]["format"] == "cargo-config"
         assert artifact_meta[cargo_credentials_path.resolve().as_posix()]["format"] == "cargo-credentials"
+        assert artifact_meta[nuget_config_path.resolve().as_posix()]["format"] == "nuget-config"
         assert artifact_meta[generic_credentials_path.resolve().as_posix()]["format"] == "credentials"
         assert artifact_meta[generic_config_path.resolve().as_posix()]["format"] == "toml"
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://nuget-labels.acme.example/v3/index.json", "url") in seeds
+        assert ("nuget-label-owner@acme.example", "email") in seeds
 
         persisted_text = "\n".join(con.iterdump())
         for raw_secret in {
             "pip-config-token-do-not-store",
             "cargo-config-token-do-not-store",
             "cargo-credentials-token-do-not-store",
+            "nuget-label-token-do-not-store",
         }:
             assert raw_secret not in persisted_text
     finally:

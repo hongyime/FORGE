@@ -26242,7 +26242,7 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         assert artifact_meta[yarnrc_path.resolve().as_posix()]["format"] == "yarnrc"
         assert artifact_meta[pnpmrc_path.resolve().as_posix()]["format"] == "pnpmrc"
         assert artifact_meta[gemrc_path.resolve().as_posix()]["format"] == "gemrc"
-        assert artifact_meta[nuget_path.resolve().as_posix()]["format"] == "config"
+        assert artifact_meta[nuget_path.resolve().as_posix()]["format"] == "nuget-config"
         assert artifact_meta[requirements_in_path.resolve().as_posix()]["format"] == "python-requirements-input"
         assert artifact_meta[requirements_path.resolve().as_posix()]["format"] == "python-requirements"
         assert artifact_meta[constraints_path.resolve().as_posix()]["format"] == "python-constraints"

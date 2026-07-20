@@ -11,10 +11,12 @@ _DIRECT_LABELS = {
     ".pnpmrc": "pnpmrc",
     ".pypirc": "pypirc",
     ".yarnrc": "yarnrc",
+    "nuget.config": "nuget-config",
 }
 _CACHE_LABEL_SUFFIXES = {
     ".cargo-config": "cargo-config",
     ".cargo-credentials": "cargo-credentials",
+    ".nuget-config": "nuget-config",
     ".pip-config": "pip-config",
 }
 _PIP_CONFIG_NAMES = {"pip.conf", "pip.ini"}

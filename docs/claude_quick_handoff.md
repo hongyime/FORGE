@@ -21,6 +21,12 @@ kill-chain path and cleanup behavior with focused local/mocked tests.
 
 ## Current green checkpoint
 
+- [x] NuGet config passive-recursion checkpoint is green:
+  `nuget.config`, `.nuget/NuGet.Config`, and cached remote `*.nuget-config` artifacts now keep a source-aware `nuget-config` format instead of generic `config`. Package feed URLs and owner emails still recurse into engagement seeds, while cleartext package-source passwords stay out of persisted DB text. Remote `.nuget/NuGet.Config` sources keep the NuGet filename for artifact review.
+  Verification: compile/Ruff for touched helper/orchestrator tests; focused package-manager config suite -> `27 passed`; existing engagement-backed package-manager/NuGet selector -> `2 passed, 758 deselected`.
+  Safety: passive static package-manager config parsing only. No NuGet client execution, package restore, feed authentication, provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-nuget-config-recursion.md`.
+
 - [x] OpenAI-compatible report-provider normalization checkpoint is green:
   OpenAI-compatible chat responses now accept block-style `message.content` arrays by concatenating text/output_text blocks while fail-closing when no text blocks exist. Phase 6 direct and auto `openai_compatible` provider construction now passes `model=` instead of invalid `model_id=`.
   Verification: compile/Ruff for touched provider/report/test files; focused OpenAI-compatible plus Phase 6 report synthesizer suite -> `113 passed`; adjacent providers suite -> `161 passed`.
