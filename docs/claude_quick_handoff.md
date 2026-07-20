@@ -27,6 +27,12 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Remote artifact download regression modularization checkpoint is green:
+  Rate-limited remote artifact retry/backoff, extensionless remote image filename inference from `Content-Disposition`, and extensionless AVIF content-type inference moved into focused `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 268 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only remote artifact coverage for respectful `Retry-After` pacing, OCR payload recursion, downloaded filename metadata, image format detection, and recursive email/URL seed extraction.
+  Verification: compile/Ruff for touched Phase 1 files; remote-download wrapper set -> `4 passed`; cleanup check found no new pytest engagement DBs.
+  Safety: test modularization only. No production downloader behavior, live probing, provider calls, credential use, scope changes, pacing/backoff behavior, report gates, or persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-remote-artifact-download-test-modularization.md`.
+
 - [x] Remote artifact download and CodeBuild regression modularization checkpoint is green:
   Extensionless remote DEX content-type download recursion moved into focused `tests/phase1/remote_artifact_download_cases.py`, and the inline CodeBuild buildspec secret/reference regression moved into `tests/phase1/ci_workflow_artifact_cases.py`; original mega-test node IDs remain thin wrappers. This removes 231 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving artifact-analysis coverage for remote binary content-type inference, provenance, recursive email/URL/cloud assets, CodeBuild Parameter Store/Secrets Manager refs, ECR URL pivots, Firebase refs, and S3 refs.
   Verification: compile/Ruff for touched Phase 1 files; focused DEX+CodeBuild wrappers -> `2 passed`; adjacent CI workflow wrappers -> `4 passed`; cleanup check found no new pytest engagement DBs.
