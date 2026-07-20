@@ -27,6 +27,13 @@ without creating competing source-of-truth docs.
 
 ## Current green checkpoint
 
+- [x] Cloud-validation identifier regression split checkpoint is green:
+  The pure `_validated_identifier_from_detail` low-signal proof regression moved from the Phase 4 mega validation suite into focused `tests/phase4/test_cloud_validation_identifiers.py` (26KB), removing 623 lines from `tests/phase4/test_cloud_validate.py` without runtime behavior changes.
+  Verification: compile/Ruff for touched test files; focused identifier test -> `1 passed`; adjacent proof/sweep slice -> `3 passed`; full cloud-validation suite including managed-hosting reachability -> `145 passed`; cleanup check found no new pytest engagement DBs.
+  Review: Claude read-only next-gap audit was attempted and hit `max turns (5)` without usable findings.
+  Safety: test-only refactor. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, deterministic severity change, validation-gate change, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-cloud-validation-identifier-test-split.md`.
+
 - [x] Managed-hosting empty-HEAD proof checkpoint is green:
   Managed-hosting reachability validators now follow an empty successful `HEAD` with one paced read-only `GET` before deciding `ACCESSIBLE_BUT_NO_DATA`, so placeholder/synthetic Vercel, Netlify, Cloudflare Pages/Workers, R2, and similar managed-hosting bodies cannot be missed just because `HEAD` returned no body. Body-bearing `HEAD` responses still avoid the extra `GET`.
   Verification: compile/Ruff for touched validator/test files; focused managed-hosting tests -> `2 passed`; adjacent direct/batch/sweep managed-hosting tests -> `4 passed`; cleanup check found no new pytest engagement DBs.
