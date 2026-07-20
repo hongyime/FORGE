@@ -17,6 +17,7 @@ or plan before continuing implementation.
 ## Source Of Truth And Status Semantics
 
 There is one goal contract. `END_GOAL.md` is the short operator answer,
+`SPEC.md` is the compact root implementer spec,
 `docs/deterministic_engagement_contract.md` is the compact gate map, and
 `docs/engagement_overhaul_tasklist.md` is the execution ledger. If those files
 conflict, preserve this file and update the others.
@@ -162,7 +163,8 @@ FORGE is considered at the intended end state when all of these are true:
 - The system still produces useful reports when no LLM/API key is available, when a provider fails, or when token/quota limits are hit.
 - Test engagements created during automated tests are cleaned up or isolated, and production engagement IDs are not reused after deletion.
 - Code stays modular: new feature logic belongs in focused helpers/tests, with large legacy files limited to thin adapters when practical.
-- Work is committed to `main` in meaningful checkpoints, with continuation docs updated so another agent can audit and resume.
+- Work is committed to `main` in meaningful checkpoints, with `SPEC.md`,
+  continuation docs, and handoffs updated so another agent can audit and resume.
 
 ## Minimum Release Proof
 

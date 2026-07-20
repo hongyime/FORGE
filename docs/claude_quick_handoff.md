@@ -6,10 +6,19 @@ Use this file first for short resume context, then verify current continuation
 order in `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`;
 that section wins if task/status details differ. Goal lock:
 `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`;
-compact workflow contract:
+root implementer spec: `SPEC.md`; compact workflow contract:
 `docs/deterministic_engagement_contract.md`; normative end goal:
 `docs/end_goal.md`; acceptance criteria:
 `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`.
+
+This file is intentionally historical and large. Future agents should read only
+the header/current checkpoint sections needed for resume, then use
+`docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog` as the
+actual continuation order. Do not full-load this file when context is tight.
+
+Historical deep entries that say `No SPEC.md exists` are stale after 2026-07-20.
+New invariant or bug-contract notes should update `SPEC.md` plus current
+handoff docs.
 
 ## End Goal To Preserve
 

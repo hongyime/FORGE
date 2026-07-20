@@ -5,7 +5,8 @@ Last updated: 2026-07-20
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
 This is the compact operator and agent contract for the FORGE end goal. The
-normative source remains `docs/end_goal.md`; this file is the short checklist to
+normative source remains `docs/end_goal.md`; `SPEC.md` is the root implementer
+spec for invariants and task categories; this file is the short checklist to
 read before implementation.
 
 ## End Goal

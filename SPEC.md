@@ -1,0 +1,86 @@
+# FORGE Spec
+
+Last updated: 2026-07-20
+
+Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
+
+This file is the compact root spec for implementers. It does not replace the
+normative goal in `docs/end_goal.md`; it restates the contract as invariants and
+execution tasks so agents can decide what to build next without moving the goal.
+
+## G
+
+FORGE must be one comprehensive, deterministic, authorized engagement pipeline
+that turns scoped multi-seed intake into bounded recursive discovery,
+non-destructive validation, rule-engine findings, graph/dashboard/report/audit
+review, and guaranteed template/raw exports when LLM providers fail.
+
+## C
+
+- Authorized scope is mandatory for live probing, follow-on tool execution, and
+  credential/resource validation.
+- Passive discovery, static artifact parsing, and deterministic synthesis are
+  the default automation path.
+- Live work must be ROE-gated, scope-manifest-gated, bounded, paced, logged,
+  resumable, dry-run capable, and non-destructive.
+- LLMs may write narrative only. They must not create findings, set severity,
+  weaken validation, alter evidence, or decide reportability.
+- Provider failures, missing keys, quota errors, rate limits, and token limits
+  are normal product paths and must degrade to deterministic template output
+  plus raw exports.
+- New code must stay modular. Large legacy files should receive thin adapters,
+  not more embedded feature logic, when a focused helper can own the behavior.
+
+## I
+
+- CLI: `forge kill-chain`, report commands, engagement creation, artifact
+  ingestion, and scoped active-assessment flags.
+- Backend/API: engagement CRUD, seed CRUD, run status, dashboard payloads,
+  findings, validation inventory, graph/export/report surfaces.
+- Frontend: main dashboard, engagement detail route, graph/report/raw-export
+  review, audit log review.
+- Persistence: engagement SQLite stores, monotonic master ID store, migrations,
+  audit logs, graph/report/export artifacts.
+- Providers/tools: passive OSINT, identity enrichment, web mining, static
+  artifact parsers, cloud/key validators, LLM narrative cascade.
+
+## V
+
+- V1. Same scoped inputs, fixtures, config, and cached provider responses must
+  produce the same findings, severities, reportability, graph/export metadata,
+  audit metadata, and fallback path.
+- V2. Engagement IDs are monotonic and are not reused after deletion.
+- V3. Every seed, discovered pivot, validation attempt, finding, export, and
+  report render is traceable to an engagement and audit context.
+- V4. Recursive discovery terminates only by explicit depth, iteration, queue,
+  stable-snapshot, budget, or operator-stop conditions.
+- V5. Static artifact analysis never executes the artifact being parsed.
+- V6. Unvalidated, dead, unsupported, placeholder, honeypot-suspected, or
+  low-signal evidence may be analyst inventory, but cannot become a reportable
+  deterministic finding.
+- V7. Severity and report gates are deterministic rule-engine outputs only.
+- V8. Dashboard, graph exports, reports, raw exports, validation inventory, and
+  audit logs expose the same engagement facts.
+- V9. LLM/API narrative failure must still produce deterministic template
+  reports and raw JSON/CSV exports with checksums and failure metadata.
+- V10. Automated tests must clean up or isolate test engagement data and must
+  not rely on real external targets unless an explicit scoped target is provided.
+
+## T
+
+| id | status | task | cites |
+|---|---|---|---|
+| T1 | . | Prove one representative multi-seed engagement path from intake through recursion, validation, graph/report/audit review, fallback exports, and cleanup with focused mocked E2E tests. | V1,V2,V3,V4,V8,V9,V10 |
+| T2 | . | Continue safe recursive discovery upgrades for concrete passive parser, provider payload, identity, artifact, and source-gated metadata gaps. | V1,V3,V4,V5 |
+| T3 | . | Harden validation proof gates and report gates so only latest validated evidence can create deterministic findings. | V6,V7 |
+| T4 | . | Keep dashboard, API, graph, report, raw export, validation inventory, and audit surfaces in factual parity. | V3,V8 |
+| T5 | . | Preserve deterministic report fallback through LLM cascade failures, quota/token failures, missing keys, local/template degradation, and raw export availability. | V7,V9 |
+| T6 | . | Keep scoped active checks ROE-gated, non-destructive, bounded, paced, logged, and dry-run capable. | V3,V4,V6,V10 |
+| T7 | . | Split or wrap large legacy modules only when it reduces risk without changing verified behavior. | V1,V10 |
+| T8 | . | Commit meaningful checkpoints to `main` with docs and handoffs updated for continuation. | V3,V10 |
+
+## B
+
+| id | date | cause | fix |
+|---|---|---|---|
+| B1 | 2026-07-20 | Goal and invariant notes were split across long handoff/tasklist history, including stale historical text saying no root spec existed. | Added root `SPEC.md` and linked it from the active goal docs while preserving `docs/end_goal.md` as normative. |

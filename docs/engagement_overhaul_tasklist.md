@@ -4,8 +4,11 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end-goal source: `docs/end_goal.md`. The `## Canonical End Goal` checklist below is acceptance criteria derived from that contract, not live completion status; if they conflict, update this checklist to match `docs/end_goal.md` before continuing. Current implementation order lives under `## Compact active backlog`.
+- Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`; root implementer spec: `SPEC.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end-goal source: `docs/end_goal.md`. The `## Canonical End Goal` checklist below is acceptance criteria derived from that contract, not live completion status; if they conflict, update this checklist to match `docs/end_goal.md` before continuing. Current implementation order lives under `## Compact active backlog`.
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Deep historical entries that say commits were impossible because the workspace was not a Git repo are stale context only; continue making meaningful commits and pushes when changes are valid.
+- Historical backprop notes that say `No SPEC.md exists` are stale after
+  2026-07-20. New goal, invariant, or bug-contract notes should update
+  `SPEC.md` plus the active handoff docs.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, and tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution must carry `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 - Subagents and Claude are review/execution accelerators, not competing
@@ -58,6 +61,10 @@ or test/cleanup gap instead.
 ## Compact active backlog
 
 Use this as the canonical current continuation list. `docs/claude_continue_checklist.md` mirrors this for Claude handoff context, but this section wins if the two differ. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.
+
+Mirror rule: update this section first. Then mirror only the active-current delta
+into `docs/claude_continue_checklist.md` and summarize the checkpoint in
+`docs/claude_quick_handoff.md`; do not create a second backlog.
 
 Repo-status note: this checkout is now a Git repo on `main`; older completed
 checkpoint summaries in this backlog may still contain retained "not a git

@@ -26,13 +26,13 @@ path that weakens scope gates, validation gates, auditability, deterministic
 severity, or report fallback.
 
 Do not replace this goal with a new project direction in a task handoff. If the
-goal needs clarification, update `docs/end_goal.md`, `END_GOAL.md`,
+goal needs clarification, update `docs/end_goal.md`, `END_GOAL.md`, `SPEC.md`,
 `docs/deterministic_engagement_contract.md`, and
 `docs/engagement_overhaul_tasklist.md` together so every agent sees the same
 locked target.
 
-Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Compact deterministic
-workflow contract:
+Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Root implementer
+spec: [SPEC.md](SPEC.md). Compact deterministic workflow contract:
 [docs/deterministic_engagement_contract.md](docs/deterministic_engagement_contract.md).
 Normative project end goal: [docs/end_goal.md](docs/end_goal.md).
 Execution-facing checklist:
@@ -42,16 +42,17 @@ Execution-facing checklist:
 Continuation order for future agents:
 
 1. Read [END_GOAL.md](END_GOAL.md) for the short goal.
-2. Read
+2. Read [SPEC.md](SPEC.md) for the invariant and task contract.
+3. Read
    [docs/deterministic_engagement_contract.md](docs/deterministic_engagement_contract.md)
    for the pipeline gates and stop rule.
-3. Treat [docs/end_goal.md](docs/end_goal.md) as the normative contract.
-4. Treat `## Canonical End Goal` in
+4. Treat [docs/end_goal.md](docs/end_goal.md) as the normative contract.
+5. Treat `## Canonical End Goal` in
    [docs/engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md)
    as acceptance criteria, not live progress.
-5. Use `## Compact active backlog` in that same task list as the current
+6. Use `## Compact active backlog` in that same task list as the current
    continuation order.
-6. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
+7. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
    latest short resume notes.
 
 ---
@@ -321,6 +322,7 @@ Current baseline: **2,100+ passing** / 0 failing.
 
 - `README.md` (this file) — main reference
 - `END_GOAL.md` — fast end-goal entry point for operators and future agents
+- `SPEC.md` — root implementer invariant and task contract
 - `docs/end_goal.md` — normative deterministic end-goal contract
 - `docs/deterministic_engagement_contract.md` — compact pipeline gate checklist
 - `docs/engagement_overhaul_tasklist.md` — canonical acceptance checklist and active backlog

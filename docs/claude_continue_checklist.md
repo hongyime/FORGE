@@ -4,8 +4,11 @@ Last updated: 2026-07-20
 
 ## Operating model
 
-- Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end goal: `docs/end_goal.md`; acceptance criteria: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; current continuation order: `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`. This file mirrors execution checkpoints for Claude handoff context.
+- Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`; root implementer spec: `SPEC.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end goal: `docs/end_goal.md`; acceptance criteria: `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`; current continuation order: `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`. This file mirrors execution checkpoints for Claude handoff context.
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Historical lines saying commits were impossible because this was not a Git repo are stale only; do not use them to skip valid checkpoint commits.
+- Historical backprop notes that say `No SPEC.md exists` are stale after
+  2026-07-20. New invariant or bug-contract notes should update `SPEC.md` plus
+  active continuation docs.
 - Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, and tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution must carry `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 
@@ -34,6 +37,9 @@ create competing goal documents or weaken the normative contract in
 ## Compact active backlog
 
 Use this as a Claude-facing mirror of the current continuation list. If this file conflicts with `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`, the engagement overhaul task list wins. Older unchecked "next audit target" breadcrumbs are historical unless they map to one of these items.
+
+Mirror rule: update `docs/engagement_overhaul_tasklist.md` first, then copy only
+the active-current delta here. Do not treat this file as an independent backlog.
 
 Repo-status note: this checkout is now a Git repo on `main`; older completed
 checkpoint summaries in this file may still contain retained "not a git repo" or

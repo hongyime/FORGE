@@ -16,6 +16,8 @@ There is one end goal, not several competing goals:
 
 - `docs/end_goal.md` is the normative contract.
 - This file is the required quick answer for operators and future agents.
+- `SPEC.md` is the root implementer spec that restates the goal as invariants
+  and task categories, but it must not override `docs/end_goal.md`.
 - `docs/deterministic_engagement_contract.md` is the compact gate checklist.
 - `docs/engagement_overhaul_tasklist.md` contains acceptance criteria and the
   current implementation backlog.
@@ -148,11 +150,12 @@ advances and verify it with focused or mocked tests.
 
 Read next:
 
-1. `docs/deterministic_engagement_contract.md` for the compact workflow gates.
-2. `docs/end_goal.md` for the full normative contract.
-3. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
+1. `SPEC.md` for the compact root invariants and implementation task categories.
+2. `docs/deterministic_engagement_contract.md` for the compact workflow gates.
+3. `docs/end_goal.md` for the full normative contract.
+4. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
    acceptance criteria. Unchecked boxes there are goal criteria, not current live
    status.
-4. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
+5. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
    the current implementation continuation order.
-5. `docs/claude_quick_handoff.md` for the latest short resume notes.
+6. `docs/claude_quick_handoff.md` for the latest short resume notes.
