@@ -34,6 +34,7 @@ from forge.utils.intel.social_profile_hosts import (
     epieos_is_stack_exchange_profile_host as _shared_stack_exchange_profile_host,
     epieos_is_supported_profile_host as _shared_supported_profile_host,
     epieos_profile_alias_host_matches as _shared_profile_alias_host_matches,
+    epieos_stack_exchange_nested_user_payload as _shared_stack_exchange_nested_user_payload,
 )
 
 try:
@@ -2856,7 +2857,20 @@ def _epieos_profile_entries_from_container(
                 else str(child_key)
             )
             if isinstance(child_value, dict):
-                if _epieos_payload_mapping_has_profile_shape(child_value):
+                stack_exchange_user = _shared_stack_exchange_nested_user_payload(
+                    fallback_platform,
+                    value,
+                    child_key,
+                    child_value,
+                )
+                if stack_exchange_user and _epieos_handle(fallback_platform, stack_exchange_user, ""):
+                    entries.append(
+                        (
+                            _epieos_profile_platform_label(fallback_platform),
+                            stack_exchange_user,
+                        )
+                    )
+                elif _epieos_payload_mapping_has_profile_shape(child_value):
                     entries.append(
                         (_epieos_profile_entry_platform(child_value, child_platform), child_value)
                     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from urllib.parse import urlparse
 
@@ -21,6 +22,22 @@ _STACK_EXCHANGE_NETWORK_HOSTS = {
     "stackapps.com",
     "superuser.com",
 }
+_STACK_EXCHANGE_PLATFORM_NAMES = {
+    "stackoverflow",
+    "stack_overflow",
+    "stackexchange",
+    "stack_exchange",
+}
+_STACK_EXCHANGE_SITE_KEYS = (
+    "site",
+    "site_url",
+    "siteUrl",
+    "domain",
+    "host",
+    "hostname",
+    "network",
+)
+_STACK_EXCHANGE_USER_ID_KEYS = ("user_id", "userId", "id")
 
 _MASTODON_LIKE_HOSTS = {
     "chaos.social",
@@ -79,6 +96,54 @@ def epieos_is_stack_exchange_profile_host(hostname: str) -> bool:
         or host == "stackexchange.com"
         or host.endswith(".stackexchange.com")
     )
+
+
+def _first_string(*values: object) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _stack_exchange_payload_host(data: Mapping[str, object]) -> str:
+    for key in (*_STACK_EXCHANGE_SITE_KEYS, "profile_url", "url"):
+        text = str(data.get(key) or "").strip()
+        if not text:
+            continue
+        parsed = urlparse(text if "://" in text else f"https://{text}")
+        host = normalize_profile_hostname(parsed.hostname)
+        if epieos_is_stack_exchange_profile_host(host):
+            return host
+    return ""
+
+
+def _stack_exchange_site_candidate_present(data: Mapping[str, object]) -> bool:
+    return any(str(data.get(key) or "").strip() for key in _STACK_EXCHANGE_SITE_KEYS)
+
+
+def epieos_stack_exchange_nested_user_payload(
+    fallback_platform: object,
+    parent: Mapping[str, object],
+    child_key: object,
+    child_value: object,
+) -> dict[str, object] | None:
+    platform = str(fallback_platform or "").strip().lower()
+    if platform not in _STACK_EXCHANGE_PLATFORM_NAMES:
+        return None
+    if str(child_key or "").strip().lower() != "user" or not isinstance(child_value, Mapping):
+        return None
+    user_id = _first_string(*(child_value.get(key) for key in _STACK_EXCHANGE_USER_ID_KEYS))
+    if not re.fullmatch(r"\d{1,20}", user_id):
+        return None
+    merged = dict(child_value)
+    for key in _STACK_EXCHANGE_SITE_KEYS:
+        if key not in merged and key in parent:
+            merged[key] = parent.get(key)
+    if _stack_exchange_site_candidate_present(merged) and not _stack_exchange_payload_host(merged):
+        return None
+    merged.setdefault("platform", fallback_platform)
+    return merged
 
 
 def epieos_is_mastodon_like_host(hostname: str) -> bool:

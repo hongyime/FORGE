@@ -60,13 +60,28 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next implementation target: broaden identity enrichment normalization by
-  preserving provider-scoped nested StackExchange/StackOverflow `user` payloads
-  as safe public profile pivots when they contain a valid `user_id`, accepted
-  StackExchange host, and non-placeholder handle. Keep this narrow: no generic
-  nested-user flattening, no provider calls, no live probing, no auth, no scope
-  relaxation, and no report-gate change. Suggested focused regression:
-  `tests/phase2/test_social_scraper.py::test_normalizes_nested_stackexchange_user_profile_for_recursive_seed_quality`.
+- [ ] Next implementation target: audit another concrete identity-provider
+  payload shape or passive artifact/parser source shape before writing code. If
+  no missing recursive pivot is found, switch to release-level mocked
+  end-to-end/report-fallback tests or safe mega-test/module splits. Keep all
+  work mapped to identity enrichment, recursion, artifact analysis, validation,
+  review, fallback, or testing/cleanup.
+- [x] Nested StackExchange user-profile recursion checkpoint:
+  provider-scoped Epieos StackExchange/StackOverflow `user` payloads now become
+  safe public profile pivots when they include a numeric `user_id`, a normalized
+  handle, and either no site override or an accepted StackExchange network host.
+  Invalid site hints such as `not-stackexchange.example` are rejected instead of
+  defaulting to fake StackOverflow URLs. The pure payload shaping lives in
+  `forge/utils/intel/social_profile_hosts.py`; `social_scraper.py` only adapts
+  it through the existing handle/profile parser. Verification: compile/Ruff for
+  touched identity parser/helper files, Phase 2 social helper/scraper suite
+  (`84 passed`), Phase 1 social-profile recursion selector (`80 passed, 679
+  deselected`), and cleanup check found no new pytest engagement DBs. Safety:
+  passive provider-payload normalization only; no provider calls, live probing,
+  auth, scope relaxation, generic nested-user flattening, validation/report-gate
+  change, rate-limit bypass, proxy/IP rotation, or persistent non-test
+  engagement DB mutation changed. Handoff:
+  `.claude/handoffs/2026-07-20-stackexchange-nested-user-profile.md`.
 - [x] Helm index absolute chart URL recursion checkpoint: Helm `index.yaml` parsing now preserves safe absolute HTTP(S) chart archive URLs in `entries[].urls[]` in addition to relative chart paths, so authorized chart indexes that point at CDN/object-storage `.tgz` / `.tar.gz` packages feed recursive artifact URL pivots instead of being silently dropped. Unsafe values remain suppressed: protocol-relative URLs, non-HTTP(S) schemes, non-chart suffixes, templated strings, userinfo-bearing URLs, localhost, and private/reserved IP hosts. Verification: compile/Ruff for touched Helm parser/tests, focused Helm index suite (`4 passed`), adjacent artifact helper/API-client/HTTP/package-manager/Helm suite (`64 passed`), and cleanup check found no new pytest engagement DBs. Review: subagent `Singer` identified the missed absolute chart URL gap. Safety: passive static Helm index parsing only; no Helm execution, chart download, provider call, live probing expansion, credential use, scope relaxation, rate-limit bypass, proxy/IP rotation, validation/report-gate change, or persistent non-test engagement DB mutation changed. Handoff: `.claude/handoffs/2026-07-20-helm-index-absolute-chart-urls.md`.
 - [x] Remote mobile-bundle regression modularization checkpoint: XAPK, APKM, and APKS seed-URL dry-run kill-chain regressions now share a compact focused helper in `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 430 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only kill-chain coverage for queued remote mobile bundles, nested APK static extraction, Firebase/Supabase cloud asset recursion, derived seed relations, and recursive email/URL seed creation. Verification: compile/Ruff for touched Phase 1 files, remote mobile-bundle wrapper set (`3 passed`), and cleanup check found no new pytest engagement DBs. Safety: test modularization only; no production mobile parsing behavior, live probing, provider calls, credential use, scope changes, validation/report gates, or persistent non-test engagement DB mutation changed. Handoff: `.claude/handoffs/2026-07-20-remote-mobile-bundle-test-modularization.md`.
 - [x] Remote artifact download regression modularization checkpoint: rate-limited remote artifact retry/backoff, extensionless remote image filename inference from `Content-Disposition`, and extensionless AVIF content-type inference moved into focused `tests/phase1/remote_artifact_download_cases.py`, with original mega-test node IDs retained as thin wrappers. This removes 268 more inline lines from `tests/phase1/test_engagement_orchestrator.py` while preserving local-only remote artifact coverage for respectful `Retry-After` pacing, OCR payload recursion, downloaded filename metadata, image format detection, and recursive email/URL seed extraction. Verification: compile/Ruff for touched Phase 1 files, remote-download wrapper set (`4 passed`), and cleanup check found no new pytest engagement DBs. Safety: test modularization only; no production downloader behavior, live probing, provider calls, credential use, scope changes, pacing/backoff behavior, report gates, or persistent non-test engagement DB mutation changed. Handoff: `.claude/handoffs/2026-07-20-remote-artifact-download-test-modularization.md`.

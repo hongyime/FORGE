@@ -2944,6 +2944,40 @@ class TestParseEpieosResponse:
         assert twitter_owner["profile_url"] == "https://x.com/ownerops"
         assert twitter_owner["username"] == "ownerops"
 
+    def test_normalizes_nested_stackexchange_user_profile_for_recursive_seed_quality(self):
+        results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "stackoverflow": {
+                    "user": {
+                        "user_id": "13579",
+                        "username": "alice-stack",
+                        "site": "serverfault.com",
+                        "name": "Alice Stack",
+                    },
+                },
+            }
+        )
+        reserved_results = _parse_epieos_response(
+            {
+                "email": "alice@example.com",
+                "stackoverflow": {
+                    "user": {
+                        "user_id": "13579",
+                        "username": "alice-stack",
+                        "site": "not-stackexchange.example",
+                    },
+                },
+            }
+        )
+
+        stack = next((r for r in results if r["platform"] == "stackoverflow"), None)
+
+        assert stack is not None
+        assert stack["profile_url"] == "https://serverfault.com/users/13579/alice-stack"
+        assert stack["username"] == "alice-stack"
+        assert reserved_results == []
+
     def test_constructs_additional_profile_urls_for_supported_provider_shapes(self):
         results = _parse_epieos_response(_expanded_provider_epieos_payload())
 

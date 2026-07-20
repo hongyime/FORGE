@@ -6,6 +6,7 @@ from forge.utils.intel.social_profile_hosts import (
     epieos_is_mastodon_like_host,
     epieos_is_supported_profile_host,
     epieos_profile_alias_host_matches,
+    epieos_stack_exchange_nested_user_payload,
     profile_url_hostname,
 )
 
@@ -65,4 +66,63 @@ def test_epieos_supported_and_federated_host_guards() -> None:
     assert not epieos_is_federated_instance_candidate_host(
         "github.com",
         _PLATFORM_HOSTS,
+    )
+
+
+def test_epieos_stack_exchange_nested_user_payload_preserves_parent_site() -> None:
+    payload = epieos_stack_exchange_nested_user_payload(
+        "stackoverflow",
+        {"site": "serverfault.com"},
+        "user",
+        {"user_id": "13579", "username": "alice-stack"},
+    )
+
+    assert payload == {
+        "platform": "stackoverflow",
+        "site": "serverfault.com",
+        "user_id": "13579",
+        "username": "alice-stack",
+    }
+
+
+def test_epieos_stack_exchange_nested_user_payload_rejects_bad_shapes() -> None:
+    assert (
+        epieos_stack_exchange_nested_user_payload(
+            "github",
+            {"site": "serverfault.com"},
+            "user",
+            {"user_id": "13579", "username": "alice-stack"},
+        )
+        is None
+    )
+    assert (
+        epieos_stack_exchange_nested_user_payload(
+            "stackoverflow",
+            {},
+            "profile",
+            {"user_id": "13579", "username": "alice-stack"},
+        )
+        is None
+    )
+    assert (
+        epieos_stack_exchange_nested_user_payload(
+            "stackoverflow",
+            {},
+            "user",
+            {"user_id": "not-numeric", "username": "alice-stack"},
+        )
+        is None
+    )
+    assert (
+        epieos_stack_exchange_nested_user_payload(
+            "stackoverflow",
+            {},
+            "user",
+            {
+                "site": "not-stackexchange.example",
+                "user_id": "13579",
+                "username": "alice-stack",
+            },
+        )
+        is None
     )

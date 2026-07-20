@@ -24,10 +24,29 @@ without creating competing source-of-truth docs.
 
 - [x] Current workspace Git status checked on 2026-07-20: this checkout is a Git repo on `main` tracking `origin/main`. Any deep historical checklist lines saying the workspace was intentionally not a Git repo are stale context only; do not use them to skip commits.
 - [x] Defender/impacket status checked: `C:\Program Files\Python312\Lib\site-packages\impacket\smbconnection.py` is currently absent/quarantined, while the project venv copy exists and Forge imports impacket from `.venv`. `Get-MpThreatDetection` shows repeated successful actions against only the global `Program Files` path. Do not add a broad Defender exclusion for `C:\Program Files`; keep launchers venv-bound and only consider a narrow project-scoped exclusion if Defender starts quarantining the verified `.venv` dependency.
-- [ ] Immediate next code target: `tests/phase2/test_social_scraper.py::test_normalizes_nested_stackexchange_user_profile_for_recursive_seed_quality` plus the narrow `forge/utils/intel/social_scraper.py` parser fix for provider-scoped nested StackExchange/StackOverflow `user` payloads. This advances identity enrichment and recursion only; do not add provider calls or generic nested user flattening.
+- [x] Nested StackExchange user-profile target completed: provider-scoped Epieos StackExchange/StackOverflow `user` payloads now become safe public profile pivots when they include numeric `user_id`, normalized handle, and accepted/no site hint. Bad site hints are rejected. Handoff: `.claude/handoffs/2026-07-20-stackexchange-nested-user-profile.md`.
+- [ ] Immediate next code target: audit another concrete identity-provider payload shape or passive artifact/parser source shape before writing code. If no missing recursive pivot is found, switch to release-level mocked E2E/report-fallback tests or safe mega-test/module splits.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
+
+- [x] Nested StackExchange user-profile recursion checkpoint is green:
+  Provider-scoped Epieos StackExchange/StackOverflow `user` payloads now become
+  safe public profile pivots when they include a numeric `user_id`, a normalized
+  handle, and either no site override or an accepted StackExchange network host.
+  Invalid site hints such as `not-stackexchange.example` are rejected instead of
+  defaulting to fake StackOverflow URLs. Pure payload shaping lives in
+  `forge/utils/intel/social_profile_hosts.py`; `social_scraper.py` only adapts it
+  through the existing handle/profile parser.
+  Verification: compile/Ruff for touched identity parser/helper files; Phase 2
+  social helper/scraper suite -> `84 passed`; Phase 1 social-profile recursion
+  selector -> `80 passed, 679 deselected`; cleanup check found no new pytest
+  engagement DBs.
+  Safety: passive provider-payload normalization only. No provider calls, live
+  probing, auth, scope relaxation, generic nested-user flattening,
+  validation/report-gate change, rate-limit bypass, proxy/IP rotation, or
+  persistent non-test engagement DB mutation changed.
+  Handoff: `.claude/handoffs/2026-07-20-stackexchange-nested-user-profile.md`.
 
 - [x] Helm index absolute chart URL recursion checkpoint is green:
   Helm `index.yaml` parsing now preserves safe absolute HTTP(S) chart archive URLs in `entries[].urls[]` in addition to relative chart paths, so authorized chart indexes that point at CDN/object-storage `.tgz` / `.tar.gz` packages feed recursive artifact URL pivots instead of being silently dropped. Unsafe values remain suppressed: protocol-relative URLs, non-HTTP(S) schemes, non-chart suffixes, templated strings, userinfo-bearing URLs, localhost, and private/reserved IP hosts.
