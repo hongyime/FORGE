@@ -59,7 +59,7 @@ def profile_url_hostname(value: str) -> str:
     text = str(value or "").strip()
     parsed = urlparse(text)
     hostname = parsed.hostname
-    if not hostname and text and "://" not in text and not text.startswith("//"):
+    if not hostname and text and not parsed.scheme and not text.startswith("//"):
         hostname = urlparse(f"//{text.lstrip('/')}").hostname
     return normalize_profile_hostname(hostname)
 

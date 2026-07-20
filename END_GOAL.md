@@ -1,5 +1,7 @@
 # FORGE End Goal
 
+Last updated: 2026-07-20
+
 This file is the fast entry point for the project goal. The normative contract is
 `docs/end_goal.md`; if any checklist, handoff, agent plan, or implementation task
 conflicts with that file, update the conflicting material before continuing.

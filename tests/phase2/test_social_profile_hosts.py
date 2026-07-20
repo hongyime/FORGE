@@ -48,6 +48,13 @@ def test_epieos_profile_alias_host_matches_scheme_less_profile_urls() -> None:
     assert epieos_profile_alias_host_matches("github", "www.github.com/acme", _PLATFORM_HOSTS)
 
 
+def test_epieos_profile_alias_host_rejects_colon_scheme_identifiers() -> None:
+    assert profile_url_hostname("mailto:alice@github.com") == ""
+    assert profile_url_hostname("urn:github:alice") == ""
+    assert not epieos_profile_alias_host_matches("github", "mailto:alice@github.com", _PLATFORM_HOSTS)
+    assert not epieos_profile_alias_host_matches("github", "urn:github:alice", _PLATFORM_HOSTS)
+
+
 def test_epieos_supported_and_federated_host_guards() -> None:
     assert epieos_is_supported_profile_host("github.com", _PLATFORM_HOSTS)
     assert epieos_is_mastodon_like_host("mastodon.acme.example")

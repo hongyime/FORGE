@@ -24,6 +24,12 @@ polish or provider breadth without proving the end-to-end kill-chain path.
 
 ## Current green checkpoint
 
+- [x] Social profile colon-scheme host guard checkpoint is green:
+  Scheme-less profile host fallback now requires an empty parsed URL scheme, so `github.com/acme` and `//github.com/acme` still match known hosts while colon-scheme identifiers such as `mailto:alice@github.com`, `urn:github:alice`, and `github:alice` no longer become fake profile hosts.
+  Verification: compile/Ruff for touched host helper/tests; focused host/alias/app-link suite -> `11 passed`; full adjacent social scraper suite -> `87 passed`; direct host-match probe confirmed the boundary.
+  Safety: passive identity host-guard hardening only. No provider calls, live probing, credential use, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-social-profile-colon-scheme-host-guard.md`.
+
 - [x] LinkedIn non-web alias fallback checkpoint is green:
   Epieos LinkedIn parser now ignores non-web explicit profile aliases such as `urn:li:fsd_profile:alice-example` and falls back to valid `publicIdentifier` / handle reconstruction. HTTP(S) and scheme-less web host mismatches such as `https://notlinkedin.com/in/alice` still block fallback.
   Verification: compile/Ruff for touched parser/test files; focused alias/app-link suite -> `6 passed`; full adjacent social scraper suite -> `82 passed`; direct parser probe confirmed `urn:li` and `linkedin://` fallback while HTTP and scheme-less host mismatches stay blocked.
@@ -2210,6 +2216,7 @@ polish or provider breadth without proving the end-to-end kill-chain path.
 - [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
 ## Best next tasks
 
+- [ ] Next safe parser coverage target from subagent `Anscombe`: add a focused Pact contract regression proving protocol-relative endpoints such as `//pact-cdn.acme.example/v1/status` normalize to `https://...` URL pivots without widening network behavior.
 - [ ] Add append-only remote storage for exported run-manifest bundles only if scoped customer storage is explicitly configured.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
 - [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
