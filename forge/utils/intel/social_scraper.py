@@ -3874,6 +3874,14 @@ def _epieos_profile_alias_host_matches(platform_name: str, url: str) -> bool:
     )
 
 
+def _epieos_explicit_profile_alias_blocks_fallback(value: str) -> bool:
+    candidate_url = _epieos_handle_candidate_url(value)
+    if not candidate_url:
+        return False
+    scheme = str(urlparse(candidate_url).scheme or "").strip().lower()
+    return scheme in {"http", "https"}
+
+
 def _epieos_youtube_channel_id(value: Any) -> str:
     candidate = _epieos_normalize_handle_candidate(value)
     if re.fullmatch(r"UC[A-Za-z0-9_-]{20,32}", candidate):
@@ -4138,70 +4146,72 @@ def _epieos_profile_url(platform: str, data: dict[str, Any]) -> str:
         if platform_name in _EPIEOS_NOSTR_PLATFORM_NAMES:
             return _epieos_nostr_profile_url(data, explicit)
         if not _epieos_profile_alias_host_matches(platform_name, explicit):
-            return ""
-        explicit_host = str(urlparse(explicit).hostname or "").strip().lower()
-        if explicit_host.startswith("www."):
-            explicit_host = explicit_host[4:]
-        if explicit_host == "news.ycombinator.com" and not _epieos_handle_from_profile_url(explicit):
-            return ""
-        if platform_name == "facebook":
-            people_url = _epieos_facebook_people_profile_url(data, explicit)
-            if people_url:
-                return people_url
-        if platform_name in {"devto", "dev.to"} and not _epieos_handle_from_profile_url(explicit):
-            return ""
-        if platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES and not _epieos_handle_from_profile_url(explicit):
-            return ""
-        if (
-            platform_name
-            in {
-                "500px",
-                "500px.com",
-                "academia",
-                "academia.edu",
-                "adplist",
-                "adp_list",
-                "artstation",
-                "artstation.com",
-                "contra",
-                "contra.com",
-                "figma",
-                "figma.com",
-                "figshare",
-                "github_gist",
-                "githubgist",
-                "gist",
-                "google_scholar",
-                "googlescholar",
-                "codepen",
-                "deviantart",
-                "deviantart.com",
-                "indie_hackers",
-                "indiehackers",
-                "launchpad",
-                "muckrack",
-                "muck_rack",
-                "muckrack.com",
-                "polywork",
-                "polywork.com",
-                "quora",
-                "quora.com",
-                "scholar",
-                "semantic_scholar",
-                "semanticscholar",
-                "sourceforge",
-                "sourceforge_net",
-                "spotify",
-                "strava",
-                "strava.com",
-                "unsplash",
-                "unsplash.com",
-                "zenodo",
-            }
-            and not _epieos_handle_from_profile_url(explicit)
-        ):
-            return ""
-        return explicit
+            if _epieos_explicit_profile_alias_blocks_fallback(explicit):
+                return ""
+        else:
+            explicit_host = str(urlparse(explicit).hostname or "").strip().lower()
+            if explicit_host.startswith("www."):
+                explicit_host = explicit_host[4:]
+            if explicit_host == "news.ycombinator.com" and not _epieos_handle_from_profile_url(explicit):
+                return ""
+            if platform_name == "facebook":
+                people_url = _epieos_facebook_people_profile_url(data, explicit)
+                if people_url:
+                    return people_url
+            if platform_name in {"devto", "dev.to"} and not _epieos_handle_from_profile_url(explicit):
+                return ""
+            if platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES and not _epieos_handle_from_profile_url(explicit):
+                return ""
+            if (
+                platform_name
+                in {
+                    "500px",
+                    "500px.com",
+                    "academia",
+                    "academia.edu",
+                    "adplist",
+                    "adp_list",
+                    "artstation",
+                    "artstation.com",
+                    "contra",
+                    "contra.com",
+                    "figma",
+                    "figma.com",
+                    "figshare",
+                    "github_gist",
+                    "githubgist",
+                    "gist",
+                    "google_scholar",
+                    "googlescholar",
+                    "codepen",
+                    "deviantart",
+                    "deviantart.com",
+                    "indie_hackers",
+                    "indiehackers",
+                    "launchpad",
+                    "muckrack",
+                    "muck_rack",
+                    "muckrack.com",
+                    "polywork",
+                    "polywork.com",
+                    "quora",
+                    "quora.com",
+                    "scholar",
+                    "semantic_scholar",
+                    "semanticscholar",
+                    "sourceforge",
+                    "sourceforge_net",
+                    "spotify",
+                    "strava",
+                    "strava.com",
+                    "unsplash",
+                    "unsplash.com",
+                    "zenodo",
+                }
+                and not _epieos_handle_from_profile_url(explicit)
+            ):
+                return ""
+            return explicit
     if platform_name in _EPIEOS_MATRIX_PLATFORM_NAMES:
         return _epieos_matrix_profile_url(data)
     if platform_name in _EPIEOS_FEDERATED_PLATFORM_NAMES:

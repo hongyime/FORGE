@@ -51,3 +51,39 @@ def test_epieos_profile_aliases_accept_scheme_less_known_profile_urls() -> None:
             "username": "acmeops",
         }
     ]
+
+
+def test_epieos_linkedin_non_web_profile_alias_falls_back_to_public_identifier() -> None:
+    rows = _parse_epieos_response(
+        {
+            "linkedin": {
+                "profileUrl": "urn:li:fsd_profile:alice-example",
+                "publicIdentifier": "alice-example",
+            },
+        }
+    )
+
+    assert rows == [
+        {
+            "source": "epieos",
+            "platform": "linkedin",
+            "profile_url": "https://www.linkedin.com/in/alice-example",
+            "url": "https://www.linkedin.com/in/alice-example",
+            "verified": False,
+            "handle": "alice-example",
+            "username": "alice-example",
+        }
+    ]
+
+
+def test_epieos_linkedin_web_profile_host_mismatch_still_blocks_fallback() -> None:
+    rows = _parse_epieos_response(
+        {
+            "linkedin": {
+                "profileUrl": "https://notlinkedin.com/in/alice",
+                "publicIdentifier": "alice-example",
+            },
+        }
+    )
+
+    assert rows == []

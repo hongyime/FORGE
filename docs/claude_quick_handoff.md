@@ -24,6 +24,13 @@ polish or provider breadth without proving the end-to-end kill-chain path.
 
 ## Current green checkpoint
 
+- [x] LinkedIn non-web alias fallback checkpoint is green:
+  Epieos LinkedIn parser now ignores non-web explicit profile aliases such as `urn:li:fsd_profile:alice-example` and falls back to valid `publicIdentifier` / handle reconstruction. HTTP(S) and scheme-less web host mismatches such as `https://notlinkedin.com/in/alice` still block fallback.
+  Verification: compile/Ruff for touched parser/test files; focused alias/app-link suite -> `6 passed`; full adjacent social scraper suite -> `82 passed`; direct parser probe confirmed `urn:li` and `linkedin://` fallback while HTTP and scheme-less host mismatches stay blocked.
+  Review: explorer `Mencius` found the gap.
+  Safety: passive parser-only identity normalization. No network, provider call, auth probing, scope relaxation, proxy/IP rotation, rate-limit bypass, destructive behavior, or report-gate change.
+  Handoff: `.claude/handoffs/2026-07-20-linkedin-non-web-alias-fallback.md`.
+
 - [x] Remote-access artifact test split checkpoint is green:
   RDP/Citrix static artifact recursion coverage moved out of the Phase 1 mega test into focused `tests/phase1/test_artifact_remote_access.py` (134 lines). The regression still proves `.rdp` and `.ica` local artifacts plus remote content-type classification feed emails, URL seeds, host/subdomain/domain pivots, Firebase/Supabase/S3/GCS cloud assets, and artifact format metadata without executing remote-access clients.
   Verification: compile/Ruff for the focused and mega tests; focused remote-access test -> `1 passed`; adjacent artifact helper/connection-client suites -> `68 passed`.
