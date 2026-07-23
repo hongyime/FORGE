@@ -551,6 +551,7 @@ def test_kill_chain_help_exposes_auto_run_detected_option() -> None:
 
     assert result.exit_code == 0
     assert "--auto-run-detected" in result.stdout
+    assert "--include-offensive" in result.stdout
     assert "--roe-id" in result.stdout
 
 

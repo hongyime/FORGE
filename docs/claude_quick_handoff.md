@@ -25,33 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: deterministic identity conflict production is complete.
-`EngagementSynthesisEngine` now creates conservative `conflicts_with` seed
-relations when one email/phone anchor has incompatible `same_entity`
-name/company targets. Evidence JSON records the collision rule, anchor seed,
-target values, target type, and original relation evidence; seed confidence
-metadata now reflects `conflict_count` and `conflicts_with`.
+Latest checkpoint: offensive prerequisite hint gating is complete. Default
+kill-chain prerequisite detection now suppresses evasion, IDOR, brute-force,
+auth-bypass, and post-exploitation manual hints. Operators must pass
+`--include-offensive-prereqs` to show those manual-only follow-ons; safe
+runnable enrichment prereqs still work.
 
-Verification: compile/Ruff passed; focused conflict/seed-confidence slice
-passed (`4 passed, 756 deselected`); single conflict regression passed
-(`1 passed`); kill-chain convergence suite passed (`3 passed`). Handoff:
-`.claude/handoffs/2026-07-24-deterministic-seed-conflicts.md`.
+Verification: compile/Ruff passed; focused help/default/opt-in/metadata slice
+passed (`3 passed`); existing safe auto-run prereq slice passed (`1 passed`).
+Handoff: `.claude/handoffs/2026-07-24-offensive-prereq-hint-gate.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Previous checkpoint: React validation inventory labeling is complete. The
-engagement detail page now counts only reportable `vulnerability_findings` plus
-`passive_vulns` rows under "Reportable validated findings"; key scanner and
-cloud validation rows render under a separate "Validation inventory" panel.
+Previous checkpoint: deterministic identity conflict production is complete.
+`EngagementSynthesisEngine` now creates conservative `conflicts_with` seed
+relations when one email/phone anchor has incompatible `same_entity`
+name/company targets; seed confidence metadata reflects `conflict_count`.
 
-Current next gate: gate evasion, brute-force, auth-bypass, and
-post-exploitation prerequisite hints out of the default authorized ASM
-kill-chain completion path. They may remain available only behind explicit
-opt-in/manual-only mode with clear ROE metadata, and default mocked kill-chain
-runs must not include them.
+Current next gate: reduce `forge/cli.py` risk by extracting prerequisite
+detection into a small dedicated helper module with no behavior change.
+Preserve `--include-offensive-prereqs`, auto-run, prompt, non-TTY, metadata,
+and audit semantics with focused tests.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

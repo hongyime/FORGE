@@ -226,11 +226,20 @@ historical notes only, not as current instructions.
   (`4 passed, 756 deselected`); single conflict regression passed (`1 passed`);
   kill-chain convergence suite passed (`3 passed`). Handoff:
   `.claude/handoffs/2026-07-24-deterministic-seed-conflicts.md`.
+- [x] Offensive prerequisite hint gating checkpoint:
+  Default kill-chain prerequisite detection now suppresses evasion, IDOR,
+  brute-force, auth-bypass, and post-exploitation manual hints. Operators must
+  pass `--include-offensive-prereqs` to show those manual-only follow-ons; safe
+  runnable enrichment prereqs such as DeHashed, breach DB, AWS/Azure, and
+  Firebase extraction remain unchanged. Run metadata and the prereq audit row
+  record whether offensive prerequisite hints were included. Verification:
+  compile passed; Ruff passed; focused help/default/opt-in/metadata slice
+  passed (`3 passed`); existing safe auto-run prereq slice passed (`1 passed`).
+  Handoff: `.claude/handoffs/2026-07-24-offensive-prereq-hint-gate.md`.
 - [ ] Next gate:
-  Gate evasion, brute-force, auth-bypass, and post-exploitation prerequisite
-  hints out of the default authorized ASM kill-chain completion path. They may
-  remain available only behind explicit opt-in/manual-only mode with clear ROE
-  metadata, and default mocked kill-chain runs must not include them.
+  Reduce `forge/cli.py` risk by extracting prerequisite detection into a small
+  dedicated helper module with no behavior change. Preserve `--include-offensive-prereqs`,
+  auto-run, prompt, non-TTY, metadata, and audit semantics with focused tests.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

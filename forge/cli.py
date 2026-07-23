@@ -4885,6 +4885,15 @@ def kill_chain(
             "detected follow-on modules instead of only listing or prompting for them."
         ),
     ),
+    include_offensive_prereqs: bool = typer.Option(
+        False,
+        "--include-offensive-prereqs",
+        help=(
+            "Include manual-only evasion, brute-force, auth-bypass, and "
+            "post-exploitation follow-on hints in prerequisite detection. "
+            "Default ASM runs suppress these suggestions."
+        ),
+    ),
 ) -> None:
     """Depth-first OSINT spider against any identifier.
 
@@ -4939,6 +4948,9 @@ def kill_chain(
     report_provider = None if _is_typer_default(report_provider) else report_provider
     report_max_loops = None if _is_typer_default(report_max_loops) else report_max_loops
     auto_run_detected = False if _is_typer_default(auto_run_detected) else bool(auto_run_detected)
+    include_offensive_prereqs = (
+        False if _is_typer_default(include_offensive_prereqs) else bool(include_offensive_prereqs)
+    )
     # ─── Compatibility aliases for internal loop code (was 14 flags) ───
     # The kill-chain body still references the pre-consolidation names.
     # Rather than rewrite ~30 references, map them here once.
@@ -5902,6 +5914,7 @@ def kill_chain(
             "active_recon_allowed": bool(active_recon and live_allowed),
             "credential_validation_allowed": bool(credential_validate and live_allowed),
             "auto_run_detected_allowed": bool(auto_run_detected and live_allowed),
+            "offensive_prereq_hints_included": bool(include_offensive_prereqs),
             "destructive_actions_allowed": False,
             "post_exploitation_allowed": False,
             "requires_explicit_roe": requires_roe,
@@ -5951,6 +5964,7 @@ def kill_chain(
             "resume_enabled": resume_enabled,
             "dry_run": dry_run_all,
             "attack_mode": attack_mode,
+            "include_offensive_prereqs": include_offensive_prereqs,
             "roe_id": roe_id,
             "live_probing_allowed": not dry_run_all,
             "tool_execution_allowed": not dry_run_all,
@@ -17490,82 +17504,86 @@ def kill_chain(
                   "--apk", str(apks[0])],
         )
 
-    # Evasion generation - requires SAFE_MODE=0. Manual only (needs --technique).
-    if _os2.environ.get("FORGE_SAFE_MODE", "0").strip() in ("0", "false", "no", ""):
-        _add(
-            "evasion generate (Phase 3)",
-            "FORGE_SAFE_MODE is off - payload generation available",
-            manual_hint=(f"forge evasion generate --engagement {engagement} "
-                         "--technique <lolbin-technique> --os windows"),
-        )
+    if include_offensive_prereqs:
+        # Evasion generation - requires SAFE_MODE=0. Manual only (needs --technique).
+        if _os2.environ.get("FORGE_SAFE_MODE", "0").strip() in ("0", "false", "no", ""):
+            _add(
+                "evasion generate (Phase 3)",
+                "FORGE_SAFE_MODE is off - payload generation available",
+                manual_hint=(f"forge evasion generate --engagement {engagement} "
+                             "--technique <lolbin-technique> --os windows"),
+            )
 
-    # Vuln IDOR / Auth brute / bypass - manual only (need --target-url).
-    con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-    try:
-        n_svcs = 0
-        n_creds = 0
-        try:
-            n_svcs = con.execute(
-                "SELECT COUNT(*) FROM services s JOIN hosts h ON s.host_id=h.id "
-                "WHERE h.engagement_id=?", (engagement_id,),
-            ).fetchone()[0]
-        except _sq.OperationalError:
-            pass
-        try:
-            n_creds = con.execute(
-                "SELECT COUNT(*) FROM credentials WHERE engagement_id=?",
-                (engagement_id,),
-            ).fetchone()[0]
-        except _sq.OperationalError:
-            pass
-    finally:
-        con.close()
-    if n_svcs > 0:
-        _add(
-            "vuln idor (Module 4-D)",
-            f"{n_svcs} discovered service(s) - IDOR probing available",
-            manual_hint=f"forge vuln idor --engagement {engagement} --target-url <url>",
-        )
-    if n_svcs > 0 and n_creds > 0:
-        _add(
-            "auth brute (Phase 4)",
-            f"{n_svcs} service(s) + {n_creds} credential(s) - brute-force ready",
-            manual_hint=(f"forge auth brute --engagement {engagement} "
-                         "--target <host> --service <svc>"),
-        )
-    if n_svcs > 0:
-        _add(
-            "auth bypass (Phase 4)",
-            f"{n_svcs} service(s) with potential auth surfaces",
-            manual_hint=f"forge auth bypass --engagement {engagement} --target-url <url>",
-        )
-
-    # Phase 5 post-exploitation - only surface if we have validated creds
-    try:
+        # Vuln IDOR / Auth brute / bypass - manual only (need --target-url).
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
-            n_validated = con.execute(
-                "SELECT COUNT(*) FROM credentials WHERE engagement_id=? AND validated=1",
-                (engagement_id,),
-            ).fetchone()[0]
-        except _sq.OperationalError:
+            n_svcs = 0
+            n_creds = 0
+            try:
+                n_svcs = con.execute(
+                    "SELECT COUNT(*) FROM services s JOIN hosts h ON s.host_id=h.id "
+                    "WHERE h.engagement_id=?", (engagement_id,),
+                ).fetchone()[0]
+            except _sq.OperationalError:
+                pass
+            try:
+                n_creds = con.execute(
+                    "SELECT COUNT(*) FROM credentials WHERE engagement_id=?",
+                    (engagement_id,),
+                ).fetchone()[0]
+            except _sq.OperationalError:
+                pass
+        finally:
+            con.close()
+        if n_svcs > 0:
+            _add(
+                "vuln idor (Module 4-D)",
+                f"{n_svcs} discovered service(s) - IDOR probing available",
+                manual_hint=f"forge vuln idor --engagement {engagement} --target-url <url>",
+            )
+        if n_svcs > 0 and n_creds > 0:
+            _add(
+                "auth brute (Phase 4)",
+                f"{n_svcs} service(s) + {n_creds} credential(s) - brute-force ready",
+                manual_hint=(f"forge auth brute --engagement {engagement} "
+                             "--target <host> --service <svc>"),
+            )
+        if n_svcs > 0:
+            _add(
+                "auth bypass (Phase 4)",
+                f"{n_svcs} service(s) with potential auth surfaces",
+                manual_hint=f"forge auth bypass --engagement {engagement} --target-url <url>",
+            )
+
+        # Phase 5 post-exploitation - only surface if we have validated creds.
+        try:
+            con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+            try:
+                n_validated = con.execute(
+                    "SELECT COUNT(*) FROM credentials WHERE engagement_id=? AND validated=1",
+                    (engagement_id,),
+                ).fetchone()[0]
+            except _sq.OperationalError:
+                n_validated = 0
+            con.close()
+        except Exception:  # noqa: BLE001
             n_validated = 0
-        con.close()
-    except Exception:  # noqa: BLE001
-        n_validated = 0
-    if n_validated > 0:
-        _add(
-            "post {shell,beacon,lateral} (Phase 5)",
-            f"{n_validated} VALIDATED credential(s) - post-ex viable "
-            "(requires FORGE_SAFE_MODE=0 + written ROE)",
-            manual_hint=(f"forge post shell --engagement {engagement} "
-                         "--target <host> --service ssh --cred-id <id>"),
-        )
+        if n_validated > 0:
+            _add(
+                "post {shell,beacon,lateral} (Phase 5)",
+                f"{n_validated} VALIDATED credential(s) - post-ex viable "
+                "(requires FORGE_SAFE_MODE=0 + written ROE)",
+                manual_hint=(f"forge post shell --engagement {engagement} "
+                             "--target <host> --service ssh --cred-id <id>"),
+            )
 
     _cli_audit(
         db_path, engagement_id, "orchestrator", "kill_chain",
         "prereq_detection", target=domain,
-        result=f"detected={len(detected)} auto_run={auto_run_detected}",
+        result=(
+            f"detected={len(detected)} auto_run={auto_run_detected} "
+            f"offensive_prereqs={include_offensive_prereqs}"
+        ),
     )
 
     if not detected:

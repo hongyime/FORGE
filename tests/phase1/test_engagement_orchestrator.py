@@ -802,7 +802,9 @@ def test_synthesis_engine_parallelizes_seed_confidence_update_entries_and_preser
 def test_synthesis_engine_creates_conflict_relations_for_identity_collisions(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
+    data_dir = tmp_path / ".forge_data"
+    db_path = data_dir / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     _bootstrap_engagement(db_path)
 
     con = sqlite3.connect(db_path)
@@ -892,6 +894,22 @@ def test_synthesis_engine_creates_conflict_relations_for_identity_collisions(
             assert synthesis["supporting_relations"] == 1
     finally:
         con.close()
+
+    from forge.reporting.dashboard import generate_dashboard
+
+    reports_dir = tmp_path / "reports"
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    relation_rows = detail_payload["sections"]["seed_relations"]
+    assert any(
+        row["Relation"] == "conflicts_with"
+        and row["From"] == "Alice Example [name]"
+        and row["To"] == "Bob Builder [name]"
+        for row in relation_rows
+    )
 
 
 def test_synthesis_engine_parallelizes_seed_id_rows_and_preserves_mapping(
@@ -65678,6 +65696,7 @@ def test_kill_chain_dry_run_records_recent_run_telemetry_metadata(
         assert metadata["phase"] == "completed"
         assert metadata["live_probing_allowed"] is False
         assert metadata["tool_execution_allowed"] is False
+        assert metadata["include_offensive_prereqs"] is False
         assert metadata["roe_id"] == ""
         live_policy = metadata["live_execution_policy"]
         assert live_policy["scope_gate"] == "engagement_scope_json_root_domains"
@@ -65687,6 +65706,7 @@ def test_kill_chain_dry_run_records_recent_run_telemetry_metadata(
         assert live_policy["tool_execution_allowed"] is False
         assert live_policy["active_recon_allowed"] is False
         assert live_policy["credential_validation_allowed"] is False
+        assert live_policy["offensive_prereq_hints_included"] is False
         assert live_policy["destructive_actions_allowed"] is False
         assert live_policy["post_exploitation_allowed"] is False
         assert live_policy["requires_explicit_roe"] is False
@@ -65720,6 +65740,112 @@ def test_kill_chain_dry_run_records_recent_run_telemetry_metadata(
         assert isinstance(last_iteration_delta, dict)
         assert int(last_iteration_delta["engagement_seeds"]) == 0
         assert metadata["last_iteration_stable"] is True
+    finally:
+        con.close()
+
+
+def test_kill_chain_suppresses_offensive_prereq_hints_without_opt_in(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    for env_name in (
+        "AWS_PROFILE",
+        "AWS_ACCESS_KEY_ID",
+        "FORGE_AZURE_SUBSCRIPTION_ID",
+        "AZURE_TENANT_ID",
+        "FORGE_DEHASHED_API_KEY",
+        "FORGE_DEHASHED_EMAIL",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+    )
+    default_db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(default_db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        metadata = json.loads(str(row[0] or "{}"))
+        assert metadata["include_offensive_prereqs"] is False
+        assert metadata["prereq_detected_count"] == 0
+        audit_row = con.execute(
+            """
+            SELECT result
+            FROM audit_log
+            WHERE engagement_id=1001 AND action='prereq_detection'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert audit_row is not None
+        assert "detected=0" in str(audit_row[0])
+        assert "offensive_prereqs=False" in str(audit_row[0])
+    finally:
+        con.close()
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1002",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+        include_offensive_prereqs=True,
+    )
+    opt_in_db_path = tmp_path / ".forge_data" / "engagements" / "1002.db"
+    con = sqlite3.connect(opt_in_db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1002
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        metadata = json.loads(str(row[0] or "{}"))
+        assert metadata["include_offensive_prereqs"] is True
+        assert metadata["prereq_detected_count"] == 1
+        assert metadata["prereq_execution_mode"] == "manual_only"
+        audit_row = con.execute(
+            """
+            SELECT result
+            FROM audit_log
+            WHERE engagement_id=1002 AND action='prereq_detection'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert audit_row is not None
+        assert "detected=1" in str(audit_row[0])
+        assert "offensive_prereqs=True" in str(audit_row[0])
     finally:
         con.close()
 
