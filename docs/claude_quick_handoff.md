@@ -25,30 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Fan-out J direct validation scope callback is complete. The
-per-iteration direct `run_cloud_asset_validate_batch()` call now passes the
-shared cloud asset scope checker and denied callback into the lower-level
-validator. The out-of-scope cloud pivot regression proves only the allowed
-target reaches validation and the callbacks still classify denied targets.
+Latest checkpoint: configurable kill-chain budgets are complete.
+`FORGE_KILL_CHAIN_SYNTHESIS_DEPTH` now controls synthesis depth with default
+`3` and bound `1..5`; `FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT` controls
+pending cloud-validation batch size with default `16` and bound `1..64`.
+Invalid values fail closed, and effective values are recorded in
+`engagement_runs.metadata_json` for dashboard/audit review.
 
-Verification: compile/Ruff passed; focused Fan-out J scope regression passed
-(`1 passed, 758 deselected`); adjacent CLI cloud/key/artifact scope slice passed
-(`3 passed, 756 deselected`); lower-level cloud validation scope slice passed
-(`4 passed, 129 deselected`); pytest engagement cleanup reported
-`removed=4 remaining=0 post_scan=0`. Handoff:
-`.claude/handoffs/2026-07-24-fanout-j-direct-validation-scope-callback.md`.
-Commit: `87a3a5d`.
+Verification: compile/Ruff passed; option normalizer tests passed (`2 passed`);
+CLI env rejection plus focused kill-chain metadata tests passed (`4 passed`);
+kill-chain convergence suite passed (`3 passed`); run telemetry metadata slice
+passed (`1 passed`); targeted slow pending-validation batch and recursive
+artifact/social/fallback slices passed with `-m slow` (`2 passed`). Handoff:
+`.claude/handoffs/2026-07-24-configurable-kill-chain-budgets.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: audit configurable recursion/concurrency budgets. Current
-hardcoded defaults noted by sidecar audit include
-`EngagementSynthesisEngine(..., depth_limit=3)` and pending validation batch size
-`16`; decide whether engagement config/env should control them, add validation
-bounds, and prove slow-and-steady defaults remain deterministic.
+Current next gate: fix React engagement-detail review labeling so only
+reportable validated findings appear under "Validated findings"; non-reportable
+`UNVERIFIED`, `DEAD`, honeypot-suspected, and metadata-only cloud/key rows
+should render as validation inventory with explicit status. Add a focused
+`tests/reporting/test_webui_contract.py` assertion for this parity gap.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

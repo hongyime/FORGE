@@ -190,12 +190,26 @@ historical notes only, not as current instructions.
   `removed=4 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-fanout-j-direct-validation-scope-callback.md`.
   Commit: `87a3a5d`.
+- [x] Configurable kill-chain budget checkpoint:
+  Kill-chain synthesis depth and pending cloud-validation batch size are now
+  bounded env-controlled budgets instead of unreviewable execution hardcodes.
+  `FORGE_KILL_CHAIN_SYNTHESIS_DEPTH` defaults to `3` and is bounded `1..5`;
+  `FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT` defaults to `16` and is bounded
+  `1..64`. Invalid values fail closed as CLI parameter errors, and the
+  effective values are stored in `engagement_runs.metadata_json` for dashboard
+  and audit review. Verification: compile passed; Ruff passed; option
+  normalizer tests passed (`2 passed`); CLI env rejection and focused
+  kill-chain metadata tests passed (`4 passed`); kill-chain convergence suite
+  passed (`3 passed`); run telemetry metadata slice passed (`1 passed`);
+  targeted slow pending-validation batch and recursive artifact/social/fallback
+  slices passed with `-m slow` (`2 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-configurable-kill-chain-budgets.md`.
 - [ ] Next gate:
-  Audit configurable recursion/concurrency budgets. Current hardcoded defaults
-  noted by sidecar audit include `EngagementSynthesisEngine(..., depth_limit=3)`
-  and pending validation batch size `16`; decide whether engagement config/env
-  should control them, add validation bounds, and prove slow-and-steady defaults
-  remain deterministic.
+  Fix React engagement-detail review labeling so only reportable validated
+  findings appear under "Validated findings"; `UNVERIFIED`, `DEAD`,
+  honeypot-suspected, and metadata-only cloud/key rows should render as
+  validation inventory with explicit status. Add a focused
+  `tests/reporting/test_webui_contract.py` assertion for this parity gap.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

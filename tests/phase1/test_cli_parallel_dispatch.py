@@ -566,6 +566,26 @@ def test_kill_chain_rejects_max_iter_out_of_range() -> None:
     assert "max_iter must be between 1 and 10" in high_result.output
 
 
+def test_kill_chain_rejects_budget_env_out_of_range() -> None:
+    runner = CliRunner()
+
+    depth_result = runner.invoke(
+        app,
+        ["kill-chain", "acme.example", "--dry-run"],
+        env={"FORGE_KILL_CHAIN_SYNTHESIS_DEPTH": "6"},
+    )
+    batch_result = runner.invoke(
+        app,
+        ["kill-chain", "acme.example", "--dry-run"],
+        env={"FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT": "65"},
+    )
+
+    assert depth_result.exit_code != 0
+    assert batch_result.exit_code != 0
+    assert "synthesis_depth must be between 1 and 5" in depth_result.output
+    assert "validation_batch_limit must be between 1 and 64" in batch_result.output
+
+
 def test_kill_chain_url_seed_with_at_query_stays_url(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))

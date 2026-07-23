@@ -83958,6 +83958,8 @@ def test_kill_chain_passes_report_provider_and_loop_overrides_to_final_report_ge
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH", "4")
+    monkeypatch.setenv("FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT", "7")
 
     module_invocations: list[list[str]] = []
 
@@ -84015,6 +84017,8 @@ def test_kill_chain_passes_report_provider_and_loop_overrides_to_final_report_ge
         metadata = json.loads(str(row[0] or "{}"))
         assert metadata["report_provider"] == "template"
         assert metadata["report_max_loops"] == 0
+        assert metadata["synthesis_depth_limit"] == 4
+        assert metadata["pending_validation_batch_limit"] == 7
     finally:
         con.close()
 

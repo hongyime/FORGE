@@ -1,6 +1,6 @@
 # FORGE Spec
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
@@ -122,3 +122,4 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | B20 | 2026-07-23 | Automation suggestions still emitted `osint:dehashed` and `report:generate`, but `/api/automation/execute` correctly rejected them because no supported scheduled action path existed for those suggestions. | Suppressed unsupported suggestion actions and shared the executable automation action allowlist between the route and suggestion parity tests. |
 | B21 | 2026-07-23 | Scraped Terraform DNS resources were parsed for existing IaC cloud references, but record names and CNAME targets did not have a focused source-gated path into recursive host/subdomain seed promotion. | Added compact static Terraform DNS parsing for public record names and targets, wired it through the existing artifact host-seed path, and covered it with focused helper plus engagement-backed recursion tests. |
 | B22 | 2026-07-23 | SAML federation metadata artifacts were treated as generic XML, so source-gated IdP/SP endpoint fields such as `Location`, `ResponseLocation`, `entityID`, and `OrganizationURL` lacked focused passive recursion coverage and remote `/saml/metadata` cache filenames lost analyst-visible format labels. | Added compact static SAML metadata parsing for source-gated endpoint/document URLs, wired it through the existing artifact URL-seed path and remote cache classification, stripped SAML protocol query secrets from generic URL extraction, and covered helper plus local/remote engagement-backed recursion tests. |
+| B23 | 2026-07-24 | Kill-chain recursion/validation budgets existed as internal hardcodes, so run review could not tell which synthesis depth or pending validation batch limit governed an engagement. | Added bounded env controls `FORGE_KILL_CHAIN_SYNTHESIS_DEPTH` and `FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT`, failed closed on invalid values, and wrote the effective budgets into engagement run metadata. |

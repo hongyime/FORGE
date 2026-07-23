@@ -51,7 +51,11 @@ from rich.console import Console
 
 from forge import VERSION
 from forge.config import ForgeConfig
-from forge.utils.kill_chain_options import normalize_kill_chain_max_iter
+from forge.utils.kill_chain_options import (
+    normalize_kill_chain_max_iter,
+    normalize_kill_chain_synthesis_depth,
+    normalize_kill_chain_validation_batch_limit,
+)
 
 console = Console(stderr=True)
 
@@ -4974,6 +4978,17 @@ def kill_chain(
     module_timeout_seconds = _module_subprocess_timeout_seconds()
     identity_lookup_workers = _identity_lookup_max_workers()
     validation_workers = _validation_max_workers()
+    try:
+        synthesis_depth_limit = normalize_kill_chain_synthesis_depth(
+            os.environ.get("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH"),
+            default=3,
+        )
+        pending_validation_batch_limit = normalize_kill_chain_validation_batch_limit(
+            os.environ.get("FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT"),
+            default=16,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     import sys as _sys_kc  # noqa: PLC0415
 
     from forge.config import ForgeConfig  # noqa: PLC0415
@@ -5929,6 +5944,8 @@ def kill_chain(
             "processed_name_seeds": len(processed_name_seeds),
             "processed_company_seeds": len(processed_company_seeds),
             "parallel_fanout": parallel_workers,
+            "synthesis_depth_limit": synthesis_depth_limit,
+            "pending_validation_batch_limit": pending_validation_batch_limit,
             "skip_cloud": skip_cloud,
             "skip_keyscan": skip_keyscan,
             "resume_enabled": resume_enabled,
@@ -8990,7 +9007,11 @@ def kill_chain(
             }
         run_progress_state["queue_metrics"] = queue_metrics
 
-    synthesis_engine = EngagementSynthesisEngine(db_path, engagement_id, depth_limit=3)
+    synthesis_engine = EngagementSynthesisEngine(
+        db_path,
+        engagement_id,
+        depth_limit=synthesis_depth_limit,
+    )
     artifact_processor = ArtifactQueueProcessor(
         db_path,
         engagement_id,
@@ -9421,8 +9442,6 @@ def kill_chain(
                 f"scope_manifest={str(scope_manifest_metadata.get('source') or '') if isinstance(scope_manifest_metadata, dict) else ''}"
             )[:500],
         )
-
-    pending_validation_batch_limit = 16
 
     def _run_pending_cloud_key_validation(pass_label: str) -> None:
         if skip_cloud:
