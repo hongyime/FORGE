@@ -25,21 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Pactum text scanner worker-pool migration is implemented.
-Static Pactum `setBaseUrl(...)` extraction now routes through the ordered
-bounded local worker helper while preserving match-position ordering, fallback
-merge behavior, sensitive-query stripping, template rejection, and serial final
-dedupe.
+Latest checkpoint: GoReleaser YAML traversal worker-pool migration is
+implemented. Static GoReleaser YAML/JSON structured traversal now dispatches
+the current child layer through ordered bounded worker helpers while worker
+tasks recurse serially and final candidate dedupe remains serial. Templated
+container image URL order, blob-bucket extraction, source gating, and passive
+artifact recursion are preserved.
 
-Verification: compile/Ruff passed; focused API-client worker suite passed
-(`15 passed`); focused persisted Pactum/API artifact slice passed (`2 passed`);
-cleanup left `remaining_pactum_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-pactum-pattern-worker-pool.md`.
+Verification: compile/Ruff passed; focused GoReleaser worker test passed
+(`1 passed`); focused persisted quality/release dotfile artifact slice passed
+(`1 passed`); cleanup left `remaining_goreleaser_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-goreleaser-worker-pool.md`.
 
-Current next gate: inspect GoReleaser YAML structured traversal for a safe
-bounded worker-pool migration. Do not edit until traversal shape and existing
-`goreleaser` tests are reviewed; if implemented, use top-level worker helpers
-with serial recursion inside worker tasks.
+Current next gate: re-audit remaining static parser/enricher candidates and
+select the next proven-safe bounded worker-pool migration before editing.
+Preserve deterministic ordering, compact tests, scope gates, provider caps,
+pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

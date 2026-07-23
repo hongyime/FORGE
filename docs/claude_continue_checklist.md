@@ -298,10 +298,20 @@ historical notes only, not as current instructions.
   `15 passed`; focused persisted Pactum/API artifact slice -> `2 passed`;
   cleanup left `remaining_pactum_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-pactum-pattern-worker-pool.md`.
-- [ ] Next implementation target: inspect GoReleaser YAML structured traversal
-  for a safe bounded worker-pool migration. Do not edit until traversal shape
-  and existing `goreleaser` tests are reviewed; if implemented, use top-level
-  worker helpers with serial recursion inside worker tasks.
+- [x] GoReleaser YAML traversal worker-pool checkpoint completed: static
+  GoReleaser YAML/JSON structured traversal now dispatches the current child
+  layer through ordered bounded worker helpers while worker tasks recurse
+  serially and final candidate dedupe remains serial. Templated container image
+  URL order, blob-bucket extraction, source gating, and passive artifact
+  recursion are preserved. Verification: compile/Ruff passed; focused
+  GoReleaser worker test -> `1 passed`; focused persisted quality/release
+  dotfile artifact slice -> `1 passed`; cleanup left
+  `remaining_goreleaser_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-goreleaser-worker-pool.md`.
+- [ ] Next implementation target: re-audit remaining static parser/enricher
+  candidates and select the next proven-safe bounded worker-pool migration
+  before editing. Preserve deterministic ordering, compact tests, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

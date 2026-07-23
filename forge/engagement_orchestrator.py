@@ -29354,84 +29354,146 @@ class ArtifactQueueProcessor:
 
         candidates: list[str] = []
         seen: set[str] = set()
-
-        def _append(value: str) -> None:
+        for value in self._yaml_goreleaser_candidate_values_for_node(
+            mapping,
+            (),
+            use_workers=True,
+        ):
             candidate = str(value or "").strip()
             if not candidate or candidate.lower() in seen:
-                return
+                continue
             seen.add(candidate.lower())
             candidates.append(candidate)
-
-        def _scalar_values(value: Any) -> list[str]:
-            if isinstance(value, (str, int, float)):
-                return [str(value)]
-            if isinstance(value, list):
-                values: list[str] = []
-                for item in value[:64]:
-                    values.extend(_scalar_values(item))
-                return values
-            if isinstance(value, dict):
-                values = []
-                for item in list(value.values())[:64]:
-                    values.extend(_scalar_values(item))
-                return values
-            return []
-
-        def _append_image_template(value: Any) -> None:
-            for raw_value in _scalar_values(value):
-                image_candidate = _artifact_templated_container_image_url_candidate(
-                    raw_value,
-                    require_explicit_registry=True,
-                )
-                if image_candidate:
-                    _append(image_candidate)
-
-        def _append_blob_bucket(blob_mapping: dict[str, Any]) -> None:
-            blob_normalized = self._yaml_normalized_mapping(blob_mapping)
-            provider = self._yaml_key_fingerprint(
-                self._yaml_ref_value(blob_normalized, "provider", "type")
-            )
-            bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(
-                    blob_normalized,
-                    "bucket",
-                    "bucketName",
-                    "bucket_name",
-                    "name",
-                )
-            )
-            if not bucket:
-                return
-            if provider in {"s3", "aws", "awss3"} and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
-                _append(f"s3://{bucket}")
-                return
-            if provider in {"gs", "gcs", "googlecloudstorage", "googlestorage"}:
-                _append(f"gs://{bucket}")
-
-        def _walk(value: Any, path: tuple[str, ...] = ()) -> None:
-            if isinstance(value, dict):
-                if "blobs" in path:
-                    _append_blob_bucket(value)
-                for key, child in value.items():
-                    key_fingerprint = self._yaml_key_fingerprint(str(key or ""))
-                    child_path = (*path, key_fingerprint)
-                    if key_fingerprint in {
-                        "image",
-                        "images",
-                        "imagetemplate",
-                        "imagetemplates",
-                        "nametemplate",
-                        "nametemplates",
-                    } and any(part in child_path for part in ("docker", "dockers", "dockermanifests")):
-                        _append_image_template(child)
-                    _walk(child, child_path)
-                return
-            if isinstance(value, list):
-                for item in value[:256]:
-                    _walk(item, path)
-
-        _walk(mapping)
         return candidates
+
+    def _yaml_goreleaser_candidate_values_for_node(
+        self,
+        value: Any,
+        path: tuple[str, ...],
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        candidates: list[str] = []
+        if isinstance(value, dict):
+            if "blobs" in path:
+                blob_candidate = self._yaml_goreleaser_blob_bucket_value(value)
+                if blob_candidate:
+                    candidates.append(blob_candidate)
+            child_jobs = [
+                (child_index, key, child, path)
+                for child_index, (key, child) in enumerate(value.items())
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._yaml_goreleaser_child_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._yaml_goreleaser_child_candidate_values_for_node(
+                        key,
+                        child,
+                        path,
+                    )
+                    for _child_index, key, child, path in child_jobs
+                ]
+            )
+            for child_values in child_batches:
+                candidates.extend(child_values)
+            return candidates
+        if isinstance(value, list):
+            for item in value[:256]:
+                candidates.extend(
+                    self._yaml_goreleaser_candidate_values_for_node(
+                        item,
+                        path,
+                        use_workers=False,
+                    )
+                )
+        return candidates
+
+    def _yaml_goreleaser_child_candidate_values(
+        self,
+        child_job: tuple[int, Any, Any, tuple[str, ...]],
+    ) -> list[str]:
+        _child_index, key, child, path = child_job
+        return self._yaml_goreleaser_child_candidate_values_for_node(key, child, path)
+
+    def _yaml_goreleaser_child_candidate_values_for_node(
+        self,
+        key: Any,
+        child: Any,
+        path: tuple[str, ...],
+    ) -> list[str]:
+        key_fingerprint = self._yaml_key_fingerprint(str(key or ""))
+        child_path = (*path, key_fingerprint)
+        candidates: list[str] = []
+        if key_fingerprint in {
+            "image",
+            "images",
+            "imagetemplate",
+            "imagetemplates",
+            "nametemplate",
+            "nametemplates",
+        } and any(part in child_path for part in ("docker", "dockers", "dockermanifests")):
+            candidates.extend(self._yaml_goreleaser_image_template_values(child))
+        candidates.extend(
+            self._yaml_goreleaser_candidate_values_for_node(
+                child,
+                child_path,
+                use_workers=False,
+            )
+        )
+        return candidates
+
+    def _yaml_goreleaser_image_template_values(self, value: Any) -> list[str]:
+        candidates: list[str] = []
+        for raw_value in self._yaml_goreleaser_scalar_values(value):
+            image_candidate = _artifact_templated_container_image_url_candidate(
+                raw_value,
+                require_explicit_registry=True,
+            )
+            if image_candidate:
+                candidates.append(image_candidate)
+        return candidates
+
+    def _yaml_goreleaser_blob_bucket_value(self, blob_mapping: dict[str, Any]) -> str:
+        blob_normalized = self._yaml_normalized_mapping(blob_mapping)
+        provider = self._yaml_key_fingerprint(
+            self._yaml_ref_value(blob_normalized, "provider", "type")
+        )
+        bucket = self._yaml_valid_bucket_name(
+            self._yaml_ref_value(
+                blob_normalized,
+                "bucket",
+                "bucketName",
+                "bucket_name",
+                "name",
+            )
+        )
+        if not bucket:
+            return ""
+        if provider in {"s3", "aws", "awss3"} and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
+            return f"s3://{bucket}"
+        if provider in {"gs", "gcs", "googlecloudstorage", "googlestorage"}:
+            return f"gs://{bucket}"
+        return ""
+
+    def _yaml_goreleaser_scalar_values(self, value: Any) -> list[str]:
+        if isinstance(value, (str, int, float)):
+            return [str(value)]
+        if isinstance(value, list):
+            values: list[str] = []
+            for item in value[:64]:
+                values.extend(self._yaml_goreleaser_scalar_values(item))
+            return values
+        if isinstance(value, dict):
+            values = []
+            for item in list(value.values())[:64]:
+                values.extend(self._yaml_goreleaser_scalar_values(item))
+            return values
+        return []
 
     def _yaml_mapping_looks_like_goreleaser_config(
         self,
