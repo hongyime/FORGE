@@ -66146,6 +66146,7 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_cloud_validation_pivot(
     )
 
     validation_items: list[tuple[str, str]] = []
+    callback_scope_checks: list[tuple[str, str, bool]] = []
     root_html = (
         "<html><body>"
         "https://allowed.supabase.co "
@@ -66197,8 +66198,24 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_cloud_validation_pivot(
             return [{"root_domain": str(item), "urls": []} for item in items]
         return []
 
-    def _fake_cloud_validation_batch(engagement_id, items, db_path, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_cloud_validation_batch(  # noqa: ANN001
+        engagement_id,
+        items,
+        db_path,
+        *,
+        max_workers,
+        progress_label=None,
+        progress_callback=None,
+        scope_checker=None,
+        scope_denied_callback=None,
+    ):
         del engagement_id, db_path, max_workers
+        assert scope_checker is not None
+        assert scope_denied_callback is not None
+        allowed_probe = bool(scope_checker("supabase", "allowed"))
+        denied_probe = bool(scope_checker("firebase", "denied"))
+        callback_scope_checks.append(("supabase", "allowed", allowed_probe))
+        callback_scope_checks.append(("firebase", "denied", denied_probe))
         normalized_items = [(str(item[0]), str(item[1])) for item in items]
         validation_items.extend(normalized_items)
         if progress_callback is not None and progress_label:
@@ -66261,6 +66278,10 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_cloud_validation_pivot(
     )
 
     assert validation_items == [("supabase", "allowed")]
+    assert callback_scope_checks == [
+        ("supabase", "allowed", True),
+        ("firebase", "denied", False),
+    ]
 
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
     con = sqlite3.connect(db_path)

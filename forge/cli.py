@@ -16927,6 +16927,8 @@ def kill_chain(
                         max_workers=parallel_workers,
                         progress_label=f"{iteration}.J cloud validation",
                         progress_callback=_record_validation_progress,
+                        scope_checker=_cloud_asset_is_in_scope,
+                        scope_denied_callback=_record_cloud_asset_scope_denied,
                     )
                     validation_results = validation_batch.get("results") or []
                     validation_log_items: list[tuple[dict[str, Any], dict[str, Any]]] = []
