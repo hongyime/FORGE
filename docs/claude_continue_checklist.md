@@ -252,7 +252,23 @@ historical notes only, not as current instructions.
   `B20`; existing `V3`/`V6`/`V10`/`V12`/`V13` cover the gate. Verification:
   failing TDD first showed unsupported actions, then focused parity regression,
   compile/Ruff, full playbook suite, and API admission slice are green.
-- [ ] Immediate next implementation target: move back to concrete kill-chain
+- [x] Terraform DNS-record passive-recursion checkpoint completed:
+  scraped Terraform DNS resources now promote public record names and CNAME
+  targets from DNS resource blocks into recursive host/subdomain seeds through
+  `forge.utils.artifact_terraform_dns` and the existing artifact host-seed
+  path. Relative record names require a concrete zone name; interpolation, IP
+  literals, private/local suffixes, and unresolved relative names stay excluded.
+  Backprop: `SPEC.md` `B21`; existing `V1`/`V3`/`V4`/`V5` cover the gate.
+  Verification: focused TDD first failed on missing parser module; focused
+  regression -> `3 passed`; adjacent Terraform/HashiCorp artifact slice ->
+  `6 passed`; existing structured IaC regression -> `1 passed, 758
+  deselected`; compile/Ruff passed; cleanup ->
+  `remaining_pytest_engagement_dirs=0`, persistent DB inventory `master.db`,
+  no Python/pytest process. Safety: passive static Terraform parsing only; no
+  Terraform execution, provider call, live probing, credential use, validation
+  or report gate change, severity change, proxy/IP rotation, or rate-limit
+  bypass.
+- [ ] Immediate next implementation target: continue concrete kill-chain
   coverage. Add the smallest mocked E2E or focused integration test that proves
   one missing recursive discovery path from `T1`/`T2` advances from discovered
   passive evidence into a secondary seed, validation inventory, graph/report

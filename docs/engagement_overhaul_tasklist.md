@@ -389,12 +389,31 @@ sentences as historical notes only, not as current instructions.
   provider calls, live probing, credential use, report generation behavior
   change, exploitation, post-exploitation, proxy/IP behavior, rate-limit bypass,
   or new playbook capabilities.
-- [ ] Next implementation target: move back to concrete kill-chain coverage.
-  Add the smallest mocked E2E or focused integration test that proves one
-  missing recursive discovery path from `T1`/`T2` advances from discovered
-  passive evidence into a secondary seed, validation inventory, graph/report
-  review, or cleanup. Prefer a gap that improves the real engagement pipeline
-  over another UI-only or automation-label cleanup.
+- [x] Terraform DNS-record passive-recursion checkpoint:
+  scraped Terraform DNS resources now promote public record names and CNAME
+  targets from Route53, Cloudflare, Google DNS, Azure DNS, DigitalOcean, and
+  DNSimple-style resource blocks into recursive host/subdomain seeds through a
+  compact source-gated parser (`forge.utils.artifact_terraform_dns`) and the
+  existing artifact host-seed path. Relative record names are resolved only when
+  a concrete zone name is present; interpolation, IP literals, private/local
+  suffixes, and unresolved relative names remain excluded. Backprop:
+  `SPEC.md` `B21`; existing `V1`/`V3`/`V4`/`V5` cover the gate.
+  Verification: focused TDD first failed on missing
+  `forge.utils.artifact_terraform_dns`; focused regression passed (`3 passed`);
+  adjacent Terraform/HashiCorp artifact slice passed (`6 passed`);
+  existing structured IaC regression passed (`1 passed, 758 deselected`);
+  compile passed; Ruff passed; cleanup scan left
+  `remaining_pytest_engagement_dirs=0`, persistent DB inventory `master.db`,
+  and no Python/pytest process. Safety: passive static Terraform parsing only;
+  no Terraform execution, provider call, live probing, credential use, scope
+  relaxation, validation-gate change, report-gate change, severity change,
+  proxy/IP rotation, or rate-limit bypass.
+- [ ] Next implementation target: continue concrete kill-chain coverage. Add
+  the smallest mocked E2E or focused integration test that proves one missing
+  recursive discovery path from `T1`/`T2` advances from discovered passive
+  evidence into a secondary seed, validation inventory, graph/report review, or
+  cleanup. Prefer a gap that improves the real engagement pipeline over another
+  UI-only or automation-label cleanup.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

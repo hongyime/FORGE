@@ -155,6 +155,7 @@ from forge.utils.artifact_storage_client_config import (
     storage_client_config_candidates,
     storage_client_config_public_payload_text,
 )
+from forge.utils.artifact_terraform_dns import terraform_dns_record_hosts
 from forge.utils.artifact_secret_provider_class import secret_provider_class_candidates
 from forge.utils.artifact_sbom import sbom_multisuffix_format_label
 from forge.utils.artifact_tunnel_config import (
@@ -20400,6 +20401,9 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) == "nostr.json":
                 for relay_host in nostr_relay_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(relay_host))
+            if _artifact_format_label(source_file) == "terraform":
+                for dns_host in terraform_dns_record_hosts(text):
+                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(dns_host))
             for host_value, host_seed_type in host_candidates:
                 seed = (host_value, host_seed_type)
                 if seed in seen_host_seeds:
