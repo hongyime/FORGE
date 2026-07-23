@@ -290,10 +290,18 @@ historical notes only, not as current instructions.
   artifact slice -> `2 passed`; cleanup left
   `remaining_api_client_fallback_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-api-client-fallback-worker-pool.md`.
-- [ ] Next implementation target: move the Pactum API-client text scanner under
-  the bounded worker-pool path. Keep this local to static Pactum config parsing
-  and preserve `setBaseUrl(...)` extraction order, fallback merge behavior,
-  sensitive-query stripping, template rejection, and serial final dedupe.
+- [x] Pactum text scanner worker-pool checkpoint completed: static Pactum
+  `setBaseUrl(...)` extraction now routes through the ordered bounded local
+  worker helper while preserving match-position ordering, fallback merge
+  behavior, sensitive-query stripping, template rejection, and serial final
+  dedupe. Verification: compile/Ruff passed; focused API-client worker suite ->
+  `15 passed`; focused persisted Pactum/API artifact slice -> `2 passed`;
+  cleanup left `remaining_pactum_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-pactum-pattern-worker-pool.md`.
+- [ ] Next implementation target: inspect GoReleaser YAML structured traversal
+  for a safe bounded worker-pool migration. Do not edit until traversal shape
+  and existing `goreleaser` tests are reviewed; if implemented, use top-level
+  worker helpers with serial recursion inside worker tasks.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

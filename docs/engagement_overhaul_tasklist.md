@@ -924,10 +924,22 @@ sentences as historical notes only, not as current instructions.
   script execution, HTTP probing, provider call, live probing, credential use,
   scope/ROE relaxation, validation/report-gate change, severity change,
   proxy/IP rotation, rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: move the Pactum API-client text scanner under
-  the bounded worker-pool path. Keep this local to static Pactum config parsing
-  and preserve `setBaseUrl(...)` extraction order, fallback merge behavior,
-  sensitive-query stripping, template rejection, and serial final dedupe.
+- [x] Pactum text scanner worker-pool checkpoint: static Pactum
+  `setBaseUrl(...)` extraction now routes through the ordered bounded local
+  worker helper while preserving match-position ordering, fallback merge
+  behavior, sensitive-query stripping, template rejection, and serial final
+  dedupe. Verification: compile passed; Ruff passed; focused API-client worker
+  suite passed (`15 passed`); focused persisted Pactum/API artifact slice passed
+  (`2 passed`); cleanup left `remaining_pactum_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-pactum-pattern-worker-pool.md`. Safety:
+  passive local static Pactum config parsing only; no Pactum execution, script
+  execution, HTTP probing, provider call, live probing, credential use,
+  scope/ROE relaxation, validation/report-gate change, severity change,
+  proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: inspect GoReleaser YAML structured traversal
+  for a safe bounded worker-pool migration. Do not edit until traversal shape
+  and existing `goreleaser` tests are reviewed; if implemented, use
+  top-level worker helpers with serial recursion inside worker tasks.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -387,6 +387,69 @@ def test_api_client_fallback_line_and_xml_scans_use_bounded_workers_and_preserve
     ]
 
 
+def test_pactum_pattern_scans_use_bounded_worker_path_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = dedent(
+        """
+        const pactum = require('pactum');
+        pactum.request.setBaseUrl('pactum-one.acme.example/api');
+        module.exports = {
+          baseUrl: 'https://pactum-two.acme.example/v1?token=hidden&view=public',
+          endpoint: 'https://${tenant}.acme.example/template',
+        };
+        """
+    ).strip()
+    original_pattern = ArtifactQueueProcessor._api_client_pactum_pattern_candidate_entries
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+    observed_pattern_batches: list[list[int]] = []
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") in {
+            "_api_client_pactum_pattern_candidate_entries",
+            "_tracking_pattern_entries",
+        }:
+            observed_pattern_batches.append([int(item[0]) for item in materialized])
+        return original_batch(
+            self,
+            materialized,
+            worker,
+            default_factory=default_factory,
+        )
+
+    calls = 0
+
+    def _tracking_pattern_entries(
+        self: ArtifactQueueProcessor,
+        item: tuple[int, object, str],
+    ) -> list[tuple[int, str]]:
+        nonlocal calls
+        calls += 1
+        return original_pattern(self, item)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_api_client_pactum_pattern_candidate_entries",
+        _tracking_pattern_entries,
+    )
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="pactum.config.js",
+    )
+
+    assert observed_pattern_batches == [[0]]
+    assert calls == 1
+    assert result.splitlines() == [
+        "https://pactum-one.acme.example/api",
+        "https://pactum-two.acme.example/v1?view=public",
+    ]
+
+
 def test_selenium_side_navigation_children_use_bounded_workers_and_preserve_order(
     tmp_path: Path,
     monkeypatch,

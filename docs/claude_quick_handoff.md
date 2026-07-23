@@ -25,22 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: API-client fallback scanner worker-pool migration is
-implemented. Generic fallback line key/value extraction and XML-like
-attribute/text scans now use ordered bounded worker helpers, then merge by
-original text position before the existing serial URL normalization and dedupe
-stage. Candidate ordering, sensitive-query stripping, template rejection, and
-Gherkin/Tavern fallback behavior are preserved.
+Latest checkpoint: Pactum text scanner worker-pool migration is implemented.
+Static Pactum `setBaseUrl(...)` extraction now routes through the ordered
+bounded local worker helper while preserving match-position ordering, fallback
+merge behavior, sensitive-query stripping, template rejection, and serial final
+dedupe.
 
 Verification: compile/Ruff passed; focused API-client worker suite passed
-(`14 passed`); focused persisted Gherkin/API artifact slice passed (`2 passed`);
-cleanup left `remaining_api_client_fallback_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-api-client-fallback-worker-pool.md`.
+(`15 passed`); focused persisted Pactum/API artifact slice passed (`2 passed`);
+cleanup left `remaining_pactum_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-pactum-pattern-worker-pool.md`.
 
-Current next gate: move the Pactum API-client text scanner under the bounded
-worker-pool path. Keep this local to static Pactum config parsing and preserve
-`setBaseUrl(...)` extraction order, fallback merge behavior, sensitive-query
-stripping, template rejection, and serial final dedupe.
+Current next gate: inspect GoReleaser YAML structured traversal for a safe
+bounded worker-pool migration. Do not edit until traversal shape and existing
+`goreleaser` tests are reviewed; if implemented, use top-level worker helpers
+with serial recursion inside worker tasks.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
