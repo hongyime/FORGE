@@ -39,6 +39,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "FORGE_ENV": "test",
         "FORGE_ENGAGEMENT_KEY": "FORGE-TEST-ENGAGEMENT-KEY",
         "FORGE_OFFLINE_STRICT": "1",
+        "FORGE_SAFE_MODE": "1",
     }.items():
         monkeypatch.setenv(key, value)
     monkeypatch.delenv("FORGE_REDIS_URL", raising=False)
@@ -292,6 +293,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("nested-web@acme.test", "email"),
             ("search-owner@acme.test", "email"),
             ("sso-owner@acme.test", "email"),
+            ("manifest-owner@acme.test", "email"),
             ("oauth-owner@acme.test", "email"),
             ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
@@ -306,6 +308,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://logout.acme.test/saml/logout", "url"),
             ("https://artifact.acme.test/saml/artifact", "url"),
             ("https://www.acme.test/security/sso", "url"),
+            ("https://manifest.acme.test/app", "url"),
+            ("https://manifest.acme.test/app/", "url"),
+            ("https://manifest.acme.test/billing", "url"),
+            ("https://manifest.acme.test/share", "url"),
+            ("https://manifest.acme.test/icons/app.png", "url"),
             (openid_url, "url"),
             ("https://login.acme.test/oauth2/v1/authorize", "url"),
             ("https://login-api.acme.test/oauth2/v1/token", "url"),
@@ -326,6 +333,8 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("http://search.yahoo.com/mrss/", "url") not in seeds
         assert ("https://jsonfeed.org/version/1.1", "url") not in seeds
         assert ("https://login.acme.test/tenant/{id}/metadata.xml", "url") not in seeds
+        assert ("https://manifest.acme.test/tenant/{id}/launch", "url") not in seeds
+        assert ("https://manifest.acme.test/icons/app.png#ignored", "url") not in seeds
         assert ("https://login.acme.test/oauth/{tenant}/authorize", "url") not in seeds
         assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
@@ -350,6 +359,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert saml_artifact is not None
         assert saml_artifact["status"] == "parsed"
         assert json.loads(saml_artifact["metadata_json"])["format"] == "saml-metadata"
+        manifest_artifact = con.execute(
+            "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%site.webmanifest'"
+        ).fetchone()
+        assert manifest_artifact is not None
+        assert manifest_artifact["status"] == "parsed"
+        assert json.loads(manifest_artifact["metadata_json"])["format"] == "webmanifest"
         openid_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE source_url=?",
             (openid_url,),
@@ -388,6 +403,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("firebase", "dead-firebase-prod"),
             ("supabase", "acmebase"),
             ("supabase", "openidvault"),
+            ("supabase", "manifestvault"),
         } <= assets
         statuses = {
             (row["asset_type"], row["identifier"]): row["validation_status"]
@@ -395,6 +411,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         }
         assert statuses[("firebase", "web-firebase-prod")] == "VALIDATED"
         assert statuses[("firebase", "dead-firebase-prod")] == "UNVERIFIED"
+        assert statuses[("supabase", "manifestvault")] == "VALIDATED"
 
         findings = con.execute("SELECT title, target_url, parameter, evidence FROM vulnerability_findings").fetchall()
         titles = {row["title"] for row in findings}
@@ -419,10 +436,28 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     finding_nodes = [node for node in graph["nodes"] if node.get("source_table") == "vulnerability_findings"]
     assert finding_nodes
     assert all((node.get("metadata") or {}).get("validation_status") == "VALIDATED" for node in finding_nodes)
+    assert any(
+        node.get("source_table") == "cloud_assets"
+        and (node.get("metadata") or {}).get("identifier") == "manifestvault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "vulnerability_findings"
+        and (node.get("metadata") or {}).get("resource_id") == "manifestvault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
     finding_report = report_text.split("## 5. Vulnerability", 1)[1].split("## 6. Post-Exploitation", 1)[0]
     assert "Validated Firebase data exposure" in finding_report
     assert "Validated Supabase data exposure" in finding_report
+    assert "supabase://manifestvault" in finding_report
     assert "dead-firebase-prod" not in finding_report
+    assert any(
+        item.get("identifier") == "manifestvault"
+        and item.get("validation_status") == "VALIDATED"
+        for item in report_payload["context"]["cloud_validation_inventory"]
+    )
     exported_findings = report_payload["context"]["exploits"]["exploited"]
     assert exported_findings
     assert all(finding["validation_status"] == "VALIDATED" for finding in exported_findings)

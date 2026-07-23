@@ -20665,6 +20665,7 @@ class ArtifactQueueProcessor:
         if family == "direct":
             urls: list[str] = []
             seen_urls: set[str] = set()
+            strip_fragment = _artifact_format_label(source_file) in {"manifest.json", "webmanifest"}
             url_entries = self._run_ordered_local_batch(
                 [url_match.group(0) for url_match in _ARTIFACT_URL_RE.finditer(text)],
                 self._artifact_text_direct_url_candidate,
@@ -20674,6 +20675,11 @@ class ArtifactQueueProcessor:
                 parsed = urlparse(url)
                 if parsed.scheme not in {"http", "https"} or not parsed.netloc or url in seen_urls:
                     continue
+                if strip_fragment and parsed.fragment:
+                    url = parsed._replace(fragment="").geturl()
+                    parsed = urlparse(url)
+                    if url in seen_urls:
+                        continue
                 seen_urls.add(url)
                 urls.append(url)
             return urls

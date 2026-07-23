@@ -28,6 +28,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     )
     _write_opensearch(config.parent / "opensearch.xml")
     _write_saml_metadata(config.parent / "saml-metadata.xml")
+    _write_web_manifest(config.parent / "site.webmanifest")
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -183,6 +184,26 @@ def _write_feed(path: Path) -> None:
           </channel>
         </rss>
         """.strip(),
+        encoding="utf-8",
+    )
+
+
+def _write_web_manifest(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "name": "Acme Portal",
+                "start_url": "https://manifest.acme.test/app?token=hidden",
+                "scope": "https://manifest.acme.test/app/",
+                "shortcuts": [{"url": "https://manifest.acme.test/billing"}],
+                "share_target": {"action": "https://manifest.acme.test/share?sig=hidden"},
+                "icons": [{"src": "https://manifest.acme.test/icons/app.png#ignored"}],
+                "description": "Contact manifest-owner@acme.test",
+                "templated": "https://manifest.acme.test/tenant/{id}/launch",
+                "supabase": "https://manifestvault.supabase.co",
+            },
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
 

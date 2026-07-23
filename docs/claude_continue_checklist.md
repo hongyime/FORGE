@@ -1,6 +1,6 @@
 # Claude Continue Checklist
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## End Goal Quick Answer
 
@@ -65,6 +65,31 @@ Repo-status note: this checkout is now a Git repo on `main`; older completed
 checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
+
+- [x] Web App Manifest kill-chain E2E parity completed:
+  the compact full-closeout multi-seed E2E now includes a local
+  `site.webmanifest` artifact under the normal artifact intake root and proves
+  manifest owner email plus stripped `start_url`, `scope`, shortcut,
+  share-target, icon URL, and Supabase inventory pivots enter the recursive
+  engagement path before validation, graph generation, deterministic template
+  fallback reporting, audit logging, and cleanup. The E2E also asserts
+  templated manifest URLs and raw URL fragments do not become recursive
+  targets and runs with `FORGE_SAFE_MODE=1`. Direct URL extraction strips
+  fragments for Web App Manifest artifacts to keep local absolute URL behavior
+  aligned with source-gated manifest metadata parsing. Verification: focused
+  E2E first failed on the raw icon fragment, then passed (`1 passed` in
+  147.20s); focused Web Manifest metadata tests passed (`2 passed`);
+  compile/Ruff passed; cleanup removed 26 test-owned temp DB/report files and
+  left `remaining_test_owned_files=0`; persistent inventory remains `1`,
+  `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-web-manifest-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: add Asset Links / Apple
+  app-site-association compact E2E parity. Extend the compact multi-seed
+  mocked E2E with the smallest local `assetlinks.json` and/or
+  `apple-app-site-association` fixture proving mobile association metadata
+  reaches passive mobile inventory, recursive seed/cross-reference state,
+  validation inventory or terminal unsupported status, graph/report/audit
+  review, deterministic fallback output, and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

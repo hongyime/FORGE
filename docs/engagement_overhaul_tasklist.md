@@ -1,6 +1,6 @@
 # Engagement Overhaul Task List
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## End Goal Quick Answer
 
@@ -611,12 +611,39 @@ sentences as historical notes only, not as current instructions.
   Safety: test-only modularization; no production code, provider call, live
   probing, credential use, scope relaxation, validation-gate change,
   report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
-- [ ] Next implementation target: continue concrete kill-chain coverage. Add
-  the smallest mocked E2E or focused integration test that proves one missing
-  recursive discovery path from `T1`/`T2` advances from discovered passive
-  evidence into a secondary seed, validation inventory, graph/report review, or
-  cleanup. Prefer a gap that improves the real engagement pipeline over another
-  UI-only or automation-label cleanup.
+- [x] Web App Manifest kill-chain E2E parity checkpoint:
+  the compact full-closeout multi-seed E2E now includes a local
+  `site.webmanifest` artifact under the normal artifact intake root and proves
+  manifest owner email plus stripped `start_url`, `scope`, shortcut,
+  share-target, icon URL, and Supabase inventory pivots enter the recursive
+  engagement path before the same run completes non-destructive validation,
+  graph generation, deterministic template fallback reporting, audit logging,
+  and cleanup checks. The E2E also asserts templated manifest URLs and raw URL
+  fragments do not become recursive targets, and it runs with
+  `FORGE_SAFE_MODE=1`. Direct URL extraction now strips fragments for
+  Web App Manifest artifacts so local manifest absolute URLs match the
+  source-gated metadata parser contract. Verification: focused mocked E2E
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` first failed on
+  the raw icon fragment, then passed (`1 passed` in 147.20s); focused Web
+  Manifest metadata tests passed (`2 passed`); compile passed; Ruff passed;
+  cleanup removed 26 test-owned temp DB/report files and left
+  `remaining_test_owned_files=0`, with persistent DB inventory unchanged at
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-web-manifest-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E plus passive manifest URL normalization only; no
+  external target, provider call, live probing, credential use, scope
+  relaxation, validation-gate change, report-gate change, severity change,
+  proxy/IP rotation, or rate-limit bypass.
+- [ ] Next implementation target: add Asset Links / Apple
+  app-site-association compact E2E parity. Extend the compact multi-seed
+  mocked E2E with the smallest local `assetlinks.json` and/or
+  `apple-app-site-association` fixture that proves mobile association metadata
+  flows through normal artifact intake into passive mobile inventory, recursive
+  seed/cross-reference state, validation inventory or terminal unsupported
+  status, graph/report/audit review, deterministic fallback output, and cleanup.
+  Likely files: `tests/phase1/kill_chain_multiseed_fixture.py`,
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py`, and only minimal
+  production code if the E2E exposes a real gap.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -25,24 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: multi-seed kill-chain E2E fixture modularization is
-implemented. The full-closeout E2E kept its original pytest node and behavior,
-but local passive artifact fixture generation plus mocked remote OpenID/JWKS
-artifact download payloads moved into
-`tests/phase1/kill_chain_multiseed_fixture.py`. This drops
-`tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` from 621 to 444 lines
-while preserving recursive discovery, validation, graph generation,
-deterministic template fallback reporting, audit logging, and cleanup proof.
-Verification: focused kill-chain E2E passed (`1 passed` in 137.85s),
-compile/Ruff passed, and temp pytest DB cleanup remained clean. `SPEC.md` was
-not structurally edited for this checkpoint because this is test-only
-modularization.
+Latest checkpoint: Web App Manifest kill-chain E2E parity is implemented. The
+compact full-closeout multi-seed E2E now includes local `site.webmanifest`
+intake and proves manifest owner email plus stripped `start_url`, `scope`,
+shortcut, share-target, icon URL, and Supabase inventory pivots reach recursive
+discovery before validation, graph generation, deterministic template fallback
+reporting, audit logging, and cleanup. Direct URL extraction now strips
+fragments for Web App Manifest artifacts, the E2E asserts raw fragments and
+templated manifest URLs are not recursive targets, and it runs with
+`FORGE_SAFE_MODE=1`.
 
-Current next gate: continue concrete kill-chain coverage. Add the smallest
-mocked E2E or focused integration test that proves one missing recursive
-discovery path from `SPEC.md` `T1`/`T2` advances from discovered passive
-evidence into a secondary seed, validation inventory, graph/report review, or
-cleanup.
+Verification: focused E2E first failed on the raw icon fragment, then passed
+(`1 passed` in 147.20s); focused Web Manifest metadata tests passed (`2
+passed`); compile/Ruff passed; cleanup removed 26 test-owned temp DB/report
+files and left `remaining_test_owned_files=0`; persistent inventory remains
+`1`, `5010`, `master.db`. Handoff:
+`.claude/handoffs/2026-07-24-web-manifest-kill-chain-e2e-parity.md`.
+
+Current next gate: add Asset Links / Apple app-site-association compact E2E
+parity. Extend the compact multi-seed mocked E2E with the smallest local
+`assetlinks.json` and/or `apple-app-site-association` fixture proving mobile
+association metadata reaches passive mobile inventory, recursive
+seed/cross-reference state, validation inventory or terminal unsupported
+status, graph/report/audit review, deterministic fallback output, and cleanup.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
