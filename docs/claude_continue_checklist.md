@@ -66,6 +66,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] CodeBuild buildspec secret-ref worker checkpoint:
+  CodeBuild buildspec `parameter-store` and `secrets-manager` reference
+  extraction now routes independent static refs through the existing ordered
+  bounded worker pool while preserving parameter-store-before-secrets order and
+  deterministic dedupe. This does not execute CodeBuild or call AWS APIs.
+  Verification: compile passed; Ruff passed; focused CodeBuild worker regression
+  passed (`1 passed`); existing engagement-backed CodeBuild buildspec secret-ref
+  slice passed (`1 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-codebuild-secret-ref-workers.md`.
+  Next gate: continue auditing remaining passive artifact parsers for proven
+  worker-pool or coverage gaps before editing.
 - [x] SOPS metadata worker checkpoint:
   SOPS metadata extraction now routes independent AWS KMS, GCP KMS, Azure Key
   Vault, and HashiCorp Vault metadata entries through the existing ordered

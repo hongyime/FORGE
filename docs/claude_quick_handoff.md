@@ -25,16 +25,16 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: SOPS metadata worker migration is complete. SOPS metadata
-extraction now routes independent AWS KMS, GCP KMS, Azure Key Vault, and
-HashiCorp Vault metadata entries through the existing ordered bounded worker
-pool while preserving section order, duplicate filtering, and passive-only
-behavior. It does not decrypt SOPS data or use key material.
+Latest checkpoint: CodeBuild buildspec secret-ref worker migration is complete.
+CodeBuild buildspec `parameter-store` and `secrets-manager` reference extraction
+now routes independent static refs through the existing ordered bounded worker
+pool while preserving parameter-store-before-secrets order and deterministic
+dedupe. It does not execute CodeBuild or call AWS APIs.
 
-Verification: compile/Ruff passed; focused SOPS worker regression passed
-(`1 passed`); engagement-backed container/orchestration artifact slice covering
-SOPS metadata persistence passed (`1 passed`). Handoff:
-`.claude/handoffs/2026-07-24-sops-metadata-workers.md`.
+Verification: compile/Ruff passed; focused CodeBuild worker regression passed
+(`1 passed`); existing engagement-backed CodeBuild buildspec secret-ref slice
+passed (`1 passed`). Handoff:
+`.claude/handoffs/2026-07-24-codebuild-secret-ref-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and

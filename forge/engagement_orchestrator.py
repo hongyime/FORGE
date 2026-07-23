@@ -25297,6 +25297,20 @@ class ArtifactQueueProcessor:
         if not env_mapping:
             return []
 
+        secret_jobs: list[tuple[str, Any]] = []
+        parameter_store = self._yaml_child_mapping(env_mapping, "parameter-store", "parameter_store", "parameterstore")
+        for parameter_ref in parameter_store.values() if parameter_store else ():
+            secret_jobs.append(("parameter_store", parameter_ref))
+
+        secrets_manager = self._yaml_child_mapping(env_mapping, "secrets-manager", "secrets_manager", "secretsmanager")
+        for secret_ref in secrets_manager.values() if secrets_manager else ():
+            secret_jobs.append(("secrets_manager", secret_ref))
+
+        candidate_entries = self._run_ordered_local_batch(
+            secret_jobs,
+            self._yaml_codebuild_secret_job_candidate,
+            default_factory=str,
+        )
         candidates: list[str] = []
         seen: set[str] = set()
 
@@ -25310,19 +25324,19 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        parameter_store = self._yaml_child_mapping(env_mapping, "parameter-store", "parameter_store", "parameterstore")
-        for parameter_ref in parameter_store.values() if parameter_store else ():
-            parameter_segment = self._yaml_external_secret_ref_segment(parameter_ref)
-            if parameter_segment:
-                _append(f"aws-parameterstore://{parameter_segment}")
-
-        secrets_manager = self._yaml_child_mapping(env_mapping, "secrets-manager", "secrets_manager", "secretsmanager")
-        for secret_ref in secrets_manager.values() if secrets_manager else ():
-            secret_segment = self._yaml_codebuild_secret_ref_segment(secret_ref)
-            if secret_segment:
-                _append(f"aws-secretsmanager://{secret_segment}")
-
+        for candidate in candidate_entries:
+            _append(candidate)
         return candidates
+
+    def _yaml_codebuild_secret_job_candidate(self, secret_job: tuple[str, Any]) -> str:
+        family, raw_ref = secret_job
+        if family == "parameter_store":
+            parameter_segment = self._yaml_external_secret_ref_segment(raw_ref)
+            return f"aws-parameterstore://{parameter_segment}" if parameter_segment else ""
+        if family == "secrets_manager":
+            secret_segment = self._yaml_codebuild_secret_ref_segment(raw_ref)
+            return f"aws-secretsmanager://{secret_segment}" if secret_segment else ""
+        return ""
 
     def _yaml_mapping_looks_like_codebuild_buildspec(
         self,
