@@ -25,19 +25,17 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: API-client generic document traversal worker-pool migration
-is implemented. Generic Postman/Insomnia/Hoppscotch/Thunder-style API-client
-document traversal now dispatches the current mapping/list child layer through
-ordered bounded worker helpers while nested recursion and final URL
-normalization/dedupe remain serial. URL-object candidates, direct URL fields,
-variable mappings, sensitive-query stripping, and source-gated API-client
-behavior are preserved.
+Latest checkpoint: Observability structured walk worker-pool migration is
+implemented. Prometheus, Alertmanager, Grafana, Loki, Tempo, and OpenTelemetry
+static config traversal now dispatches the current mapping/list child layer
+through ordered bounded worker helpers while nested recursion, inherited
+`http`/`https` scheme propagation, endpoint normalization, duplicate
+suppression, and final source-gated output order remain serial.
 
-Verification: compile/Ruff passed; focused API-client document worker test
-passed (`2 passed`); existing API-client worker suite and persisted
-API-spec/client artifact slice passed (`16 passed`); cleanup left
-`remaining_api_client_document_runtime_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-api-client-document-worker-pool.md`.
+Verification: compile/Ruff passed; focused observability worker test passed
+(`2 passed`); focused persisted observability artifact slice passed (`1 passed`);
+cleanup left `remaining_observability_runtime_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-observability-worker-pool.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -46,14 +44,13 @@ and persisted recon-output artifact slice both passed.
 
 Current next gate: re-audit remaining static parser/enricher candidates and
 select the next proven-safe bounded worker-pool migration before editing.
-Observability structured walk, orchestration structured walk, and
-security-scanner JSON structured walk are the currently ranked candidates.
-Preserve deterministic ordering, compact tests, scope gates, provider caps,
-pacing/backoff, and passive-only behavior.
+Orchestration structured walk and security-scanner JSON structured walk are the
+currently ranked candidates. Preserve deterministic ordering, compact tests,
+scope gates, provider caps, pacing/backoff, and passive-only behavior.
 
-Natural stop note: repo was clean after push `20728be`. API-client generic
-document traversal was then selected by read-only subagent audit as the top
-missing worker-pool target and implemented in the current checkpoint.
+Natural stop note: repo was clean after push `5aeaa25`. Observability
+structured walk was then selected from the read-only subagent audit and
+implemented in the current checkpoint.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -352,12 +352,22 @@ historical notes only, not as current instructions.
   suite plus persisted API-spec/client artifact slice -> `16 passed`; cleanup
   left `remaining_api_client_document_runtime_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-api-client-document-worker-pool.md`.
+- [x] Observability structured walk worker-pool checkpoint completed:
+  Prometheus, Alertmanager, Grafana, Loki, Tempo, and OpenTelemetry static
+  config traversal now dispatches the current mapping/list child layer through
+  ordered bounded worker helpers while nested recursion, inherited
+  `http`/`https` scheme propagation, endpoint normalization, duplicate
+  suppression, and final source-gated output order remain serial.
+  Verification: compile/Ruff passed; focused observability worker test ->
+  `2 passed`; focused persisted observability artifact slice -> `1 passed`;
+  cleanup left `remaining_observability_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-observability-worker-pool.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Observability structured walk, orchestration structured walk,
-  and security-scanner JSON structured walk are the currently ranked candidates.
-  Preserve deterministic ordering, compact tests, scope gates, provider caps,
-  pacing/backoff, and passive-only behavior.
+  before editing. Orchestration structured walk and security-scanner JSON
+  structured walk are the currently ranked candidates. Preserve deterministic
+  ordering, compact tests, scope gates, provider caps, pacing/backoff, and
+  passive-only behavior.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

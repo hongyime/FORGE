@@ -23216,50 +23216,110 @@ class ArtifactQueueProcessor:
 
     def _observability_structured_document_candidates(self, document: Any, label: str) -> list[str]:
         del label
+        candidate_values = self._observability_structured_node_candidates(
+            document,
+            inherited_scheme="http",
+            use_workers=True,
+        )
         candidates: list[str] = []
         seen: set[str] = set()
-
-        def _append(value: str) -> None:
+        for value in candidate_values:
             candidate = str(value or "").strip()
             lowered = candidate.lower()
             if not candidate or lowered in seen:
-                return
+                continue
             seen.add(lowered)
             candidates.append(candidate)
-
-        def _walk(value: Any, inherited_scheme: str = "http") -> None:
-            if isinstance(value, dict):
-                normalized = self._yaml_normalized_mapping(value)
-                scheme = self._observability_scheme_candidate(
-                    self._yaml_ref_value(normalized, "scheme")
-                ) or inherited_scheme
-                endpoint_jobs: list[tuple[Any, str]] = []
-                for raw_key, raw_endpoint_values in value.items():
-                    if (
-                        self._yaml_key_fingerprint(str(raw_key or ""))
-                        not in _OBSERVABILITY_ENDPOINT_FIELD_FINGERPRINTS
-                    ):
-                        continue
-                    endpoint_jobs.extend(
-                        self._observability_endpoint_jobs(raw_endpoint_values, scheme)
-                    )
-                if endpoint_jobs:
-                    target_candidates = self._run_ordered_local_batch(
-                        endpoint_jobs,
-                        self._observability_target_url_candidate,
-                        default_factory=str,
-                    )
-                    for target_candidate in target_candidates:
-                        _append(target_candidate)
-                for child in value.values():
-                    _walk(child, scheme)
-                return
-            if isinstance(value, list):
-                for child in value[:4096]:
-                    _walk(child, inherited_scheme)
-
-        _walk(document)
         return candidates
+
+    def _observability_structured_node_candidates(
+        self,
+        value: Any,
+        *,
+        inherited_scheme: str,
+        use_workers: bool,
+    ) -> list[str]:
+        candidates: list[str] = []
+        if isinstance(value, dict):
+            normalized = self._yaml_normalized_mapping(value)
+            scheme = self._observability_scheme_candidate(
+                self._yaml_ref_value(normalized, "scheme")
+            ) or inherited_scheme
+            endpoint_jobs: list[tuple[Any, str]] = []
+            for raw_key, raw_endpoint_values in value.items():
+                if (
+                    self._yaml_key_fingerprint(str(raw_key or ""))
+                    not in _OBSERVABILITY_ENDPOINT_FIELD_FINGERPRINTS
+                ):
+                    continue
+                endpoint_jobs.extend(
+                    self._observability_endpoint_jobs(raw_endpoint_values, scheme)
+                )
+            if endpoint_jobs:
+                target_candidates = self._run_ordered_local_batch(
+                    endpoint_jobs,
+                    self._observability_target_url_candidate,
+                    default_factory=str,
+                )
+                candidates.extend(target_candidates)
+            child_jobs = [
+                (child_index, child, scheme)
+                for child_index, child in enumerate(value.values())
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._observability_child_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._observability_structured_node_candidates(
+                        child,
+                        inherited_scheme=scheme,
+                        use_workers=False,
+                    )
+                    for _child_index, child, scheme in child_jobs
+                ]
+            )
+            for child_values in child_batches:
+                candidates.extend(child_values)
+            return candidates
+        if isinstance(value, list):
+            item_jobs = [
+                (item_index, item, inherited_scheme)
+                for item_index, item in enumerate(value[:4096])
+            ]
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._observability_child_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._observability_structured_node_candidates(
+                        item,
+                        inherited_scheme=inherited_scheme,
+                        use_workers=False,
+                    )
+                    for _item_index, item, inherited_scheme in item_jobs
+                ]
+            )
+            for item_values in item_batches:
+                candidates.extend(item_values)
+        return candidates
+
+    def _observability_child_candidate_values(
+        self,
+        child_job: tuple[int, Any, str],
+    ) -> list[str]:
+        _child_index, child, inherited_scheme = child_job
+        return self._observability_structured_node_candidates(
+            child,
+            inherited_scheme=inherited_scheme,
+            use_workers=False,
+        )
 
     def _observability_endpoint_jobs(self, value: Any, scheme: str) -> list[tuple[Any, str]]:
         jobs: list[tuple[Any, str]] = []
