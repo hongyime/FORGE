@@ -55,6 +55,34 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         """.strip(),
         encoding="utf-8",
     )
+    saml_metadata = config.parent / "saml-metadata.xml"
+    saml_metadata.write_text(
+        """
+        <md:EntityDescriptor
+            xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+            entityID="https://idp.acme.test/saml/metadata?tenant=hidden">
+          <md:IDPSSODescriptor>
+            <md:SingleSignOnService
+                Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                Location="https://login.acme.test/sso/login?SAMLRequest=secret&amp;client=acme" />
+            <md:SingleLogoutService
+                Location="//logout.acme.test/saml/logout#ignored" />
+            <md:ArtifactResolutionService
+                Location="https://artifact.acme.test/saml/artifact?token=secret" />
+          </md:IDPSSODescriptor>
+          <md:Organization>
+            <md:OrganizationURL xml:lang="en">
+              https://www.acme.test/security/sso?api_key=hidden
+            </md:OrganizationURL>
+          </md:Organization>
+          <md:ContactPerson>
+            <md:EmailAddress>sso-owner@acme.test</md:EmailAddress>
+          </md:ContactPerson>
+          <md:AdditionalMetadataLocation Location="/tenant/{id}/metadata.xml" />
+        </md:EntityDescriptor>
+        """.strip(),
+        encoding="utf-8",
+    )
     feed = config.parent / "feed.xml"
     feed.write_text(
         """
@@ -356,6 +384,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("web-id@acme.test", "email"),
             ("nested-web@acme.test", "email"),
             ("search-owner@acme.test", "email"),
+            ("sso-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
             ("json-feed-owner@acme.test", "email"),
             ("app.acme.test", "subdomain"),
@@ -363,6 +392,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://app.acme.test/config", "url"),
             ("https://search.acme.test/query", "url"),
             ("https://search.acme.test/advanced", "url"),
+            ("https://idp.acme.test/saml/metadata", "url"),
+            ("https://login.acme.test/sso/login", "url"),
+            ("https://logout.acme.test/saml/logout", "url"),
+            ("https://artifact.acme.test/saml/artifact", "url"),
+            ("https://www.acme.test/security/sso", "url"),
             ("https://news.acme.test/blog", "url"),
             ("https://news.acme.test/posts/launch", "url"),
             ("https://media.acme.test/demo.mp4", "url"),
@@ -374,6 +408,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("http://www.w3.org/2005/Atom", "url") not in seeds
         assert ("http://search.yahoo.com/mrss/", "url") not in seeds
         assert ("https://jsonfeed.org/version/1.1", "url") not in seeds
+        assert ("https://login.acme.test/tenant/{id}/metadata.xml", "url") not in seeds
         for table, columns in {
             "engagement_seeds": "seed_type, seed_value",
             "cloud_assets": "asset_type, identifier",
@@ -390,6 +425,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert opensearch_artifact is not None
         assert opensearch_artifact["status"] == "parsed"
         assert json.loads(opensearch_artifact["metadata_json"])["format"] == "opensearch-description"
+        saml_artifact = con.execute(
+            "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%saml-metadata.xml'"
+        ).fetchone()
+        assert saml_artifact is not None
+        assert saml_artifact["status"] == "parsed"
+        assert json.loads(saml_artifact["metadata_json"])["format"] == "saml-metadata"
         feed_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%feed.xml'"
         ).fetchone()
