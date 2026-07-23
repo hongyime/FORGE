@@ -27474,6 +27474,19 @@ class ArtifactQueueProcessor:
         *,
         base_url: str,
     ) -> list[str]:
+        return self._api_client_selenium_side_navigation_values_for_node(
+            value,
+            base_url=base_url,
+            use_workers=True,
+        )
+
+    def _api_client_selenium_side_navigation_values_for_node(
+        self,
+        value: Any,
+        *,
+        base_url: str,
+        use_workers: bool,
+    ) -> list[str]:
         values: list[str] = []
         if isinstance(value, dict):
             normalized = self._yaml_normalized_mapping(value)
@@ -27486,23 +27499,64 @@ class ArtifactQueueProcessor:
                     )
                     if candidate:
                         values.append(candidate)
-            for child in value.values():
-                values.extend(
-                    self._api_client_selenium_side_navigation_values(
+            child_jobs = [
+                (child_index, child, base_url)
+                for child_index, child in enumerate(value.values())
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._api_client_selenium_side_navigation_child_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._api_client_selenium_side_navigation_values_for_node(
                         child,
                         base_url=base_url,
+                        use_workers=False,
                     )
-                )
+                    for _child_index, child, base_url in child_jobs
+                ]
+            )
+            for child_values in child_batches:
+                values.extend(child_values)
             return values
         if isinstance(value, list):
-            for item in value[:512]:
-                values.extend(
-                    self._api_client_selenium_side_navigation_values(
+            item_jobs = [
+                (item_index, item, base_url)
+                for item_index, item in enumerate(value[:512])
+            ]
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._api_client_selenium_side_navigation_child_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._api_client_selenium_side_navigation_values_for_node(
                         item,
                         base_url=base_url,
+                        use_workers=False,
                     )
-                )
+                    for _item_index, item, base_url in item_jobs
+                ]
+            )
+            for item_values in item_batches:
+                values.extend(item_values)
         return values
+
+    def _api_client_selenium_side_navigation_child_values(
+        self,
+        child_job: tuple[int, Any, str],
+    ) -> list[str]:
+        _child_index, child, base_url = child_job
+        return self._api_client_selenium_side_navigation_values_for_node(
+            child,
+            base_url=base_url,
+            use_workers=False,
+        )
 
     @staticmethod
     def _api_client_selenium_side_navigation_target(value: Any, *, base_url: str) -> str:

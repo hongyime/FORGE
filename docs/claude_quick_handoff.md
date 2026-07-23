@@ -25,21 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: SAZ raw-session classification worker-pool migration is
-implemented. Fiddler `.saz` raw-session member classification now uses the
-ordered bounded local worker helper while `ZipFile.read()` remains serial to
-avoid shared archive-handle thread-safety risk.
+Latest checkpoint: Selenium SIDE navigation worker-pool migration is
+implemented. Selenium `.side` static API-client navigation child traversal now
+uses the ordered bounded local worker helper for the current child layer while
+worker tasks recurse serially to avoid nested worker-pool oversubscription.
+Navigation order, base URL resolution, sensitive-query stripping, template
+rejection, and serial final dedupe are preserved.
 
-Verification: compile/Ruff passed; focused SAZ worker plus existing SAZ
-functionality tests passed (`3 passed`); cleanup left
-`remaining_saz_test_db_files=0`; persistent inventory remains `1`, `5010`,
-`master.db`. Handoff:
-`.claude/handoffs/2026-07-24-saz-session-worker-pool.md`.
+Verification: compile/Ruff passed; focused API-client worker plus existing
+Selenium SIDE functionality tests passed (`9 passed`); cleanup left
+`remaining_selenium_side_test_db_files=0`; persistent inventory remains `1`,
+`5010`, `master.db`. Handoff:
+`.claude/handoffs/2026-07-24-selenium-side-worker-pool.md`.
 
-Current next gate: move Selenium SIDE navigation child traversal under the
+Current next gate: move JMeter `HTTPSamplerProxy` block parsing under the
 bounded worker-pool path. Keep this local to static API-client artifact parsing
-and preserve navigation order, base URL resolution, sensitive-query stripping,
-and serial final dedupe.
+and preserve sampler order, protocol/host/path/port reconstruction,
+sensitive-query stripping, and serial final dedupe.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

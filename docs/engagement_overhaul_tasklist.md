@@ -819,12 +819,26 @@ sentences as historical notes only, not as current instructions.
   credential use, scope/ROE relaxation, validation/report-gate change, severity
   change, proxy/IP rotation, rate-limit bypass, shared archive-handle threaded
   reads, or destructive behavior.
-- [ ] Next implementation target: move Selenium SIDE navigation child traversal
+- [x] Selenium SIDE navigation worker-pool checkpoint: Selenium `.side` static
+  API-client navigation child traversal now uses the ordered bounded local
+  worker helper for the current child layer while worker tasks recurse
+  serially to avoid nested worker-pool oversubscription. Navigation order, base
+  URL resolution, sensitive-query stripping, template rejection, and serial
+  final dedupe are preserved. Verification: compile passed; Ruff passed;
+  focused API-client worker plus existing Selenium SIDE functionality tests
+  passed (`9 passed`); cleanup left `remaining_selenium_side_test_db_files=0`,
+  with persistent DB inventory unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-selenium-side-worker-pool.md`. Safety: passive
+  local static `.side` parsing only; no browser replay, Selenium execution,
+  provider call, live probing, credential use, scope/ROE relaxation,
+  validation/report-gate change, severity change, proxy/IP rotation,
+  rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: move JMeter `HTTPSamplerProxy` block parsing
   under the bounded worker-pool path. Keep this local to static API-client
-  artifact parsing and preserve navigation order, base URL resolution,
-  sensitive-query stripping, and serial final dedupe. Likely files:
-  `forge/engagement_orchestrator.py`, a small focused worker test under
-  `tests/phase1/`, docs, and handoff.
+  artifact parsing and preserve sampler order, protocol/host/path/port
+  reconstruction, sensitive-query stripping, and serial final dedupe. Likely
+  files: `forge/engagement_orchestrator.py`,
+  `tests/phase1/test_artifact_api_client_workers.py`, docs, and handoff.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

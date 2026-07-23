@@ -210,10 +210,20 @@ historical notes only, not as current instructions.
   cleanup left `remaining_saz_test_db_files=0`; persistent inventory remains
   `1`, `5010`, `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-saz-session-worker-pool.md`.
-- [ ] Next implementation target: move Selenium SIDE navigation child traversal
+- [x] Selenium SIDE navigation worker-pool checkpoint completed: Selenium
+  `.side` static API-client navigation child traversal now uses the ordered
+  bounded local worker helper for the current child layer while worker tasks
+  recurse serially to avoid nested worker-pool oversubscription. Navigation
+  order, base URL resolution, sensitive-query stripping, template rejection,
+  and serial final dedupe are preserved. Verification: compile/Ruff passed;
+  focused API-client worker plus existing Selenium SIDE functionality tests ->
+  `9 passed`; cleanup left `remaining_selenium_side_test_db_files=0`;
+  persistent inventory remains `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-selenium-side-worker-pool.md`.
+- [ ] Next implementation target: move JMeter `HTTPSamplerProxy` block parsing
   under the bounded worker-pool path. Keep this local to static API-client
-  artifact parsing and preserve navigation order, base URL resolution,
-  sensitive-query stripping, and serial final dedupe.
+  artifact parsing and preserve sampler order, protocol/host/path/port
+  reconstruction, sensitive-query stripping, and serial final dedupe.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
