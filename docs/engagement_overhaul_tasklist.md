@@ -91,6 +91,18 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] CircleCI workflow/container family worker checkpoint:
+  CircleCI structured metadata extraction now routes workflow-name and container
+  image families through `_yaml_ci_resource_family_candidates()` on the existing
+  ordered bounded worker pool before deterministic dedupe. Workflow identifiers
+  still precede container-image pivots. This does not run CircleCI, fetch orbs,
+  contact CI providers, pull images, or change validation/reporting gates.
+  Verification: compile passed; Ruff passed; compact CI worker file plus general
+  CI metadata ingestion fixture passed (`7 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-circleci-resource-family-workers.md`.
+  Next gate: fresh audit for remaining passive/static parser or enricher
+  hotspots. Skip code changes when the remaining loops are cheap, already
+  covered by an outer worker batch, or require shared mutable callbacks.
 - [x] CI resource top-level fan-out worker checkpoint:
   Azure Pipelines, Bitbucket Pipelines, and GitLab CI structured metadata
   extraction now routes independent repository/include and container/service
@@ -104,9 +116,9 @@ sentences as historical notes only, not as current instructions.
   extraction fixtures passed (`6 passed`); compact CI worker file plus general
   CI metadata ingestion fixture passed (`7 passed`). Handoff:
   `.claude/handoffs/2026-07-24-ci-resource-family-workers.md`.
-  Next gate: CircleCI workflow/container fan-out audit; only patch if the
-  workflow-name/container-image split is worth moving under the same bounded
-  family dispatcher without adding provider or CI execution behavior.
+  Later code checkpoint moved CircleCI workflow/container fan-out under the same
+  worker dispatcher; continue with a fresh audit for remaining passive/static
+  parser or enricher hotspots.
 - [x] Framework config DB/service worker audit checkpoint:
   No production code change needed. Framework config DB host and service
   endpoint extraction already routes both independent candidate lists through

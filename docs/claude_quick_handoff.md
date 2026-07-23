@@ -25,28 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: CI resource top-level fan-out worker migration is complete.
-Azure Pipelines, Bitbucket Pipelines, and GitLab CI structured metadata
-extraction now routes independent repository/include and container/service
-resource families through `_yaml_ci_resource_family_candidates()` on the
+Latest checkpoint: CircleCI workflow/container family worker migration is
+complete. CircleCI structured metadata extraction now routes workflow-name and
+container-image families through `_yaml_ci_resource_family_candidates()` on the
 existing ordered bounded worker pool before deterministic dedupe. It does not
-execute CI jobs, fetch includes, contact CI providers, pull images, or change
+run CircleCI, fetch orbs, contact CI providers, pull images, or change
 validation and reporting gates.
 
-Verification: compile/Ruff passed; focused CI repository/container/resource
-tests plus Azure/Bitbucket/GitLab resource extraction fixtures passed
-(`6 passed`); compact CI worker file plus general CI metadata ingestion fixture
-passed (`7 passed`). Handoff:
-`.claude/handoffs/2026-07-24-ci-resource-family-workers.md`.
+Verification: compile/Ruff passed; compact CI worker file plus general CI
+metadata ingestion fixture passed (`7 passed`). Handoff:
+`.claude/handoffs/2026-07-24-circleci-resource-family-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: CircleCI workflow/container fan-out audit. Only patch if the
-workflow-name/container-image split is worth moving under the same bounded
-family dispatcher without adding provider or CI execution behavior. Preserve
+Current next gate: fresh audit for remaining passive/static parser or enricher
+hotspots. Skip code changes when the remaining loops are cheap, already covered
+by an outer worker batch, or require shared mutable callbacks. Preserve
 deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 

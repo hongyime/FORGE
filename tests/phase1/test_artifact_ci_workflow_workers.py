@@ -210,6 +210,11 @@ def test_ci_structured_resource_families_use_ordered_worker_path_and_preserve_or
 
     monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
 
+    circleci = {
+        "version": "2.1",
+        "workflows": {"deploy": {"jobs": ["deploy"]}},
+        "jobs": {"deploy": {"docker": [{"image": "ghcr.io/acme/circle-deploy:1"}]}},
+    }
     azure = {
         "resources": {
             "repositories": [{"type": "github", "name": "acme/azure-templates"}],
@@ -229,6 +234,14 @@ def test_ci_structured_resource_families_use_ordered_worker_path_and_preserve_or
         "default": {"services": [{"name": "registry.gitlab.com/acme/postgres:14"}]},
     }
 
+    assert processor._yaml_circleci_config_structured_candidates(
+        circleci,
+        processor._yaml_normalized_mapping(circleci),
+        (),
+    ) == [
+        "circleci-pipeline://deploy",
+        "https://ghcr.io/acme/circle-deploy",
+    ]
     assert processor._yaml_azure_pipelines_structured_candidates(
         azure,
         processor._yaml_normalized_mapping(azure),
@@ -256,6 +269,7 @@ def test_ci_structured_resource_families_use_ordered_worker_path_and_preserve_or
         "https://registry.gitlab.com/acme/postgres",
     ]
     assert observed_family_batches == [
+        [("circleci", "workflows"), ("circleci", "containers")],
         [("azure_pipelines", "repositories"), ("azure_pipelines", "containers")],
         [("bitbucket_pipelines", "repositories"), ("bitbucket_pipelines", "containers")],
         [("gitlab_ci", "includes"), ("gitlab_ci", "services")],

@@ -25490,10 +25490,17 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        for workflow_name in self._yaml_circleci_workflow_names(mapping):
-            _append(f"circleci-pipeline://{workflow_name}")
-        for image_candidate in self._yaml_circleci_container_candidates(mapping):
-            _append(image_candidate)
+        resource_batches = self._run_ordered_local_batch(
+            (
+                ("circleci", "workflows", mapping),
+                ("circleci", "containers", mapping),
+            ),
+            self._yaml_ci_resource_family_candidates,
+            default_factory=list,
+        )
+        for resource_values in resource_batches:
+            for resource_candidate in resource_values:
+                _append(resource_candidate)
         return candidates
 
     def _yaml_mapping_looks_like_circleci_config(
@@ -25839,6 +25846,14 @@ class ArtifactQueueProcessor:
         family_job: tuple[str, str, dict[str, Any]],
     ) -> list[str]:
         platform, family, mapping = family_job
+        if platform == "circleci":
+            if family == "workflows":
+                return [
+                    f"circleci-pipeline://{workflow_name}"
+                    for workflow_name in self._yaml_circleci_workflow_names(mapping)
+                ]
+            if family == "containers":
+                return self._yaml_circleci_container_candidates(mapping)
         if platform == "azure_pipelines":
             if family == "repositories":
                 return self._yaml_azure_pipelines_repository_candidates(mapping)
