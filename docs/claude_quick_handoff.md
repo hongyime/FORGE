@@ -25,18 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: OpenSearch Description passive recursion is implemented.
-Source-gated OpenSearch XML artifacts now keep `opensearch-description` labels
-and statically promote concrete URL pivots from `<Url template=...>`,
-`moz:SearchForm`, and image links into recursive URL seeds through
-`forge.utils.artifact_opensearch_metadata` and the existing artifact URL-seed
-path. Search-template query values such as `{searchTerms}` are stripped instead
-of persisted, templated hosts/paths are excluded, and relative URLs resolve
-only from HTTP(S) source artifacts. Focused TDD first failed on the missing
-parser module, then passed with adjacent OpenSearch/SAML/OAuth/JWKS/Web
-Manifest/remote-static classification slices, compile/Ruff, and temp pytest DB
-cleanup. `SPEC.md` was not structurally edited for this checkpoint because `T2`
-remains ongoing and root `FORMAT.md` is absent.
+Latest checkpoint: OpenSearch Description passive recursion plus kill-chain E2E
+parity is implemented. Source-gated OpenSearch XML artifacts now keep
+`opensearch-description` labels and statically promote concrete URL pivots from
+`<Url template=...>`, `moz:SearchForm`, and image links into recursive URL
+seeds through `forge.utils.artifact_opensearch_metadata` and the existing
+artifact URL-seed path. Search-template query values such as `{searchTerms}` are
+stripped instead of persisted, templated hosts/paths are excluded, and relative
+URLs resolve only from HTTP(S) source artifacts. Focused TDD first failed on the
+missing parser module, then passed with adjacent
+OpenSearch/SAML/OAuth/JWKS/Web Manifest/remote-static classification slices,
+compile/Ruff, and temp pytest DB cleanup. The focused multi-seed recursive
+kill-chain E2E now includes a local OpenSearch artifact and proves its owner
+email plus stripped URL pivots enter recursive seeds before graph generation,
+template fallback reporting, audit logging, and cleanup. `SPEC.md` was not
+structurally edited for this checkpoint because `T2` remains ongoing and root
+`FORMAT.md` is absent.
 
 Current next gate: continue concrete kill-chain coverage. Add the smallest
 mocked E2E or focused integration test that proves one missing recursive

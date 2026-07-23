@@ -41,6 +41,20 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         """.strip(),
         encoding="utf-8",
     )
+    opensearch = config.parent / "opensearch.xml"
+    opensearch.write_text(
+        """
+        <OpenSearchDescription
+            xmlns="http://a9.com/-/spec/opensearch/1.1/"
+            xmlns:moz="http://www.mozilla.org/2006/browser/search/">
+          <Url type="text/html"
+               template="https://search.acme.test/query?q={searchTerms}&amp;token=hidden&amp;view=public" />
+          <moz:SearchForm>https://search.acme.test/advanced</moz:SearchForm>
+          <Developer>search-owner@acme.test</Developer>
+        </OpenSearchDescription>
+        """.strip(),
+        encoding="utf-8",
+    )
     monkeypatch.chdir(tmp_path)
     for key, value in {
         "FORGE_DATA_DIR": str(data_dir),
@@ -294,9 +308,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("artifact-owner@acme.test", "email"),
             ("web-id@acme.test", "email"),
             ("nested-web@acme.test", "email"),
+            ("search-owner@acme.test", "email"),
             ("app.acme.test", "subdomain"),
             ("static.acme.test", "subdomain"),
             ("https://app.acme.test/config", "url"),
+            ("https://search.acme.test/query", "url"),
+            ("https://search.acme.test/advanced", "url"),
         } <= seeds
         for table, columns in {
             "engagement_seeds": "seed_type, seed_value",
@@ -308,6 +325,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         artifact = con.execute("SELECT status FROM artifact_queue WHERE local_path LIKE '%client-config.js'").fetchone()
         assert artifact is not None
         assert artifact["status"] == "parsed"
+        opensearch_artifact = con.execute(
+            "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%opensearch.xml'"
+        ).fetchone()
+        assert opensearch_artifact is not None
+        assert opensearch_artifact["status"] == "parsed"
+        assert json.loads(opensearch_artifact["metadata_json"])["format"] == "opensearch-description"
 
         assets = {(row["asset_type"], row["identifier"]) for row in con.execute("SELECT asset_type, identifier FROM cloud_assets")}
         assert {

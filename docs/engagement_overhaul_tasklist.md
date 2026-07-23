@@ -455,6 +455,21 @@ sentences as historical notes only, not as current instructions.
   execution, provider call, live probing, credential use, scope relaxation,
   validation-gate change, report-gate change, severity change, proxy/IP
   rotation, or rate-limit bypass.
+- [x] OpenSearch kill-chain E2E parity checkpoint:
+  the focused multi-seed recursive kill-chain fixture now includes a local
+  OpenSearch Description artifact under the normal artifact intake root and
+  proves its owner email plus stripped search/reporting URLs become recursive
+  engagement seeds before the same run completes validation, graph generation,
+  deterministic template fallback reporting, audit logging, and cleanup checks.
+  Verification: focused mocked E2E
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` passed (`1
+  passed` in 47.54s); compile passed; Ruff passed; cleanup left
+  `temp_pytest_engagement_dbs=0`, with persistent DB inventory unchanged at
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-opensearch-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E only; no external target, provider call, live
+  probing, credential use, scope relaxation, validation-gate change,
+  report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
 - [ ] Next implementation target: continue concrete kill-chain coverage. Add
   the smallest mocked E2E or focused integration test that proves one missing
   recursive discovery path from `T1`/`T2` advances from discovered passive
