@@ -41,7 +41,7 @@ from textwrap import TextWrapper
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
 import questionary
@@ -2454,7 +2454,7 @@ class ReportSynthesizer:
             title=f"FORGE Engagement Report {ctx.engagement_id}",
             text=markdown_text,
         )
-        self._write_raw_export_csv_file(ctx, csv_path)
+        self._write_raw_export_csv_file(ctx, csv_path, report_metadata=payload["report_lineage"])
         return {
             "markdown": markdown_path,
             "json": json_path,
@@ -2463,7 +2463,23 @@ class ReportSynthesizer:
         }
 
     @staticmethod
-    def _raw_export_csv_rows(ctx: ReportContext) -> list[dict[str, object]]:
+    def _csv_report_metadata(report_metadata: Mapping[str, Any] | None) -> dict[str, object]:
+        metadata = report_metadata or {}
+        return {
+            "findings_checksum": str(metadata.get("findings_checksum") or ""),
+            "report_requested_provider": str(metadata.get("requested_provider") or ""),
+            "report_rendered_provider": str(metadata.get("rendered_provider") or ""),
+            "report_format": str(metadata.get("format") or ""),
+            "report_generated_at": str(metadata.get("generated_at") or ""),
+            "fallback_reason": str(metadata.get("fallback_reason") or ""),
+            "report_write_error": str(metadata.get("write_error") or metadata.get("report_write_error") or ""),
+        }
+
+    @staticmethod
+    def _raw_export_csv_rows(
+        ctx: ReportContext,
+        report_metadata: Mapping[str, Any] | None = None,
+    ) -> list[dict[str, object]]:
         rows: list[dict[str, object]] = []
         for finding in ctx.exploits.exploited:
             rows.append(
@@ -2634,11 +2650,13 @@ class ReportSynthesizer:
             "validation_notes": "",
             "validation_evidence_summary": "",
         }
+        report_defaults = ReportSynthesizer._csv_report_metadata(report_metadata)
         for row in rows:
             for key, value in archive_defaults.items():
                 row.setdefault(key, value)
             for key, value in cloud_validation_defaults.items():
                 row.setdefault(key, value)
+            row.update(report_defaults)
             for key in (
                 "severity",
                 "cve_id",
@@ -2694,6 +2712,7 @@ class ReportSynthesizer:
                 "validation_checked_at": "",
                 "validation_notes": "",
                 "validation_evidence_summary": "",
+                **report_defaults,
                 "emails_found": ctx.osint.emails_found,
                 "hosts_found": len(ctx.recon.hosts),
                 "subdomains_found": len(ctx.recon.subdomains),
@@ -2703,8 +2722,13 @@ class ReportSynthesizer:
         ]
 
     @classmethod
-    def _write_raw_export_csv_file(cls, ctx: ReportContext, csv_path: Path) -> None:
-        csv_rows = cls._raw_export_csv_rows(ctx)
+    def _write_raw_export_csv_file(
+        cls,
+        ctx: ReportContext,
+        csv_path: Path,
+        report_metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        csv_rows = cls._raw_export_csv_rows(ctx, report_metadata=report_metadata)
         csv_columns = list(csv_rows[0].keys())
         with csv_path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=csv_columns)
@@ -2779,7 +2803,7 @@ class ReportSynthesizer:
                     json.dumps(payload, indent=2, sort_keys=True),
                     encoding="utf-8",
                 )
-                self._write_raw_export_csv_file(ctx, csv_path)
+                self._write_raw_export_csv_file(ctx, csv_path, report_metadata=lineage)
                 logger.warning(
                     "Report-family write failed; emitted raw export fallback to %s",
                     json_path,

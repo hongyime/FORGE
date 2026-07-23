@@ -63,6 +63,18 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Raw-export CSV lineage parity completed: Phase 6 CSV exports now carry
+  report-lineage metadata matching fallback JSON: structured findings checksum,
+  requested provider, rendered provider, report format, generated timestamp,
+  fallback reason, and write-error detail. Verification: focused TDD failed
+  first with missing `findings_checksum`; compile/Ruff passed; focused Phase 6
+  fallback tests -> `3 passed`; raw-export/fallback selector -> `4 passed, 78
+  deselected`; cloud-exposure raw fallback gate -> `1 passed`; dashboard/API
+  raw-export detail checks -> `2 passed, 2 warnings`; compact cross-phase smoke
+  -> `3 passed, 1 deselected`; cleanup ->
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory -> `1`, `5010`,
+  `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-23-raw-export-csv-lineage.md`.
 - [x] Dashboard/API audit-artifact review parity completed: static dashboard
   JSON/HTML and the live web API now split report artifacts from audit exports,
   keep `report_count` report-only, expose `audit_count`, surface audit files in

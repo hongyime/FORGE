@@ -30,6 +30,7 @@ import json
 import re
 import sqlite3
 import textwrap
+import csv
 from pathlib import Path
 from unittest import mock
 
@@ -1723,6 +1724,27 @@ def test_synthesizer_report_write_failure_falls_back_to_raw_exports(
     assert payload["report_lineage"]["format"] == "raw_export"
     assert "disk full" in str(payload["report_lineage"]["fallback_reason"] or "")
     assert "disk full" in str(payload["report_lineage"]["write_error"])
+    with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+    assert csv_rows
+    assert {
+        row["findings_checksum"]
+        for row in csv_rows
+    } == {payload["findings_checksum"]}
+    assert {
+        row["report_requested_provider"]
+        for row in csv_rows
+    } == {"template"}
+    assert {
+        row["report_rendered_provider"]
+        for row in csv_rows
+    } == {"raw_export"}
+    assert {
+        row["report_format"]
+        for row in csv_rows
+    } == {"raw_export"}
+    assert all("disk full" in row["fallback_reason"] for row in csv_rows)
+    assert all("disk full" in row["report_write_error"] for row in csv_rows)
 
 
 def test_synthesise_output_path_pdf_mirrors_report_family(

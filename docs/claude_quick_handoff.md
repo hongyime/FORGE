@@ -55,6 +55,16 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Raw-export CSV lineage parity completed: Phase 6 raw/companion CSV
+  exports now include findings checksum and report-lineage fields matching the
+  JSON export, including fallback reason and write error for last-resort raw
+  export. Verification included failing TDD first (`KeyError:
+  'findings_checksum'`), compile/Ruff, focused Phase 6 fallback/raw-export
+  selectors, cloud-exposure raw fallback gate, dashboard/API raw-export detail
+  checks, compact cross-phase smoke, cleanup
+  `remaining_pytest_engagement_dirs=0`, persistent DB inventory `1`, `5010`,
+  `master.db`, and no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-23-raw-export-csv-lineage.md`.
 - [x] Dashboard/API audit-artifact review parity completed: static dashboard
   detail JSON/HTML and live web API detail payloads now expose audit exports as
   `kind: "audit"` artifacts with separate `audit_count`, while `report_count`
