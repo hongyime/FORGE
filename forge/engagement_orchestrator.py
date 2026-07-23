@@ -27447,12 +27447,18 @@ class ArtifactQueueProcessor:
     def _api_client_document_candidate_values(self, document: Any) -> list[str]:
         if not isinstance(document, (dict, list)):
             return []
-        return self._api_client_value_candidate_values(document, ())[:512]
+        return self._api_client_value_candidate_values(
+            document,
+            (),
+            use_workers=True,
+        )[:512]
 
     def _api_client_value_candidate_values(
         self,
         value: Any,
         path: tuple[str, ...],
+        *,
+        use_workers: bool,
     ) -> list[str]:
         candidates: list[str] = []
         if isinstance(value, dict):
@@ -27463,35 +27469,115 @@ class ArtifactQueueProcessor:
             variable_candidate = self._api_client_variable_mapping_candidate(value)
             if variable_candidate:
                 candidates.append(variable_candidate)
-            for key, child in value.items():
-                key_text = str(key or "")
-                key_fingerprint = self._yaml_key_fingerprint(key_text)
-                child_path = (*path, key_fingerprint)
-                if key_fingerprint in {"url", "rawurl", "baseurl", "endpoint", "target"}:
-                    if isinstance(child, dict):
-                        object_candidate = self._api_client_url_object_candidate(child)
-                        if object_candidate:
-                            candidates.append(object_candidate)
-                        continue
-                    elif isinstance(child, (str, int, float)):
-                        candidates.append(str(child))
-                        continue
-                elif key_fingerprint == "raw" and self._api_client_url_object_looks_supported(normalized):
-                    if isinstance(child, (str, int, float)):
-                        candidates.append(str(child))
-                    continue
-                elif self._api_client_variable_name_is_urlish(key_text) and isinstance(
-                    child,
-                    (str, int, float),
-                ):
-                    candidates.append(str(child))
-                    continue
-                candidates.extend(self._api_client_value_candidate_values(child, child_path))
+            child_jobs = [
+                (child_index, key, child, path, self._api_client_url_object_looks_supported(normalized))
+                for child_index, (key, child) in enumerate(value.items())
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._api_client_child_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._api_client_child_candidate_values_for_node(
+                        key,
+                        child,
+                        path,
+                        parent_url_object_supported,
+                    )
+                    for (
+                        _child_index,
+                        key,
+                        child,
+                        path,
+                        parent_url_object_supported,
+                    ) in child_jobs
+                ]
+            )
+            for child_values in child_batches:
+                candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            for item in value[:512]:
-                candidates.extend(self._api_client_value_candidate_values(item, path))
+            item_jobs = [
+                (item_index, item, path)
+                for item_index, item in enumerate(value[:512])
+            ]
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._api_client_list_item_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._api_client_value_candidate_values(
+                        item,
+                        path,
+                        use_workers=False,
+                    )
+                    for _item_index, item, path in item_jobs
+                ]
+            )
+            for item_values in item_batches:
+                candidates.extend(item_values)
         return candidates
+
+    def _api_client_child_candidate_values(
+        self,
+        child_job: tuple[int, Any, Any, tuple[str, ...], bool],
+    ) -> list[str]:
+        _child_index, key, child, path, parent_url_object_supported = child_job
+        return self._api_client_child_candidate_values_for_node(
+            key,
+            child,
+            path,
+            parent_url_object_supported,
+        )
+
+    def _api_client_child_candidate_values_for_node(
+        self,
+        key: Any,
+        child: Any,
+        path: tuple[str, ...],
+        parent_url_object_supported: bool,
+    ) -> list[str]:
+        key_text = str(key or "")
+        key_fingerprint = self._yaml_key_fingerprint(key_text)
+        child_path = (*path, key_fingerprint)
+        if key_fingerprint in {"url", "rawurl", "baseurl", "endpoint", "target"}:
+            if isinstance(child, dict):
+                object_candidate = self._api_client_url_object_candidate(child)
+                return [object_candidate] if object_candidate else []
+            if isinstance(child, (str, int, float)):
+                return [str(child)]
+            return []
+        if key_fingerprint == "raw" and parent_url_object_supported:
+            if isinstance(child, (str, int, float)):
+                return [str(child)]
+            return []
+        if self._api_client_variable_name_is_urlish(key_text) and isinstance(
+            child,
+            (str, int, float),
+        ):
+            return [str(child)]
+        return self._api_client_value_candidate_values(
+            child,
+            child_path,
+            use_workers=False,
+        )
+
+    def _api_client_list_item_candidate_values(
+        self,
+        item_job: tuple[int, Any, tuple[str, ...]],
+    ) -> list[str]:
+        _item_index, item, path = item_job
+        return self._api_client_value_candidate_values(
+            item,
+            path,
+            use_workers=False,
+        )
 
     def _api_client_variable_mapping_candidate(self, value: dict[str, Any]) -> str:
         normalized = self._yaml_normalized_mapping(value)

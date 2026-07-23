@@ -1001,10 +1001,27 @@ sentences as historical notes only, not as current instructions.
   webhook execution, endpoint probing, provider call, live probing, credential
   use, scope/ROE relaxation, validation/report-gate change, severity change,
   proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [x] API-client generic document traversal worker-pool checkpoint: generic
+  Postman/Insomnia/Hoppscotch/Thunder-style API-client document traversal now
+  dispatches the current mapping/list child layer through ordered bounded
+  worker helpers while nested recursion and final URL normalization/dedupe
+  remain serial. URL-object candidates, direct URL fields, variable mappings,
+  sensitive-query stripping, and source-gated API-client behavior are
+  preserved. Verification: compile passed; Ruff passed; focused API-client
+  document worker test passed (`2 passed`); existing API-client worker suite and
+  persisted API-spec/client artifact slice passed (`16 passed`); cleanup left
+  `remaining_api_client_document_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-api-client-document-worker-pool.md`. Safety:
+  passive local static API-client collection parsing only; no API-client
+  execution, request replay, endpoint probing, provider call, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior.
+  before editing. Observability structured walk, orchestration structured walk,
+  and security-scanner JSON structured walk are the currently ranked candidates.
+  Preserve deterministic ordering, compact tests, scope gates, provider caps,
+  pacing/backoff, and passive-only behavior.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
