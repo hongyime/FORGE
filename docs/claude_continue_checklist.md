@@ -275,10 +275,25 @@ historical notes only, not as current instructions.
   GraphQL/API artifact slice -> `3 passed`; cleanup left
   `remaining_graphql_config_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-graphql-config-worker-pool.md`.
-- [ ] Next implementation target: re-audit the remaining static parser/enricher
-  backlog and select the next proven-safe bounded worker-pool migration before
-  editing. Preserve compact tests, deterministic ordering, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior.
+- [x] Remaining static parser candidate re-audit completed: read-only candidate
+  audit ranked API-client fallback scanner, Pactum text scanner, and GoReleaser
+  YAML traversal as the next safe bounded worker-pool candidates. API-client
+  fallback was selected first because it is passive regex/line/XML extraction,
+  source-gated, and already covered by compact API-client fixtures.
+- [x] API-client fallback scanner worker-pool checkpoint completed: generic
+  fallback line key/value extraction and XML-like attribute/text scans now use
+  ordered bounded worker helpers, then merge by original text position before
+  the existing serial URL normalization and dedupe stage. Candidate ordering,
+  sensitive-query stripping, template rejection, and Gherkin/Tavern fallback
+  behavior are preserved. Verification: compile/Ruff passed; focused
+  API-client worker suite -> `14 passed`; focused persisted Gherkin/API
+  artifact slice -> `2 passed`; cleanup left
+  `remaining_api_client_fallback_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-api-client-fallback-worker-pool.md`.
+- [ ] Next implementation target: move the Pactum API-client text scanner under
+  the bounded worker-pool path. Keep this local to static Pactum config parsing
+  and preserve `setBaseUrl(...)` extraction order, fallback merge behavior,
+  sensitive-query stripping, template rejection, and serial final dedupe.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

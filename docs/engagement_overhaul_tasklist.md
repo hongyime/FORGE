@@ -905,10 +905,29 @@ sentences as historical notes only, not as current instructions.
   introspection, code generation, HTTP probing, provider call, live probing,
   credential use, scope/ROE relaxation, validation/report-gate change, severity
   change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: re-audit the remaining static parser/enricher
-  backlog and select the next proven-safe bounded worker-pool migration before
-  editing. Preserve compact tests, deterministic ordering, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior.
+- [x] Remaining static parser candidate re-audit completed: read-only candidate
+  audit ranked API-client fallback scanner, Pactum text scanner, and GoReleaser
+  YAML traversal as the next safe bounded worker-pool candidates. API-client
+  fallback was selected first because it is passive regex/line/XML extraction,
+  source-gated, and already covered by compact API-client fixtures.
+- [x] API-client fallback scanner worker-pool checkpoint: generic fallback
+  line key/value extraction and XML-like attribute/text scans now use ordered
+  bounded worker helpers, then merge by original text position before the
+  existing serial URL normalization and dedupe stage. Candidate ordering,
+  sensitive-query stripping, template rejection, and Gherkin/Tavern fallback
+  behavior are preserved. Verification: compile passed; Ruff passed; focused
+  API-client worker suite passed (`14 passed`); focused persisted Gherkin/API
+  artifact slice passed (`2 passed`); cleanup left
+  `remaining_api_client_fallback_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-api-client-fallback-worker-pool.md`. Safety:
+  passive local static API-client text parsing only; no API-client execution,
+  script execution, HTTP probing, provider call, live probing, credential use,
+  scope/ROE relaxation, validation/report-gate change, severity change,
+  proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: move the Pactum API-client text scanner under
+  the bounded worker-pool path. Keep this local to static Pactum config parsing
+  and preserve `setBaseUrl(...)` extraction order, fallback merge behavior,
+  sensitive-query stripping, template rejection, and serial final dedupe.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

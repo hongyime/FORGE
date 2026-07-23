@@ -25,22 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: GraphQL config traversal worker-pool migration is
-implemented. Static GraphQL config document traversal now dispatches the current
-dict/list child layer through ordered bounded worker helpers while worker tasks
-recurse serially to avoid nested worker-pool oversubscription. Recursive
-candidate order, host-only URL normalization, sensitive-query stripping,
-template rejection, and serial final dedupe are preserved.
+Latest checkpoint: API-client fallback scanner worker-pool migration is
+implemented. Generic fallback line key/value extraction and XML-like
+attribute/text scans now use ordered bounded worker helpers, then merge by
+original text position before the existing serial URL normalization and dedupe
+stage. Candidate ordering, sensitive-query stripping, template rejection, and
+Gherkin/Tavern fallback behavior are preserved.
 
-Verification: compile/Ruff passed; focused GraphQL worker tests passed
-(`2 passed`); focused persisted GraphQL/API artifact slice passed (`3 passed`);
-cleanup left `remaining_graphql_config_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-graphql-config-worker-pool.md`.
+Verification: compile/Ruff passed; focused API-client worker suite passed
+(`14 passed`); focused persisted Gherkin/API artifact slice passed (`2 passed`);
+cleanup left `remaining_api_client_fallback_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-api-client-fallback-worker-pool.md`.
 
-Current next gate: re-audit the remaining static parser/enricher backlog and
-select the next proven-safe bounded worker-pool migration before editing.
-Preserve compact tests, deterministic ordering, scope gates, provider caps,
-pacing/backoff, and passive-only behavior.
+Current next gate: move the Pactum API-client text scanner under the bounded
+worker-pool path. Keep this local to static Pactum config parsing and preserve
+`setBaseUrl(...)` extraction order, fallback merge behavior, sensitive-query
+stripping, template rejection, and serial final dedupe.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

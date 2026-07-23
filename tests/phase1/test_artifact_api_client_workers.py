@@ -306,6 +306,87 @@ def test_dredd_schemathesis_line_scanners_use_bounded_workers_and_preserve_order
     assert result.splitlines() == expected_lines
 
 
+def test_api_client_fallback_line_and_xml_scans_use_bounded_workers_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = dedent(
+        """
+        Feature: API fallback
+        Background:
+          * url 'fallback-one.acme.example/api'
+        Scenario: status
+          Given endpoint: https://fallback-two.acme.example/status?token=hidden&view=public
+          And serviceUrl = https://${tenant}.acme.example/template
+        <client baseUrl="fallback-three.acme.example/v3" />
+        <endpoint>https://fallback-four.acme.example/xml?api_key=hidden&amp;view=public</endpoint>
+        """
+    ).strip()
+    original_line = ArtifactQueueProcessor._api_client_text_fallback_line_candidate_entry
+    original_pattern = ArtifactQueueProcessor._api_client_text_fallback_pattern_candidate_entries
+    active_line = 0
+    peak_line = 0
+    active_pattern = 0
+    peak_pattern = 0
+    lock = threading.Lock()
+
+    def _tracking_line_entry(
+        self: ArtifactQueueProcessor,
+        item: tuple[int, str, object],
+    ) -> tuple[int, str]:
+        nonlocal active_line, peak_line
+        with lock:
+            active_line += 1
+            peak_line = max(peak_line, active_line)
+        try:
+            time.sleep(0.05)
+            return original_line(self, item)  # type: ignore[arg-type]
+        finally:
+            with lock:
+                active_line -= 1
+
+    def _tracking_pattern_entries(
+        self: ArtifactQueueProcessor,
+        item: tuple[int, object, str],
+    ) -> list[tuple[int, str]]:
+        nonlocal active_pattern, peak_pattern
+        with lock:
+            active_pattern += 1
+            peak_pattern = max(peak_pattern, active_pattern)
+        try:
+            time.sleep(0.05)
+            return original_pattern(self, item)  # type: ignore[arg-type]
+        finally:
+            with lock:
+                active_pattern -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_api_client_text_fallback_line_candidate_entry",
+        _tracking_line_entry,
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_api_client_text_fallback_pattern_candidate_entries",
+        _tracking_pattern_entries,
+    )
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="api.feature",
+    )
+
+    assert peak_line == 4
+    assert peak_pattern == 2
+    assert result.splitlines() == [
+        "https://fallback-one.acme.example/api",
+        "https://fallback-two.acme.example/status?view=public",
+        "https://fallback-three.acme.example/v3",
+        "https://fallback-four.acme.example/xml?view=public",
+    ]
+
+
 def test_selenium_side_navigation_children_use_bounded_workers_and_preserve_order(
     tmp_path: Path,
     monkeypatch,

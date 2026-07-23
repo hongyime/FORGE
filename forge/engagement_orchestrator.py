@@ -27713,7 +27713,7 @@ class ArtifactQueueProcessor:
         if family == "pactum":
             return ArtifactQueueProcessor._api_client_pactum_text_candidate_values(text)
         if family == "fallback":
-            return ArtifactQueueProcessor._api_client_text_fallback_candidate_values(text)
+            return self._api_client_text_fallback_candidate_values(text)
         if family == "jmeter":
             return self._api_client_jmeter_text_candidate_values(text)
         if family == "k6":
@@ -27778,8 +27778,7 @@ class ArtifactQueueProcessor:
             return str(value).strip().strip("\"'").strip("/")
         return ""
 
-    @staticmethod
-    def _api_client_text_fallback_candidate_values(text: str) -> list[str]:
+    def _api_client_text_fallback_candidate_values(self, text: str) -> list[str]:
         line_pattern = re.compile(
             r"""
             ^\s*(?:-\s*)?
@@ -27809,20 +27808,57 @@ class ArtifactQueueProcessor:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
         candidates: list[tuple[int, str]] = []
         offset = 0
+        line_jobs: list[tuple[int, str, re.Pattern[str]]] = []
         for line in parse_text.splitlines()[:4096]:
-            match = line_pattern.match(line)
-            if match:
-                value = str(match.group("value") or "").strip()
-                if value:
-                    candidates.append((offset + match.start(), value))
+            line_jobs.append((offset, line, line_pattern))
             offset += len(line) + 1
-        for pattern in (xml_attr_pattern, xml_endpoint_text_pattern):
-            for match in pattern.finditer(parse_text):
-                value = str(match.group("value") or "").strip()
-                if value:
-                    candidates.append((match.start(), value))
+        line_entries = self._run_ordered_local_batch(
+            line_jobs,
+            self._api_client_text_fallback_line_candidate_entry,
+            default_factory=lambda: (-1, ""),
+        )
+        candidates.extend(
+            (position, value)
+            for position, value in line_entries
+            if position >= 0 and value
+        )
+        pattern_batches = self._run_ordered_local_batch(
+            [
+                (pattern_index, pattern, parse_text)
+                for pattern_index, pattern in enumerate((xml_attr_pattern, xml_endpoint_text_pattern))
+            ],
+            self._api_client_text_fallback_pattern_candidate_entries,
+            default_factory=list,
+        )
+        for pattern_entries in pattern_batches:
+            candidates.extend(pattern_entries)
         candidates.sort(key=lambda item: item[0])
         return [value for _position, value in candidates[:512]]
+
+    def _api_client_text_fallback_line_candidate_entry(
+        self,
+        item: tuple[int, str, re.Pattern[str]],
+    ) -> tuple[int, str]:
+        offset, line, pattern = item
+        match = pattern.match(line)
+        if not match:
+            return (-1, "")
+        value = str(match.group("value") or "").strip()
+        if not value:
+            return (-1, "")
+        return (offset + match.start(), value)
+
+    def _api_client_text_fallback_pattern_candidate_entries(
+        self,
+        item: tuple[int, re.Pattern[str], str],
+    ) -> list[tuple[int, str]]:
+        _pattern_index, pattern, parse_text = item
+        entries: list[tuple[int, str]] = []
+        for match in pattern.finditer(parse_text):
+            value = str(match.group("value") or "").strip()
+            if value:
+                entries.append((match.start(), value))
+        return entries
 
     def _api_client_jmeter_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
