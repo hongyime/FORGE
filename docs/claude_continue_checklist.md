@@ -194,11 +194,19 @@ historical notes only, not as current instructions.
   `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
   `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-well-known-service-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: continue moving remaining safe sequential
-  enrichers under the bounded worker-pool path beyond the existing D1/D2/D5
-  parse work. Start with the smallest deterministic slice that reduces
-  sequential kill-chain runtime while preserving stable result ordering,
-  scope/ROE gates, provider pacing, audit logging, and cleanup.
+- [x] Charles session JSON worker-pool checkpoint completed: Charles `.chlsj`
+  static session artifact child traversal now uses the ordered bounded local
+  worker helper while retaining serial normalization/dedupe semantics and
+  existing origin/redirect behavior. Verification: compile/Ruff passed;
+  focused Charles worker plus existing Charles artifact integration tests ->
+  `2 passed`; cleanup left `remaining_charles_test_db_files=0`; persistent
+  inventory remains `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-charles-session-worker-pool.md`.
+- [ ] Next implementation target: move SAZ raw-session member classification
+  under the bounded worker-pool path while keeping `ZipFile.read()` serial to
+  avoid shared archive-handle thread-safety risk. Add a focused worker-order
+  regression around `_saz_raw_session_member_entry`, then run the existing SAZ
+  functionality tests.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

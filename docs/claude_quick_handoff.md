@@ -25,33 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Well-known service metadata kill-chain E2E parity is
-implemented. The compact full-closeout multi-seed E2E now includes local
-`.well-known` `did-configuration.json`, `keybase.txt`, `smart-configuration`,
-and `terraform.json` intake and proves owner contacts, stripped service
-metadata URL pivots, DID host recursion, static Terraform registry URLs,
-validated Supabase/Firebase refs, deterministic findings, graph cloud/assets,
-report references, report JSON validation inventory, raw CSV validation rows,
-audit closeout, and cleanup. Templated service metadata URLs and sensitive
-query strings are asserted absent from persisted URL seeds. `smart-configuration`
-URL resolution now strips sensitive query parameters before returning recursive
-URL candidates, and `.well-known/terraform.json` now feeds Terraform DNS host
-extraction without executing Terraform. The E2E graph export cap was raised
-from 600 to 700 nodes so the expanded compact fixture retains asserted service
-metadata review nodes.
+Latest checkpoint: Charles session JSON worker-pool migration is implemented.
+Charles `.chlsj` static session artifact child traversal now uses the ordered
+bounded local worker helper while retaining serial normalization/dedupe
+semantics and existing origin/redirect behavior.
 
-Verification: compile/Ruff passed; focused service/OAuth/Terraform/DID/helper
-tests passed (`17 passed`); focused E2E passed (`1 passed` in 276.84s);
-cleanup removed 13 test-owned DB/report files and left
-`remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
+Verification: compile/Ruff passed; focused Charles worker plus existing
+Charles artifact integration tests passed (`2 passed`); cleanup left
+`remaining_charles_test_db_files=0`; persistent inventory remains `1`, `5010`,
 `master.db`. Handoff:
-`.claude/handoffs/2026-07-24-well-known-service-kill-chain-e2e-parity.md`.
+`.claude/handoffs/2026-07-24-charles-session-worker-pool.md`.
 
-Current next gate: continue moving remaining safe sequential enrichers under
-the bounded worker-pool path beyond the existing D1/D2/D5 parse work. Start
-with the smallest deterministic slice that reduces sequential kill-chain
-runtime while preserving stable result ordering, scope/ROE gates, provider
-pacing, audit logging, and cleanup.
+Current next gate: move SAZ raw-session member classification under the bounded
+worker-pool path while keeping `ZipFile.read()` serial to avoid shared
+archive-handle thread-safety risk. Add a focused worker-order regression around
+`_saz_raw_session_member_entry`, then run the existing SAZ functionality tests.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -795,13 +795,24 @@ sentences as historical notes only, not as current instructions.
   call, provider call beyond mocked validators, live probing, credential use,
   scope relaxation, validation-gate change, report-gate change, severity
   change, proxy/IP rotation, or rate-limit bypass.
-- [ ] Next implementation target: continue moving remaining safe sequential
-  enrichers under the bounded worker-pool path beyond the existing D1/D2/D5
-  parse work. Start with the smallest deterministic slice that reduces
-  sequential kill-chain runtime while preserving stable result ordering,
-  scope/ROE gates, provider pacing, audit logging, and cleanup. Likely files:
-  `forge/engagement_orchestrator.py`, focused orchestration tests under
-  `tests/phase1/`, and docs/handoff only after tests prove parity.
+- [x] Charles session JSON worker-pool checkpoint: Charles `.chlsj` static
+  session artifact child traversal now uses the ordered bounded local worker
+  helper while retaining serial normalization/dedupe semantics and existing
+  origin/redirect behavior. Verification: compile passed; Ruff passed;
+  focused Charles worker plus existing Charles artifact integration tests
+  passed (`2 passed`); cleanup left `remaining_charles_test_db_files=0`, with
+  persistent DB inventory unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-charles-session-worker-pool.md`. Safety:
+  passive local static `.chlsj` parsing only; no HTTP replay, provider call,
+  live probing, credential use, scope/ROE relaxation, validation/report-gate
+  change, severity change, proxy/IP rotation, rate-limit bypass, or destructive
+  behavior.
+- [ ] Next implementation target: move SAZ raw-session member classification
+  under the bounded worker-pool path while keeping `ZipFile.read()` serial to
+  avoid shared archive-handle thread-safety risk. Add a focused worker-order
+  regression around `_saz_raw_session_member_entry`, then run the existing SAZ
+  functionality tests. Likely files: `forge/engagement_orchestrator.py`, a
+  small focused `tests/phase1/test_artifact_saz_workers.py`, docs, and handoff.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

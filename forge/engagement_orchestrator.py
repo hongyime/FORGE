@@ -28540,33 +28540,50 @@ class ArtifactQueueProcessor:
         return "\n".join(lines)
 
     def _charles_session_json_candidate_values(self, document: Any) -> list[str]:
+        candidate_batches: list[list[str]] = []
+        if isinstance(document, dict):
+            normalized = self._yaml_normalized_mapping(document)
+            candidate_batches.append(
+                self._charles_session_mapping_url_candidates(document, normalized)
+            )
+            children = list(document.values())[:512]
+        elif isinstance(document, list):
+            children = list(document[:512])
+        else:
+            children = []
+        candidate_batches.extend(
+            self._run_ordered_local_batch(
+                list(enumerate(children)),
+                self._charles_session_json_child_candidate_values,
+                default_factory=list,
+            )
+        )
+        return self._charles_session_candidate_batch_values(candidate_batches)
+
+    def _charles_session_json_child_candidate_values(
+        self,
+        child_job: tuple[int, Any],
+    ) -> list[str]:
+        _child_index, child = child_job
+        return self._charles_session_json_candidate_values(child)
+
+    @staticmethod
+    def _charles_session_candidate_batch_values(
+        candidate_batches: Sequence[Sequence[str]],
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
-
-        def _append(value: str) -> None:
-            candidate = str(value or "").strip()
-            lowered = candidate.lower()
-            if not candidate or lowered in seen:
-                return
-            seen.add(lowered)
-            candidates.append(candidate)
-
-        def _walk(value: Any) -> None:
-            if len(candidates) >= 512:
-                return
-            if isinstance(value, dict):
-                normalized = self._yaml_normalized_mapping(value)
-                for candidate in self._charles_session_mapping_url_candidates(value, normalized):
-                    _append(candidate)
-                for child in list(value.values())[:512]:
-                    _walk(child)
-                return
-            if isinstance(value, list):
-                for item in value[:512]:
-                    _walk(item)
-
-        _walk(document)
-        return candidates[:512]
+        for batch in candidate_batches:
+            for value in batch:
+                candidate = str(value or "").strip()
+                lowered = candidate.lower()
+                if not candidate or lowered in seen:
+                    continue
+                seen.add(lowered)
+                candidates.append(candidate)
+                if len(candidates) >= 512:
+                    return candidates
+        return candidates
 
     def _charles_session_mapping_url_candidates(
         self,
