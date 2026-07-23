@@ -30,6 +30,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     _write_saml_metadata(config.parent / "saml-metadata.xml")
     _write_web_manifest(config.parent / "site.webmanifest")
     _write_mobile_association_metadata(config.parent / ".well-known")
+    _write_security_txt(config.parent / ".well-known" / "security.txt")
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -268,6 +269,21 @@ def _write_mobile_association_metadata(well_known_dir: Path) -> None:
             },
             sort_keys=True,
         ),
+        encoding="utf-8",
+    )
+
+
+def _write_security_txt(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        """
+        Contact: mailto:securitytxt-owner@acme.test
+        Contact: https://security.acme.test/report?token=hidden
+        Policy: https://security.acme.test/policy?api_key=hidden
+        Hiring: https://jobs.acme.test/security?signature=hidden
+        Supabase: https://securitytxtvault.supabase.co
+        Firebase: https://securitytxt-firebase.firebaseio.com
+        """.strip(),
         encoding="utf-8",
     )
 

@@ -25,28 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Asset Links / Apple app-site-association kill-chain E2E
-parity is implemented. The compact full-closeout multi-seed E2E now includes
-local `.well-known/assetlinks.json` and
-`.well-known/apple-app-site-association` intake and proves mobile association
-owner emails, stripped documentation URL pivots, Supabase refs, Android/iOS
-passive app inventory, terminal `UNSUPPORTED` mobile validation inventory,
-graph nodes, raw CSV validation rows, deterministic template fallback output,
-audit closeout, and cleanup. Passive mobile app inventory remains reviewable
-and does not create vulnerability findings.
+Latest checkpoint: Security.txt kill-chain E2E parity is implemented. The
+compact full-closeout multi-seed E2E now includes local
+`.well-known/security.txt` intake and proves disclosure contact email, stripped
+report/policy/hiring URL pivots, validated Supabase/Firebase refs,
+deterministic findings, graph nodes, deterministic template fallback report
+context, raw CSV validation rows, audit closeout, and cleanup. Sensitive query
+strings are asserted absent from persisted URL seeds. The E2E graph export cap
+was raised from 150 to 220 nodes so the expanded compact fixture retains all
+asserted review nodes.
 
-Verification: focused Asset Links/AASA/validation-registry tests passed (`3
-passed`); compile/Ruff passed; focused E2E passed (`1 passed` in 154.56s);
-cleanup removed 14 test-owned temp DB/report files and left
-`remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
-`master.db`. Handoff:
-`.claude/handoffs/2026-07-24-mobile-association-kill-chain-e2e-parity.md`.
+Verification: focused public metadata/security classifier tests passed (`10
+passed`); compile/Ruff passed; focused E2E first exposed graph-cap pruning,
+then passed (`1 passed` in 163.48s); cleanup removed 26 test-owned temp
+DB/report files and left `remaining_test_owned_files=0`; persistent inventory
+remains `1`, `5010`, `master.db`. Handoff:
+`.claude/handoffs/2026-07-24-security-txt-kill-chain-e2e-parity.md`.
 
-Current next gate: add `security.txt` / well-known security metadata compact
-E2E parity. Extend the compact multi-seed mocked E2E with the smallest local
-security metadata fixture proving disclosure contacts, policy or documentation
-URLs, cloud refs, validation inventory, graph/report/audit review,
-deterministic fallback output, and cleanup.
+Current next gate: add `llms.txt` / public AI metadata compact E2E parity.
+Extend the compact multi-seed mocked E2E with the smallest local public AI
+metadata fixture proving owner contacts, markdown or field-link documentation
+and API URL pivots, cloud refs, validation inventory, graph/report/audit
+review, deterministic fallback output, and cleanup.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -129,7 +129,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
                 min_severity="LOW",
                 critical_path_only=False,
                 snapshot=True,
-                max_nodes=150,
+                max_nodes=220,
             )
             return subprocess.CompletedProcess(["forge", *argv], 0, "graph built\n", "")
         if argv[:2] == ["report", "generate"]:
@@ -310,6 +310,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("manifest-owner@acme.test", "email"),
             ("assetlinks-owner@acme.test", "email"),
             ("aasa-owner@acme.test", "email"),
+            ("securitytxt-owner@acme.test", "email"),
             ("oauth-owner@acme.test", "email"),
             ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
@@ -331,6 +332,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://manifest.acme.test/icons/app.png", "url"),
             ("https://assetlinks.acme.test/android", "url"),
             ("https://aasa-docs.acme.test/help", "url"),
+            ("https://security.acme.test/report", "url"),
+            ("https://security.acme.test/policy", "url"),
+            ("https://jobs.acme.test/security", "url"),
             (openid_url, "url"),
             ("https://login.acme.test/oauth2/v1/authorize", "url"),
             ("https://login-api.acme.test/oauth2/v1/token", "url"),
@@ -353,6 +357,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("https://login.acme.test/tenant/{id}/metadata.xml", "url") not in seeds
         assert ("https://manifest.acme.test/tenant/{id}/launch", "url") not in seeds
         assert ("https://manifest.acme.test/icons/app.png#ignored", "url") not in seeds
+        assert ("https://security.acme.test/report?token=hidden", "url") not in seeds
+        assert ("https://security.acme.test/policy?api_key=hidden", "url") not in seeds
+        assert ("https://jobs.acme.test/security?signature=hidden", "url") not in seeds
         assert ("https://login.acme.test/oauth/{tenant}/authorize", "url") not in seeds
         assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
@@ -395,6 +402,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert aasa_artifact is not None
         assert aasa_artifact["status"] == "parsed"
         assert json.loads(aasa_artifact["metadata_json"])["format"] == "apple-app-site-association"
+        security_txt_artifact = con.execute(
+            "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%security.txt'"
+        ).fetchone()
+        assert security_txt_artifact is not None
+        assert security_txt_artifact["status"] == "parsed"
+        assert json.loads(security_txt_artifact["metadata_json"])["format"] == "security.txt"
         openid_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE source_url=?",
             (openid_url,),
@@ -436,6 +449,8 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("supabase", "manifestvault"),
             ("supabase", "assetlinksvault"),
             ("supabase", "aasavault"),
+            ("supabase", "securitytxtvault"),
+            ("firebase", "securitytxt-firebase"),
             ("mobile_android_package", "com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.credentials"),
@@ -452,6 +467,8 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert statuses[("supabase", "manifestvault")] == "VALIDATED"
         assert statuses[("supabase", "assetlinksvault")] == "VALIDATED"
         assert statuses[("supabase", "aasavault")] == "VALIDATED"
+        assert statuses[("supabase", "securitytxtvault")] == "VALIDATED"
+        assert statuses[("firebase", "securitytxt-firebase")] == "VALIDATED"
         assert statuses[("mobile_android_package", "com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.credentials")] == "UNSUPPORTED"
@@ -493,6 +510,18 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     )
     assert any(
         node.get("source_table") == "cloud_assets"
+        and (node.get("metadata") or {}).get("identifier") == "securitytxtvault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "vulnerability_findings"
+        and (node.get("metadata") or {}).get("resource_id") == "securitytxtvault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "cloud_assets"
         and (node.get("metadata") or {}).get("identifier") == "com.acme.portal"
         and (node.get("metadata") or {}).get("validation_status") == "UNSUPPORTED"
         for node in graph["nodes"]
@@ -518,10 +547,17 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert "supabase://manifestvault" in finding_report
     assert "supabase://assetlinksvault" in finding_report
     assert "supabase://aasavault" in finding_report
+    assert "supabase://securitytxtvault" in finding_report
+    assert "firebase://securitytxt-firebase" in finding_report
     assert "dead-firebase-prod" not in finding_report
     assert "com.acme.portal" not in finding_report
     assert any(
         item.get("identifier") == "manifestvault"
+        and item.get("validation_status") == "VALIDATED"
+        for item in report_payload["context"]["cloud_validation_inventory"]
+    )
+    assert any(
+        item.get("identifier") == "securitytxtvault"
         and item.get("validation_status") == "VALIDATED"
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
@@ -547,6 +583,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert any(
         row.get("cloud_identifier") == "dead-firebase-prod"
         and row.get("validation_status") == "UNVERIFIED"
+        for row in validation_rows
+    )
+    assert any(
+        row.get("cloud_identifier") == "securitytxtvault"
+        and row.get("validation_status") == "VALIDATED"
         for row in validation_rows
     )
     assert any(

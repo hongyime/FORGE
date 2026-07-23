@@ -98,11 +98,26 @@ historical notes only, not as current instructions.
   `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
   `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-mobile-association-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: add `security.txt` / well-known security
-  metadata compact E2E parity. Extend the compact multi-seed mocked E2E with
-  the smallest local security metadata fixture proving contacts, policy or
-  documentation URLs, cloud refs, validation inventory, graph/report/audit
-  review, deterministic fallback output, and cleanup.
+- [x] Security.txt kill-chain E2E parity completed:
+  the compact full-closeout multi-seed E2E now includes local
+  `.well-known/security.txt` and proves disclosure contact email, stripped
+  report/policy/hiring URL pivots, validated Supabase/Firebase refs,
+  deterministic findings, graph nodes, deterministic template fallback report
+  context, raw CSV validation rows, audit closeout, and cleanup. Sensitive query
+  strings are asserted absent from persisted URL seeds. The E2E graph export
+  cap was raised from 150 to 220 nodes so the expanded compact fixture retains
+  all asserted review nodes. Verification: focused public metadata/security
+  classifier tests -> `10 passed`; compile/Ruff passed; focused E2E first
+  exposed graph-cap pruning, then passed -> `1 passed` in 163.48s; cleanup
+  removed 26 test-owned DB/report files and left
+  `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
+  `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-security-txt-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: add `llms.txt` / public AI metadata compact
+  E2E parity. Extend the compact multi-seed mocked E2E with the smallest local
+  public AI metadata fixture proving owner contacts, markdown or field-link
+  documentation/API URL pivots, cloud refs, validation inventory,
+  graph/report/audit review, deterministic fallback output, and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
