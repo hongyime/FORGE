@@ -25,29 +25,31 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: early remote artifact scope-gate is complete. Kill-chain
-startup now installs the remote artifact scope-manifest gate before the first
-`ArtifactQueueProcessor.process()` pass. Pre-existing queued remote artifacts
-are denied before download when outside the scope manifest, receive skipped
-artifact status, and emit `remote_artifact_scope_denied` audit rows.
+Latest checkpoint: auto-run finalization ordering is complete. Kill-chain
+completion now happens after prerequisite detection and optional
+`--auto-run-detected` follow-on execution. Final run metadata records detected
+and auto-run prerequisite counts, the run manifest is written after
+`prereq_auto_run` audit evidence lands, and dashboard refresh now runs after
+final completion so review surfaces see late DB changes.
 
-Verification: compile/Ruff passed; focused scope-manifest remote artifact
-regression passed (`1 passed, 758 deselected`); kill-chain convergence suite
-passed (`3 passed`); recursive multi-seed mocked E2E passed (`1 passed`);
-pytest engagement cleanup reported `removed=4 remaining=0 post_scan=0`.
-Handoff: `.claude/handoffs/2026-07-24-early-remote-artifact-scope-gate.md`.
-Commit: `ce33ff7`.
+Verification: compile/Ruff passed; focused auto-run finalization regression
+passed (`1 passed, 758 deselected`); adjacent lifecycle/finalization slice
+passed (`5 passed, 754 deselected`); kill-chain convergence suite passed
+(`3 passed`); recursive multi-seed mocked E2E passed (`1 passed`); pytest
+engagement cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
+`.claude/handoffs/2026-07-24-auto-run-finalization-ordering.md`. Commit:
+`fa25d99`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: audit and fix kill-chain run finalization ordering for
-`--auto-run-detected`. Follow-on auto-run actions must be included in run audit
-and final metadata before the engagement run is marked completed. Add a mocked
-regression proving auto-run action evidence appears before completion/final
-manifest generation.
+Current next gate: audit Fan-out J direct cloud validation call boundaries and
+ensure every direct cloud asset validation path passes the available scope
+checker/denied callback into lower-level validators. Add a mocked out-of-scope
+direct cloud asset regression proving zero provider calls and a persisted
+scope-denied validation inventory row.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -187,10 +187,25 @@ sentences as historical notes only, not as current instructions.
   `.claude/handoffs/2026-07-24-early-remote-artifact-scope-gate.md`. Commit:
   `ce33ff7`.
 - [ ] Next gate:
-  Audit and fix kill-chain run finalization ordering for `--auto-run-detected`.
-  Follow-on auto-run actions must be included in the run audit/final metadata
-  before the engagement run is marked completed. Add a mocked regression proving
-  auto-run action evidence appears before completion/final manifest generation.
+- [x] Auto-run finalization ordering checkpoint:
+  Kill-chain completion now happens after prerequisite detection and optional
+  `--auto-run-detected` follow-on execution. Final run metadata records detected
+  and auto-run prerequisite counts, the run manifest is written after the
+  `prereq_auto_run` audit row lands, and dashboard refresh now runs after final
+  completion so review surfaces see late DB changes. Verification: compile
+  passed; Ruff passed; focused auto-run finalization regression passed
+  (`1 passed, 758 deselected`); adjacent lifecycle/finalization slice passed
+  (`5 passed, 754 deselected`); kill-chain convergence suite passed
+  (`3 passed`); recursive multi-seed mocked E2E passed (`1 passed`); pytest
+  engagement cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-auto-run-finalization-ordering.md`. Commit:
+  `fa25d99`.
+- [ ] Next gate:
+  Audit Fan-out J direct cloud validation call boundaries and ensure every direct
+  cloud asset validation path passes the available scope checker/denied callback
+  into lower-level validators. Add a mocked out-of-scope direct cloud asset
+  regression proving zero provider calls and a persisted scope-denied validation
+  inventory row.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
