@@ -17429,153 +17429,16 @@ def kill_chain(
     # (runnable via --auto-run-detected or Y/N prompt) or a manual_hint
     # (requires --target-url / --service and can only be shown as text).
     # ═══════════════════════════════════════════════════════════════════
-    import os as _os2  # noqa: PLC0415
     import sys as _sys2  # noqa: PLC0415
-    from pathlib import Path as _P2  # noqa: PLC0415
+    from forge.kill_chain_prereqs import detect_kill_chain_prerequisites  # noqa: PLC0415
 
-    detected: list[dict[str, object]] = []
-
-    def _add(label: str, reason: str,
-             argv: Optional[list[str]] = None,
-             manual_hint: Optional[str] = None) -> None:
-        detected.append({
-            "label": label,
-            "reason": reason,
-            "argv": argv,
-            "manual_hint": manual_hint,
-            "runnable": argv is not None,
-        })
-
-    # DeHashed - paired env creds
-    if _os2.environ.get("FORGE_DEHASHED_API_KEY") and _os2.environ.get("FORGE_DEHASHED_EMAIL"):
-        _add(
-            "osint dehashed (Module 2-C)",
-            "FORGE_DEHASHED_* env vars are set",
-            argv=["osint", "dehashed", "--engagement", engagement,
-                  "--query-type", "domain", "--query-value", domain],
-        )
-
-    # Local breach DB
-    breach_dir = _P2(".forge_data/breach")
-    if breach_dir.is_dir():
-        dumps = [p for p in breach_dir.glob("*") if p.is_file()]
-        if dumps:
-            _add(
-                "osint breach (Module 2-A)",
-                f"{len(dumps)} breach dump(s) in .forge_data/breach/",
-                argv=["osint", "breach", "--engagement", engagement,
-                      "--db", str(dumps[0])],
-            )
-
-    # AWS
-    if _os2.environ.get("AWS_PROFILE") or _os2.environ.get("AWS_ACCESS_KEY_ID"):
-        _add(
-            "cloud aws (Module 4)",
-            "AWS creds detected in env",
-            argv=["cloud", "aws", "--engagement", engagement],
-        )
-
-    # Azure
-    if _os2.environ.get("FORGE_AZURE_SUBSCRIPTION_ID") or _os2.environ.get("AZURE_TENANT_ID"):
-        _add(
-            "cloud azure (Module 4)",
-            "Azure creds detected in env",
-            argv=["cloud", "azure", "--engagement", engagement],
-        )
-
-    # Firebase from local artifact intake roots
-    from forge.engagement_orchestrator import default_local_artifact_roots  # noqa: PLC0415
-
-    local_artifact_roots = [path for path in default_local_artifact_roots(_P2.cwd()) if path.is_dir()]
-    apks: list[_P2] = []
-    for artifact_root in local_artifact_roots:
-        apks.extend(p for p in artifact_root.glob("*.apk") if p.is_file())
-        apks.extend(p for p in artifact_root.glob("*.aab") if p.is_file())
-        apks.extend(p for p in artifact_root.glob("*.xapk") if p.is_file())
-        apks.extend(p for p in artifact_root.glob("*.apkm") if p.is_file())
-        apks.extend(p for p in artifact_root.glob("*.apks") if p.is_file())
-        apks.extend(p for p in artifact_root.glob("*.ipa") if p.is_file())
-    if apks:
-        visible_roots = ", ".join(path.as_posix() for path in local_artifact_roots[:4])
-        _add(
-            "cloud firebase-extract (Module 4-F)",
-            f"{len(apks)} mobile package(s) across {visible_roots}",
-            argv=["cloud", "firebase-extract", "--engagement", engagement,
-                  "--apk", str(apks[0])],
-        )
-
-    if include_offensive_prereqs:
-        # Evasion generation - requires SAFE_MODE=0. Manual only (needs --technique).
-        if _os2.environ.get("FORGE_SAFE_MODE", "0").strip() in ("0", "false", "no", ""):
-            _add(
-                "evasion generate (Phase 3)",
-                "FORGE_SAFE_MODE is off - payload generation available",
-                manual_hint=(f"forge evasion generate --engagement {engagement} "
-                             "--technique <lolbin-technique> --os windows"),
-            )
-
-        # Vuln IDOR / Auth brute / bypass - manual only (need --target-url).
-        con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-        try:
-            n_svcs = 0
-            n_creds = 0
-            try:
-                n_svcs = con.execute(
-                    "SELECT COUNT(*) FROM services s JOIN hosts h ON s.host_id=h.id "
-                    "WHERE h.engagement_id=?", (engagement_id,),
-                ).fetchone()[0]
-            except _sq.OperationalError:
-                pass
-            try:
-                n_creds = con.execute(
-                    "SELECT COUNT(*) FROM credentials WHERE engagement_id=?",
-                    (engagement_id,),
-                ).fetchone()[0]
-            except _sq.OperationalError:
-                pass
-        finally:
-            con.close()
-        if n_svcs > 0:
-            _add(
-                "vuln idor (Module 4-D)",
-                f"{n_svcs} discovered service(s) - IDOR probing available",
-                manual_hint=f"forge vuln idor --engagement {engagement} --target-url <url>",
-            )
-        if n_svcs > 0 and n_creds > 0:
-            _add(
-                "auth brute (Phase 4)",
-                f"{n_svcs} service(s) + {n_creds} credential(s) - brute-force ready",
-                manual_hint=(f"forge auth brute --engagement {engagement} "
-                             "--target <host> --service <svc>"),
-            )
-        if n_svcs > 0:
-            _add(
-                "auth bypass (Phase 4)",
-                f"{n_svcs} service(s) with potential auth surfaces",
-                manual_hint=f"forge auth bypass --engagement {engagement} --target-url <url>",
-            )
-
-        # Phase 5 post-exploitation - only surface if we have validated creds.
-        try:
-            con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-            try:
-                n_validated = con.execute(
-                    "SELECT COUNT(*) FROM credentials WHERE engagement_id=? AND validated=1",
-                    (engagement_id,),
-                ).fetchone()[0]
-            except _sq.OperationalError:
-                n_validated = 0
-            con.close()
-        except Exception:  # noqa: BLE001
-            n_validated = 0
-        if n_validated > 0:
-            _add(
-                "post {shell,beacon,lateral} (Phase 5)",
-                f"{n_validated} VALIDATED credential(s) - post-ex viable "
-                "(requires FORGE_SAFE_MODE=0 + written ROE)",
-                manual_hint=(f"forge post shell --engagement {engagement} "
-                             "--target <host> --service ssh --cred-id <id>"),
-            )
+    detected = detect_kill_chain_prerequisites(
+        db_path=db_path,
+        engagement_id=engagement_id,
+        engagement=engagement,
+        domain=domain,
+        include_offensive_prereqs=include_offensive_prereqs,
+    )
 
     _cli_audit(
         db_path, engagement_id, "orchestrator", "kill_chain",

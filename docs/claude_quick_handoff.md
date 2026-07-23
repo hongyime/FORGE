@@ -25,15 +25,17 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: offensive prerequisite hint gating is complete. Default
-kill-chain prerequisite detection now suppresses evasion, IDOR, brute-force,
-auth-bypass, and post-exploitation manual hints. Operators must pass
-`--include-offensive-prereqs` to show those manual-only follow-ons; safe
-runnable enrichment prereqs still work.
+Latest checkpoint: prerequisite detection extraction is complete. Kill-chain
+prerequisite detection now lives in
+`forge.kill_chain_prereqs.detect_kill_chain_prerequisites()` instead of the
+large CLI finalization path. The helper preserves the existing record shape and
+safe/offensive policy; `forge kill-chain` still owns audit, display, auto-run,
+prompt, non-TTY, and completion metadata semantics.
 
-Verification: compile/Ruff passed; focused help/default/opt-in/metadata slice
-passed (`3 passed`); existing safe auto-run prereq slice passed (`1 passed`).
-Handoff: `.claude/handoffs/2026-07-24-offensive-prereq-hint-gate.md`.
+Verification: compile/Ruff passed; helper tests plus existing
+help/default/opt-in and safe auto-run prereq tests passed (`5 passed`);
+kill-chain convergence suite passed (`3 passed`). Handoff:
+`.claude/handoffs/2026-07-24-prereq-detection-extraction.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -45,10 +47,11 @@ Previous checkpoint: deterministic identity conflict production is complete.
 relations when one email/phone anchor has incompatible `same_entity`
 name/company targets; seed confidence metadata reflects `conflict_count`.
 
-Current next gate: reduce `forge/cli.py` risk by extracting prerequisite
-detection into a small dedicated helper module with no behavior change.
-Preserve `--include-offensive-prereqs`, auto-run, prompt, non-TTY, metadata,
-and audit semantics with focused tests.
+Current next gate: continue reducing `forge/cli.py` risk only where behavior can
+be preserved: extract the remaining prerequisite display/execution/completion
+branch into a small helper or typed adapter, while keeping
+`--include-offensive-prereqs`, auto-run, prompt, non-TTY, metadata, audit, and
+dashboard-refresh semantics covered by focused tests.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
