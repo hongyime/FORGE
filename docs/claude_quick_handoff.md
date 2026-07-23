@@ -25,24 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: RSS/Atom feed passive recursion plus kill-chain E2E parity
-is implemented. Source-gated `feed.xml`, `rss.xml`, `atom.xml`, and
-extensionless `/feed`, `/rss`, and `/atom` routes now keep source-aware feed
-labels and statically promote concrete URLs from RSS/Atom `<link>`, Atom
-`href`, permalink `guid`, enclosure URLs, and media content URLs through
-`forge.utils.artifact_feed_metadata` and the existing artifact URL-seed path.
-Feed query strings/fragments are stripped before helper persistence, templated
-URLs are excluded, relative URLs resolve only from HTTP(S) source artifacts,
-remote cache filenames stay source-aware, and common Atom/Media RSS namespace
-URIs are suppressed as standards metadata. Focused TDD first failed on the
-missing parser module, then passed with adjacent
-Feed/OpenSearch/SAML/OAuth/JWKS/Web Manifest/remote-static classification
-slices, compile/Ruff, and temp pytest DB cleanup. The focused multi-seed
-recursive kill-chain E2E now includes a local RSS feed artifact and proves its
-owner email plus stripped URL pivots enter recursive seeds before graph
-generation, template fallback reporting, audit logging, and cleanup. `SPEC.md`
-was not structurally edited for this checkpoint because `T2` remains ongoing
-and root `FORMAT.md` is absent.
+Latest checkpoint: JSON Feed passive recursion is implemented. Source-gated
+`feed.json`, `jsonfeed.json`, and `json-feed.json` artifacts now keep a
+`json-feed` label and statically promote concrete URLs from JSON Feed
+`home_page_url`, `feed_url`, `next_url`, author URLs, hub URLs, item URLs, item
+external URLs, images, banner images, and attachment URLs through
+`forge.utils.artifact_json_feed_metadata` and the existing artifact URL-seed
+path. JSON Feed query strings/fragments are stripped before helper persistence,
+templated URLs are excluded, relative URLs resolve only from HTTP(S) source
+artifacts, remote cache filenames stay source-aware, and
+`jsonfeed.org/version/*` URLs are suppressed as standards metadata. Focused TDD
+first failed on the missing parser module, then passed with adjacent JSON Feed,
+RSS/OpenSearch/SAML/OAuth/JWKS/Web Manifest/remote-static classification
+slices, compile/Ruff, and temp pytest DB cleanup. `SPEC.md` was not
+structurally edited for this checkpoint because `T2` remains ongoing and root
+`FORMAT.md` is absent.
 
 Current next gate: continue concrete kill-chain coverage. Add the smallest
 mocked E2E or focused integration test that proves one missing recursive

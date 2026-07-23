@@ -508,6 +508,28 @@ sentences as historical notes only, not as current instructions.
   mocked/offline E2E only; no external target, provider call, live probing,
   credential use, scope relaxation, validation-gate change, report-gate change,
   severity change, proxy/IP rotation, or rate-limit bypass.
+- [x] JSON Feed passive-recursion checkpoint:
+  source-gated `feed.json`, `jsonfeed.json`, and `json-feed.json` artifacts now
+  keep a `json-feed` format label and passively promote concrete URLs from JSON
+  Feed `home_page_url`, `feed_url`, `next_url`, author URLs, hub URLs, item
+  URLs, item external URLs, images, banner images, and attachment URLs into the
+  existing recursive seed path. Query strings/fragments are stripped before
+  helper persistence, templated URLs are excluded, relative URLs resolve only
+  against HTTP(S) source artifacts, remote cache filenames stay source-aware,
+  and `jsonfeed.org/version/*` standards URLs are suppressed as metadata rather
+  than recursive targets. Backprop: no `SPEC.md` structural edit for this
+  checkpoint because `T2` remains ongoing and root `FORMAT.md` is absent;
+  existing `V1`/`V3`/`V4`/`V5` cover the gate. Verification: focused TDD first
+  failed on missing `forge.utils.artifact_json_feed_metadata`; focused JSON
+  Feed regression passed (`4 passed`); adjacent JSON Feed/RSS/OpenSearch/SAML/
+  OAuth/JWKS/Web Manifest/remote-static classification slice passed (`42
+  passed`); compile passed; Ruff passed; cleanup removed temp pytest engagement
+  DBs and left `remaining_temp_pytest_engagement_dbs=0`, with persistent DB
+  inventory unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-json-feed-passive-recursion.md`. Safety:
+  passive static JSON Feed parsing only; no feed polling, provider call, live
+  probing, credential use, scope relaxation, validation-gate change,
+  report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
 - [ ] Next implementation target: continue concrete kill-chain coverage. Add
   the smallest mocked E2E or focused integration test that proves one missing
   recursive discovery path from `T1`/`T2` advances from discovered passive

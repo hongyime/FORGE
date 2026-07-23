@@ -119,6 +119,7 @@ from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
     lambda_config_candidates,
 )
+from forge.utils.artifact_json_feed_metadata import json_feed_artifact_label, json_feed_urls
 from forge.utils.artifact_jmap_metadata import jmap_urls
 from forge.utils.artifact_matrix_metadata import matrix_server_delegated_hosts
 from forge.utils.artifact_mercure_metadata import mercure_urls
@@ -496,6 +497,7 @@ def _artifact_url_looks_standards_namespace(value: object) -> bool:
         or (host == "www.w3.org" and path in {"/2005/atom"})
         or (host == "w3.org" and path.startswith("/ns/"))
         or (host == "w3.org" and path in {"/2005/atom"})
+        or (host == "jsonfeed.org" and path.startswith("/version/"))
         or (host == "nodeinfo.diaspora.software" and path.startswith("/ns/schema/"))
         or (host == "search.yahoo.com" and path in {"/mrss/"})
     )
@@ -6045,6 +6047,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if feed_artifact_label(raw_lowered):
         return True
+    if json_feed_artifact_label(raw_lowered):
+        return True
     if opensearch_description_artifact_label(raw_lowered):
         return True
     if saml_metadata_artifact_label(raw_lowered):
@@ -6240,6 +6244,9 @@ def _artifact_format_label(value: str | Path) -> str:
     feed_label = feed_artifact_label(str(value or ""))
     if feed_label:
         return feed_label
+    json_feed_label = json_feed_artifact_label(str(value or ""))
+    if json_feed_label:
+        return json_feed_label
     opensearch_label = opensearch_description_artifact_label(str(value or ""))
     if opensearch_label:
         return opensearch_label
@@ -6987,6 +6994,8 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
     parsed_remote = urlparse(raw_url)
     if feed_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
+    if json_feed_artifact_label(unquote(parsed_remote.path or "")):
+        return "config"
     if opensearch_description_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
     if saml_metadata_artifact_label(unquote(parsed_remote.path or "")):
@@ -7124,6 +7133,12 @@ def _select_remote_artifact_filename(
         if candidate and feed_artifact_label(candidate) and Path(candidate).suffix:
             return candidate
         return feed_label
+    json_feed_label = json_feed_artifact_label(unquote(parsed_source.path or ""))
+    if json_feed_label:
+        candidate = Path(unquote(parsed_source.path or "")).name.strip()
+        if candidate and json_feed_artifact_label(candidate):
+            return candidate
+        return "feed.json"
     opensearch_label = opensearch_description_artifact_label(unquote(parsed_source.path or ""))
     if opensearch_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
@@ -20482,6 +20497,7 @@ class ArtifactQueueProcessor:
                     "oauth_metadata",
                     "jwks_metadata",
                     "feed_metadata",
+                    "json_feed_metadata",
                     "opensearch_description",
                     "saml_metadata",
                     "web_manifest_metadata",
@@ -20719,6 +20735,12 @@ class ArtifactQueueProcessor:
             )
         if family == "feed_metadata":
             return feed_urls(
+                text,
+                source_label=_artifact_format_label(source_file),
+                base_url=source_file,
+            )
+        if family == "json_feed_metadata":
+            return json_feed_urls(
                 text,
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,
