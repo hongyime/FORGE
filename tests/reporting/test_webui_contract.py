@@ -33,3 +33,12 @@ def test_webui_fallback_samples_include_audit_artifact_contract() -> None:
     assert "audit_1001_manifest_20260709T014413.json" in source
     assert "kind: 'audit'" in source
     assert "label: 'Audit'" in source
+
+
+def test_webui_prior_report_history_surfaces_degraded_lineage() -> None:
+    source = _app_source()
+
+    assert "historyEntry.report_write_error" in source
+    assert "Write degradation: {historyEntry.report_write_error}" in source
+    assert "historyEntry.findings_checksum" in source
+    assert "<span className=\"mono-tag\">{historyEntry.findings_checksum}</span>" in source

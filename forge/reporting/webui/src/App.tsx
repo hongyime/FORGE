@@ -3151,6 +3151,14 @@ function DetailPage({
                       {historyEntry.fallback_reason ? (
                         <p className="muted-copy">Fallback reason: {historyEntry.fallback_reason}</p>
                       ) : null}
+                      {historyEntry.report_write_error ? (
+                        <p className="muted-copy">Write degradation: {historyEntry.report_write_error}</p>
+                      ) : null}
+                      {historyEntry.findings_checksum ? (
+                        <div className="token-wrap">
+                          <span className="mono-tag">{historyEntry.findings_checksum}</span>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>

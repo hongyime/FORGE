@@ -967,6 +967,7 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
                     "format": "markdown",
                     "generated_at": "2026-07-09T09:44:12+00:00" if stem == newer_stem else "2026-07-08T23:00:00+00:00",
                     "fallback_reason": fallback_reason,
+                    "report_write_error": "older disk warning" if stem == older_stem else "",
                     "findings_checksum": f"sha256:{stem}",
                 }
             ),
@@ -1006,6 +1007,8 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
     assert detail_payload["report_previews"][0]["name"] == f"{newer_stem}.md"
     assert detail_payload["report_history"][0]["artifact_name"] == f"{newer_stem}.json"
     assert detail_payload["report_history"][1]["artifact_name"] == f"{older_stem}.json"
+    assert detail_payload["report_history"][1]["report_write_error"] == "older disk warning"
+    assert detail_payload["report_history"][1]["findings_checksum"] == f"sha256:{older_stem}"
     assert [item["label"] for item in detail_payload["report_history"][1]["available_exports"]] == [
         "Markdown",
         "PDF",
@@ -1016,6 +1019,8 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Report History" in detail_html
     assert f"{older_stem}.json" in detail_html
+    assert "Write degradation: older disk warning" in detail_html
+    assert f"Checksum sha256:{older_stem}" in detail_html
     assert detail_html.count('artifact-kind">report</span>') >= 8
     assert detail_html.count('artifact-kind">graph</span>') >= 1
 

@@ -505,7 +505,12 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
         detail = detail_resp.json()
         assert detail["report_previews"] == []
         assert detail["report_summary"]["provider"] == "raw_export"
+        assert detail["report_summary"]["requested_provider"] == "auto"
         assert detail["report_summary"]["render_backend"] == "template"
+        assert detail["report_summary"]["upstream_provider"] == "template"
+        assert detail["report_summary"]["fallback_reason"] == "RuntimeError: report write failed"
+        assert detail["report_summary"]["report_write_error"] == "RuntimeError: report write failed"
+        assert detail["report_summary"]["findings_checksum"] == "sha256:test-checksum-raw-1001"
         assert detail["report_summary"]["raw_export"] is True
         assert detail["report_summary"]["export_count"] == 2
         assert [item["label"] for item in detail["report_summary"]["available_exports"]] == [
@@ -516,6 +521,20 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
             "engagement_1001_raw_export_20260709T014412.json",
             "engagement_1001_raw_export_20260709T014412.csv",
         }
+        raw_json_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/artifacts/"
+            "engagement_1001_raw_export_20260709T014412.json",
+            headers=headers,
+        )
+        assert raw_json_resp.status_code == 200, raw_json_resp.text
+        assert raw_json_resp.json()["provider"] == "raw_export"
+        raw_csv_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/artifacts/"
+            "engagement_1001_raw_export_20260709T014412.csv",
+            headers=headers,
+        )
+        assert raw_csv_resp.status_code == 200, raw_csv_resp.text
+        assert "Validated Firebase data exposure" in raw_csv_resp.text
 
 
 def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tmp_path: Path, monkeypatch) -> None:
@@ -541,6 +560,7 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
                 "format": "markdown",
                 "generated_at": "2026-07-08T23:00:00+00:00",
                 "fallback_reason": "older generation",
+                "report_write_error": "older disk warning",
                 "findings_checksum": "sha256:older-report-family",
             }
         ),
@@ -571,6 +591,9 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
         assert detail["report_previews"][0]["name"] == "engagement_1001_report_20260709T014412.md"
         assert detail["report_history"][0]["artifact_name"] == "engagement_1001_report_20260709T014412.json"
         assert detail["report_history"][1]["artifact_name"] == "engagement_1001_report_20260708T230000.json"
+        assert detail["report_history"][1]["fallback_reason"] == "older generation"
+        assert detail["report_history"][1]["report_write_error"] == "older disk warning"
+        assert detail["report_history"][1]["findings_checksum"] == "sha256:older-report-family"
         assert [item["label"] for item in detail["report_history"][1]["available_exports"]] == [
             "Markdown",
             "PDF",

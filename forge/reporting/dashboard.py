@@ -3371,6 +3371,14 @@ def _render_report_history(report_history: list[dict[str, Any]]) -> str:
             detail_lines.append(
                 f"<div class='tiny muted'>Fallback reason: {html.escape(str(family['fallback_reason']))}</div>"
             )
+        if family.get("report_write_error"):
+            detail_lines.append(
+                f"<div class='tiny muted'>Write degradation: {html.escape(str(family['report_write_error']))}</div>"
+            )
+        if family.get("findings_checksum"):
+            detail_lines.append(
+                f"<div class='tiny mono'>Checksum {html.escape(_truncate(str(family['findings_checksum']), 96))}</div>"
+            )
         items.append(
             "<div class='route-card'>"
             f"<strong>{html.escape(str(family.get('artifact_name') or '-'))}</strong>"
