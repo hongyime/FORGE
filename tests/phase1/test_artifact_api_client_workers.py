@@ -494,3 +494,64 @@ def test_k6_pattern_scans_use_bounded_workers_and_preserve_order(
         "https://k6-three.acme.example/socket",
         "https://k6-four.acme.example/path?view=public",
     ]
+
+
+def test_locust_pattern_scans_use_bounded_workers_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = dedent(
+        """
+        from locust import HttpUser, task
+
+        class WebsiteUser(HttpUser):
+            host = "locust-host.acme.example/api"
+
+            @task
+            def index(self):
+                self.client.get("/relative")
+                self.client.post("https://locust-one.acme.example/events")
+                self.client.request("GET", "locust-two.acme.example/v1")
+                self.client.get("https://locust-three.acme.example/path?token=hidden&view=public")
+                self.client.get("https://${tenant}.acme.example/template")
+        """
+    ).strip()
+    original_pattern = ArtifactQueueProcessor._api_client_locust_pattern_candidate_entries
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _tracking_pattern_entries(
+        self: ArtifactQueueProcessor,
+        item: tuple[int, object, str],
+    ) -> list[tuple[int, str]]:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_pattern(self, item)  # type: ignore[arg-type]
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_api_client_locust_pattern_candidate_entries",
+        _tracking_pattern_entries,
+    )
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="locustfile.py",
+    )
+
+    assert peak == 3
+    assert result.splitlines() == [
+        "https://locust-host.acme.example/api",
+        "https://locust-one.acme.example/events",
+        "https://locust-two.acme.example/v1",
+        "https://locust-three.acme.example/path?view=public",
+    ]

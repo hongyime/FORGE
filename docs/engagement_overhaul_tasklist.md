@@ -878,10 +878,24 @@ sentences as historical notes only, not as current instructions.
   probing, provider call, live probing, credential use, scope/ROE relaxation,
   validation/report-gate change, severity change, proxy/IP rotation,
   rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: move the Locust API-client regex-pattern
-  scanner under the bounded worker-pool path. Keep this local to static
-  `locustfile` parsing and preserve host/request ordering, sensitive-query
-  stripping, template rejection, and serial final dedupe.
+- [x] Locust API-client pattern scanner worker-pool checkpoint: static
+  `locustfile` regex-pattern scans now run as independent ordered bounded
+  worker jobs and merge by original match position before the existing serial
+  normalization and dedupe stage. Host/request ordering, sensitive-query
+  stripping, and template rejection are preserved. Verification: compile
+  passed; Ruff passed; focused API-client worker suite passed (`13 passed`);
+  focused persisted Locust/API artifact slice passed (`2 passed`); cleanup left
+  `remaining_locust_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-locust-pattern-worker-pool.md`. Safety:
+  passive local static `locustfile` parsing only; no Locust execution, load
+  generation, script execution, HTTP probing, provider call, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: inspect GraphQL config document traversal for
+  a safe bounded worker-pool migration. Do not edit until the recursive
+  traversal shape and existing tests are reviewed; avoid nested worker-pool
+  oversubscription by using the Selenium-style top-level worker plus serial
+  recursion pattern if implemented.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -25,21 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Dredd/Schemathesis API-client line scanner worker-pool
-migration is implemented. Static config line scans now use the ordered bounded
-local worker helper through a shared line-candidate helper. Line order, URL
-candidate extraction, sensitive-query stripping, template rejection, and serial
-final dedupe are preserved.
+Latest checkpoint: Locust API-client pattern scanner worker-pool migration is
+implemented. Static `locustfile` regex-pattern scans now run as independent
+ordered bounded worker jobs and merge by original match position before the
+existing serial normalization and dedupe stage. Host/request ordering,
+sensitive-query stripping, and template rejection are preserved.
 
 Verification: compile/Ruff passed; focused API-client worker suite passed
-(`12 passed`); focused persisted Dredd/Schemathesis/API artifact slice passed
-(`3 passed`); cleanup left `remaining_dredd_schemathesis_test_files=0`.
-Handoff: `.claude/handoffs/2026-07-24-dredd-schemathesis-line-worker-pool.md`.
+(`13 passed`); focused persisted Locust/API artifact slice passed (`2 passed`);
+cleanup left `remaining_locust_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-locust-pattern-worker-pool.md`.
 
-Current next gate: move the Locust API-client regex-pattern scanner under the
-bounded worker-pool path. Keep this local to static `locustfile` parsing and
-preserve host/request ordering, sensitive-query stripping, template rejection,
-and serial final dedupe.
+Current next gate: inspect GraphQL config document traversal for a safe bounded
+worker-pool migration. Do not edit until the recursive traversal shape and
+existing tests are reviewed; avoid nested worker-pool oversubscription by using
+the Selenium-style top-level worker plus serial recursion pattern if
+implemented.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

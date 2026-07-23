@@ -256,10 +256,20 @@ historical notes only, not as current instructions.
   `3 passed`; cleanup left `remaining_dredd_schemathesis_test_files=0`.
   Handoff:
   `.claude/handoffs/2026-07-24-dredd-schemathesis-line-worker-pool.md`.
-- [ ] Next implementation target: move the Locust API-client regex-pattern
-  scanner under the bounded worker-pool path. Keep this local to static
-  `locustfile` parsing and preserve host/request ordering, sensitive-query
-  stripping, template rejection, and serial final dedupe.
+- [x] Locust API-client pattern scanner worker-pool checkpoint completed:
+  static `locustfile` regex-pattern scans now run as independent ordered
+  bounded worker jobs and merge by original match position before the existing
+  serial normalization and dedupe stage. Host/request ordering,
+  sensitive-query stripping, and template rejection are preserved.
+  Verification: compile/Ruff passed; focused API-client worker suite ->
+  `13 passed`; focused persisted Locust/API artifact slice -> `2 passed`;
+  cleanup left `remaining_locust_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-locust-pattern-worker-pool.md`.
+- [ ] Next implementation target: inspect GraphQL config document traversal for
+  a safe bounded worker-pool migration. Do not edit until the recursive
+  traversal shape and existing tests are reviewed; avoid nested worker-pool
+  oversubscription by using the Selenium-style top-level worker plus serial
+  recursion pattern if implemented.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
