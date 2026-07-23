@@ -25,26 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Cloudflare Pages `_routes.json` worker migration is complete.
-Static-hosting control parsing now routes independent Cloudflare Pages
-`_routes.json` `include`, `exclude`, and `routes` entries through the existing
-ordered bounded worker pool before URL normalization. It preserves entry order,
-local base-URL resolution, query secret stripping, and passive-only behavior.
+Latest checkpoint: ExternalSecret remote-ref worker migration is complete.
+ExternalSecret `data` and `dataFrom` remote-ref key extraction now routes
+independent entries through the existing ordered bounded worker pool while
+preserving `data` before `dataFrom` order and deterministic dedupe. Provider
+expansion remains serial where it depends on cumulative remote keys. It does not
+call Kubernetes, secret stores, or cloud providers.
 
-Verification: compile/Ruff passed; focused static-hosting worker tests and
-existing engagement-backed static-hosting control slice passed (`3 passed`).
-Handoff: `.claude/handoffs/2026-07-24-cloudflare-routes-workers.md`.
+Verification: compile/Ruff passed; focused ExternalSecret worker regression and
+existing structured YAML cloud-asset integration slice passed (`2 passed`).
+Handoff: `.claude/handoffs/2026-07-24-external-secret-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: continue with Ohm's remaining ExternalSecret `data` /
-`dataFrom` remote-ref candidate if still applicable, then GoReleaser nested
-list/scalar walkers only if a concrete gap remains. Preserve deterministic
-ordering, compact tests, scope gates, provider caps, pacing/backoff, and
-passive-only behavior.
+Current next gate: GoReleaser nested list/scalar walkers are lower priority;
+audit first and skip code changes if root child dispatch already covers the
+useful work. Preserve deterministic ordering, compact tests, scope gates,
+provider caps, pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -30967,6 +30967,27 @@ class ArtifactQueueProcessor:
         return [f"secret-store://{store_name}"]
 
     def _yaml_external_secret_remote_ref_keys(self, spec: dict[str, Any]) -> list[str]:
+        remote_ref_jobs: list[tuple[str, dict[str, Any]]] = []
+        data_entries = spec.get("data")
+        if isinstance(data_entries, list):
+            remote_ref_jobs.extend(
+                ("data", entry)
+                for entry in data_entries
+                if isinstance(entry, dict)
+            )
+        data_from_entries = spec.get("dataFrom") or spec.get("datafrom")
+        if isinstance(data_from_entries, list):
+            remote_ref_jobs.extend(
+                ("data_from", entry)
+                for entry in data_from_entries
+                if isinstance(entry, dict)
+            )
+
+        remote_ref_batches = self._run_ordered_local_batch(
+            remote_ref_jobs,
+            self._yaml_external_secret_remote_ref_entry_keys,
+            default_factory=list,
+        )
         keys: list[str] = []
         seen: set[str] = set()
 
@@ -30977,44 +30998,46 @@ class ArtifactQueueProcessor:
             seen.add(key.lower())
             keys.append(key)
 
-        data_entries = spec.get("data")
-        if isinstance(data_entries, list):
-            for entry in data_entries:
-                if not isinstance(entry, dict):
-                    continue
-                remote_ref = self._yaml_child_mapping(entry, "remoteRef", "remote_ref")
-                if not remote_ref:
-                    continue
-                normalized_remote = self._yaml_normalized_mapping(remote_ref)
-                _append(
-                    self._yaml_ref_value(
-                        normalized_remote,
-                        "key",
-                        "remoteKey",
-                        "remote_key",
-                    )
-                )
+        for remote_ref_batch in remote_ref_batches:
+            for remote_key in remote_ref_batch:
+                _append(remote_key)
+        return keys
 
-        data_from_entries = spec.get("dataFrom") or spec.get("datafrom")
-        if isinstance(data_from_entries, list):
-            for entry in data_from_entries:
-                if not isinstance(entry, dict):
-                    continue
-                for child_name in ("extract", "find"):
-                    child = self._yaml_child_mapping(entry, child_name)
-                    if not child:
-                        continue
-                    normalized_child = self._yaml_normalized_mapping(child)
-                    _append(
-                        self._yaml_ref_value(
-                            normalized_child,
-                            "key",
-                            "path",
-                            "name",
-                            "remoteKey",
-                            "remote_key",
-                        )
-                    )
+    def _yaml_external_secret_remote_ref_entry_keys(
+        self,
+        remote_ref_job: tuple[str, dict[str, Any]],
+    ) -> list[str]:
+        family, entry = remote_ref_job
+        if family == "data":
+            remote_ref = self._yaml_child_mapping(entry, "remoteRef", "remote_ref")
+            if not remote_ref:
+                return []
+            normalized_remote = self._yaml_normalized_mapping(remote_ref)
+            remote_key = self._yaml_ref_value(
+                normalized_remote,
+                "key",
+                "remoteKey",
+                "remote_key",
+            )
+            return [remote_key] if remote_key else []
+        if family != "data_from":
+            return []
+        keys: list[str] = []
+        for child_name in ("extract", "find"):
+            child = self._yaml_child_mapping(entry, child_name)
+            if not child:
+                continue
+            normalized_child = self._yaml_normalized_mapping(child)
+            remote_key = self._yaml_ref_value(
+                normalized_child,
+                "key",
+                "path",
+                "name",
+                "remoteKey",
+                "remote_key",
+            )
+            if remote_key:
+                keys.append(remote_key)
         return keys
 
     def _yaml_external_secret_provider_candidates(

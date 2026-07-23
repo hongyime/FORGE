@@ -66,6 +66,18 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] ExternalSecret remote-ref worker checkpoint:
+  ExternalSecret `data` and `dataFrom` remote-ref key extraction now routes
+  independent entries through the existing ordered bounded worker pool while
+  preserving `data` before `dataFrom` order and deterministic dedupe. Provider
+  expansion remains serial where it depends on cumulative remote keys. This does
+  not call Kubernetes, secret stores, or cloud providers. Verification: compile
+  passed; Ruff passed; focused ExternalSecret worker regression and existing
+  structured YAML cloud-asset integration slice passed (`2 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-external-secret-workers.md`.
+  Next gate: GoReleaser nested list/scalar walkers are lower priority; audit
+  first and skip code changes if root child dispatch already covers the useful
+  work.
 - [x] Cloudflare Pages `_routes.json` worker checkpoint:
   Static-hosting control parsing now routes independent Cloudflare Pages
   `_routes.json` `include`, `exclude`, and `routes` entries through the existing
