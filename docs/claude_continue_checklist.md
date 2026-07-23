@@ -63,6 +63,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] OAuth/OpenID metadata passive-recursion completed: added compact
+  `forge.utils.artifact_oauth_metadata` helper and a thin orchestrator
+  `oauth_metadata` URL-family adapter so source-gated OAuth/OIDC `.well-known`
+  metadata resolves relative endpoint/document URLs for recursion while generic
+  JSON lookalikes stay excluded. Verification: TDD first failed on missing
+  helper; focused helper/integration plus adjacent well-known slices -> `8
+  passed`; compile/Ruff passed; existing remote OpenID/OAuth engagement-backed
+  regressions -> `3 passed, 756 deselected`; compact smoke -> `5 passed, 1
+  deselected`; no test-owned engagement DBs remain; persistent inventory -> `1`,
+  `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-oauth-metadata-passive-recursion.md`.
 - [x] React audit artifact and kill-chain raw CSV parity completed: React
   engagement detail types/offline samples now carry `audit_count`, include audit
   manifest artifacts, and expose an `Audit` quick export link. The kill-chain

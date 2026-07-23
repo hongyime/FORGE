@@ -88,6 +88,26 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] OAuth/OpenID metadata passive-recursion checkpoint: source-gated
+  `.well-known` OAuth/OIDC metadata now has a compact helper
+  (`forge.utils.artifact_oauth_metadata`) that resolves concrete relative URL
+  pivots from `openid-configuration`, `oauth-authorization-server`,
+  `oauth-protected-resource`, `openid-federation`, `uma2-configuration`, and
+  `smart-configuration` artifacts. The large orchestrator only keeps a thin
+  `oauth_metadata` URL-family adapter under the existing bounded local
+  discovery path. Generic JSON with the same endpoint fields remains excluded
+  from this OAuth-specific parser. Verification: focused TDD first failed on
+  missing helper module; new helper/integration plus adjacent well-known slices
+  passed (`8 passed`); compile passed; Ruff passed; existing remote
+  OpenID/OAuth engagement-backed regressions passed (`3 passed, 756
+  deselected`); compact cross-phase smoke passed (`5 passed, 1 deselected`);
+  cleanup found no test-owned engagement DBs and persistent inventory remains
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-oauth-metadata-passive-recursion.md`.
+  Safety: passive static metadata parsing only; no OAuth/OIDC endpoint request,
+  token request, authentication attempt, provider call, live probing, scope
+  relaxation, proxy/IP rotation, rate-limit bypass, validation-gate change,
+  report-gate change, or severity change.
 - [x] React audit artifact and kill-chain raw CSV parity checkpoint: the React
   engagement detail model and offline fallback samples now carry `audit_count`,
   include audit manifest artifacts, and expose an `Audit` quick export link
