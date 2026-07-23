@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +10,219 @@ from typing import Any
 PrerequisiteRecord = dict[str, object]
 
 _MOBILE_ARTIFACT_PATTERNS = ("*.apk", "*.aab", "*.xapk", "*.apkm", "*.apks", "*.ipa")
+
+
+def handle_kill_chain_prerequisite_flow(
+    detected: Sequence[PrerequisiteRecord],
+    *,
+    auto_run_detected: bool,
+    parallel_workers: int,
+    console_print: Callable[[str], None],
+    log: Callable[[str, str], None],
+    complete_run: Callable[[dict[str, object]], None],
+    audit_auto_run: Callable[[str], None],
+    audit_prompted: Callable[[str], None],
+    run_inprocess_batch: Any,
+    run_module_batch: Any,
+    run_module: Callable[[list[str], str], int],
+    make_dispatch_spec: Callable[[list[str], str], object],
+    harden_child_argv: Callable[[Sequence[str]], list[str]],
+    progress_callback: Any,
+    is_tty: bool,
+    input_func: Callable[[str], str] = input,
+) -> None:
+    if not detected:
+        console_print(
+            "\n[dim]No additional tools currently applicable. Add breach dumps to "
+            ".forge_data/breach/, set AWS/Azure creds in .env, or place APKs/configs "
+            "under data/mobile/, data/artifacts/, data/evidence/, or data/uploads/ "
+            "to unlock more.[/dim]"
+        )
+        complete_run(
+            {
+                "prereq_detected_count": 0,
+                "prereq_runnable_count": 0,
+                "prereq_execution_mode": "none",
+                "prereq_auto_run_enabled": bool(auto_run_detected),
+            }
+        )
+        return
+
+    console_print(
+        f"\n[bold yellow]Additional tools available on this engagement[/bold yellow] "
+        f"([dim]{len(detected)} detected[/dim]):"
+    )
+    for item in detected:
+        marker = "[green]RUNNABLE[/green]" if item["runnable"] else "[dim]manual[/dim]"
+        console_print(f"  [cyan]*[/cyan] [bold]{item['label']}[/bold] {marker} - {item['reason']}")
+        if item["argv"] is not None:
+            argv = item["argv"]
+            preview = "forge " + " ".join(str(arg) for arg in argv)  # type: ignore[union-attr]
+            console_print(f"       [dim]{preview}[/dim]")
+        elif item["manual_hint"]:
+            console_print(f"       [dim]{item['manual_hint']}[/dim]")
+
+    runnable = [item for item in detected if item["runnable"]]
+    if not runnable:
+        console_print(
+            "\n[dim]None are auto-runnable (all need --target-url or per-service "
+            "params). Copy the suggested command when ready.[/dim]"
+        )
+        complete_run(
+            {
+                "prereq_detected_count": len(detected),
+                "prereq_runnable_count": 0,
+                "prereq_execution_mode": "manual_only",
+                "prereq_auto_run_enabled": bool(auto_run_detected),
+            }
+        )
+        return
+
+    if auto_run_detected:
+        _auto_run_prerequisites(
+            runnable,
+            detected_count=len(detected),
+            parallel_workers=parallel_workers,
+            console_print=console_print,
+            log=log,
+            complete_run=complete_run,
+            audit_auto_run=audit_auto_run,
+            run_inprocess_batch=run_inprocess_batch,
+            run_module_batch=run_module_batch,
+            run_module=run_module,
+            make_dispatch_spec=make_dispatch_spec,
+            harden_child_argv=harden_child_argv,
+            progress_callback=progress_callback,
+        )
+        return
+
+    if is_tty:
+        _prompt_prerequisites(
+            runnable,
+            detected_count=len(detected),
+            auto_run_detected=auto_run_detected,
+            console_print=console_print,
+            complete_run=complete_run,
+            audit_prompted=audit_prompted,
+            run_module=run_module,
+            input_func=input_func,
+        )
+        return
+
+    console_print(
+        "\n[dim]Non-TTY invocation - not prompting. Re-run interactively "
+        "or pass --auto-run-detected to execute the RUNNABLE entries.[/dim]"
+    )
+    complete_run(
+        {
+            "prereq_detected_count": len(detected),
+            "prereq_runnable_count": len(runnable),
+            "prereq_execution_mode": "non_tty_skipped",
+            "prereq_auto_run_enabled": bool(auto_run_detected),
+        }
+    )
+
+
+def _auto_run_prerequisites(
+    runnable: Sequence[PrerequisiteRecord],
+    *,
+    detected_count: int,
+    parallel_workers: int,
+    console_print: Callable[[str], None],
+    log: Callable[[str, str], None],
+    complete_run: Callable[[dict[str, object]], None],
+    audit_auto_run: Callable[[str], None],
+    run_inprocess_batch: Any,
+    run_module_batch: Any,
+    run_module: Callable[[list[str], str], int],
+    make_dispatch_spec: Callable[[list[str], str], object],
+    harden_child_argv: Callable[[Sequence[str]], list[str]],
+    progress_callback: Any,
+) -> None:
+    console_print(
+        f"\n[bold cyan]--auto-run-detected set[/bold cyan] - running "
+        f"{len(runnable)} runnable prereq(s) now."
+    )
+    prereq_inputs = [item for item in runnable if item.get("argv") is not None]
+    if len(prereq_inputs) > 1 and parallel_workers > 1:
+        log(
+            "prereq spec prep",
+            f"[dim]parallel parse x{min(parallel_workers, len(prereq_inputs))}[/dim]",
+        )
+    prereq_specs = run_inprocess_batch(
+        prereq_inputs,
+        lambda item: make_dispatch_spec(
+            harden_child_argv([str(arg) for arg in item["argv"]]),  # type: ignore[index]
+            f"prereq: {item['label']}",
+        ),
+        max_workers=parallel_workers,
+        progress_label="prereq spec prep",
+        progress_callback=progress_callback,
+    )
+    if len(prereq_specs) > 1 and parallel_workers > 1:
+        log(
+            "prereq auto-run",
+            f"[dim]parallel dispatch x{min(parallel_workers, len(prereq_specs))}[/dim]",
+        )
+    prereq_results = run_module_batch(
+        prereq_specs,
+        run_module,
+        max_workers=parallel_workers,
+    )
+    prereq_failures = sum(1 for result in prereq_results if int(result) != 0)
+    audit_auto_run(
+        f"ran={len(prereq_specs)} failed={prereq_failures} "
+        f"workers={min(parallel_workers, len(prereq_specs) or 1)}"
+    )
+    complete_run(
+        {
+            "prereq_detected_count": detected_count,
+            "prereq_runnable_count": len(runnable),
+            "prereq_execution_mode": "auto_run",
+            "prereq_auto_run_enabled": True,
+            "prereq_auto_run_count": len(prereq_specs),
+            "prereq_auto_run_failures": prereq_failures,
+        }
+    )
+
+
+def _prompt_prerequisites(
+    runnable: Sequence[PrerequisiteRecord],
+    *,
+    detected_count: int,
+    auto_run_detected: bool,
+    console_print: Callable[[str], None],
+    complete_run: Callable[[dict[str, object]], None],
+    audit_prompted: Callable[[str], None],
+    run_module: Callable[[list[str], str], int],
+    input_func: Callable[[str], str],
+) -> None:
+    console_print(
+        f"\n[bold]{len(runnable)} tool(s) can be run now.[/bold] "
+        "Press Y to run each, any other key to skip.\n"
+    )
+    ran = 0
+    for item in runnable:
+        try:
+            resp = input_func(f"Run [{item['label']}]? [y/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            console_print("[dim]input cancelled - stopping prereq prompts[/dim]")
+            break
+        if resp == "y":
+            argv = item["argv"]
+            run_module([str(arg) for arg in argv], f"prereq: {item['label']}")  # type: ignore[union-attr]
+            ran += 1
+    audit_prompted(f"offered={len(runnable)} ran={ran}")
+    complete_run(
+        {
+            "prereq_detected_count": detected_count,
+            "prereq_runnable_count": len(runnable),
+            "prereq_execution_mode": "prompted",
+            "prereq_auto_run_enabled": bool(auto_run_detected),
+            "prereq_prompted_count": len(runnable),
+            "prereq_prompted_ran": ran,
+        }
+    )
 
 
 def detect_kill_chain_prerequisites(
@@ -44,10 +257,9 @@ def detect_kill_chain_prerequisites(
             }
         )
 
-    _add_safe_prereqs(detected, add, engagement=engagement, domain=domain, cwd=effective_cwd, env=effective_env)
+    _add_safe_prereqs(add, engagement=engagement, domain=domain, cwd=effective_cwd, env=effective_env)
     if include_offensive_prereqs:
         _add_offensive_prereqs(
-            detected,
             add,
             db_path=db_path,
             engagement_id=engagement_id,
@@ -58,7 +270,6 @@ def detect_kill_chain_prerequisites(
 
 
 def _add_safe_prereqs(
-    _detected: list[PrerequisiteRecord],
     add: Any,
     *,
     engagement: str,
@@ -137,7 +348,6 @@ def _local_mobile_artifacts(cwd: Path) -> list[Path]:
 
 
 def _add_offensive_prereqs(
-    _detected: list[PrerequisiteRecord],
     add: Any,
     *,
     db_path: Path,

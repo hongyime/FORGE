@@ -25,17 +25,16 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: prerequisite detection extraction is complete. Kill-chain
-prerequisite detection now lives in
-`forge.kill_chain_prereqs.detect_kill_chain_prerequisites()` instead of the
-large CLI finalization path. The helper preserves the existing record shape and
-safe/offensive policy; `forge kill-chain` still owns audit, display, auto-run,
-prompt, non-TTY, and completion metadata semantics.
+Latest checkpoint: prerequisite flow adapter extraction is complete. The
+remaining prerequisite display/execution/completion branch now lives in
+`handle_kill_chain_prerequisite_flow()` behind CLI-provided callbacks. `forge
+kill-chain` still owns run finalization, dashboard refresh, audit adapters,
+ROE/scope child-argv hardening, and module dispatch construction.
 
-Verification: compile/Ruff passed; helper tests plus existing
-help/default/opt-in and safe auto-run prereq tests passed (`5 passed`);
-kill-chain convergence suite passed (`3 passed`). Handoff:
-`.claude/handoffs/2026-07-24-prereq-detection-extraction.md`.
+Verification: compile/Ruff passed; helper tests plus existing CLI prereq
+behavior tests passed (`8 passed`); kill-chain convergence suite passed
+(`3 passed`). Handoff:
+`.claude/handoffs/2026-07-24-prereq-flow-adapter-extraction.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -47,11 +46,11 @@ Previous checkpoint: deterministic identity conflict production is complete.
 relations when one email/phone anchor has incompatible `same_entity`
 name/company targets; seed confidence metadata reflects `conflict_count`.
 
-Current next gate: continue reducing `forge/cli.py` risk only where behavior can
-be preserved: extract the remaining prerequisite display/execution/completion
-branch into a small helper or typed adapter, while keeping
-`--include-offensive-prereqs`, auto-run, prompt, non-TTY, metadata, audit, and
-dashboard-refresh semantics covered by focused tests.
+Current next gate: run a fresh current-code audit for remaining deterministic
+ASM gaps and pick the next concrete implementation target. Prioritize
+end-to-end kill-chain correctness, scope/proof/report/dashboard parity,
+recursive discovery value, and file-size/module-risk reductions only when tied
+to a proven behavior risk.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

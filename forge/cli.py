@@ -17430,7 +17430,10 @@ def kill_chain(
     # (requires --target-url / --service and can only be shown as text).
     # ═══════════════════════════════════════════════════════════════════
     import sys as _sys2  # noqa: PLC0415
-    from forge.kill_chain_prereqs import detect_kill_chain_prerequisites  # noqa: PLC0415
+    from forge.kill_chain_prereqs import (  # noqa: PLC0415
+        detect_kill_chain_prerequisites,
+        handle_kill_chain_prerequisite_flow,
+    )
 
     detected = detect_kill_chain_prerequisites(
         db_path=db_path,
@@ -17449,161 +17452,43 @@ def kill_chain(
         ),
     )
 
-    if not detected:
-        console.print(
-            "\n[dim]No additional tools currently applicable. Add breach dumps to "
-            ".forge_data/breach/, set AWS/Azure creds in .env, or place APKs/configs "
-            "under data/mobile/, data/artifacts/, data/evidence/, or data/uploads/ "
-            "to unlock more.[/dim]"
-        )
-        _complete_engagement_run(
-            {
-                "prereq_detected_count": 0,
-                "prereq_runnable_count": 0,
-                "prereq_execution_mode": "none",
-                "prereq_auto_run_enabled": bool(auto_run_detected),
-            }
-        )
-        return
-
-    # Display detected list
-    console.print(
-        f"\n[bold yellow]Additional tools available on this engagement[/bold yellow] "
-        f"([dim]{len(detected)} detected[/dim]):"
-    )
-    for d in detected:
-        marker = "[green]RUNNABLE[/green]" if d["runnable"] else "[dim]manual[/dim]"
-        console.print(f"  [cyan]*[/cyan] [bold]{d['label']}[/bold] {marker} - {d['reason']}")
-        if d["argv"] is not None:
-            argv = d["argv"]  # type: ignore[assignment]
-            preview = "forge " + " ".join(argv)  # type: ignore[arg-type]
-            console.print(f"       [dim]{preview}[/dim]")
-        elif d["manual_hint"]:
-            console.print(f"       [dim]{d['manual_hint']}[/dim]")
-
-    # Determine execution mode
-    runnable = [d for d in detected if d["runnable"]]
-    if not runnable:
-        console.print(
-            "\n[dim]None are auto-runnable (all need --target-url or per-service "
-            "params). Copy the suggested command when ready.[/dim]"
-        )
-        _complete_engagement_run(
-            {
-                "prereq_detected_count": len(detected),
-                "prereq_runnable_count": 0,
-                "prereq_execution_mode": "manual_only",
-                "prereq_auto_run_enabled": bool(auto_run_detected),
-            }
-        )
-        return
-
-    is_tty = _sys2.stdin.isatty() and _sys2.stdout.isatty()
-
-    if auto_run_detected:
-        console.print(
-            f"\n[bold cyan]--auto-run-detected set[/bold cyan] - running "
-            f"{len(runnable)} runnable prereq(s) now."
-        )
-        prereq_inputs = [
-            d
-            for d in runnable
-            if d.get("argv") is not None
-        ]
-        if len(prereq_inputs) > 1 and parallel_workers > 1:
-            _log(
-                "prereq spec prep",
-                f"[dim]parallel parse x{min(parallel_workers, len(prereq_inputs))}[/dim]",
-            )
-        prereq_specs = _run_inprocess_batch(
-            prereq_inputs,
-            lambda item: ModuleDispatchSpec(
-                cmd_argv=_detected_prereq_child_argv(
-                    list(item["argv"]),  # type: ignore[arg-type]
-                    roe_id=roe_id,
-                    scope_manifest=scope_manifest,
-                ),
-                label=f"prereq: {item['label']}",
-            ),
-            max_workers=parallel_workers,
-            progress_label="prereq spec prep",
-            progress_callback=_record_batch_progress,
-        )
-        if len(prereq_specs) > 1 and parallel_workers > 1:
-            _log(
-                "prereq auto-run",
-                f"[dim]parallel dispatch x{min(parallel_workers, len(prereq_specs))}[/dim]",
-            )
-        prereq_results = _run_module_batch(
-            prereq_specs,
-            _run_module,
-            max_workers=parallel_workers,
-        )
-        prereq_failures = sum(1 for result in prereq_results if int(result) != 0)
+    def _audit_prereq_auto_run(result: str) -> None:
         _cli_audit(
             db_path, engagement_id, "orchestrator", "kill_chain",
             "prereq_auto_run", target=domain,
-            result=(
-                f"ran={len(prereq_specs)} failed={prereq_failures} "
-                f"workers={min(parallel_workers, len(prereq_specs) or 1)}"
-            ),
+            result=result,
         )
-        _complete_engagement_run(
-            {
-                "prereq_detected_count": len(detected),
-                "prereq_runnable_count": len(runnable),
-                "prereq_execution_mode": "auto_run",
-                "prereq_auto_run_enabled": True,
-                "prereq_auto_run_count": len(prereq_specs),
-                "prereq_auto_run_failures": prereq_failures,
-            }
-        )
-        return
-    elif is_tty:
-        console.print(
-            f"\n[bold]{len(runnable)} tool(s) can be run now.[/bold] "
-            "Press Y to run each, any other key to skip.\n"
-        )
-        ran = 0
-        for d in runnable:
-            try:
-                resp = input(f"Run [{d['label']}]? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                console.print("[dim]input cancelled - stopping prereq prompts[/dim]")
-                break
-            if resp == "y":
-                _run_module(d["argv"], f"prereq: {d['label']}")  # type: ignore[arg-type]
-                ran += 1
+
+    def _audit_prereq_prompted(result: str) -> None:
         _cli_audit(
             db_path, engagement_id, "orchestrator", "kill_chain",
             "prereq_prompted", target=domain,
-            result=f"offered={len(runnable)} ran={ran}",
+            result=result,
         )
-        _complete_engagement_run(
-            {
-                "prereq_detected_count": len(detected),
-                "prereq_runnable_count": len(runnable),
-                "prereq_execution_mode": "prompted",
-                "prereq_auto_run_enabled": bool(auto_run_detected),
-                "prereq_prompted_count": len(runnable),
-                "prereq_prompted_ran": ran,
-            }
-        )
-        return
-    else:
-        console.print(
-            "\n[dim]Non-TTY invocation - not prompting. Re-run interactively "
-            "or pass --auto-run-detected to execute the RUNNABLE entries.[/dim]"
-        )
-        _complete_engagement_run(
-            {
-                "prereq_detected_count": len(detected),
-                "prereq_runnable_count": len(runnable),
-                "prereq_execution_mode": "non_tty_skipped",
-                "prereq_auto_run_enabled": bool(auto_run_detected),
-            }
-        )
-        return
+
+    handle_kill_chain_prerequisite_flow(
+        detected,
+        auto_run_detected=auto_run_detected,
+        parallel_workers=parallel_workers,
+        console_print=console.print,
+        log=_log,
+        complete_run=_complete_engagement_run,
+        audit_auto_run=_audit_prereq_auto_run,
+        audit_prompted=_audit_prereq_prompted,
+        run_inprocess_batch=_run_inprocess_batch,
+        run_module_batch=_run_module_batch,
+        run_module=_run_module,
+        make_dispatch_spec=lambda argv, label: ModuleDispatchSpec(cmd_argv=argv, label=label),
+        harden_child_argv=lambda argv: _detected_prereq_child_argv(
+            argv,
+            roe_id=roe_id,
+            scope_manifest=scope_manifest,
+        ),
+        progress_callback=_record_batch_progress,
+        is_tty=_sys2.stdin.isatty() and _sys2.stdout.isatty(),
+        input_func=input,
+    )
+    return
 
 
 @app.command("dashboard")

@@ -271,12 +271,21 @@ sentences as historical notes only, not as current instructions.
   and safe auto-run prereq tests passed (`5 passed`); kill-chain convergence
   suite passed (`3 passed`). Handoff:
   `.claude/handoffs/2026-07-24-prereq-detection-extraction.md`.
+- [x] Prerequisite flow adapter extraction checkpoint:
+  The remaining prerequisite display/execution/completion branch is now handled
+  by `handle_kill_chain_prerequisite_flow()` behind CLI-provided callbacks.
+  `forge kill-chain` still owns run finalization, dashboard refresh, audit
+  adapters, ROE/scope child-argv hardening, and module dispatch construction.
+  Helper tests now cover no-detected, manual-only, non-TTY skipped, prompt, and
+  auto-run completion modes. Verification: compile passed; Ruff passed; helper
+  plus existing CLI prereq behavior tests passed (`8 passed`); kill-chain
+  convergence suite passed (`3 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-prereq-flow-adapter-extraction.md`.
 - [ ] Next gate:
-  Continue reducing `forge/cli.py` risk only where behavior can be preserved:
-  extract the remaining prerequisite display/execution/completion branch into a
-  small helper or typed adapter, while keeping `--include-offensive-prereqs`,
-  auto-run, prompt, non-TTY, metadata, audit, and dashboard-refresh semantics
-  covered by focused tests.
+  Run a fresh current-code audit for remaining deterministic ASM gaps and pick
+  the next concrete implementation target. Prioritize end-to-end kill-chain
+  correctness, scope/proof/report/dashboard parity, recursive discovery value,
+  and file-size/module-risk reductions only when tied to a proven behavior risk.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
