@@ -25,19 +25,19 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Recon-output JSON structured walk worker-pool migration is
-implemented. Already collected recon-tool JSON/JSONL artifacts now dispatch
-source-gated structured document child traversal through ordered bounded worker
-helpers while nested recursion, text/XML/line parsing, final candidate
-normalization, duplicate suppression, sensitive-query stripping, and template
-rejection remain deterministic.
+Latest checkpoint: Terraform state resource iterator audit is complete. No code
+refactor was needed for `_iter_terraform_state_resource_values()` because it is
+a small in-memory state-order flattening pass, while structured/text
+state-family extraction, resource-specific candidate conversion, and final
+candidate-entry dedupe are already covered by bounded worker helpers. Added a
+focused real iterator regression covering legacy `resources`,
+`values.root_module`, `child_modules`, and `prior_state.values.root_module`.
 
-Verification: compile/Ruff passed; focused recon worker test plus existing
-structured-payload and persisted recon-output artifact slices passed
-(`3 passed`); adjacent DNS/takeover, imported scanner, passive scan, SARIF,
-and SBOM/security-tool output slices passed (`8 passed` including recon
-checks); cleanup left `remaining_recon_tool_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-recon-output-json-worker-pool.md`.
+Verification: compile/Ruff passed; focused Terraform iterator,
+engagement-backed structured tfstate extraction, Terraform state family,
+payload-family, resource-candidate, and candidate-entry worker slices passed
+(`6 passed`); cleanup left `remaining_terraform_state_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-terraform-state-iterator-audit.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -47,14 +47,13 @@ and persisted recon-output artifact slice both passed.
 Current next gate: re-audit remaining static parser/enricher candidates and
 select the next proven-safe bounded worker-pool migration before editing.
 Preserve deterministic ordering, compact tests, scope gates, provider caps,
-pacing/backoff, and passive-only behavior. Latest read-only audit says
-Terraform state resource collection is low priority because surrounding
-Terraform stages are already workerized; do not edit it unless a concrete
-current gap is proven.
+pacing/backoff, and passive-only behavior. Terraform state resource collection
+has been audited and covered without code changes; pick a new proven gap before
+editing.
 
-Natural stop note: repo was clean after push `8d934bd`. Recon-output JSON
-structured traversal was then selected from local review while read-only
-re-audit was running and implemented in the current checkpoint.
+Natural stop note: repo was clean after push `06dae0f`. Terraform state resource
+collection was then audited locally and covered with focused tests; no code
+refactor was needed.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

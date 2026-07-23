@@ -1107,13 +1107,27 @@ sentences as historical notes only, not as current instructions.
   execution, endpoint probing, provider call, live probing, credential use,
   scope/ROE relaxation, validation/report-gate change, severity change,
   proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [x] Terraform state resource iterator audit checkpoint: no code refactor was
+  needed for `_iter_terraform_state_resource_values()` because it is a small
+  in-memory state-order flattening pass, while structured/text state-family
+  extraction, resource-specific candidate conversion, and final candidate-entry
+  dedupe are already covered by bounded worker helpers. Added focused real
+  iterator coverage proving legacy `resources`, `values.root_module`,
+  `child_modules`, and `prior_state.values.root_module` order remains stable.
+  Verification: compile passed; Ruff passed; focused Terraform iterator,
+  engagement-backed structured tfstate extraction, Terraform state family,
+  payload-family, resource-candidate, and candidate-entry worker slices passed
+  (`6 passed`); cleanup left `remaining_terraform_state_test_files=0`. Safety:
+  passive static Terraform state/plan JSON parsing tests only; no Terraform
+  execution, provider call, state refresh, endpoint probing, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior. Latest read-only
-  audit says Terraform state resource collection is low priority because
-  surrounding Terraform stages are already workerized; do not edit it unless a
-  concrete current gap is proven.
+  provider caps, pacing/backoff, and passive-only behavior. Terraform state
+  resource collection has been audited and covered without code changes; pick a
+  new proven gap before editing.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

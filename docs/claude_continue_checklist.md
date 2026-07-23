@@ -414,13 +414,24 @@ historical notes only, not as current instructions.
   SBOM/security-tool output slices -> `8 passed` including recon checks;
   cleanup left `remaining_recon_tool_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-recon-output-json-worker-pool.md`.
+- [x] Terraform state resource iterator audit checkpoint completed: no code
+  refactor was needed for `_iter_terraform_state_resource_values()` because it
+  is a small in-memory state-order flattening pass, while structured/text
+  state-family extraction, resource-specific candidate conversion, and final
+  candidate-entry dedupe are already covered by bounded worker helpers. Added
+  focused real iterator coverage proving legacy `resources`,
+  `values.root_module`, `child_modules`, and `prior_state.values.root_module`
+  order remains stable. Verification: compile/Ruff passed; focused Terraform
+  iterator, engagement-backed structured tfstate extraction, Terraform state
+  family, payload-family, resource-candidate, and candidate-entry worker slices
+  -> `6 passed`; cleanup left `remaining_terraform_state_test_files=0`.
+  Handoff: `.claude/handoffs/2026-07-24-terraform-state-iterator-audit.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior. Latest read-only
-  audit says Terraform state resource collection is low priority because
-  surrounding Terraform stages are already workerized; do not edit it unless a
-  concrete current gap is proven.
+  provider caps, pacing/backoff, and passive-only behavior. Terraform state
+  resource collection has been audited and covered without code changes; pick a
+  new proven gap before editing.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
