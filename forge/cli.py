@@ -9021,6 +9021,55 @@ def kill_chain(
             if root and root not in root_domains:
                 root_domains.append(root)
 
+    def _remote_artifact_url_scope_decision(value: str) -> dict[str, object]:
+        raw_value = str(value or "").strip()
+        if not raw_value:
+            return {"allowed": False, "reason": "empty"}
+        parsed = urlparse(raw_value)
+        hostname = str(parsed.hostname or "").strip().lower().strip(".")
+        if parsed.scheme not in {"http", "https"} or not hostname:
+            return {"allowed": False, "reason": "invalid_url"}
+        if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
+            return {"allowed": True, "reason": "no_scope_manifest", "hostname": hostname}
+        recursive_scope = _validate_scope_manifest_seed_values(
+            scope_manifest_metadata,
+            [{"value": raw_value, "seed_type": "url"}],
+        )
+        if recursive_scope.get("denied"):
+            return {
+                "allowed": False,
+                "reason": "scope_manifest_denied",
+                "hostname": hostname,
+                "scope_manifest_source": str(scope_manifest_metadata.get("source") or ""),
+            }
+        return {"allowed": True, "reason": "allowed", "hostname": hostname}
+
+    def _remote_artifact_url_is_in_scope(value: str) -> bool:
+        return bool(_remote_artifact_url_scope_decision(value).get("allowed"))
+
+    def _audit_remote_artifact_scope_denied(request: ArtifactDownloadRequest, reason: str) -> None:
+        decision = _remote_artifact_url_scope_decision(request.source_url)
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "scope_gate",
+            "artifact_queue",
+            "remote_artifact_scope_denied",
+            target=request.source_url,
+            result=(
+                f"artifact_id={request.artifact_id} "
+                f"artifact_type={request.artifact_type} "
+                f"reason={str(decision.get('reason') or reason)} "
+                f"host={str(decision.get('hostname') or '')} "
+                f"scope_manifest={str(scope_manifest_metadata.get('source') or '') if isinstance(scope_manifest_metadata, dict) else ''}"
+            )[:500],
+        )
+
+    artifact_processor.set_remote_scope_gate(
+        _remote_artifact_url_is_in_scope,
+        _audit_remote_artifact_scope_denied,
+    )
+
     local_artifacts = artifact_processor.ingest_local_artifacts()
     if local_artifacts:
         _log("artifact intake", f"[green]{local_artifacts} local artifact(s) queued[/green]")
@@ -9608,55 +9657,6 @@ def kill_chain(
 
     def _url_seed_is_in_scope(value: str) -> bool:
         return bool(_url_seed_scope_decision(value).get("allowed"))
-
-    def _remote_artifact_url_scope_decision(value: str) -> dict[str, object]:
-        raw_value = str(value or "").strip()
-        if not raw_value:
-            return {"allowed": False, "reason": "empty"}
-        parsed = urlparse(raw_value)
-        hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        if parsed.scheme not in {"http", "https"} or not hostname:
-            return {"allowed": False, "reason": "invalid_url"}
-        if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
-            return {"allowed": True, "reason": "no_scope_manifest", "hostname": hostname}
-        recursive_scope = _validate_scope_manifest_seed_values(
-            scope_manifest_metadata,
-            [{"value": raw_value, "seed_type": "url"}],
-        )
-        if recursive_scope.get("denied"):
-            return {
-                "allowed": False,
-                "reason": "scope_manifest_denied",
-                "hostname": hostname,
-                "scope_manifest_source": str(scope_manifest_metadata.get("source") or ""),
-            }
-        return {"allowed": True, "reason": "allowed", "hostname": hostname}
-
-    def _remote_artifact_url_is_in_scope(value: str) -> bool:
-        return bool(_remote_artifact_url_scope_decision(value).get("allowed"))
-
-    def _audit_remote_artifact_scope_denied(request: ArtifactDownloadRequest, reason: str) -> None:
-        decision = _remote_artifact_url_scope_decision(request.source_url)
-        _cli_audit(
-            db_path,
-            engagement_id,
-            "scope_gate",
-            "artifact_queue",
-            "remote_artifact_scope_denied",
-            target=request.source_url,
-            result=(
-                f"artifact_id={request.artifact_id} "
-                f"artifact_type={request.artifact_type} "
-                f"reason={str(decision.get('reason') or reason)} "
-                f"host={str(decision.get('hostname') or '')} "
-                f"scope_manifest={str(scope_manifest_metadata.get('source') or '') if isinstance(scope_manifest_metadata, dict) else ''}"
-            )[:500],
-        )
-
-    artifact_processor.set_remote_scope_gate(
-        _remote_artifact_url_is_in_scope,
-        _audit_remote_artifact_scope_denied,
-    )
 
     def _url_seed_should_use_playwright(value: str) -> bool:
         if no_playwright:

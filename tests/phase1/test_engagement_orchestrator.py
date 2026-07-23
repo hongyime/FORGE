@@ -65969,6 +65969,23 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_remote_artifact_download(
         encoding="utf-8",
     )
 
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, artifact_type, discovered_from, status, metadata_json)
+            VALUES
+                (1001, 'https://evil.example/bootstrap.apk', 'apk', 'preexisting_fixture', 'queued', '{}')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
     downloaded_urls: list[str] = []
     root_html = (
         "<html><body>"
@@ -66024,7 +66041,10 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_remote_artifact_download(
     def _fake_download_remote_artifact_request(self, request):  # noqa: ANN001
         del self
         downloaded_urls.append(request.source_url)
-        if request.source_url == "https://acme.example/admin/secrets.json":
+        if request.source_url in {
+            "https://evil.example/bootstrap.apk",
+            "https://acme.example/admin/secrets.json",
+        }:
             raise AssertionError("out-of-scope remote artifact was downloaded")
         assert request.source_url == "https://acme.example/app/config.json"
         download_path = tmp_path / "allowed-config.json"
@@ -66065,7 +66085,6 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_remote_artifact_download(
 
     assert downloaded_urls == ["https://acme.example/app/config.json"]
 
-    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
     con = sqlite3.connect(db_path)
     try:
         artifact_rows = {
@@ -66079,6 +66098,10 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_remote_artifact_download(
             ).fetchall()
         }
         assert artifact_rows["https://acme.example/app/config.json"][0] == "parsed"
+        assert artifact_rows["https://evil.example/bootstrap.apk"][0] == "skipped"
+        assert "scope_manifest_denied_remote_artifact" in artifact_rows[
+            "https://evil.example/bootstrap.apk"
+        ][1]
         assert artifact_rows["https://acme.example/admin/secrets.json"][0] == "skipped"
         assert "scope_manifest_denied_remote_artifact" in artifact_rows[
             "https://acme.example/admin/secrets.json"
@@ -66093,6 +66116,7 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_remote_artifact_download(
             """
         ).fetchall()
         assert audit_rows
+        assert any(str(row[3]) == "https://evil.example/bootstrap.apk" for row in audit_rows)
         assert any(str(row[3]) == "https://acme.example/admin/secrets.json" for row in audit_rows)
         assert any("reason=scope_manifest_denied" in str(row[4]) for row in audit_rows)
         assert any(manifest_path.resolve().as_posix() in str(row[4]) for row in audit_rows)
