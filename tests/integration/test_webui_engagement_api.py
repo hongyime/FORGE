@@ -15,6 +15,8 @@ pytest.importorskip("jose")
 from forge.audit.manifest import write_run_audit_manifest
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.phase6.report_synthesizer import ReportSynthesizer
+from forge.reporting.dashboard import generate_dashboard
 from forge.webui.app import create_app
 from forge.webui.auth import mint_token
 
@@ -543,6 +545,91 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
         )
         assert raw_csv_resp.status_code == 200, raw_csv_resp.text
         assert "Validated Firebase data exposure" in raw_csv_resp.text
+
+
+def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    for artifact in reports_dir.glob("engagement_1001_report_20260709T014412.*"):
+        artifact.unlink()
+
+    report_path = ReportSynthesizer(
+        db_path=db_path,
+        output_dir=reports_dir,
+        provider="template",
+        assume_yes=True,
+    ).generate(engagement_id=1001)
+    report_json_path = report_path.with_suffix(".json")
+    report_csv_path = report_path.with_suffix(".csv")
+    report_payload = json.loads(report_json_path.read_text(encoding="utf-8"))
+    lineage = report_payload["report_lineage"]
+
+    assert report_payload["provider"] == "template"
+    assert report_payload["requested_provider"] == "template"
+    assert lineage["rendered_provider"] == "template"
+    assert lineage["findings_checksum"] == report_payload["findings_checksum"]
+
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=reports_dir / "dashboard.html")
+    detail_json = (
+        reports_dir
+        / "dashboard"
+        / "data"
+        / "engagements"
+        / "engagement-1001-acme-example.json"
+    )
+    dashboard_detail = json.loads(detail_json.read_text(encoding="utf-8"))
+    dashboard_summary = dashboard_detail["report_summary"]
+    assert dashboard_summary["artifact_name"] == report_json_path.name
+    assert dashboard_summary["provider"] == report_payload["provider"]
+    assert dashboard_summary["requested_provider"] == report_payload["requested_provider"]
+    assert dashboard_summary["render_backend"] == lineage["rendered_provider"]
+    assert dashboard_summary["rendered_provider"] == lineage["rendered_provider"]
+    assert dashboard_summary["findings_checksum"] == report_payload["findings_checksum"]
+    assert {item["label"] for item in dashboard_summary["available_exports"]} == {
+        "Markdown",
+        "PDF",
+        "Report JSON",
+        "CSV",
+    }
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('lineage-reviewer')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        api_summary = detail_resp.json()["report_summary"]
+        assert api_summary["artifact_name"] == dashboard_summary["artifact_name"]
+        assert api_summary["provider"] == dashboard_summary["provider"]
+        assert api_summary["requested_provider"] == dashboard_summary["requested_provider"]
+        assert api_summary["render_backend"] == dashboard_summary["render_backend"]
+        assert api_summary["rendered_provider"] == dashboard_summary["rendered_provider"]
+        assert api_summary["findings_checksum"] == dashboard_summary["findings_checksum"]
+
+        json_resp = client.get(
+            f"/api/engagements/engagement-1001-acme-example/artifacts/{report_json_path.name}",
+            headers=headers,
+        )
+        assert json_resp.status_code == 200, json_resp.text
+        downloaded_json = json_resp.json()
+        assert downloaded_json["findings_checksum"] == api_summary["findings_checksum"]
+        assert downloaded_json["report_lineage"]["rendered_provider"] == api_summary["rendered_provider"]
+
+        csv_resp = client.get(
+            f"/api/engagements/engagement-1001-acme-example/artifacts/{report_csv_path.name}",
+            headers=headers,
+        )
+        assert csv_resp.status_code == 200, csv_resp.text
+        assert report_payload["findings_checksum"] in csv_resp.text
+        assert ",template," in csv_resp.text
 
 
 def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tmp_path: Path, monkeypatch) -> None:
