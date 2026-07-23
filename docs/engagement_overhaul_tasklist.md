@@ -118,11 +118,22 @@ sentences as historical notes only, not as current instructions.
   model / sandbox constraints prevented an external review. Handoff:
   `.claude/handoffs/2026-07-24-report-lineage-alias-normalization.md`. Commit:
   `3d9f7b4`.
+- [x] Phase 6 dashboard/API lineage E2E checkpoint:
+  A mocked integration slice now generates a real Phase 6 template report family
+  from the existing engagement fixture and proves provider/checksum/render
+  lineage agreement across generated JSON, static dashboard detail payload, live
+  web API detail summary, JSON artifact download, and CSV artifact download.
+  Verification: focused parity test passed (`1 passed, 34 deselected,
+  3 warnings`); compile passed; Ruff passed; full web UI engagement API file
+  passed (`35 passed, 68 warnings`); pytest engagement cleanup reported
+  `removed=3 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-phase6-dashboard-api-lineage-e2e.md`. Commit:
+  `5aa0431`.
 - [ ] Next gate:
-  Verify end-to-end report lineage agreement between Phase 6 generated
-  artifacts, static dashboard payloads, web API detail summaries, and artifact
-  downloads in one mocked integration slice. Do not reopen worker-pool
-  micro-optimization unless a new measured bottleneck appears.
+  Add the same end-to-end lineage agreement proof for actual Phase 6 raw-export
+  last-resort artifacts, or document why existing raw-export dashboard/API
+  coverage is already equivalent. Do not reopen worker-pool micro-optimization
+  unless a new measured bottleneck appears.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
