@@ -77,11 +77,21 @@ def pytest_engagement_temp_dirs(roots: Iterable[Path] | None = None) -> list[Pat
             continue
         for child in sorted(resolved_root.iterdir(), key=lambda path: path.name):
             for candidate in _pytest_run_dir_candidates(child):
-                if candidate in seen or not any(candidate.rglob("engagement.db")):
+                if candidate in seen or not _has_engagement_test_db(candidate):
                     continue
                 seen.add(candidate)
                 targets.append(candidate)
     return targets
+
+
+def _has_engagement_test_db(path: Path) -> bool:
+    if any(path.rglob("engagement.db")):
+        return True
+    return any(
+        candidate.stem.isdigit()
+        for candidate in path.rglob("*.db")
+        if candidate.parent.name == "engagements" and candidate.parent.parent.name == ".forge_data"
+    )
 
 
 def _pytest_run_dir_candidates(path: Path) -> list[Path]:

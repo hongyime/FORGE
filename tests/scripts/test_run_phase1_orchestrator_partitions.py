@@ -86,6 +86,27 @@ def test_v11_cleanup_removes_nested_pytest_run_dirs_not_pytest_of_container(tmp_
     assert keep_nested.exists()
 
 
+def test_cleanup_detects_numeric_engagement_dbs_under_pytest_run_dirs(tmp_path: Path) -> None:
+    container = tmp_path / "pytest-of-bryan"
+    removable = container / "pytest-43"
+    engagement_root = removable / "case" / ".forge_data" / "engagements"
+    engagement_root.mkdir(parents=True)
+    (engagement_root / "4242.db").write_text("", encoding="utf-8")
+
+    keep_repo_like = tmp_path / "repo" / ".forge_data" / "engagements"
+    keep_repo_like.mkdir(parents=True)
+    (keep_repo_like / "5010.db").write_text("", encoding="utf-8")
+
+    assert runner.pytest_engagement_temp_dirs([tmp_path]) == [removable]
+
+    removed, remaining = runner.cleanup_pytest_engagement_dbs([tmp_path])
+
+    assert removed == 1
+    assert remaining == 0
+    assert not removable.exists()
+    assert keep_repo_like.exists()
+
+
 def test_run_command_returns_124_on_timeout(monkeypatch, tmp_path: Path) -> None:
     def _timeout_run(*args, **kwargs):  # noqa: ANN001, ARG001
         raise subprocess.TimeoutExpired(cmd=["python", "-m", "pytest"], timeout=1)
