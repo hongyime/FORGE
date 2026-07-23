@@ -27700,8 +27700,7 @@ class ArtifactQueueProcessor:
             default_factory=list,
         )
 
-    @staticmethod
-    def _api_client_text_candidate_family_values(item: tuple[str, str]) -> list[str]:
+    def _api_client_text_candidate_family_values(self, item: tuple[str, str]) -> list[str]:
         family, text = item
         if family == "dredd":
             return ArtifactQueueProcessor._api_client_dredd_text_candidate_values(text)
@@ -27712,7 +27711,7 @@ class ArtifactQueueProcessor:
         if family == "fallback":
             return ArtifactQueueProcessor._api_client_text_fallback_candidate_values(text)
         if family == "jmeter":
-            return ArtifactQueueProcessor._api_client_jmeter_text_candidate_values(text)
+            return self._api_client_jmeter_text_candidate_values(text)
         if family == "k6":
             return ArtifactQueueProcessor._api_client_k6_text_candidate_values(text)
         if family == "locust":
@@ -27821,8 +27820,7 @@ class ArtifactQueueProcessor:
         candidates.sort(key=lambda item: item[0])
         return [value for _position, value in candidates[:512]]
 
-    @staticmethod
-    def _api_client_jmeter_text_candidate_values(text: str) -> list[str]:
+    def _api_client_jmeter_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
         if "HTTPSampler" not in parse_text and "jmeterTestPlan" not in parse_text:
             return []
@@ -27830,6 +27828,18 @@ class ArtifactQueueProcessor:
             r"<HTTPSamplerProxy\b[^>]*>(?P<body>.*?)</HTTPSamplerProxy>",
             re.IGNORECASE | re.DOTALL,
         )
+        sampler_bodies = [
+            str(sampler_match.group("body") or "")
+            for sampler_match in sampler_pattern.finditer(parse_text)
+        ]
+        candidates = self._run_ordered_local_batch(
+            sampler_bodies,
+            self._api_client_jmeter_sampler_candidate_value,
+            default_factory=str,
+        )
+        return [candidate for candidate in candidates if candidate]
+
+    def _api_client_jmeter_sampler_candidate_value(self, body: str) -> str:
         prop_pattern = re.compile(
             r"""
             <stringProp\b[^>]*\bname=(?P<quote>["'])
@@ -27840,33 +27850,27 @@ class ArtifactQueueProcessor:
             """,
             re.IGNORECASE | re.DOTALL | re.VERBOSE,
         )
-        candidates: list[str] = []
-        for sampler_match in sampler_pattern.finditer(parse_text):
-            props: dict[str, str] = {}
-            for prop_match in prop_pattern.finditer(str(sampler_match.group("body") or "")):
-                key = str(prop_match.group("name") or "").rsplit(".", 1)[-1].lower()
-                value = html.unescape(str(prop_match.group("value") or "")).strip()
-                if value:
-                    props[key] = value
-            direct_path = str(props.get("path") or "").strip()
-            if direct_path.lower().startswith(("http://", "https://", "ws://", "wss://")):
-                candidates.append(direct_path)
-                continue
-            domain = str(props.get("domain") or "").strip()
-            if not domain:
-                continue
-            protocol = str(props.get("protocol") or "").strip()
-            port = str(props.get("port") or "").strip()
-            if port and not domain.endswith(f":{port}") and port.isdigit():
-                domain = f"{domain}:{port}"
-            candidates.append(
-                ArtifactQueueProcessor._api_spec_host_protocol_candidate(
-                    domain,
-                    protocol=protocol,
-                    path=direct_path,
-                )
-            )
-        return [candidate for candidate in candidates if candidate]
+        props: dict[str, str] = {}
+        for prop_match in prop_pattern.finditer(str(body or "")):
+            key = str(prop_match.group("name") or "").rsplit(".", 1)[-1].lower()
+            value = html.unescape(str(prop_match.group("value") or "")).strip()
+            if value:
+                props[key] = value
+        direct_path = str(props.get("path") or "").strip()
+        if direct_path.lower().startswith(("http://", "https://", "ws://", "wss://")):
+            return direct_path
+        domain = str(props.get("domain") or "").strip()
+        if not domain:
+            return ""
+        protocol = str(props.get("protocol") or "").strip()
+        port = str(props.get("port") or "").strip()
+        if port and not domain.endswith(f":{port}") and port.isdigit():
+            domain = f"{domain}:{port}"
+        return ArtifactQueueProcessor._api_spec_host_protocol_candidate(
+            domain,
+            protocol=protocol,
+            path=direct_path,
+        )
 
     @staticmethod
     def _api_client_k6_text_candidate_values(text: str) -> list[str]:

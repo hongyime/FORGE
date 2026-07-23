@@ -220,10 +220,19 @@ historical notes only, not as current instructions.
   `9 passed`; cleanup left `remaining_selenium_side_test_db_files=0`;
   persistent inventory remains `1`, `5010`, `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-selenium-side-worker-pool.md`.
-- [ ] Next implementation target: move JMeter `HTTPSamplerProxy` block parsing
-  under the bounded worker-pool path. Keep this local to static API-client
-  artifact parsing and preserve sampler order, protocol/host/path/port
-  reconstruction, sensitive-query stripping, and serial final dedupe.
+- [x] JMeter sampler worker-pool checkpoint completed: static `.jmx`
+  `HTTPSamplerProxy` block parsing now dispatches individual sampler bodies
+  through the ordered bounded local worker helper while URL normalization,
+  template rejection, sensitive-query stripping, and final dedupe remain serial
+  and deterministic. Protocol/host/path/port reconstruction and direct full-URL
+  sampler paths are preserved. Verification: compile/Ruff passed; focused
+  API-client worker suite -> `9 passed`; focused persisted JMeter/API artifact
+  slice -> `2 passed`; cleanup left `remaining_jmeter_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-jmeter-sampler-worker-pool.md`.
+- [ ] Next implementation target: identify the next proven-safe sequential
+  parser/enricher migration under the bounded worker-pool path before editing.
+  Prefer compact feature tests, disjoint helper extraction, and no behavior
+  expansion unless the selected parser is already covered by static fixtures.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

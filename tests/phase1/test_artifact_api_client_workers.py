@@ -279,3 +279,76 @@ def test_selenium_side_navigation_children_use_bounded_workers_and_preserve_orde
         "https://two.acme.example/path?view=public",
         "https://three.acme.example/path?view=public",
     ]
+
+
+def test_jmeter_sampler_blocks_use_bounded_workers_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = dedent(
+        """
+        <jmeterTestPlan version="1.2">
+          <HTTPSamplerProxy>
+            <stringProp name="HTTPSampler.domain">jmeter-one.acme.example</stringProp>
+            <stringProp name="HTTPSampler.protocol">https</stringProp>
+            <stringProp name="HTTPSampler.path">/api/v1</stringProp>
+          </HTTPSamplerProxy>
+          <HTTPSamplerProxy>
+            <stringProp name="HTTPSampler.path">https://jmeter-two.acme.example/status</stringProp>
+          </HTTPSamplerProxy>
+          <HTTPSamplerProxy>
+            <stringProp name="HTTPSampler.domain">jmeter-three.acme.example</stringProp>
+            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.port">8080</stringProp>
+            <stringProp name="HTTPSampler.path">/health</stringProp>
+          </HTTPSamplerProxy>
+          <HTTPSamplerProxy>
+            <stringProp name="HTTPSampler.path">https://jmeter-four.acme.example/path?token=hidden&amp;view=public&amp;api_key=hidden&amp;signature=hidden</stringProp>
+          </HTTPSamplerProxy>
+          <HTTPSamplerProxy>
+            <stringProp name="HTTPSampler.domain">${tenant}.acme.example</stringProp>
+            <stringProp name="HTTPSampler.protocol">https</stringProp>
+            <stringProp name="HTTPSampler.path">/template</stringProp>
+          </HTTPSamplerProxy>
+        </jmeterTestPlan>
+        """
+    ).strip()
+    original_sampler = ArtifactQueueProcessor._api_client_jmeter_sampler_candidate_value
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _tracking_sampler_candidate(
+        self: ArtifactQueueProcessor,
+        body: str,
+    ) -> str:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_sampler(self, body)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_api_client_jmeter_sampler_candidate_value",
+        _tracking_sampler_candidate,
+    )
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="load-test.jmx",
+    )
+
+    assert peak == 4
+    assert result.splitlines() == [
+        "https://jmeter-one.acme.example/api/v1",
+        "https://jmeter-two.acme.example/status",
+        "http://jmeter-three.acme.example:8080/health",
+        "https://jmeter-four.acme.example/path?view=public",
+    ]

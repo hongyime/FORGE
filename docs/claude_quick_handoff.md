@@ -25,23 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Selenium SIDE navigation worker-pool migration is
-implemented. Selenium `.side` static API-client navigation child traversal now
-uses the ordered bounded local worker helper for the current child layer while
-worker tasks recurse serially to avoid nested worker-pool oversubscription.
-Navigation order, base URL resolution, sensitive-query stripping, template
-rejection, and serial final dedupe are preserved.
+Latest checkpoint: JMeter sampler worker-pool migration is implemented. Static
+`.jmx` `HTTPSamplerProxy` block parsing now dispatches individual sampler
+bodies through the ordered bounded local worker helper while URL normalization,
+template rejection, sensitive-query stripping, and final dedupe remain serial
+and deterministic. Protocol/host/path/port reconstruction and direct full-URL
+sampler paths are preserved.
 
-Verification: compile/Ruff passed; focused API-client worker plus existing
-Selenium SIDE functionality tests passed (`9 passed`); cleanup left
-`remaining_selenium_side_test_db_files=0`; persistent inventory remains `1`,
-`5010`, `master.db`. Handoff:
-`.claude/handoffs/2026-07-24-selenium-side-worker-pool.md`.
+Verification: compile/Ruff passed; focused API-client worker suite passed
+(`9 passed`); focused persisted JMeter/API artifact slice passed (`2 passed`);
+cleanup left `remaining_jmeter_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-jmeter-sampler-worker-pool.md`.
 
-Current next gate: move JMeter `HTTPSamplerProxy` block parsing under the
-bounded worker-pool path. Keep this local to static API-client artifact parsing
-and preserve sampler order, protocol/host/path/port reconstruction,
-sensitive-query stripping, and serial final dedupe.
+Current next gate: identify the next proven-safe sequential parser/enricher
+migration under the bounded worker-pool path before editing. Prefer compact
+feature tests, disjoint helper extraction, and no behavior expansion unless the
+selected parser is already covered by static fixtures.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

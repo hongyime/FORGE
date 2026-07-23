@@ -833,12 +833,24 @@ sentences as historical notes only, not as current instructions.
   provider call, live probing, credential use, scope/ROE relaxation,
   validation/report-gate change, severity change, proxy/IP rotation,
   rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: move JMeter `HTTPSamplerProxy` block parsing
-  under the bounded worker-pool path. Keep this local to static API-client
-  artifact parsing and preserve sampler order, protocol/host/path/port
-  reconstruction, sensitive-query stripping, and serial final dedupe. Likely
-  files: `forge/engagement_orchestrator.py`,
-  `tests/phase1/test_artifact_api_client_workers.py`, docs, and handoff.
+- [x] JMeter sampler worker-pool checkpoint: static `.jmx`
+  `HTTPSamplerProxy` block parsing now dispatches individual sampler bodies
+  through the ordered bounded local worker helper while URL normalization,
+  template rejection, sensitive-query stripping, and final dedupe remain serial
+  and deterministic. Protocol/host/path/port reconstruction and direct full-URL
+  sampler paths are preserved. Verification: compile passed; Ruff passed;
+  focused API-client worker suite passed (`9 passed`); focused persisted
+  JMeter/API artifact slice passed (`2 passed`); cleanup left
+  `remaining_jmeter_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-jmeter-sampler-worker-pool.md`. Safety:
+  passive local static `.jmx` parsing only; no JMeter execution, load
+  generation, script execution, HTTP probing, provider call, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: identify the next proven-safe sequential
+  parser/enricher migration under the bounded worker-pool path before editing.
+  Prefer compact feature tests, disjoint helper extraction, and no behavior
+  expansion unless the selected parser is already covered by static fixtures.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
