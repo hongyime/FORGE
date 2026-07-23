@@ -576,7 +576,6 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         ),
         encoding="utf-8",
     )
-    (reports_dir / "audit_1001_manifest_20260709T014413.json").unlink()
     (reports_dir / "1001_attack_graph.graphml").write_text(
         """
         <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
@@ -631,7 +630,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["highest_severity"] == "HIGH"
     assert overview_payload["items"][0]["severity_summary"]["HIGH"] == 1
     assert overview_payload["items"][0]["report_count"] == 4
-    assert overview_payload["items"][0]["audit_count"] == 1
+    assert overview_payload["items"][0]["audit_count"] == 2
     assert overview_payload["items"][0]["counts"]["seed_runs"] == 1
     assert overview_payload["items"][0]["counts"]["engagement_runs"] == 1
     assert overview_payload["items"][0]["counts"]["email_intelligence"] == 2
@@ -735,6 +734,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "engagement_1001_report_20260709T014412.md",
         "engagement_1001_report_20260709T014412.json",
         "engagement_1001_report_20260709T014412.pdf",
+        "audit_1001_manifest_20260709T014413.json",
     }
     audit_artifact = next(
         artifact

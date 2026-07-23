@@ -766,12 +766,7 @@ def _materialize_audit_manifest_artifacts(
     verify: bool,
 ) -> list[Path]:
     existing = _audit_files(str(engagement_id), reports_dir)
-    manual_existing = [
-        path
-        for path in existing
-        if not path.name.startswith(f"audit_{engagement_id}_run_")
-    ]
-    if manual_existing or not _table_exists(con, "run_audit_manifests"):
+    if not _table_exists(con, "run_audit_manifests"):
         return existing
     rows = _fetch_rows(
         con,

@@ -261,7 +261,6 @@ def _build_engagement(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    (reports_dir / "audit_1001_manifest_20260709T014413.json").unlink()
     (reports_dir / "1001_attack_graph.graphml").write_text(
         """
         <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
@@ -313,7 +312,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["counts"]["seed_runs"] == 1
         assert items[0]["counts"]["engagement_runs"] == 1
         assert items[0]["report_count"] == 4
-        assert items[0]["audit_count"] == 1
+        assert items[0]["audit_count"] == 2
         assert items[0]["counts"]["email_intelligence"] == 2
         assert items[0]["run_summary"]["status"] == "completed"
         assert items[0]["run_summary"]["metadata"]["phase"] == "completed"
@@ -351,6 +350,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
             "engagement_1001_report_20260709T014412.json",
             "engagement_1001_report_20260709T014412.pdf",
             "engagement_1001_report_20260709T014412.csv",
+            "audit_1001_manifest_20260709T014413.json",
         }
         audit_artifact = next(
             artifact
