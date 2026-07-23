@@ -91,6 +91,17 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Renovate structured registry worker checkpoint:
+  Renovate YAML/JSON structured registry host extraction now routes independent
+  `matchHost`, `registryUrl`, `endpoint`, `npmRegistryServer`, and
+  `registryUrls` values through the existing ordered bounded worker pool before
+  deterministic URL normalization/dedupe. This does not run Renovate or contact
+  registries. Verification: compile passed; Ruff passed; focused Renovate worker
+  tests and existing engagement-backed quality/release dotfile slice passed
+  (`3 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-renovate-structured-workers.md`.
+  Next gate: wait for Jason's fresh audit if available; otherwise continue
+  inspecting remaining passive/static parser hotspots one candidate at a time.
 - [x] GoReleaser nested walker audit checkpoint:
   No code change needed. GoReleaser root config child traversal already uses the
   ordered bounded worker pool via `_yaml_goreleaser_child_candidate_values`; the

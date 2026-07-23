@@ -26544,11 +26544,11 @@ class ArtifactQueueProcessor:
         if not self._yaml_mapping_looks_like_renovate_config(mapping, normalized, path_hint):
             return []
 
+        raw_candidates: list[Any] = []
         candidates: list[str] = []
         seen: set[str] = set()
 
-        def _append(value: Any) -> None:
-            candidate = _artifact_package_registry_host_or_url_candidate(str(value or ""))
+        def _append_candidate(candidate: str) -> None:
             if not candidate or candidate.lower() in seen:
                 return
             seen.add(candidate.lower())
@@ -26568,17 +26568,24 @@ class ArtifactQueueProcessor:
         ):
             raw_value = self._yaml_ref_value(normalized, key)
             if raw_value:
-                _append(raw_value)
+                raw_candidates.append(raw_value)
 
         for key in ("registryUrls", "registry_urls"):
             value = normalized.get(key) or normalized.get(self._yaml_key_fingerprint(key))
             if isinstance(value, list):
                 for item in value[:64]:
                     if isinstance(item, (str, int, float)):
-                        _append(item)
+                        raw_candidates.append(item)
             elif isinstance(value, (str, int, float)):
-                _append(value)
+                raw_candidates.append(value)
 
+        candidate_entries = self._run_ordered_local_batch(
+            raw_candidates,
+            self._renovate_text_candidate_entry,
+            default_factory=str,
+        )
+        for candidate in candidate_entries:
+            _append_candidate(candidate)
         return candidates
 
     def _yaml_mapping_looks_like_renovate_config(

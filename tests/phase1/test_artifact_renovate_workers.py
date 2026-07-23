@@ -58,3 +58,58 @@ def test_renovate_text_candidates_use_bounded_workers_and_preserve_order(
         "https://npm.pkg.github.com",
         "https://renovate.acme.example/registry?view=public",
     ]
+
+
+def test_renovate_structured_candidates_use_bounded_workers_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    mapping = {
+        "hostRules": [
+            {
+                "matchHost": "quay.io",
+                "registryUrls": [
+                    "nuget.pkg.github.com",
+                    "https://npm.pkg.github.com",
+                    "https://renovate.acme.example/registry?token=hidden&view=public",
+                ],
+            }
+        ]
+    }
+    host_rule = mapping["hostRules"][0]
+    normalized = processor._yaml_normalized_mapping(host_rule)
+    original_entry = ArtifactQueueProcessor._renovate_text_candidate_entry
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _tracking_candidate_entry(raw_value: object) -> str:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_entry(raw_value)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_renovate_text_candidate_entry",
+        staticmethod(_tracking_candidate_entry),
+    )
+
+    assert processor._yaml_renovate_config_structured_candidates(
+        host_rule,
+        normalized,
+        "renovate/hostRules",
+    ) == [
+        "https://quay.io",
+        "https://nuget.pkg.github.com",
+        "https://npm.pkg.github.com",
+        "https://renovate.acme.example/registry?view=public",
+    ]
+    assert peak == 4

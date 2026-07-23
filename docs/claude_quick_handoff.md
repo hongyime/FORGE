@@ -25,24 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: GoReleaser nested walker audit is complete. No code change
-was needed because GoReleaser root config child traversal already uses the
-ordered bounded worker pool via `_yaml_goreleaser_child_candidate_values`; the
-remaining list/scalar walkers run inside a single child job and stay serial to
-avoid nested worker pools.
+Latest checkpoint: Renovate structured registry worker migration is complete.
+Renovate YAML/JSON structured registry host extraction now routes independent
+`matchHost`, `registryUrl`, `endpoint`, `npmRegistryServer`, and `registryUrls`
+values through the existing ordered bounded worker pool before deterministic URL
+normalization/dedupe. It does not run Renovate or contact registries.
 
-Verification: focused GoReleaser worker test and existing engagement-backed
-quality/release dotfile artifact slice passed (`2 passed`). Handoff:
-`.claude/handoffs/2026-07-24-goreleaser-nested-walker-audit.md`.
+Verification: compile/Ruff passed; focused Renovate worker tests and existing
+engagement-backed quality/release dotfile slice passed (`3 passed`). Handoff:
+`.claude/handoffs/2026-07-24-renovate-structured-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: run a fresh audit for remaining passive/static parser
-hotspots before editing; the ranked list from Ohm is now exhausted. Preserve
-deterministic ordering, compact tests, scope gates, provider caps,
+Current next gate: wait for Jason's fresh audit if available; otherwise continue
+inspecting remaining passive/static parser hotspots one candidate at a time.
+Preserve deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
