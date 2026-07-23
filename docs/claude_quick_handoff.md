@@ -25,35 +25,31 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: DB-backed audit manifest artifacts are complete. Static
-dashboard and live web API now expose a safe downloadable audit artifact even
-when no manual `audit_*.json` file exists beside reports. Completed runs already
-store canonical manifests in `run_audit_manifests`; dashboard/API now
-materialize `audit_{engagement_id}_run_{run_id}_{short_hash}.json` summary
-artifacts from that DB row, while existing manual audit sidecars still win.
+Latest checkpoint: manual plus DB audit artifact parity is complete. Manual
+legacy `audit_*.json` sidecars no longer suppress DB-backed
+`audit_{engagement_id}_run_{run_id}_{short_hash}.json` manifest summaries.
+Static dashboard and live web API now expose both artifact families so mixed
+old/new deployments do not hide canonical run audit summaries.
 
-The materialized summary includes hash/status metadata and intentionally does
-not expose raw `manifest_json`. Live list views materialize/count without
-verification; detail/download paths write verified summaries. Verification:
-compile/Ruff passed; focused static dashboard audit artifact test passed
-(`1 passed, 19 deselected`); focused web UI API audit artifact test passed
-(`1 passed, 35 deselected, 10 warnings`); full static dashboard file passed
-(`20 passed`); full web UI engagement API file passed
-(`36 passed, 71 warnings`); pytest engagement cleanup reported
-`removed=4 remaining=0 post_scan=0`. Handoff:
-`.claude/handoffs/2026-07-24-db-backed-audit-manifest-artifacts.md`. Commit:
-`4e000e2`.
+Verification: compile/Ruff passed; focused static dashboard and web API audit
+tests passed; full static dashboard file passed (`20 passed`); full web UI
+engagement API file passed (`36 passed, 71 warnings`); pytest engagement
+cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
+`.claude/handoffs/2026-07-24-manual-db-audit-artifact-parity.md`. Commit:
+`32ee3bb`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: run a current-code audit for remaining dashboard/report/audit
-surface mismatches or a broader mocked kill-chain acceptance gap. Do not reopen
-worker-pool micro-optimization unless a new measured bottleneck appears.
-Preserve deterministic ordering, compact tests, scope gates, provider caps,
-pacing/backoff, and passive-only behavior.
+Current next gate: fix the high-priority kill-chain remote artifact scope gate
+ordering found by the sidecar audit. Pre-existing queued remote artifacts must
+receive the scope-manifest gate before the first
+`ArtifactQueueProcessor.process()` pass. Add a regression where an out-of-scope
+queued remote artifact cannot download, records scope denial, and leaves no
+outbound call. Then audit run-finalization ordering for `--auto-run-detected`
+actions.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -137,10 +137,24 @@ historical notes only, not as current instructions.
   `removed=4 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-db-backed-audit-manifest-artifacts.md`. Commit:
   `4e000e2`.
+- [x] Manual plus DB audit artifact parity checkpoint:
+  Manual legacy `audit_*.json` sidecars no longer suppress DB-backed
+  `audit_{engagement_id}_run_{run_id}_{short_hash}.json` manifest summaries.
+  Static dashboard and live web API now expose both artifact families so mixed
+  old/new deployments do not hide canonical run audit summaries. Verification:
+  compile passed; Ruff passed; focused static dashboard and web API audit tests
+  passed; full static dashboard file passed (`20 passed`); full web UI
+  engagement API file passed (`36 passed, 71 warnings`); pytest engagement
+  cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-manual-db-audit-artifact-parity.md`. Commit:
+  `32ee3bb`.
 - [ ] Next gate:
-  Run a current-code audit for remaining dashboard/report/audit surface
-  mismatches or a broader mocked kill-chain acceptance gap. Do not reopen
-  worker-pool micro-optimization unless a new measured bottleneck appears.
+  Fix the high-priority kill-chain remote artifact scope gate ordering found by
+  the sidecar audit: pre-existing queued remote artifacts must receive the
+  scope-manifest gate before the first `ArtifactQueueProcessor.process()` pass.
+  Add a regression where an out-of-scope queued remote artifact cannot download,
+  records scope denial, and leaves no outbound call. Then audit run-finalization
+  ordering for `--auto-run-detected` actions.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
