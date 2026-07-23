@@ -66,6 +66,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Cloudflare Pages `_routes.json` worker checkpoint:
+  Static-hosting control parsing now routes independent Cloudflare Pages
+  `_routes.json` `include`, `exclude`, and `routes` entries through the existing
+  ordered bounded worker pool before URL normalization. This preserves entry
+  order, local base-URL resolution, query secret stripping, and passive-only
+  behavior. Verification: compile passed; Ruff passed; focused static-hosting
+  worker tests and existing engagement-backed static-hosting control slice passed
+  (`3 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-cloudflare-routes-workers.md`.
+  Next gate: continue with Ohm's remaining ExternalSecret `data`/`dataFrom`
+  remote-ref candidate if still applicable.
 - [x] Recon JSONL line-worker checkpoint:
   Recon-tool output parsing now routes independent JSONL/plain line extraction
   through the existing ordered bounded worker pool before deterministic

@@ -25,25 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Recon JSONL line-worker migration is complete. Recon-tool
-output parsing now routes independent JSONL/plain line extraction through the
-existing ordered bounded worker pool before deterministic candidate
-normalization and dedupe. It preserves raw line order, the 4096 cap, and
-passive static parsing behavior; it does not execute recon tools or perform
-live probing.
+Latest checkpoint: Cloudflare Pages `_routes.json` worker migration is complete.
+Static-hosting control parsing now routes independent Cloudflare Pages
+`_routes.json` `include`, `exclude`, and `routes` entries through the existing
+ordered bounded worker pool before URL normalization. It preserves entry order,
+local base-URL resolution, query secret stripping, and passive-only behavior.
 
-Verification: compile/Ruff passed; focused recon worker regressions and existing
-engagement-backed recon artifact slice passed (`3 passed`). Handoff:
-`.claude/handoffs/2026-07-24-recon-jsonl-line-workers.md`.
+Verification: compile/Ruff passed; focused static-hosting worker tests and
+existing engagement-backed static-hosting control slice passed (`3 passed`).
+Handoff: `.claude/handoffs/2026-07-24-cloudflare-routes-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: use Ohm's remaining ranked candidates, starting with
-Cloudflare Pages `_routes.json` value walking, then ExternalSecret
-`data`/`dataFrom` remote refs if still applicable. Preserve deterministic
+Current next gate: continue with Ohm's remaining ExternalSecret `data` /
+`dataFrom` remote-ref candidate if still applicable, then GoReleaser nested
+list/scalar walkers only if a concrete gap remains. Preserve deterministic
 ordering, compact tests, scope gates, provider caps, pacing/backoff, and
 passive-only behavior.
 

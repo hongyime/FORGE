@@ -27647,16 +27647,22 @@ class ArtifactQueueProcessor:
         if source_label == "cloudflare-pages-routes":
             document = _safe_json_loads(raw_text)
             if isinstance(document, dict):
+                route_jobs: list[object] = []
                 for key in ("include", "exclude"):
                     raw_entries = document.get(key)
                     if isinstance(raw_entries, list):
                         for entry in raw_entries[:256]:
-                            _append(entry)
+                            route_jobs.append(entry)
                 for route in list(document.get("routes") or [])[:256]:
-                    if isinstance(route, dict):
-                        _append(route.get("pattern") or route.get("path") or route.get("route"))
-                    else:
-                        _append(route)
+                    route_jobs.append(route)
+                route_batches = self._run_ordered_local_batch(
+                    route_jobs,
+                    self._static_hosting_control_cloudflare_route_candidate_values,
+                    default_factory=list,
+                )
+                for route_batch in route_batches:
+                    for candidate in route_batch:
+                        _append(candidate)
 
         line_batches = self._run_ordered_local_batch(
             [(source_label, raw_line) for raw_line in raw_text.splitlines()[:4096]],
@@ -27676,6 +27682,20 @@ class ArtifactQueueProcessor:
         if lowered in {"-", "/", "/*", "/:splat", "/:path*", "200", "301", "302", "303", "307", "308"}:
             return ""
         return candidate
+
+    @staticmethod
+    def _static_hosting_control_cloudflare_route_candidate_values(value: object) -> list[str]:
+        if isinstance(value, dict):
+            candidate = (
+                value.get("pattern")
+                or value.get("path")
+                or value.get("route")
+                or ""
+            )
+        else:
+            candidate = value
+        normalized = ArtifactQueueProcessor._static_hosting_control_candidate_entry(candidate)
+        return [normalized] if normalized else []
 
     @classmethod
     def _static_hosting_control_line_candidate_values(

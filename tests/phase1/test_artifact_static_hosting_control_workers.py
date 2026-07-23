@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import threading
+import time
 from pathlib import Path
 from textwrap import dedent
 
@@ -59,4 +62,60 @@ def test_static_hosting_control_payload_uses_bounded_workers_and_preserves_order
         "https://cdn.acme.example/app.css?view=public",
         "https://acme.example/firebase/*",
         "https://redirects-firebase.firebaseio.com/:splat",
+    ]
+
+
+def test_cloudflare_pages_routes_use_bounded_workers_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = json.dumps(
+        {
+            "include": ["/api/*", "/assets/*"],
+            "exclude": ["/admin/*"],
+            "routes": [
+                {"pattern": "/docs/*"},
+                {"path": "https://routes.acme.example/status?token=hidden&view=ops"},
+                "/firebase/*",
+            ],
+        }
+    )
+    original_route = ArtifactQueueProcessor._static_hosting_control_cloudflare_route_candidate_values
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _tracking_route_values(value: object) -> list[str]:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_route(value)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_static_hosting_control_cloudflare_route_candidate_values",
+        staticmethod(_tracking_route_values),
+    )
+
+    result = processor._static_hosting_control_text_structured_payload_text(
+        payload,
+        source_hint="_routes.json",
+        base_url="https://acme.example/_routes.json",
+    )
+
+    assert peak == 4
+    assert result.splitlines() == [
+        "https://acme.example/api/*",
+        "https://acme.example/assets/*",
+        "https://acme.example/admin/*",
+        "https://acme.example/docs/*",
+        "https://routes.acme.example/status?view=ops",
+        "https://acme.example/firebase/*",
     ]
