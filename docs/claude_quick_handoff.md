@@ -25,19 +25,18 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: report history lineage parity is complete. Static dashboard
-and React detail report-history cards now expose historical write-degradation
-details and findings checksums, not only fallback reason/export count. Live API
-raw-export detail coverage now asserts requested provider, upstream/render
-backend, fallback reason, write error, findings checksum, raw-export status,
-export labels, artifact names, and raw JSON/CSV downloads.
+Latest checkpoint: workflow report API lineage is complete. Legacy
+`GET /reports/{workflow_id}` still returns the expected markdown report payload,
+but now also exposes allowlisted deterministic lineage for degraded/raw-export
+workflow reports: provider, requested provider, upstream/render backend,
+fallback reason, report write error, findings checksum, and nested
+`report_lineage`.
 
-Verification: compile/Ruff passed; focused report-history and raw-export API/UI
-slice passed (`8 passed, 6 warnings`); web UI build passed; web UI lint
-completed with existing unrelated React hook warnings; pytest engagement cleanup
-removed four test-owned temp dirs and post-scan was `0`. Handoff:
-`.claude/handoffs/2026-07-24-report-history-lineage-parity.md`. Commit:
-`82e0406`.
+Verification: compile/Ruff passed; full MVP workflow integration file passed
+(`5 passed`); pytest engagement cleanup reported
+`removed=0 remaining=0 post_scan=0`. Handoff:
+`.claude/handoffs/2026-07-24-workflow-report-api-lineage.md`. Commit:
+`1dd57f6`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -45,9 +44,11 @@ uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
 Current next gate: continue with a concrete provider/export parity gap or
-another mocked E2E acceptance gap found by current-code audit. Do not reopen
-worker-pool micro-optimization unless a new measured bottleneck appears.
-Preserve deterministic ordering, compact tests, scope gates, provider caps,
+another mocked E2E acceptance gap found by current-code audit. Recommended
+target: confirm the current-code report API/export path and dashboard report
+lineage agree for template/raw-export degradation. Do not reopen worker-pool
+micro-optimization unless a new measured bottleneck appears. Preserve
+deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only

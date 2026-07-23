@@ -91,6 +91,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Workflow report API lineage checkpoint:
+  Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
+  markdown response fields while exposing allowlisted deterministic lineage from
+  stored `report`, `report_metadata`, and `report_lineage` workflow payloads.
+  Raw-export-like degraded workflow reports now surface provider, requested
+  provider, upstream/render backend, fallback reason, report write error,
+  findings checksum, and nested `report_lineage` for review/API consumers.
+  Verification: compile passed; Ruff passed; full MVP workflow integration file
+  passed (`5 passed`); pytest engagement cleanup reported
+  `removed=0 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-workflow-report-api-lineage.md`. Commit:
+  `1dd57f6`.
+- [ ] Next gate:
+  Continue with another concrete provider/export parity gap or a mocked E2E
+  acceptance gap found by current-code audit. Recommended target: confirm the
+  current-code report API/export path and dashboard report lineage agree for
+  template/raw-export degradation. Do not reopen worker-pool micro-optimization
+  unless a new measured bottleneck appears.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
@@ -104,10 +122,6 @@ sentences as historical notes only, not as current instructions.
   `0`. Handoff:
   `.claude/handoffs/2026-07-24-report-history-lineage-parity.md`. Commit:
   `82e0406`.
-- [ ] Next gate:
-  Continue with another concrete provider/export parity gap or mocked E2E
-  acceptance gap found by current-code audit. Do not reopen worker-pool
-  micro-optimization unless a new measured bottleneck appears.
 - [x] Recursive kill-chain dashboard review parity checkpoint:
   The mocked multi-seed recursive kill-chain E2E now proves the real generated
   dashboard/detail route can review the same engagement output. The run covers
