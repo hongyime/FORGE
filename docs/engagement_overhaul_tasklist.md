@@ -1075,6 +1075,22 @@ sentences as historical notes only, not as current instructions.
   endpoint probing, provider call, live probing, credential use,
   scope/ROE relaxation, validation/report-gate change, severity change,
   proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [x] JS runtime config regex worker-pool checkpoint: JS runtime/package and
+  frontend/deploy config parsing now dispatches independent package-specifier,
+  registry, and browser-endpoint regex families through ordered bounded worker
+  helpers while Firebase hosting site ordering, serial Bun `[install.scopes]`
+  line-state parsing, final offset sort, and final URL/package normalization
+  remain deterministic. Read-only sidecar review confirmed the migration shape
+  and do-not-touch boundaries. Verification: compile passed; Ruff passed;
+  focused JS runtime worker/config/Firebase hosting tests passed (`6 passed`);
+  persisted runtime toolchain artifact slice passed (`1 passed`); cleanup left
+  `remaining_js_runtime_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-js-runtime-regex-worker-pool.md`. Safety:
+  passive local static JS/runtime/frontend/deploy config parsing only; no JS
+  execution, package install, browser automation, endpoint probing, provider
+  call, live probing, credential use, scope/ROE relaxation,
+  validation/report-gate change, severity change, proxy/IP rotation,
+  rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,

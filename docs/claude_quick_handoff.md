@@ -25,18 +25,19 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: CI/CD workflow YAML walker worker-pool migration is
-implemented. GitHub Actions `uses`, CircleCI containers, Azure
-repository/container resources, Bitbucket repository/container refs, and GitLab
-include/service refs now dispatch current mapping/list child scans or
-independent resource entries through ordered bounded worker helpers while
-nested recursion and final dedupe stay serial.
+Latest checkpoint: JS runtime config regex worker-pool migration is
+implemented. JS runtime/package and frontend/deploy config parsing now
+dispatches independent package-specifier, registry, and browser-endpoint regex
+families through ordered bounded worker helpers while Firebase hosting site
+ordering, serial Bun `[install.scopes]` line-state parsing, final offset sort,
+and final URL/package normalization remain deterministic.
 
-Verification: compile/Ruff passed; focused CI/CD worker tests passed
-(`3 passed`); persisted CI/CD workflow, Bitbucket, Azure, and GitLab artifact
-slices passed (`4 passed`); cleanup left
-`remaining_ci_workflow_runtime_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-ci-workflow-yaml-worker-pool.md`.
+Verification: compile/Ruff passed; focused JS runtime worker/config/Firebase
+hosting tests passed (`6 passed`); persisted runtime toolchain artifact slice
+passed (`1 passed`); cleanup left `remaining_js_runtime_test_files=0`.
+Read-only sidecar `Noether` confirmed the migration shape and do-not-touch
+boundaries. Handoff:
+`.claude/handoffs/2026-07-24-js-runtime-regex-worker-pool.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -48,9 +49,9 @@ select the next proven-safe bounded worker-pool migration before editing.
 Preserve deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
-Natural stop note: repo was clean after push `c27adbf`. CI/CD workflow YAML
-walkers were then selected from the read-only subagent audit and implemented in
-the current checkpoint.
+Natural stop note: repo was clean after push `24e0260`. JS runtime config regex
+families were then selected from the read-only subagent audit and implemented
+in the current checkpoint.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

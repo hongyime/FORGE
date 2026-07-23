@@ -27278,8 +27278,7 @@ class ArtifactQueueProcessor:
             lines.append(normalized)
         return "\n".join(lines)
 
-    @staticmethod
-    def _js_runtime_text_candidate_values(text: str, *, source_label: str = "") -> list[str]:
+    def _js_runtime_text_candidate_values(self, text: str, *, source_label: str = "") -> list[str]:
         raw_text = str(text or "")
         entries: list[tuple[int, str]] = []
         if source_label == "firebase-hosting-config":
@@ -27287,27 +27286,16 @@ class ArtifactQueueProcessor:
                 (len(raw_text) + index, value)
                 for index, value in enumerate(firebase_hosting_site_urls(raw_text))
             )
-        for match in re.finditer(r"""["'](?P<value>(?:npm|jsr):[^"']+)["']""", raw_text):
-            value = str(match.group("value") or "").strip()
-            if value:
-                entries.append((match.start(), value))
-        registry_pattern = re.compile(
-            r"""
-            ["']?
-            (?P<key>
-                registry|registries|registryUrl|registry_url|
-                npmRegistryServer|npm_registry_server
-            )
-            ["']?
-            \s*(?::|=)\s*
-            ["'](?P<value>[^"']+)["']
-            """,
-            re.IGNORECASE | re.VERBOSE,
+        family_batches = self._run_ordered_local_batch(
+            [("package", raw_text), ("registry", raw_text)],
+            self._js_runtime_text_candidate_family_entries,
+            default_factory=list,
         )
-        for match in registry_pattern.finditer(raw_text):
-            value = str(match.group("value") or "").strip()
-            if value:
-                entries.append((match.start(), value))
+        entries.extend(
+            entry
+            for family_entries in family_batches
+            for entry in family_entries
+        )
 
         in_bun_scope_block = False
         offset = 0
@@ -27326,7 +27314,64 @@ class ArtifactQueueProcessor:
                     entries.append((offset + raw_line.find(value), value))
             offset += len(raw_line)
 
-        if source_label in {
+        if self._js_runtime_source_uses_browser_endpoint_patterns(source_label):
+            browser_batches = self._run_ordered_local_batch(
+                [
+                    (index, pattern, raw_text)
+                    for index, pattern in enumerate(
+                        self._js_runtime_browser_endpoint_patterns()
+                    )
+                ],
+                self._js_runtime_browser_endpoint_pattern_entries,
+                default_factory=list,
+            )
+            entries.extend(
+                entry
+                for pattern_entries in browser_batches
+                for entry in pattern_entries
+            )
+
+        entries.sort(key=lambda item: item[0])
+        return [value for _index, value in entries]
+
+    @staticmethod
+    def _js_runtime_text_candidate_family_entries(
+        item: tuple[str, str],
+    ) -> list[tuple[int, str]]:
+        family, raw_text = item
+        if family == "package":
+            return [
+                (match.start(), value)
+                for match in re.finditer(
+                    r"""["'](?P<value>(?:npm|jsr):[^"']+)["']""",
+                    raw_text,
+                )
+                if (value := str(match.group("value") or "").strip())
+            ]
+        if family == "registry":
+            registry_pattern = re.compile(
+                r"""
+                ["']?
+                (?P<key>
+                    registry|registries|registryUrl|registry_url|
+                    npmRegistryServer|npm_registry_server
+                )
+                ["']?
+                \s*(?::|=)\s*
+                ["'](?P<value>[^"']+)["']
+                """,
+                re.IGNORECASE | re.VERBOSE,
+            )
+            return [
+                (match.start(), value)
+                for match in registry_pattern.finditer(raw_text)
+                if (value := str(match.group("value") or "").strip())
+            ]
+        return []
+
+    @staticmethod
+    def _js_runtime_source_uses_browser_endpoint_patterns(source_label: str) -> bool:
+        return source_label in {
             "astro-config",
             "next-config",
             "nuxt-config",
@@ -27356,54 +27401,51 @@ class ArtifactQueueProcessor:
             "heroku-app-json",
             "static-json-config",
             "cordova-config",
-        }:
-            browser_endpoint_patterns = (
-                re.compile(
-                    r"""
-                    ["']?\b(?:
-                        apiBase|apiBaseURL|apiBaseUrl|apiEndpoint|apiHost|apiHostname|
-                        apiURL|apiUrl|appURL|appUrl|assetPrefix|assets|base|baseURL|
-                        baseUrl|base_url|buildHookURL|buildHookUrl|callbackURL|callbackUrl|
-                        cdnURL|cdnUrl|contentURL|contentUrl|destination|domain|endpoint|
-                        endpointURL|endpointUrl|host|hostname|href|launchURL|launchUrl|
-                        launch_url|origin|publicPath|redirectURL|redirectUrl|serverURL|
-                        serverUrl|site|siteURL|siteUrl|src|staticURL|staticUrl|target|to|
-                        updatesURL|updatesUrl|url|webServerURL|webServerUrl|webURL|webUrl|
-                        website|websiteURL|websiteUrl
-                    )\b["']?
-                    \s*(?::|=)\s*
-                    (?P<quote>["'])(?P<value>[^"'\s,}\]]+)(?P=quote)
-                    """,
-                    re.IGNORECASE | re.VERBOSE,
-                ),
-                re.compile(
-                    r"""
-                    ["']?\b(?:
-                        apiBase|apiBaseURL|apiBaseUrl|apiEndpoint|apiHost|apiHostname|
-                        apiURL|apiUrl|appURL|appUrl|assetPrefix|assets|base|baseURL|
-                        baseUrl|base_url|buildHookURL|buildHookUrl|callbackURL|callbackUrl|
-                        cdnURL|cdnUrl|contentURL|contentUrl|destination|domain|endpoint|
-                        endpointURL|endpointUrl|host|hostname|href|launchURL|launchUrl|
-                        launch_url|origin|publicPath|redirectURL|redirectUrl|serverURL|
-                        serverUrl|site|siteURL|siteUrl|src|staticURL|staticUrl|target|to|
-                        updatesURL|updatesUrl|url|webServerURL|webServerUrl|webURL|webUrl|
-                        website|websiteURL|websiteUrl
-                    )\b["']?
-                    \s*(?::|=)\s*
-                    [^,\n;]+?\|\|\s*
-                    (?P<quote>["'])(?P<value>[^"'\s,}\]]+)(?P=quote)
-                    """,
-                    re.IGNORECASE | re.VERBOSE,
-                ),
-            )
-            for pattern in browser_endpoint_patterns:
-                for match in pattern.finditer(raw_text):
-                    value = str(match.group("value") or "").strip()
-                    if value:
-                        entries.append((match.start(), value))
+        }
 
-        entries.sort(key=lambda item: item[0])
-        return [value for _index, value in entries]
+    @staticmethod
+    def _js_runtime_browser_endpoint_patterns() -> tuple[re.Pattern[str], ...]:
+        key_pattern = r"""
+            apiBase|apiBaseURL|apiBaseUrl|apiEndpoint|apiHost|apiHostname|
+            apiURL|apiUrl|appURL|appUrl|assetPrefix|assets|base|baseURL|
+            baseUrl|base_url|buildHookURL|buildHookUrl|callbackURL|callbackUrl|
+            cdnURL|cdnUrl|contentURL|contentUrl|destination|domain|endpoint|
+            endpointURL|endpointUrl|host|hostname|href|launchURL|launchUrl|
+            launch_url|origin|publicPath|redirectURL|redirectUrl|serverURL|
+            serverUrl|site|siteURL|siteUrl|src|staticURL|staticUrl|target|to|
+            updatesURL|updatesUrl|url|webServerURL|webServerUrl|webURL|webUrl|
+            website|websiteURL|websiteUrl
+        """
+        return (
+            re.compile(
+                rf"""
+                ["']?\b(?:{key_pattern})\b["']?
+                \s*(?::|=)\s*
+                (?P<quote>["'])(?P<value>[^"'\s,}}\]]+)(?P=quote)
+                """,
+                re.IGNORECASE | re.VERBOSE,
+            ),
+            re.compile(
+                rf"""
+                ["']?\b(?:{key_pattern})\b["']?
+                \s*(?::|=)\s*
+                [^,\n;]+?\|\|\s*
+                (?P<quote>["'])(?P<value>[^"'\s,}}\]]+)(?P=quote)
+                """,
+                re.IGNORECASE | re.VERBOSE,
+            ),
+        )
+
+    @staticmethod
+    def _js_runtime_browser_endpoint_pattern_entries(
+        item: tuple[int, re.Pattern[str], str],
+    ) -> list[tuple[int, str]]:
+        _index, pattern, raw_text = item
+        return [
+            (match.start(), value)
+            for match in pattern.finditer(raw_text)
+            if (value := str(match.group("value") or "").strip())
+        ]
 
     @staticmethod
     def _js_runtime_url_candidate_entry(raw_value: str) -> str:

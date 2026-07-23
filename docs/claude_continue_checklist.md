@@ -392,11 +392,22 @@ historical notes only, not as current instructions.
   artifact slices -> `4 passed`; cleanup left
   `remaining_ci_workflow_runtime_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-ci-workflow-yaml-worker-pool.md`.
+- [x] JS runtime config regex worker-pool checkpoint completed: JS runtime/
+  package and frontend/deploy config parsing now dispatches independent
+  package-specifier, registry, and browser-endpoint regex families through
+  ordered bounded worker helpers while Firebase hosting site ordering, serial
+  Bun `[install.scopes]` line-state parsing, final offset sort, and final
+  URL/package normalization remain deterministic. Read-only sidecar `Noether`
+  confirmed the migration shape and do-not-touch boundaries. Verification:
+  compile/Ruff passed; focused JS runtime worker/config/Firebase hosting tests
+  -> `6 passed`; persisted runtime toolchain artifact slice -> `1 passed`;
+  cleanup left `remaining_js_runtime_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-js-runtime-regex-worker-pool.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,
   provider caps, pacing/backoff, and passive-only behavior. Do not assume the
-  older ranked list is still current after the CI/CD checkpoint.
+  older ranked list is still current after the JS runtime checkpoint.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
