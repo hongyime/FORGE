@@ -238,43 +238,8 @@ class AutomationEngine:
         return sorted(suggestions, key=lambda x: x.priority, reverse=True)
 
     def _suggest_credential_validation(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
-        # Find unvalidated credentials and hosts with matching services
-        creds = conn.execute(
-            "SELECT id, email, password_hash FROM credentials WHERE engagement_id = ? AND validated = 0",
-            (self.engagement_id,),
-        ).fetchall()
-        
-        if not creds:
-            return
-
-        services = conn.execute(
-            """
-            SELECT h.ip, s.service_name 
-            FROM services s 
-            JOIN hosts h ON s.host_id = h.id 
-            WHERE h.engagement_id = ? AND s.service_name IN ('ssh', 'rdp', 'smb', 'ftp')
-            """,
-            (self.engagement_id,),
-        ).fetchall()
-
-        for cred in creds:
-            for svc in services:
-                suggestions.append(
-                    Suggestion(
-                        id=f"cred-val-{cred['id']}-{svc['ip']}",
-                        title=f"Validate {cred['email']} on {svc['ip']} ({svc['service_name']})",
-                        action="osint:validate",
-                        params={
-                            "engagement_id": self.engagement_id,
-                            "host": svc["ip"],
-                            "service": svc["service_name"],
-                            "credential_id": cred["id"]
-                        },
-                        reason=f"Unvalidated credential found; service {svc['service_name']} available on {svc['ip']}.",
-                        priority=95,
-                        category="exploit",
-                    )
-                )
+        # Live credential use requires an explicit scoped validation model.
+        return
 
     def _suggest_osint_enrichment(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
         # Suggest DeHashed or XposedOrNot for new emails

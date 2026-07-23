@@ -460,3 +460,43 @@ def test_automation_suggestions_do_not_offer_lateral_movement(tmp_path):
     suggestions = automation.get_suggestions()
 
     assert "post:lateral" not in {suggestion.action for suggestion in suggestions}
+
+
+def test_automation_suggestions_do_not_offer_credential_validation_by_default(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO hosts (id, engagement_id, ip, hostname)
+            VALUES (5, 7, '10.0.0.5', 'ssh.acme.example')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO services (host_id, port, protocol, service_name)
+            VALUES (5, 22, 'tcp', 'ssh')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO credentials
+                (engagement_id, email, password_hash, validated)
+            VALUES
+                (7, 'operator@acme.example', 'hash', 0)
+            """
+        )
+        conn.commit()
+
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    suggestions = automation.get_suggestions()
+
+    assert "osint:validate" not in {suggestion.action for suggestion in suggestions}

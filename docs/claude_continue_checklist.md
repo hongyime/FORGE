@@ -223,11 +223,16 @@ historical notes only, not as current instructions.
   `V3`/`V6`/`V10`/`V12` cover the gate. Verification: failing TDD first showed
   `post:lateral`, then focused regression, compile/Ruff, full playbook suite,
   adjacent API parity regression, and cleanup scan are green.
-- [ ] Immediate next implementation target: audit remaining automation
-  suggestions that still use exploit/credential-validation framing, especially
-  `_suggest_credential_validation()` and `_suggest_correlation()`. Add the
-  smallest failing suggestion/route test first, then suppress, reclassify, or
-  ROE-gate only the proven unsafe suggestion.
+- [x] Legacy credential-validation suggestion guardrail completed:
+  `AutomationEngine` no longer emits `osint:validate` suggestions from
+  unvalidated credential rows plus exposed services by default. Backprop:
+  `SPEC.md` `B17`; existing `V3`/`V6`/`V10`/`V12` cover the gate.
+  Verification: failing TDD first showed `osint:validate`, then focused
+  regression, compile/Ruff, full playbook suite, and cleanup scan are green.
+- [ ] Immediate next implementation target: audit automation exploit-correlation
+  framing in `_suggest_correlation()`. Add the smallest failing suggestion/route
+  test first, then reclassify it as passive vulnerability/exposure correlation
+  or suppress it if the action path is not safely implemented.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

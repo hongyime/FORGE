@@ -25,11 +25,10 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: remaining automation suggestion framing. Audit suggestions
-that still use exploit/credential-validation framing, especially
-`_suggest_credential_validation()` and `_suggest_correlation()`. Write the
-smallest failing suggestion/route test first, then suppress, reclassify, or
-ROE-gate only the proven unsafe suggestion.
+Current next gate: automation exploit-correlation framing. Audit
+`_suggest_correlation()` and write the smallest failing suggestion/route test
+first, then reclassify it as passive vulnerability/exposure correlation or
+suppress it if the action path is not safely implemented.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -64,6 +63,14 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Legacy credential-validation suggestion guardrail completed:
+  `AutomationEngine` no longer emits `osint:validate` suggestions from
+  unvalidated credential rows plus exposed services by default. Backprop:
+  `SPEC.md` `B17`; existing `V3`/`V6`/`V10`/`V12` cover the gate.
+  Verification: failing TDD first showed `osint:validate`; focused guardrail
+  regression; compile/Ruff; full playbook integration suite (`16 passed`);
+  cleanup `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-credential-validation-suggestion-guardrail.md`.
 - [x] Legacy post-exploitation suggestion guardrail completed:
   `AutomationEngine` no longer emits `post:lateral` suggestions from validated
   credential rows. Backprop: `SPEC.md` `B16`; existing

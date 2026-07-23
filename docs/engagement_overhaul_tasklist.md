@@ -337,14 +337,25 @@ sentences as historical notes only, not as current instructions.
   credential use, scope changes, password attacks, exploitation,
   post-exploitation, proxy/IP rotation, rate-limit bypass, or new playbook
   capabilities.
-- [ ] Next implementation target: audit remaining automation suggestions that
-  still use exploit/credential-validation framing, especially
-  `_suggest_credential_validation()` and `_suggest_correlation()`. Add the
-  smallest failing suggestion/route test first, then suppress, reclassify, or
-  ROE-gate only the proven unsafe suggestion. This advances scoped active
-  checks, review, and testing/cleanup; do not add password attacks,
-  exploitation, post-exploitation, provider calls, proxy/IP behavior, or new
-  playbook capabilities.
+- [x] Legacy credential-validation suggestion guardrail checkpoint:
+  `AutomationEngine` no longer emits `osint:validate` suggestions from
+  unvalidated credential rows plus exposed services by default. Live credential
+  use now requires a future explicit scoped validation model instead of an
+  automatic review suggestion. Backprop: `SPEC.md` `B17`; existing
+  `V3`/`V6`/`V10`/`V12` cover the gate. Verification: failing TDD first showed
+  `osint:validate` in suggestions; focused guardrail regression passed;
+  compile/Ruff passed; full playbook integration suite passed (`16 passed`);
+  cleanup `test_owned_engagement_db_count=0`. Safety: suggestion suppression
+  only; no provider calls, live probing, credential use, scope changes,
+  password attacks, exploitation, post-exploitation, proxy/IP rotation,
+  rate-limit bypass, or new playbook capabilities.
+- [ ] Next implementation target: audit automation exploit-correlation framing
+  in `_suggest_correlation()`. Add the smallest failing suggestion/route test
+  first, then reclassify it as passive vulnerability/exposure correlation or
+  suppress it if the action path is not safely implemented. This advances
+  scoped active checks, review, and testing/cleanup; do not add exploit lookup
+  calls, exploitation, post-exploitation, provider calls, proxy/IP behavior, or
+  new playbook capabilities.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
