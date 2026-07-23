@@ -25,29 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Well-known privacy/vendor metadata kill-chain E2E parity is
+Latest checkpoint: Well-known API/application metadata kill-chain E2E parity is
 implemented. The compact full-closeout multi-seed E2E now includes local
-`.well-known` `gpc.json`, `tdmrep.json`, `pubvendors.json`, `trust.txt`,
-`dnt-policy.txt`, and `privacy-sandbox-attestations.json` intake and proves
-owner contacts, stripped privacy/vendor/trust/DNT/sandbox URL pivots, validated
-Supabase/Firebase refs, deterministic findings, graph nodes, deterministic
-template fallback report context, raw CSV validation rows, audit closeout, and
-cleanup. Templated privacy/vendor URLs and sensitive query strings are asserted
-absent from persisted URL seeds. The E2E graph export cap was raised from 380
-to 480 nodes so the expanded compact fixture retains asserted privacy/vendor
-review nodes.
+`.well-known` `agent-card.json`, `api-catalog`, `open-resource-discovery`,
+`mercure`, and `webweaver.json` intake and proves owner contacts, stripped
+API/application URL pivots, validated Supabase/Firebase refs, deterministic
+findings, graph cloud/assets, report references, report JSON validation
+inventory, raw CSV validation rows, audit closeout, and cleanup. Templated
+API/application URLs and sensitive query strings are asserted absent from
+persisted URL seeds. The API/application metadata helpers now strip sensitive
+query parameters before returning recursive URL candidates while preserving
+non-sensitive parameters. The E2E graph export cap was raised from 480 to 600
+nodes so the expanded compact fixture retains asserted API/application review
+nodes.
 
-Verification: compile/Ruff passed; focused well-known privacy/public metadata
-tests passed (`12 passed`); focused E2E passed (`1 passed` in 237.24s);
-cleanup removed 13 test-owned DB/report files and left
-`remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
-`master.db`. Handoff:
-`.claude/handoffs/2026-07-24-well-known-privacy-kill-chain-e2e-parity.md`.
+Verification: compile/Ruff passed; focused API/application metadata plus
+sanitizer tests passed (`16 passed`); focused E2E passed (`1 passed` in
+258.90s); final cleanup left `remaining_test_owned_files=0`; persistent
+inventory remains `1`, `5010`, `master.db`. Handoff:
+`.claude/handoffs/2026-07-24-well-known-api-application-kill-chain-e2e-parity.md`.
 
-Current next gate: add well-known API/application metadata compact E2E parity.
-Extend the compact multi-seed mocked E2E with the smallest local
-`agent-card.json`, `api-catalog`, `open-resource-discovery`, `mercure`, or
-`webweaver.json` fixture set proving contacts, sanitized recursive URLs, cloud
+Current next gate: add well-known service metadata compact E2E parity. Extend
+the compact multi-seed mocked E2E with the smallest local
+`did-configuration.json`, `keybase.txt`, `smart-configuration`, and
+`terraform.json` fixture set proving contacts, sanitized recursive URLs, cloud
 refs, passive review inventory, validation inventory where applicable,
 graph/report/audit review, deterministic fallback output, and cleanup.
 

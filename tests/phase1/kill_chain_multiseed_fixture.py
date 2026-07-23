@@ -34,6 +34,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     _write_public_ai_metadata(config.parent)
     _write_well_known_supply_chain_metadata(config.parent / ".well-known")
     _write_well_known_privacy_vendor_metadata(config.parent / ".well-known")
+    _write_well_known_api_application_metadata(config.parent / ".well-known")
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -467,6 +468,72 @@ def _write_well_known_privacy_vendor_metadata(well_known_dir: Path) -> None:
                 "contact": "privacysandbox-e2e-owner@acme.test",
                 "supabase": "https://privacysandboxe2evault.supabase.co",
                 "template": "https://privacy.acme.test/{tenant}/sandbox/attestation",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_well_known_api_application_metadata(well_known_dir: Path) -> None:
+    well_known_dir.mkdir(parents=True, exist_ok=True)
+    (well_known_dir / "agent-card.json").write_text(
+        json.dumps(
+            {
+                "name": "Acme Agent",
+                "url": "https://agent.acme.test/a2a?token=hidden",
+                "documentationUrl": "https://agent.acme.test/docs?api_key=hidden",
+                "contact": "agentcard-e2e-owner@acme.test",
+                "supabase": "https://agentcarde2evault.supabase.co",
+                "template": "https://agent.acme.test/{tenant}/a2a",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "api-catalog").write_text(
+        json.dumps(
+            {
+                "apis": [{"name": "public", "url": "https://api-catalog.acme.test/catalog?signature=hidden"}],
+                "support": "apicatalog-e2e-owner@acme.test",
+                "firebase": "https://api-catalog-e2e-firebase.firebaseio.com",
+                "template": "https://api-catalog.acme.test/{workspace}/catalog",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "open-resource-discovery").write_text(
+        json.dumps(
+            {
+                "resources": ["https://resources.acme.test/.well-known/open-resource-discovery?token=hidden"],
+                "contact": "ord-e2e-owner@acme.test",
+                "supabase": "https://orde2evault.supabase.co",
+                "template": "https://resources.acme.test/{tenant}/open-resource-discovery",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "mercure").write_text(
+        """
+        hub=https://mercure.acme.test/.well-known/mercure?api_key=hidden
+        subscribe=https://mercure.acme.test/subscribe?token=hidden
+        publish=https://mercure.acme.test/publish?signature=hidden
+        contact=mercure-e2e-owner@acme.test
+        supabase=https://mercuree2evault.supabase.co
+        template=https://mercure.acme.test/{tenant}/hub
+        """.strip(),
+        encoding="utf-8",
+    )
+    (well_known_dir / "webweaver.json").write_text(
+        json.dumps(
+            {
+                "endpoint": "https://webweaver.acme.test/api?token=hidden",
+                "documentationUrl": "https://webweaver.acme.test/docs?api_key=hidden",
+                "support": "webweaver-e2e-owner@acme.test",
+                "firebase": "https://webweaver-e2e-firebase.firebaseio.com",
+                "template": "https://webweaver.acme.test/{tenant}/api",
             },
             sort_keys=True,
         ),

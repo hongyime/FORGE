@@ -747,14 +747,37 @@ sentences as historical notes only, not as current instructions.
   use, policy/vendor API call, browser privacy-sandbox behavior, scope
   relaxation, validation-gate change, report-gate change, severity change,
   proxy/IP rotation, or rate-limit bypass.
-- [ ] Next implementation target: add well-known API/application metadata
-  compact E2E parity. Extend the compact multi-seed mocked E2E with the
-  smallest local `.well-known` API/application metadata fixture set (for
-  example `agent-card.json`, `api-catalog`, `open-resource-discovery`,
-  `mercure`, or `webweaver.json`) that proves contacts, sanitized recursive
-  URLs, cloud refs, passive review inventory, validation inventory where
-  applicable, graph/report/audit review, deterministic fallback output, and
-  cleanup. Likely files: `tests/phase1/kill_chain_multiseed_fixture.py`,
+- [x] Well-known API/application metadata kill-chain E2E parity checkpoint:
+  the compact full-closeout multi-seed E2E now includes local `.well-known`
+  `agent-card.json`, `api-catalog`, `open-resource-discovery`, `mercure`, and
+  `webweaver.json` artifacts under the normal artifact intake root. It proves
+  owner contacts, stripped API/application URL pivots, Supabase/Firebase refs,
+  validation inventory, deterministic findings, graph cloud/assets, report
+  references, report JSON validation inventory, raw CSV validation rows, audit
+  closeout, and cleanup. Templated API/application URLs and sensitive query
+  strings are asserted absent from persisted URL seeds. The API/application
+  metadata helpers now strip sensitive query parameters before returning
+  recursive URL candidates while preserving non-sensitive parameters. The
+  test-local graph export cap was raised from 480 to 600 nodes so the expanded
+  compact fixture retains asserted API/application review nodes. Verification:
+  compile passed; Ruff passed; focused API/application metadata plus sanitizer
+  tests passed (`16 passed`); focused mocked E2E passed (`1 passed` in
+  258.90s); final cleanup left `remaining_test_owned_files=0`, with persistent
+  DB inventory unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-api-application-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E and passive well-known API/application metadata
+  only; no A2A agent call, API catalog fetch, ORD call, Mercure subscription,
+  WebWeaver call, provider call beyond mocked validators, live probing,
+  credential use, scope relaxation, validation-gate change, report-gate change,
+  severity change, proxy/IP rotation, or rate-limit bypass.
+- [ ] Next implementation target: add well-known service metadata compact E2E
+  parity. Extend the compact multi-seed mocked E2E with the smallest local
+  `.well-known` service metadata fixture set (`did-configuration.json`,
+  `keybase.txt`, `smart-configuration`, and `terraform.json`) that proves
+  contacts, sanitized recursive URLs, cloud refs, passive review inventory,
+  validation inventory where applicable, graph/report/audit review,
+  deterministic fallback output, and cleanup. Likely files:
+  `tests/phase1/kill_chain_multiseed_fixture.py`,
   `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py`, and only minimal
   production code if the E2E exposes a real gap.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:

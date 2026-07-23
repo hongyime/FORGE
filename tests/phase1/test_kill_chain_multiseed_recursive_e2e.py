@@ -129,7 +129,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
                 min_severity="LOW",
                 critical_path_only=False,
                 snapshot=True,
-                max_nodes=480,
+                max_nodes=600,
             )
             return subprocess.CompletedProcess(["forge", *argv], 0, "graph built\n", "")
         if argv[:2] == ["report", "generate"]:
@@ -330,6 +330,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("trust-e2e-owner@acme.test", "email"),
             ("dnt-e2e-owner@acme.test", "email"),
             ("privacysandbox-e2e-owner@acme.test", "email"),
+            ("agentcard-e2e-owner@acme.test", "email"),
+            ("apicatalog-e2e-owner@acme.test", "email"),
+            ("ord-e2e-owner@acme.test", "email"),
+            ("mercure-e2e-owner@acme.test", "email"),
+            ("webweaver-e2e-owner@acme.test", "email"),
             ("oauth-owner@acme.test", "email"),
             ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
@@ -376,6 +381,15 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://trust.acme.test/transparency", "url"),
             ("https://privacy.acme.test/dnt", "url"),
             ("https://privacy.acme.test/sandbox/attestation", "url"),
+            ("https://agent.acme.test/a2a", "url"),
+            ("https://agent.acme.test/docs", "url"),
+            ("https://api-catalog.acme.test/catalog", "url"),
+            ("https://resources.acme.test/.well-known/open-resource-discovery", "url"),
+            ("https://mercure.acme.test/.well-known/mercure", "url"),
+            ("https://mercure.acme.test/subscribe", "url"),
+            ("https://mercure.acme.test/publish", "url"),
+            ("https://webweaver.acme.test/api", "url"),
+            ("https://webweaver.acme.test/docs", "url"),
             (openid_url, "url"),
             ("https://login.acme.test/oauth2/v1/authorize", "url"),
             ("https://login-api.acme.test/oauth2/v1/token", "url"),
@@ -434,6 +448,20 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("https://privacy.acme.test/{tenant}/dnt", "url") not in seeds
         assert ("https://privacy.acme.test/sandbox/attestation?token=hidden", "url") not in seeds
         assert ("https://privacy.acme.test/{tenant}/sandbox/attestation", "url") not in seeds
+        assert ("https://agent.acme.test/a2a?token=hidden", "url") not in seeds
+        assert ("https://agent.acme.test/docs?api_key=hidden", "url") not in seeds
+        assert ("https://agent.acme.test/{tenant}/a2a", "url") not in seeds
+        assert ("https://api-catalog.acme.test/catalog?signature=hidden", "url") not in seeds
+        assert ("https://api-catalog.acme.test/{workspace}/catalog", "url") not in seeds
+        assert ("https://resources.acme.test/.well-known/open-resource-discovery?token=hidden", "url") not in seeds
+        assert ("https://resources.acme.test/{tenant}/open-resource-discovery", "url") not in seeds
+        assert ("https://mercure.acme.test/.well-known/mercure?api_key=hidden", "url") not in seeds
+        assert ("https://mercure.acme.test/subscribe?token=hidden", "url") not in seeds
+        assert ("https://mercure.acme.test/publish?signature=hidden", "url") not in seeds
+        assert ("https://mercure.acme.test/{tenant}/hub", "url") not in seeds
+        assert ("https://webweaver.acme.test/api?token=hidden", "url") not in seeds
+        assert ("https://webweaver.acme.test/docs?api_key=hidden", "url") not in seeds
+        assert ("https://webweaver.acme.test/{tenant}/api", "url") not in seeds
         assert ("https://login.acme.test/oauth/{tenant}/authorize", "url") not in seeds
         assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
@@ -497,6 +525,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("%trust.txt", "trust.txt"),
             ("%dnt-policy.txt", "dnt-policy.txt"),
             ("%privacy-sandbox-attestations.json", "privacy-sandbox-attestations.json"),
+            ("%agent-card.json", "agent-card.json"),
+            ("%api-catalog", "api-catalog"),
+            ("%open-resource-discovery", "open-resource-discovery"),
+            ("%mercure", "mercure"),
+            ("%webweaver.json", "webweaver.json"),
         ):
             public_metadata_artifact = con.execute(
                 "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE ?",
@@ -563,6 +596,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("supabase", "truste2evault"),
             ("firebase", "dnt-e2e-firebase"),
             ("supabase", "privacysandboxe2evault"),
+            ("supabase", "agentcarde2evault"),
+            ("firebase", "api-catalog-e2e-firebase"),
+            ("supabase", "orde2evault"),
+            ("supabase", "mercuree2evault"),
+            ("firebase", "webweaver-e2e-firebase"),
             ("mobile_android_package", "com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.credentials"),
@@ -596,6 +634,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert statuses[("supabase", "truste2evault")] == "VALIDATED"
         assert statuses[("firebase", "dnt-e2e-firebase")] == "VALIDATED"
         assert statuses[("supabase", "privacysandboxe2evault")] == "VALIDATED"
+        assert statuses[("supabase", "agentcarde2evault")] == "VALIDATED"
+        assert statuses[("firebase", "api-catalog-e2e-firebase")] == "VALIDATED"
+        assert statuses[("supabase", "orde2evault")] == "VALIDATED"
+        assert statuses[("supabase", "mercuree2evault")] == "VALIDATED"
+        assert statuses[("firebase", "webweaver-e2e-firebase")] == "VALIDATED"
         assert statuses[("mobile_android_package", "com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.credentials")] == "UNSUPPORTED"
@@ -701,6 +744,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "truste2evault",
         "dnt-e2e-firebase",
         "privacysandboxe2evault",
+        "agentcarde2evault",
+        "api-catalog-e2e-firebase",
+        "orde2evault",
+        "mercuree2evault",
+        "webweaver-e2e-firebase",
     ):
         assert any(
             node.get("source_table") == "cloud_assets"
@@ -758,6 +806,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "supabase://truste2evault",
         "firebase://dnt-e2e-firebase",
         "supabase://privacysandboxe2evault",
+        "supabase://agentcarde2evault",
+        "firebase://api-catalog-e2e-firebase",
+        "supabase://orde2evault",
+        "supabase://mercuree2evault",
+        "firebase://webweaver-e2e-firebase",
     ):
         assert expected_ref in finding_report
     assert "dead-firebase-prod" not in finding_report
@@ -805,6 +858,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "truste2evault",
         "dnt-e2e-firebase",
         "privacysandboxe2evault",
+        "agentcarde2evault",
+        "api-catalog-e2e-firebase",
+        "orde2evault",
+        "mercuree2evault",
+        "webweaver-e2e-firebase",
     ):
         assert any(
             item.get("identifier") == identifier
@@ -872,6 +930,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "truste2evault",
         "dnt-e2e-firebase",
         "privacysandboxe2evault",
+        "agentcarde2evault",
+        "api-catalog-e2e-firebase",
+        "orde2evault",
+        "mercuree2evault",
+        "webweaver-e2e-firebase",
     ):
         assert any(
             row.get("cloud_identifier") == identifier

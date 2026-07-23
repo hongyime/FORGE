@@ -159,13 +159,29 @@ historical notes only, not as current instructions.
   DB/report files and left `remaining_test_owned_files=0`; persistent
   inventory remains `1`, `5010`, `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-well-known-privacy-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: add well-known API/application metadata
-  compact E2E parity. Extend the compact multi-seed mocked E2E with the
-  smallest local `agent-card.json`, `api-catalog`, `open-resource-discovery`,
-  `mercure`, or `webweaver.json` fixture set proving contacts, sanitized
-  recursive URLs, cloud refs, passive review inventory, validation inventory
-  where applicable, graph/report/audit review, deterministic fallback output,
-  and cleanup.
+- [x] Well-known API/application metadata kill-chain E2E parity completed:
+  the compact full-closeout multi-seed E2E now includes local `.well-known`
+  `agent-card.json`, `api-catalog`, `open-resource-discovery`, `mercure`, and
+  `webweaver.json` artifacts and proves owner contacts, stripped
+  API/application URL pivots, Supabase/Firebase refs, validation inventory,
+  deterministic findings, graph cloud/assets, report references, report JSON
+  validation inventory, raw CSV validation rows, audit closeout, and cleanup.
+  Templated API/application URLs and sensitive query strings are asserted
+  absent from persisted URL seeds. The API/application metadata helpers now
+  strip sensitive query parameters before returning recursive URL candidates
+  while preserving non-sensitive parameters. The E2E graph export cap was
+  raised from 480 to 600 nodes. Verification: compile/Ruff passed; focused
+  API/application metadata plus sanitizer tests -> `16 passed`; focused E2E
+  -> `1 passed` in 258.90s; final cleanup left
+  `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
+  `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-api-application-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: add well-known service metadata compact E2E
+  parity. Extend the compact multi-seed mocked E2E with the smallest local
+  `did-configuration.json`, `keybase.txt`, `smart-configuration`, and
+  `terraform.json` fixture set proving contacts, sanitized recursive URLs,
+  cloud refs, passive review inventory, validation inventory where applicable,
+  graph/report/audit review, deterministic fallback output, and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

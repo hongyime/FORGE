@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from urllib.parse import unquote, urljoin, urlparse
 
+from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
+
 _URL_KEYS = frozenset({"hub", "publish", "subscribe", "topic"})
 
 
@@ -61,4 +63,4 @@ def _resolve_url(value: object, *, base_url: str) -> str:
     except ValueError:
         netloc = host
     path = unquote(parsed_resolved.path or "/")
-    return parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl()
+    return strip_sensitive_url_query(parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl())
