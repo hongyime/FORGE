@@ -3258,6 +3258,7 @@ def _report_export_descriptor(path: Path, *, raw_export: bool) -> dict[str, str]
 def _report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path]]]:
     families: dict[str, list[Path]] = {}
     family_mtimes: dict[str, float] = {}
+    family_has_json: dict[str, bool] = {}
     for artifact in report_files:
         try:
             stat = artifact.stat()
@@ -3265,6 +3266,7 @@ def _report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path
             continue
         families.setdefault(artifact.stem, []).append(artifact)
         family_mtimes[artifact.stem] = max(family_mtimes.get(artifact.stem, 0.0), stat.st_mtime)
+        family_has_json[artifact.stem] = family_has_json.get(artifact.stem, False) or artifact.suffix.lower() == ".json"
     grouped = [
         (
             stem,
@@ -3272,7 +3274,14 @@ def _report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path
         )
         for stem, artifacts in families.items()
     ]
-    grouped.sort(key=lambda item: (family_mtimes.get(item[0], 0.0), item[0].lower()), reverse=True)
+    grouped.sort(
+        key=lambda item: (
+            family_mtimes.get(item[0], 0.0),
+            family_has_json.get(item[0], False),
+            item[0].lower(),
+        ),
+        reverse=True,
+    )
     return grouped
 
 

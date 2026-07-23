@@ -632,6 +632,85 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         assert ",template," in csv_resp.text
 
 
+def test_phase6_raw_export_lineage_agrees_across_dashboard_api_and_downloads(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    reports_dir = tmp_path / "reports"
+    for artifact in reports_dir.glob("engagement_1001_report_20260709T014412.*"):
+        artifact.unlink()
+
+    synthesizer = ReportSynthesizer(
+        db_path=db_path,
+        output_dir=reports_dir,
+        provider="template",
+        assume_yes=True,
+    )
+
+    def _fail_report_family(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise OSError("lineage disk full")
+
+    monkeypatch.setattr(synthesizer, "_write_companion_exports", _fail_report_family)
+    report_path = synthesizer.generate(engagement_id=1001)
+    report_csv_path = report_path.with_suffix(".csv")
+    report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert report_payload["provider"] == "raw_export"
+    assert report_payload["requested_provider"] == "template"
+    assert report_payload["upstream_provider"] == "template"
+    assert report_payload["report_lineage"]["rendered_provider"] == "raw_export"
+    assert "lineage disk full" in report_payload["report_write_error"]
+
+    generate_dashboard(data_dir=tmp_path / ".forge_data", reports_dir=reports_dir, output_path=reports_dir / "dashboard.html")
+    dashboard_detail = json.loads(
+        (
+            reports_dir
+            / "dashboard"
+            / "data"
+            / "engagements"
+            / "engagement-1001-acme-example.json"
+        ).read_text(encoding="utf-8")
+    )
+    dashboard_summary = dashboard_detail["report_summary"]
+    assert dashboard_summary["provider"] == "raw_export"
+    assert dashboard_summary["render_backend"] == "template"
+    assert dashboard_summary["rendered_provider"] == "raw_export"
+    assert dashboard_summary["findings_checksum"] == report_payload["findings_checksum"]
+    assert "lineage disk full" in dashboard_summary["report_write_error"]
+    assert {item["label"] for item in dashboard_summary["available_exports"]} == {"Raw JSON", "CSV"}
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('raw-lineage-reviewer')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        api_summary = detail_resp.json()["report_summary"]
+        assert api_summary["render_backend"] == dashboard_summary["render_backend"]
+        assert api_summary["rendered_provider"] == dashboard_summary["rendered_provider"]
+        assert api_summary["findings_checksum"] == dashboard_summary["findings_checksum"]
+
+        json_resp = client.get(
+            f"/api/engagements/engagement-1001-acme-example/artifacts/{report_path.name}",
+            headers=headers,
+        )
+        assert json_resp.status_code == 200, json_resp.text
+        assert json_resp.json()["report_lineage"]["write_error"] == report_payload["report_lineage"]["write_error"]
+        csv_resp = client.get(
+            f"/api/engagements/engagement-1001-acme-example/artifacts/{report_csv_path.name}",
+            headers=headers,
+        )
+        assert csv_resp.status_code == 200, csv_resp.text
+        assert report_payload["findings_checksum"] in csv_resp.text
+        assert "lineage disk full" in csv_resp.text
+
+
 def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
