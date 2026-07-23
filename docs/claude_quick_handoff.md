@@ -25,26 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: GitOps repository normalization worker migration is complete.
-GitOps repository value discovery was already workerized; final conversion of
-discovered Git/SSH/OCI repository values into normalized URL candidates now also
-uses the ordered bounded worker pool. It preserves discovery order and
-deterministic dedupe without executing GitOps tools or contacting
-repositories/registries.
+Latest checkpoint: AppVeyor multi-document worker migration is complete.
+AppVeyor YAML metadata extraction now routes independent parsed documents
+through the existing ordered bounded worker pool before deterministic pipeline
+URI dedupe. It does not execute AppVeyor workflows or contact CI providers.
 
-Verification: compile/Ruff passed; focused GitOps worker tests and existing
-structured YAML cloud-asset integration slice passed (`3 passed`). Handoff:
-`.claude/handoffs/2026-07-24-gitops-repository-workers.md`.
+Verification: compile/Ruff passed; focused CI workflow worker tests and existing
+engagement-backed CI workflow metadata slice passed (`6 passed`). Handoff:
+`.claude/handoffs/2026-07-24-appveyor-document-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: Jason's fresh audit ranked AppVeyor multi-doc metadata loop
-first, then framework config DB/service enrichment, then CI resource top-level
-fan-outs. Preserve deterministic ordering, compact tests, scope gates, provider
-caps, pacing/backoff, and passive-only behavior.
+Current next gate: Jason's remaining candidates are framework config DB/service
+enrichment, then CI resource top-level fan-outs, then CircleCI
+workflow/container fan-out. Preserve deterministic ordering, compact tests,
+scope gates, provider caps, pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

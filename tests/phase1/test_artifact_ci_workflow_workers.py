@@ -262,3 +262,59 @@ def test_ci_platform_image_walkers_use_ordered_worker_path_and_preserve_order(
         "_yaml_ci_image_job_candidate",
         "_yaml_buildkite_plugin_image_candidate_values",
     }.issubset(set(observed_workers))
+
+
+def test_appveyor_multidoc_metadata_uses_ordered_worker_path_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = """
+name: alpha
+environment:
+  OWNER_EMAIL: appveyor-alpha@acme.example
+---
+not_ci: true
+---
+name: beta
+build_script:
+  - dotnet build
+---
+build_script:
+  - dotnet test
+""".strip()
+    original_candidate = ArtifactQueueProcessor._appveyor_ci_document_candidate
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _tracking_document_candidate(
+        self: ArtifactQueueProcessor,
+        document: object,
+    ) -> str:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_candidate(self, document)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_appveyor_ci_document_candidate",
+        _tracking_document_candidate,
+    )
+
+    assert processor._ci_text_structured_payload_text(
+        payload,
+        source_hint="appveyor.yml",
+    ).splitlines() == [
+        "appveyor-pipeline://alpha",
+        "appveyor-pipeline://beta",
+        "appveyor-pipeline://pipeline",
+    ]
+    assert peak == 4

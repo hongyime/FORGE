@@ -66,6 +66,16 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] AppVeyor multi-document worker checkpoint:
+  AppVeyor YAML metadata extraction now routes independent parsed documents
+  through the existing ordered bounded worker pool before deterministic pipeline
+  URI dedupe. This does not execute AppVeyor workflows or contact CI providers.
+  Verification: compile passed; Ruff passed; focused CI workflow worker tests
+  and existing engagement-backed CI workflow metadata slice passed (`6 passed`).
+  Handoff: `.claude/handoffs/2026-07-24-appveyor-document-workers.md`.
+  Next gate: Jason's remaining candidates are framework config DB/service
+  enrichment, then CI resource top-level fan-outs, then CircleCI
+  workflow/container fan-out.
 - [x] GitOps repository normalization worker checkpoint:
   GitOps repository value discovery was already workerized; final conversion of
   discovered Git/SSH/OCI repository values into normalized URL candidates now

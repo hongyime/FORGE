@@ -24170,17 +24170,25 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             lines.append(candidate)
 
-        for document in documents:
-            if not isinstance(document, dict):
-                continue
-            normalized = self._yaml_normalized_mapping(document)
-            if not self._yaml_mapping_looks_like_appveyor_ci(normalized):
-                continue
-            pipeline_name = self._yaml_external_secret_ref_segment(
-                self._yaml_ref_value(normalized, "name")
-            )
-            _append(f"appveyor-pipeline://{pipeline_name or 'pipeline'}")
+        candidate_entries = self._run_ordered_local_batch(
+            documents,
+            self._appveyor_ci_document_candidate,
+            default_factory=str,
+        )
+        for candidate in candidate_entries:
+            _append(candidate)
         return "\n".join(lines)
+
+    def _appveyor_ci_document_candidate(self, document: Any) -> str:
+        if not isinstance(document, dict):
+            return ""
+        normalized = self._yaml_normalized_mapping(document)
+        if not self._yaml_mapping_looks_like_appveyor_ci(normalized):
+            return ""
+        pipeline_name = self._yaml_external_secret_ref_segment(
+            self._yaml_ref_value(normalized, "name")
+        )
+        return f"appveyor-pipeline://{pipeline_name or 'pipeline'}"
 
     @staticmethod
     def _yaml_mapping_looks_like_appveyor_ci(normalized: dict[str, Any]) -> bool:
