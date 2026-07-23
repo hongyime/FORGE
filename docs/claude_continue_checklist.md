@@ -324,6 +324,25 @@ historical notes only, not as current instructions.
   Safety: mocked/offline E2E only; no external target, provider call, live
   probing, credential use, validation/report gate change, severity change,
   proxy/IP rotation, or rate-limit bypass.
+- [x] RSS/Atom feed passive-recursion checkpoint completed:
+  source-gated `feed.xml`, `rss.xml`, `atom.xml`, and extensionless `/feed`,
+  `/rss`, and `/atom` routes now keep source-aware feed labels and passively
+  promote concrete URLs from RSS/Atom `<link>`, Atom `href`, permalink `guid`,
+  enclosure URLs, and media content URLs into the recursive seed path. Feed
+  query strings/fragments are stripped before helper persistence, templated URLs
+  are excluded, relative URLs resolve only against HTTP(S) source artifacts, and
+  Atom/Media RSS XML namespace URIs are suppressed as standards metadata.
+  Backprop: no `SPEC.md` structural edit because `T2` remains ongoing and root
+  `FORMAT.md` is absent; existing `V1`/`V3`/`V4`/`V5` cover the gate.
+  Verification: focused TDD first failed on missing helper module; focused feed
+  regression -> `5 passed`; adjacent Feed/OpenSearch/SAML/OAuth/JWKS/Web
+  Manifest/remote-static classification slice -> `38 passed`; compile/Ruff
+  passed; cleanup -> `remaining_temp_pytest_engagement_dbs=0`, persistent DB
+  inventory -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-feed-metadata-passive-recursion.md`. Safety:
+  passive static feed XML parsing only; no feed polling, provider call, live
+  probing, credential use, validation/report gate change, severity change,
+  proxy/IP rotation, or rate-limit bypass.
 - [ ] Immediate next implementation target: continue concrete kill-chain
   coverage. Add the smallest mocked E2E or focused integration test that proves
   one missing recursive discovery path from `T1`/`T2` advances from discovered

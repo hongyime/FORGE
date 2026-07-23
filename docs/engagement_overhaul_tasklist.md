@@ -470,6 +470,28 @@ sentences as historical notes only, not as current instructions.
   Safety: mocked/offline E2E only; no external target, provider call, live
   probing, credential use, scope relaxation, validation-gate change,
   report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
+- [x] RSS/Atom feed passive-recursion checkpoint:
+  source-gated `feed.xml`, `rss.xml`, `atom.xml`, and extensionless `/feed`,
+  `/rss`, and `/atom` routes now keep source-aware feed format labels and
+  passively promote concrete URLs from RSS/Atom `<link>`, Atom `href`,
+  permalink `guid`, enclosure URLs, and media content URLs into the existing
+  recursive seed path. Feed query strings/fragments are stripped before helper
+  persistence, templated URLs are excluded, relative URLs resolve only against
+  HTTP(S) source artifacts, remote cache filenames stay source-aware, and common
+  Atom/Media RSS XML namespace URIs are suppressed as standards metadata rather
+  than recursive targets. Backprop: no `SPEC.md` structural edit for this
+  checkpoint because `T2` remains ongoing and root `FORMAT.md` is absent;
+  existing `V1`/`V3`/`V4`/`V5` cover the gate. Verification: focused TDD first
+  failed on missing `forge.utils.artifact_feed_metadata`; focused feed
+  regression passed (`5 passed`); adjacent Feed/OpenSearch/SAML/OAuth/JWKS/Web
+  Manifest/remote-static classification slice passed (`38 passed`); compile
+  passed; Ruff passed; cleanup removed temp pytest engagement DBs and left
+  `remaining_temp_pytest_engagement_dbs=0`, with persistent DB inventory
+  unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-feed-metadata-passive-recursion.md`. Safety:
+  passive static feed XML parsing only; no feed polling, provider call, live
+  probing, credential use, scope relaxation, validation-gate change,
+  report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
 - [ ] Next implementation target: continue concrete kill-chain coverage. Add
   the smallest mocked E2E or focused integration test that proves one missing
   recursive discovery path from `T1`/`T2` advances from discovered passive
