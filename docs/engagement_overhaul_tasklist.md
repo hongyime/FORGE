@@ -91,6 +91,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Deterministic validation-method report-gate checkpoint:
+  `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
+  reportable validation methods before cloud findings can be created, and linked
+  key confirmations must pass the stable validation-proof parser before they can
+  keep or create deterministic key findings. This prevents manual or unknown
+  `VALIDATED` method labels from reviving stale reportable findings. Backprop:
+  added `SPEC.md` `B10`; existing invariants `V6`/`V7` cover the gate.
+  Verification: focused TDD first failed with `active_findings == 2`; focused
+  regression/static-site slice passed (`2 passed`); compile passed; Ruff
+  passed; full deterministic findings slice passed (`17 passed`); Phase 6
+  report-gating slice passed (`3 passed`); representative integration
+  validation/fallback slice passed (`3 passed`); orchestrator kill-chain slice
+  passed (`2 passed, 757 deselected`); attack-path validation proof slice
+  passed (`2 passed, 106 deselected`). Handoff:
+  `.claude/handoffs/2026-07-23-deterministic-validation-method-report-gate.md`.
+  Safety: deterministic report-gate hardening only; no provider calls, live
+  probing, credential use, scope relaxation, proxy/IP rotation, rate-limit
+  bypass, severity expansion, or validator behavior change.
 - [x] Web App Manifest relative-URL passive-recursion checkpoint:
   source-gated `manifest.json` and `webmanifest` artifacts now resolve concrete
   relative URL pivots from Web App Manifest fields such as `start_url`, `scope`,

@@ -816,3 +816,67 @@ def test_deterministic_findings_keep_static_site_only_storage_listings_low(tmp_p
         ]
     finally:
         con.close()
+
+
+def test_deterministic_findings_skip_validated_rows_with_unknown_methods(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status, validation_method,
+                 http_status, evidence, notes)
+            VALUES
+                (1001, 'aws_s3', 'acme-public-assets', 'VALIDATED', 'manual_validated_note',
+                 200, 'operator note says validated', 'No deterministic validator proof method.')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, domain, service, pattern_name, source_backend, source_url,
+                 repo_name, key_redacted, validation_state, validation_detail)
+            VALUES
+                (1001, 'acme-public-assets', 'aws_s3', 'aws_access_key', 'artifact',
+                 'mobile-config.js', 'mobile-config.js', 'AKIA...MPLE', 'ACTIVE',
+                 'ACTIVE:manual_validated_note:no deterministic proof')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title, description, evidence)
+            VALUES
+                (1001, 'DETERMINISTIC_CLOUD_EXPOSURE', 'aws_s3://acme-public-assets', 'aws_s3',
+                 'HIGH', 'Stale cloud finding', 'unknown validation method', 'operator note'),
+                (1001, 'DETERMINISTIC_KEY_EXPOSURE', 'mobile-config.js', 'aws_s3:aws_access_key',
+                 'HIGH', 'Stale key finding', 'unknown linked validation method', 'operator note')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = DeterministicFindingEngine(db_path, 1001).run()
+
+    assert summary.inserted == 0
+    assert summary.active_findings == 0
+    assert summary.removed == 2
+
+    con = sqlite3.connect(db_path)
+    try:
+        findings = con.execute(
+            """
+            SELECT vuln_type, title
+            FROM vulnerability_findings
+            WHERE engagement_id=1001
+            """
+        ).fetchall()
+        assert findings == []
+    finally:
+        con.close()

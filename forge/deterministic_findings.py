@@ -125,6 +125,40 @@ def _storage_listing_title(asset_type: str) -> str:
     }.get(asset_type, f"Validated public {_asset_label(asset_type)} listing exposure")
 
 
+_STORAGE_ASSET_TYPES = {"aws_s3", "do_spaces", "gcs", "azure_blob"}
+_STORAGE_LISTING_METHODS = {
+    "s3_list_bucket",
+    "do_spaces_list_bucket",
+    "gcs_list_bucket",
+    "azure_blob_list_container",
+}
+_STORAGE_METADATA_METHODS = {
+    "s3_head_probe",
+    "do_spaces_head_probe",
+    "gcs_http_probe",
+    "azure_blob_http_probe",
+}
+_CLOUD_DATA_METHODS = {
+    "firebase": {"firebase_database_shallow_read", "firebase_database_node_read"},
+    "supabase": {"supabase_rest_root"},
+}
+
+
+def _is_reportable_cloud_validation_method(
+    asset_type: str,
+    validation_method: str,
+) -> bool:
+    asset = str(asset_type or "").strip().lower()
+    method = str(validation_method or "").strip().lower()
+    if method in _CLOUD_DATA_METHODS.get(asset, set()):
+        return True
+    if asset in _STORAGE_ASSET_TYPES and method in _STORAGE_LISTING_METHODS:
+        return True
+    if asset in _STORAGE_ASSET_TYPES and method in _STORAGE_METADATA_METHODS:
+        return True
+    return False
+
+
 def _is_low_signal_public_cloud_metadata(
     asset_type: str,
     validation_method: str,
@@ -139,6 +173,16 @@ def _is_low_signal_public_cloud_metadata(
 
 def _is_reportable_cloud_validation_status(validation_status: str) -> bool:
     return str(validation_status or "").upper().strip() == "VALIDATED"
+
+
+def _is_reportable_linked_key_validation(row: sqlite3.Row) -> bool:
+    status = str(row["validation_status"] or "").upper().strip()
+    if status != "VALIDATED":
+        return False
+    method = str(row["validation_method"] or "").strip()
+    proof = str(row["evidence"] or row["notes"] or "").strip()
+    parsed = parse_validated_detail(f"VALIDATED:{method}:{proof}")
+    return parsed["validation_status"] == "VALIDATED"
 
 
 class DeterministicFindingEngine:
@@ -221,7 +265,7 @@ class DeterministicFindingEngine:
     def _validation_index(self, con: sqlite3.Connection) -> dict[tuple[str, str], str]:
         rows = con.execute(
             """
-            SELECT asset_type, identifier, validation_status
+            SELECT asset_type, identifier, validation_status, validation_method, evidence, notes
             FROM cloud_validation_results
             WHERE engagement_id=?
             """,
@@ -232,6 +276,7 @@ class DeterministicFindingEngine:
                 row["validation_status"] or ""
             ).upper()
             for row in rows
+            if _is_reportable_linked_key_validation(row)
         }
 
     @staticmethod
@@ -252,27 +297,13 @@ class DeterministicFindingEngine:
         title = ""
         description = ""
         severity = ""
-        storage_asset_types = {"aws_s3", "do_spaces", "gcs", "azure_blob"}
-        storage_listing_methods = {
-            "s3_list_bucket",
-            "do_spaces_list_bucket",
-            "gcs_list_bucket",
-            "azure_blob_list_container",
-        }
-        storage_metadata_methods = {
-            "s3_head_probe",
-            "do_spaces_head_probe",
-            "gcs_http_probe",
-            "azure_blob_http_probe",
-        }
         if not _is_reportable_cloud_validation_status(validation_status):
+            return None
+        if not _is_reportable_cloud_validation_method(asset_type, validation_method):
             return None
 
         if validation_status == "VALIDATED":
-            if asset_type == "firebase" and validation_method in {
-                "firebase_database_shallow_read",
-                "firebase_database_node_read",
-            }:
+            if asset_type == "firebase" and validation_method in _CLOUD_DATA_METHODS["firebase"]:
                 severity = "HIGH"
                 title = "Validated Firebase data exposure"
                 description = (
@@ -288,14 +319,14 @@ class DeterministicFindingEngine:
                 )
             elif _is_low_signal_public_cloud_metadata(asset_type, validation_method):
                 return None
-            elif asset_type in storage_asset_types and validation_method in storage_listing_methods:
+            elif asset_type in _STORAGE_ASSET_TYPES and validation_method in _STORAGE_LISTING_METHODS:
                 severity = "HIGH"
                 title = _storage_listing_title(asset_type)
                 description = (
                     f"Deterministic validation confirmed that `{identifier}` allowed unauthenticated enumeration "
                     f"of real object metadata through `{validation_method}`."
                 )
-            elif asset_type in storage_asset_types and validation_method in storage_metadata_methods:
+            elif asset_type in _STORAGE_ASSET_TYPES and validation_method in _STORAGE_METADATA_METHODS:
                 severity = "LOW"
                 title = f"Externally reachable {_asset_label(asset_type)} detected"
                 description = (
@@ -303,12 +334,7 @@ class DeterministicFindingEngine:
                     f"to a low-impact probe. Additional policy review is required before escalating beyond metadata exposure."
                 )
             else:
-                severity = "LOW"
-                title = f"Public {_asset_label(asset_type)} metadata observed"
-                description = (
-                    f"Deterministic validation confirmed that `{identifier}` exposed externally reachable "
-                    f"configuration or metadata through `{validation_method}`."
-                )
+                return None
         else:
             return None
 

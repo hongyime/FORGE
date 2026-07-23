@@ -58,6 +58,16 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Deterministic validation-method report-gate completed:
+  `DeterministicFindingEngine` now rejects `VALIDATED` cloud rows with unknown
+  validation methods and requires linked key confirmations to pass the stable
+  proof parser before they keep or create deterministic findings. Backprop:
+  `SPEC.md` `B10`. Verification included failing TDD first, focused regression,
+  compile/Ruff, full deterministic findings (`17 passed`), Phase 6 report-gate
+  slice (`3 passed`), representative integration validation/fallback (`3
+  passed`), orchestrator kill-chain slice (`2 passed, 757 deselected`), and
+  attack-path proof slice (`2 passed, 106 deselected`). Handoff:
+  `.claude/handoffs/2026-07-23-deterministic-validation-method-report-gate.md`.
 - [x] Web App Manifest relative-URL passive-recursion completed: source-gated
   `manifest.json`/`webmanifest` artifacts now resolve relative `start_url`,
   `scope`, shortcut, share-target, protocol-handler, icon, and screenshot URLs
