@@ -25,23 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: AppVeyor multi-document worker migration is complete.
-AppVeyor YAML metadata extraction now routes independent parsed documents
-through the existing ordered bounded worker pool before deterministic pipeline
-URI dedupe. It does not execute AppVeyor workflows or contact CI providers.
+Latest checkpoint: framework config DB/service worker audit is complete.
+No production code change was needed. Framework config DB host and service
+endpoint extraction already routes both independent candidate lists through
+`_structured_payload_lines()`, which uses the existing ordered bounded worker
+pool via `_run_ordered_local_batch()` before deterministic dedupe. It does not
+run framework CLIs, connect to databases/services, or contact providers.
 
-Verification: compile/Ruff passed; focused CI workflow worker tests and existing
-engagement-backed CI workflow metadata slice passed (`6 passed`). Handoff:
-`.claude/handoffs/2026-07-24-appveyor-document-workers.md`.
+Verification: compile/Ruff passed; focused client-config worker and framework
+ingestion tests passed (`5 passed`). Handoff:
+`.claude/handoffs/2026-07-24-framework-config-worker-audit.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: Jason's remaining candidates are framework config DB/service
-enrichment, then CI resource top-level fan-outs, then CircleCI
-workflow/container fan-out. Preserve deterministic ordering, compact tests,
+Current next gate: CI resource top-level fan-outs, then CircleCI
+workflow/container fan-out, unless the sidecar audit identifies a higher-value
+safe sequential parser gap. Preserve deterministic ordering, compact tests,
 scope gates, provider caps, pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
