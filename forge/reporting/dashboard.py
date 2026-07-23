@@ -633,9 +633,9 @@ def _vulnerability_row_is_reportable(
     if is_deterministic_cloud_exposure(vuln_type, title, (asset,)):
         identifier = _vulnerability_validation_identifier(row)
         if not asset or not identifier:
-            return True
+            return False
         reportable = validation_index.get((asset, identifier))
-        return True if reportable is None else reportable
+        return reportable is True
     if vuln_type == "DETERMINISTIC_KEY_EXPOSURE" or title.lower().startswith("active exposed "):
         proof = parse_validated_detail(str(row["evidence"] or "") if "evidence" in row.keys() else "")
         return str(proof["validation_status"] or "").strip().upper() == "VALIDATED"
@@ -1198,9 +1198,9 @@ def _graph_node_is_unreportable_cloud_finding(
     if not is_deterministic_cloud_exposure(vuln_type, label, (asset,)):
         return False
     if not asset or not identifier:
-        return False
+        return True
     reportable = validation_index.get((asset, identifier))
-    return reportable is False
+    return reportable is not True
 
 
 def _graph_node_key_validation_detail(node: dict[str, Any]) -> str:

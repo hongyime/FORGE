@@ -25,32 +25,37 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: prerequisite flow adapter extraction is complete. The
-remaining prerequisite display/execution/completion branch now lives in
-`handle_kill_chain_prerequisite_flow()` behind CLI-provided callbacks. `forge
-kill-chain` still owns run finalization, dashboard refresh, audit adapters,
-ROE/scope child-argv hardening, and module dispatch construction.
+Latest checkpoint: dashboard malformed cloud finding gating is complete. Static
+dashboard and live API review now fail closed for malformed
+`DETERMINISTIC_CLOUD_EXPOSURE` rows and imported graph VULN nodes; deterministic
+cloud findings need a normalized asset, identifier, and reportable validation
+index proof before entering finding tables, severity counts, vuln summaries, or
+graph vulnerability nodes.
 
-Verification: compile/Ruff passed; helper tests plus existing CLI prereq
-behavior tests passed (`8 passed`); kill-chain convergence suite passed
-(`3 passed`). Handoff:
-`.claude/handoffs/2026-07-24-prereq-flow-adapter-extraction.md`.
+Verification: compile/Ruff passed; focused malformed dashboard/API regressions
+passed (`2 passed`); full static dashboard file passed (`21 passed`); full web
+UI engagement API file passed (`37 passed, 75 warnings`); Phase 6 cloud selector
+passed (`2 passed, 98 deselected`); pytest engagement cleanup reported
+`removed=4 remaining=0`. Review: sidecar `Hume` confirmed the original row/graph
+fail-open paths and API inheritance. Handoff:
+`.claude/handoffs/2026-07-24-dashboard-malformed-cloud-finding-gate.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Previous checkpoint: deterministic identity conflict production is complete.
-`EngagementSynthesisEngine` now creates conservative `conflicts_with` seed
-relations when one email/phone anchor has incompatible `same_entity`
-name/company targets; seed confidence metadata reflects `conflict_count`.
+Previous checkpoint: prerequisite flow adapter extraction is complete. The
+remaining prerequisite display/execution/completion branch now lives in
+`handle_kill_chain_prerequisite_flow()` behind CLI-provided callbacks. `forge
+kill-chain` still owns run finalization, dashboard refresh, audit adapters,
+ROE/scope child-argv hardening, and module dispatch construction.
 
-Current next gate: run a fresh current-code audit for remaining deterministic
-ASM gaps and pick the next concrete implementation target. Prioritize
-end-to-end kill-chain correctness, scope/proof/report/dashboard parity,
-recursive discovery value, and file-size/module-risk reductions only when tied
-to a proven behavior risk.
+Current next gate: fix latest-validation proof parity for linked key/cloud
+confirmations. Add duplicate-validation regressions where an older `VALIDATED`
+proof and later `UNVERIFIED`/non-reportable proof disagree, then make latest
+matching validation evidence win consistently across deterministic finding
+synthesis, Phase 6, dashboard/API summaries, and graph filtering.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

@@ -192,6 +192,18 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
                 evidence TEXT,
                 found_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            );
             CREATE TABLE attack_graph_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engagement_id INTEGER,
@@ -431,6 +443,18 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
             VALUES
                 (1001, 'DETERMINISTIC_CLOUD_EXPOSURE', 'firebase://acme-firebase-prod', 'firebase',
                  'HIGH', 'Validated Firebase data exposure', 'Deterministic validation confirmed live data access.', '{"users":1}', '2026-07-09T09:41:03')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES (
+                1001, 'firebase', 'acme-firebase-prod', 'VALIDATED',
+                'firebase_database_shallow_read', 200, '{"users":1}',
+                'base deterministic fixture proof', '2026-07-09T08:00:00'
+            )
             """
         )
         con.execute(
@@ -1444,7 +1468,7 @@ def test_generate_dashboard_surfaces_provider_matrix_artifacts_and_validation_ev
     try:
         con.executescript(
             """
-            CREATE TABLE cloud_validation_results (
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engagement_id INTEGER,
                 asset_type TEXT,
@@ -1618,7 +1642,7 @@ def test_generate_dashboard_orders_cloud_validation_results_by_latest_checked_at
     try:
         con.executescript(
             """
-            CREATE TABLE cloud_validation_results (
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engagement_id INTEGER,
                 asset_type TEXT,
@@ -1691,7 +1715,7 @@ def test_generate_dashboard_filters_unknown_method_deterministic_cloud_rows(
         con.execute("ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT")
         con.executescript(
             """
-            CREATE TABLE cloud_validation_results (
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engagement_id INTEGER,
                 asset_type TEXT,
@@ -1823,7 +1847,7 @@ def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
         con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
         con.executescript(
             """
-            CREATE TABLE cloud_validation_results (
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engagement_id INTEGER,
                 asset_type TEXT,
@@ -1885,6 +1909,165 @@ def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
     assert "VULN::manual-note" not in graph_payload["critical_path_nodes"]
     assert all(
         "VULN::manual-note"
+        not in {edge["source_node_id"], edge["target_node_id"]}
+        for edge in graph_payload["edges"]
+    )
+
+
+def test_generate_dashboard_filters_malformed_deterministic_cloud_findings(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    graph = {
+        "nodes": [
+            {
+                "node_id": "HOST::app",
+                "label": "app.acme.example",
+                "node_type": "HOST",
+                "metadata": {},
+            },
+            {
+                "node_id": "VULN::firebase",
+                "label": "Validated Firebase data exposure",
+                "node_type": "VULN",
+                "severity": "HIGH",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "DETERMINISTIC_CLOUD_EXPOSURE",
+                    "cloud_provider": "firebase",
+                    "resource_id": "acme-firebase-prod",
+                },
+            },
+            {
+                "node_id": "VULN::malformed-cloud",
+                "label": "Malformed deterministic cloud exposure",
+                "node_type": "VULN",
+                "severity": "HIGH",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "DETERMINISTIC_CLOUD_EXPOSURE",
+                    "cloud_provider": "firebase",
+                },
+            },
+        ],
+        "edges": [
+            {
+                "source_node_id": "HOST::app",
+                "target_node_id": "VULN::firebase",
+                "edge_type": "vuln_found",
+            },
+            {
+                "source_node_id": "HOST::app",
+                "target_node_id": "VULN::malformed-cloud",
+                "edge_type": "vuln_found",
+            },
+        ],
+        "critical_path_nodes": [
+            "HOST::app",
+            "VULN::firebase",
+            "VULN::malformed-cloud",
+        ],
+    }
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT")
+        con.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES (
+                1001, 'firebase', 'acme-firebase-prod', 'VALIDATED',
+                'firebase_database_shallow_read', 200, '{"users":1}',
+                'deterministic proof fixture', '2026-07-09T09:43:00'
+            )
+            """
+        )
+        con.execute(
+            """
+            UPDATE vulnerability_findings
+            SET cloud_provider='firebase',
+                resource_id='acme-firebase-prod'
+            WHERE engagement_id=1001 AND vuln_type='DETERMINISTIC_CLOUD_EXPOSURE'
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at, cloud_provider, resource_id)
+            VALUES (
+                1001, 'DETERMINISTIC_CLOUD_EXPOSURE', '', 'firebase', 'HIGH',
+                'Malformed deterministic cloud exposure',
+                'Legacy row has no resource identifier and no validation proof.',
+                'missing validation key', '2026-07-09T09:44:01', 'firebase', ''
+            )
+            """
+        )
+        con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
+        con.execute(
+            """
+            INSERT INTO attack_graph_snapshots
+                (engagement_id, snapshot_at, node_count, edge_count,
+                 critical_path_weight, min_severity, pruned, graph_json,
+                 mermaid_output, dot_output)
+            VALUES
+                (1001, '2026-07-09T09:50:00', 3, 2, 18.0, 'LOW', 0, ?,
+                 'graph TD; app-->firebase; app-->malformed;',
+                 'digraph G { app -> firebase; app -> malformed; }')
+            """,
+            (json.dumps(graph, sort_keys=True),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    finding_titles = {
+        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
+    }
+    graph_payload = detail_payload["graph_payload"]
+    node_ids = {node["node_id"] for node in graph_payload["nodes"]}
+
+    assert detail_payload["severity_summary"]["HIGH"] == 1
+    assert "Validated Firebase data exposure" in finding_titles
+    assert "Malformed deterministic cloud exposure" not in finding_titles
+    assert "VULN::firebase" in node_ids
+    assert "VULN::malformed-cloud" not in node_ids
+    assert "VULN::malformed-cloud" not in graph_payload["critical_path_nodes"]
+    assert all(
+        "VULN::malformed-cloud"
         not in {edge["source_node_id"], edge["target_node_id"]}
         for edge in graph_payload["edges"]
     )
@@ -1990,7 +2173,7 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
     try:
         con.executescript(
             """
-            CREATE TABLE cloud_validation_results (
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engagement_id INTEGER,
                 asset_type TEXT,

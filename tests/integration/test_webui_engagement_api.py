@@ -1530,6 +1530,129 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
     assert summary["vulnerability_findings"].get("HIGH", 0) == 0
 
 
+def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    graph = {
+        "nodes": [
+            {
+                "node_id": "HOST::app",
+                "label": "app.acme.example",
+                "node_type": "HOST",
+                "metadata": {},
+            },
+            {
+                "node_id": "VULN::firebase",
+                "label": "Validated Firebase data exposure",
+                "node_type": "VULN",
+                "severity": "HIGH",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "DETERMINISTIC_CLOUD_EXPOSURE",
+                    "cloud_provider": "firebase",
+                    "resource_id": "acme-firebase-prod",
+                },
+            },
+            {
+                "node_id": "VULN::malformed-cloud",
+                "label": "Malformed deterministic cloud exposure",
+                "node_type": "VULN",
+                "severity": "HIGH",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "DETERMINISTIC_CLOUD_EXPOSURE",
+                    "cloud_provider": "firebase",
+                },
+            },
+        ],
+        "edges": [
+            {
+                "source_node_id": "HOST::app",
+                "target_node_id": "VULN::firebase",
+                "edge_type": "vuln_found",
+            },
+            {
+                "source_node_id": "HOST::app",
+                "target_node_id": "VULN::malformed-cloud",
+                "edge_type": "vuln_found",
+            },
+        ],
+        "critical_path_nodes": [
+            "HOST::app",
+            "VULN::firebase",
+            "VULN::malformed-cloud",
+        ],
+    }
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at, cloud_provider, resource_id)
+            VALUES (
+                1001, 'DETERMINISTIC_CLOUD_EXPOSURE', '', 'firebase', 'HIGH',
+                'Malformed deterministic cloud exposure',
+                'Legacy row has no resource identifier and no validation proof.',
+                'missing validation key', '2026-07-09 09:44:01', 'firebase', ''
+            )
+            """
+        )
+        con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
+        con.execute(
+            """
+            INSERT INTO attack_graph_snapshots
+                (engagement_id, node_count, edge_count, critical_path_weight,
+                 min_severity, pruned, graph_json, mermaid_output, dot_output,
+                 snapshot_at)
+            VALUES
+                (1001, 3, 2, 18.0, 'LOW', 0, ?,
+                 'graph TD; app-->firebase; app-->malformed;',
+                 'digraph G { app -> firebase; app -> malformed; }',
+                 '2026-07-09T09:50:00')
+            """,
+            (json.dumps(graph, sort_keys=True),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail = detail_resp.json()
+        summary_resp = client.get("/api/engagements/1001/vuln-summary", headers=headers)
+        assert summary_resp.status_code == 200, summary_resp.text
+        summary = summary_resp.json()
+
+    finding_titles = {
+        row["Title"] for row in detail["sections"]["vulnerability_findings"]
+    }
+    node_ids = {node["node_id"] for node in detail["graph_payload"]["nodes"]}
+
+    assert detail["severity_summary"]["HIGH"] == 1
+    assert summary["vulnerability_findings"].get("HIGH", 0) == 1
+    assert "Validated Firebase data exposure" in finding_titles
+    assert "Malformed deterministic cloud exposure" not in finding_titles
+    assert "VULN::firebase" in node_ids
+    assert "VULN::malformed-cloud" not in node_ids
+    assert "VULN::malformed-cloud" not in detail["graph_payload"]["critical_path_nodes"]
+    assert all(
+        "VULN::malformed-cloud"
+        not in {edge["source_node_id"], edge["target_node_id"]}
+        for edge in detail["graph_payload"]["edges"]
+    )
+
+
 def test_web_root_serves_react_console_and_generated_data(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))

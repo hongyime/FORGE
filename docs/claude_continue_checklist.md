@@ -256,11 +256,28 @@ historical notes only, not as current instructions.
   plus existing CLI prereq behavior tests passed (`8 passed`); kill-chain
   convergence suite passed (`3 passed`). Handoff:
   `.claude/handoffs/2026-07-24-prereq-flow-adapter-extraction.md`.
+- [x] Dashboard malformed cloud finding gate checkpoint:
+  Static dashboard and live API review now fail closed for malformed
+  `DETERMINISTIC_CLOUD_EXPOSURE` rows and imported graph VULN nodes. A
+  deterministic cloud finding must resolve to a cloud asset plus identifier and
+  have a reportable validation-index proof before it can enter finding tables,
+  severity counts, vulnerability summaries, or graph vulnerability nodes. The
+  static dashboard fixture now carries matching deterministic Firebase proof
+  when it expects a reportable HIGH. Verification: compile passed; Ruff passed;
+  focused malformed dashboard/API regressions passed (`2 passed`); full static
+  dashboard file passed (`21 passed`); full web UI engagement API file passed
+  (`37 passed, 75 warnings`); Phase 6 cloud selector passed (`2 passed, 98
+  deselected`); pytest engagement cleanup reported `removed=4 remaining=0`.
+  Review: sidecar `Hume` independently confirmed the fail-open row and graph
+  gates plus API inheritance paths. Handoff:
+  `.claude/handoffs/2026-07-24-dashboard-malformed-cloud-finding-gate.md`.
 - [ ] Next gate:
-  Run a fresh current-code audit for remaining deterministic ASM gaps and pick
-  the next concrete implementation target. Prioritize end-to-end kill-chain
-  correctness, scope/proof/report/dashboard parity, recursive discovery value,
-  and file-size/module-risk reductions only when tied to a proven behavior risk.
+  Fix latest-validation proof parity for linked key/cloud confirmations. The
+  next audit target is duplicate validation rows where an older `VALIDATED`
+  proof and later `UNVERIFIED`/non-reportable proof can disagree across
+  deterministic finding synthesis, Phase 6, dashboard/API summaries, and graph
+  filtering. Add regressions that prove latest matching validation evidence
+  wins everywhere before refactoring shared policy.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
