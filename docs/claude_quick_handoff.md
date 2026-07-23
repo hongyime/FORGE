@@ -25,28 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: workflow report API lineage is complete. Legacy
-`GET /reports/{workflow_id}` still returns the expected markdown report payload,
-but now also exposes allowlisted deterministic lineage for degraded/raw-export
-workflow reports: provider, requested provider, upstream/render backend,
-fallback reason, report write error, findings checksum, and nested
-`report_lineage`.
+Latest checkpoint: report lineage alias normalization is complete. Phase
+6-shaped report payloads now survive the legacy route and dashboard/API summary
+surfaces without losing lineage aliases: `report_markdown` is accepted as report
+text, `report_lineage.rendered_provider` is normalized to `render_backend` while
+preserving `rendered_provider`, and nested `write_error` is normalized to
+`report_write_error`.
 
-Verification: compile/Ruff passed; full MVP workflow integration file passed
-(`5 passed`); pytest engagement cleanup reported
-`removed=0 remaining=0 post_scan=0`. Handoff:
-`.claude/handoffs/2026-07-24-workflow-report-api-lineage.md`. Commit:
-`1dd57f6`.
+Verification: compile/Ruff passed; MVP workflow integration file passed
+(`5 passed`); static dashboard file passed (`20 passed`); web UI engagement API
+file passed (`34 passed, 65 warnings`); pytest engagement cleanup reported
+`removed=3 remaining=0 post_scan=0`. Handoff:
+`.claude/handoffs/2026-07-24-report-lineage-alias-normalization.md`. Commit:
+`3d9f7b4`. Reviewer attempts were made with Claude and Codex fallback, but local
+CLI auth/model/sandbox constraints prevented an external review.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: continue with a concrete provider/export parity gap or
-another mocked E2E acceptance gap found by current-code audit. Recommended
-target: confirm the current-code report API/export path and dashboard report
-lineage agree for template/raw-export degradation. Do not reopen worker-pool
+Current next gate: verify end-to-end report lineage agreement between Phase 6
+generated artifacts, static dashboard payloads, web API detail summaries, and
+artifact downloads in one mocked integration slice. Do not reopen worker-pool
 micro-optimization unless a new measured bottleneck appears. Preserve
 deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.

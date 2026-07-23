@@ -78,12 +78,26 @@ historical notes only, not as current instructions.
   `removed=0 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-workflow-report-api-lineage.md`. Commit:
   `1dd57f6`.
+- [x] Report lineage alias normalization checkpoint:
+  Phase 6-shaped report payloads now survive the legacy route and dashboard/API
+  summary surfaces without losing lineage aliases. `report_markdown` is accepted
+  as report text; nested `report_lineage.rendered_provider` is normalized to
+  `render_backend` while preserving `rendered_provider`; nested `write_error`
+  is normalized to `report_write_error`; and dashboard/web API summaries fall
+  back to nested lineage for upstream provider, fallback reason, generated time,
+  format, and findings checksum. Verification: compile passed; Ruff passed; MVP
+  workflow integration file passed (`5 passed`); static dashboard file passed
+  (`20 passed`); web UI engagement API file passed (`34 passed, 65 warnings`);
+  pytest engagement cleanup reported `removed=3 remaining=0 post_scan=0`.
+  Reviewer attempts were made with Claude and Codex fallback; local CLI auth /
+  model / sandbox constraints prevented an external review. Handoff:
+  `.claude/handoffs/2026-07-24-report-lineage-alias-normalization.md`. Commit:
+  `3d9f7b4`.
 - [ ] Next gate:
-  Continue with another concrete provider/export parity gap or a mocked E2E
-  acceptance gap found by current-code audit. Recommended target: confirm the
-  current-code report API/export path and dashboard report lineage agree for
-  template/raw-export degradation. Do not reopen worker-pool micro-optimization
-  unless a new measured bottleneck appears.
+  Verify end-to-end report lineage agreement between Phase 6 generated
+  artifacts, static dashboard payloads, web API detail summaries, and artifact
+  downloads in one mocked integration slice. Do not reopen worker-pool
+  micro-optimization unless a new measured bottleneck appears.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
