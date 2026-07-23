@@ -47,6 +47,12 @@ select the next proven-safe bounded worker-pool migration before editing.
 Preserve deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
+Natural stop note: repo was clean after push `3aef060`. The most likely next
+audit targets are remaining source-gated passive parsers such as API-client
+generic document traversal, observability/orchestration structured walks, and
+security-scanner structured walks. Confirm each one is not already under the
+worker path before editing, and skip with docs if already implemented.
+
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
 `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog` as the
