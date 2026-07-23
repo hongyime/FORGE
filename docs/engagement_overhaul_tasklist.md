@@ -964,10 +964,24 @@ sentences as historical notes only, not as current instructions.
   manifest apply, cluster access, HTTP probing, provider call, live probing,
   credential use, scope/ROE relaxation, validation/report-gate change, severity
   change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: re-audit remaining static parser/enricher
-  candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior.
+- [x] Renovate config text worker-pool checkpoint: static Renovate config text
+  parsing now keeps the line-oriented `registryUrls` state machine serial, then
+  dispatches independent candidate normalization through ordered bounded worker
+  helpers before final serial dedupe. `matchHost`, `registryUrl`, and multiline
+  `registryUrls` order plus sensitive-query stripping are preserved.
+  Verification: compile passed; Ruff passed; focused Renovate worker test passed
+  (`1 passed`); focused persisted repo-maintenance artifact slice passed
+  (`1 passed`); cleanup left `remaining_renovate_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-renovate-text-worker-pool.md`. Safety:
+  passive local static Renovate config parsing only; no Renovate execution,
+  dependency resolution, registry calls, package download, HTTP probing,
+  provider call, live probing, credential use, scope/ROE relaxation,
+  validation/report-gate change, severity change, proxy/IP rotation,
+  rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: recon tool output static parsing worker-pool
+  migration. Preserve family order across whole-document JSON, XML tag
+  extraction, and line-by-line extraction; do not execute recon tools or probe
+  discovered hosts.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

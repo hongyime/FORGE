@@ -317,10 +317,19 @@ historical notes only, not as current instructions.
   persisted structured YAML/GitOps artifact slice -> `1 passed`; cleanup left
   `remaining_gitops_runtime_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-gitops-repository-worker-pool.md`.
-- [ ] Next implementation target: re-audit remaining static parser/enricher
-  candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior.
+- [x] Renovate config text worker-pool checkpoint completed: static Renovate
+  config text parsing keeps the line-oriented `registryUrls` state machine
+  serial, then dispatches independent candidate normalization through ordered
+  bounded worker helpers before final serial dedupe. `matchHost`, `registryUrl`,
+  multiline `registryUrls` order, and sensitive-query stripping are preserved.
+  Verification: compile/Ruff passed; focused Renovate worker test -> `1 passed`;
+  focused persisted repo-maintenance artifact slice -> `1 passed`; cleanup left
+  `remaining_renovate_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-renovate-text-worker-pool.md`.
+- [ ] Next implementation target: recon tool output static parsing worker-pool
+  migration. Preserve family order across whole-document JSON, XML tag
+  extraction, and line-by-line extraction; do not execute recon tools or probe
+  discovered hosts.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

@@ -25,21 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: GitOps repository walk worker-pool migration is implemented.
-Argo/Flux GitOps manifest repository extraction now dispatches the current
-mapping/list child layer through ordered bounded worker helpers while nested
-traversal and final repository normalization/dedupe remain serial. Recursive
-repository URL, `git@`, and `ssh://git@` candidate order is preserved.
+Latest checkpoint: Renovate config text worker-pool migration is implemented.
+Static Renovate config text parsing keeps the line-oriented `registryUrls`
+state machine serial, then dispatches independent candidate normalization
+through ordered bounded worker helpers before final serial dedupe. `matchHost`,
+`registryUrl`, multiline `registryUrls` order, and sensitive-query stripping are
+preserved.
 
-Verification: compile/Ruff passed; focused GitOps worker test passed
-(`1 passed`); focused persisted structured YAML/GitOps artifact slice passed
-(`1 passed`); cleanup left `remaining_gitops_runtime_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-gitops-repository-worker-pool.md`.
+Verification: compile/Ruff passed; focused Renovate worker test passed
+(`1 passed`); focused persisted repo-maintenance artifact slice passed
+(`1 passed`); cleanup left `remaining_renovate_runtime_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-renovate-text-worker-pool.md`.
 
-Current next gate: re-audit remaining static parser/enricher candidates and
-select the next proven-safe bounded worker-pool migration before editing.
-Preserve deterministic ordering, compact tests, scope gates, provider caps,
-pacing/backoff, and passive-only behavior.
+Current next gate: recon tool output static parsing worker-pool migration.
+Preserve family order across whole-document JSON, XML tag extraction, and
+line-by-line extraction; do not execute recon tools or probe discovered hosts.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

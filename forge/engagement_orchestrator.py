@@ -26089,8 +26089,7 @@ class ArtifactQueueProcessor:
         ):
             return ""
 
-        lines: list[str] = []
-        seen: set[str] = set()
+        raw_candidates: list[str] = []
         in_registry_array = False
         key_pattern = re.compile(
             r"""
@@ -26125,14 +26124,30 @@ class ArtifactQueueProcessor:
                     in_registry_array = False
                 candidate_values.extend(re.findall(r"""["']([^"']+)["']""", line))
 
-            for raw_candidate in candidate_values:
-                candidate = _artifact_package_registry_host_or_url_candidate(raw_candidate)
-                if not candidate or candidate.lower() in seen:
-                    continue
-                seen.add(candidate.lower())
-                lines.append(candidate)
+            raw_candidates.extend(candidate_values)
+
+        candidate_entries = self._run_ordered_local_batch(
+            raw_candidates,
+            self._renovate_text_candidate_entry,
+            default_factory=str,
+        )
+        lines: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidate_entries:
+            normalized = str(candidate or "").strip()
+            if not normalized or normalized.lower() in seen:
+                continue
+            seen.add(normalized.lower())
+            lines.append(normalized)
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _renovate_text_candidate_entry(raw_value: Any) -> str:
+        value = ArtifactQueueProcessor._parse_key_value_scalar(str(raw_value or "").strip())
+        if not value:
+            return ""
+        return _artifact_package_registry_host_or_url_candidate(value)
 
     def _security_scanner_config_structured_payload_text(
         self,
