@@ -83,12 +83,25 @@ historical notes only, not as current instructions.
   left `remaining_test_owned_files=0`; persistent inventory remains `1`,
   `5010`, `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-web-manifest-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: add Asset Links / Apple
-  app-site-association compact E2E parity. Extend the compact multi-seed
-  mocked E2E with the smallest local `assetlinks.json` and/or
-  `apple-app-site-association` fixture proving mobile association metadata
-  reaches passive mobile inventory, recursive seed/cross-reference state,
-  validation inventory or terminal unsupported status, graph/report/audit
+- [x] Asset Links / Apple app-site-association kill-chain E2E parity
+  completed:
+  the compact full-closeout multi-seed E2E now includes local
+  `.well-known/assetlinks.json` and `.well-known/apple-app-site-association`
+  artifacts and proves owner emails, stripped documentation URL pivots,
+  Supabase refs, Android/iOS passive app inventory, terminal `UNSUPPORTED`
+  mobile validation inventory, graph nodes, raw CSV validation rows,
+  deterministic template fallback output, audit closeout, and cleanup. Mobile
+  passive app inventory remains reviewable and does not create vulnerability
+  findings. Verification: focused Asset Links/AASA/validation-registry tests
+  -> `3 passed`; compile/Ruff passed; focused E2E -> `1 passed` in 154.56s;
+  cleanup removed 14 test-owned DB/report files and left
+  `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
+  `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-mobile-association-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: add `security.txt` / well-known security
+  metadata compact E2E parity. Extend the compact multi-seed mocked E2E with
+  the smallest local security metadata fixture proving contacts, policy or
+  documentation URLs, cloud refs, validation inventory, graph/report/audit
   review, deterministic fallback output, and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:

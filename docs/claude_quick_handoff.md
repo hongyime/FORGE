@@ -25,29 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Web App Manifest kill-chain E2E parity is implemented. The
-compact full-closeout multi-seed E2E now includes local `site.webmanifest`
-intake and proves manifest owner email plus stripped `start_url`, `scope`,
-shortcut, share-target, icon URL, and Supabase inventory pivots reach recursive
-discovery before validation, graph generation, deterministic template fallback
-reporting, audit logging, and cleanup. Direct URL extraction now strips
-fragments for Web App Manifest artifacts, the E2E asserts raw fragments and
-templated manifest URLs are not recursive targets, and it runs with
-`FORGE_SAFE_MODE=1`.
+Latest checkpoint: Asset Links / Apple app-site-association kill-chain E2E
+parity is implemented. The compact full-closeout multi-seed E2E now includes
+local `.well-known/assetlinks.json` and
+`.well-known/apple-app-site-association` intake and proves mobile association
+owner emails, stripped documentation URL pivots, Supabase refs, Android/iOS
+passive app inventory, terminal `UNSUPPORTED` mobile validation inventory,
+graph nodes, raw CSV validation rows, deterministic template fallback output,
+audit closeout, and cleanup. Passive mobile app inventory remains reviewable
+and does not create vulnerability findings.
 
-Verification: focused E2E first failed on the raw icon fragment, then passed
-(`1 passed` in 147.20s); focused Web Manifest metadata tests passed (`2
-passed`); compile/Ruff passed; cleanup removed 26 test-owned temp DB/report
-files and left `remaining_test_owned_files=0`; persistent inventory remains
-`1`, `5010`, `master.db`. Handoff:
-`.claude/handoffs/2026-07-24-web-manifest-kill-chain-e2e-parity.md`.
+Verification: focused Asset Links/AASA/validation-registry tests passed (`3
+passed`); compile/Ruff passed; focused E2E passed (`1 passed` in 154.56s);
+cleanup removed 14 test-owned temp DB/report files and left
+`remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
+`master.db`. Handoff:
+`.claude/handoffs/2026-07-24-mobile-association-kill-chain-e2e-parity.md`.
 
-Current next gate: add Asset Links / Apple app-site-association compact E2E
-parity. Extend the compact multi-seed mocked E2E with the smallest local
-`assetlinks.json` and/or `apple-app-site-association` fixture proving mobile
-association metadata reaches passive mobile inventory, recursive
-seed/cross-reference state, validation inventory or terminal unsupported
-status, graph/report/audit review, deterministic fallback output, and cleanup.
+Current next gate: add `security.txt` / well-known security metadata compact
+E2E parity. Extend the compact multi-seed mocked E2E with the smallest local
+security metadata fixture proving disclosure contacts, policy or documentation
+URLs, cloud refs, validation inventory, graph/report/audit review,
+deterministic fallback output, and cleanup.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

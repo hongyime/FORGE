@@ -634,14 +634,38 @@ sentences as historical notes only, not as current instructions.
   external target, provider call, live probing, credential use, scope
   relaxation, validation-gate change, report-gate change, severity change,
   proxy/IP rotation, or rate-limit bypass.
-- [ ] Next implementation target: add Asset Links / Apple
-  app-site-association compact E2E parity. Extend the compact multi-seed
-  mocked E2E with the smallest local `assetlinks.json` and/or
-  `apple-app-site-association` fixture that proves mobile association metadata
-  flows through normal artifact intake into passive mobile inventory, recursive
-  seed/cross-reference state, validation inventory or terminal unsupported
-  status, graph/report/audit review, deterministic fallback output, and cleanup.
-  Likely files: `tests/phase1/kill_chain_multiseed_fixture.py`,
+- [x] Asset Links / Apple app-site-association kill-chain E2E parity
+  checkpoint:
+  the compact full-closeout multi-seed E2E now includes local
+  `.well-known/assetlinks.json` and `.well-known/apple-app-site-association`
+  artifacts under the normal artifact intake root. It proves Asset Links and
+  AASA owner emails plus stripped documentation URL pivots enter recursive
+  engagement state, validates Supabase refs from the same mobile association
+  artifacts, and carries Android/iOS passive app inventory into
+  `cloud_assets`, graph nodes, report validation inventory, raw CSV validation
+  rows, and cleanup without creating vulnerability findings. The E2E also
+  asserts malformed Android package and AASA app IDs are excluded, and its
+  cloud-validation mock now mirrors the real registry behavior by returning
+  terminal `UNSUPPORTED` with `registry_lookup` for passive mobile app asset
+  types. Verification: focused Asset Links/AASA/validation-registry tests
+  passed (`3 passed`); compile passed; Ruff passed; focused mocked E2E
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` passed (`1
+  passed` in 154.56s); cleanup removed 14 test-owned temp DB/report files and
+  left `remaining_test_owned_files=0`, with persistent DB inventory unchanged
+  at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-mobile-association-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E and passive mobile-association inventory only; no
+  app-store lookup, app download, provider call beyond mocked validators, live
+  probing, credential use, scope relaxation, validation-gate change,
+  report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
+- [ ] Next implementation target: add `security.txt` / well-known security
+  metadata compact E2E parity. Extend the compact multi-seed mocked E2E with
+  the smallest local `security.txt` or adjacent well-known security metadata
+  fixture that proves disclosure contacts, policy/documentation URLs, and any
+  cloud refs flow through normal artifact intake into recursive seeds,
+  validation inventory, graph/report/audit review, deterministic fallback
+  output, and cleanup. Likely files:
+  `tests/phase1/kill_chain_multiseed_fixture.py`,
   `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py`, and only minimal
   production code if the E2E exposes a real gap.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:

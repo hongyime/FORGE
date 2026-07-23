@@ -29,6 +29,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     _write_opensearch(config.parent / "opensearch.xml")
     _write_saml_metadata(config.parent / "saml-metadata.xml")
     _write_web_manifest(config.parent / "site.webmanifest")
+    _write_mobile_association_metadata(config.parent / ".well-known")
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -201,6 +202,69 @@ def _write_web_manifest(path: Path) -> None:
                 "description": "Contact manifest-owner@acme.test",
                 "templated": "https://manifest.acme.test/tenant/{id}/launch",
                 "supabase": "https://manifestvault.supabase.co",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_mobile_association_metadata(well_known_dir: Path) -> None:
+    well_known_dir.mkdir(parents=True, exist_ok=True)
+    (well_known_dir / "assetlinks.json").write_text(
+        json.dumps(
+            [
+                {
+                    "relation": ["delegate_permission/common.handle_all_urls"],
+                    "target": {
+                        "namespace": "android_app",
+                        "package_name": "com.acme.portal",
+                        "sha256_cert_fingerprints": ["AA:BB:CC"],
+                    },
+                },
+                {"target": {"namespace": "android_app", "package_name": "not a package"}},
+                {
+                    "target": {
+                        "namespace": "web",
+                        "site": "https://assetlinks.acme.test/android?token=hidden",
+                    },
+                },
+                {
+                    "contact": "assetlinks-owner@acme.test",
+                    "supabase": "https://assetlinksvault.supabase.co",
+                },
+            ],
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "apple-app-site-association").write_text(
+        json.dumps(
+            {
+                "applinks": {
+                    "details": [
+                        {
+                            "appIDs": [
+                                "ABCDE12345.com.acme.portal",
+                                "ABCDE12345.*",
+                                "not-an-app-id",
+                            ],
+                            "components": [
+                                {
+                                    "/": "/support/*",
+                                    "comment": (
+                                        "Contact aasa-owner@acme.test via "
+                                        "https://aasa-docs.acme.test/help?token=hidden"
+                                    ),
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "webcredentials": {
+                    "apps": ["ABCDE12345.com.acme.credentials"],
+                    "supabase": "https://aasavault.supabase.co",
+                },
             },
             sort_keys=True,
         ),
