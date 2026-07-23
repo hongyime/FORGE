@@ -88,6 +88,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] JWKS metadata passive-recursion checkpoint: source-gated
+  `.well-known/jwks.json` artifacts now use compact helper
+  `forge.utils.artifact_jwks_metadata` to resolve concrete `x5u` and `jku`
+  certificate/key-set URL pivots, including relative URLs, through the existing
+  bounded artifact URL-family path. Generic JSON with the same key names remains
+  excluded from this JWKS-specific parser. Verification: focused TDD first
+  failed on missing helper module; JWKS plus adjacent OAuth/well-known metadata
+  slices passed (`10 passed`); compile passed; Ruff passed; existing remote
+  OpenID/OAuth engagement-backed regressions passed (`3 passed, 756
+  deselected`); compact cross-phase smoke passed (`7 passed, 1 deselected`);
+  cleanup found no test-owned engagement DBs and persistent inventory remains
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-jwks-metadata-passive-recursion.md`.
+  Safety: passive static JWK Set metadata parsing only; no JWKS/certificate
+  request, token request, authentication attempt, provider call, live probing,
+  scope relaxation, proxy/IP rotation, rate-limit bypass, validation-gate
+  change, report-gate change, or severity change.
 - [x] OAuth/OpenID metadata passive-recursion checkpoint: source-gated
   `.well-known` OAuth/OIDC metadata now has a compact helper
   (`forge.utils.artifact_oauth_metadata`) that resolves concrete relative URL

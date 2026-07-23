@@ -55,6 +55,16 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] JWKS metadata passive-recursion completed: source-gated
+  `.well-known/jwks.json` now resolves concrete `x5u` and `jku` certificate or
+  key-set URL pivots through `forge.utils.artifact_jwks_metadata`, wired into
+  the existing orchestrator URL-family path as a thin adapter. Generic JSON
+  lookalikes remain excluded. Verification included failing TDD first, JWKS plus
+  adjacent OAuth/well-known slices (`10 passed`), compile/Ruff, existing remote
+  OpenID/OAuth engagement-backed regressions (`3 passed, 756 deselected`),
+  compact smoke (`7 passed, 1 deselected`), and cleanup with no test-owned
+  engagement DBs remaining. Handoff:
+  `.claude/handoffs/2026-07-23-jwks-metadata-passive-recursion.md`.
 - [x] OAuth/OpenID metadata passive-recursion completed: source-gated
   `.well-known` OAuth/OIDC metadata now resolves concrete relative URL pivots
   through `forge.utils.artifact_oauth_metadata`, wired into the existing

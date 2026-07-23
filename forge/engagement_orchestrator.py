@@ -113,6 +113,7 @@ from forge.utils.artifact_hashicorp_config import (
 from forge.utils.artifact_helm_index import helm_index_chart_package_urls
 from forge.utils.artifact_host_meta_metadata import host_meta_href_urls
 from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
+from forge.utils.artifact_jwks_metadata import jwks_urls
 from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
     lambda_config_candidates,
@@ -20419,6 +20420,7 @@ class ArtifactQueueProcessor:
                     "jmap_metadata",
                     "webweaver_metadata",
                     "oauth_metadata",
+                    "jwks_metadata",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20641,6 +20643,12 @@ class ArtifactQueueProcessor:
             return webweaver_urls(text, base_url=source_file)
         if family == "oauth_metadata":
             return oauth_metadata_urls(
+                text,
+                source_label=_artifact_format_label(source_file),
+                base_url=source_file,
+            )
+        if family == "jwks_metadata":
+            return jwks_urls(
                 text,
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,

@@ -63,6 +63,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] JWKS metadata passive-recursion completed: added compact
+  `forge.utils.artifact_jwks_metadata` helper and a thin orchestrator
+  `jwks_metadata` URL-family adapter so source-gated `.well-known/jwks.json`
+  artifacts resolve concrete `x5u`/`jku` certificate and key-set URLs for
+  recursion while generic JSON lookalikes stay excluded. Verification: TDD first
+  failed on missing helper; JWKS plus adjacent OAuth/well-known slices -> `10
+  passed`; compile/Ruff passed; existing remote OpenID/OAuth engagement-backed
+  regressions -> `3 passed, 756 deselected`; compact smoke -> `7 passed, 1
+  deselected`; no test-owned engagement DBs remain; persistent inventory -> `1`,
+  `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-jwks-metadata-passive-recursion.md`.
 - [x] OAuth/OpenID metadata passive-recursion completed: added compact
   `forge.utils.artifact_oauth_metadata` helper and a thin orchestrator
   `oauth_metadata` URL-family adapter so source-gated OAuth/OIDC `.well-known`
