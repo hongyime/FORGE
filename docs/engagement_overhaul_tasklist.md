@@ -174,12 +174,23 @@ sentences as historical notes only, not as current instructions.
   `.claude/handoffs/2026-07-24-manual-db-audit-artifact-parity.md`. Commit:
   `32ee3bb`.
 - [ ] Next gate:
-  Fix the high-priority kill-chain remote artifact scope gate ordering found by
-  the sidecar audit: pre-existing queued remote artifacts must receive the
-  scope-manifest gate before the first `ArtifactQueueProcessor.process()` pass.
-  Add a regression where an out-of-scope queued remote artifact cannot download,
-  records scope denial, and leaves no outbound call. Then audit run-finalization
-  ordering for `--auto-run-detected` actions.
+- [x] Early remote artifact scope-gate checkpoint:
+  Kill-chain startup now installs the remote artifact scope-manifest gate before
+  the first `ArtifactQueueProcessor.process()` pass. Pre-existing queued remote
+  artifacts are denied before download when outside the scope manifest, receive a
+  skipped artifact status, and emit `remote_artifact_scope_denied` audit rows.
+  Same-run discovered remote artifacts still use the same gate. Verification:
+  compile passed; Ruff passed; focused scope-manifest remote artifact regression
+  passed (`1 passed, 758 deselected`); kill-chain convergence suite passed
+  (`3 passed`); recursive multi-seed mocked E2E passed (`1 passed`); pytest
+  engagement cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-early-remote-artifact-scope-gate.md`. Commit:
+  `ce33ff7`.
+- [ ] Next gate:
+  Audit and fix kill-chain run finalization ordering for `--auto-run-detected`.
+  Follow-on auto-run actions must be included in the run audit/final metadata
+  before the engagement run is marked completed. Add a mocked regression proving
+  auto-run action evidence appears before completion/final manifest generation.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

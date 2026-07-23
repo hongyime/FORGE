@@ -25,31 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: manual plus DB audit artifact parity is complete. Manual
-legacy `audit_*.json` sidecars no longer suppress DB-backed
-`audit_{engagement_id}_run_{run_id}_{short_hash}.json` manifest summaries.
-Static dashboard and live web API now expose both artifact families so mixed
-old/new deployments do not hide canonical run audit summaries.
+Latest checkpoint: early remote artifact scope-gate is complete. Kill-chain
+startup now installs the remote artifact scope-manifest gate before the first
+`ArtifactQueueProcessor.process()` pass. Pre-existing queued remote artifacts
+are denied before download when outside the scope manifest, receive skipped
+artifact status, and emit `remote_artifact_scope_denied` audit rows.
 
-Verification: compile/Ruff passed; focused static dashboard and web API audit
-tests passed; full static dashboard file passed (`20 passed`); full web UI
-engagement API file passed (`36 passed, 71 warnings`); pytest engagement
-cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
-`.claude/handoffs/2026-07-24-manual-db-audit-artifact-parity.md`. Commit:
-`32ee3bb`.
+Verification: compile/Ruff passed; focused scope-manifest remote artifact
+regression passed (`1 passed, 758 deselected`); kill-chain convergence suite
+passed (`3 passed`); recursive multi-seed mocked E2E passed (`1 passed`);
+pytest engagement cleanup reported `removed=4 remaining=0 post_scan=0`.
+Handoff: `.claude/handoffs/2026-07-24-early-remote-artifact-scope-gate.md`.
+Commit: `ce33ff7`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: fix the high-priority kill-chain remote artifact scope gate
-ordering found by the sidecar audit. Pre-existing queued remote artifacts must
-receive the scope-manifest gate before the first
-`ArtifactQueueProcessor.process()` pass. Add a regression where an out-of-scope
-queued remote artifact cannot download, records scope denial, and leaves no
-outbound call. Then audit run-finalization ordering for `--auto-run-detected`
-actions.
+Current next gate: audit and fix kill-chain run finalization ordering for
+`--auto-run-detected`. Follow-on auto-run actions must be included in run audit
+and final metadata before the engagement run is marked completed. Add a mocked
+regression proving auto-run action evidence appears before completion/final
+manifest generation.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
