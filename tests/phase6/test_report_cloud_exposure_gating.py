@@ -91,6 +91,14 @@ def _create_cloud_exposure_db(path: Path) -> None:
                 "gcp",
                 "metadata-bucket",
             ),
+            (
+                "DETERMINISTIC_CLOUD_EXPOSURE",
+                "Manual note public S3 bucket exposure",
+                "aws_s3://manual-note-bucket",
+                "aws_s3",
+                "aws",
+                "manual-note-bucket",
+            ),
         ]
         con.executemany(
             """
@@ -158,6 +166,15 @@ def _create_cloud_exposure_db(path: Path) -> None:
                 "reachable but no data",
                 "2026-07-02T00:00:00Z",
             ),
+            (
+                "aws_s3",
+                "manual-note-bucket",
+                "VALIDATED",
+                "manual_validated_note",
+                200,
+                "operator note says bucket was public",
+                "2026-07-02T00:00:00Z",
+            ),
         ]
         con.executemany(
             """
@@ -186,6 +203,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert "Latest validated public S3 bucket listing exposure" in context_titles
     assert "Stale validated public S3 bucket listing exposure" not in context_titles
     assert "Public Google Cloud Storage metadata observed" not in context_titles
+    assert "Manual note public S3 bucket exposure" not in context_titles
     inventory_by_identifier = {
         str(item["identifier"]): item for item in ctx.cloud_validation_inventory
     }
@@ -196,6 +214,8 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert inventory_by_identifier["validated-bucket"]["evidence_summary"] == (
         "latest object metadata listing"
     )
+    assert inventory_by_identifier["manual-note-bucket"]["validation_status"] == "VALIDATED"
+    assert inventory_by_identifier["manual-note-bucket"]["method"] == "manual_validated_note"
     validated_finding = next(
         item
         for item in ctx.exploits.exploited
@@ -240,6 +260,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert "Latest validated public S3 bucket listing exposure" in markdown
     assert "Stale validated public S3 bucket listing exposure" not in markdown
     assert "Public Google Cloud Storage metadata observed" not in markdown
+    assert "Manual note public S3 bucket exposure" not in markdown
     assert exported_titles == {"Latest validated public S3 bucket listing exposure"}
     assert {
         item["validation_status"]

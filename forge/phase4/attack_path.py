@@ -22,6 +22,7 @@ from forge.models.attack_graph_models import (
 )
 from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
+    is_reportable_cloud_validation,
     normalize_cloud_exposure_asset_type,
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
@@ -490,6 +491,7 @@ class AttackGraphBuilder:
             ident = str(identifier or svc).strip().lower()
             metadata: dict[str, Any] = {
                 "provider_identifier": str(provider_identifier or identifier or ""),
+                "validation_asset_type": svc,
                 "validation_status": str(status or ""),
                 "validation_method": str(method or ""),
                 "checked_at": str(checked_at or ""),
@@ -905,7 +907,11 @@ class AttackGraphBuilder:
     def _cloud_exposure_is_validated(validation_metadata: dict[str, Any] | None) -> bool:
         if not validation_metadata:
             return False
-        return str(validation_metadata.get("validation_status") or "").strip().upper() == "VALIDATED"
+        return is_reportable_cloud_validation(
+            str(validation_metadata.get("validation_asset_type") or ""),
+            str(validation_metadata.get("validation_status") or ""),
+            str(validation_metadata.get("validation_method") or ""),
+        )
 
     @staticmethod
     def _vuln_is_deterministic_cloud_exposure(

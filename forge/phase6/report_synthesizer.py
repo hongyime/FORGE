@@ -50,7 +50,10 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFo
 from forge.core.errors import ProviderUnavailableError
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
-from forge.utils.cloud_exposure_gate import is_deterministic_cloud_exposure
+from forge.utils.cloud_exposure_gate import (
+    is_deterministic_cloud_exposure,
+    is_reportable_cloud_validation,
+)
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
@@ -599,7 +602,10 @@ class ContextBuilder:
         try:
             rows = con.execute(
                 f"""
-                SELECT asset_type, identifier, validation_status
+                SELECT asset_type,
+                       identifier,
+                       validation_status,
+                       {"validation_method" if "validation_method" in columns else "NULL AS validation_method"}
                 FROM cloud_validation_results
                 WHERE engagement_id=?
                 ORDER BY asset_type ASC,
@@ -617,9 +623,10 @@ class ContextBuilder:
             identifier = str(row["identifier"] or "").strip().lower()
             if not asset_type or not identifier:
                 continue
-            validation_index[(asset_type, identifier)] = str(
-                row["validation_status"] or ""
-            ).strip().upper()
+            status = str(row["validation_status"] or "").strip().upper()
+            method = str(row["validation_method"] or "").strip()
+            if is_reportable_cloud_validation(asset_type, status, method):
+                validation_index[(asset_type, identifier)] = status
         return validation_index
 
     @staticmethod
@@ -687,6 +694,7 @@ class ContextBuilder:
             if not asset_type or not identifier:
                 continue
             metadata[(asset_type, identifier)] = {
+                "validation_asset_type": asset_type,
                 "provider_identifier": str(row["provider_identifier"] or row["identifier"] or "").strip(),
                 "validation_status": str(row["validation_status"] or "").strip().upper(),
                 "validation_method": str(row["validation_method"] or "").strip(),
@@ -1343,7 +1351,14 @@ class ContextBuilder:
     ) -> bool:
         if not cls._finding_is_deterministic_cloud_exposure(finding):
             return False
-        return str(finding.get("validation_status") or "").strip().upper() != "VALIDATED"
+        asset_type = str(
+            finding.get("validation_asset_type") or finding.get("parameter") or ""
+        ).split(":", 1)[0]
+        return not is_reportable_cloud_validation(
+            asset_type,
+            str(finding.get("validation_status") or ""),
+            str(finding.get("validation_method") or ""),
+        )
 
     @classmethod
     def _finding_is_deterministic_cloud_exposure(cls, finding: dict[str, Any]) -> bool:

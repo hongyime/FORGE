@@ -89,8 +89,8 @@ review, and guaranteed template/raw exports when LLM providers fail.
 |---|---|---|---|
 | T1 | . | Prove one representative multi-seed engagement path from intake through recursion, validation, graph/report/audit review, fallback exports, and cleanup with focused mocked E2E tests. | V1,V2,V3,V4,V8,V9,V10,V11 |
 | T2 | . | Continue safe recursive discovery upgrades for concrete passive parser, provider payload, identity, artifact, and source-gated metadata gaps. | V1,V3,V4,V5 |
-| T3 | . | Harden validation proof gates and report gates so only latest validated evidence can create deterministic findings. | V6,V7 |
-| T4 | . | Keep dashboard, API, graph, report, raw export, validation inventory, and audit surfaces in factual parity. | V3,V8 |
+| T3 | ~ | Harden validation proof gates and report gates so only latest validated evidence can create deterministic findings. | V6,V7 |
+| T4 | ~ | Keep dashboard, API, graph, report, raw export, validation inventory, and audit surfaces in factual parity. | V3,V8 |
 | T5 | . | Preserve deterministic report fallback through LLM cascade failures, quota/token failures, missing keys, local/template degradation, and raw export availability. | V7,V9,V12,V13 |
 | T6 | . | Keep scoped active checks ROE-gated, non-destructive, bounded, paced, logged, and dry-run capable. | V3,V4,V6,V10 |
 | T7 | . | Split or wrap large legacy modules only when it reduces risk without changing verified behavior. | V1,V10 |
@@ -110,3 +110,4 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | B8 | 2026-07-20 | Runtime `/goal` text remained stale enough to obscure the real deterministic product target even though repository goal docs existed. | Re-anchored the active goal statement in `END_GOAL.md`, `docs/end_goal.md`, `docs/deterministic_engagement_contract.md`, and the active continuation checklists; repository goal docs remain authoritative over runtime labels. |
 | B9 | 2026-07-23 | The locked end goal existed, but the newest continuation prompt showed the answer still needed to be more immediate for future agents under low context. | Added top-level "end goal now" wording to the root spec and refreshed the source-of-truth docs so agents answer with the deterministic authorized ASM pipeline target before choosing tasks. |
 | B10 | 2026-07-23 | Deterministic finding synthesis trusted a `VALIDATED` cloud row even when the validation method was not a known deterministic proof method. | Gated cloud findings by explicit reportable validation-method allowlists and required linked key confirmations to pass the stable proof parser before they can keep or create deterministic findings. |
+| B11 | 2026-07-23 | Phase 6, graph, and dashboard review surfaces could still trust stale deterministic cloud finding rows when the latest validation row used an unknown `VALIDATED` method, because the validation-method allowlist lived only in synthesis. | Moved the reportable cloud validation-method policy into `forge.utils.cloud_exposure_gate` and reused it across deterministic synthesis, Phase 6 report/raw exports, graph vuln-node gating, and dashboard severity/finding review tables. |

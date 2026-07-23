@@ -15,9 +15,15 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 from forge.audit.manifest import summarize_run_audit_manifest
+from forge.utils.cloud_exposure_gate import (
+    is_deterministic_cloud_exposure,
+    is_reportable_cloud_validation,
+    normalize_cloud_exposure_asset_type,
+)
 from forge.utils.validation_proof import parse_validated_detail
 
 GRAPHML_NS = {"g": "http://graphml.graphdrawing.org/xmlns"}
@@ -479,22 +485,138 @@ def _merged_email_rows(con: sqlite3.Connection, engagement_id: int, *, limit: in
     return merged[:limit] if limit is not None else merged
 
 
-def _severity_summary(con: sqlite3.Connection, engagement_id: int) -> dict[str, int]:
-    counts = {severity: 0 for severity in SEVERITY_ORDER}
-    for row in _fetch_rows(
+def _reportable_cloud_validation_index(
+    con: sqlite3.Connection,
+    engagement_id: int,
+) -> dict[tuple[str, str], bool]:
+    columns = _table_columns(con, "cloud_validation_results")
+    if not {"asset_type", "identifier", "validation_status"}.issubset(columns):
+        return {}
+    method_expr = "validation_method" if "validation_method" in columns else "NULL AS validation_method"
+    checked_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
+    id_expr = "id" if "id" in columns else "0"
+    rows = _fetch_rows(
         con,
-        """
-        SELECT UPPER(COALESCE(severity, 'INFO')) AS severity, COUNT(*)
-        FROM vulnerability_findings
+        f"""
+        SELECT asset_type, identifier, validation_status, {method_expr}
+        FROM cloud_validation_results
         WHERE engagement_id=?
-        GROUP BY UPPER(COALESCE(severity, 'INFO'))
+        ORDER BY asset_type ASC, identifier ASC, {checked_expr} ASC, {id_expr} ASC
         """,
         (engagement_id,),
-    ):
+    )
+    index: dict[tuple[str, str], bool] = {}
+    for row in rows:
+        asset = normalize_cloud_exposure_asset_type(str(row["asset_type"] or ""))
+        identifier = str(row["identifier"] or "").strip().lower()
+        if not asset or not identifier:
+            continue
+        index[(asset, identifier)] = is_reportable_cloud_validation(
+            asset,
+            str(row["validation_status"] or ""),
+            str(row["validation_method"] or ""),
+        )
+    return index
+
+
+def _vulnerability_validation_asset(row: sqlite3.Row) -> str:
+    provider = str(row["cloud_provider"] or "").strip().lower() if "cloud_provider" in row.keys() else ""
+    parameter = str(row["parameter"] or "").strip().lower() if "parameter" in row.keys() else ""
+    target_url = str(row["target_url"] or "").strip().lower() if "target_url" in row.keys() else ""
+    hint = f"{parameter} {target_url}"
+    if provider in {"firebase", "supabase"}:
+        return provider
+    if provider in {"aws", "amazon"} and ("s3" in hint or "aws_s3" in hint):
+        return "aws_s3"
+    if provider in {"gcp", "google"} and ("gcs" in hint or "gs://" in hint):
+        return "gcs"
+    if provider == "azure" and "blob" in hint:
+        return "azure_blob"
+    if provider in {"digitalocean", "do"} and "space" in hint:
+        return "do_spaces"
+    for value in (provider, parameter.split(":", 1)[0], urlparse(target_url).scheme):
+        normalized = normalize_cloud_exposure_asset_type(value)
+        if normalized:
+            return normalized
+    return ""
+
+
+def _vulnerability_validation_identifier(row: sqlite3.Row) -> str:
+    resource_id = str(row["resource_id"] or "").strip().lower() if "resource_id" in row.keys() else ""
+    if resource_id:
+        return resource_id
+    target_url = str(row["target_url"] or "").strip()
+    if target_url:
+        parsed = urlparse(target_url)
+        identifier = f"{parsed.netloc}/{parsed.path.strip('/')}".strip("/")
+        if identifier:
+            return identifier.lower()
+    return ""
+
+
+def _vulnerability_row_is_reportable(
+    row: sqlite3.Row,
+    validation_index: dict[tuple[str, str], bool],
+) -> bool:
+    vuln_type = str(row["vuln_type"] or "").strip().upper() if "vuln_type" in row.keys() else ""
+    title = str(row["title"] or "").strip()
+    asset = _vulnerability_validation_asset(row)
+    if is_deterministic_cloud_exposure(vuln_type, title, (asset,)):
+        identifier = _vulnerability_validation_identifier(row)
+        if not asset or not identifier:
+            return True
+        reportable = validation_index.get((asset, identifier))
+        return True if reportable is None else reportable
+    if vuln_type == "DETERMINISTIC_KEY_EXPOSURE" or title.lower().startswith("active exposed "):
+        proof = parse_validated_detail(str(row["evidence"] or "") if "evidence" in row.keys() else "")
+        return str(proof["validation_status"] or "").strip().upper() == "VALIDATED"
+    return True
+
+
+def _reportable_vulnerability_rows(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    *,
+    limit: int | None = None,
+) -> list[sqlite3.Row]:
+    columns = _table_columns(con, "vulnerability_findings")
+    if not columns:
+        return []
+    select_parts = [
+        "severity" if "severity" in columns else "'INFO' AS severity",
+        "vuln_type" if "vuln_type" in columns else "NULL AS vuln_type",
+        "title" if "title" in columns else "NULL AS title",
+        "target_url" if "target_url" in columns else "NULL AS target_url",
+        "parameter" if "parameter" in columns else "NULL AS parameter",
+        "evidence" if "evidence" in columns else "NULL AS evidence",
+        "cloud_provider" if "cloud_provider" in columns else "NULL AS cloud_provider",
+        "resource_id" if "resource_id" in columns else "NULL AS resource_id",
+        "found_at" if "found_at" in columns else "NULL AS found_at",
+    ]
+    rows = _fetch_rows(
+        con,
+        f"""
+        SELECT {', '.join(select_parts)}
+        FROM vulnerability_findings
+        WHERE engagement_id=?
+        ORDER BY id DESC
+        """,
+        (engagement_id,),
+    )
+    validation_index = _reportable_cloud_validation_index(con, engagement_id)
+    reportable = [
+        row for row in rows if _vulnerability_row_is_reportable(row, validation_index)
+    ]
+    return reportable[:limit] if limit is not None else reportable
+
+
+def _severity_summary(con: sqlite3.Connection, engagement_id: int) -> dict[str, int]:
+    counts = {severity: 0 for severity in SEVERITY_ORDER}
+    for row in _reportable_vulnerability_rows(con, engagement_id):
         severity = str(row["severity"] or "INFO").upper()
         if severity not in counts:
             counts[severity] = 0
-        counts[severity] += int(row[1] or 0)
+        counts[severity] += 1
     for row in _fetch_rows(
         con,
         """
@@ -925,6 +1047,91 @@ def _graph_payload_with_defaults(
     return enriched
 
 
+def _graph_node_validation_key(node: dict[str, Any]) -> tuple[str, str]:
+    metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    asset = ""
+    for value in (
+        metadata.get("validation_asset_type"),
+        metadata.get("service"),
+        metadata.get("parameter"),
+        metadata.get("cloud_provider"),
+    ):
+        normalized = normalize_cloud_exposure_asset_type(str(value or "").split(":", 1)[0])
+        if normalized:
+            asset = normalized
+            break
+    node_text = f"{node.get('label') or ''} {metadata.get('target_url') or ''}".lower()
+    if asset in {"aws", "amazon"} and "s3" in node_text:
+        asset = "aws_s3"
+    identifier = str(metadata.get("resource_id") or metadata.get("identifier") or "").strip().lower()
+    return asset, identifier
+
+
+def _graph_node_is_unreportable_cloud_finding(
+    node: dict[str, Any],
+    validation_index: dict[tuple[str, str], bool],
+) -> bool:
+    metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    vuln_type = str(metadata.get("vuln_type") or node.get("vuln_type") or "").strip().upper()
+    label = str(node.get("label") or node.get("title") or "")
+    asset, identifier = _graph_node_validation_key(node)
+    if not is_deterministic_cloud_exposure(vuln_type, label, (asset,)):
+        return False
+    if not asset or not identifier:
+        return False
+    reportable = validation_index.get((asset, identifier))
+    return reportable is False
+
+
+def _filter_graph_payload_for_validation(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    payload: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not _graph_payload_has_structure(payload):
+        return payload
+    validation_index = _reportable_cloud_validation_index(con, engagement_id)
+    if not validation_index:
+        return payload
+    nodes = payload.get("nodes", []) if isinstance(payload.get("nodes"), list) else []
+    removed: set[str] = set()
+    filtered_nodes: list[dict[str, Any]] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        node_id = str(node.get("node_id") or "")
+        if _graph_node_is_unreportable_cloud_finding(node, validation_index):
+            if node_id:
+                removed.add(node_id)
+            continue
+        filtered_nodes.append(node)
+    if not removed:
+        return payload
+    edges = payload.get("edges", []) if isinstance(payload.get("edges"), list) else []
+    filtered_edges = [
+        edge
+        for edge in edges
+        if isinstance(edge, dict)
+        and str(edge.get("source_node_id") or "") not in removed
+        and str(edge.get("target_node_id") or "") not in removed
+    ]
+    filtered = dict(payload)
+    filtered["nodes"] = filtered_nodes
+    filtered["edges"] = filtered_edges
+    filtered["node_count"] = len(filtered_nodes)
+    filtered["edge_count"] = len(filtered_edges)
+    filtered["critical_path_nodes"] = [
+        node_id
+        for node_id in (
+            payload.get("critical_path_nodes", [])
+            if isinstance(payload.get("critical_path_nodes"), list)
+            else []
+        )
+        if str(node_id) not in removed
+    ]
+    return filtered
+
+
 def _parse_graph_payload(raw: str) -> dict[str, Any] | None:
     try:
         payload = json.loads(raw)
@@ -1204,12 +1411,13 @@ def _graph_payload_for_engagement(
             payload = _parse_graph_payload(str(rows[0]["graph_json"] or ""))
             if _graph_payload_has_structure(payload):
                 snapshot_at = str(rows[0]["snapshot_at"] or "")
+                graph_payload = _graph_payload_with_defaults(
+                    payload,
+                    source="attack_graph_snapshot",
+                    generated_at=_format_dt(snapshot_at),
+                )
                 return (
-                    _graph_payload_with_defaults(
-                        payload,
-                        source="attack_graph_snapshot",
-                        generated_at=_format_dt(snapshot_at),
-                    ),
+                    _filter_graph_payload_for_validation(con, engagement_id, graph_payload),
                     snapshot_at,
                 )
 
@@ -1219,12 +1427,13 @@ def _graph_payload_for_engagement(
             payload = _parse_graph_payload(graph_json.read_text(encoding="utf-8", errors="replace"))
             if _graph_payload_has_structure(payload):
                 generated_at = _format_dt(datetime.fromtimestamp(graph_json.stat().st_mtime).isoformat())
+                graph_payload = _graph_payload_with_defaults(
+                    payload,
+                    source=graph_json.name,
+                    generated_at=generated_at,
+                )
                 return (
-                    _graph_payload_with_defaults(
-                        payload,
-                        source=graph_json.name,
-                        generated_at=generated_at,
-                    ),
+                    _filter_graph_payload_for_validation(con, engagement_id, graph_payload),
                     generated_at,
                 )
         except Exception:  # noqa: BLE001
@@ -1234,13 +1443,19 @@ def _graph_payload_for_engagement(
     if graphml is not None:
         payload = _graph_payload_from_graphml(graphml)
         if _graph_payload_has_structure(payload):
-            return payload, _format_dt(datetime.fromtimestamp(graphml.stat().st_mtime).isoformat())
+            return (
+                _filter_graph_payload_for_validation(con, engagement_id, payload),
+                _format_dt(datetime.fromtimestamp(graphml.stat().st_mtime).isoformat()),
+            )
 
     mtgx = next((path for path in graph_files if path.suffix.lower() == ".mtgx"), None)
     if mtgx is not None:
         payload = _graph_payload_from_graphml(mtgx)
         if _graph_payload_has_structure(payload):
-            return payload, _format_dt(datetime.fromtimestamp(mtgx.stat().st_mtime).isoformat())
+            return (
+                _filter_graph_payload_for_validation(con, engagement_id, payload),
+                _format_dt(datetime.fromtimestamp(mtgx.stat().st_mtime).isoformat()),
+            )
 
     seed_payload, seed_snapshot_at = _seed_graph_payload_for_engagement(con, engagement_id)
     if _graph_payload_has_structure(seed_payload):
@@ -1425,6 +1640,9 @@ def _summary_counts(con: sqlite3.Connection, engagement_id: int) -> dict[str, in
         "auth_test_results",
     ):
         if _table_exists(con, table):
+            if table == "vulnerability_findings":
+                counts[table] = len(_reportable_vulnerability_rows(con, engagement_id))
+                continue
             counts[table] = _fetch_count(
                 con,
                 f"SELECT COUNT(*) FROM {table} WHERE engagement_id=?",
@@ -2207,16 +2425,10 @@ def _detail_sections(
             "Target": str(row["target_url"] or ""),
             "Seen": _format_dt(str(row["found_at"] or "")),
         }
-        for row in _fetch_rows(
+        for row in _reportable_vulnerability_rows(
             con,
-            """
-            SELECT severity, vuln_type, title, target_url, found_at
-            FROM vulnerability_findings
-            WHERE engagement_id=?
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (engagement_id, SECTION_LIMIT),
+            engagement_id,
+            limit=SECTION_LIMIT,
         )
     ]
 

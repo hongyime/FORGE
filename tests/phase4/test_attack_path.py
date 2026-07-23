@@ -966,6 +966,7 @@ class TestLoadCloudAssets:
                 VALUES
                     (1, 'aws_s3', 'bucket-stale', 'cloud_validate'),
                     (1, 'aws_s3', 'bucket-good', 'cloud_validate'),
+                    (1, 'aws_s3', 'manual-note-bucket', 'cloud_validate'),
                     (1, 'stripe', 'acct-unsupported', 'cloud_validate'),
                     (1, 'gcs', 'metadata-bucket', 'cloud_validate');
 
@@ -981,6 +982,8 @@ class TestLoadCloudAssets:
                      's3_list_bucket', 404, '2026-07-15T09:00:00+00:00'),
                     (1, 'aws_s3', 'bucket-good', 'VALIDATED',
                      's3_list_bucket', 200, '2026-07-15T10:00:00+00:00'),
+                    (1, 'aws_s3', 'manual-note-bucket', 'VALIDATED',
+                     'manual_validated_note', 200, '2026-07-15T10:00:00+00:00'),
                     (1, 'stripe', 'acct-unsupported', 'UNSUPPORTED',
                      'registry_dispatch', NULL, '2026-07-15T10:00:00+00:00'),
                     (1, 'gcs', 'metadata-bucket', 'ACCESSIBLE_BUT_NO_DATA',
@@ -999,6 +1002,9 @@ class TestLoadCloudAssets:
                      'HIGH', 'Stale cloud exposure', 'aws', 'bucket-stale'),
                     (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://bucket-good', 'aws_s3',
                      'HIGH', 'Validated cloud exposure', 'aws', 'bucket-good'),
+                    (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://manual-note-bucket',
+                     'aws_s3', 'HIGH', 'Manual note cloud exposure', 'aws',
+                     'manual-note-bucket'),
                     (1, 'CLOUD_STORAGE_METADATA', 'gs://metadata-bucket', 'gcs',
                      'MEDIUM', 'Public Google Cloud Storage metadata observed',
                      NULL, 'metadata-bucket');
@@ -1022,6 +1028,8 @@ class TestLoadCloudAssets:
 
         assert cloud_nodes["bucket-stale"].metadata["validation_status"] == "HONEYPOT_SUSPECTED"
         assert cloud_nodes["bucket-good"].metadata["validation_status"] == "VALIDATED"
+        assert cloud_nodes["manual-note-bucket"].metadata["validation_status"] == "VALIDATED"
+        assert cloud_nodes["manual-note-bucket"].metadata["validation_method"] == "manual_validated_note"
         assert cloud_nodes["acct-unsupported"].metadata["validation_status"] == "UNSUPPORTED"
         assert cloud_nodes["metadata-bucket"].metadata["validation_status"] == "ACCESSIBLE_BUT_NO_DATA"
         assert cloud_nodes["bucket-good"].metadata["validation_notes"] == (
@@ -1032,6 +1040,7 @@ class TestLoadCloudAssets:
         )
         assert "Stale cloud exposure" not in vuln_by_label
         assert "Validated cloud exposure" in vuln_by_label
+        assert "Manual note cloud exposure" not in vuln_by_label
         assert "Public Google Cloud Storage metadata observed" not in vuln_by_label
         assert all("acct-unsupported" not in node.label for node in vuln_by_label.values())
 

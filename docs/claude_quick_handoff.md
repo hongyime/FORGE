@@ -25,12 +25,11 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: validation/review parity. Audit whether Phase 6 reports,
-dashboard payloads, graph exports, raw exports, validation inventory, or audit
-surfaces can still expose stale pre-existing deterministic cloud/key finding
-rows when the latest validation row uses an unknown or non-reportable validation
-method. Write the smallest failing test first, then harden only the affected
-gate.
+Current next gate: deterministic key exposure parity. Audit whether
+pre-existing key findings or `key_scanner_findings` counts can still surface in
+reports, dashboard/API payloads, raw exports, graph exports, or summaries when
+their stored validation detail fails the stable proof parser. Write the smallest
+failing test first, then harden only the affected gate.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -65,6 +64,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Validation/review parity for unknown validation methods completed:
+  shared reportable cloud validation-method policy now gates deterministic
+  synthesis, Phase 6 report/raw exports, graph vulnerability nodes, dashboard
+  severity/finding tables, and imported dashboard graph payloads. Unknown
+  `VALIDATED` methods such as `manual_validated_note` remain validation
+  inventory only. Backprop: `SPEC.md` `B11`; `T3`/`T4` are marked in progress.
+  Verification: failing Phase 6 TDD first; focused Phase 6/dashboard/graph
+  regressions; compile/Ruff; combined deterministic findings, Phase 6,
+  dashboard, and attack-path suite (`145 passed`); representative integration
+  smoke (`2 passed`); cleanup `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-validation-review-method-parity.md`.
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now rejects `VALIDATED` cloud rows with unknown
   validation methods and requires linked key confirmations to pass the stable

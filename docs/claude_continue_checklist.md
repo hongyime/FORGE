@@ -159,14 +159,28 @@ historical notes only, not as current instructions.
   template/raw fallback, and test-data cleanup. Backprop: added `SPEC.md`
   `B8`. Verification: documentation grep and source-of-truth review only.
   Handoff: `.claude/handoffs/2026-07-20-end-goal-source-of-truth-refresh.md`.
-- [ ] Immediate next implementation target: validation/review parity audit.
-  Check whether Phase 6 reports, dashboard payloads, graph exports, raw exports,
-  validation inventory, and audit surfaces can still expose stale pre-existing
-  deterministic cloud/key finding rows when the latest validation row uses an
-  unknown or non-reportable validation method. Add the smallest failing test
-  first, then harden only the affected gate. This advances validation, scoring,
-  review, fallback, and testing/cleanup; do not broaden provider calls, live
-  probing, scope, proxy/IP behavior, or severity rules.
+- [x] Validation/review parity for unknown validation methods completed:
+  reportable cloud validation-method policy now lives in
+  `forge.utils.cloud_exposure_gate` and is reused by deterministic finding
+  synthesis, Phase 6 report/raw export context, graph vulnerability-node
+  gating, dashboard severity counts, dashboard finding tables, and imported
+  dashboard graph payload filtering. Unknown or non-reportable `VALIDATED`
+  methods such as `manual_validated_note` remain visible as validation
+  inventory but cannot keep stale deterministic cloud/key findings reportable.
+  Backprop: `SPEC.md` `B11`; `T3`/`T4` are marked in progress. Verification:
+  focused TDD first failed in Phase 6, then focused Phase 6/dashboard/graph
+  regressions passed; compile/Ruff passed; combined deterministic
+  findings/Phase 6/dashboard/attack-path suite -> `145 passed`;
+  representative integration smoke -> `2 passed`; cleanup ->
+  `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-validation-review-method-parity.md`.
+- [ ] Immediate next implementation target: audit persisted
+  report/dashboard/API parity for deterministic key exposure rows and
+  `key_scanner_findings` counts. Check whether pre-existing key findings or
+  active key rows can still surface in reports, dashboard/API payloads, raw
+  exports, graph exports, or summaries when their stored validation detail fails
+  the stable proof parser. Add the smallest failing test first, then harden only
+  the affected gate.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -7,6 +7,13 @@ from typing import Any
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.utils.cloud_exposure_gate import (
+    CLOUD_DATA_VALIDATION_METHODS,
+    STORAGE_CLOUD_ASSET_TYPES,
+    STORAGE_LISTING_VALIDATION_METHODS,
+    STORAGE_METADATA_VALIDATION_METHODS,
+    is_reportable_cloud_validation_method,
+)
 from forge.utils.validation_proof import parse_validated_detail
 
 SEVERITY_ORDER = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
@@ -123,40 +130,6 @@ def _storage_listing_title(asset_type: str) -> str:
         "gcs": "Validated public Google Cloud Storage bucket listing exposure",
         "azure_blob": "Validated public Azure Blob container listing exposure",
     }.get(asset_type, f"Validated public {_asset_label(asset_type)} listing exposure")
-
-
-_STORAGE_ASSET_TYPES = {"aws_s3", "do_spaces", "gcs", "azure_blob"}
-_STORAGE_LISTING_METHODS = {
-    "s3_list_bucket",
-    "do_spaces_list_bucket",
-    "gcs_list_bucket",
-    "azure_blob_list_container",
-}
-_STORAGE_METADATA_METHODS = {
-    "s3_head_probe",
-    "do_spaces_head_probe",
-    "gcs_http_probe",
-    "azure_blob_http_probe",
-}
-_CLOUD_DATA_METHODS = {
-    "firebase": {"firebase_database_shallow_read", "firebase_database_node_read"},
-    "supabase": {"supabase_rest_root"},
-}
-
-
-def _is_reportable_cloud_validation_method(
-    asset_type: str,
-    validation_method: str,
-) -> bool:
-    asset = str(asset_type or "").strip().lower()
-    method = str(validation_method or "").strip().lower()
-    if method in _CLOUD_DATA_METHODS.get(asset, set()):
-        return True
-    if asset in _STORAGE_ASSET_TYPES and method in _STORAGE_LISTING_METHODS:
-        return True
-    if asset in _STORAGE_ASSET_TYPES and method in _STORAGE_METADATA_METHODS:
-        return True
-    return False
 
 
 def _is_low_signal_public_cloud_metadata(
@@ -299,11 +272,11 @@ class DeterministicFindingEngine:
         severity = ""
         if not _is_reportable_cloud_validation_status(validation_status):
             return None
-        if not _is_reportable_cloud_validation_method(asset_type, validation_method):
+        if not is_reportable_cloud_validation_method(asset_type, validation_method):
             return None
 
         if validation_status == "VALIDATED":
-            if asset_type == "firebase" and validation_method in _CLOUD_DATA_METHODS["firebase"]:
+            if asset_type == "firebase" and validation_method in CLOUD_DATA_VALIDATION_METHODS["firebase"]:
                 severity = "HIGH"
                 title = "Validated Firebase data exposure"
                 description = (
@@ -319,14 +292,14 @@ class DeterministicFindingEngine:
                 )
             elif _is_low_signal_public_cloud_metadata(asset_type, validation_method):
                 return None
-            elif asset_type in _STORAGE_ASSET_TYPES and validation_method in _STORAGE_LISTING_METHODS:
+            elif asset_type in STORAGE_CLOUD_ASSET_TYPES and validation_method in STORAGE_LISTING_VALIDATION_METHODS:
                 severity = "HIGH"
                 title = _storage_listing_title(asset_type)
                 description = (
                     f"Deterministic validation confirmed that `{identifier}` allowed unauthenticated enumeration "
                     f"of real object metadata through `{validation_method}`."
                 )
-            elif asset_type in _STORAGE_ASSET_TYPES and validation_method in _STORAGE_METADATA_METHODS:
+            elif asset_type in STORAGE_CLOUD_ASSET_TYPES and validation_method in STORAGE_METADATA_VALIDATION_METHODS:
                 severity = "LOW"
                 title = f"Externally reachable {_asset_label(asset_type)} detected"
                 description = (

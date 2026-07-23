@@ -1654,6 +1654,222 @@ def test_generate_dashboard_orders_cloud_validation_results_by_latest_checked_at
     assert validation_rows[1]["Evidence"] == "older dead proof"
 
 
+def test_generate_dashboard_filters_unknown_method_deterministic_cloud_rows(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT")
+        con.executescript(
+            """
+            CREATE TABLE cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at, cloud_provider, resource_id)
+            VALUES (
+                1001, 'DETERMINISTIC_CLOUD_EXPOSURE',
+                'aws_s3://manual-note-bucket', 'aws_s3', 'HIGH',
+                'Manual note public S3 bucket exposure',
+                'Legacy finding from a manual validation note.',
+                'operator note says bucket was public',
+                '2026-07-09T09:42:00', 'aws', 'manual-note-bucket'
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES (
+                1001, 'aws_s3', 'manual-note-bucket', 'VALIDATED',
+                'manual_validated_note', 200,
+                'operator note says bucket was public',
+                'no deterministic proof method',
+                '2026-07-09T09:43:00'
+            )
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+
+    assert detail_payload["severity_summary"]["HIGH"] == 1
+    finding_titles = {
+        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
+    }
+    assert "Manual note public S3 bucket exposure" not in finding_titles
+    validation_rows = {
+        row["Asset"]: row for row in detail_payload["sections"]["cloud_validation_results"]
+    }
+    assert validation_rows["manual-note-bucket"]["Status"] == "VALIDATED"
+    assert validation_rows["manual-note-bucket"]["Method"] == "manual_validated_note"
+
+
+def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    stale_graph = {
+        "nodes": [
+            {
+                "node_id": "HOST::app",
+                "label": "app.acme.example",
+                "node_type": "HOST",
+                "metadata": {},
+            },
+            {
+                "node_id": "VULN::manual-note",
+                "label": "Manual note public S3 bucket exposure",
+                "node_type": "VULN",
+                "severity": "HIGH",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "DETERMINISTIC_CLOUD_EXPOSURE",
+                    "validation_asset_type": "aws_s3",
+                    "resource_id": "manual-note-bucket",
+                    "validation_status": "VALIDATED",
+                    "validation_method": "manual_validated_note",
+                },
+            },
+            {
+                "node_id": "CLOUD::manual-note",
+                "label": "manual-note-bucket",
+                "node_type": "CLOUD",
+                "metadata": {
+                    "service": "aws_s3",
+                    "identifier": "manual-note-bucket",
+                    "validation_status": "VALIDATED",
+                    "validation_method": "manual_validated_note",
+                },
+            },
+        ],
+        "edges": [
+            {
+                "source_node_id": "HOST::app",
+                "target_node_id": "VULN::manual-note",
+                "edge_type": "vuln_found",
+            },
+            {
+                "source_node_id": "VULN::manual-note",
+                "target_node_id": "CLOUD::manual-note",
+                "edge_type": "cloud_misconfig",
+            },
+        ],
+        "critical_path_nodes": ["HOST::app", "VULN::manual-note", "CLOUD::manual-note"],
+    }
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
+        con.executescript(
+            """
+            CREATE TABLE cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES (
+                1001, 'aws_s3', 'manual-note-bucket', 'VALIDATED',
+                'manual_validated_note', 200,
+                'operator note says bucket was public',
+                'no deterministic proof method',
+                '2026-07-09T09:43:00'
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO attack_graph_snapshots
+                (engagement_id, snapshot_at, node_count, edge_count,
+                 critical_path_weight, min_severity, pruned, graph_json,
+                 mermaid_output, dot_output)
+            VALUES
+                (1001, '2026-07-09T09:50:00', 3, 2, 18.0, 'LOW', 0, ?,
+                 'graph TD; app-->manual;', 'digraph G { app -> manual; }')
+            """,
+            (json.dumps(stale_graph, sort_keys=True),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    graph_payload = detail_payload["graph_payload"]
+    node_ids = {node["node_id"] for node in graph_payload["nodes"]}
+
+    assert "VULN::manual-note" not in node_ids
+    assert "CLOUD::manual-note" in node_ids
+    assert graph_payload["node_count"] == 2
+    assert graph_payload["edge_count"] == 0
+    assert "VULN::manual-note" not in graph_payload["critical_path_nodes"]
+    assert all(
+        "VULN::manual-note"
+        not in {edge["source_node_id"], edge["target_node_id"]}
+        for edge in graph_payload["edges"]
+    )
+
+
 def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph(
     tmp_path: Path,
 ) -> None:
