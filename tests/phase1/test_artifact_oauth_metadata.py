@@ -15,6 +15,7 @@ def test_oauth_metadata_urls_resolve_relative_endpoint_fields_source_aware() -> 
             "userinfo_endpoint": "./userinfo",
             "jwks_uri": "/.well-known/jwks.json",
             "registration_endpoint": "https://login.acme.example/register#fragment",
+            "introspection_endpoint": "./introspect?token=hidden&view=public",
             "contacts": ["oauth-owner@acme.example"],
             "templated_endpoint": "/oauth/{tenant}/authorize",
             "unsafe_endpoint": "javascript:alert(1)",
@@ -34,7 +35,9 @@ def test_oauth_metadata_urls_resolve_relative_endpoint_fields_source_aware() -> 
         "https://login.acme.example/.well-known/userinfo",
         "https://login.acme.example/.well-known/jwks.json",
         "https://login.acme.example/register",
+        "https://login.acme.example/.well-known/introspect?view=public",
     ]
+    assert "https://login.acme.example/.well-known/introspect?token=hidden&view=public" not in urls
     assert oauth_metadata_urls(
         payload,
         source_label="json",

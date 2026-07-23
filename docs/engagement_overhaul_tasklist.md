@@ -770,16 +770,38 @@ sentences as historical notes only, not as current instructions.
   WebWeaver call, provider call beyond mocked validators, live probing,
   credential use, scope relaxation, validation-gate change, report-gate change,
   severity change, proxy/IP rotation, or rate-limit bypass.
-- [ ] Next implementation target: add well-known service metadata compact E2E
-  parity. Extend the compact multi-seed mocked E2E with the smallest local
-  `.well-known` service metadata fixture set (`did-configuration.json`,
-  `keybase.txt`, `smart-configuration`, and `terraform.json`) that proves
-  contacts, sanitized recursive URLs, cloud refs, passive review inventory,
-  validation inventory where applicable, graph/report/audit review,
-  deterministic fallback output, and cleanup. Likely files:
-  `tests/phase1/kill_chain_multiseed_fixture.py`,
-  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py`, and only minimal
-  production code if the E2E exposes a real gap.
+- [x] Well-known service metadata kill-chain E2E parity checkpoint: the
+  compact full-closeout multi-seed E2E now includes local `.well-known`
+  `did-configuration.json`, `keybase.txt`, `smart-configuration`, and
+  `terraform.json` artifacts under the normal artifact intake root. It proves
+  owner contacts, stripped service metadata URL pivots, DID host recursion,
+  static Terraform registry URLs, Supabase/Firebase refs, validation inventory,
+  deterministic findings, graph cloud/assets, report references, report JSON
+  validation inventory, raw CSV validation rows, audit closeout, and cleanup.
+  Templated service metadata URLs and sensitive query strings are asserted
+  absent from persisted URL seeds. `smart-configuration` URL resolution now
+  strips sensitive query parameters before returning recursive URL candidates,
+  and `.well-known/terraform.json` now feeds Terraform DNS host extraction
+  without executing Terraform. The test-local graph export cap was raised from
+  600 to 700 nodes so the expanded compact fixture retains asserted service
+  metadata review nodes. Verification: compile passed; Ruff passed; focused
+  service/OAuth/Terraform/DID/helper tests passed (`17 passed`); focused
+  mocked E2E passed (`1 passed` in 276.84s); cleanup removed 13 test-owned
+  DB/report files and left `remaining_test_owned_files=0`, with persistent DB
+  inventory unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-service-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E and passive well-known service metadata only; no
+  Terraform execution, DID resolution call, Keybase lookup, SMART endpoint
+  call, provider call beyond mocked validators, live probing, credential use,
+  scope relaxation, validation-gate change, report-gate change, severity
+  change, proxy/IP rotation, or rate-limit bypass.
+- [ ] Next implementation target: continue moving remaining safe sequential
+  enrichers under the bounded worker-pool path beyond the existing D1/D2/D5
+  parse work. Start with the smallest deterministic slice that reduces
+  sequential kill-chain runtime while preserving stable result ordering,
+  scope/ROE gates, provider pacing, audit logging, and cleanup. Likely files:
+  `forge/engagement_orchestrator.py`, focused orchestration tests under
+  `tests/phase1/`, and docs/handoff only after tests prove parity.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

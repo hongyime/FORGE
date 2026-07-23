@@ -176,12 +176,29 @@ historical notes only, not as current instructions.
   `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
   `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-well-known-api-application-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: add well-known service metadata compact E2E
-  parity. Extend the compact multi-seed mocked E2E with the smallest local
+- [x] Well-known service metadata kill-chain E2E parity completed: the compact
+  full-closeout multi-seed E2E now includes local `.well-known`
   `did-configuration.json`, `keybase.txt`, `smart-configuration`, and
-  `terraform.json` fixture set proving contacts, sanitized recursive URLs,
-  cloud refs, passive review inventory, validation inventory where applicable,
-  graph/report/audit review, deterministic fallback output, and cleanup.
+  `terraform.json` artifacts and proves owner contacts, stripped service
+  metadata URL pivots, DID host recursion, static Terraform registry URLs,
+  Supabase/Firebase refs, validation inventory, deterministic findings, graph
+  cloud/assets, report references, report JSON validation inventory, raw CSV
+  validation rows, audit closeout, and cleanup. Templated service metadata URLs
+  and sensitive query strings are asserted absent from persisted URL seeds.
+  `smart-configuration` URL resolution now strips sensitive query parameters,
+  and `.well-known/terraform.json` feeds Terraform DNS host extraction without
+  executing Terraform. The E2E graph export cap was raised from 600 to 700
+  nodes. Verification: compile/Ruff passed; focused service/OAuth/Terraform/DID
+  helper tests -> `17 passed`; focused E2E -> `1 passed` in 276.84s; cleanup
+  removed 13 test-owned DB/report files and left
+  `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
+  `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-service-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: continue moving remaining safe sequential
+  enrichers under the bounded worker-pool path beyond the existing D1/D2/D5
+  parse work. Start with the smallest deterministic slice that reduces
+  sequential kill-chain runtime while preserving stable result ordering,
+  scope/ROE gates, provider pacing, audit logging, and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

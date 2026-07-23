@@ -35,6 +35,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     _write_well_known_supply_chain_metadata(config.parent / ".well-known")
     _write_well_known_privacy_vendor_metadata(config.parent / ".well-known")
     _write_well_known_api_application_metadata(config.parent / ".well-known")
+    _write_well_known_service_metadata(config.parent / ".well-known")
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -534,6 +535,62 @@ def _write_well_known_api_application_metadata(well_known_dir: Path) -> None:
                 "support": "webweaver-e2e-owner@acme.test",
                 "firebase": "https://webweaver-e2e-firebase.firebaseio.com",
                 "template": "https://webweaver.acme.test/{tenant}/api",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_well_known_service_metadata(well_known_dir: Path) -> None:
+    well_known_dir.mkdir(parents=True, exist_ok=True)
+    (well_known_dir / "did-configuration.json").write_text(
+        json.dumps(
+            {
+                "linked_dids": [
+                    "did:web:didservice.acme.test",
+                    "https://identity-service.acme.test/.well-known/did.json?token=hidden",
+                ],
+                "contact": "didconfig-e2e-owner@acme.test",
+                "supabase": "https://didconfige2evault.supabase.co",
+                "template": "https://identity-service.acme.test/{tenant}/did.json",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "keybase.txt").write_text(
+        """
+        keybase proof for acme service metadata
+        contact=keybase-e2e-owner@acme.test
+        profile=https://keybase.io/acmeserviceproof?api_key=hidden
+        supabase=https://keybasee2evault.supabase.co
+        template=https://keybase.io/{tenant}
+        """.strip(),
+        encoding="utf-8",
+    )
+    (well_known_dir / "smart-configuration").write_text(
+        json.dumps(
+            {
+                "authorization_endpoint": "https://ehr.acme.test/oauth/authorize?token=hidden",
+                "token_endpoint": "https://ehr.acme.test/oauth/token?api_key=hidden",
+                "management_endpoint": "https://ehr.acme.test/smart/manage?signature=hidden",
+                "support": "smartconfig-e2e-owner@acme.test",
+                "firebase": "https://smartconfig-e2e-firebase.firebaseio.com",
+                "template": "https://ehr.acme.test/{tenant}/smart/manage",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "terraform.json").write_text(
+        json.dumps(
+            {
+                "modules.v1": "https://terraform.acme.test/v1/modules/?token=hidden",
+                "login.v1": "https://terraform.acme.test/v1/login/?api_key=hidden",
+                "support": "terraform-e2e-owner@acme.test",
+                "supabase": "https://terraformconfige2evault.supabase.co",
+                "template": "https://terraform.acme.test/{workspace}/v1/modules",
             },
             sort_keys=True,
         ),

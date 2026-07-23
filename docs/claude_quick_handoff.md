@@ -25,32 +25,33 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Well-known API/application metadata kill-chain E2E parity is
+Latest checkpoint: Well-known service metadata kill-chain E2E parity is
 implemented. The compact full-closeout multi-seed E2E now includes local
-`.well-known` `agent-card.json`, `api-catalog`, `open-resource-discovery`,
-`mercure`, and `webweaver.json` intake and proves owner contacts, stripped
-API/application URL pivots, validated Supabase/Firebase refs, deterministic
-findings, graph cloud/assets, report references, report JSON validation
-inventory, raw CSV validation rows, audit closeout, and cleanup. Templated
-API/application URLs and sensitive query strings are asserted absent from
-persisted URL seeds. The API/application metadata helpers now strip sensitive
-query parameters before returning recursive URL candidates while preserving
-non-sensitive parameters. The E2E graph export cap was raised from 480 to 600
-nodes so the expanded compact fixture retains asserted API/application review
-nodes.
+`.well-known` `did-configuration.json`, `keybase.txt`, `smart-configuration`,
+and `terraform.json` intake and proves owner contacts, stripped service
+metadata URL pivots, DID host recursion, static Terraform registry URLs,
+validated Supabase/Firebase refs, deterministic findings, graph cloud/assets,
+report references, report JSON validation inventory, raw CSV validation rows,
+audit closeout, and cleanup. Templated service metadata URLs and sensitive
+query strings are asserted absent from persisted URL seeds. `smart-configuration`
+URL resolution now strips sensitive query parameters before returning recursive
+URL candidates, and `.well-known/terraform.json` now feeds Terraform DNS host
+extraction without executing Terraform. The E2E graph export cap was raised
+from 600 to 700 nodes so the expanded compact fixture retains asserted service
+metadata review nodes.
 
-Verification: compile/Ruff passed; focused API/application metadata plus
-sanitizer tests passed (`16 passed`); focused E2E passed (`1 passed` in
-258.90s); final cleanup left `remaining_test_owned_files=0`; persistent
-inventory remains `1`, `5010`, `master.db`. Handoff:
-`.claude/handoffs/2026-07-24-well-known-api-application-kill-chain-e2e-parity.md`.
+Verification: compile/Ruff passed; focused service/OAuth/Terraform/DID/helper
+tests passed (`17 passed`); focused E2E passed (`1 passed` in 276.84s);
+cleanup removed 13 test-owned DB/report files and left
+`remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
+`master.db`. Handoff:
+`.claude/handoffs/2026-07-24-well-known-service-kill-chain-e2e-parity.md`.
 
-Current next gate: add well-known service metadata compact E2E parity. Extend
-the compact multi-seed mocked E2E with the smallest local
-`did-configuration.json`, `keybase.txt`, `smart-configuration`, and
-`terraform.json` fixture set proving contacts, sanitized recursive URLs, cloud
-refs, passive review inventory, validation inventory where applicable,
-graph/report/audit review, deterministic fallback output, and cleanup.
+Current next gate: continue moving remaining safe sequential enrichers under
+the bounded worker-pool path beyond the existing D1/D2/D5 parse work. Start
+with the smallest deterministic slice that reduces sequential kill-chain
+runtime while preserving stable result ordering, scope/ROE gates, provider
+pacing, audit logging, and cleanup.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

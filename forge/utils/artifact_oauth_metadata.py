@@ -4,6 +4,8 @@ import json
 import re
 from urllib.parse import unquote, urljoin, urlparse
 
+from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
+
 OAUTH_METADATA_LABELS = frozenset(
     {
         "oauth-authorization-server",
@@ -107,4 +109,6 @@ def _resolve_url(value: object, *, base_url: str) -> str:
     except ValueError:
         return ""
     path = unquote(parsed_resolved.path or "/")
-    return parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl()
+    return strip_sensitive_url_query(
+        parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl()
+    )

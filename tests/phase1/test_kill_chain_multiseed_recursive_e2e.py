@@ -129,7 +129,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
                 min_severity="LOW",
                 critical_path_only=False,
                 snapshot=True,
-                max_nodes=600,
+                max_nodes=700,
             )
             return subprocess.CompletedProcess(["forge", *argv], 0, "graph built\n", "")
         if argv[:2] == ["report", "generate"]:
@@ -335,6 +335,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("ord-e2e-owner@acme.test", "email"),
             ("mercure-e2e-owner@acme.test", "email"),
             ("webweaver-e2e-owner@acme.test", "email"),
+            ("didconfig-e2e-owner@acme.test", "email"),
+            ("keybase-e2e-owner@acme.test", "email"),
+            ("smartconfig-e2e-owner@acme.test", "email"),
+            ("terraform-e2e-owner@acme.test", "email"),
             ("oauth-owner@acme.test", "email"),
             ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
@@ -390,6 +394,14 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://mercure.acme.test/publish", "url"),
             ("https://webweaver.acme.test/api", "url"),
             ("https://webweaver.acme.test/docs", "url"),
+            ("didservice.acme.test", "subdomain"),
+            ("https://identity-service.acme.test/.well-known/did.json", "url"),
+            ("https://keybase.io/acmeserviceproof", "url"),
+            ("https://ehr.acme.test/oauth/authorize", "url"),
+            ("https://ehr.acme.test/oauth/token", "url"),
+            ("https://ehr.acme.test/smart/manage", "url"),
+            ("https://terraform.acme.test/v1/modules/", "url"),
+            ("https://terraform.acme.test/v1/login/", "url"),
             (openid_url, "url"),
             ("https://login.acme.test/oauth2/v1/authorize", "url"),
             ("https://login-api.acme.test/oauth2/v1/token", "url"),
@@ -462,6 +474,17 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("https://webweaver.acme.test/api?token=hidden", "url") not in seeds
         assert ("https://webweaver.acme.test/docs?api_key=hidden", "url") not in seeds
         assert ("https://webweaver.acme.test/{tenant}/api", "url") not in seeds
+        assert ("https://identity-service.acme.test/.well-known/did.json?token=hidden", "url") not in seeds
+        assert ("https://identity-service.acme.test/{tenant}/did.json", "url") not in seeds
+        assert ("https://keybase.io/acmeserviceproof?api_key=hidden", "url") not in seeds
+        assert ("https://keybase.io/{tenant}", "url") not in seeds
+        assert ("https://ehr.acme.test/oauth/authorize?token=hidden", "url") not in seeds
+        assert ("https://ehr.acme.test/oauth/token?api_key=hidden", "url") not in seeds
+        assert ("https://ehr.acme.test/smart/manage?signature=hidden", "url") not in seeds
+        assert ("https://ehr.acme.test/{tenant}/smart/manage", "url") not in seeds
+        assert ("https://terraform.acme.test/v1/modules/?token=hidden", "url") not in seeds
+        assert ("https://terraform.acme.test/v1/login/?api_key=hidden", "url") not in seeds
+        assert ("https://terraform.acme.test/{workspace}/v1/modules", "url") not in seeds
         assert ("https://login.acme.test/oauth/{tenant}/authorize", "url") not in seeds
         assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
@@ -530,6 +553,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("%open-resource-discovery", "open-resource-discovery"),
             ("%mercure", "mercure"),
             ("%webweaver.json", "webweaver.json"),
+            ("%did-configuration.json", "did-configuration.json"),
+            ("%keybase.txt", "keybase.txt"),
+            ("%smart-configuration", "smart-configuration"),
+            ("%terraform.json", "terraform.json"),
         ):
             public_metadata_artifact = con.execute(
                 "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE ?",
@@ -601,6 +628,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("supabase", "orde2evault"),
             ("supabase", "mercuree2evault"),
             ("firebase", "webweaver-e2e-firebase"),
+            ("supabase", "didconfige2evault"),
+            ("supabase", "keybasee2evault"),
+            ("firebase", "smartconfig-e2e-firebase"),
+            ("supabase", "terraformconfige2evault"),
             ("mobile_android_package", "com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.credentials"),
@@ -639,6 +670,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert statuses[("supabase", "orde2evault")] == "VALIDATED"
         assert statuses[("supabase", "mercuree2evault")] == "VALIDATED"
         assert statuses[("firebase", "webweaver-e2e-firebase")] == "VALIDATED"
+        assert statuses[("supabase", "didconfige2evault")] == "VALIDATED"
+        assert statuses[("supabase", "keybasee2evault")] == "VALIDATED"
+        assert statuses[("firebase", "smartconfig-e2e-firebase")] == "VALIDATED"
+        assert statuses[("supabase", "terraformconfige2evault")] == "VALIDATED"
         assert statuses[("mobile_android_package", "com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.credentials")] == "UNSUPPORTED"
@@ -749,6 +784,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "orde2evault",
         "mercuree2evault",
         "webweaver-e2e-firebase",
+        "didconfige2evault",
+        "keybasee2evault",
+        "smartconfig-e2e-firebase",
+        "terraformconfige2evault",
     ):
         assert any(
             node.get("source_table") == "cloud_assets"
@@ -811,6 +850,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "supabase://orde2evault",
         "supabase://mercuree2evault",
         "firebase://webweaver-e2e-firebase",
+        "supabase://didconfige2evault",
+        "supabase://keybasee2evault",
+        "firebase://smartconfig-e2e-firebase",
+        "supabase://terraformconfige2evault",
     ):
         assert expected_ref in finding_report
     assert "dead-firebase-prod" not in finding_report
@@ -863,6 +906,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "orde2evault",
         "mercuree2evault",
         "webweaver-e2e-firebase",
+        "didconfige2evault",
+        "keybasee2evault",
+        "smartconfig-e2e-firebase",
+        "terraformconfige2evault",
     ):
         assert any(
             item.get("identifier") == identifier
@@ -935,6 +982,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "orde2evault",
         "mercuree2evault",
         "webweaver-e2e-firebase",
+        "didconfige2evault",
+        "keybasee2evault",
+        "smartconfig-e2e-firebase",
+        "terraformconfige2evault",
     ):
         assert any(
             row.get("cloud_identifier") == identifier

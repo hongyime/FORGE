@@ -20469,7 +20469,7 @@ class ArtifactQueueProcessor:
             if _artifact_format_label(source_file) == "nostr.json":
                 for relay_host in nostr_relay_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(relay_host))
-            if _artifact_format_label(source_file) == "terraform":
+            if _artifact_format_label(source_file) in {"terraform", "terraform.json"}:
                 for dns_host in terraform_dns_record_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(dns_host))
             for host_value, host_seed_type in host_candidates:
