@@ -91,6 +91,22 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] CI YAML image-worker checkpoint:
+  Cloud Build, Drone, Woodpecker, and Buildkite plugin image extraction now route
+  independent image normalization/plugin-root jobs through the existing ordered
+  bounded worker pool while keeping nested plugin recursion serial and final
+  dedupe deterministic. This improves passive CI artifact enrichment without
+  executing CI workflows, pulling containers, probing registries, changing
+  validation/report gates, or altering severity rules. Verification: compile
+  passed; Ruff passed; focused CI workflow worker tests passed (`4 passed`);
+  engagement-backed CI workflow metadata and GitLab include integration slices
+  passed (`2 passed`); adjacent observability and orchestration no-code boundary
+  worker slices passed (`4 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-ci-yaml-image-workers.md`.
+  Next gate: continue auditing remaining static parser/enricher candidates for
+  a proven worker-pool or coverage gap; do not edit live probing, validation,
+  reporting, or severity paths unless the task explicitly advances those gates
+  with mocked tests and scope controls.
 - [x] Deterministic validation-method report-gate checkpoint:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
   reportable validation methods before cloud findings can be created, and linked

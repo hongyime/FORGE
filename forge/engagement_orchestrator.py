@@ -25401,38 +25401,50 @@ class ArtifactQueueProcessor:
         return False
 
     def _yaml_cloudbuild_image_candidates(self, mapping: dict[str, Any]) -> list[str]:
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        def _append(value: Any) -> None:
-            candidate = _artifact_container_image_url_candidate(
-                str(value or "").strip().strip("\"'"),
-                require_explicit_registry=True,
-            )
-            if not candidate:
-                return
-            lowered = candidate.lower()
-            if lowered in seen:
-                return
-            seen.add(lowered)
-            candidates.append(candidate)
-
+        image_jobs: list[tuple[Any, str]] = []
         for step_entry in self._yaml_ref_collection(mapping, "steps"):
             if isinstance(step_entry, dict):
-                step_normalized = self._yaml_normalized_mapping(step_entry)
-                _append(self._yaml_ref_value(step_normalized, "name"))
+                image_jobs.append((step_entry, "name"))
             else:
-                _append(step_entry)
+                image_jobs.append((step_entry, ""))
 
         for image_entry in self._yaml_ref_collection(mapping, "images"):
-            _append(image_entry)
+            image_jobs.append((image_entry, ""))
 
         artifacts = self._yaml_child_mapping(mapping, "artifacts")
         if artifacts:
             for image_entry in self._yaml_ref_collection(artifacts, "images"):
-                _append(image_entry)
+                image_jobs.append((image_entry, ""))
 
+        return self._yaml_ci_image_candidates_from_jobs(image_jobs)
+
+    def _yaml_ci_image_candidates_from_jobs(
+        self,
+        image_jobs: Sequence[tuple[Any, str]],
+    ) -> list[str]:
+        candidate_values = self._run_ordered_local_batch(
+            list(image_jobs),
+            self._yaml_ci_image_job_candidate,
+            default_factory=str,
+        )
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidate_values:
+            if not candidate or candidate.lower() in seen:
+                continue
+            seen.add(candidate.lower())
+            candidates.append(candidate)
         return candidates
+
+    def _yaml_ci_image_job_candidate(self, image_job: tuple[Any, str]) -> str:
+        entry, image_key = image_job
+        raw_value = entry
+        if image_key and isinstance(entry, dict):
+            raw_value = self._yaml_ref_value(self._yaml_normalized_mapping(entry), image_key)
+        return _artifact_container_image_url_candidate(
+            str(raw_value or "").strip().strip("\"'"),
+            require_explicit_registry=True,
+        )
 
     def _yaml_circleci_config_structured_candidates(
         self,
@@ -25612,6 +25624,36 @@ class ArtifactQueueProcessor:
         candidates: list[str] = []
         seen: set[str] = set()
 
+        plugin_jobs: list[tuple[int, Any]] = []
+        for step_index, step_entry in enumerate(self._yaml_ref_collection(mapping, "steps")):
+            if not isinstance(step_entry, dict):
+                continue
+            step_normalized = self._yaml_normalized_mapping(step_entry)
+            plugins = step_normalized.get("plugins")
+            if plugins is not None:
+                plugin_jobs.append((step_index, plugins))
+
+        plugin_batches = self._run_ordered_local_batch(
+            plugin_jobs,
+            self._yaml_buildkite_plugin_image_candidate_values,
+            default_factory=list,
+        )
+        for plugin_batch in plugin_batches:
+            for candidate in plugin_batch:
+                if not candidate or candidate.lower() in seen:
+                    continue
+                seen.add(candidate.lower())
+                candidates.append(candidate)
+        return candidates
+
+    def _yaml_buildkite_plugin_image_candidate_values(
+        self,
+        plugin_job: tuple[int, Any],
+    ) -> list[str]:
+        _step_index, plugins = plugin_job
+        candidates: list[str] = []
+        seen: set[str] = set()
+
         def _append(value: Any) -> None:
             candidate = _artifact_container_image_url_candidate(
                 str(value or "").strip().strip("\"'"),
@@ -25633,13 +25675,7 @@ class ArtifactQueueProcessor:
                 for item in value[:128]:
                     _walk_plugins(item)
 
-        for step_entry in self._yaml_ref_collection(mapping, "steps"):
-            if not isinstance(step_entry, dict):
-                continue
-            step_normalized = self._yaml_normalized_mapping(step_entry)
-            plugins = step_normalized.get("plugins")
-            if plugins is not None:
-                _walk_plugins(plugins)
+        _walk_plugins(plugins)
         return candidates
 
     def _yaml_drone_ci_structured_candidates(
@@ -25682,25 +25718,12 @@ class ArtifactQueueProcessor:
         return pipeline_type in {"docker", "exec", "kubernetes", "ssh"} or isinstance(normalized.get("steps"), list)
 
     def _yaml_drone_step_image_candidates(self, mapping: dict[str, Any]) -> list[str]:
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        def _append(value: Any) -> None:
-            candidate = _artifact_container_image_url_candidate(
-                str(value or "").strip().strip("\"'"),
-                require_explicit_registry=True,
-            )
-            if not candidate or candidate.lower() in seen:
-                return
-            seen.add(candidate.lower())
-            candidates.append(candidate)
-
+        image_jobs: list[tuple[Any, str]] = []
         for step_entry in self._yaml_ref_collection(mapping, "steps"):
             if not isinstance(step_entry, dict):
                 continue
-            step_normalized = self._yaml_normalized_mapping(step_entry)
-            _append(self._yaml_ref_value(step_normalized, "image"))
-        return candidates
+            image_jobs.append((step_entry, "image"))
+        return self._yaml_ci_image_candidates_from_jobs(image_jobs)
 
     def _yaml_woodpecker_ci_structured_candidates(
         self,
@@ -25739,30 +25762,16 @@ class ArtifactQueueProcessor:
         return isinstance(normalized.get("pipeline"), dict)
 
     def _yaml_woodpecker_step_image_candidates(self, mapping: dict[str, Any]) -> list[str]:
-        candidates: list[str] = []
-        seen: set[str] = set()
-
-        def _append(value: Any) -> None:
-            candidate = _artifact_container_image_url_candidate(
-                str(value or "").strip().strip("\"'"),
-                require_explicit_registry=True,
-            )
-            if not candidate or candidate.lower() in seen:
-                return
-            seen.add(candidate.lower())
-            candidates.append(candidate)
-
+        image_jobs: list[tuple[Any, str]] = []
         pipeline = self._yaml_child_mapping(mapping, "pipeline")
         for step_entry in pipeline.values() if pipeline else ():
             if isinstance(step_entry, dict):
-                step_normalized = self._yaml_normalized_mapping(step_entry)
-                _append(self._yaml_ref_value(step_normalized, "image"))
+                image_jobs.append((step_entry, "image"))
 
         for step_entry in self._yaml_ref_collection(mapping, "steps"):
             if isinstance(step_entry, dict):
-                step_normalized = self._yaml_normalized_mapping(step_entry)
-                _append(self._yaml_ref_value(step_normalized, "image"))
-        return candidates
+                image_jobs.append((step_entry, "image"))
+        return self._yaml_ci_image_candidates_from_jobs(image_jobs)
 
     def _yaml_azure_pipelines_structured_candidates(
         self,

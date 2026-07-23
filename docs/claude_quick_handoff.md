@@ -25,35 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Terraform state resource iterator audit is complete. No code
-refactor was needed for `_iter_terraform_state_resource_values()` because it is
-a small in-memory state-order flattening pass, while structured/text
-state-family extraction, resource-specific candidate conversion, and final
-candidate-entry dedupe are already covered by bounded worker helpers. Added a
-focused real iterator regression covering legacy `resources`,
-`values.root_module`, `child_modules`, and `prior_state.values.root_module`.
+Latest checkpoint: CI YAML image-worker migration is complete. Cloud Build,
+Drone, Woodpecker, and Buildkite plugin image extraction now route independent
+image-normalization/plugin-root jobs through the existing ordered bounded worker
+pool while keeping nested plugin recursion serial and final dedupe
+deterministic.
 
-Verification: compile/Ruff passed; focused Terraform iterator,
-engagement-backed structured tfstate extraction, Terraform state family,
-payload-family, resource-candidate, and candidate-entry worker slices passed
-(`6 passed`); cleanup left `remaining_terraform_state_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-terraform-state-iterator-audit.md`.
+Verification: compile/Ruff passed; focused CI workflow worker tests passed
+(`4 passed`); engagement-backed CI workflow metadata and GitLab include
+integration slices passed (`2 passed`); adjacent observability and
+orchestration no-code boundary worker slices passed (`4 passed`). Handoff:
+`.claude/handoffs/2026-07-24-ci-yaml-image-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: re-audit remaining static parser/enricher candidates and
-select the next proven-safe bounded worker-pool migration before editing.
-Preserve deterministic ordering, compact tests, scope gates, provider caps,
-pacing/backoff, and passive-only behavior. Terraform state resource collection
-has been audited and covered without code changes; pick a new proven gap before
-editing.
-
-Natural stop note: repo was clean after push `06dae0f`. Terraform state resource
-collection was then audited locally and covered with focused tests; no code
-refactor was needed.
+Current next gate: continue auditing remaining static parser/enricher candidates
+and select the next proven-safe bounded worker-pool or coverage gap before
+editing. Preserve deterministic ordering, compact tests, scope gates, provider
+caps, pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

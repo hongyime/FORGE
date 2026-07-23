@@ -187,3 +187,78 @@ def test_ci_container_walkers_use_ordered_worker_path_and_preserve_order(
         "_yaml_bitbucket_container_child_candidate_values",
         "_yaml_gitlab_ci_service_container_child_values",
     }.issubset(set(observed_workers))
+
+
+def test_ci_platform_image_walkers_use_ordered_worker_path_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    observed_workers: list[str] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        observed_workers.append(getattr(worker, "__name__", ""))
+        return original_batch(
+            self,
+            list(items),
+            worker,
+            default_factory=default_factory,
+        )
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    cloudbuild = {
+        "steps": [
+            {"name": "gcr.io/acme/cloudbuild-step:1"},
+            "us-docker.pkg.dev/acme/prod/cloudbuild-direct:sha",
+        ],
+        "images": ["ghcr.io/acme/cloudbuild-output:latest"],
+        "artifacts": {"images": ["registry.acme.example/ci/cloudbuild-artifact:2"]},
+    }
+    buildkite = {
+        "steps": [
+            {
+                "plugins": [
+                    {"docker#v5": {"image": "ghcr.io/acme/buildkite-runner:latest"}},
+                    {"nested": {"container": "registry.acme.example/buildkite/nested:1"}},
+                ]
+            },
+            {"plugins": {"docker": {"image": "us-docker.pkg.dev/acme/buildkite/plugin:2"}}},
+        ]
+    }
+    drone = {
+        "steps": [
+            {"image": "ghcr.io/acme/drone-deployer:1.2"},
+            {"image": "ghcr.io/acme/drone-deployer:1.2"},
+            {"image": "registry.gitlab.com/acme/drone-helper:3"},
+        ]
+    }
+    woodpecker = {
+        "pipeline": {"build": {"image": "ghcr.io/acme/woodpecker-build:1"}},
+        "steps": [{"image": "registry.woodpecker.acme.example/ci/deploy:latest"}],
+    }
+
+    assert processor._yaml_cloudbuild_image_candidates(cloudbuild) == [
+        "https://gcr.io/acme/cloudbuild-step",
+        "https://us-docker.pkg.dev/acme/prod/cloudbuild-direct",
+        "https://ghcr.io/acme/cloudbuild-output",
+        "https://registry.acme.example/ci/cloudbuild-artifact",
+    ]
+    assert processor._yaml_buildkite_plugin_image_candidates(buildkite) == [
+        "https://ghcr.io/acme/buildkite-runner",
+        "https://registry.acme.example/buildkite/nested",
+        "https://us-docker.pkg.dev/acme/buildkite/plugin",
+    ]
+    assert processor._yaml_drone_step_image_candidates(drone) == [
+        "https://ghcr.io/acme/drone-deployer",
+        "https://registry.gitlab.com/acme/drone-helper",
+    ]
+    assert processor._yaml_woodpecker_step_image_candidates(woodpecker) == [
+        "https://ghcr.io/acme/woodpecker-build",
+        "https://registry.woodpecker.acme.example/ci/deploy",
+    ]
+    assert {
+        "_yaml_ci_image_job_candidate",
+        "_yaml_buildkite_plugin_image_candidate_values",
+    }.issubset(set(observed_workers))

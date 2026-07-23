@@ -66,6 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] CI YAML image-worker checkpoint:
+  Cloud Build, Drone, Woodpecker, and Buildkite plugin image extraction now route
+  independent image normalization/plugin-root jobs through the existing ordered
+  bounded worker pool while keeping nested plugin recursion serial and final
+  dedupe deterministic. This improves passive CI artifact enrichment only; no CI
+  execution, registry pulls/probes, provider calls, validation/report gate
+  changes, or severity changes. Verification: compile passed; Ruff passed;
+  focused CI workflow worker tests passed (`4 passed`); engagement-backed CI
+  workflow metadata and GitLab include integration slices passed (`2 passed`);
+  adjacent observability and orchestration no-code boundary worker slices passed
+  (`4 passed`).
+  Handoff: `.claude/handoffs/2026-07-24-ci-yaml-image-workers.md`.
+  Next gate: continue auditing remaining static parser/enricher candidates for a
+  proven worker-pool or coverage gap before editing.
 - [x] Web App Manifest kill-chain E2E parity completed:
   the compact full-closeout multi-seed E2E now includes a local
   `site.webmanifest` artifact under the normal artifact intake root and proves
