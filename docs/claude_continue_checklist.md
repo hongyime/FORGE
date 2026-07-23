@@ -63,6 +63,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] React audit artifact and kill-chain raw CSV parity completed: React
+  engagement detail types/offline samples now carry `audit_count`, include audit
+  manifest artifacts, and expose an `Audit` quick export link. The kill-chain
+  raw-export fallback regression now proves CSV lineage fields at the
+  end-to-end boundary and distinguishes honeypot-suspected validation inventory
+  from deterministic findings. Verification: React contract TDD failed first on
+  missing `audit_count`; focused React contract -> `2 passed`; kill-chain
+  raw-export fallback -> `1 passed`; React production build passed; `npm run
+  lint` exited 0 with existing hook-dependency warnings; compile/Ruff passed;
+  dashboard/API/report/webui slice -> `6 passed, 10 warnings`; compact
+  cross-phase smoke -> `3 passed, 1 deselected`; cleanup ->
+  `remaining_pytest_engagement_dirs=0`; persistent DB inventory -> `1`, `5010`,
+  `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-23-webui-audit-raw-csv-e2e-parity.md`.
 - [x] Raw-export CSV lineage parity completed: Phase 6 CSV exports now carry
   report-lineage metadata matching fallback JSON: structured findings checksum,
   requested provider, rendered provider, report format, generated timestamp,

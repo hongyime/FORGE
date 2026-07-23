@@ -150,6 +150,7 @@ type EngagementSummary = {
   run_summary?: RunSummary | null
   report_count: number
   graph_count: number
+  audit_count?: number
   detail_route: string
   detail_data: string
   detail_api?: string
@@ -289,6 +290,7 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
     },
     report_count: 4,
     graph_count: 3,
+    audit_count: 1,
     detail_route: 'engagements/engagement-1001-acme-holdings/',
     detail_data: 'data/engagements/engagement-1001-acme-holdings.json',
     path: '.forge_data/engagements/1001.db',
@@ -329,6 +331,13 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
         href: '#',
         size_label: '18.9 KB',
         modified_at: '2026-07-09 09:40:01',
+      },
+      {
+        name: 'audit_1001_manifest_20260709T014413.json',
+        kind: 'audit',
+        href: '#',
+        size_label: '2.2 KB',
+        modified_at: '2026-07-09 09:44:13',
       },
     ],
     report_previews: [
@@ -468,6 +477,7 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
     },
     report_count: 3,
     graph_count: 1,
+    audit_count: 1,
     detail_route: 'engagements/engagement-1013-bryan-seah/',
     detail_data: 'data/engagements/engagement-1013-bryan-seah.json',
     path: '.forge_data/engagements/1013.db',
@@ -494,6 +504,13 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
         href: '#',
         size_label: '1.0 KB',
         modified_at: '2026-07-09 09:43:28',
+      },
+      {
+        name: 'audit_1013_manifest_20260709T014329.json',
+        kind: 'audit',
+        href: '#',
+        size_label: '1.8 KB',
+        modified_at: '2026-07-09 09:43:29',
       },
     ],
     report_previews: [
@@ -583,6 +600,7 @@ const SAMPLE_INDEX: EngagementIndex = {
     graph_summary: item.graph_summary,
     report_count: item.report_count,
     graph_count: item.graph_count,
+    audit_count: item.audit_count,
     detail_route: item.detail_route,
     detail_data: item.detail_data,
   })),
@@ -2285,6 +2303,7 @@ function DetailPage({
       : ''
   const reportArtifacts = detail.artifacts.filter((artifact) => artifact.kind === 'report')
   const graphArtifacts = detail.artifacts.filter((artifact) => artifact.kind === 'graph')
+  const auditArtifacts = detail.artifacts.filter((artifact) => artifact.kind === 'audit')
   const jsonExportHref = detail.detail_api ?? detail.detail_data
   const reportSummary = detail.report_summary
   const reportHistory = detail.report_history ?? (reportSummary ? [reportSummary] : [])
@@ -2326,6 +2345,11 @@ function DetailPage({
       : []),
     ...(graphArtifacts.slice(0, 1).map((artifact) => ({
       label: 'Graph',
+      href: artifact.href,
+      title: artifact.name,
+    }))),
+    ...(auditArtifacts.slice(0, 1).map((artifact) => ({
+      label: 'Audit',
       href: artifact.href,
       title: artifact.name,
     }))),

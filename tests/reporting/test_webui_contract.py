@@ -23,3 +23,13 @@ def test_webui_fallback_samples_include_csv_report_exports() -> None:
     assert "engagement_1001_report_20260709T014412.csv" in source
     assert "engagement_1013_report_20260709T014328.csv" in source
     assert source.count("format: 'csv', label: 'CSV'") >= 2
+
+
+def test_webui_fallback_samples_include_audit_artifact_contract() -> None:
+    source = _app_source()
+
+    assert "audit_count: item.audit_count" in source
+    assert "const auditArtifacts = detail.artifacts.filter((artifact) => artifact.kind === 'audit')" in source
+    assert "audit_1001_manifest_20260709T014413.json" in source
+    assert "kind: 'audit'" in source
+    assert "label: 'Audit'" in source

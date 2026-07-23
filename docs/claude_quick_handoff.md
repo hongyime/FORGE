@@ -55,6 +55,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] React audit artifact and kill-chain raw CSV parity completed: React
+  detail types/offline samples now include `audit_count`, audit manifest
+  artifacts, and an `Audit` quick export link. The Phase 1 kill-chain raw-export
+  fallback test now proves CSV checksum/provider/fallback/write-error lineage
+  at the E2E boundary and treats honeypot-suspected resources as validation
+  inventory, not reportable findings. Verification included failing React TDD
+  first, focused React contract, kill-chain fallback, React build/lint,
+  compile/Ruff, dashboard/API/report/webui slice, compact smoke, cleanup
+  `remaining_pytest_engagement_dirs=0`, persistent DB inventory `1`, `5010`,
+  `master.db`, and no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-23-webui-audit-raw-csv-e2e-parity.md`.
 - [x] Raw-export CSV lineage parity completed: Phase 6 raw/companion CSV
   exports now include findings checksum and report-lineage fields matching the
   JSON export, including fallback reason and write error for last-resort raw

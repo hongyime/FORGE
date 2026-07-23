@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import bz2
+import csv
 from email.message import EmailMessage
 import gc
 import gzip
@@ -81553,7 +81554,6 @@ def test_kill_chain_raw_export_fallback_preserves_validated_finding_gate(
     assert payload["overall_risk"] == "HIGH"
     assert "simulated companion export failure" in str(payload["fallback_reason"])
     assert "raw-export-firebase-prod" in payload_text
-    assert "raw-export-decoy-lab" not in payload_text
     raw_finding = next(
         item
         for item in payload["context"]["exploits"]["exploited"]
@@ -81561,13 +81561,53 @@ def test_kill_chain_raw_export_fallback_preserves_validated_finding_gate(
     )
     assert raw_finding["validation_status"] == "VALIDATED"
     assert raw_finding["validation_method"] == "firebase_database_shallow_read"
+    assert all(
+        item.get("resource_id") != "raw-export-decoy-lab"
+        for item in payload["context"]["exploits"]["exploited"]
+    )
+    assert any(
+        item.get("identifier") == "raw-export-decoy-lab"
+        and item.get("validation_status") == "HONEYPOT_SUSPECTED"
+        for item in payload["context"]["cloud_validation_inventory"]
+    )
     raw_csv_text = raw_csv_files[-1].read_text(encoding="utf-8")
     assert "Validated Firebase data exposure" in raw_csv_text
     assert "validation_status" in raw_csv_text
     assert "validation_method" in raw_csv_text
     assert "VALIDATED" in raw_csv_text
     assert "firebase_database_shallow_read" in raw_csv_text
-    assert "raw-export-decoy-lab" not in raw_csv_text
+    with raw_csv_files[-1].open(encoding="utf-8", newline="") as handle:
+        raw_csv_rows = list(csv.DictReader(handle))
+    assert raw_csv_rows
+    raw_csv_finding_rows = [
+        row for row in raw_csv_rows if row["record_type"] == "finding"
+    ]
+    raw_csv_validation_rows = [
+        row for row in raw_csv_rows if row["record_type"] == "cloud_validation"
+    ]
+    assert all(
+        row["cloud_identifier"] != "raw-export-decoy-lab"
+        for row in raw_csv_finding_rows
+    )
+    assert any(
+        row["cloud_identifier"] == "raw-export-decoy-lab"
+        and row["validation_status"] == "HONEYPOT_SUSPECTED"
+        for row in raw_csv_validation_rows
+    )
+    assert {row["findings_checksum"] for row in raw_csv_rows} == {
+        payload["findings_checksum"]
+    }
+    assert {row["report_requested_provider"] for row in raw_csv_rows} == {"template"}
+    assert {row["report_rendered_provider"] for row in raw_csv_rows} == {"raw_export"}
+    assert {row["report_format"] for row in raw_csv_rows} == {"raw_export"}
+    assert all(
+        "simulated companion export failure" in row["fallback_reason"]
+        for row in raw_csv_rows
+    )
+    assert all(
+        "simulated companion export failure" in row["report_write_error"]
+        for row in raw_csv_rows
+    )
 
 
 def test_kill_chain_html_mines_managed_hosting_aliases_without_firebase_false_validation(
