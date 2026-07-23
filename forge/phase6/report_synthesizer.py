@@ -1936,7 +1936,17 @@ class ReportSynthesizer:
                         )
                     logger.info("Auto cascade continuing with local llama_cpp.")
                 else:
-                    raise
+                    logger.warning(
+                        "LLM provider '%s' unavailable (%s); falling back to deterministic template.",
+                        self._provider_name,
+                        exc,
+                    )
+                    self._set_render_backend("template", fallback_reason=str(exc))
+                    return self._persist_report_with_fallback(
+                        ctx,
+                        raw_text=self._render_fallback_report(ctx, str(exc)),
+                        dry_run=False,
+                    )
 
         # 4. Generate and iteratively self-correct
         from forge.phase6.llm_validator import validate_report
@@ -2050,6 +2060,32 @@ class ReportSynthesizer:
                     quality_score=0.0,
                     correction_loops=attempt,
                     feedback_text="template_fallback: short completion",
+                    narrative_coherence_score=0.0,
+                    opsec_violation_count=0,
+                    hallucination_score=0.0,
+                    factual_accuracy_score=1.0,
+                    engagement_context_relevance=1.0,
+                    validator_ok=False,
+                    final_approval=False,
+                )
+                break
+
+            integrity_failures = self._authoritative_finding_integrity_failures(
+                ctx,
+                response_text,
+            )
+            if integrity_failures:
+                reason = (
+                    "LLM output failed authoritative finding integrity check: "
+                    + "; ".join(integrity_failures[:5])
+                )
+                logger.warning("%s", reason)
+                self._set_render_backend("template", fallback_reason=reason)
+                response_text = self._render_fallback_report(ctx, reason)
+                telemetry = ValidationTelemetry(
+                    quality_score=0.0,
+                    correction_loops=attempt,
+                    feedback_text=f"template_fallback: {reason}",
                     narrative_coherence_score=0.0,
                     opsec_violation_count=0,
                     hallucination_score=0.0,
@@ -2185,6 +2221,51 @@ class ReportSynthesizer:
         factual_score = matched / max(1, len(mentioned_cves))
         hallucination_score = hallucinated / max(1, len(mentioned_cves))
         return factual_score, hallucination_score
+
+    @staticmethod
+    def _authoritative_finding_integrity_failures(
+        ctx: ReportContext,
+        report_text: str,
+    ) -> list[str]:
+        report_lower = " ".join(str(report_text or "").lower().split())
+        failures: list[str] = []
+        for finding in ctx.exploits.exploited:
+            title = str(finding.get("title") or finding.get("cve_id") or "").strip()
+            severity = str(finding.get("severity") or "").strip().upper()
+            if not title:
+                continue
+            title_lower = " ".join(title.lower().split())
+            title_pos = report_lower.find(title_lower)
+            if title_pos < 0:
+                failures.append(f"missing finding title '{title[:80]}'")
+                continue
+            if not severity:
+                continue
+            window = report_lower[
+                max(0, title_pos - 240): title_pos + len(title_lower) + 240
+            ]
+            labels = ("critical", "high", "medium", "low", "info")
+            prefix = report_lower[max(0, title_pos - 120): title_pos]
+            suffix = report_lower[title_pos + len(title_lower): title_pos + len(title_lower) + 80]
+            prefix_matches = [
+                (len(prefix) - match.end(), label)
+                for label in labels
+                for match in re.finditer(rf"\b{label}\b", prefix)
+            ]
+            suffix_matches = [
+                (match.start(), label)
+                for label in labels
+                for match in re.finditer(rf"\b{label}\b", suffix)
+            ]
+            nearest_label = min(prefix_matches + suffix_matches, default=None)
+            if nearest_label and nearest_label[1] != severity.lower():
+                failures.append(
+                    f"conflicting severity {nearest_label[1].upper()} near '{title[:80]}'"
+                )
+                continue
+            if severity.lower() not in window:
+                failures.append(f"missing severity {severity} near '{title[:80]}'")
+        return failures
 
     @staticmethod
     def _detect_opsec_violations(report_text: str) -> list[str]:

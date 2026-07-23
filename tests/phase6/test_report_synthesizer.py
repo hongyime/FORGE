@@ -811,6 +811,36 @@ def test_prompt_assembler_enforces_token_budget(monkeypatch):
         assembler.assemble(ctx)
 
 
+def test_synthesizer_prompt_overflow_falls_back_to_template_with_lineage(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+    monkeypatch,
+):
+    monkeypatch.setattr("forge.phase6.report_synthesizer.MAX_PROMPT_TOKENS", 8)
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="auto",
+    )
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+
+    assert "LLM fallback engaged: estimated prompt tokens" in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "auto"
+    assert "estimated prompt tokens" in str(payload["fallback_reason"] or "")
+    assert payload["report_lineage"]["rendered_provider"] == "template"
+    assert csv_rows
+    assert {row["report_requested_provider"] for row in csv_rows} == {"auto"}
+    assert {row["report_rendered_provider"] for row in csv_rows} == {"template"}
+
+
 # ── 4–12. Validator rules V-01 through V-09 ───────────────────────────────────
 
 def test_v01_passes_with_all_mandatory_sections(full_report_text):
@@ -1833,6 +1863,49 @@ def test_synthesizer_runtime_provider_failure_falls_back_to_template(
     assert payload["report_lineage"]["requested_provider"] == "auto"
     assert payload["report_lineage"]["rendered_provider"] == "template"
     assert payload["report_lineage"]["fallback_reason"] == "quota exceeded"
+    with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+    assert csv_rows
+    assert {
+        row["findings_checksum"]
+        for row in csv_rows
+    } == {payload["findings_checksum"]}
+    assert {
+        row["report_requested_provider"]
+        for row in csv_rows
+    } == {"auto"}
+    assert {
+        row["report_rendered_provider"]
+        for row in csv_rows
+    } == {"template"}
+    assert all(row["fallback_reason"] == "quota exceeded" for row in csv_rows)
+
+
+def test_synthesizer_explicit_provider_misconfig_falls_back_to_template(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+    monkeypatch,
+):
+    monkeypatch.delenv("FORGE_OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("FORGE_OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("FORGE_OPENAI_API_KEY", raising=False)
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="openai_compatible",
+    )
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert "template mode, no LLM" in content
+    assert "FORGE_OPENAI_BASE_URL and FORGE_OPENAI_MODEL" in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "openai_compatible"
+    assert "FORGE_OPENAI_BASE_URL" in str(payload["fallback_reason"] or "")
 
 
 def test_synthesizer_auto_cascade_order_accepts_env_aliases(monkeypatch) -> None:
@@ -2013,11 +2086,25 @@ def test_synthesizer_operator_cancel_raises_no_file(tmp_eng_db, tmp_path, patch_
 
 # ── 18. Full LLM path (mocked llama_cpp) ─────────────────────────────────────
 
-def _build_valid_report(overall_risk: str = "HIGH") -> str:
+def _build_valid_report(
+    overall_risk: str = "HIGH",
+    *,
+    finding_severity: str = "CRITICAL",
+) -> str:
     body = " ".join(["Professional assessment finding."] * 15)
-    lines = [f"## 1. Executive Summary", f"", f"The overall risk is {overall_risk}. {body}", ""]
+    finding_block = (
+        f"Authoritative finding: [{finding_severity}] "
+        "SMBv1 Remote Code Execution. "
+    )
+    lines = [
+        "## 1. Executive Summary",
+        "",
+        f"The overall risk is {overall_risk}. {finding_block}{body}",
+        "",
+    ]
     for section in MANDATORY_SECTIONS[1:]:
-        lines += [section, "", body, ""]
+        section_body = f"{finding_block}{body}" if section == MANDATORY_SECTIONS[4] else body
+        lines += [section, "", section_body, ""]
     return "\n".join(lines)
 
 
@@ -2043,6 +2130,37 @@ def test_synthesizer_mocked_llm_writes_report(tmp_eng_db, tmp_path, patch_confir
     assert out.exists()
     assert out.stat().st_size > 0
     assert "CRITICAL" in out.read_text()
+
+
+def test_synthesizer_llm_cannot_downgrade_authoritative_finding_severity(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+):
+    fake_gguf = tmp_path / "fake.gguf"
+    fake_gguf.write_bytes(b"\x00" * 64)
+    mock_llama_cls = mock.MagicMock()
+    mock_llama_cls.return_value.create_chat_completion.return_value = {
+        "choices": [{"message": {"content": _build_valid_report("CRITICAL", finding_severity="LOW")}}]
+    }
+
+    with mock.patch("forge.phase6.report_synthesizer.Llama", mock_llama_cls, create=True):
+        synth = ReportSynthesizer(
+            db_path=tmp_eng_db,
+            model_path=fake_gguf,
+            output_dir=tmp_path,
+        )
+        synth._llm = mock_llama_cls.return_value
+        out = synth.generate(ENGAGEMENT_ID, dry_run=False)
+
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert "LLM output failed authoritative finding integrity check" in content
+    assert "#### [CRITICAL] SMBv1 Remote Code Execution" in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "llama_cpp"
+    assert "authoritative finding integrity check" in str(payload["fallback_reason"] or "")
 
 
 def test_synthesizer_persists_feedback_telemetry(tmp_eng_db, tmp_path, patch_confirm_approve):
