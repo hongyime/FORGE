@@ -66,6 +66,18 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Recon JSONL line-worker checkpoint:
+  Recon-tool output parsing now routes independent JSONL/plain line extraction
+  through the existing ordered bounded worker pool before deterministic
+  candidate normalization and dedupe. This preserves raw line order, the 4096
+  cap, and passive static parsing behavior; it does not execute recon tools or
+  perform live probing. Verification: compile passed; Ruff passed; focused recon
+  worker regressions passed; existing engagement-backed recon artifact slice
+  passed (`3 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-recon-jsonl-line-workers.md`.
+  Next gate: use Ohm's remaining ranked candidates, starting with Cloudflare
+  Pages `_routes.json` value walking, then ExternalSecret `data`/`dataFrom`
+  remote refs if still applicable.
 - [x] CodeBuild buildspec secret-ref worker checkpoint:
   CodeBuild buildspec `parameter-store` and `secrets-manager` reference
   extraction now routes independent static refs through the existing ordered

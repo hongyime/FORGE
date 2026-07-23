@@ -27045,22 +27045,14 @@ class ArtifactQueueProcessor:
                 if value:
                     _append_candidate(value)
 
-        for raw_line in raw_text.splitlines()[:4096]:
-            line = raw_line.strip()
-            if not line or line.startswith(("#", "//")):
-                continue
-            line_document = _safe_json_loads(line)
-            if isinstance(line_document, (dict, list)):
-                for candidate in self._recon_tool_output_structured_document_values(
-                    line_document,
-                    allowed_keys,
-                    use_workers=True,
-                ):
-                    _append_candidate(candidate)
-                continue
-            first_field = re.split(r"[\t, ]+", line, maxsplit=1)[0].strip()
-            if first_field:
-                _append_candidate(first_field)
+        line_candidate_batches = self._run_ordered_local_batch(
+            [(raw_line, allowed_keys) for raw_line in raw_text.splitlines()[:4096]],
+            self._recon_tool_output_line_candidate_values,
+            default_factory=list,
+        )
+        for line_candidate_batch in line_candidate_batches:
+            for candidate in line_candidate_batch:
+                _append_candidate(candidate)
 
         candidate_entries = self._run_ordered_local_batch(
             raw_candidates,
@@ -27076,6 +27068,24 @@ class ArtifactQueueProcessor:
             seen.add(normalized.lower())
             lines.append(normalized)
         return "\n".join(lines)
+
+    def _recon_tool_output_line_candidate_values(
+        self,
+        line_job: tuple[str, set[str]],
+    ) -> list[str]:
+        raw_line, allowed_keys = line_job
+        line = str(raw_line or "").strip()
+        if not line or line.startswith(("#", "//")):
+            return []
+        line_document = _safe_json_loads(line)
+        if isinstance(line_document, (dict, list)):
+            return self._recon_tool_output_structured_document_values(
+                line_document,
+                allowed_keys,
+                use_workers=False,
+            )
+        first_field = re.split(r"[\t, ]+", line, maxsplit=1)[0].strip()
+        return [first_field] if first_field else []
 
     def _recon_tool_output_structured_document_values(
         self,

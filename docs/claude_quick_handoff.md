@@ -25,26 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: CodeBuild buildspec secret-ref worker migration is complete.
-CodeBuild buildspec `parameter-store` and `secrets-manager` reference extraction
-now routes independent static refs through the existing ordered bounded worker
-pool while preserving parameter-store-before-secrets order and deterministic
-dedupe. It does not execute CodeBuild or call AWS APIs.
+Latest checkpoint: Recon JSONL line-worker migration is complete. Recon-tool
+output parsing now routes independent JSONL/plain line extraction through the
+existing ordered bounded worker pool before deterministic candidate
+normalization and dedupe. It preserves raw line order, the 4096 cap, and
+passive static parsing behavior; it does not execute recon tools or perform
+live probing.
 
-Verification: compile/Ruff passed; focused CodeBuild worker regression passed
-(`1 passed`); existing engagement-backed CodeBuild buildspec secret-ref slice
-passed (`1 passed`). Handoff:
-`.claude/handoffs/2026-07-24-codebuild-secret-ref-workers.md`.
+Verification: compile/Ruff passed; focused recon worker regressions and existing
+engagement-backed recon artifact slice passed (`3 passed`). Handoff:
+`.claude/handoffs/2026-07-24-recon-jsonl-line-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: continue auditing remaining static parser/enricher candidates
-and select the next proven-safe bounded worker-pool or coverage gap before
-editing. Preserve deterministic ordering, compact tests, scope gates, provider
-caps, pacing/backoff, and passive-only behavior.
+Current next gate: use Ohm's remaining ranked candidates, starting with
+Cloudflare Pages `_routes.json` value walking, then ExternalSecret
+`data`/`dataFrom` remote refs if still applicable. Preserve deterministic
+ordering, compact tests, scope gates, provider caps, pacing/backoff, and
+passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
