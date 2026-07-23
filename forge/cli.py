@@ -17345,36 +17345,47 @@ def kill_chain(
             ".graphml in Community Edition if you need the lightweight path.[/dim]"
         )
 
-    # ─── Auto-regenerate the cross-engagement dashboard ──────────────
-    try:
-        from forge.reporting.dashboard import generate_dashboard  # noqa: PLC0415
-        _dash_path = _P3("reports/dashboard.html")
-        _dash_path.parent.mkdir(parents=True, exist_ok=True)
-        generate_dashboard(
-            data_dir=_P3(cfg.data_dir),
-            reports_dir=_P3("reports"),
-            output_path=_dash_path,
-        )
-        console.print(f"[dim]Dashboard:[/dim] {_dash_path} "
-                      "[dim](refreshed)[/dim]")
-    except Exception as _exc:  # noqa: BLE001
-        console.print(f"[dim]Dashboard refresh skipped: {_exc}[/dim]")
+    engagement_run_completed = False
 
-    _refresh_pending_work_state()
-    _set_progress_counts()
-    engagement_run_tracker.finish_run(
-        engagement_run_handle,
-        status="completed",
-        current_iteration=last_iteration,
-        metadata={
+    def _complete_engagement_run(prereq_metadata: dict[str, object] | None = None) -> None:
+        nonlocal engagement_run_completed
+        if engagement_run_completed:
+            return
+        _refresh_pending_work_state()
+        _set_progress_counts()
+        final_metadata: dict[str, object] = {
             **_engagement_run_metadata(phase="completed"),
             "elapsed_seconds": round(total, 3),
             "report_path": _report_path,
             "report_provider": report_provider or "default",
             "report_max_loops": report_max_loops,
-        },
-    )
-    _clear_run_control_markers()
+        }
+        if prereq_metadata:
+            final_metadata.update(prereq_metadata)
+        engagement_run_tracker.finish_run(
+            engagement_run_handle,
+            status="completed",
+            current_iteration=last_iteration,
+            metadata=final_metadata,
+        )
+        _clear_run_control_markers()
+        engagement_run_completed = True
+
+        # Refresh review surfaces only after all optional follow-on work has
+        # landed in the DB and the run manifest has been written.
+        try:
+            from forge.reporting.dashboard import generate_dashboard  # noqa: PLC0415
+            _dash_path = _P3("reports/dashboard.html")
+            _dash_path.parent.mkdir(parents=True, exist_ok=True)
+            generate_dashboard(
+                data_dir=_P3(cfg.data_dir),
+                reports_dir=_P3("reports"),
+                output_path=_dash_path,
+            )
+            console.print(f"[dim]Dashboard:[/dim] {_dash_path} "
+                          "[dim](refreshed)[/dim]")
+        except Exception as _exc:  # noqa: BLE001
+            console.print(f"[dim]Dashboard refresh skipped: {_exc}[/dim]")
 
     # ═══════════════════════════════════════════════════════════════════
     # PREREQUISITE DETECTION - tell the operator which extra tools would
@@ -17543,6 +17554,14 @@ def kill_chain(
             "under data/mobile/, data/artifacts/, data/evidence/, or data/uploads/ "
             "to unlock more.[/dim]"
         )
+        _complete_engagement_run(
+            {
+                "prereq_detected_count": 0,
+                "prereq_runnable_count": 0,
+                "prereq_execution_mode": "none",
+                "prereq_auto_run_enabled": bool(auto_run_detected),
+            }
+        )
         return
 
     # Display detected list
@@ -17566,6 +17585,14 @@ def kill_chain(
         console.print(
             "\n[dim]None are auto-runnable (all need --target-url or per-service "
             "params). Copy the suggested command when ready.[/dim]"
+        )
+        _complete_engagement_run(
+            {
+                "prereq_detected_count": len(detected),
+                "prereq_runnable_count": 0,
+                "prereq_execution_mode": "manual_only",
+                "prereq_auto_run_enabled": bool(auto_run_detected),
+            }
         )
         return
 
@@ -17619,6 +17646,17 @@ def kill_chain(
                 f"workers={min(parallel_workers, len(prereq_specs) or 1)}"
             ),
         )
+        _complete_engagement_run(
+            {
+                "prereq_detected_count": len(detected),
+                "prereq_runnable_count": len(runnable),
+                "prereq_execution_mode": "auto_run",
+                "prereq_auto_run_enabled": True,
+                "prereq_auto_run_count": len(prereq_specs),
+                "prereq_auto_run_failures": prereq_failures,
+            }
+        )
+        return
     elif is_tty:
         console.print(
             f"\n[bold]{len(runnable)} tool(s) can be run now.[/bold] "
@@ -17639,11 +17677,31 @@ def kill_chain(
             "prereq_prompted", target=domain,
             result=f"offered={len(runnable)} ran={ran}",
         )
+        _complete_engagement_run(
+            {
+                "prereq_detected_count": len(detected),
+                "prereq_runnable_count": len(runnable),
+                "prereq_execution_mode": "prompted",
+                "prereq_auto_run_enabled": bool(auto_run_detected),
+                "prereq_prompted_count": len(runnable),
+                "prereq_prompted_ran": ran,
+            }
+        )
+        return
     else:
         console.print(
             "\n[dim]Non-TTY invocation - not prompting. Re-run interactively "
             "or pass --auto-run-detected to execute the RUNNABLE entries.[/dim]"
         )
+        _complete_engagement_run(
+            {
+                "prereq_detected_count": len(detected),
+                "prereq_runnable_count": len(runnable),
+                "prereq_execution_mode": "non_tty_skipped",
+                "prereq_auto_run_enabled": bool(auto_run_detected),
+            }
+        )
+        return
 
 
 @app.command("dashboard")

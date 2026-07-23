@@ -89972,6 +89972,63 @@ def test_kill_chain_parallel_batches_detected_prereqs_when_auto_run_enabled(
         for label, item_count, max_workers in parse_batch_calls
     )
 
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        run_row = con.execute(
+            """
+            SELECT id, status, metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert run_row is not None
+        run_id = int(run_row[0])
+        assert run_row[1] == "completed"
+        metadata = json.loads(str(run_row[2] or "{}"))
+        assert metadata["prereq_execution_mode"] == "auto_run"
+        assert metadata["prereq_auto_run_enabled"] is True
+        assert metadata["prereq_auto_run_count"] >= 5
+        assert metadata["prereq_auto_run_failures"] == 0
+
+        assert con.execute(
+            """
+            SELECT COUNT(*)
+            FROM audit_log
+            WHERE engagement_id=1001
+              AND action='prereq_auto_run'
+            """
+        ).fetchone()[0] == 1
+        audit_count = int(
+            con.execute(
+                """
+                SELECT COUNT(*)
+                FROM audit_log
+                WHERE engagement_id=1001
+                """
+            ).fetchone()[0]
+        )
+        manifest_row = con.execute(
+            """
+            SELECT manifest_json
+            FROM run_audit_manifests
+            WHERE engagement_id=1001 AND run_id=?
+            """,
+            (run_id,),
+        ).fetchone()
+        assert manifest_row is not None
+        manifest = json.loads(str(manifest_row[0] or "{}"))
+        audit_digest = next(
+            item
+            for item in manifest["database"]["tables"]
+            if item["table"] == "audit_log"
+        )
+        assert audit_digest["row_count"] == audit_count
+    finally:
+        con.close()
+
 
 def test_kill_chain_pause_request_transitions_run_to_paused_metadata(
     tmp_path: Path,
