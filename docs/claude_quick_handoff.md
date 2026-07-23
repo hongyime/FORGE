@@ -25,32 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: report fallback integrity and pytest engagement cleanup are
-complete. Phase 6 now falls back to deterministic template output when explicit
-provider setup fails, prompt/token budgets are exceeded, runtime providers fail,
-or LLM output weakens authoritative finding title/severity integrity. Pytest
-cleanup now detects test-owned numeric `.forge_data/engagements/<id>.db` files
-under pytest temp roots as well as direct `engagement.db` files.
+Latest checkpoint: recursive kill-chain dashboard review parity is complete.
+The mocked multi-seed recursive kill-chain E2E now proves the real generated
+dashboard/detail route can review the same engagement output: recursive seed
+promotion, non-destructive validation/report gates, deterministic template
+fallback after LLM/provider failure, checksum/report-lineage exports, graph
+generation, slug detail routing, completed run metadata, report exports,
+validated findings, validation inventory, VULN graph-node validation status,
+Maltego workspace visibility, and fallback reason rendering.
 
-Verification: reporting compile/Ruff passed; focused Phase 6 fallback set
-passed (`9 passed, 76 deselected`); provider/raw-export fallback set passed
-(`12 passed`); integration fallback smoke passed (`4 passed, 5 deselected`);
-cleanup compile/Ruff passed; cleanup script tests passed (`6 passed`).
-Handoffs: `.claude/handoffs/2026-07-24-report-fallback-integrity.md` and
-`.claude/handoffs/2026-07-24-pytest-numeric-engagement-cleanup.md`. Commits:
-`76f352d`, `188f009`.
+Verification: compile/Ruff passed for the touched Phase 1 files; recursive E2E
+passed (`1 passed in 279.22s`); compact dashboard contract slice passed (`4
+passed`); pytest engagement cleanup removed four test-owned temp dirs and
+post-scan was `0`. Handoff:
+`.claude/handoffs/2026-07-24-recursive-kill-chain-dashboard-review-parity.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: pick the next broader deterministic acceptance gap after
-fallback and cleanup, preferably mocked end-to-end kill-chain coverage that
-proves recursive discovery plus validation/report/dashboard review together, or
-a concrete provider/export parity gap found by audit. Do not reopen worker-pool
-micro-optimization unless a new measured bottleneck appears. Preserve
-deterministic ordering, compact tests, scope gates, provider caps,
+Current next gate: continue with a concrete provider/export parity gap or
+another mocked E2E acceptance gap found by current-code audit. Do not reopen
+worker-pool micro-optimization unless a new measured bottleneck appears.
+Preserve deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only

@@ -91,6 +91,26 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Recursive kill-chain dashboard review parity checkpoint:
+  The mocked multi-seed recursive kill-chain E2E now proves the real generated
+  dashboard/detail route can review the same engagement output. The run covers
+  recursive seed promotion, non-destructive validation/report gates,
+  deterministic template fallback after LLM/provider failure, checksum/report
+  lineage exports, graph generation, slug detail routing, completed run
+  metadata, available report exports, full seed visibility, validated finding
+  rows, validation inventory, VULN graph-node validation status, Maltego
+  workspace visibility, and fallback reason rendering. Repeated expected
+  metadata identifiers were extracted into the shared fixture, keeping
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` under 1000 lines.
+  Verification: compile passed; Ruff passed; recursive E2E passed (`1 passed in
+  279.22s`); compact dashboard contract slice passed (`4 passed`); pytest
+  engagement cleanup removed four test-owned temp dirs and post-scan was `0`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-recursive-kill-chain-dashboard-review-parity.md`.
+- [ ] Next gate:
+  Continue with a concrete provider/export parity gap or another mocked E2E
+  acceptance gap found by current-code audit. Do not reopen worker-pool
+  micro-optimization unless a new measured bottleneck appears.
 - [x] Report fallback integrity checkpoint:
   Phase 6 reporting now falls back to the deterministic template when explicit
   provider setup fails, when prompt/token budgets are exceeded, or when LLM
@@ -112,12 +132,6 @@ sentences as historical notes only, not as current instructions.
   passed; Ruff passed; cleanup script tests passed (`6 passed`). Handoff:
   `.claude/handoffs/2026-07-24-pytest-numeric-engagement-cleanup.md`. Commit:
   `188f009`.
-- [ ] Next gate:
-  Pick the next broader deterministic acceptance gap after fallback and cleanup:
-  preferably mocked end-to-end kill-chain coverage that proves recursive
-  discovery plus validation/report/dashboard review together, or a concrete
-  provider/export parity gap found by audit. Do not reopen worker-pool
-  micro-optimization unless a new measured bottleneck appears.
 - [x] Fresh worker-pool audit exhaustion checkpoint:
   Two read-only sidecar audits plus local inspection found no worthwhile
   remaining safe sequential parser/extractor/enricher loops to migrate under the
