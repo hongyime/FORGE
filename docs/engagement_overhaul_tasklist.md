@@ -408,6 +408,31 @@ sentences as historical notes only, not as current instructions.
   no Terraform execution, provider call, live probing, credential use, scope
   relaxation, validation-gate change, report-gate change, severity change,
   proxy/IP rotation, or rate-limit bypass.
+- [x] SAML federation metadata passive-recursion checkpoint:
+  source-gated SAML metadata artifacts such as `saml-metadata.xml`,
+  `idp-metadata.xml`, `sp-metadata.xml`, `FederationMetadata.xml`, and scoped
+  `/saml/metadata` remote routes now keep a `saml-metadata` format label and
+  passively promote IdP/SP endpoint/document URLs from `entityID`, `Location`,
+  `ResponseLocation`, `OrganizationURL`, and `AdditionalMetadataLocation` into
+  recursive URL seeds. Relative endpoints resolve only against HTTP(S) source
+  URLs; protocol-relative URLs normalize to HTTPS; query strings/fragments are
+  stripped to avoid preserving SAML request or token material, and the shared
+  generic URL sanitizer now strips XML-escaped SAML protocol query keys before
+  direct URL persistence. Backprop: `SPEC.md` `B22`; existing
+  `V1`/`V3`/`V4`/`V5` cover the gate. Verification:
+  focused TDD first failed on missing `forge.utils.artifact_saml_metadata`;
+  focused SAML regression passed (`6 passed`); adjacent OAuth/JWKS/Web Manifest
+  metadata plus artifact helper/static-classification slices passed (`34
+  passed`), then final adjacent slice passed after reviewer fixes (`36
+  passed`); compile passed; Ruff passed; cleanup scan left
+  `temp_pytest_engagement_dirs=0` and persistent DB inventory `1`, `5010`,
+  `master.db`. Review: read-only sidecars found SAML query-secret leakage in
+  generic direct URL extraction and missing remote artifact provenance coverage;
+  both were fixed before commit. Claude CLI review was attempted but the local
+  OAuth session was expired. Safety: passive static SAML XML parsing only; no SSO request,
+  token request, authentication attempt, provider call, live probing,
+  credential use, validation-gate change, report-gate change, severity change,
+  proxy/IP rotation, or rate-limit bypass.
 - [ ] Next implementation target: continue concrete kill-chain coverage. Add
   the smallest mocked E2E or focused integration test that proves one missing
   recursive discovery path from `T1`/`T2` advances from discovered passive

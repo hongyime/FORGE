@@ -149,6 +149,7 @@ from forge.utils.artifact_package_manager_config import (
 from forge.utils.artifact_passkey_metadata import passkey_endpoint_urls
 from forge.utils.artifact_public_metadata_links import public_metadata_document_urls
 from forge.utils.artifact_pulumi_config import pulumi_config_candidates
+from forge.utils.artifact_saml_metadata import saml_metadata_artifact_label, saml_metadata_urls
 from forge.utils.artifact_sst_config import sst_config_artifact_label, sst_config_candidates
 from forge.utils.artifact_storage_client_config import (
     storage_client_config_artifact_label,
@@ -440,6 +441,7 @@ def _normalize_artifact_text_url(value: str) -> str:
     if not candidate:
         return ""
     candidate = candidate.replace("\\/", "/")
+    candidate = html.unescape(candidate)
     while candidate:
         previous = candidate
         candidate = _ARTIFACT_URL_ESCAPED_CONTROL_SUFFIX_RE.sub("", candidate)
@@ -1530,6 +1532,9 @@ def _artifact_url_query_key_is_sensitive(value: str) -> bool:
         "key",
         "password",
         "refresh_token",
+        "relaystate",
+        "samlrequest",
+        "samlresponse",
         "secret",
         "security_token",
         "session",
@@ -1538,6 +1543,7 @@ def _artifact_url_query_key_is_sensitive(value: str) -> bool:
         "session_token",
         "shared_access_signature",
         "sig",
+        "sigalg",
         "signature",
         "sid",
         "jsessionid",
@@ -6029,6 +6035,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _observability_text_config_artifact_label(raw_lowered):
         return True
+    if saml_metadata_artifact_label(raw_lowered):
+        return True
     if _kubernetes_secret_manifest_artifact_label(raw_lowered):
         return True
     if _gitops_manifest_artifact_label(raw_lowered):
@@ -6217,6 +6225,9 @@ def _artifact_format_label(value: str | Path) -> str:
     observability_label = _observability_text_config_artifact_label(str(value or ""))
     if observability_label:
         return observability_label
+    saml_label = saml_metadata_artifact_label(str(value or ""))
+    if saml_label:
+        return saml_label
     kubernetes_secret_label = _kubernetes_secret_manifest_artifact_label(str(value or ""))
     if kubernetes_secret_label:
         return kubernetes_secret_label
@@ -6956,6 +6967,8 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
     if _special_text_config_route_label(raw_url):
         return "config"
     parsed_remote = urlparse(raw_url)
+    if saml_metadata_artifact_label(unquote(parsed_remote.path or "")):
+        return "config"
     if package_manager_config_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
     if windows_registry_hive_artifact_label(unquote(parsed_remote.path or "")):
@@ -7083,6 +7096,12 @@ def _select_remote_artifact_filename(
     if route_label:
         return route_label
     parsed_source = urlparse(source_url)
+    saml_label = saml_metadata_artifact_label(unquote(parsed_source.path or ""))
+    if saml_label:
+        candidate = Path(unquote(parsed_source.path or "")).name.strip()
+        if candidate and saml_metadata_artifact_label(candidate):
+            return candidate
+        return "saml-metadata.xml"
     package_manager_filename = package_manager_config_remote_filename(
         unquote(parsed_source.path or "")
     )
@@ -20428,6 +20447,7 @@ class ArtifactQueueProcessor:
                     "webweaver_metadata",
                     "oauth_metadata",
                     "jwks_metadata",
+                    "saml_metadata",
                     "web_manifest_metadata",
                     "helm_index",
                     "package_registry",
@@ -20657,6 +20677,12 @@ class ArtifactQueueProcessor:
             )
         if family == "jwks_metadata":
             return jwks_urls(
+                text,
+                source_label=_artifact_format_label(source_file),
+                base_url=source_file,
+            )
+        if family == "saml_metadata":
+            return saml_metadata_urls(
                 text,
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,

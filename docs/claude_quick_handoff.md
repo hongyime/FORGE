@@ -25,12 +25,17 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Terraform DNS-record passive recursion is implemented.
-Scraped Terraform DNS resource blocks now statically promote public record names
-and CNAME targets into recursive host/subdomain seeds through
-`forge.utils.artifact_terraform_dns` and the existing artifact host-seed path.
-Focused TDD first failed on the missing parser module, then passed with adjacent
-Terraform/HashiCorp and structured-IaC slices, compile/Ruff, and cleanup scan.
+Latest checkpoint: SAML federation metadata passive recursion is implemented.
+Source-gated SAML metadata artifacts now keep `saml-metadata` labels and
+statically promote IdP/SP endpoint/document URLs from `entityID`, `Location`,
+`ResponseLocation`, `OrganizationURL`, and `AdditionalMetadataLocation` into
+recursive URL seeds through `forge.utils.artifact_saml_metadata` and the
+existing artifact URL-seed path. Focused TDD first failed on the missing parser
+module, then passed with adjacent OAuth/JWKS/Web Manifest metadata,
+artifact-helper/static-classification slices, compile/Ruff, and cleanup scan.
+Read-only sidecars found and drove fixes for SAML protocol query stripping in
+generic direct URL extraction plus mocked remote artifact provenance coverage.
+Claude CLI review was attempted but the local OAuth session was expired.
 
 Current next gate: continue concrete kill-chain coverage. Add the smallest
 mocked E2E or focused integration test that proves one missing recursive
