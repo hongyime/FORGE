@@ -32,6 +32,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     _write_mobile_association_metadata(config.parent / ".well-known")
     _write_security_txt(config.parent / ".well-known" / "security.txt")
     _write_public_ai_metadata(config.parent)
+    _write_well_known_supply_chain_metadata(config.parent / ".well-known")
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -333,6 +334,68 @@ def _write_public_ai_metadata(artifact_dir: Path) -> None:
             },
             sort_keys=True,
         ),
+        encoding="utf-8",
+    )
+
+
+def _write_well_known_supply_chain_metadata(well_known_dir: Path) -> None:
+    well_known_dir.mkdir(parents=True, exist_ok=True)
+    (well_known_dir / "csaf").write_text(
+        json.dumps(
+            {
+                "provider_metadata": {
+                    "url": "https://supply.acme.test/csaf/provider.json?token=hidden",
+                    "contact": "csaf-e2e-owner@acme.test",
+                },
+                "supabase": "https://csafe2evault.supabase.co",
+                "template": "https://supply.acme.test/csaf/{tenant}/provider.json",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "sbom").write_text(
+        json.dumps(
+            {
+                "spdx": "https://sbom.acme.test/spdx/app.spdx.json?api_key=hidden",
+                "contact": "sbom-e2e-owner@acme.test",
+                "firebase": "https://sbom-e2e-firebase.firebaseio.com",
+                "template": "https://sbom.acme.test/{build}/app.spdx.json",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "passkey-endpoints").write_text(
+        json.dumps(
+            {
+                "enroll": "https://login.acme.test/passkeys/enroll?signature=hidden",
+                "manage": "https://login.acme.test/passkeys/manage?token=hidden",
+                "support": "passkey-e2e-owner@acme.test",
+                "supabase": "https://passkeye2evault.supabase.co",
+                "templated_endpoint": "https://login.acme.test/passkeys/{tenant}/manage",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "ssh-known-hosts").write_text(
+        """
+        ssh-supply.acme.test ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample
+        Contact: sshknown-e2e-owner@acme.test
+        Docs: https://ssh.acme.test/known-hosts?api_key=hidden
+        Supabase: https://sshknowne2evault.supabase.co
+        """.strip(),
+        encoding="utf-8",
+    )
+    (well_known_dir / "pki-validation").write_text(
+        """
+        CA validation placeholder for static review only.
+        Contact: pki-e2e-owner@acme.test
+        Docs: https://pki.acme.test/validation?token=hidden
+        Firebase: https://pki-e2e-firebase.firebaseio.com
+        Template: https://pki.acme.test/{tenant}/validation
+        """.strip(),
         encoding="utf-8",
     )
 

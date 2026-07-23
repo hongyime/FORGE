@@ -700,14 +700,39 @@ sentences as historical notes only, not as current instructions.
   call beyond mocked validators, live probing, credential use, plugin
   execution, scope relaxation, validation-gate change, report-gate change,
   severity change, proxy/IP rotation, or rate-limit bypass.
-- [ ] Next implementation target: add well-known security/supply-chain
-  metadata compact E2E parity. Extend the compact multi-seed mocked E2E with
-  the smallest local `.well-known` security/supply-chain metadata fixture set
-  (for example CSAF/SBOM/passkey/SSH/PKI metadata) that proves contacts,
-  sanitized recursive URLs, cloud refs, passive review inventory, validation
-  inventory where applicable, graph/report/audit review, deterministic fallback
-  output, and cleanup. Likely files:
-  `tests/phase1/kill_chain_multiseed_fixture.py`,
+- [x] Well-known security/supply-chain metadata kill-chain E2E parity
+  checkpoint:
+  the compact full-closeout multi-seed E2E now includes local `.well-known`
+  CSAF, SBOM, passkey endpoint, SSH known-hosts, and PKI validation metadata
+  artifacts under the normal artifact intake root. It proves owner contacts,
+  stripped documentation/API/passkey URL pivots, SSH known-host passive
+  subdomain inventory, Supabase/Firebase refs, validation inventory,
+  deterministic findings, graph nodes, deterministic template fallback report
+  context, raw CSV validation rows, audit closeout, and cleanup. Templated
+  supply-chain URLs and sensitive query strings are asserted absent from
+  persisted URL seeds. The test-local graph export cap was raised from 300 to
+  380 nodes so the expanded compact fixture retains asserted supply-chain
+  review nodes. Verification: compile passed; Ruff passed; focused
+  well-known/passkey/public metadata tests passed (`12 passed`); focused
+  mocked E2E passed (`1 passed` in 336.11s); cleanup removed generated
+  test-owned DB/report files and left `remaining_test_owned_files=0`, with
+  persistent DB inventory unchanged at `1`, `5010`, `master.db`. A stale
+  global-Python pytest process holding the prior compact E2E temp DB was
+  identified by exact command line and stopped before final cleanup. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-supply-chain-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E and passive well-known supply-chain/security
+  metadata only; no provider call beyond mocked validators, live probing,
+  credential use, package/SBOM/passkey/SSH/PKI execution, scope relaxation,
+  validation-gate change, report-gate change, severity change, proxy/IP
+  rotation, or rate-limit bypass.
+- [ ] Next implementation target: add well-known privacy/vendor metadata
+  compact E2E parity. Extend the compact multi-seed mocked E2E with the
+  smallest local `.well-known` privacy/vendor metadata fixture set (for
+  example `trust.txt`, `gpc.json`, `tdmrep.json`, or adjacent public vendor
+  metadata) that proves contacts, sanitized recursive URLs, cloud refs,
+  passive review inventory, validation inventory where applicable,
+  graph/report/audit review, deterministic fallback output, and cleanup.
+  Likely files: `tests/phase1/kill_chain_multiseed_fixture.py`,
   `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py`, and only minimal
   production code if the E2E exposes a real gap.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:

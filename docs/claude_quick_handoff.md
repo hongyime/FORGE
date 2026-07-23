@@ -25,30 +25,32 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Public AI metadata kill-chain E2E parity is implemented.
-The compact full-closeout multi-seed E2E now includes local `llms.txt`,
-`ai.txt`, and `ai-plugin.json` intake and proves owner contacts, stripped
-documentation/API/auth URL pivots, validated Supabase/Firebase refs, passive
-`ai_plugin_manifest` inventory, deterministic findings for validated refs,
-graph nodes, deterministic template fallback report context, raw CSV
-validation rows, audit closeout, and cleanup. Templated public-AI URLs and
-sensitive query strings are asserted absent from persisted URL seeds. The E2E
-graph export cap was raised from 220 to 300 nodes so the expanded compact
-fixture retains asserted public-AI review nodes.
+Latest checkpoint: Well-known security/supply-chain metadata kill-chain E2E
+parity is implemented. The compact full-closeout multi-seed E2E now includes
+local `.well-known` CSAF, SBOM, passkey endpoint, SSH known-hosts, and PKI
+validation metadata intake and proves owner contacts, stripped
+documentation/API/passkey URL pivots, SSH known-host passive subdomain
+inventory, validated Supabase/Firebase refs, deterministic findings, graph
+nodes, deterministic template fallback report context, raw CSV validation rows,
+audit closeout, and cleanup. Templated supply-chain URLs and sensitive query
+strings are asserted absent from persisted URL seeds. The E2E graph export cap
+was raised from 300 to 380 nodes so the expanded compact fixture retains
+asserted supply-chain review nodes.
 
-Verification: compile/Ruff passed; focused public metadata / AI metadata tests
-passed (`11 passed`); focused E2E passed (`1 passed` in 184.03s); cleanup
-removed 13 test-owned temp DB/report files and left
-`remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
-`master.db`. Handoff:
-`.claude/handoffs/2026-07-24-public-ai-metadata-kill-chain-e2e-parity.md`.
+Verification: compile/Ruff passed; focused well-known/passkey/public metadata
+tests passed (`12 passed`); focused E2E passed (`1 passed` in 336.11s);
+cleanup left `remaining_test_owned_files=0`; persistent inventory remains `1`,
+`5010`, `master.db`. A stale global-Python pytest process holding a prior
+compact E2E temp DB was identified by exact command line and stopped before
+final cleanup. Handoff:
+`.claude/handoffs/2026-07-24-well-known-supply-chain-kill-chain-e2e-parity.md`.
 
-Current next gate: add well-known security/supply-chain metadata compact E2E
-parity. Extend the compact multi-seed mocked E2E with the smallest local
-CSAF/SBOM/passkey/SSH/PKI-style `.well-known` fixture set proving contacts,
-sanitized recursive URLs, cloud refs, passive review inventory, validation
-inventory where applicable, graph/report/audit review, deterministic fallback
-output, and cleanup.
+Current next gate: add well-known privacy/vendor metadata compact E2E parity.
+Extend the compact multi-seed mocked E2E with the smallest local `trust.txt`,
+`gpc.json`, `tdmrep.json`, or adjacent public vendor metadata fixture set
+proving contacts, sanitized recursive URLs, cloud refs, passive review
+inventory, validation inventory where applicable, graph/report/audit review,
+deterministic fallback output, and cleanup.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

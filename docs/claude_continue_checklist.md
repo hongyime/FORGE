@@ -127,12 +127,29 @@ historical notes only, not as current instructions.
   left `remaining_test_owned_files=0`; persistent inventory remains `1`,
   `5010`, `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-public-ai-metadata-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: add well-known security/supply-chain
-  metadata compact E2E parity. Extend the compact multi-seed mocked E2E with
-  the smallest local CSAF/SBOM/passkey/SSH/PKI-style `.well-known` fixture set
-  proving contacts, sanitized recursive URLs, cloud refs, passive review
-  inventory, validation inventory where applicable, graph/report/audit review,
-  deterministic fallback output, and cleanup.
+- [x] Well-known security/supply-chain metadata kill-chain E2E parity
+  completed:
+  the compact full-closeout multi-seed E2E now includes local `.well-known`
+  CSAF, SBOM, passkey endpoint, SSH known-hosts, and PKI validation metadata
+  artifacts and proves owner contacts, stripped documentation/API/passkey URL
+  pivots, SSH known-host passive subdomain inventory, Supabase/Firebase refs,
+  validation inventory, deterministic findings, graph nodes, deterministic
+  template fallback report context, raw CSV validation rows, audit closeout,
+  and cleanup. Templated supply-chain URLs and sensitive query strings are
+  asserted absent from persisted URL seeds. The E2E graph export cap was
+  raised from 300 to 380 nodes. Verification: compile/Ruff passed; focused
+  well-known/passkey/public metadata tests -> `12 passed`; focused E2E ->
+  `1 passed` in 336.11s; cleanup left `remaining_test_owned_files=0`;
+  persistent inventory remains `1`, `5010`, `master.db`. A stale global-Python
+  pytest process holding a prior compact E2E temp DB was identified by exact
+  command line and stopped before final cleanup. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-supply-chain-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: add well-known privacy/vendor metadata
+  compact E2E parity. Extend the compact multi-seed mocked E2E with the
+  smallest local `trust.txt`, `gpc.json`, `tdmrep.json`, or adjacent public
+  vendor metadata fixture set proving contacts, sanitized recursive URLs, cloud
+  refs, passive review inventory, validation inventory where applicable,
+  graph/report/audit review, deterministic fallback output, and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
