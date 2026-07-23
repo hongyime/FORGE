@@ -378,6 +378,21 @@ historical notes only, not as current instructions.
   passive static JSON Feed parsing only; no feed polling, provider call, live
   probing, credential use, validation/report gate change, severity change,
   proxy/IP rotation, or rate-limit bypass.
+- [x] JSON Feed kill-chain E2E parity checkpoint completed:
+  the focused multi-seed recursive kill-chain fixture now includes a local JSON
+  Feed artifact under the normal artifact intake root and proves JSON Feed owner
+  email plus stripped feed/person/media/APK URL pivots become recursive
+  engagement seeds before the same run completes validation, graph generation,
+  deterministic template fallback reporting, audit logging, and cleanup checks.
+  The E2E also asserts `jsonfeed.org/version/*` standards URLs do not become
+  recursive targets. Verification: focused mocked E2E
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` -> `1 passed` in
+  67.96s; compile/Ruff passed; cleanup -> `temp_pytest_engagement_dbs=0`,
+  persistent DB inventory -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-json-feed-kill-chain-e2e-parity.md`. Safety:
+  mocked/offline E2E only; no external target, provider call, live probing,
+  credential use, validation/report gate change, severity change, proxy/IP
+  rotation, or rate-limit bypass.
 - [ ] Immediate next implementation target: continue concrete kill-chain
   coverage. Add the smallest mocked E2E or focused integration test that proves
   one missing recursive discovery path from `T1`/`T2` advances from discovered

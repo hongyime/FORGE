@@ -75,6 +75,33 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         """.strip(),
         encoding="utf-8",
     )
+    json_feed = config.parent / "feed.json"
+    json_feed.write_text(
+        json.dumps(
+            {
+                "version": "https://jsonfeed.org/version/1.1",
+                "title": "Acme JSON Updates",
+                "home_page_url": "https://jsonfeed.acme.test/blog?token=hidden",
+                "feed_url": "https://jsonfeed.acme.test/feed.json?signature=hidden",
+                "author": {
+                    "email": "json-feed-owner@acme.test",
+                    "url": "https://people.acme.test/json-feed-owner?api_key=hidden",
+                },
+                "items": [
+                    {
+                        "id": "json-launch",
+                        "url": "https://jsonfeed.acme.test/posts/launch?sig=hidden&view=public",
+                        "external_url": "https://cdn-json.acme.test/downloads/app.apk?signature=hidden",
+                        "attachments": [
+                            {"url": "https://media-json.acme.test/podcast.mp3#ignored"},
+                        ],
+                    }
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.chdir(tmp_path)
     for key, value in {
         "FORGE_DATA_DIR": str(data_dir),
@@ -330,6 +357,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("nested-web@acme.test", "email"),
             ("search-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
+            ("json-feed-owner@acme.test", "email"),
             ("app.acme.test", "subdomain"),
             ("static.acme.test", "subdomain"),
             ("https://app.acme.test/config", "url"),
@@ -338,9 +366,14 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://news.acme.test/blog", "url"),
             ("https://news.acme.test/posts/launch", "url"),
             ("https://media.acme.test/demo.mp4", "url"),
+            ("https://jsonfeed.acme.test/blog", "url"),
+            ("https://jsonfeed.acme.test/posts/launch", "url"),
+            ("https://cdn-json.acme.test/downloads/app.apk", "apk_url"),
+            ("https://media-json.acme.test/podcast.mp3", "url"),
         } <= seeds
         assert ("http://www.w3.org/2005/Atom", "url") not in seeds
         assert ("http://search.yahoo.com/mrss/", "url") not in seeds
+        assert ("https://jsonfeed.org/version/1.1", "url") not in seeds
         for table, columns in {
             "engagement_seeds": "seed_type, seed_value",
             "cloud_assets": "asset_type, identifier",
@@ -363,6 +396,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert feed_artifact is not None
         assert feed_artifact["status"] == "parsed"
         assert json.loads(feed_artifact["metadata_json"])["format"] == "feed.xml"
+        json_feed_artifact = con.execute(
+            "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%feed.json'"
+        ).fetchone()
+        assert json_feed_artifact is not None
+        assert json_feed_artifact["status"] == "parsed"
+        assert json.loads(json_feed_artifact["metadata_json"])["format"] == "json-feed"
 
         assets = {(row["asset_type"], row["identifier"]) for row in con.execute("SELECT asset_type, identifier FROM cloud_assets")}
         assert {
