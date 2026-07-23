@@ -25,16 +25,18 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: JWKS kill-chain E2E parity is implemented. The focused
-mocked multi-seed recursive kill-chain E2E now includes a mocked remote
-`.well-known/jwks.json` artifact seed and proves JWKS owner email plus stripped
-`x5u`/`jku` certificate/key-set URL pivots become recursive engagement seeds
-before the same run completes validation, graph generation, deterministic
-template fallback reporting, audit logging, and cleanup checks. It also asserts
-templated JWKS certificate URLs stay suppressed. Verification: focused
-kill-chain E2E passed (`1 passed` in 114.49s), compile/Ruff passed, and temp
-pytest DB cleanup remained clean. `SPEC.md` was not structurally edited for this
-checkpoint because `T2` remains ongoing and root `FORMAT.md` is absent.
+Latest checkpoint: OpenID/OAuth kill-chain E2E parity is implemented. The
+focused mocked multi-seed recursive kill-chain E2E now includes mocked remote
+`.well-known/openid-configuration` and `.well-known/jwks.json` artifact seeds
+and proves OAuth contact email, authorization/token/userinfo/documentation URL
+pivots, linked JWKS URL/certificate pivots, and Supabase inventory enter the
+recursive engagement path before the same run completes validation, graph
+generation, deterministic template fallback reporting, audit logging, and
+cleanup checks. It also asserts templated OAuth/JWKS URLs stay suppressed.
+Verification: focused kill-chain E2E passed (`1 passed` in 136.66s),
+compile/Ruff passed, and temp pytest DB cleanup remained clean. `SPEC.md` was
+not structurally edited for this checkpoint because `T2` remains ongoing and
+root `FORMAT.md` is absent.
 
 Current next gate: continue concrete kill-chain coverage. Add the smallest
 mocked E2E or focused integration test that proves one missing recursive

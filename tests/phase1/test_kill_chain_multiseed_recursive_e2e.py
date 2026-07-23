@@ -161,7 +161,26 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     def blocked(*args, **kwargs):  # noqa: ANN002, ANN003
         raise AssertionError(f"external network disabled: {args!r} {kwargs!r}")
 
+    openid_url = "https://login.acme.test/.well-known/openid-configuration"
     jwks_url = "https://login.acme.test/.well-known/jwks.json"
+    openid_body = json.dumps(
+        {
+            "issuer": "https://login.acme.test",
+            "authorization_endpoint": "/oauth2/v1/authorize",
+            "token_endpoint": "https://login-api.acme.test/oauth2/v1/token",
+            "userinfo_endpoint": "./userinfo",
+            "jwks_uri": jwks_url,
+            "service_documentation": "https://docs.acme.test/oauth#ignored",
+            "contacts": ["oauth-owner@acme.test"],
+            "templated_endpoint": "/oauth/{tenant}/authorize",
+            "supabase": {
+                "type": "supabase",
+                "projectRef": "openidvault",
+                "url": "https://openidvault.supabase.co",
+            },
+        },
+        sort_keys=True,
+    )
     jwks_body = json.dumps(
         {
             "owner": "jwks-owner@acme.test",
@@ -187,6 +206,21 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
 
     def remote_artifact_download(self, request):  # noqa: ANN001
         del self
+        if request.source_url == openid_url:
+            download_path = tmp_path / "downloads" / "openid-configuration"
+            download_path.parent.mkdir(parents=True, exist_ok=True)
+            download_path.write_text(openid_body, encoding="utf-8")
+            return ArtifactDownloadResult(
+                artifact_id=request.artifact_id,
+                source_url=request.source_url,
+                artifact_type=request.artifact_type,
+                path=download_path,
+                metadata_extra={
+                    "content_type": "application/json",
+                    "downloaded_from_remote": True,
+                    "download_filename": "openid-configuration",
+                },
+            )
         if request.source_url != jwks_url:
             return ArtifactDownloadResult(
                 artifact_id=request.artifact_id,
@@ -391,7 +425,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
 
     cli.kill_chain(
         "acme.test",
-        related_seed=["ops@acme.test", "ops@acme.test", jwks_url],
+        related_seed=["ops@acme.test", "ops@acme.test", openid_url, jwks_url],
         engagement=str(EID),
         max_iter=4,
         parallel_fanout=1,
@@ -435,6 +469,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("nested-web@acme.test", "email"),
             ("search-owner@acme.test", "email"),
             ("sso-owner@acme.test", "email"),
+            ("oauth-owner@acme.test", "email"),
             ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
             ("json-feed-owner@acme.test", "email"),
@@ -448,6 +483,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://logout.acme.test/saml/logout", "url"),
             ("https://artifact.acme.test/saml/artifact", "url"),
             ("https://www.acme.test/security/sso", "url"),
+            (openid_url, "url"),
+            ("https://login.acme.test/oauth2/v1/authorize", "url"),
+            ("https://login-api.acme.test/oauth2/v1/token", "url"),
+            ("https://login.acme.test/.well-known/userinfo", "url"),
+            ("https://docs.acme.test/oauth", "url"),
             (jwks_url, "url"),
             ("https://login.acme.test/certs/signing.pem", "url"),
             ("https://keys.acme.test/.well-known/tenant-jwks.json", "url"),
@@ -463,6 +503,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("http://search.yahoo.com/mrss/", "url") not in seeds
         assert ("https://jsonfeed.org/version/1.1", "url") not in seeds
         assert ("https://login.acme.test/tenant/{id}/metadata.xml", "url") not in seeds
+        assert ("https://login.acme.test/oauth/{tenant}/authorize", "url") not in seeds
         assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
             "engagement_seeds": "seed_type, seed_value",
@@ -486,6 +527,15 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert saml_artifact is not None
         assert saml_artifact["status"] == "parsed"
         assert json.loads(saml_artifact["metadata_json"])["format"] == "saml-metadata"
+        openid_artifact = con.execute(
+            "SELECT status, metadata_json FROM artifact_queue WHERE source_url=?",
+            (openid_url,),
+        ).fetchone()
+        assert openid_artifact is not None
+        assert openid_artifact["status"] == "parsed"
+        openid_metadata = json.loads(openid_artifact["metadata_json"])
+        assert openid_metadata["format"] == "openid-configuration"
+        assert openid_metadata["downloaded_from_remote"] is True
         jwks_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE source_url=?",
             (jwks_url,),
@@ -514,6 +564,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("firebase", "web-firebase-prod"),
             ("firebase", "dead-firebase-prod"),
             ("supabase", "acmebase"),
+            ("supabase", "openidvault"),
         } <= assets
         statuses = {
             (row["asset_type"], row["identifier"]): row["validation_status"]
