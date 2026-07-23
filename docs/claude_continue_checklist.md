@@ -195,13 +195,22 @@ historical notes only, not as current instructions.
   compile/Ruff, full web UI engagement API suite (`28 passed`), adjacent
   API/detail/graph route slice, dashboard gate slice, Phase 6 validation
   selectors, and cleanup scan are green.
-- [ ] Immediate next implementation target: audit operational automation and
-  playbook suggestion gates that still read `vulnerability_findings` or
-  `key_scanner_findings` directly, especially `AutomationEngine` reporting/RCE
-  suggestions and legacy cloud-leak playbook paths. Add the smallest failing
-  test first, then harden only that surface without broadening provider calls,
-  live probing, scope, proxy/IP behavior, severity rules, or playbook
-  capabilities.
+- [x] Operational automation reportability gates completed:
+  `AutomationEngine` report suggestions now count only shared reportable
+  deterministic findings plus non-false-positive passive findings, and the RCE
+  auto-trigger now requires shared reportable `HIGH`/`CRITICAL` rows,
+  RCE-specific text, and engagement-matched host metadata before scheduling.
+  It skips safely when canonical findings lack legacy `host_id`. Backprop:
+  `SPEC.md` `B14`; existing `V3`/`V6`/`V7`/`V8` cover the gate. Verification:
+  failing TDD first for stale report suggestion and canonical-schema RCE
+  trigger failure; focused operational regressions, compile/Ruff, full playbook
+  integration suite, adjacent API/detail parity slice, dashboard gate slice,
+  and Phase 6 validation selectors are green.
+- [ ] Immediate next implementation target: audit the legacy cloud-leak
+  manual/future re-enable path so `key_scanner_findings.validation_state='ACTIVE'`
+  is never enough by itself. Require stable key proof parsing or linked
+  reportable cloud validation before any cloud-leak playbook path proceeds, and
+  keep the auto-trigger disabled unless a scoped cloud-secret model exists.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

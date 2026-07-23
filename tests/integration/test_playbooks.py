@@ -4,6 +4,8 @@ import sqlite3
 import pytest
 from forge.distributed.coordinator import RateLimiter, QueueCoordinator
 from forge.distributed.scheduler import TaskScheduler
+from forge.db.migrations import run_migrations
+from forge.db.schema import apply_schema
 from forge.phase1.stealth_recon import run_searxng_passive
 from forge.phase4.cloud_validate import run_cloud_validate
 from forge.phase4.rce_hunter import run_safe_check, run_weaponize
@@ -264,3 +266,94 @@ def test_failed_task_playbook_preserves_roe_scope_context(tmp_path):
     assert payload["scope_manifest"] == context["scope_manifest"]
     assert payload["require_roe"] is True
     assert payload["require_scope_manifest"] is True
+
+
+def test_automation_report_suggestion_ignores_unreportable_cloud_findings(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, evidence, notes)
+            VALUES
+                (7, 'firebase', 'stale-firebase', 'VALIDATED',
+                 'manual_validated_note', 'operator note only',
+                 'not a deterministic proof method')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity,
+                 title, description, evidence, cloud_provider, resource_id)
+            VALUES
+                (7, 'DETERMINISTIC_CLOUD_EXPOSURE',
+                 'firebase://stale-firebase', 'firebase', 'HIGH',
+                 'Validated Firebase data exposure',
+                 'Stale deterministic row should stay non-reportable.',
+                 'manual note only', 'firebase', 'stale-firebase')
+            """
+        )
+        conn.commit()
+
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    suggestions = automation.get_suggestions()
+
+    assert {suggestion.id for suggestion in suggestions} == set()
+
+
+def test_automation_rce_trigger_ignores_unreportable_non_rce_findings(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, evidence, notes)
+            VALUES
+                (7, 'firebase', 'stale-firebase', 'VALIDATED',
+                 'manual_validated_note', 'operator note only',
+                 'not a deterministic proof method')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity,
+                 title, description, evidence, cloud_provider, resource_id)
+            VALUES
+                (7, 'DETERMINISTIC_CLOUD_EXPOSURE',
+                 'firebase://stale-firebase', 'firebase', 'HIGH',
+                 'Validated Firebase data exposure',
+                 'Stale deterministic row should not trigger RCE automation.',
+                 'manual note only', 'firebase', 'stale-firebase')
+            """
+        )
+        conn.commit()
+
+    scheduler = RecordingScheduler()
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    automation.scheduler = scheduler
+    automation.playbooks = PlaybookEngine(scheduler)
+    automation._handle_task_done(7, "vuln:passive:https://app.acme.example")
+
+    assert scheduler.tasks == []

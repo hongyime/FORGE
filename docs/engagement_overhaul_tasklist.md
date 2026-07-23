@@ -290,15 +290,32 @@ sentences as historical notes only, not as current instructions.
   or validator/playbook behavior expansion. Note: stale key rows may still be
   visible in detail sections as downgraded analyst inventory under `V6`; they
   are not reportable counts, graph nodes, findings, or report inputs.
-- [ ] Next implementation target: audit operational automation and playbook
-  suggestion gates that still read `vulnerability_findings` or
-  `key_scanner_findings` directly, especially `AutomationEngine` reporting/RCE
-  suggestions and legacy cloud-leak playbook paths. Add the smallest failing
-  test first to prove unreportable stale findings or unvalidated keys do not
-  trigger actions or report suggestions, then harden only that path. This
-  advances validation, scoring, scoped active checks, review, and
-  testing/cleanup; do not broaden provider calls, live probing, scope,
-  proxy/IP behavior, severity rules, or playbook capabilities.
+- [x] Operational automation reportability-gate checkpoint:
+  `AutomationEngine` report suggestions now count only shared reportable
+  deterministic findings plus non-false-positive passive findings. The RCE
+  auto-trigger now iterates shared reportable vulnerability rows, requires
+  `HIGH`/`CRITICAL`, requires RCE-specific finding text, joins hosts by
+  engagement, and skips safely when canonical findings lack legacy `host_id`.
+  Backprop: `SPEC.md` `B14`; existing `V3`/`V6`/`V7`/`V8` cover the gate.
+  Verification: failing TDD first for stale report suggestion
+  (`{'report-generate'}`) and RCE trigger canonical-schema failure (`no such
+  column: host_id`); focused operational regressions passed; compile/Ruff
+  passed; full playbook integration suite passed (`12 passed`); adjacent
+  API/detail parity slice passed (`2 passed`); dashboard cloud/key gate slice
+  passed (`4 passed`); Phase 6 validation selectors passed (`2 passed, 80
+  deselected`). Safety: automation gating only; no provider calls, live
+  probing, credential use, scope changes, severity expansion, proxy/IP
+  rotation, rate-limit bypass, cloud-leak enablement, or new playbook
+  capabilities.
+- [ ] Next implementation target: audit the legacy cloud-leak manual/future
+  re-enable path so `key_scanner_findings.validation_state='ACTIVE'` is never
+  enough by itself; require stable key proof parsing or an existing linked
+  reportable cloud validation before any cloud-leak playbook path proceeds.
+  Add the smallest failing test first and keep the auto-trigger disabled unless
+  a scoped cloud-secret model exists. This advances validation, scoped active
+  checks, review, and testing/cleanup; do not call providers, enumerate
+  resources, scan storage, broaden scope, add proxy/IP behavior, or enable
+  destructive/extraction behavior.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

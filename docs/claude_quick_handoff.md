@@ -25,12 +25,11 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: operational automation/playbook reportability gates. Audit
-automation suggestions and legacy playbook paths that still read
-`vulnerability_findings` or `key_scanner_findings` directly, especially
-`AutomationEngine` reporting/RCE suggestions and cloud-leak key paths. Write the
-smallest failing test first to prove stale unreportable findings or unvalidated
-keys do not trigger suggestions/actions, then harden only that surface.
+Current next gate: legacy cloud-leak key proof gate. Audit the manual/future
+re-enable cloud-leak path so `key_scanner_findings.validation_state='ACTIVE'` is
+never enough by itself; require stable key proof parsing or linked reportable
+cloud validation before any cloud-leak playbook path proceeds. Keep the
+auto-trigger disabled unless a scoped cloud-secret model exists.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -65,6 +64,20 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Operational automation reportability gates completed:
+  `AutomationEngine` report suggestions now count only shared reportable
+  deterministic findings plus non-false-positive passive findings. The RCE
+  auto-trigger now requires shared reportable `HIGH`/`CRITICAL` rows,
+  RCE-specific finding text, and engagement-matched host metadata before
+  scheduling, and skips safely when canonical findings lack legacy `host_id`.
+  Backprop: `SPEC.md` `B14`; existing `V3`/`V6`/`V7`/`V8` cover the gate.
+  Verification: failing TDD first for stale report suggestion
+  (`{'report-generate'}`) and RCE trigger schema failure (`no such column:
+  host_id`); focused operational regressions; compile/Ruff; full playbook
+  integration suite (`12 passed`); adjacent API/detail parity slice (`2
+  passed`); dashboard cloud/key gate slice (`4 passed`); Phase 6 validation
+  selectors (`2 passed, 80 deselected`). Handoff:
+  `.claude/handoffs/2026-07-23-automation-reportability-gates.md`.
 - [x] Live API vulnerability-summary reportability parity completed:
   `/api/engagements/{id}/vuln-summary` now builds active finding severity counts
   from `_reportable_vulnerability_rows` instead of grouping

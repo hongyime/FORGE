@@ -11,6 +11,7 @@ from forge.config import ForgeConfig
 from forge.db.session import get_engagement_db
 from forge.distributed.coordinator import QueueCoordinator
 from forge.distributed.scheduler import TaskScheduler
+from forge.reporting.dashboard import _reportable_vulnerability_rows
 from forge.utils.playbooks import (
     PlaybookEngine,
     ROE_SCOPE_CONTEXT_KEYS,
@@ -139,18 +140,26 @@ class AutomationEngine:
         if task_key.startswith("vuln:passive") or task_key.startswith("recon:ports"):
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
-                # Example: finding an RCE vulnerability
-                row = conn.execute("SELECT id, host_id FROM vulnerability_findings WHERE severity IN ('high', 'critical') ORDER BY id DESC LIMIT 1").fetchone()
-                if row:
-                    # simplistic target extraction
-                    host_row = conn.execute("SELECT ip FROM hosts WHERE id = ?", (row["host_id"],)).fetchone()
-                    if host_row:
-                        self.playbooks.run_rce_hunter(
-                            engagement_id,
-                            str(row["id"]),
-                            host_row["ip"],
-                            context=parent_context,
-                        )
+                for row in _reportable_vulnerability_rows(conn, engagement_id):
+                    severity = str(row["severity"] or "").strip().upper()
+                    host_id = row["host_id"] if "host_id" in row.keys() else None
+                    if severity not in {"HIGH", "CRITICAL"} or not host_id:
+                        continue
+                    if not self._is_rce_candidate(row):
+                        continue
+                    host_row = conn.execute(
+                        "SELECT ip FROM hosts WHERE id = ? AND engagement_id = ?",
+                        (host_id, engagement_id),
+                    ).fetchone()
+                    if not host_row:
+                        continue
+                    self.playbooks.run_rce_hunter(
+                        engagement_id,
+                        str(row["id"]),
+                        host_row["ip"],
+                        context=parent_context,
+                    )
+                    break
 
     def _handle_task_failed(self, engagement_id: int, task_key: str, error: str):
         # Example triggering Playbook 3 (WAF Evasion) if a task fails due to 403
@@ -191,6 +200,14 @@ class AutomationEngine:
 
     def _roe_scope_context(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {key: payload[key] for key in ROE_SCOPE_CONTEXT_KEYS if key in payload}
+
+    def _is_rce_candidate(self, row: sqlite3.Row) -> bool:
+        text = " ".join(
+            str(row[key] or "")
+            for key in ("vuln_type", "title")
+            if key in row.keys()
+        ).lower()
+        return "rce" in text or "remote code execution" in text
 
     def get_suggestions(self) -> list[Suggestion]:
         if not self.db_path.exists():
@@ -450,23 +467,26 @@ class AutomationEngine:
 
     def _suggest_reporting(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
         # If we have any findings, suggest generating a report
-        row = conn.execute(
+        deterministic_total = len(_reportable_vulnerability_rows(conn, self.engagement_id))
+        passive_row = conn.execute(
             """
-            SELECT 
-                (SELECT COUNT(*) FROM vulnerability_findings WHERE engagement_id = ?) +
-                (SELECT COUNT(*) FROM passive_vulns WHERE engagement_id = ?) as total
+            SELECT COUNT(*) as total
+            FROM passive_vulns
+            WHERE engagement_id = ? AND COALESCE(false_positive, 0)=0
             """,
-            (self.engagement_id, self.engagement_id),
+            (self.engagement_id,),
         ).fetchone()
+        passive_total = int(passive_row["total"] or 0) if passive_row else 0
+        total = deterministic_total + passive_total
 
-        if row and row["total"] > 0:
+        if total > 0:
             suggestions.append(
                 Suggestion(
                     id="report-generate",
                     title="Generate interim engagement report",
                     action="report:generate",
                     params={"engagement_id": self.engagement_id},
-                    reason=f"Found {row['total']} total vulnerabilities/findings.",
+                    reason=f"Found {total} total reportable vulnerabilities/findings.",
                     priority=40,
                     category="report",
                 )

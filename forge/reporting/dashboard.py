@@ -652,6 +652,8 @@ def _reportable_vulnerability_rows(
     if not columns:
         return []
     select_parts = [
+        "id" if "id" in columns else "NULL AS id",
+        "host_id" if "host_id" in columns else "NULL AS host_id",
         "severity" if "severity" in columns else "'INFO' AS severity",
         "vuln_type" if "vuln_type" in columns else "NULL AS vuln_type",
         "title" if "title" in columns else "NULL AS title",
