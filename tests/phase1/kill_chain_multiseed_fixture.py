@@ -5,9 +5,104 @@ from pathlib import Path
 from typing import Any
 
 from forge.engagement_orchestrator import ArtifactDownloadResult, ArtifactQueueProcessor
+from forge.reporting.dashboard import generate_dashboard
 
 OPENID_URL = "https://login.acme.test/.well-known/openid-configuration"
 JWKS_URL = "https://login.acme.test/.well-known/jwks.json"
+VALIDATED_PUBLIC_METADATA_IDENTIFIERS = (
+    "csafe2evault",
+    "sbom-e2e-firebase",
+    "passkeye2evault",
+    "sshknowne2evault",
+    "pki-e2e-firebase",
+    "gpce2evault",
+    "tdm-e2e-firebase",
+    "pubvendorse2evault",
+    "truste2evault",
+    "dnt-e2e-firebase",
+    "privacysandboxe2evault",
+    "agentcarde2evault",
+    "api-catalog-e2e-firebase",
+    "orde2evault",
+    "mercuree2evault",
+    "webweaver-e2e-firebase",
+    "didconfige2evault",
+    "keybasee2evault",
+    "smartconfig-e2e-firebase",
+    "terraformconfige2evault",
+)
+
+
+def assert_dashboard_review_visibility(
+    *,
+    data_dir: Path,
+    reports_dir: Path,
+    engagement_id: int,
+    fallback_reason: str,
+) -> None:
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    site_root = reports_dir / "dashboard"
+    overview = json.loads((site_root / "data" / "engagements.json").read_text(encoding="utf-8"))
+    item = next(row for row in overview["items"] if row["id"] == str(engagement_id))
+    slug = item["slug"]
+    assert slug.startswith(f"engagement-{engagement_id}-")
+    assert slug.endswith("acme-test")
+    assert item["detail_route"] == f"engagements/{slug}/"
+    assert item["run_summary"]["status"] == "completed"
+
+    detail_page = site_root / "engagements" / slug / "index.html"
+    detail_json = site_root / "data" / "engagements" / f"{slug}.json"
+    assert detail_page.exists()
+    assert detail_json.exists()
+    detail_html = detail_page.read_text(encoding="utf-8")
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+
+    report_summary = detail_payload["report_summary"]
+    assert report_summary["provider"] == "template"
+    assert report_summary["requested_provider"] == "auto"
+    assert report_summary["render_backend"] == "template"
+    assert report_summary["fallback_reason"] == fallback_reason
+    assert str(report_summary["findings_checksum"]).startswith("sha256:")
+    assert {item["label"] for item in report_summary["available_exports"]} == {
+        "Markdown",
+        "PDF",
+        "Report JSON",
+        "CSV",
+    }
+
+    run_summary = detail_payload["run_summary"]
+    assert run_summary["status"] == "completed"
+    assert int(run_summary["current_iteration"]) < 4
+    assert (run_summary["metadata"] or {}).get("last_iteration_stable") is True
+    assert "artifact-owner@acme.test" in detail_payload["seeds"]
+
+    findings = detail_payload["sections"]["vulnerability_findings"]
+    assert {row["Title"] for row in findings} >= {
+        "Validated Firebase data exposure",
+        "Validated Supabase data exposure",
+    }
+    assert not any("dead-firebase-prod" in json.dumps(row, sort_keys=True) for row in findings)
+
+    validation_rows = {
+        (row["Type"], row["Asset"]): row
+        for row in detail_payload["sections"]["cloud_validation_results"]
+    }
+    assert validation_rows[("firebase", "dead-firebase-prod")]["Status"] == "UNVERIFIED"
+    assert validation_rows[("supabase", "acmebase")]["Status"] == "VALIDATED"
+
+    graph_payload = detail_payload["graph_payload"]
+    vuln_nodes = [
+        node
+        for node in graph_payload["nodes"]
+        if node.get("source_table") == "vulnerability_findings"
+    ]
+    assert vuln_nodes
+    assert all((node.get("metadata") or {}).get("validation_status") == "VALIDATED" for node in vuln_nodes)
+    assert not any("dead-firebase-prod" in json.dumps(node, sort_keys=True) for node in vuln_nodes)
+    assert "Maltego Workspace" in detail_html
+    assert f"Fallback reason: {fallback_reason}" in detail_html
 
 
 def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:

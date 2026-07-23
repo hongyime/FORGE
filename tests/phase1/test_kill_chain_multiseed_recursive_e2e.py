@@ -17,6 +17,8 @@ from forge.phase6.report_synthesizer import ReportSynthesizer
 from tests.phase1.kill_chain_multiseed_fixture import (
     JWKS_URL,
     OPENID_URL,
+    VALIDATED_PUBLIC_METADATA_IDENTIFIERS,
+    assert_dashboard_review_visibility,
     install_remote_metadata_download_mock,
     write_local_artifact_fixtures,
 )
@@ -767,28 +769,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         and (node.get("metadata") or {}).get("validation_status") == "UNSUPPORTED"
         for node in graph["nodes"]
     )
-    for identifier in (
-        "csafe2evault",
-        "sbom-e2e-firebase",
-        "passkeye2evault",
-        "sshknowne2evault",
-        "pki-e2e-firebase",
-        "gpce2evault",
-        "tdm-e2e-firebase",
-        "pubvendorse2evault",
-        "truste2evault",
-        "dnt-e2e-firebase",
-        "privacysandboxe2evault",
-        "agentcarde2evault",
-        "api-catalog-e2e-firebase",
-        "orde2evault",
-        "mercuree2evault",
-        "webweaver-e2e-firebase",
-        "didconfige2evault",
-        "keybasee2evault",
-        "smartconfig-e2e-firebase",
-        "terraformconfige2evault",
-    ):
+    for identifier in VALIDATED_PUBLIC_METADATA_IDENTIFIERS:
         assert any(
             node.get("source_table") == "cloud_assets"
             and (node.get("metadata") or {}).get("identifier") == identifier
@@ -889,28 +870,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         and item.get("validation_status") == "UNSUPPORTED"
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
-    for identifier in (
-        "csafe2evault",
-        "sbom-e2e-firebase",
-        "passkeye2evault",
-        "sshknowne2evault",
-        "pki-e2e-firebase",
-        "gpce2evault",
-        "tdm-e2e-firebase",
-        "pubvendorse2evault",
-        "truste2evault",
-        "dnt-e2e-firebase",
-        "privacysandboxe2evault",
-        "agentcarde2evault",
-        "api-catalog-e2e-firebase",
-        "orde2evault",
-        "mercuree2evault",
-        "webweaver-e2e-firebase",
-        "didconfige2evault",
-        "keybasee2evault",
-        "smartconfig-e2e-firebase",
-        "terraformconfige2evault",
-    ):
+    for identifier in VALIDATED_PUBLIC_METADATA_IDENTIFIERS:
         assert any(
             item.get("identifier") == identifier
             and item.get("validation_status") == "VALIDATED"
@@ -965,28 +925,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         and row.get("validation_status") == "UNSUPPORTED"
         for row in validation_rows
     )
-    for identifier in (
-        "csafe2evault",
-        "sbom-e2e-firebase",
-        "passkeye2evault",
-        "sshknowne2evault",
-        "pki-e2e-firebase",
-        "gpce2evault",
-        "tdm-e2e-firebase",
-        "pubvendorse2evault",
-        "truste2evault",
-        "dnt-e2e-firebase",
-        "privacysandboxe2evault",
-        "agentcarde2evault",
-        "api-catalog-e2e-firebase",
-        "orde2evault",
-        "mercuree2evault",
-        "webweaver-e2e-firebase",
-        "didconfige2evault",
-        "keybasee2evault",
-        "smartconfig-e2e-firebase",
-        "terraformconfige2evault",
-    ):
+    for identifier in VALIDATED_PUBLIC_METADATA_IDENTIFIERS:
         assert any(
             row.get("cloud_identifier") == identifier
             and row.get("validation_status") == "VALIDATED"
@@ -996,4 +935,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         row.get("cloud_identifier") == "com.acme.portal"
         and row.get("validation_status") == "UNSUPPORTED"
         for row in validation_rows
+    )
+    assert_dashboard_review_visibility(
+        data_dir=data_dir,
+        reports_dir=tmp_path / "reports",
+        engagement_id=EID,
+        fallback_reason="mock quota exhausted",
     )
