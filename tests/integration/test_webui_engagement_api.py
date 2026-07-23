@@ -249,6 +249,16 @@ def _build_engagement(tmp_path: Path) -> Path:
         "record_type,engagement_id\nsummary,1001\n",
         encoding="utf-8",
     )
+    (reports_dir / "audit_1001_manifest_20260709T014413.json").write_text(
+        json.dumps(
+            {
+                "engagement_id": 1001,
+                "manifest_hash": "sha256:api-audit-fixture",
+                "verification_status": "verified",
+            }
+        ),
+        encoding="utf-8",
+    )
     (reports_dir / "1001_attack_graph.graphml").write_text(
         """
         <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
@@ -299,6 +309,8 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["severity_summary"]["HIGH"] == 1
         assert items[0]["counts"]["seed_runs"] == 1
         assert items[0]["counts"]["engagement_runs"] == 1
+        assert items[0]["report_count"] == 4
+        assert items[0]["audit_count"] == 1
         assert items[0]["counts"]["email_intelligence"] == 2
         assert items[0]["run_summary"]["status"] == "completed"
         assert items[0]["run_summary"]["metadata"]["phase"] == "completed"
@@ -336,10 +348,21 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
             "engagement_1001_report_20260709T014412.json",
             "engagement_1001_report_20260709T014412.pdf",
             "engagement_1001_report_20260709T014412.csv",
+            "audit_1001_manifest_20260709T014413.json",
         }
+        audit_artifact = next(
+            artifact
+            for artifact in detail["artifacts"]
+            if artifact["name"] == "audit_1001_manifest_20260709T014413.json"
+        )
+        assert audit_artifact["kind"] == "audit"
         assert (
             "/api/engagements/engagement-1001-acme-example/artifacts/"
             "engagement_1001_report_20260709T014412.json"
+        ) in {artifact["href"] for artifact in detail["artifacts"]}
+        assert (
+            "/api/engagements/engagement-1001-acme-example/artifacts/"
+            "audit_1001_manifest_20260709T014413.json"
         ) in {artifact["href"] for artifact in detail["artifacts"]}
         assert detail["sections"]["hosts"][0]["Host"] == "app.acme.example"
         assert detail["sections"]["cloud_validation_results"][0]["Asset"] == "acme-firebase-prod"
@@ -398,6 +421,13 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         )
         assert artifact_resp.status_code == 200, artifact_resp.text
         assert artifact_resp.content.startswith(b"%PDF-1.4")
+        audit_artifact_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/artifacts/"
+            "audit_1001_manifest_20260709T014413.json",
+            headers=headers,
+        )
+        assert audit_artifact_resp.status_code == 200, audit_artifact_resp.text
+        assert audit_artifact_resp.json()["verification_status"] == "verified"
 
         create_name_seed = client.post(
             "/api/engagements/engagement-1001-acme-example/seeds",
@@ -437,6 +467,7 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
         "engagement_1001_report_20260709T014412.md",
         "engagement_1001_report_20260709T014412.json",
         "engagement_1001_report_20260709T014412.pdf",
+        "engagement_1001_report_20260709T014412.csv",
     ):
         (reports_dir / artifact_name).unlink()
     (reports_dir / "engagement_1001_raw_export_20260709T014412.json").write_text(

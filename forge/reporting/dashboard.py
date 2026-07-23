@@ -533,20 +533,35 @@ def _relative_href(source_page: Path, target_path: Path) -> str:
     return rel.replace("\\", "/")
 
 
-def _artifact_files(eng_id: str, reports_dir: Path) -> list[Path]:
+def _files_matching(reports_dir: Path, patterns: tuple[str, ...]) -> list[Path]:
     matches: list[Path] = []
-    for pattern in (
-        f"engagement_{eng_id}*.md",
-        f"engagement_{eng_id}*.pdf",
-        f"engagement_{eng_id}*.json",
-        f"engagement_{eng_id}*.csv",
-        f"audit_{eng_id}*.md",
-        f"audit_{eng_id}*.pdf",
-        f"audit_{eng_id}*.json",
-        f"audit_{eng_id}*.csv",
-    ):
+    for pattern in patterns:
         matches.extend(reports_dir.glob(pattern))
     return sorted(set(matches), key=lambda path: (path.suffix, path.name.lower()))
+
+
+def _artifact_files(eng_id: str, reports_dir: Path) -> list[Path]:
+    return _files_matching(
+        reports_dir,
+        (
+            f"engagement_{eng_id}*.md",
+            f"engagement_{eng_id}*.pdf",
+            f"engagement_{eng_id}*.json",
+            f"engagement_{eng_id}*.csv",
+        ),
+    )
+
+
+def _audit_files(eng_id: str, reports_dir: Path) -> list[Path]:
+    return _files_matching(
+        reports_dir,
+        (
+            f"audit_{eng_id}*.md",
+            f"audit_{eng_id}*.pdf",
+            f"audit_{eng_id}*.json",
+            f"audit_{eng_id}*.csv",
+        ),
+    )
 
 
 def _graph_files(eng_id: str, reports_dir: Path) -> list[Path]:
@@ -3220,6 +3235,7 @@ def _render_engagement_page(
     highest_severity = engagement.get("highest_severity", "INFO")
     graph_files = engagement["graph_files"]
     report_files = engagement["report_files"]
+    audit_files = engagement.get("audit_files", [])
     run_summary = engagement.get("run_summary") or {}
     meta_blocks = [
         _render_meta_block("Engagement ID", engagement["id"], mono=True),
@@ -3258,10 +3274,15 @@ def _render_engagement_page(
         else '<div class="empty">No seed history found for this engagement.</div>'
     )
 
-    artifact_cards = "".join(_render_artifact_card(page_path, path, "report") for path in report_files) + "".join(
-        _render_artifact_card(page_path, path, "graph") for path in graph_files
+    artifact_cards = (
+        "".join(_render_artifact_card(page_path, path, "report") for path in report_files)
+        + "".join(_render_artifact_card(page_path, path, "graph") for path in graph_files)
+        + "".join(_render_artifact_card(page_path, path, "audit") for path in audit_files)
     )
-    artifact_block = artifact_cards or '<div class="empty">No report or graph artifacts were found beside the engagement DB.</div>'
+    artifact_block = (
+        artifact_cards
+        or '<div class="empty">No report, graph, or audit artifacts were found beside the engagement DB.</div>'
+    )
 
     latest_report_files = _latest_report_family_files(report_files)
     preview_files = [path for path in latest_report_files if path.suffix.lower() == ".md"]
@@ -3320,6 +3341,7 @@ def _render_engagement_page(
           <span class="chip">{html.escape(engagement['status'] or 'unknown')}</span>
           <span class="chip">{len(report_files)} reports</span>
           <span class="chip">{len(graph_files)} graph artifacts</span>
+          <span class="chip">{len(audit_files)} audit artifacts</span>
           {''.join(f'<span class="chip">{html.escape(str(tag))}</span>' for tag in engagement.get('tags', []))}
         </div>
         <h1>{html.escape(engagement['name'])}</h1>
@@ -3371,7 +3393,7 @@ def _render_engagement_page(
             </div>
             <div class="lane">
               <div class="eyebrow">Evidence</div>
-              <div class="figure">{len(report_files) + len(graph_files)}</div>
+              <div class="figure">{len(report_files) + len(graph_files) + len(audit_files)}</div>
               <div class="tiny muted">Artifacts linked here</div>
             </div>
           </div>
@@ -3462,6 +3484,7 @@ def _engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
         "seed_graph_summary": engagement.get("seed_graph_summary", {}),
         "report_count": len(engagement["report_files"]),
         "graph_count": len(engagement["graph_files"]),
+        "audit_count": len(engagement.get("audit_files", [])),
         "detail_route": engagement["detail_route"],
         "detail_data": engagement["detail_data"],
     }
@@ -3478,6 +3501,9 @@ def _engagement_detail_payload(engagement: dict[str, Any], root_page: Path) -> d
     ] + [
         _artifact_payload(root_page, path, kind="graph")
         for path in engagement["graph_files"]
+    ] + [
+        _artifact_payload(root_page, path, kind="audit")
+        for path in engagement.get("audit_files", [])
     ]
     payload = {
         **_engagement_index_payload(engagement),
@@ -3521,6 +3547,7 @@ def generate_dashboard(
         item = _engagement_summary(db_path)
         item["report_files"] = _artifact_files(item["id"], reports_dir)
         item["graph_files"] = _graph_files(item["id"], reports_dir)
+        item["audit_files"] = _audit_files(item["id"], reports_dir)
         con = _connect_readonly(db_path)
         if con is not None:
             try:

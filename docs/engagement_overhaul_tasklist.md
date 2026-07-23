@@ -88,6 +88,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Dashboard/API audit-artifact review parity checkpoint: static dashboard
+  JSON/HTML and the live web API now split report artifacts from audit exports,
+  keep `report_count` report-only, expose `audit_count`, surface audit files in
+  detail payloads as `kind: "audit"`, and allow slug-based audit artifact
+  downloads through the existing artifact route. Verification: TDD focused
+  dashboard/API regressions first failed (`2 failed`) because audit JSON
+  inflated `report_count`; compile/Ruff passed; focused route tests passed (`2
+  passed`); dashboard parity slice passed (`7 passed, 10 deselected`); web API
+  parity slice passed (`8 passed, 19 deselected`); compact cross-phase smoke
+  passed (`3 passed, 1 deselected`); cleanup removed two pytest engagement dirs
+  and left `remaining_pytest_engagement_dirs=0`; persistent DB inventory remains
+  `1`, `5010`, `master.db`; no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-23-dashboard-audit-artifact-parity.md`.
+  Safety: dashboard/API artifact classification and tests only; no live
+  probing, provider calls, credential use, scope changes, validation-gate
+  changes, report-gate changes, severity changes, proxy/IP rotation, or
+  rate-limit bypass.
 - [x] End-goal source-of-truth refresh checkpoint: `END_GOAL.md`,
   `docs/end_goal.md`, and `docs/deterministic_engagement_contract.md` now state
   explicitly that stale runtime `/goal` labels do not redefine the product

@@ -566,6 +566,16 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "record_type,engagement_id\nsummary,1001\n",
         encoding="utf-8",
     )
+    (reports_dir / "audit_1001_manifest_20260709T014413.json").write_text(
+        json.dumps(
+            {
+                "engagement_id": 1001,
+                "manifest_hash": manifest_hash,
+                "verification_status": "verified",
+            }
+        ),
+        encoding="utf-8",
+    )
     (reports_dir / "1001_attack_graph.graphml").write_text(
         """
         <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
@@ -620,6 +630,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["highest_severity"] == "HIGH"
     assert overview_payload["items"][0]["severity_summary"]["HIGH"] == 1
     assert overview_payload["items"][0]["report_count"] == 4
+    assert overview_payload["items"][0]["audit_count"] == 1
     assert overview_payload["items"][0]["counts"]["seed_runs"] == 1
     assert overview_payload["items"][0]["counts"]["engagement_runs"] == 1
     assert overview_payload["items"][0]["counts"]["email_intelligence"] == 2
@@ -723,12 +734,20 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "engagement_1001_report_20260709T014412.md",
         "engagement_1001_report_20260709T014412.json",
         "engagement_1001_report_20260709T014412.pdf",
+        "audit_1001_manifest_20260709T014413.json",
     }
-    assert {artifact["kind"] for artifact in detail_payload["artifacts"]} == {"graph", "report"}
+    audit_artifact = next(
+        artifact
+        for artifact in detail_payload["artifacts"]
+        if artifact["name"] == "audit_1001_manifest_20260709T014413.json"
+    )
+    assert audit_artifact["kind"] == "audit"
+    assert {artifact["kind"] for artifact in detail_payload["artifacts"]} == {"audit", "graph", "report"}
 
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Maltego Workspace" in detail_html
     assert "Audit Timeline" in detail_html
+    assert 'artifact-kind">audit</span>' in detail_html
     assert "Email Intelligence" in detail_html
     assert "Fallback reason: quota exceeded" in detail_html
     assert "Report JSON" in detail_html

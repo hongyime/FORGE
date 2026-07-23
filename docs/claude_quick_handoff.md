@@ -55,6 +55,15 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Dashboard/API audit-artifact review parity completed: static dashboard
+  detail JSON/HTML and live web API detail payloads now expose audit exports as
+  `kind: "audit"` artifacts with separate `audit_count`, while `report_count`
+  remains report-only. Slug artifact download works for audit JSON. Verification
+  included failing TDD first (`2 failed`), compile/Ruff, focused dashboard/API
+  slices, compact cross-phase smoke, cleanup
+  `remaining_pytest_engagement_dirs=0`, persistent DB inventory `1`, `5010`,
+  `master.db`, and no Python/pytest process remains. Handoff:
+  `.claude/handoffs/2026-07-23-dashboard-audit-artifact-parity.md`.
 - [x] End-goal source-of-truth refresh completed: the active product target is
   explicitly locked to `FORGE-DETERMINISTIC-ASM-PIPELINE-v1` even when runtime
   `/goal` text is stale. `END_GOAL.md`, `docs/end_goal.md`,

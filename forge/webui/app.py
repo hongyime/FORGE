@@ -788,21 +788,32 @@ def create_app() -> Any:
             raise HTTPException(status_code=500, detail="Seed insert failed.")
         return int(row[0])
 
-    def _report_files(engagement_id: int) -> list[Path]:
+    def _files_matching(patterns: tuple[str, ...]) -> list[Path]:
         reports_dir = _reports_dir()
         matches: list[Path] = []
-        for pattern in (
-            f"engagement_{engagement_id}*.md",
-            f"engagement_{engagement_id}*.pdf",
-            f"engagement_{engagement_id}*.json",
-            f"engagement_{engagement_id}*.csv",
-            f"audit_{engagement_id}*.md",
-            f"audit_{engagement_id}*.pdf",
-            f"audit_{engagement_id}*.json",
-            f"audit_{engagement_id}*.csv",
-        ):
+        for pattern in patterns:
             matches.extend(reports_dir.glob(pattern))
         return sorted(set(matches), key=lambda path: (path.suffix, path.name.lower()))
+
+    def _report_files(engagement_id: int) -> list[Path]:
+        return _files_matching(
+            (
+                f"engagement_{engagement_id}*.md",
+                f"engagement_{engagement_id}*.pdf",
+                f"engagement_{engagement_id}*.json",
+                f"engagement_{engagement_id}*.csv",
+            ),
+        )
+
+    def _audit_files(engagement_id: int) -> list[Path]:
+        return _files_matching(
+            (
+                f"audit_{engagement_id}*.md",
+                f"audit_{engagement_id}*.pdf",
+                f"audit_{engagement_id}*.json",
+                f"audit_{engagement_id}*.csv",
+            ),
+        )
 
     def _artifact_payload(engagement_ref: str, artifact: Path, kind: str) -> dict[str, Any]:
         stat = artifact.stat()
@@ -858,6 +869,7 @@ def create_app() -> Any:
         slug_source = str(row["name"] or primary_seed or f"engagement-{engagement_id}")
         slug = f"engagement-{engagement_id}-{_slugify(slug_source)}"
         report_files = _report_files(engagement_id)
+        audit_files = _audit_files(engagement_id)
         graph_files = _graph_files(str(engagement_id), _reports_dir())
         severity_summary = _severity_summary(con, engagement_id)
         graph_summary, _graph_payload, _graph_snapshot_at = _graph_state_for_engagement(
@@ -891,6 +903,7 @@ def create_app() -> Any:
             ),
             "seed_graph_summary": _seed_graph_summary(con, engagement_id),
             "report_count": len(report_files),
+            "audit_count": len(audit_files),
             "graph_count": len(graph_files),
             "detail_route": f"/engagements/{slug}",
             "detail_api": f"/api/engagements/{slug}",
@@ -904,9 +917,12 @@ def create_app() -> Any:
         summary = _engagement_summary_payload(db_file, con, row)
         engagement_id = int(row["id"])
         report_files = _report_files(engagement_id)
+        audit_files = _audit_files(engagement_id)
         graph_files = _graph_files(str(engagement_id), _reports_dir())
         artifacts = [_artifact_payload(summary["slug"], path, "report") for path in report_files] + [
             _artifact_payload(summary["slug"], path, "graph") for path in graph_files
+        ] + [
+            _artifact_payload(summary["slug"], path, "audit") for path in audit_files
         ]
         report_history = _report_history_payload(report_files)
         preview_files = [
@@ -925,6 +941,7 @@ def create_app() -> Any:
             "artifacts": artifacts,
             "report_previews": [_report_preview_payload(path) for path in preview_files],
             "report_count": len(report_files),
+            "audit_count": len(audit_files),
             "graph_count": len(graph_files),
         }
         report_summary = _report_summary_payload(report_files)
@@ -1008,7 +1025,7 @@ def create_app() -> Any:
                     summary = _engagement_summary_payload(db_file, con, row)
                     if ref not in {str(summary["id"]).lower(), str(summary["slug"]).lower()}:
                         continue
-                    files = _report_files(int(summary["id"])) + _graph_files(
+                    files = _report_files(int(summary["id"])) + _audit_files(int(summary["id"])) + _graph_files(
                         str(summary["id"]),
                         _reports_dir(),
                     )
