@@ -25,31 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: auto-run finalization ordering is complete. Kill-chain
-completion now happens after prerequisite detection and optional
-`--auto-run-detected` follow-on execution. Final run metadata records detected
-and auto-run prerequisite counts, the run manifest is written after
-`prereq_auto_run` audit evidence lands, and dashboard refresh now runs after
-final completion so review surfaces see late DB changes.
+Latest checkpoint: Fan-out J direct validation scope callback is complete. The
+per-iteration direct `run_cloud_asset_validate_batch()` call now passes the
+shared cloud asset scope checker and denied callback into the lower-level
+validator. The out-of-scope cloud pivot regression proves only the allowed
+target reaches validation and the callbacks still classify denied targets.
 
-Verification: compile/Ruff passed; focused auto-run finalization regression
-passed (`1 passed, 758 deselected`); adjacent lifecycle/finalization slice
-passed (`5 passed, 754 deselected`); kill-chain convergence suite passed
-(`3 passed`); recursive multi-seed mocked E2E passed (`1 passed`); pytest
-engagement cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
-`.claude/handoffs/2026-07-24-auto-run-finalization-ordering.md`. Commit:
-`fa25d99`.
+Verification: compile/Ruff passed; focused Fan-out J scope regression passed
+(`1 passed, 758 deselected`); adjacent CLI cloud/key/artifact scope slice passed
+(`3 passed, 756 deselected`); lower-level cloud validation scope slice passed
+(`4 passed, 129 deselected`); pytest engagement cleanup reported
+`removed=4 remaining=0 post_scan=0`. Handoff:
+`.claude/handoffs/2026-07-24-fanout-j-direct-validation-scope-callback.md`.
+Commit: `87a3a5d`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: audit Fan-out J direct cloud validation call boundaries and
-ensure every direct cloud asset validation path passes the available scope
-checker/denied callback into lower-level validators. Add a mocked out-of-scope
-direct cloud asset regression proving zero provider calls and a persisted
-scope-denied validation inventory row.
+Current next gate: audit configurable recursion/concurrency budgets. Current
+hardcoded defaults noted by sidecar audit include
+`EngagementSynthesisEngine(..., depth_limit=3)` and pending validation batch size
+`16`; decide whether engagement config/env should control them, add validation
+bounds, and prove slow-and-steady defaults remain deterministic.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

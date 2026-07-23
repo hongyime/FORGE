@@ -176,11 +176,26 @@ historical notes only, not as current instructions.
   `.claude/handoffs/2026-07-24-auto-run-finalization-ordering.md`. Commit:
   `fa25d99`.
 - [ ] Next gate:
-  Audit Fan-out J direct cloud validation call boundaries and ensure every direct
-  cloud asset validation path passes the available scope checker/denied callback
-  into lower-level validators. Add a mocked out-of-scope direct cloud asset
-  regression proving zero provider calls and a persisted scope-denied validation
-  inventory row.
+- [x] Fan-out J direct validation scope callback checkpoint:
+  The per-iteration direct `run_cloud_asset_validate_batch()` call now passes the
+  shared cloud asset scope checker and denied callback into the lower-level
+  validator. The existing out-of-scope cloud pivot regression now also asserts
+  the direct validator receives callbacks that classify the allowed Supabase
+  target as in scope and the denied Firebase target as out of scope, while only
+  the allowed target reaches validation. Verification: compile passed; Ruff
+  passed; focused Fan-out J scope regression passed
+  (`1 passed, 758 deselected`); adjacent CLI cloud/key/artifact scope slice
+  passed (`3 passed, 756 deselected`); lower-level cloud validation scope slice
+  passed (`4 passed, 129 deselected`); pytest engagement cleanup reported
+  `removed=4 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-fanout-j-direct-validation-scope-callback.md`.
+  Commit: `87a3a5d`.
+- [ ] Next gate:
+  Audit configurable recursion/concurrency budgets. Current hardcoded defaults
+  noted by sidecar audit include `EngagementSynthesisEngine(..., depth_limit=3)`
+  and pending validation batch size `16`; decide whether engagement config/env
+  should control them, add validation bounds, and prove slow-and-steady defaults
+  remain deterministic.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
