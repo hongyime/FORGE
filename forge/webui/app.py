@@ -1086,21 +1086,34 @@ def create_app() -> Any:
         _subject: str = Depends(_auth_subject),
     ) -> dict[str, str]:
         engagement_id = body.get("engagement_id")
-        action = body.get("action")
+        action = str(body.get("action") or "").strip()
         params = body.get("params", {})
 
         if not engagement_id or not action:
             raise HTTPException(status_code=400, detail="engagement_id and action are required.")
+        if not isinstance(params, dict):
+            raise HTTPException(status_code=400, detail="params must be an object.")
 
-        # Re-use existing enqueue logic
+        allowed_actions = {
+            "recon:ports": "ports",
+            "recon:crawl": "crawl",
+            "vuln:passive": "passive",
+        }
+        task_type = allowed_actions.get(action)
+        if task_type is None:
+            raise HTTPException(status_code=400, detail="Unsupported automation action.")
+
+        target = str(params.get("target") or "").strip()
+        if not target:
+            raise HTTPException(status_code=400, detail="target is required for automation action.")
+
+        # Re-use existing enqueue logic for admitted passive/recon suggestions.
         scheduler = TaskScheduler(
             db_path=cfg.engagement_db_path(str(engagement_id)),
             queue=coordinator,
             event_publisher=_publish_progress_sync,
         )
 
-        task_type = action.split(":")[-1]
-        target = params.get("target", "default")
         task_key = f"{task_type}:{target}"
 
         scheduler.schedule(

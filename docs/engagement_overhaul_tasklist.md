@@ -362,12 +362,26 @@ sentences as historical notes only, not as current instructions.
   only; no exploit lookup calls, exploitation, post-exploitation, provider
   calls, live probing, credential use, scope changes, proxy/IP rotation,
   rate-limit bypass, or new playbook capabilities.
-- [ ] Next implementation target: audit `/api/automation/execute` action
-  admission. Add the smallest failing API/route test first, then reject
-  unsupported or sensitive action names before scheduling. Preserve supported
-  passive/recon suggestions, and do not add provider calls, live probing,
-  credential use, exploitation, post-exploitation, proxy/IP behavior,
-  rate-limit bypass, or new playbook capabilities.
+- [x] Automation execute action-admission checkpoint:
+  `/api/automation/execute` now rejects unsupported or sensitive action names
+  before queue writes and only schedules currently supported passive/recon
+  automation actions: `recon:ports`, `recon:crawl`, and `vuln:passive`.
+  Backprop: `SPEC.md` `B19`; existing `V3`/`V6`/`V10`/`V12`/`V13` cover the
+  gate. Verification: failing API TDD first showed unsupported/sensitive
+  actions queued (`exploit:correlate`, `exploit:safe_check`, `post:lateral`,
+  `auth:spray`, `unknown:thing`); focused API regression passed (`6 passed`);
+  compile/Ruff passed; full web UI engagement API suite passed (`34 passed`);
+  adjacent playbook suggestion suite passed (`17 passed`); cleanup
+  `test_owned_engagement_db_count=0`. Safety: admission control only; no
+  provider calls, live probing, credential use, exploitation, post-exploitation,
+  proxy/IP behavior, rate-limit bypass, or new playbook capabilities.
+- [ ] Next implementation target: audit automation suggestions that point to
+  unsupported route actions, starting with `_suggest_osint_enrichment()` and
+  `osint:dehashed`. Add the smallest failing suggestion/route parity test
+  first, then suppress, reclassify, or wire only a scoped passive supported
+  action. Do not add provider calls, live probing, credential use, exploitation,
+  post-exploitation, proxy/IP behavior, rate-limit bypass, or new playbook
+  capabilities.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

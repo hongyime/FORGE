@@ -25,10 +25,10 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: automation execute action admission. Audit
-`/api/automation/execute` and write the smallest failing API/route test first,
-then reject unsupported or sensitive action names before scheduling while
-preserving supported passive/recon suggestions.
+Current next gate: unsupported automation suggestion actions. Audit
+`_suggest_osint_enrichment()` and `osint:dehashed`, then write the smallest
+failing suggestion/route parity test first. Suppress, reclassify, or wire only a
+scoped passive supported action; do not add provider calls or new live behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -63,6 +63,18 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Automation execute action-admission checkpoint completed:
+  `/api/automation/execute` now rejects unsupported or sensitive action names
+  before queue writes and only schedules currently supported passive/recon
+  automation actions: `recon:ports`, `recon:crawl`, and `vuln:passive`.
+  Backprop: `SPEC.md` `B19`; existing `V3`/`V6`/`V10`/`V12`/`V13` cover the
+  gate. Verification: failing API TDD first showed unsupported/sensitive
+  actions queued (`exploit:correlate`, `exploit:safe_check`, `post:lateral`,
+  `auth:spray`, `unknown:thing`); focused API regression passed (`6 passed`);
+  compile/Ruff; full web UI engagement API suite (`34 passed`); adjacent
+  playbook suggestion suite (`17 passed`); cleanup
+  `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-automation-execute-action-admission.md`.
 - [x] Legacy exploit-correlation suggestion guardrail completed:
   `AutomationEngine` no longer emits `exploit:correlate` suggestions from
   passive service version strings by default. The web automation executor has no

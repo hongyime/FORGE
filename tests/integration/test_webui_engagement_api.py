@@ -2528,3 +2528,91 @@ def test_launch_route_rejects_overlapping_running_engagement_run(tmp_path: Path,
         )
         assert response.status_code == 409, response.text
         assert "already active" in response.text
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "exploit:correlate",
+        "exploit:safe_check",
+        "post:lateral",
+        "auth:spray",
+        "unknown:thing",
+    ],
+)
+def test_automation_execute_rejects_unsupported_or_sensitive_actions(
+    tmp_path: Path,
+    monkeypatch,
+    action: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/automation/execute",
+            json={
+                "engagement_id": 1001,
+                "action": action,
+                "params": {"target": "https://app.acme.example"},
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 400, response.text
+    assert "unsupported automation action" in response.text.lower()
+    with sqlite3.connect(db_path) as con:
+        queued = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM distributed_tasks
+            WHERE engagement_id=1001
+            """
+        ).fetchone()[0]
+    assert queued == 0
+
+
+def test_automation_execute_allows_supported_passive_recon_action(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/automation/execute",
+            json={
+                "engagement_id": 1001,
+                "action": "recon:crawl",
+                "params": {"target": "https://app.acme.example"},
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["task_key"] == "crawl:https://app.acme.example"
+    with sqlite3.connect(db_path) as con:
+        row = con.execute(
+            """
+            SELECT task_key, status, payload
+            FROM distributed_tasks
+            WHERE engagement_id=1001
+            """
+        ).fetchone()
+    assert row is not None
+    assert row[0] == "crawl:https://app.acme.example"
+    assert row[1] == "queued"
+    assert json.loads(row[2])["task_type"] == "crawl"
