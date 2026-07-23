@@ -595,6 +595,22 @@ sentences as historical notes only, not as current instructions.
   Safety: mocked/offline E2E only; no external target, provider call, live
   probing, credential use, scope relaxation, validation-gate change,
   report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
+- [x] Multi-seed kill-chain E2E fixture modularization checkpoint:
+  the compact full-closeout multi-seed E2E kept its original pytest node and
+  behavior, but local passive artifact fixture generation plus mocked remote
+  OpenID/JWKS artifact download payloads moved into
+  `tests/phase1/kill_chain_multiseed_fixture.py`. This drops
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` from 621 to 444
+  lines while preserving the same recursive discovery, validation,
+  graph/report fallback, audit logging, and cleanup proof. Verification:
+  focused E2E `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` passed
+  (`1 passed` in 137.85s); compile passed; Ruff passed; cleanup left
+  `temp_pytest_engagement_dbs=0`, with persistent DB inventory unchanged at
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-multiseed-e2e-fixture-modularization.md`.
+  Safety: test-only modularization; no production code, provider call, live
+  probing, credential use, scope relaxation, validation-gate change,
+  report-gate change, severity change, proxy/IP rotation, or rate-limit bypass.
 - [ ] Next implementation target: continue concrete kill-chain coverage. Add
   the smallest mocked E2E or focused integration test that proves one missing
   recursive discovery path from `T1`/`T2` advances from discovered passive

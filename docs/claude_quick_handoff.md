@@ -25,18 +25,18 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: OpenID/OAuth kill-chain E2E parity is implemented. The
-focused mocked multi-seed recursive kill-chain E2E now includes mocked remote
-`.well-known/openid-configuration` and `.well-known/jwks.json` artifact seeds
-and proves OAuth contact email, authorization/token/userinfo/documentation URL
-pivots, linked JWKS URL/certificate pivots, and Supabase inventory enter the
-recursive engagement path before the same run completes validation, graph
-generation, deterministic template fallback reporting, audit logging, and
-cleanup checks. It also asserts templated OAuth/JWKS URLs stay suppressed.
-Verification: focused kill-chain E2E passed (`1 passed` in 136.66s),
+Latest checkpoint: multi-seed kill-chain E2E fixture modularization is
+implemented. The full-closeout E2E kept its original pytest node and behavior,
+but local passive artifact fixture generation plus mocked remote OpenID/JWKS
+artifact download payloads moved into
+`tests/phase1/kill_chain_multiseed_fixture.py`. This drops
+`tests/phase1/test_kill_chain_multiseed_recursive_e2e.py` from 621 to 444 lines
+while preserving recursive discovery, validation, graph generation,
+deterministic template fallback reporting, audit logging, and cleanup proof.
+Verification: focused kill-chain E2E passed (`1 passed` in 137.85s),
 compile/Ruff passed, and temp pytest DB cleanup remained clean. `SPEC.md` was
-not structurally edited for this checkpoint because `T2` remains ongoing and
-root `FORMAT.md` is absent.
+not structurally edited for this checkpoint because this is test-only
+modularization.
 
 Current next gate: continue concrete kill-chain coverage. Add the smallest
 mocked E2E or focused integration test that proves one missing recursive

@@ -12,9 +12,14 @@ import pytest
 
 import forge.cli as cli
 from forge.core.errors import ProviderUnavailableError
-from forge.engagement_orchestrator import ArtifactDownloadResult, ArtifactQueueProcessor
 from forge.phase4 import cloud_validate
 from forge.phase6.report_synthesizer import ReportSynthesizer
+from tests.phase1.kill_chain_multiseed_fixture import (
+    JWKS_URL,
+    OPENID_URL,
+    install_remote_metadata_download_mock,
+    write_local_artifact_fixtures,
+)
 
 EID = 4242
 SUPABASE_JWT = (
@@ -27,110 +32,7 @@ SUPABASE_JWT = (
 def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     data_dir = tmp_path / ".forge_data"
     db_path = data_dir / "engagements" / f"{EID}.db"
-    config = tmp_path / "data" / "artifacts" / "client-config.js"
-    config.parent.mkdir(parents=True)
-    config.write_text(
-        f"""
-        export const FIREBASE_URL = "https://artifact-firebase-prod.firebaseio.com";
-        export const FIREBASE_DUP = "https://artifact-firebase-prod.firebaseio.com";
-        export const DEAD_FIREBASE = "https://dead-firebase-prod.firebaseio.com";
-        export const SUPABASE_URL = "https://acmebase.supabase.co";
-        export const SUPABASE_ANON_KEY = "{SUPABASE_JWT}";
-        export const OWNER = "artifact-owner@acme.test";
-        export const DUPLICATE_OWNER = "ops@acme.test";
-        export const CONFIG_URL = "https://app.acme.test/config";
-        """.strip(),
-        encoding="utf-8",
-    )
-    opensearch = config.parent / "opensearch.xml"
-    opensearch.write_text(
-        """
-        <OpenSearchDescription
-            xmlns="http://a9.com/-/spec/opensearch/1.1/"
-            xmlns:moz="http://www.mozilla.org/2006/browser/search/">
-          <Url type="text/html"
-               template="https://search.acme.test/query?q={searchTerms}&amp;token=hidden&amp;view=public" />
-          <moz:SearchForm>https://search.acme.test/advanced</moz:SearchForm>
-          <Developer>search-owner@acme.test</Developer>
-        </OpenSearchDescription>
-        """.strip(),
-        encoding="utf-8",
-    )
-    saml_metadata = config.parent / "saml-metadata.xml"
-    saml_metadata.write_text(
-        """
-        <md:EntityDescriptor
-            xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
-            entityID="https://idp.acme.test/saml/metadata?tenant=hidden">
-          <md:IDPSSODescriptor>
-            <md:SingleSignOnService
-                Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
-                Location="https://login.acme.test/sso/login?SAMLRequest=secret&amp;client=acme" />
-            <md:SingleLogoutService
-                Location="//logout.acme.test/saml/logout#ignored" />
-            <md:ArtifactResolutionService
-                Location="https://artifact.acme.test/saml/artifact?token=secret" />
-          </md:IDPSSODescriptor>
-          <md:Organization>
-            <md:OrganizationURL xml:lang="en">
-              https://www.acme.test/security/sso?api_key=hidden
-            </md:OrganizationURL>
-          </md:Organization>
-          <md:ContactPerson>
-            <md:EmailAddress>sso-owner@acme.test</md:EmailAddress>
-          </md:ContactPerson>
-          <md:AdditionalMetadataLocation Location="/tenant/{id}/metadata.xml" />
-        </md:EntityDescriptor>
-        """.strip(),
-        encoding="utf-8",
-    )
-    feed = config.parent / "feed.xml"
-    feed.write_text(
-        """
-        <rss version="2.0"
-             xmlns:atom="http://www.w3.org/2005/Atom"
-             xmlns:media="http://search.yahoo.com/mrss/">
-          <channel>
-            <title>Acme Updates</title>
-            <link>https://news.acme.test/blog?token=hidden</link>
-            <atom:link rel="self" href="https://news.acme.test/feed.xml?signature=hidden" />
-            <item>
-              <link>https://news.acme.test/posts/launch?api_key=hidden&amp;view=public</link>
-              <media:content url="https://media.acme.test/demo.mp4#ignored" />
-            </item>
-            <managingEditor>feed-owner@acme.test</managingEditor>
-          </channel>
-        </rss>
-        """.strip(),
-        encoding="utf-8",
-    )
-    json_feed = config.parent / "feed.json"
-    json_feed.write_text(
-        json.dumps(
-            {
-                "version": "https://jsonfeed.org/version/1.1",
-                "title": "Acme JSON Updates",
-                "home_page_url": "https://jsonfeed.acme.test/blog?token=hidden",
-                "feed_url": "https://jsonfeed.acme.test/feed.json?signature=hidden",
-                "author": {
-                    "email": "json-feed-owner@acme.test",
-                    "url": "https://people.acme.test/json-feed-owner?api_key=hidden",
-                },
-                "items": [
-                    {
-                        "id": "json-launch",
-                        "url": "https://jsonfeed.acme.test/posts/launch?sig=hidden&view=public",
-                        "external_url": "https://cdn-json.acme.test/downloads/app.apk?signature=hidden",
-                        "attachments": [
-                            {"url": "https://media-json.acme.test/podcast.mp3#ignored"},
-                        ],
-                    }
-                ],
-            },
-            sort_keys=True,
-        ),
-        encoding="utf-8",
-    )
+    write_local_artifact_fixtures(tmp_path, supabase_jwt=SUPABASE_JWT)
     monkeypatch.chdir(tmp_path)
     for key, value in {
         "FORGE_DATA_DIR": str(data_dir),
@@ -161,87 +63,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     def blocked(*args, **kwargs):  # noqa: ANN002, ANN003
         raise AssertionError(f"external network disabled: {args!r} {kwargs!r}")
 
-    openid_url = "https://login.acme.test/.well-known/openid-configuration"
-    jwks_url = "https://login.acme.test/.well-known/jwks.json"
-    openid_body = json.dumps(
-        {
-            "issuer": "https://login.acme.test",
-            "authorization_endpoint": "/oauth2/v1/authorize",
-            "token_endpoint": "https://login-api.acme.test/oauth2/v1/token",
-            "userinfo_endpoint": "./userinfo",
-            "jwks_uri": jwks_url,
-            "service_documentation": "https://docs.acme.test/oauth#ignored",
-            "contacts": ["oauth-owner@acme.test"],
-            "templated_endpoint": "/oauth/{tenant}/authorize",
-            "supabase": {
-                "type": "supabase",
-                "projectRef": "openidvault",
-                "url": "https://openidvault.supabase.co",
-            },
-        },
-        sort_keys=True,
-    )
-    jwks_body = json.dumps(
-        {
-            "owner": "jwks-owner@acme.test",
-            "keys": [
-                {
-                    "kid": "signing-key",
-                    "kty": "RSA",
-                    "x5u": "../certs/signing.pem",
-                },
-                {
-                    "kid": "delegated-key-set",
-                    "kty": "EC",
-                    "jku": "https://keys.acme.test/.well-known/tenant-jwks.json#ignored",
-                },
-                {
-                    "kid": "templated-noise",
-                    "x5u": "/certs/{tenant}/key.pem",
-                },
-            ],
-        },
-        sort_keys=True,
-    )
-
-    def remote_artifact_download(self, request):  # noqa: ANN001
-        del self
-        if request.source_url == openid_url:
-            download_path = tmp_path / "downloads" / "openid-configuration"
-            download_path.parent.mkdir(parents=True, exist_ok=True)
-            download_path.write_text(openid_body, encoding="utf-8")
-            return ArtifactDownloadResult(
-                artifact_id=request.artifact_id,
-                source_url=request.source_url,
-                artifact_type=request.artifact_type,
-                path=download_path,
-                metadata_extra={
-                    "content_type": "application/json",
-                    "downloaded_from_remote": True,
-                    "download_filename": "openid-configuration",
-                },
-            )
-        if request.source_url != jwks_url:
-            return ArtifactDownloadResult(
-                artifact_id=request.artifact_id,
-                source_url=request.source_url,
-                artifact_type=request.artifact_type,
-                error="mock remote artifact unavailable",
-            )
-        download_path = tmp_path / "downloads" / "jwks.json"
-        download_path.parent.mkdir(parents=True, exist_ok=True)
-        download_path.write_text(jwks_body, encoding="utf-8")
-        return ArtifactDownloadResult(
-            artifact_id=request.artifact_id,
-            source_url=request.source_url,
-            artifact_type=request.artifact_type,
-            path=download_path,
-            metadata_extra={
-                "content_type": "application/jwk-set+json",
-                "downloaded_from_remote": True,
-                "download_filename": "jwks.json",
-            },
-        )
+    openid_url = OPENID_URL
+    jwks_url = JWKS_URL
+    install_remote_metadata_download_mock(monkeypatch, tmp_path)
 
     monkeypatch.setattr(socket, "create_connection", blocked)
     monkeypatch.setattr(socket, "gethostbyname", lambda host: ip(str(host)))
@@ -412,7 +236,6 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
     monkeypatch.setattr(cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips])
     monkeypatch.setattr(cli, "_run_forge_module_subprocess", fake_module)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifact_request", remote_artifact_download)
     monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", validate_batch)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_asset_validations", sweep_assets)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_validations", lambda *_, **__: {"attempted": 0})
