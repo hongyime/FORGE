@@ -1289,6 +1289,49 @@ def test_engagement_detail_api_orders_cloud_validation_results_by_latest_checked
     assert validation_rows[1]["Evidence"] == "older dead proof"
 
 
+def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE cloud_validation_results
+            SET validation_status='VALIDATED',
+                validation_method='manual_validated_note',
+                evidence='operator note only',
+                notes='not a deterministic proof method'
+            WHERE engagement_id=1001 AND asset_type='firebase'
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail = detail_resp.json()
+        assert detail["severity_summary"]["HIGH"] == 0
+
+        summary_resp = client.get("/api/engagements/1001/vuln-summary", headers=headers)
+        assert summary_resp.status_code == 200, summary_resp.text
+        summary = summary_resp.json()
+
+    assert summary["vulnerability_findings"].get("HIGH", 0) == 0
+
+
 def test_web_root_serves_react_console_and_generated_data(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))

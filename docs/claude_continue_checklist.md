@@ -185,12 +185,23 @@ historical notes only, not as current instructions.
   regressions, compile/Ruff, full dashboard, Phase 6 key selectors, attack-path
   API key selectors, validation-proof parser, integration smoke, and cleanup
   scan are green.
-- [ ] Immediate next implementation target: audit live API route/detail parity
-  for the same deterministic key/cloud reportability gates, especially any
-  non-dashboard code paths that return engagement detail, graph payloads,
-  report summaries, or key/finding counts directly from SQLite instead of
-  dashboard-generated JSON. Add the smallest failing route/contract test first,
-  then harden only that surface.
+- [x] Live API vulnerability-summary reportability parity completed:
+  `/api/engagements/{id}/vuln-summary` now uses
+  `_reportable_vulnerability_rows` for active severity counts instead of direct
+  SQLite grouping. Stale deterministic cloud findings with non-reportable
+  validation methods no longer surface as active `HIGH` API summary counts.
+  Backprop: `SPEC.md` `B13`; existing `V6`/`V7`/`V8` cover the gate.
+  Verification: failing TDD first on `/vuln-summary`, focused route regression,
+  compile/Ruff, full web UI engagement API suite (`28 passed`), adjacent
+  API/detail/graph route slice, dashboard gate slice, Phase 6 validation
+  selectors, and cleanup scan are green.
+- [ ] Immediate next implementation target: audit operational automation and
+  playbook suggestion gates that still read `vulnerability_findings` or
+  `key_scanner_findings` directly, especially `AutomationEngine` reporting/RCE
+  suggestions and legacy cloud-leak playbook paths. Add the smallest failing
+  test first, then harden only that surface without broadening provider calls,
+  live probing, scope, proxy/IP behavior, severity rules, or playbook
+  capabilities.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -35,6 +35,7 @@ from forge.reporting.dashboard import (
     _latest_engagement_run,
     _normalize_engagement_tags,
     _report_history_payload,
+    _reportable_vulnerability_rows,
     _report_summary_payload,
     _run_policy_summary,
     _safe_json_loads,
@@ -2326,15 +2327,7 @@ def create_app() -> Any:
                 """,
                 (engagement_id,),
             ).fetchall()
-            active_rows = con.execute(
-                """
-                SELECT UPPER(COALESCE(severity, 'UNKNOWN')), COUNT(*)
-                FROM vulnerability_findings
-                WHERE engagement_id=?
-                GROUP BY UPPER(COALESCE(severity, 'UNKNOWN'))
-                """,
-                (engagement_id,),
-            ).fetchall()
+            active_rows = _reportable_vulnerability_rows(con, engagement_id)
             auth_rows = con.execute(
                 """
                 SELECT success, COUNT(*)
@@ -2347,7 +2340,10 @@ def create_app() -> Any:
         finally:
             con.close()
         passive = {str(row[0]): int(row[1]) for row in passive_rows}
-        active = {str(row[0]): int(row[1]) for row in active_rows}
+        active: dict[str, int] = {}
+        for row in active_rows:
+            severity = str(row["severity"] or "UNKNOWN").upper()
+            active[severity] = active.get(severity, 0) + 1
         auth = {"success": 0, "failed": 0}
         for row in auth_rows:
             if int(row[0]) == 1:

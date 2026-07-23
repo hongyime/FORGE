@@ -25,11 +25,12 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: live API route/detail parity for deterministic key exposure
-and cloud reportability gates. Audit non-dashboard code paths that return
-engagement detail, graph payloads, report summaries, or key/finding counts
-directly from SQLite instead of dashboard-generated JSON. Write the smallest
-failing route/contract test first, then harden only the affected surface.
+Current next gate: operational automation/playbook reportability gates. Audit
+automation suggestions and legacy playbook paths that still read
+`vulnerability_findings` or `key_scanner_findings` directly, especially
+`AutomationEngine` reporting/RCE suggestions and cloud-leak key paths. Write the
+smallest failing test first to prove stale unreportable findings or unvalidated
+keys do not trigger suggestions/actions, then harden only that surface.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -64,6 +65,19 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Live API vulnerability-summary reportability parity completed:
+  `/api/engagements/{id}/vuln-summary` now builds active finding severity counts
+  from `_reportable_vulnerability_rows` instead of grouping
+  `vulnerability_findings` directly from SQLite. Stale deterministic cloud
+  findings with non-reportable validation methods no longer reappear as active
+  `HIGH` API summary counts after dashboard/detail/report gates suppress them.
+  Backprop: `SPEC.md` `B13`; existing `V6`/`V7`/`V8` cover the gate.
+  Verification: failing TDD first on `/vuln-summary` (`{'HIGH': 1}`); focused
+  route regression; compile/Ruff; full web UI engagement API suite (`28
+  passed`); adjacent API/detail/graph route slice (`3 passed`); dashboard
+  cloud/key gate slice (`4 passed`); Phase 6 validation selectors (`2 passed,
+  80 deselected`); cleanup `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-live-api-vuln-summary-parity.md`.
 - [x] Deterministic key exposure dashboard parity completed: dashboard
   `key_scanner_findings` counts now require stable key proof or linked
   reportable cloud validation before counting a key as reportable, while stale

@@ -271,14 +271,34 @@ sentences as historical notes only, not as current instructions.
   Safety: dashboard/review gate only; no provider calls, live probing,
   credential use, scope changes, severity expansion, proxy/IP rotation,
   rate-limit bypass, or validator behavior expansion.
-- [ ] Next implementation target: audit live API route/detail parity for the
-  same reportability gates, especially any non-dashboard code paths that return
-  engagement detail, graph payloads, report summaries, or key/finding counts
-  directly from SQLite instead of dashboard-generated JSON. Add the smallest
-  failing route/contract test first, then harden only that surface. This
-  advances validation, scoring, review, fallback, and testing/cleanup; do not
-  broaden provider calls, live probing, scope, proxy/IP behavior, or severity
-  rules.
+- [x] Live API vulnerability-summary reportability parity checkpoint:
+  `/api/engagements/{id}/vuln-summary` now builds active finding severity counts
+  from `_reportable_vulnerability_rows` instead of grouping
+  `vulnerability_findings` directly from SQLite. Stale deterministic cloud
+  findings whose latest validation row uses a non-reportable method such as
+  `manual_validated_note` no longer reappear as `HIGH` active API summary
+  counts after dashboard/detail/report gates suppress them. Backprop:
+  `SPEC.md` `B13`; existing `V6`/`V7`/`V8` cover the gate. Verification:
+  failing TDD first on `/vuln-summary` (`{'HIGH': 1}`); focused route
+  regression passed; compile/Ruff passed; full web UI engagement API suite
+  passed (`28 passed`); adjacent API/detail/graph route slice passed (`3
+  passed`); dashboard cloud/key gate slice passed (`4 passed`); Phase 6
+  validation selectors passed (`2 passed, 80 deselected`); cleanup
+  `test_owned_engagement_db_count=0`. Safety:
+  live API review/count gate only; no provider calls, live probing, credential
+  use, scope changes, severity expansion, proxy/IP rotation, rate-limit bypass,
+  or validator/playbook behavior expansion. Note: stale key rows may still be
+  visible in detail sections as downgraded analyst inventory under `V6`; they
+  are not reportable counts, graph nodes, findings, or report inputs.
+- [ ] Next implementation target: audit operational automation and playbook
+  suggestion gates that still read `vulnerability_findings` or
+  `key_scanner_findings` directly, especially `AutomationEngine` reporting/RCE
+  suggestions and legacy cloud-leak playbook paths. Add the smallest failing
+  test first to prove unreportable stale findings or unvalidated keys do not
+  trigger actions or report suggestions, then harden only that path. This
+  advances validation, scoring, scoped active checks, review, and
+  testing/cleanup; do not broaden provider calls, live probing, scope,
+  proxy/IP behavior, severity rules, or playbook capabilities.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
