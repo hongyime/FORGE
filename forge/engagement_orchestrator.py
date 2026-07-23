@@ -187,7 +187,10 @@ from forge.utils.artifact_barcode import (
 from forge.utils.artifact_shell_history import shell_history_artifact_label
 from forge.utils.artifact_starlark_images import starlark_container_image_values
 from forge.utils.artifact_windows_registry import windows_registry_hive_artifact_label
-from forge.utils.artifact_web_manifest import web_manifest_related_application_assets
+from forge.utils.artifact_web_manifest import (
+    web_manifest_related_application_assets,
+    web_manifest_urls,
+)
 from forge.utils.artifact_webweaver_metadata import webweaver_urls
 from forge.utils.artifact_well_known_link_metadata import well_known_link_urls
 from forge.utils.intel.http_pacing import (
@@ -20421,6 +20424,7 @@ class ArtifactQueueProcessor:
                     "webweaver_metadata",
                     "oauth_metadata",
                     "jwks_metadata",
+                    "web_manifest_metadata",
                     "helm_index",
                     "package_registry",
                     "container_images",
@@ -20649,6 +20653,12 @@ class ArtifactQueueProcessor:
             )
         if family == "jwks_metadata":
             return jwks_urls(
+                text,
+                source_label=_artifact_format_label(source_file),
+                base_url=source_file,
+            )
+        if family == "web_manifest_metadata":
+            return web_manifest_urls(
                 text,
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,

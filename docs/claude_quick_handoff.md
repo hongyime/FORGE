@@ -55,6 +55,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Web App Manifest relative-URL passive-recursion completed: source-gated
+  `manifest.json`/`webmanifest` artifacts now resolve relative `start_url`,
+  `scope`, shortcut, share-target, protocol-handler, icon, and screenshot URLs
+  via `web_manifest_urls`, wired into the existing orchestrator URL-family path
+  as a thin adapter. Generic JSON lookalikes remain excluded. Verification
+  included failing TDD first, focused manifest plus adjacent format/label checks
+  (`4 passed`), compile/Ruff, exact local and remote engagement-backed
+  manifest/root metadata tests (`2 passed`), compact smoke (`7 passed, 1
+  deselected`), and cleanup with no test-owned engagement DBs remaining.
+  Handoff:
+  `.claude/handoffs/2026-07-23-web-manifest-relative-url-recursion.md`.
 - [x] JWKS metadata passive-recursion completed: source-gated
   `.well-known/jwks.json` now resolves concrete `x5u` and `jku` certificate or
   key-set URL pivots through `forge.utils.artifact_jwks_metadata`, wired into

@@ -63,6 +63,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Web App Manifest relative-URL passive-recursion completed: source-gated
+  `manifest.json`/`webmanifest` artifacts now resolve relative `start_url`,
+  `scope`, shortcut, share-target, protocol-handler, icon, and screenshot URLs
+  through `web_manifest_urls` and a thin orchestrator `web_manifest_metadata`
+  adapter while generic JSON lookalikes stay excluded. Verification: TDD first
+  failed on missing helper; focused manifest plus adjacent format/label checks
+  -> `4 passed`; compile/Ruff passed; exact local and remote
+  engagement-backed manifest/root metadata tests -> `2 passed`; compact smoke
+  -> `7 passed, 1 deselected`; no test-owned engagement DBs remain; persistent
+  inventory -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-web-manifest-relative-url-recursion.md`.
 - [x] JWKS metadata passive-recursion completed: added compact
   `forge.utils.artifact_jwks_metadata` helper and a thin orchestrator
   `jwks_metadata` URL-family adapter so source-gated `.well-known/jwks.json`

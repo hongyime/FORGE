@@ -88,6 +88,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Web App Manifest relative-URL passive-recursion checkpoint:
+  source-gated `manifest.json` and `webmanifest` artifacts now resolve concrete
+  relative URL pivots from Web App Manifest fields such as `start_url`, `scope`,
+  `shortcuts[].url`, `share_target.action`, `protocol_handlers[].url`,
+  `icons[].src`, and `screenshots[].src` through the existing bounded artifact
+  URL-family path. Generic JSON with the same field names remains excluded from
+  this manifest-specific parser. Verification: focused TDD first failed on
+  missing `web_manifest_urls`; focused manifest plus adjacent format/label
+  checks passed (`4 passed`); compile passed; Ruff passed; exact local and
+  remote engagement-backed manifest/root metadata tests passed (`2 passed`);
+  compact cross-phase smoke passed (`7 passed, 1 deselected`); cleanup found no
+  test-owned engagement DBs and persistent inventory remains `1`, `5010`,
+  `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-web-manifest-relative-url-recursion.md`.
+  Safety: passive static Web App Manifest parsing only; no app launch, app-store
+  lookup, manifest fetch expansion, provider call, live probing, credential use,
+  scope relaxation, proxy/IP rotation, rate-limit bypass, validation-gate
+  change, report-gate change, or severity change.
 - [x] JWKS metadata passive-recursion checkpoint: source-gated
   `.well-known/jwks.json` artifacts now use compact helper
   `forge.utils.artifact_jwks_metadata` to resolve concrete `x5u` and `jku`

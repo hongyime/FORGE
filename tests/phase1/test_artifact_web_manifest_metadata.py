@@ -5,7 +5,45 @@ import sqlite3
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.utils.artifact_web_manifest import web_manifest_urls
 from tests.phase1.artifact_test_support import bootstrap_engagement
+
+
+def test_web_manifest_urls_resolve_source_gated_relative_fields() -> None:
+    payload = json.dumps(
+        {
+            "start_url": ".",
+            "scope": "/app/",
+            "shortcuts": [{"url": "./billing"}],
+            "share_target": {"action": "/share/submit"},
+            "protocol_handlers": [{"url": "/open?uri=%s"}],
+            "icons": [{"src": "/icons/app.png"}],
+            "screenshots": [{"src": "screenshots/desktop.png"}],
+            "templated": "/tenant/{id}/launch",
+            "unsafe": "javascript:alert(1)",
+        }
+    )
+
+    urls = web_manifest_urls(
+        payload,
+        source_label="webmanifest",
+        base_url="https://portal.acme.example/manifest.webmanifest",
+    )
+
+    assert urls == [
+        "https://portal.acme.example/",
+        "https://portal.acme.example/app/",
+        "https://portal.acme.example/billing",
+        "https://portal.acme.example/share/submit",
+        "https://portal.acme.example/open?uri=%s",
+        "https://portal.acme.example/icons/app.png",
+        "https://portal.acme.example/screenshots/desktop.png",
+    ]
+    assert web_manifest_urls(
+        payload,
+        source_label="json",
+        base_url="https://portal.acme.example/generic.json",
+    ) == []
 
 
 def test_web_manifest_related_applications_become_passive_inventory(tmp_path: Path) -> None:
