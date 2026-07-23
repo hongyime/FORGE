@@ -254,14 +254,31 @@ sentences as historical notes only, not as current instructions.
   review/report-gate hardening only; no provider calls, live probing,
   credential use, scope changes, severity expansion, proxy/IP rotation,
   rate-limit bypass, or validator behavior expansion.
-- [ ] Next implementation target: audit persisted report/dashboard/API parity
-  for deterministic key exposure rows and `key_scanner_findings` counts. Check
-  whether pre-existing key findings or active key rows can still surface in
-  reports, dashboard/API payloads, raw exports, graph exports, or summaries when
-  their stored validation detail fails the stable proof parser. Add the smallest
-  failing test first, then harden only the affected gate. This advances
-  validation, scoring, review, fallback, and testing/cleanup; do not broaden
-  provider calls, live probing, scope, proxy/IP behavior, or severity rules.
+- [x] Deterministic key exposure dashboard parity checkpoint: dashboard
+  `key_scanner_findings` counts now require stable key proof or linked
+  reportable cloud validation before counting a key as reportable, while
+  stale/invalid active key rows remain visible as downgraded analyst inventory.
+  Imported dashboard graph payloads from DB snapshots, JSON, GraphML, and MTGX
+  now remove stale `APIKEY` nodes whose validation detail fails
+  `parse_validated_detail`, and dangling edges/critical-path refs are dropped.
+  Backprop: `SPEC.md` `B12`; existing `V6`/`V7`/`V8` cover the gate.
+  Verification: failing TDD first for stale count (`1 == 0`) and stale graph
+  node leakage; focused dashboard regressions passed; compile/Ruff passed; full
+  dashboard passed (`20 passed`); Phase 6 key selectors passed (`3 passed, 79
+  deselected`); attack-path API key selectors passed (`7 passed, 101
+  deselected`); validation-proof parser passed (`104 passed`); integration
+  smoke passed (`2 passed`); cleanup `test_owned_engagement_db_count=0`.
+  Safety: dashboard/review gate only; no provider calls, live probing,
+  credential use, scope changes, severity expansion, proxy/IP rotation,
+  rate-limit bypass, or validator behavior expansion.
+- [ ] Next implementation target: audit live API route/detail parity for the
+  same reportability gates, especially any non-dashboard code paths that return
+  engagement detail, graph payloads, report summaries, or key/finding counts
+  directly from SQLite instead of dashboard-generated JSON. Add the smallest
+  failing route/contract test first, then harden only that surface. This
+  advances validation, scoring, review, fallback, and testing/cleanup; do not
+  broaden provider calls, live probing, scope, proxy/IP behavior, or severity
+  rules.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

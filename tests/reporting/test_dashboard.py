@@ -2219,6 +2219,7 @@ def test_generate_dashboard_surfaces_key_validation_proof_rows(tmp_path: Path) -
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     key_row = detail_payload["sections"]["key_scanner_findings"][0]
 
+    assert detail_payload["counts"]["key_scanner_findings"] == 1
     assert key_row["Service"] == "sentry"
     assert key_row["Pattern"] == "sentry_auth_token"
     assert key_row["State"] == "ACTIVE"
@@ -2269,6 +2270,7 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     key_row = detail_payload["sections"]["key_scanner_findings"][0]
 
+    assert detail_payload["counts"]["key_scanner_findings"] == 0
     assert key_row["Service"] == "sentry"
     assert key_row["State"] == "ACTIVE"
     assert key_row["Validation Status"] == "UNVERIFIED"
@@ -2276,6 +2278,87 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
     assert key_row["Validation Proof"] == ""
     assert "VALIDATED:sentry_list_organizations" in key_row["Proof"]
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
+
+
+def test_generate_dashboard_filters_stale_api_key_graph_snapshot_nodes(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    stale_graph = {
+        "nodes": [
+            {
+                "node_id": "HOST::app",
+                "label": "app.acme.example",
+                "node_type": "HOST",
+                "metadata": {},
+            },
+            {
+                "node_id": "KEY::stale-sentry",
+                "label": "sentry:sntrys_...ABCD",
+                "node_type": "APIKEY",
+                "source_table": "key_scanner_findings",
+                "metadata": {
+                    "service": "sentry",
+                    "validation_detail": (
+                        "VALIDATED:sentry_list_organizations:Sentry organizations ok: "
+                        "org_id=0000000000000000 org_slug_present=true org_slug_stable=true"
+                    ),
+                    "validation_status": "VALIDATED",
+                    "validation_method": "sentry_list_organizations",
+                },
+            },
+        ],
+        "edges": [
+            {
+                "source_node_id": "HOST::app",
+                "target_node_id": "KEY::stale-sentry",
+                "edge_type": "contains_key",
+            },
+        ],
+        "critical_path_nodes": ["HOST::app", "KEY::stale-sentry"],
+    }
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
+        con.execute(
+            """
+            INSERT INTO attack_graph_snapshots
+                (engagement_id, snapshot_at, node_count, edge_count,
+                 critical_path_weight, min_severity, pruned, graph_json,
+                 mermaid_output, dot_output)
+            VALUES
+                (1001, '2026-07-09T09:50:00', 2, 1, 18.0, 'LOW', 0, ?,
+                 'graph TD; app-->key;', 'digraph G { app -> key; }')
+            """,
+            (json.dumps(stale_graph, sort_keys=True),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    graph_payload = detail_payload["graph_payload"]
+    node_ids = {node["node_id"] for node in graph_payload["nodes"]}
+
+    assert "KEY::stale-sentry" not in node_ids
+    assert graph_payload["node_count"] == 1
+    assert graph_payload["edge_count"] == 0
+    assert "KEY::stale-sentry" not in graph_payload["critical_path_nodes"]
 
 
 def test_generate_dashboard_downgrades_bare_legacy_key_validation_proof_rows(

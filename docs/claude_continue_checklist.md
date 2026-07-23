@@ -174,13 +174,23 @@ historical notes only, not as current instructions.
   representative integration smoke -> `2 passed`; cleanup ->
   `test_owned_engagement_db_count=0`. Handoff:
   `.claude/handoffs/2026-07-23-validation-review-method-parity.md`.
-- [ ] Immediate next implementation target: audit persisted
-  report/dashboard/API parity for deterministic key exposure rows and
-  `key_scanner_findings` counts. Check whether pre-existing key findings or
-  active key rows can still surface in reports, dashboard/API payloads, raw
-  exports, graph exports, or summaries when their stored validation detail fails
-  the stable proof parser. Add the smallest failing test first, then harden only
-  the affected gate.
+- [x] Deterministic key exposure dashboard parity completed: dashboard
+  `key_scanner_findings` counts now require stable key proof or linked
+  reportable cloud validation before counting a key as reportable, while stale
+  active key rows remain visible as downgraded inventory. Imported dashboard
+  graph payloads now remove stale `APIKEY` nodes whose validation detail fails
+  the stable proof parser and drop dangling edges/critical-path refs. Backprop:
+  `SPEC.md` `B12`; existing `V6`/`V7`/`V8` cover the gate. Verification:
+  failing TDD first for stale count and stale graph-node leakage; dashboard
+  regressions, compile/Ruff, full dashboard, Phase 6 key selectors, attack-path
+  API key selectors, validation-proof parser, integration smoke, and cleanup
+  scan are green.
+- [ ] Immediate next implementation target: audit live API route/detail parity
+  for the same deterministic key/cloud reportability gates, especially any
+  non-dashboard code paths that return engagement detail, graph payloads,
+  report summaries, or key/finding counts directly from SQLite instead of
+  dashboard-generated JSON. Add the smallest failing route/contract test first,
+  then harden only that surface.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

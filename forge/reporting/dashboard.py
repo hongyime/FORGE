@@ -519,6 +519,75 @@ def _reportable_cloud_validation_index(
     return index
 
 
+def _validation_asset_types_for_key_service(service: str) -> list[str]:
+    normalized = normalize_cloud_exposure_asset_type(service)
+    return {
+        "amazon": ["aws_s3"],
+        "aws": ["aws_s3"],
+        "azure": ["azure_blob"],
+        "digitalocean": ["do_spaces"],
+        "do": ["do_spaces"],
+        "firebase": ["firebase"],
+        "gcp": ["gcs"],
+        "google": ["gcs"],
+        "supabase": ["supabase"],
+    }.get(normalized, [normalized] if normalized else [])
+
+
+def _key_validation_detail_is_reportable(value: object) -> bool:
+    proof = parse_validated_detail(value)
+    return str(proof["validation_status"] or "").strip().upper() == "VALIDATED"
+
+
+def _key_row_is_reportable(
+    row: sqlite3.Row,
+    validation_index: dict[tuple[str, str], bool],
+) -> bool:
+    state = str(row["validation_state"] or "").strip().upper() if "validation_state" in row.keys() else ""
+    if state != "ACTIVE":
+        return False
+    if _key_validation_detail_is_reportable(row["validation_detail"] if "validation_detail" in row.keys() else ""):
+        return True
+    identifier = str(row["domain"] or "").strip().lower() if "domain" in row.keys() else ""
+    if not identifier:
+        return False
+    service = str(row["service"] or "").strip().lower() if "service" in row.keys() else ""
+    return any(
+        validation_index.get((asset_type, identifier)) is True
+        for asset_type in _validation_asset_types_for_key_service(service)
+    )
+
+
+def _reportable_key_scanner_rows(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    *,
+    limit: int | None = None,
+) -> list[sqlite3.Row]:
+    columns = _table_columns(con, "key_scanner_findings")
+    if not {"engagement_id", "validation_state"}.issubset(columns):
+        return []
+    select_parts = [
+        "validation_state",
+        "service" if "service" in columns else "NULL AS service",
+        "domain" if "domain" in columns else "NULL AS domain",
+        "validation_detail" if "validation_detail" in columns else "NULL AS validation_detail",
+    ]
+    rows = _fetch_rows(
+        con,
+        f"""
+        SELECT {', '.join(select_parts)}
+        FROM key_scanner_findings
+        WHERE engagement_id=?
+        ORDER BY id DESC
+        """,
+        (engagement_id,),
+    )
+    validation_index = _reportable_cloud_validation_index(con, engagement_id)
+    reportable = [row for row in rows if _key_row_is_reportable(row, validation_index)]
+    return reportable[:limit] if limit is not None else reportable
+
+
 def _vulnerability_validation_asset(row: sqlite3.Row) -> str:
     provider = str(row["cloud_provider"] or "").strip().lower() if "cloud_provider" in row.keys() else ""
     parameter = str(row["parameter"] or "").strip().lower() if "parameter" in row.keys() else ""
@@ -1083,6 +1152,36 @@ def _graph_node_is_unreportable_cloud_finding(
     return reportable is False
 
 
+def _graph_node_key_validation_detail(node: dict[str, Any]) -> str:
+    metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    detail = str(metadata.get("validation_detail") or "").strip()
+    if detail:
+        return detail
+    method = str(metadata.get("validation_method") or "").strip()
+    status = str(metadata.get("validation_status") or "").strip().upper()
+    proof = str(metadata.get("validation_proof") or "").strip()
+    if status == "VALIDATED" and method:
+        return f"VALIDATED:{method}:{proof}"
+    return ""
+
+
+def _graph_node_is_unreportable_key_finding(node: dict[str, Any]) -> bool:
+    node_type = str(node.get("node_type") or node.get("entity_type") or "").strip().upper()
+    source_table = str(node.get("source_table") or "").strip().lower()
+    metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    if node_type != "APIKEY" and source_table != "key_scanner_findings":
+        return False
+    if source_table and source_table != "key_scanner_findings" and node_type != "APIKEY":
+        return False
+    detail = _graph_node_key_validation_detail(node)
+    if not detail and not any(
+        str(metadata.get(key) or "").strip()
+        for key in ("validation_status", "validation_method", "validation_proof")
+    ):
+        return True
+    return not _key_validation_detail_is_reportable(detail)
+
+
 def _filter_graph_payload_for_validation(
     con: sqlite3.Connection,
     engagement_id: int,
@@ -1091,8 +1190,6 @@ def _filter_graph_payload_for_validation(
     if not _graph_payload_has_structure(payload):
         return payload
     validation_index = _reportable_cloud_validation_index(con, engagement_id)
-    if not validation_index:
-        return payload
     nodes = payload.get("nodes", []) if isinstance(payload.get("nodes"), list) else []
     removed: set[str] = set()
     filtered_nodes: list[dict[str, Any]] = []
@@ -1100,7 +1197,10 @@ def _filter_graph_payload_for_validation(
         if not isinstance(node, dict):
             continue
         node_id = str(node.get("node_id") or "")
-        if _graph_node_is_unreportable_cloud_finding(node, validation_index):
+        if _graph_node_is_unreportable_cloud_finding(
+            node,
+            validation_index,
+        ) or _graph_node_is_unreportable_key_finding(node):
             if node_id:
                 removed.add(node_id)
             continue
@@ -1640,6 +1740,9 @@ def _summary_counts(con: sqlite3.Connection, engagement_id: int) -> dict[str, in
         "auth_test_results",
     ):
         if _table_exists(con, table):
+            if table == "key_scanner_findings":
+                counts[table] = len(_reportable_key_scanner_rows(con, engagement_id))
+                continue
             if table == "vulnerability_findings":
                 counts[table] = len(_reportable_vulnerability_rows(con, engagement_id))
                 continue

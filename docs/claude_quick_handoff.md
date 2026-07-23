@@ -25,11 +25,11 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: deterministic key exposure parity. Audit whether
-pre-existing key findings or `key_scanner_findings` counts can still surface in
-reports, dashboard/API payloads, raw exports, graph exports, or summaries when
-their stored validation detail fails the stable proof parser. Write the smallest
-failing test first, then harden only the affected gate.
+Current next gate: live API route/detail parity for deterministic key exposure
+and cloud reportability gates. Audit non-dashboard code paths that return
+engagement detail, graph payloads, report summaries, or key/finding counts
+directly from SQLite instead of dashboard-generated JSON. Write the smallest
+failing route/contract test first, then harden only the affected surface.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -64,6 +64,20 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Deterministic key exposure dashboard parity completed: dashboard
+  `key_scanner_findings` counts now require stable key proof or linked
+  reportable cloud validation before counting a key as reportable, while stale
+  active key rows remain visible as downgraded inventory. Imported dashboard
+  graph payloads now remove stale `APIKEY` nodes whose validation detail fails
+  `parse_validated_detail`; dangling edges and critical-path refs are dropped.
+  Backprop: `SPEC.md` `B12`; existing `V6`/`V7`/`V8` cover the gate.
+  Verification: failing TDD first for stale count and stale graph leakage;
+  focused dashboard regressions; compile/Ruff; full dashboard (`20 passed`);
+  Phase 6 key selectors (`3 passed, 79 deselected`); attack-path API key
+  selectors (`7 passed, 101 deselected`); validation-proof parser (`104
+  passed`); integration smoke (`2 passed`); cleanup
+  `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-key-exposure-dashboard-parity.md`.
 - [x] Validation/review parity for unknown validation methods completed:
   shared reportable cloud validation-method policy now gates deterministic
   synthesis, Phase 6 report/raw exports, graph vulnerability nodes, dashboard
@@ -459,7 +473,12 @@ stop and pick a smaller verified kill-chain or determinism gap.
 - [x] OIDC claim contact/userinfo target completed: `claims.email`, `claims.phone_number`, `userinfo.email`, `userinfo.phone_number`, `userinfo.profile`, and `userinfo.website` now stay on the enclosing provider row as recursive evidence; scalar/token claims stay suppressed. Handoff: `.claude/handoffs/2026-07-20-oidc-userinfo-claim-contact-recursion.md`.
 - [x] OIDC claim URL recursion target completed: Epieos/userinfo-style `claims.profile` and `claims.website` now stay on the existing provider row as recursive URL evidence; scalar/token claims stay suppressed. Handoff: `.claude/handoffs/2026-07-20-oidc-claim-url-recursion.md`.
 - [x] Nested StackExchange user-profile target completed: provider-scoped Epieos StackExchange/StackOverflow `user` payloads now become safe public profile pivots when they include numeric `user_id`, normalized handle, and accepted/no site hint. Bad site hints are rejected. Handoff: `.claude/handoffs/2026-07-20-stackexchange-nested-user-profile.md`.
-- [ ] Immediate next code target: audit another concrete identity-provider payload shape or passive artifact/parser source shape before writing code. If no missing recursive pivot is found, switch to release-level mocked E2E/report-fallback tests or safe mega-test/module splits.
+- [ ] Immediate next code target: audit live API route/detail parity for
+  deterministic key exposure and cloud reportability gates. Focus on
+  non-dashboard routes that return engagement detail, graph payloads, report
+  summaries, or key/finding counts directly from SQLite instead of
+  dashboard-generated JSON. Add the smallest failing route/contract test first,
+  then harden only that surface.
 - [ ] Code-size discipline is now a hard continuation rule: do not add new feature logic directly into `forge/engagement_orchestrator.py`, `forge/cli.py`, `forge/utils/intel/social_scraper.py`, or mega test files unless it is a thin adapter/regression hook. HAR helpers live in `forge/utils/artifact_har.py`, and Epieos/social host guards now live in `forge/utils/intel/social_profile_hosts.py`; next refactor target is splitting newly added mega-file tests where imports allow it.
 
 ## Current green checkpoint
@@ -3020,13 +3039,19 @@ canonical active queue. Use `docs/engagement_overhaul_tasklist.md` ->
 
 - [ ] Provider coverage is still selective rather than exhaustive. The strongest deterministic coverage is Firebase, Supabase, S3/GCS/Azure/DO, Google/Gemini API keys, Hugging Face, Discord bot tokens, Telegram bot tokens, Notion tokens, Datadog API keys, GitHub, GitLab, Mailchimp, Stripe, SendGrid, Slack, Azure Storage connection strings, and co-located Twilio/AWS key-pair validation.
 - [ ] The engagement detail UI is sectioned, not literally tabbed. Treat that as a polish decision unless product now requires strict tabs.
-- [ ] MTGX/GraphML export exists, but the analyst-workflow fidelity audit is still open.
+- [x] MTGX/GraphML analyst-workflow fidelity audit is reconciled in the
+  canonical backlog: portable GraphML and MTGX exports carry analyst entity
+  hints, deterministic layout, primary values, property JSON, edge typing, and
+  critical-path metadata. Future graph work should come from a concrete parity
+  gap in the active backlog.
 ## Best next tasks
 
 - [ ] Add append-only remote storage for exported run-manifest bundles only if scoped customer storage is explicitly configured.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
 - [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
-- [ ] Audit MTGX entity typing/layout against the intended Maltego-first workflow before changing more graph UI.
+- [x] MTGX entity typing/layout audit was completed and reconciled; do not
+  reopen it from historical handoff text unless a new graph parity gap is proven
+  with current code evidence.
 - [ ] Expand safe parser coverage for additional passive artifact formats and nested text containers.
 
 ## Guardrails
