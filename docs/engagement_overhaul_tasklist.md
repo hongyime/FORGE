@@ -1,6 +1,6 @@
 # Engagement Overhaul Task List
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 ## End Goal Quick Answer
 
@@ -14,6 +14,9 @@ This is the only active product goal. Every current task must implement, harden,
 or test one of these gates: intake, discovery, recursion, artifact analysis,
 validation, scoring, review, fallback, or testing/cleanup. Subagents and Claude
 may accelerate execution or review, but they do not redefine the goal.
+
+When context is low, answer the end-goal question from `END_GOAL.md` and this
+section first, then choose the next task from `## Compact active backlog`.
 
 ## Operating model
 

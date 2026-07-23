@@ -1,6 +1,6 @@
 # Deterministic Engagement Contract
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
@@ -8,6 +8,11 @@ This is the compact operator and agent contract for the FORGE end goal. The
 normative source remains `docs/end_goal.md`; `SPEC.md` is the root implementer
 spec for invariants and task categories; this file is the short checklist to
 read before implementation.
+
+If you only read one line: FORGE must become one deterministic authorized ASM
+engagement pipeline from scoped multi-seed intake through bounded recursive
+discovery, static artifact enrichment, non-destructive validation, rule-engine
+scoring, review surfaces, deterministic fallback exports, and test cleanup.
 
 ## End Goal
 

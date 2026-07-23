@@ -1,6 +1,6 @@
 # Claude Quick Handoff
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 End goal quick answer: FORGE must be one deterministic authorized engagement
 pipeline from scoped multi-seed intake through bounded recursive discovery,
@@ -9,6 +9,9 @@ rule-engine findings/severity, graph/dashboard/report/audit review, guaranteed
 template/raw fallback when LLM/API narrative providers fail, and automated
 test-data cleanup. Subagents are accelerators only; they do not redefine this
 goal.
+
+If asked for the end goal, answer this first, then point to `END_GOAL.md` and
+`docs/end_goal.md` as source-of-truth docs.
 
 Use this file first for short resume context, then verify current continuation
 order in `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`;

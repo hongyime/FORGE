@@ -1,6 +1,6 @@
 # Claude Continue Checklist
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 ## End Goal Quick Answer
 
@@ -11,6 +11,9 @@ findings/severity, graph/dashboard/report/audit review, guaranteed template/raw
 fallback when LLM/API narrative providers fail, and automated test-data cleanup.
 Use subagents only to accelerate bounded implementation or review; never let
 them create a competing goal or weaken the contract in `docs/end_goal.md`.
+
+If asked "what is the end goal?", answer with that deterministic authorized ASM
+pipeline target before discussing task status.
 
 ## Operating model
 

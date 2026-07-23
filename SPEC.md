@@ -1,8 +1,12 @@
 # FORGE Spec
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
+
+End goal now: FORGE must ship one comprehensive deterministic authorized ASM
+engagement pipeline, not a UI-only dashboard, scanner collection, or provider
+count project.
 
 This file is the compact root spec for implementers. It does not replace the
 normative goal in `docs/end_goal.md`; it restates the contract as invariants and
@@ -104,3 +108,4 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | B6 | 2026-07-20 | Deterministic Phase 6 reports and fallback prompts still forced a legacy post-exploitation section despite the current authorized ASM goal. | Added V12 and reframed Section 6 as validation boundaries and evidence handling in mandatory sections, fallback prompts, Jinja template instructions, and deterministic template output. |
 | B7 | 2026-07-20 | Deterministic Phase 6 reports and fallback prompts still forced a legacy exploit-correlation section despite the current authorized ASM goal. | Added V13 and reframed Section 5 as vulnerability and exposure correlation in mandatory sections, fallback prompts, Jinja template instructions, and deterministic template output. |
 | B8 | 2026-07-20 | Runtime `/goal` text remained stale enough to obscure the real deterministic product target even though repository goal docs existed. | Re-anchored the active goal statement in `END_GOAL.md`, `docs/end_goal.md`, `docs/deterministic_engagement_contract.md`, and the active continuation checklists; repository goal docs remain authoritative over runtime labels. |
+| B9 | 2026-07-23 | The locked end goal existed, but the newest continuation prompt showed the answer still needed to be more immediate for future agents under low context. | Added top-level "end goal now" wording to the root spec and refreshed the source-of-truth docs so agents answer with the deterministic authorized ASM pipeline target before choosing tasks. |

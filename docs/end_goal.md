@@ -1,8 +1,22 @@
 # FORGE End Goal
 
-Last updated: 2026-07-20
+Last updated: 2026-07-23
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
+
+## End Goal Now
+
+FORGE's end goal is one comprehensive, deterministic, authorized ASM engagement
+pipeline. It starts with scoped multi-seed intake, runs bounded recursive
+discovery and static artifact enrichment, validates cloud/resource/credential
+evidence non-destructively before reporting, scores risk with deterministic
+rules only, exposes the same facts through dashboard, graph, report, raw export,
+and audit surfaces, and always emits template/raw output when every LLM/API
+narrative provider fails, hits quota, lacks keys, or exceeds token limits.
+
+Every implementation task must name the gate it advances before code changes:
+intake, discovery, recursion, artifact analysis, validation, scoring, review,
+fallback, or testing/cleanup. Anything else is outside the current goal lock.
 
 This is the normative end-goal contract for FORGE. The repository-root
 `END_GOAL.md` is the fast entry point, and
