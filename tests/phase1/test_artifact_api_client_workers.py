@@ -226,6 +226,86 @@ def test_api_client_url_objects_default_host_path_to_https_without_protocol(
     ]
 
 
+@pytest.mark.parametrize(
+    ("source_hint", "payload", "expected_lines"),
+    [
+        (
+            ".dredd.yml",
+            """
+            endpoint: dredd-one.acme.example/api
+            base-url: dredd-two.acme.example/v1
+            api-description: https://dredd-three.acme.example/openapi.yaml?token=hidden&view=public
+            api-url: https://${tenant}.acme.example/template
+            blueprint: https://dredd-four.acme.example/blueprint.apib
+            """,
+            [
+                "https://dredd-one.acme.example/api",
+                "https://dredd-two.acme.example/v1",
+                "https://dredd-three.acme.example/openapi.yaml?view=public",
+                "https://dredd-four.acme.example/blueprint.apib",
+            ],
+        ),
+        (
+            ".schemathesis.toml",
+            """
+            schema = "https://schemathesis-one.acme.example/openapi.json"
+            base-url = "schemathesis-two.acme.example/api"
+            endpoint = "https://schemathesis-three.acme.example/path?signature=hidden&view=public"
+            api-url = "https://${tenant}.acme.example/template"
+            base-uri = "schemathesis-four.acme.example/base"
+            """,
+            [
+                "https://schemathesis-one.acme.example/openapi.json",
+                "https://schemathesis-two.acme.example/api",
+                "https://schemathesis-three.acme.example/path?view=public",
+                "https://schemathesis-four.acme.example/base",
+            ],
+        ),
+    ],
+)
+def test_dredd_schemathesis_line_scanners_use_bounded_workers_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+    source_hint: str,
+    payload: str,
+    expected_lines: list[str],
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    original_line = ArtifactQueueProcessor._api_client_api_config_line_candidate_value
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _tracking_line_candidate(
+        self: ArtifactQueueProcessor,
+        item: tuple[int, str, object],
+    ) -> str:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_line(self, item)  # type: ignore[arg-type]
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_api_client_api_config_line_candidate_value",
+        _tracking_line_candidate,
+    )
+
+    result = processor._api_client_text_structured_payload_text(
+        dedent(payload).strip(),
+        source_hint=source_hint,
+    )
+
+    assert peak == 4
+    assert result.splitlines() == expected_lines
+
+
 def test_selenium_side_navigation_children_use_bounded_workers_and_preserve_order(
     tmp_path: Path,
     monkeypatch,

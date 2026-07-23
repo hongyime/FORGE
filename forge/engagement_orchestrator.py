@@ -27590,8 +27590,7 @@ class ArtifactQueueProcessor:
                 values.append(value)
         return values[:512]
 
-    @staticmethod
-    def _api_client_dredd_text_candidate_values(text: str) -> list[str]:
+    def _api_client_dredd_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
         pattern = re.compile(
             r"""
@@ -27604,15 +27603,7 @@ class ArtifactQueueProcessor:
             """,
             re.IGNORECASE | re.VERBOSE,
         )
-        values: list[str] = []
-        for line in parse_text.splitlines()[:4096]:
-            match = pattern.match(line)
-            if not match:
-                continue
-            value = str(match.group("value") or "").strip().strip("\"'")
-            if value:
-                values.append(value)
-        return values
+        return self._api_client_api_config_line_candidate_values(parse_text, pattern)
 
     def _api_client_schemathesis_candidate_values(self, document: Any, text: str) -> list[str]:
         text_batches = self._api_client_text_candidate_family_batches(("schemathesis",), text)
@@ -27622,8 +27613,7 @@ class ArtifactQueueProcessor:
                 values.append(value)
         return values[:512]
 
-    @staticmethod
-    def _api_client_schemathesis_text_candidate_values(text: str) -> list[str]:
+    def _api_client_schemathesis_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
         pattern = re.compile(
             r"""
@@ -27636,15 +27626,29 @@ class ArtifactQueueProcessor:
             """,
             re.IGNORECASE | re.VERBOSE,
         )
-        values: list[str] = []
-        for line in parse_text.splitlines()[:4096]:
-            match = pattern.match(line)
-            if not match:
-                continue
-            value = str(match.group("value") or "").strip().strip("\"'")
-            if value:
-                values.append(value)
-        return values
+        return self._api_client_api_config_line_candidate_values(parse_text, pattern)
+
+    def _api_client_api_config_line_candidate_values(
+        self,
+        parse_text: str,
+        pattern: re.Pattern[str],
+    ) -> list[str]:
+        line_entries = self._run_ordered_local_batch(
+            [(line_index, line, pattern) for line_index, line in enumerate(parse_text.splitlines()[:4096])],
+            self._api_client_api_config_line_candidate_value,
+            default_factory=str,
+        )
+        return [str(value or "").strip() for value in line_entries if str(value or "").strip()]
+
+    def _api_client_api_config_line_candidate_value(
+        self,
+        item: tuple[int, str, re.Pattern[str]],
+    ) -> str:
+        _line_index, line, pattern = item
+        match = pattern.match(line)
+        if not match:
+            return ""
+        return str(match.group("value") or "").strip().strip("\"'")
 
     def _api_client_pactum_candidate_values(self, document: Any, text: str) -> list[str]:
         text_batches = self._api_client_text_candidate_family_batches(("pactum", "fallback"), text)
@@ -27703,9 +27707,9 @@ class ArtifactQueueProcessor:
     def _api_client_text_candidate_family_values(self, item: tuple[str, str]) -> list[str]:
         family, text = item
         if family == "dredd":
-            return ArtifactQueueProcessor._api_client_dredd_text_candidate_values(text)
+            return self._api_client_dredd_text_candidate_values(text)
         if family == "schemathesis":
-            return ArtifactQueueProcessor._api_client_schemathesis_text_candidate_values(text)
+            return self._api_client_schemathesis_text_candidate_values(text)
         if family == "pactum":
             return ArtifactQueueProcessor._api_client_pactum_text_candidate_values(text)
         if family == "fallback":

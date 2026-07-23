@@ -247,9 +247,18 @@ historical notes only, not as current instructions.
   `10 passed`; focused persisted K6/API artifact slice -> `2 passed`; cleanup
   left `remaining_k6_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-k6-pattern-worker-pool.md`.
-- [ ] Next implementation target: move Dredd and Schemathesis API-client line
-  scanners under the bounded worker-pool path. Keep this local to static config
-  parsing and preserve line order, URL candidate extraction, sensitive-query
+- [x] Dredd/Schemathesis line scanner worker-pool checkpoint completed: static
+  API-client config line scans now use the ordered bounded local worker helper
+  through a shared line-candidate helper. Line order, URL candidate extraction,
+  sensitive-query stripping, template rejection, and serial final dedupe are
+  preserved. Verification: compile/Ruff passed; focused API-client worker suite
+  -> `12 passed`; focused persisted Dredd/Schemathesis/API artifact slice ->
+  `3 passed`; cleanup left `remaining_dredd_schemathesis_test_files=0`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-dredd-schemathesis-line-worker-pool.md`.
+- [ ] Next implementation target: move the Locust API-client regex-pattern
+  scanner under the bounded worker-pool path. Keep this local to static
+  `locustfile` parsing and preserve host/request ordering, sensitive-query
   stripping, template rejection, and serial final dedupe.
 
 - [x] Deterministic validation-method report-gate completed:

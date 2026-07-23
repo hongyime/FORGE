@@ -865,9 +865,22 @@ sentences as historical notes only, not as current instructions.
   execution, HTTP probing, provider call, live probing, credential use,
   scope/ROE relaxation, validation/report-gate change, severity change,
   proxy/IP rotation, rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: move Dredd and Schemathesis API-client line
-  scanners under the bounded worker-pool path. Keep this local to static config
-  parsing and preserve line order, URL candidate extraction, sensitive-query
+- [x] Dredd/Schemathesis line scanner worker-pool checkpoint: static
+  API-client config line scans now use the ordered bounded local worker helper
+  through a shared line-candidate helper. Line order, URL candidate extraction,
+  sensitive-query stripping, template rejection, and serial final dedupe are
+  preserved. Verification: compile passed; Ruff passed; focused API-client
+  worker suite passed (`12 passed`); focused persisted Dredd/Schemathesis/API
+  artifact slice passed (`3 passed`); cleanup left
+  `remaining_dredd_schemathesis_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-dredd-schemathesis-line-worker-pool.md`.
+  Safety: passive local static config parsing only; no tool execution, HTTP
+  probing, provider call, live probing, credential use, scope/ROE relaxation,
+  validation/report-gate change, severity change, proxy/IP rotation,
+  rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: move the Locust API-client regex-pattern
+  scanner under the bounded worker-pool path. Keep this local to static
+  `locustfile` parsing and preserve host/request ordering, sensitive-query
   stripping, template rejection, and serial final dedupe.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
