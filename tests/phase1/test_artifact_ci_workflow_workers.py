@@ -189,6 +189,79 @@ def test_ci_container_walkers_use_ordered_worker_path_and_preserve_order(
     }.issubset(set(observed_workers))
 
 
+def test_ci_structured_resource_families_use_ordered_worker_path_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    observed_family_batches: list[list[tuple[str, str]]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_yaml_ci_resource_family_candidates":
+            observed_family_batches.append([(item[0], item[1]) for item in materialized])
+        return original_batch(
+            self,
+            materialized,
+            worker,
+            default_factory=default_factory,
+        )
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    azure = {
+        "resources": {
+            "repositories": [{"type": "github", "name": "acme/azure-templates"}],
+            "containers": [{"container": "build", "image": "ghcr.io/acme/azdo-build:1"}],
+        },
+        "jobs": [{"job": "deploy", "container": "mcr.microsoft.com/azure-cli:latest"}],
+    }
+    bitbucket = {
+        "pipelines": {"default": [{"step": {"script": ["echo ok"]}}]},
+        "definitions": {
+            "repositories": {"infra": "acme/infra-scripts"},
+            "services": {"scanner": {"image": "registry.gitlab.com/acme/scanner:2"}},
+        },
+    }
+    gitlab = {
+        "include": [{"project": "acme/ci-templates"}],
+        "default": {"services": [{"name": "registry.gitlab.com/acme/postgres:14"}]},
+    }
+
+    assert processor._yaml_azure_pipelines_structured_candidates(
+        azure,
+        processor._yaml_normalized_mapping(azure),
+        (),
+    ) == [
+        "https://github.com/acme/azure-templates",
+        "https://ghcr.io/acme/azdo-build",
+        "https://mcr.microsoft.com/azure-cli",
+    ]
+    assert processor._yaml_bitbucket_pipelines_structured_candidates(
+        bitbucket,
+        processor._yaml_normalized_mapping(bitbucket),
+        (),
+    ) == [
+        "bitbucket-pipeline://pipeline",
+        "https://bitbucket.org/acme/infra-scripts",
+        "https://registry.gitlab.com/acme/scanner",
+    ]
+    assert processor._yaml_gitlab_ci_structured_candidates(
+        gitlab,
+        processor._yaml_normalized_mapping(gitlab),
+        (),
+    ) == [
+        "https://gitlab.com/acme/ci-templates",
+        "https://registry.gitlab.com/acme/postgres",
+    ]
+    assert observed_family_batches == [
+        [("azure_pipelines", "repositories"), ("azure_pipelines", "containers")],
+        [("bitbucket_pipelines", "repositories"), ("bitbucket_pipelines", "containers")],
+        [("gitlab_ci", "includes"), ("gitlab_ci", "services")],
+    ]
+
+
 def test_ci_platform_image_walkers_use_ordered_worker_path_and_preserve_order(
     tmp_path: Path,
     monkeypatch,

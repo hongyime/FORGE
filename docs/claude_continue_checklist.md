@@ -66,6 +66,22 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] CI resource top-level fan-out worker checkpoint:
+  Azure Pipelines, Bitbucket Pipelines, and GitLab CI structured metadata
+  extraction now routes independent repository/include and container/service
+  resource families through `_yaml_ci_resource_family_candidates()` on the
+  existing ordered bounded worker pool before deterministic dedupe. Existing
+  direct pipeline/workflow identifiers still stay first; repository/include
+  outputs still precede container/service outputs. This does not execute CI
+  jobs, fetch includes, contact CI providers, pull images, or change validation
+  and reporting gates. Verification: compile passed; Ruff passed; focused CI
+  repository/container/resource tests plus Azure/Bitbucket/GitLab resource
+  extraction fixtures passed (`6 passed`); compact CI worker file plus general
+  CI metadata ingestion fixture passed (`7 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-ci-resource-family-workers.md`.
+  Next gate: CircleCI workflow/container fan-out audit; only patch if the
+  workflow-name/container-image split is worth moving under the same bounded
+  family dispatcher without adding provider or CI execution behavior.
 - [x] Framework config DB/service worker audit checkpoint:
   No production code change needed. Framework config DB host and service
   endpoint extraction already routes both independent candidate lists through
@@ -76,9 +92,8 @@ historical notes only, not as current instructions.
   Verification: compile passed; Ruff passed; focused client-config worker and
   framework ingestion tests passed (`5 passed`). Handoff:
   `.claude/handoffs/2026-07-24-framework-config-worker-audit.md`.
-  Next gate: CI resource top-level fan-outs, then CircleCI workflow/container
-  fan-out, unless the sidecar audit identifies a higher-value safe sequential
-  parser gap.
+  Later code checkpoint moved CI resource top-level fan-outs under the same
+  worker path; continue with CircleCI workflow/container fan-out audit.
 - [x] AppVeyor multi-document worker checkpoint:
   AppVeyor YAML metadata extraction now routes independent parsed documents
   through the existing ordered bounded worker pool before deterministic pipeline

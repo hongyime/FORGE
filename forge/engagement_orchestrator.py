@@ -25821,11 +25821,40 @@ class ArtifactQueueProcessor:
         if pipeline_name:
             _append(f"azure-pipeline://{pipeline_name}")
 
-        for repo_candidate in self._yaml_azure_pipelines_repository_candidates(mapping):
-            _append(repo_candidate)
-        for container_candidate in self._yaml_azure_pipelines_container_candidates(mapping):
-            _append(container_candidate)
+        resource_batches = self._run_ordered_local_batch(
+            (
+                ("azure_pipelines", "repositories", mapping),
+                ("azure_pipelines", "containers", mapping),
+            ),
+            self._yaml_ci_resource_family_candidates,
+            default_factory=list,
+        )
+        for resource_values in resource_batches:
+            for resource_candidate in resource_values:
+                _append(resource_candidate)
         return candidates
+
+    def _yaml_ci_resource_family_candidates(
+        self,
+        family_job: tuple[str, str, dict[str, Any]],
+    ) -> list[str]:
+        platform, family, mapping = family_job
+        if platform == "azure_pipelines":
+            if family == "repositories":
+                return self._yaml_azure_pipelines_repository_candidates(mapping)
+            if family == "containers":
+                return self._yaml_azure_pipelines_container_candidates(mapping)
+        if platform == "bitbucket_pipelines":
+            if family == "repositories":
+                return self._yaml_bitbucket_pipelines_repository_candidates(mapping)
+            if family == "containers":
+                return self._yaml_bitbucket_pipelines_container_candidates(mapping)
+        if platform == "gitlab_ci":
+            if family == "includes":
+                return self._yaml_gitlab_ci_include_repository_candidates(mapping)
+            if family == "services":
+                return self._yaml_gitlab_ci_service_container_candidates(mapping)
+        return []
 
     def _yaml_mapping_looks_like_azure_pipelines(
         self,
@@ -26007,10 +26036,17 @@ class ArtifactQueueProcessor:
         pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
         _append(f"bitbucket-pipeline://{pipeline_name or 'pipeline'}")
 
-        for repo_candidate in self._yaml_bitbucket_pipelines_repository_candidates(mapping):
-            _append(repo_candidate)
-        for container_candidate in self._yaml_bitbucket_pipelines_container_candidates(mapping):
-            _append(container_candidate)
+        resource_batches = self._run_ordered_local_batch(
+            (
+                ("bitbucket_pipelines", "repositories", mapping),
+                ("bitbucket_pipelines", "containers", mapping),
+            ),
+            self._yaml_ci_resource_family_candidates,
+            default_factory=list,
+        )
+        for resource_values in resource_batches:
+            for resource_candidate in resource_values:
+                _append(resource_candidate)
         return candidates
 
     def _yaml_mapping_looks_like_bitbucket_pipelines(
@@ -26229,10 +26265,17 @@ class ArtifactQueueProcessor:
             if workflow_name:
                 _append(f"gitlab-pipeline://{workflow_name}")
 
-        for repo_candidate in self._yaml_gitlab_ci_include_repository_candidates(mapping):
-            _append(repo_candidate)
-        for container_candidate in self._yaml_gitlab_ci_service_container_candidates(mapping):
-            _append(container_candidate)
+        resource_batches = self._run_ordered_local_batch(
+            (
+                ("gitlab_ci", "includes", mapping),
+                ("gitlab_ci", "services", mapping),
+            ),
+            self._yaml_ci_resource_family_candidates,
+            default_factory=list,
+        )
+        for resource_values in resource_batches:
+            for resource_candidate in resource_values:
+                _append(resource_candidate)
         return candidates
 
     def _yaml_mapping_looks_like_gitlab_ci(

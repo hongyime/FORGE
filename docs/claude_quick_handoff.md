@@ -25,26 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: framework config DB/service worker audit is complete.
-No production code change was needed. Framework config DB host and service
-endpoint extraction already routes both independent candidate lists through
-`_structured_payload_lines()`, which uses the existing ordered bounded worker
-pool via `_run_ordered_local_batch()` before deterministic dedupe. It does not
-run framework CLIs, connect to databases/services, or contact providers.
+Latest checkpoint: CI resource top-level fan-out worker migration is complete.
+Azure Pipelines, Bitbucket Pipelines, and GitLab CI structured metadata
+extraction now routes independent repository/include and container/service
+resource families through `_yaml_ci_resource_family_candidates()` on the
+existing ordered bounded worker pool before deterministic dedupe. It does not
+execute CI jobs, fetch includes, contact CI providers, pull images, or change
+validation and reporting gates.
 
-Verification: compile/Ruff passed; focused client-config worker and framework
-ingestion tests passed (`5 passed`). Handoff:
-`.claude/handoffs/2026-07-24-framework-config-worker-audit.md`.
+Verification: compile/Ruff passed; focused CI repository/container/resource
+tests plus Azure/Bitbucket/GitLab resource extraction fixtures passed
+(`6 passed`); compact CI worker file plus general CI metadata ingestion fixture
+passed (`7 passed`). Handoff:
+`.claude/handoffs/2026-07-24-ci-resource-family-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: CI resource top-level fan-outs, then CircleCI
-workflow/container fan-out, unless the sidecar audit identifies a higher-value
-safe sequential parser gap. Preserve deterministic ordering, compact tests,
-scope gates, provider caps, pacing/backoff, and passive-only behavior.
+Current next gate: CircleCI workflow/container fan-out audit. Only patch if the
+workflow-name/container-image split is worth moving under the same bounded
+family dispatcher without adding provider or CI execution behavior. Preserve
+deterministic ordering, compact tests, scope gates, provider caps,
+pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
