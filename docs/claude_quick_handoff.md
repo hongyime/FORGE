@@ -25,17 +25,17 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Observability structured walk worker-pool migration is
-implemented. Prometheus, Alertmanager, Grafana, Loki, Tempo, and OpenTelemetry
-static config traversal now dispatches the current mapping/list child layer
-through ordered bounded worker helpers while nested recursion, inherited
-`http`/`https` scheme propagation, endpoint normalization, duplicate
-suppression, and final source-gated output order remain serial.
+Latest checkpoint: Orchestration structured walk worker-pool migration is
+implemented. Kubernetes/Nomad/Helm-style static orchestration config traversal
+now dispatches the current per-key/list child layer through ordered bounded
+worker helpers while nested recursion, key-level endpoint extraction,
+routing-rule extraction, duplicate suppression, and final source-gated output
+order remain serial.
 
-Verification: compile/Ruff passed; focused observability worker test passed
-(`2 passed`); focused persisted observability artifact slice passed (`1 passed`);
-cleanup left `remaining_observability_runtime_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-observability-worker-pool.md`.
+Verification: compile/Ruff passed; focused orchestration worker test plus
+Nomad/order and persisted orchestration artifact slices passed (`4 passed`);
+cleanup left `remaining_orchestration_runtime_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-orchestration-worker-pool.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -44,11 +44,11 @@ and persisted recon-output artifact slice both passed.
 
 Current next gate: re-audit remaining static parser/enricher candidates and
 select the next proven-safe bounded worker-pool migration before editing.
-Orchestration structured walk and security-scanner JSON structured walk are the
-currently ranked candidates. Preserve deterministic ordering, compact tests,
-scope gates, provider caps, pacing/backoff, and passive-only behavior.
+Security-scanner JSON structured walk is the currently ranked candidate.
+Preserve deterministic ordering, compact tests, scope gates, provider caps,
+pacing/backoff, and passive-only behavior.
 
-Natural stop note: repo was clean after push `5aeaa25`. Observability
+Natural stop note: repo was clean after push `24be7b1`. Orchestration
 structured walk was then selected from the read-only subagent audit and
 implemented in the current checkpoint.
 

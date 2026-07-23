@@ -362,12 +362,21 @@ historical notes only, not as current instructions.
   `2 passed`; focused persisted observability artifact slice -> `1 passed`;
   cleanup left `remaining_observability_runtime_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-observability-worker-pool.md`.
+- [x] Orchestration structured walk worker-pool checkpoint completed:
+  Kubernetes/Nomad/Helm-style static orchestration config traversal now
+  dispatches the current per-key/list child layer through ordered bounded
+  worker helpers while nested recursion, key-level endpoint extraction,
+  routing-rule extraction, duplicate suppression, and final source-gated output
+  order remain serial. Verification: compile/Ruff passed; focused
+  orchestration worker test plus Nomad/order and persisted orchestration
+  artifact slices -> `4 passed`; cleanup left
+  `remaining_orchestration_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-orchestration-worker-pool.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Orchestration structured walk and security-scanner JSON
-  structured walk are the currently ranked candidates. Preserve deterministic
-  ordering, compact tests, scope gates, provider caps, pacing/backoff, and
-  passive-only behavior.
+  before editing. Security-scanner JSON structured walk is the currently ranked
+  candidate. Preserve deterministic ordering, compact tests, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

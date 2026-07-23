@@ -23542,75 +23542,192 @@ class ArtifactQueueProcessor:
         *,
         source_label: str = "",
     ) -> list[str]:
+        candidate_values = self._orchestration_node_url_candidates(
+            document,
+            parent_key_fingerprint="",
+            source_label=source_label,
+            use_workers=True,
+        )
         candidates: list[str] = []
         seen: set[str] = set()
-
-        def _append(value: str) -> None:
+        for value in candidate_values:
             candidate = str(value or "").strip()
             lowered = candidate.lower()
             if not candidate or lowered in seen:
-                return
+                continue
             seen.add(lowered)
             candidates.append(candidate)
+        return candidates
 
-        def _append_endpoint_values(value: Any) -> None:
-            raw_values = self._orchestration_endpoint_values(value)
-            normalized_values = self._run_ordered_local_batch(
+    def _orchestration_node_url_candidates(
+        self,
+        value: Any,
+        *,
+        parent_key_fingerprint: str,
+        source_label: str,
+        use_workers: bool,
+    ) -> list[str]:
+        if isinstance(value, dict):
+            child_jobs = [
+                (child_index, raw_key, child, parent_key_fingerprint, source_label)
+                for child_index, (raw_key, child) in enumerate(value.items())
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._orchestration_child_url_candidates,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._orchestration_child_url_candidates_for_entry(
+                        raw_key,
+                        child,
+                        parent_key_fingerprint,
+                        source_label,
+                    )
+                    for (
+                        _child_index,
+                        raw_key,
+                        child,
+                        parent_key_fingerprint,
+                        source_label,
+                    ) in child_jobs
+                ]
+            )
+            return [
+                candidate
+                for child_values in child_batches
+                for candidate in child_values
+            ]
+        if isinstance(value, list):
+            item_jobs = [
+                (item_index, None, item, parent_key_fingerprint, source_label)
+                for item_index, item in enumerate(value[:4096])
+            ]
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._orchestration_child_url_candidates,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._orchestration_node_url_candidates(
+                        item,
+                        parent_key_fingerprint=parent_key_fingerprint,
+                        source_label=source_label,
+                        use_workers=False,
+                    )
+                    for _item_index, _raw_key, item, parent_key_fingerprint, source_label in item_jobs
+                ]
+            )
+            return [
+                candidate
+                for item_values in item_batches
+                for candidate in item_values
+            ]
+        if isinstance(value, str) and ("Host(" in value or "HostSNI(" in value):
+            return self._orchestration_routing_rule_candidates(value, use_workers=False)
+        return []
+
+    def _orchestration_child_url_candidates(
+        self,
+        child_job: tuple[int, Any, Any, str, str],
+    ) -> list[str]:
+        _child_index, raw_key, child, parent_key_fingerprint, source_label = child_job
+        if raw_key is None:
+            return self._orchestration_node_url_candidates(
+                child,
+                parent_key_fingerprint=parent_key_fingerprint,
+                source_label=source_label,
+                use_workers=False,
+            )
+        return self._orchestration_child_url_candidates_for_entry(
+            raw_key,
+            child,
+            parent_key_fingerprint,
+            source_label,
+        )
+
+    def _orchestration_child_url_candidates_for_entry(
+        self,
+        raw_key: Any,
+        child: Any,
+        parent_key_fingerprint: str,
+        source_label: str,
+    ) -> list[str]:
+        key_fingerprint = self._yaml_key_fingerprint(str(raw_key or ""))
+        candidates: list[str] = []
+        if key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS or (
+            parent_key_fingerprint in {"annotation", "annotations"}
+            and self._orchestration_annotation_endpointish_key(key_fingerprint)
+        ) or (
+            source_label in {"helm-chart", "helm-lock"}
+            and key_fingerprint in {"repository", "repositories"}
+        ):
+            candidates.extend(self._orchestration_endpoint_url_candidates(child, use_workers=False))
+        if key_fingerprint in {"annotation", "annotations", "label", "labels", "match", "matches", "rule", "rules"}:
+            candidates.extend(self._orchestration_routing_rule_candidates(child, use_workers=False))
+        candidates.extend(
+            self._orchestration_node_url_candidates(
+                child,
+                parent_key_fingerprint=key_fingerprint,
+                source_label=source_label,
+                use_workers=False,
+            )
+        )
+        return candidates
+
+    @staticmethod
+    def _orchestration_annotation_endpointish_key(key_fingerprint: str) -> bool:
+        return any(
+            marker in key_fingerprint
+            for marker in (
+                "endpoint",
+                "hostname",
+                "serveralias",
+                "vhost",
+                "domain",
+                "externaldns",
+            )
+        ) or key_fingerprint.endswith(("host", "url", "address"))
+
+    def _orchestration_endpoint_url_candidates(self, value: Any, *, use_workers: bool) -> list[str]:
+        raw_values = self._orchestration_endpoint_values(value)
+        normalized_values = (
+            self._run_ordered_local_batch(
                 raw_values,
                 self._edge_proxy_endpoint_url_candidate,
                 default_factory=str,
             )
-            for candidate in normalized_values:
-                _append(candidate)
+            if use_workers
+            else [
+                self._edge_proxy_endpoint_url_candidate(raw_value)
+                for raw_value in raw_values
+            ]
+        )
+        return [candidate for candidate in normalized_values if candidate]
 
-        def _append_routing_rule_values(value: Any) -> None:
-            candidate_batches = self._run_ordered_local_batch(
-                self._orchestration_text_values(value),
+    def _orchestration_routing_rule_candidates(self, value: Any, *, use_workers: bool) -> list[str]:
+        text_values = self._orchestration_text_values(value)
+        candidate_batches = (
+            self._run_ordered_local_batch(
+                text_values,
                 self._edge_proxy_line_url_candidates,
                 default_factory=list,
             )
-            for candidate_batch in candidate_batches:
-                for candidate in candidate_batch:
-                    _append(candidate)
-
-        def _annotation_endpointish_key(key_fingerprint: str) -> bool:
-            return any(
-                marker in key_fingerprint
-                for marker in (
-                    "endpoint",
-                    "hostname",
-                    "serveralias",
-                    "vhost",
-                    "domain",
-                    "externaldns",
-                )
-            ) or key_fingerprint.endswith(("host", "url", "address"))
-
-        def _walk(value: Any, parent_key_fingerprint: str = "") -> None:
-            if isinstance(value, dict):
-                for raw_key, child in value.items():
-                    key_fingerprint = self._yaml_key_fingerprint(str(raw_key or ""))
-                    if key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS or (
-                        parent_key_fingerprint in {"annotation", "annotations"}
-                        and _annotation_endpointish_key(key_fingerprint)
-                    ) or (
-                        source_label in {"helm-chart", "helm-lock"}
-                        and key_fingerprint in {"repository", "repositories"}
-                    ):
-                        _append_endpoint_values(child)
-                    if key_fingerprint in {"annotation", "annotations", "label", "labels", "match", "matches", "rule", "rules"}:
-                        _append_routing_rule_values(child)
-                    _walk(child, key_fingerprint)
-                return
-            if isinstance(value, list):
-                for child in value[:4096]:
-                    _walk(child, parent_key_fingerprint)
-                return
-            if isinstance(value, str) and ("Host(" in value or "HostSNI(" in value):
-                _append_routing_rule_values(value)
-
-        _walk(document)
-        return candidates
+            if use_workers
+            else [
+                self._edge_proxy_line_url_candidates(text_value)
+                for text_value in text_values
+            ]
+        )
+        return [
+            candidate
+            for candidate_batch in candidate_batches
+            for candidate in candidate_batch
+        ]
 
     def _orchestration_endpoint_values(self, value: Any) -> list[str]:
         values: list[str] = []

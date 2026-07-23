@@ -1030,12 +1030,27 @@ sentences as historical notes only, not as current instructions.
   OTel execution, scraping, endpoint probing, provider call, live probing,
   credential use, scope/ROE relaxation, validation/report-gate change, severity
   change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [x] Orchestration structured walk worker-pool checkpoint: Kubernetes/Nomad/
+  Helm-style static orchestration config traversal now dispatches the current
+  per-key/list child layer through ordered bounded worker helpers while nested
+  recursion, key-level endpoint extraction, routing-rule extraction, duplicate
+  suppression, and final source-gated output order remain serial. Existing
+  inner routing-rule batch assertions were updated because routing extraction
+  now executes serially inside child workers to avoid nested worker pools.
+  Verification: compile passed; Ruff passed; focused orchestration worker test
+  and Nomad/order plus persisted orchestration artifact slices passed
+  (`4 passed`); cleanup left `remaining_orchestration_runtime_files=0`.
+  Handoff: `.claude/handoffs/2026-07-24-orchestration-worker-pool.md`.
+  Safety: passive local static orchestration config parsing only; no manifest
+  apply, cluster access, Nomad/Helm/Kubernetes execution, endpoint probing,
+  provider call, live probing, credential use, scope/ROE relaxation,
+  validation/report-gate change, severity change, proxy/IP rotation,
+  rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Orchestration structured walk and security-scanner JSON
-  structured walk are the currently ranked candidates. Preserve deterministic
-  ordering, compact tests, scope gates, provider caps, pacing/backoff, and
-  passive-only behavior.
+  before editing. Security-scanner JSON structured walk is the currently ranked
+  candidate. Preserve deterministic ordering, compact tests, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
