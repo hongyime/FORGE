@@ -25,22 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Locust API-client pattern scanner worker-pool migration is
-implemented. Static `locustfile` regex-pattern scans now run as independent
-ordered bounded worker jobs and merge by original match position before the
-existing serial normalization and dedupe stage. Host/request ordering,
-sensitive-query stripping, and template rejection are preserved.
+Latest checkpoint: GraphQL config traversal worker-pool migration is
+implemented. Static GraphQL config document traversal now dispatches the current
+dict/list child layer through ordered bounded worker helpers while worker tasks
+recurse serially to avoid nested worker-pool oversubscription. Recursive
+candidate order, host-only URL normalization, sensitive-query stripping,
+template rejection, and serial final dedupe are preserved.
 
-Verification: compile/Ruff passed; focused API-client worker suite passed
-(`13 passed`); focused persisted Locust/API artifact slice passed (`2 passed`);
-cleanup left `remaining_locust_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-locust-pattern-worker-pool.md`.
+Verification: compile/Ruff passed; focused GraphQL worker tests passed
+(`2 passed`); focused persisted GraphQL/API artifact slice passed (`3 passed`);
+cleanup left `remaining_graphql_config_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-graphql-config-worker-pool.md`.
 
-Current next gate: inspect GraphQL config document traversal for a safe bounded
-worker-pool migration. Do not edit until the recursive traversal shape and
-existing tests are reviewed; avoid nested worker-pool oversubscription by using
-the Selenium-style top-level worker plus serial recursion pattern if
-implemented.
+Current next gate: re-audit the remaining static parser/enricher backlog and
+select the next proven-safe bounded worker-pool migration before editing.
+Preserve compact tests, deterministic ordering, scope gates, provider caps,
+pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

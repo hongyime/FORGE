@@ -891,11 +891,24 @@ sentences as historical notes only, not as current instructions.
   generation, script execution, HTTP probing, provider call, live probing,
   credential use, scope/ROE relaxation, validation/report-gate change, severity
   change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: inspect GraphQL config document traversal for
-  a safe bounded worker-pool migration. Do not edit until the recursive
-  traversal shape and existing tests are reviewed; avoid nested worker-pool
-  oversubscription by using the Selenium-style top-level worker plus serial
-  recursion pattern if implemented.
+- [x] GraphQL config traversal worker-pool checkpoint: static GraphQL config
+  document traversal now dispatches the current dict/list child layer through
+  ordered bounded worker helpers while worker tasks recurse serially to avoid
+  nested worker-pool oversubscription. Recursive candidate order, host-only URL
+  normalization, sensitive-query stripping, template rejection, and serial final
+  dedupe are preserved. Verification: compile passed; Ruff passed; focused
+  GraphQL worker tests passed (`2 passed`); focused persisted GraphQL/API
+  artifact slice passed (`3 passed`); cleanup left
+  `remaining_graphql_config_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-graphql-config-worker-pool.md`. Safety:
+  passive local static GraphQL config parsing only; no GraphQL query,
+  introspection, code generation, HTTP probing, provider call, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: re-audit the remaining static parser/enricher
+  backlog and select the next proven-safe bounded worker-pool migration before
+  editing. Preserve compact tests, deterministic ordering, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
