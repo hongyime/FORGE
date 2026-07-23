@@ -202,11 +202,18 @@ historical notes only, not as current instructions.
   `2 passed`; cleanup left `remaining_charles_test_db_files=0`; persistent
   inventory remains `1`, `5010`, `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-charles-session-worker-pool.md`.
-- [ ] Next implementation target: move SAZ raw-session member classification
-  under the bounded worker-pool path while keeping `ZipFile.read()` serial to
-  avoid shared archive-handle thread-safety risk. Add a focused worker-order
-  regression around `_saz_raw_session_member_entry`, then run the existing SAZ
-  functionality tests.
+- [x] SAZ raw-session classification worker-pool checkpoint completed:
+  Fiddler `.saz` raw-session member classification now uses the ordered bounded
+  local worker helper while `ZipFile.read()` remains serial to avoid shared
+  archive-handle thread-safety risk. Verification: compile/Ruff passed;
+  focused SAZ worker plus existing SAZ functionality tests -> `3 passed`;
+  cleanup left `remaining_saz_test_db_files=0`; persistent inventory remains
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-saz-session-worker-pool.md`.
+- [ ] Next implementation target: move Selenium SIDE navigation child traversal
+  under the bounded worker-pool path. Keep this local to static API-client
+  artifact parsing and preserve navigation order, base URL resolution,
+  sensitive-query stripping, and serial final dedupe.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

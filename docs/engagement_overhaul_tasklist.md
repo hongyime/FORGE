@@ -807,12 +807,24 @@ sentences as historical notes only, not as current instructions.
   live probing, credential use, scope/ROE relaxation, validation/report-gate
   change, severity change, proxy/IP rotation, rate-limit bypass, or destructive
   behavior.
-- [ ] Next implementation target: move SAZ raw-session member classification
-  under the bounded worker-pool path while keeping `ZipFile.read()` serial to
-  avoid shared archive-handle thread-safety risk. Add a focused worker-order
-  regression around `_saz_raw_session_member_entry`, then run the existing SAZ
-  functionality tests. Likely files: `forge/engagement_orchestrator.py`, a
-  small focused `tests/phase1/test_artifact_saz_workers.py`, docs, and handoff.
+- [x] SAZ raw-session classification worker-pool checkpoint: Fiddler `.saz`
+  raw-session member classification now uses the ordered bounded local worker
+  helper while `ZipFile.read()` remains serial to avoid shared archive-handle
+  thread-safety risk. Verification: compile passed; Ruff passed; focused SAZ
+  worker plus existing SAZ functionality tests passed (`3 passed`); cleanup
+  left `remaining_saz_test_db_files=0`, with persistent DB inventory unchanged
+  at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-saz-session-worker-pool.md`. Safety: passive
+  local static `.saz` parsing only; no HTTP replay, provider call, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, shared archive-handle threaded
+  reads, or destructive behavior.
+- [ ] Next implementation target: move Selenium SIDE navigation child traversal
+  under the bounded worker-pool path. Keep this local to static API-client
+  artifact parsing and preserve navigation order, base URL resolution,
+  sensitive-query stripping, and serial final dedupe. Likely files:
+  `forge/engagement_orchestrator.py`, a small focused worker test under
+  `tests/phase1/`, docs, and handoff.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

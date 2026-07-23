@@ -25,21 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Charles session JSON worker-pool migration is implemented.
-Charles `.chlsj` static session artifact child traversal now uses the ordered
-bounded local worker helper while retaining serial normalization/dedupe
-semantics and existing origin/redirect behavior.
+Latest checkpoint: SAZ raw-session classification worker-pool migration is
+implemented. Fiddler `.saz` raw-session member classification now uses the
+ordered bounded local worker helper while `ZipFile.read()` remains serial to
+avoid shared archive-handle thread-safety risk.
 
-Verification: compile/Ruff passed; focused Charles worker plus existing
-Charles artifact integration tests passed (`2 passed`); cleanup left
-`remaining_charles_test_db_files=0`; persistent inventory remains `1`, `5010`,
+Verification: compile/Ruff passed; focused SAZ worker plus existing SAZ
+functionality tests passed (`3 passed`); cleanup left
+`remaining_saz_test_db_files=0`; persistent inventory remains `1`, `5010`,
 `master.db`. Handoff:
-`.claude/handoffs/2026-07-24-charles-session-worker-pool.md`.
+`.claude/handoffs/2026-07-24-saz-session-worker-pool.md`.
 
-Current next gate: move SAZ raw-session member classification under the bounded
-worker-pool path while keeping `ZipFile.read()` serial to avoid shared
-archive-handle thread-safety risk. Add a focused worker-order regression around
-`_saz_raw_session_member_entry`, then run the existing SAZ functionality tests.
+Current next gate: move Selenium SIDE navigation child traversal under the
+bounded worker-pool path. Keep this local to static API-client artifact parsing
+and preserve navigation order, base URL resolution, sensitive-query stripping,
+and serial final dedupe.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

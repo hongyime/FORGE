@@ -31911,8 +31911,13 @@ class ArtifactQueueProcessor:
         source_file: str,
     ) -> list[tuple[str, str, str]]:
         sessions: dict[str, dict[str, tuple[str, bytes]]] = {}
-        for member in zf.infolist():
-            entry = self._saz_raw_session_member_entry(member)
+        members = zf.infolist()
+        member_entries = self._run_ordered_local_batch(
+            members,
+            self._saz_raw_session_member_entry,
+            default_factory=lambda: None,
+        )
+        for member, entry in zip(members, member_entries):
             if entry is None:
                 continue
             session_id, side, member_name = entry
