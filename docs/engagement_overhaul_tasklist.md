@@ -145,6 +145,23 @@ sentences as historical notes only, not as current instructions.
   `removed=4 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-phase6-raw-export-lineage-e2e.md`. Commit:
   `d0806ff`.
+- [x] DB-backed audit manifest artifact checkpoint:
+  Static dashboard and live web API now expose a safe downloadable audit
+  artifact even when no manual `audit_*.json` file exists beside reports.
+  Completed runs already store canonical manifests in `run_audit_manifests`;
+  dashboard/API now materialize `audit_{engagement_id}_run_{run_id}_{short_hash}.json`
+  summary artifacts from that DB row. Existing manual audit sidecars still win.
+  The materialized summary includes hash/status metadata and intentionally does
+  not expose raw `manifest_json`. Live list views materialize/count without
+  verification; detail/download paths write verified summaries. Verification:
+  compile passed; Ruff passed; focused static dashboard audit artifact test
+  passed (`1 passed, 19 deselected`); focused web UI API audit artifact test
+  passed (`1 passed, 35 deselected, 10 warnings`); full static dashboard file
+  passed (`20 passed`); full web UI engagement API file passed
+  (`36 passed, 71 warnings`); pytest engagement cleanup reported
+  `removed=4 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-db-backed-audit-manifest-artifacts.md`. Commit:
+  `4e000e2`.
 - [ ] Next gate:
   Run a current-code audit for remaining dashboard/report/audit surface
   mismatches or a broader mocked kill-chain acceptance gap. Do not reopen

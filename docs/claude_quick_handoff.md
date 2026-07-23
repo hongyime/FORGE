@@ -25,23 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Phase 6 raw-export lineage E2E parity is complete. Actual
-Phase 6 raw-export last-resort artifacts now have the same mocked
-dashboard/API/download parity proof. The test forces report-family persistence
-failure and verifies raw-export JSON/CSV lineage across static dashboard
-payload, live web API detail summary, JSON artifact download, and CSV artifact
-download.
+Latest checkpoint: DB-backed audit manifest artifacts are complete. Static
+dashboard and live web API now expose a safe downloadable audit artifact even
+when no manual `audit_*.json` file exists beside reports. Completed runs already
+store canonical manifests in `run_audit_manifests`; dashboard/API now
+materialize `audit_{engagement_id}_run_{run_id}_{short_hash}.json` summary
+artifacts from that DB row, while existing manual audit sidecars still win.
 
-It also caught/fixed an orphan markdown tie-break bug: dashboard report-family
-sorting now prefers JSON-backed families on equal mtime so auditable lineage
-wins over failed same-run markdown leftovers. Verification: compile/Ruff passed;
-focused template/raw-export lineage slice passed (`2 passed, 34 deselected,
-6 warnings`); focused dashboard raw/latest family slice passed
-(`2 passed, 18 deselected`); full web UI engagement API file passed
-(`36 passed, 71 warnings`); full static dashboard file passed (`20 passed`);
-pytest engagement cleanup reported `removed=4 remaining=0 post_scan=0`.
-Handoff: `.claude/handoffs/2026-07-24-phase6-raw-export-lineage-e2e.md`.
-Commit: `d0806ff`.
+The materialized summary includes hash/status metadata and intentionally does
+not expose raw `manifest_json`. Live list views materialize/count without
+verification; detail/download paths write verified summaries. Verification:
+compile/Ruff passed; focused static dashboard audit artifact test passed
+(`1 passed, 19 deselected`); focused web UI API audit artifact test passed
+(`1 passed, 35 deselected, 10 warnings`); full static dashboard file passed
+(`20 passed`); full web UI engagement API file passed
+(`36 passed, 71 warnings`); pytest engagement cleanup reported
+`removed=4 remaining=0 post_scan=0`. Handoff:
+`.claude/handoffs/2026-07-24-db-backed-audit-manifest-artifacts.md`. Commit:
+`4e000e2`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
