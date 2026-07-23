@@ -25,26 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: ExternalSecret remote-ref worker migration is complete.
-ExternalSecret `data` and `dataFrom` remote-ref key extraction now routes
-independent entries through the existing ordered bounded worker pool while
-preserving `data` before `dataFrom` order and deterministic dedupe. Provider
-expansion remains serial where it depends on cumulative remote keys. It does not
-call Kubernetes, secret stores, or cloud providers.
+Latest checkpoint: GoReleaser nested walker audit is complete. No code change
+was needed because GoReleaser root config child traversal already uses the
+ordered bounded worker pool via `_yaml_goreleaser_child_candidate_values`; the
+remaining list/scalar walkers run inside a single child job and stay serial to
+avoid nested worker pools.
 
-Verification: compile/Ruff passed; focused ExternalSecret worker regression and
-existing structured YAML cloud-asset integration slice passed (`2 passed`).
-Handoff: `.claude/handoffs/2026-07-24-external-secret-workers.md`.
+Verification: focused GoReleaser worker test and existing engagement-backed
+quality/release dotfile artifact slice passed (`2 passed`). Handoff:
+`.claude/handoffs/2026-07-24-goreleaser-nested-walker-audit.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: GoReleaser nested list/scalar walkers are lower priority;
-audit first and skip code changes if root child dispatch already covers the
-useful work. Preserve deterministic ordering, compact tests, scope gates,
-provider caps, pacing/backoff, and passive-only behavior.
+Current next gate: run a fresh audit for remaining passive/static parser
+hotspots before editing; the ranked list from Ohm is now exhausted. Preserve
+deterministic ordering, compact tests, scope gates, provider caps,
+pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

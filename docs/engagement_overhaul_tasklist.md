@@ -91,6 +91,16 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] GoReleaser nested walker audit checkpoint:
+  No code change needed. GoReleaser root config child traversal already uses the
+  ordered bounded worker pool via `_yaml_goreleaser_child_candidate_values`; the
+  remaining list/scalar walkers run inside a single child job and are kept serial
+  to avoid nested worker pools. Verification: focused GoReleaser worker test and
+  existing engagement-backed quality/release dotfile artifact slice passed
+  (`2 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-goreleaser-nested-walker-audit.md`.
+  Next gate: run a fresh audit for remaining passive/static parser hotspots
+  before editing; the ranked list from Ohm is now exhausted.
 - [x] ExternalSecret remote-ref worker checkpoint:
   ExternalSecret `data` and `dataFrom` remote-ref key extraction now routes
   independent entries through the existing ordered bounded worker pool while
