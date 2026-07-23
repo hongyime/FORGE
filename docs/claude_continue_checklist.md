@@ -403,11 +403,24 @@ historical notes only, not as current instructions.
   -> `6 passed`; persisted runtime toolchain artifact slice -> `1 passed`;
   cleanup left `remaining_js_runtime_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-js-runtime-regex-worker-pool.md`.
+- [x] Recon-output JSON structured walk worker-pool checkpoint completed:
+  already collected recon-tool JSON/JSONL artifacts now dispatch source-gated
+  structured document child traversal through ordered bounded worker helpers
+  while nested recursion, text/XML/line parsing, final candidate normalization,
+  duplicate suppression, sensitive-query stripping, and template rejection
+  remain deterministic. Verification: compile/Ruff passed; focused recon
+  worker plus structured-payload and persisted recon-output slices -> `3
+  passed`; adjacent DNS/takeover, imported scanner, passive scan, SARIF, and
+  SBOM/security-tool output slices -> `8 passed` including recon checks;
+  cleanup left `remaining_recon_tool_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-recon-output-json-worker-pool.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior. Do not assume the
-  older ranked list is still current after the JS runtime checkpoint.
+  provider caps, pacing/backoff, and passive-only behavior. Latest read-only
+  audit says Terraform state resource collection is low priority because
+  surrounding Terraform stages are already workerized; do not edit it unless a
+  concrete current gap is proven.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

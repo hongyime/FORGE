@@ -25,19 +25,19 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: JS runtime config regex worker-pool migration is
-implemented. JS runtime/package and frontend/deploy config parsing now
-dispatches independent package-specifier, registry, and browser-endpoint regex
-families through ordered bounded worker helpers while Firebase hosting site
-ordering, serial Bun `[install.scopes]` line-state parsing, final offset sort,
-and final URL/package normalization remain deterministic.
+Latest checkpoint: Recon-output JSON structured walk worker-pool migration is
+implemented. Already collected recon-tool JSON/JSONL artifacts now dispatch
+source-gated structured document child traversal through ordered bounded worker
+helpers while nested recursion, text/XML/line parsing, final candidate
+normalization, duplicate suppression, sensitive-query stripping, and template
+rejection remain deterministic.
 
-Verification: compile/Ruff passed; focused JS runtime worker/config/Firebase
-hosting tests passed (`6 passed`); persisted runtime toolchain artifact slice
-passed (`1 passed`); cleanup left `remaining_js_runtime_test_files=0`.
-Read-only sidecar `Noether` confirmed the migration shape and do-not-touch
-boundaries. Handoff:
-`.claude/handoffs/2026-07-24-js-runtime-regex-worker-pool.md`.
+Verification: compile/Ruff passed; focused recon worker test plus existing
+structured-payload and persisted recon-output artifact slices passed
+(`3 passed`); adjacent DNS/takeover, imported scanner, passive scan, SARIF,
+and SBOM/security-tool output slices passed (`8 passed` including recon
+checks); cleanup left `remaining_recon_tool_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-recon-output-json-worker-pool.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -47,11 +47,14 @@ and persisted recon-output artifact slice both passed.
 Current next gate: re-audit remaining static parser/enricher candidates and
 select the next proven-safe bounded worker-pool migration before editing.
 Preserve deterministic ordering, compact tests, scope gates, provider caps,
-pacing/backoff, and passive-only behavior.
+pacing/backoff, and passive-only behavior. Latest read-only audit says
+Terraform state resource collection is low priority because surrounding
+Terraform stages are already workerized; do not edit it unless a concrete
+current gap is proven.
 
-Natural stop note: repo was clean after push `24e0260`. JS runtime config regex
-families were then selected from the read-only subagent audit and implemented
-in the current checkpoint.
+Natural stop note: repo was clean after push `8d934bd`. Recon-output JSON
+structured traversal was then selected from local review while read-only
+re-audit was running and implemented in the current checkpoint.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

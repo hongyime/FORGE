@@ -1091,11 +1091,29 @@ sentences as historical notes only, not as current instructions.
   call, live probing, credential use, scope/ROE relaxation,
   validation/report-gate change, severity change, proxy/IP rotation,
   rate-limit bypass, or destructive behavior.
+- [x] Recon-output JSON structured walk worker-pool checkpoint: already
+  collected recon-tool JSON/JSONL artifacts now dispatch source-gated structured
+  document child traversal through ordered bounded worker helpers while nested
+  recursion, text/XML/line parsing, final candidate normalization, duplicate
+  suppression, sensitive-query stripping, and template rejection remain
+  deterministic. Verification: compile passed; Ruff passed; focused recon
+  worker test plus existing structured-payload and persisted recon-output
+  artifact slices passed (`3 passed`); adjacent DNS/takeover, imported scanner,
+  passive scan, SARIF, and SBOM/security-tool output slices passed (`8 passed`
+  including recon checks); cleanup left
+  `remaining_recon_tool_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-recon-output-json-worker-pool.md`. Safety:
+  passive parsing of already-collected recon output only; no recon tool
+  execution, endpoint probing, provider call, live probing, credential use,
+  scope/ROE relaxation, validation/report-gate change, severity change,
+  proxy/IP rotation, rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior. Do not assume the
-  older ranked list is still current after the security-scanner checkpoint.
+  provider caps, pacing/backoff, and passive-only behavior. Latest read-only
+  audit says Terraform state resource collection is low priority because
+  surrounding Terraform stages are already workerized; do not edit it unless a
+  concrete current gap is proven.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
