@@ -757,6 +757,60 @@ def _audit_files(eng_id: str, reports_dir: Path) -> list[Path]:
     )
 
 
+def _materialize_audit_manifest_artifacts(
+    con: sqlite3.Connection,
+    *,
+    db_path: Path,
+    reports_dir: Path,
+    engagement_id: int,
+    verify: bool,
+) -> list[Path]:
+    existing = _audit_files(str(engagement_id), reports_dir)
+    manual_existing = [
+        path
+        for path in existing
+        if not path.name.startswith(f"audit_{engagement_id}_run_")
+    ]
+    if manual_existing or not _table_exists(con, "run_audit_manifests"):
+        return existing
+    rows = _fetch_rows(
+        con,
+        """
+        SELECT id, run_id
+        FROM run_audit_manifests
+        WHERE engagement_id=?
+        ORDER BY run_id DESC, id DESC
+        """,
+        (engagement_id,),
+    )
+    for row in rows:
+        run_id = int(row["run_id"] or 0)
+        if run_id <= 0:
+            continue
+        summary = summarize_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=engagement_id,
+            run_id=run_id,
+            verify=verify,
+        )
+        if not summary.get("present"):
+            continue
+        short_hash = str(summary.get("short_hash") or "unknown")[:12] or "unknown"
+        payload = {
+            "schema": "forge.run_audit_manifest_summary.v1",
+            "engagement_id": int(engagement_id),
+            "run_id": run_id,
+            **summary,
+        }
+        artifact_path = reports_dir / f"audit_{engagement_id}_run_{run_id}_{short_hash}.json"
+        artifact_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+    return _audit_files(str(engagement_id), reports_dir)
+
+
 def _graph_files(eng_id: str, reports_dir: Path) -> list[Path]:
     return sorted(reports_dir.glob(f"{eng_id}_attack_graph*"), key=lambda path: path.name.lower())
 
@@ -3913,6 +3967,13 @@ def generate_dashboard(
                 except (TypeError, ValueError):
                     engagement_id = None
                 if engagement_id is not None:
+                    item["audit_files"] = _materialize_audit_manifest_artifacts(
+                        con,
+                        db_path=db_path,
+                        reports_dir=reports_dir,
+                        engagement_id=engagement_id,
+                        verify=True,
+                    )
                     graph_summary, graph_payload, graph_snapshot_at = _graph_state_for_engagement(
                         con,
                         engagement_id,

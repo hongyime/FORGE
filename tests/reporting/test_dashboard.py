@@ -576,6 +576,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         ),
         encoding="utf-8",
     )
+    (reports_dir / "audit_1001_manifest_20260709T014413.json").unlink()
     (reports_dir / "1001_attack_graph.graphml").write_text(
         """
         <graphml xmlns="http://graphml.graphdrawing.org/xmlns">
@@ -734,14 +735,18 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "engagement_1001_report_20260709T014412.md",
         "engagement_1001_report_20260709T014412.json",
         "engagement_1001_report_20260709T014412.pdf",
-        "audit_1001_manifest_20260709T014413.json",
     }
     audit_artifact = next(
         artifact
         for artifact in detail_payload["artifacts"]
-        if artifact["name"] == "audit_1001_manifest_20260709T014413.json"
+        if artifact["name"].startswith("audit_1001_run_")
     )
     assert audit_artifact["kind"] == "audit"
+    assert audit_artifact["name"].endswith(f"{manifest_hash[:12]}.json")
+    audit_artifact_payload = json.loads((reports_dir / audit_artifact["name"]).read_text(encoding="utf-8"))
+    assert audit_artifact_payload["manifest_hash"] == manifest_hash
+    assert audit_artifact_payload["verification_status"] == "verified"
+    assert "manifest_json" not in audit_artifact_payload
     assert {artifact["kind"] for artifact in detail_payload["artifacts"]} == {"audit", "graph", "report"}
 
     detail_html = detail_page.read_text(encoding="utf-8")

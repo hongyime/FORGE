@@ -33,6 +33,7 @@ from forge.reporting.dashboard import (
     _highest_severity,
     _latest_report_family_files,
     _latest_engagement_run,
+    _materialize_audit_manifest_artifacts,
     _normalize_engagement_tags,
     _report_history_payload,
     _reportable_vulnerability_rows,
@@ -870,7 +871,13 @@ def create_app() -> Any:
         slug_source = str(row["name"] or primary_seed or f"engagement-{engagement_id}")
         slug = f"engagement-{engagement_id}-{_slugify(slug_source)}"
         report_files = _report_files(engagement_id)
-        audit_files = _audit_files(engagement_id)
+        audit_files = _materialize_audit_manifest_artifacts(
+            con,
+            db_path=db_file,
+            reports_dir=_reports_dir(),
+            engagement_id=engagement_id,
+            verify=False,
+        )
         graph_files = _graph_files(str(engagement_id), _reports_dir())
         severity_summary = _severity_summary(con, engagement_id)
         graph_summary, _graph_payload, _graph_snapshot_at = _graph_state_for_engagement(
@@ -918,7 +925,13 @@ def create_app() -> Any:
         summary = _engagement_summary_payload(db_file, con, row)
         engagement_id = int(row["id"])
         report_files = _report_files(engagement_id)
-        audit_files = _audit_files(engagement_id)
+        audit_files = _materialize_audit_manifest_artifacts(
+            con,
+            db_path=db_file,
+            reports_dir=_reports_dir(),
+            engagement_id=engagement_id,
+            verify=True,
+        )
         graph_files = _graph_files(str(engagement_id), _reports_dir())
         artifacts = [_artifact_payload(summary["slug"], path, "report") for path in report_files] + [
             _artifact_payload(summary["slug"], path, "graph") for path in graph_files
@@ -1026,7 +1039,15 @@ def create_app() -> Any:
                     summary = _engagement_summary_payload(db_file, con, row)
                     if ref not in {str(summary["id"]).lower(), str(summary["slug"]).lower()}:
                         continue
-                    files = _report_files(int(summary["id"])) + _audit_files(int(summary["id"])) + _graph_files(
+                    engagement_id = int(summary["id"])
+                    audit_files = _materialize_audit_manifest_artifacts(
+                        con,
+                        db_path=db_file,
+                        reports_dir=_reports_dir(),
+                        engagement_id=engagement_id,
+                        verify=True,
+                    )
+                    files = _report_files(engagement_id) + audit_files + _graph_files(
                         str(summary["id"]),
                         _reports_dir(),
                     )
