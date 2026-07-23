@@ -680,12 +680,34 @@ sentences as historical notes only, not as current instructions.
   call beyond mocked validators, live probing, credential use, scope
   relaxation, validation-gate change, report-gate change, severity change,
   proxy/IP rotation, or rate-limit bypass.
-- [ ] Next implementation target: add `llms.txt` / public AI metadata compact
-  E2E parity. Extend the compact multi-seed mocked E2E with the smallest local
-  `llms.txt` or adjacent public AI metadata fixture that proves owner contacts,
-  markdown or field-link documentation/API URL pivots, cloud refs, validation
-  inventory, graph/report/audit review, deterministic fallback output, and
-  cleanup. Likely files: `tests/phase1/kill_chain_multiseed_fixture.py`,
+- [x] Public AI metadata kill-chain E2E parity checkpoint:
+  the compact full-closeout multi-seed E2E now includes local `llms.txt`,
+  `ai.txt`, and `ai-plugin.json` artifacts under the normal artifact intake
+  root and proves owner contacts, stripped documentation/API/auth URL pivots,
+  Supabase/Firebase refs, passive `ai_plugin_manifest` inventory, validation
+  inventory, graph nodes, deterministic template fallback report context, raw
+  CSV validation rows, audit closeout, and cleanup. Templated public-AI URLs
+  and sensitive query strings are asserted absent from persisted URL seeds. The
+  test-local graph export cap was raised from 220 to 300 nodes so the expanded
+  compact fixture retains asserted public-AI review nodes. Verification:
+  compile passed; Ruff passed; focused public metadata / AI metadata tests
+  passed (`11 passed`); focused mocked E2E passed (`1 passed` in 184.03s);
+  cleanup removed 13 test-owned temp DB/report files and left
+  `remaining_test_owned_files=0`, with persistent DB inventory unchanged at
+  `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-public-ai-metadata-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E and passive public-AI metadata only; no provider
+  call beyond mocked validators, live probing, credential use, plugin
+  execution, scope relaxation, validation-gate change, report-gate change,
+  severity change, proxy/IP rotation, or rate-limit bypass.
+- [ ] Next implementation target: add well-known security/supply-chain
+  metadata compact E2E parity. Extend the compact multi-seed mocked E2E with
+  the smallest local `.well-known` security/supply-chain metadata fixture set
+  (for example CSAF/SBOM/passkey/SSH/PKI metadata) that proves contacts,
+  sanitized recursive URLs, cloud refs, passive review inventory, validation
+  inventory where applicable, graph/report/audit review, deterministic fallback
+  output, and cleanup. Likely files:
+  `tests/phase1/kill_chain_multiseed_fixture.py`,
   `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py`, and only minimal
   production code if the E2E exposes a real gap.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:

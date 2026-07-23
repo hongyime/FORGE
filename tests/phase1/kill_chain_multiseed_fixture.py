@@ -31,6 +31,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     _write_web_manifest(config.parent / "site.webmanifest")
     _write_mobile_association_metadata(config.parent / ".well-known")
     _write_security_txt(config.parent / ".well-known" / "security.txt")
+    _write_public_ai_metadata(config.parent)
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -284,6 +285,54 @@ def _write_security_txt(path: Path) -> None:
         Supabase: https://securitytxtvault.supabase.co
         Firebase: https://securitytxt-firebase.firebaseio.com
         """.strip(),
+        encoding="utf-8",
+    )
+
+
+def _write_public_ai_metadata(artifact_dir: Path) -> None:
+    (artifact_dir / "llms.txt").write_text(
+        """
+        Contact: mailto:llms-e2e-owner@acme.test
+        Docs: https://llms.acme.test/context?token=hidden
+        OpenAPI: https://llms.acme.test/openapi.yaml?api_key=hidden
+        Supabase: https://llmse2evault.supabase.co
+        Template: https://llms.acme.test/{tenant}/agent
+        """.strip(),
+        encoding="utf-8",
+    )
+    (artifact_dir / "ai.txt").write_text(
+        """
+        contact: ai-e2e-owner@acme.test
+        Policy: https://ai.acme.test/policy?signature=hidden
+        Docs: https://ai.acme.test/docs?token=hidden
+        Firebase: https://ai-e2e-firebase.firebaseio.com
+        Template: https://ai.acme.test/{workspace}/agent
+        """.strip(),
+        encoding="utf-8",
+    )
+    (artifact_dir / "ai-plugin.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "v1",
+                "name_for_human": "Acme Plugin",
+                "name_for_model": "acme_plugin",
+                "contact_email": "aiplugin-e2e-owner@acme.test",
+                "api": {
+                    "type": "openapi",
+                    "url": "https://plugin.acme.test/openapi.yaml?token=hidden",
+                },
+                "auth": {
+                    "authorization_url": "https://plugin.acme.test/oauth/authorize?api_key=hidden",
+                },
+                "description_for_model": (
+                    "Firebase https://aiplugin-e2e-firebase.firebaseio.com and "
+                    "docs https://plugin.acme.test/docs?signature=hidden"
+                ),
+                "legal_info_url": "https://plugin.acme.test/legal?signature=hidden",
+                "templated_endpoint": "https://plugin.acme.test/{tenant}/openapi.yaml",
+            },
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
 

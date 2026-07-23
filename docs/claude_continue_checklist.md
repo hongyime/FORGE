@@ -113,11 +113,26 @@ historical notes only, not as current instructions.
   `remaining_test_owned_files=0`; persistent inventory remains `1`, `5010`,
   `master.db`. Handoff:
   `.claude/handoffs/2026-07-24-security-txt-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: add `llms.txt` / public AI metadata compact
-  E2E parity. Extend the compact multi-seed mocked E2E with the smallest local
-  public AI metadata fixture proving owner contacts, markdown or field-link
-  documentation/API URL pivots, cloud refs, validation inventory,
-  graph/report/audit review, deterministic fallback output, and cleanup.
+- [x] Public AI metadata kill-chain E2E parity completed:
+  the compact full-closeout multi-seed E2E now includes local `llms.txt`,
+  `ai.txt`, and `ai-plugin.json` artifacts and proves owner contacts, stripped
+  documentation/API/auth URL pivots, Supabase/Firebase refs, passive
+  `ai_plugin_manifest` inventory, validation inventory, graph nodes,
+  deterministic template fallback report context, raw CSV validation rows,
+  audit closeout, and cleanup. Templated public-AI URLs and sensitive query
+  strings are asserted absent from persisted URL seeds. The E2E graph export
+  cap was raised from 220 to 300 nodes. Verification: compile/Ruff passed;
+  focused public metadata / AI metadata tests -> `11 passed`; focused E2E ->
+  `1 passed` in 184.03s; cleanup removed 13 test-owned DB/report files and
+  left `remaining_test_owned_files=0`; persistent inventory remains `1`,
+  `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-public-ai-metadata-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: add well-known security/supply-chain
+  metadata compact E2E parity. Extend the compact multi-seed mocked E2E with
+  the smallest local CSAF/SBOM/passkey/SSH/PKI-style `.well-known` fixture set
+  proving contacts, sanitized recursive URLs, cloud refs, passive review
+  inventory, validation inventory where applicable, graph/report/audit review,
+  deterministic fallback output, and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

@@ -129,7 +129,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
                 min_severity="LOW",
                 critical_path_only=False,
                 snapshot=True,
-                max_nodes=220,
+                max_nodes=300,
             )
             return subprocess.CompletedProcess(["forge", *argv], 0, "graph built\n", "")
         if argv[:2] == ["report", "generate"]:
@@ -184,7 +184,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         return subprocess.CompletedProcess(["forge", *argv], 0, "mock ok\n", "")
 
     def validate_asset(con: sqlite3.Connection, kind: str, ref: str) -> dict[str, str]:
-        unsupported_asset_types = {"mobile_android_package", "mobile_ios_app", "mobile_ios_app_store_id"}
+        unsupported_asset_types = {
+            "ai_plugin_manifest",
+            "mobile_android_package",
+            "mobile_ios_app",
+            "mobile_ios_app_store_id",
+        }
         status = "UNSUPPORTED" if kind in unsupported_asset_types else "UNVERIFIED" if ref.startswith("dead-") else "VALIDATED"
         methods = {
             "firebase": "firebase_database_shallow_read",
@@ -198,9 +203,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             else methods[kind]
         )
         http_status = None if status == "UNSUPPORTED" else 200
-        evidence = "unsupported passive mobile inventory" if status == "UNSUPPORTED" else '{"records":1}'
+        evidence = "unsupported passive inventory" if status == "UNSUPPORTED" else '{"records":1}'
         notes = (
-            "No deterministic validator available for this passive mobile asset."
+            "No deterministic validator available for this passive asset."
             if status == "UNSUPPORTED"
             else "mock provider"
         )
@@ -311,6 +316,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("assetlinks-owner@acme.test", "email"),
             ("aasa-owner@acme.test", "email"),
             ("securitytxt-owner@acme.test", "email"),
+            ("llms-e2e-owner@acme.test", "email"),
+            ("ai-e2e-owner@acme.test", "email"),
+            ("aiplugin-e2e-owner@acme.test", "email"),
             ("oauth-owner@acme.test", "email"),
             ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
@@ -335,6 +343,14 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://security.acme.test/report", "url"),
             ("https://security.acme.test/policy", "url"),
             ("https://jobs.acme.test/security", "url"),
+            ("https://llms.acme.test/context", "url"),
+            ("https://llms.acme.test/openapi.yaml", "url"),
+            ("https://ai.acme.test/policy", "url"),
+            ("https://ai.acme.test/docs", "url"),
+            ("https://plugin.acme.test/openapi.yaml", "url"),
+            ("https://plugin.acme.test/oauth/authorize", "url"),
+            ("https://plugin.acme.test/docs", "url"),
+            ("https://plugin.acme.test/legal", "url"),
             (openid_url, "url"),
             ("https://login.acme.test/oauth2/v1/authorize", "url"),
             ("https://login-api.acme.test/oauth2/v1/token", "url"),
@@ -360,6 +376,17 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("https://security.acme.test/report?token=hidden", "url") not in seeds
         assert ("https://security.acme.test/policy?api_key=hidden", "url") not in seeds
         assert ("https://jobs.acme.test/security?signature=hidden", "url") not in seeds
+        assert ("https://llms.acme.test/context?token=hidden", "url") not in seeds
+        assert ("https://llms.acme.test/openapi.yaml?api_key=hidden", "url") not in seeds
+        assert ("https://llms.acme.test/{tenant}/agent", "url") not in seeds
+        assert ("https://ai.acme.test/policy?signature=hidden", "url") not in seeds
+        assert ("https://ai.acme.test/docs?token=hidden", "url") not in seeds
+        assert ("https://ai.acme.test/{workspace}/agent", "url") not in seeds
+        assert ("https://plugin.acme.test/openapi.yaml?token=hidden", "url") not in seeds
+        assert ("https://plugin.acme.test/oauth/authorize?api_key=hidden", "url") not in seeds
+        assert ("https://plugin.acme.test/docs?signature=hidden", "url") not in seeds
+        assert ("https://plugin.acme.test/legal?signature=hidden", "url") not in seeds
+        assert ("https://plugin.acme.test/{tenant}/openapi.yaml", "url") not in seeds
         assert ("https://login.acme.test/oauth/{tenant}/authorize", "url") not in seeds
         assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
@@ -408,6 +435,18 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert security_txt_artifact is not None
         assert security_txt_artifact["status"] == "parsed"
         assert json.loads(security_txt_artifact["metadata_json"])["format"] == "security.txt"
+        for artifact_pattern, expected_format in (
+            ("%llms.txt", "llms.txt"),
+            ("%ai.txt", "ai.txt"),
+            ("%ai-plugin.json", "ai-plugin.json"),
+        ):
+            public_ai_artifact = con.execute(
+                "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE ?",
+                (artifact_pattern,),
+            ).fetchone()
+            assert public_ai_artifact is not None
+            assert public_ai_artifact["status"] == "parsed"
+            assert json.loads(public_ai_artifact["metadata_json"])["format"] == expected_format
         openid_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE source_url=?",
             (openid_url,),
@@ -451,6 +490,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("supabase", "aasavault"),
             ("supabase", "securitytxtvault"),
             ("firebase", "securitytxt-firebase"),
+            ("supabase", "llmse2evault"),
+            ("firebase", "ai-e2e-firebase"),
+            ("firebase", "aiplugin-e2e-firebase"),
+            ("ai_plugin_manifest", "plugin.acme.test/acme_plugin"),
             ("mobile_android_package", "com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.credentials"),
@@ -469,6 +512,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert statuses[("supabase", "aasavault")] == "VALIDATED"
         assert statuses[("supabase", "securitytxtvault")] == "VALIDATED"
         assert statuses[("firebase", "securitytxt-firebase")] == "VALIDATED"
+        assert statuses[("supabase", "llmse2evault")] == "VALIDATED"
+        assert statuses[("firebase", "ai-e2e-firebase")] == "VALIDATED"
+        assert statuses[("firebase", "aiplugin-e2e-firebase")] == "VALIDATED"
+        assert statuses[("ai_plugin_manifest", "plugin.acme.test/acme_plugin")] == "UNSUPPORTED"
         assert statuses[("mobile_android_package", "com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.credentials")] == "UNSUPPORTED"
@@ -522,6 +569,48 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     )
     assert any(
         node.get("source_table") == "cloud_assets"
+        and (node.get("metadata") or {}).get("identifier") == "llmse2evault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "vulnerability_findings"
+        and (node.get("metadata") or {}).get("resource_id") == "llmse2evault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "cloud_assets"
+        and (node.get("metadata") or {}).get("identifier") == "ai-e2e-firebase"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "vulnerability_findings"
+        and (node.get("metadata") or {}).get("resource_id") == "ai-e2e-firebase"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "cloud_assets"
+        and (node.get("metadata") or {}).get("identifier") == "aiplugin-e2e-firebase"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "vulnerability_findings"
+        and (node.get("metadata") or {}).get("resource_id") == "aiplugin-e2e-firebase"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "cloud_assets"
+        and (node.get("metadata") or {}).get("identifier") == "plugin.acme.test/acme_plugin"
+        and (node.get("metadata") or {}).get("validation_status") == "UNSUPPORTED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "cloud_assets"
         and (node.get("metadata") or {}).get("identifier") == "com.acme.portal"
         and (node.get("metadata") or {}).get("validation_status") == "UNSUPPORTED"
         for node in graph["nodes"]
@@ -549,7 +638,11 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert "supabase://aasavault" in finding_report
     assert "supabase://securitytxtvault" in finding_report
     assert "firebase://securitytxt-firebase" in finding_report
+    assert "supabase://llmse2evault" in finding_report
+    assert "firebase://ai-e2e-firebase" in finding_report
+    assert "firebase://aiplugin-e2e-firebase" in finding_report
     assert "dead-firebase-prod" not in finding_report
+    assert "plugin.acme.test/acme_plugin" not in finding_report
     assert "com.acme.portal" not in finding_report
     assert any(
         item.get("identifier") == "manifestvault"
@@ -559,6 +652,26 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert any(
         item.get("identifier") == "securitytxtvault"
         and item.get("validation_status") == "VALIDATED"
+        for item in report_payload["context"]["cloud_validation_inventory"]
+    )
+    assert any(
+        item.get("identifier") == "llmse2evault"
+        and item.get("validation_status") == "VALIDATED"
+        for item in report_payload["context"]["cloud_validation_inventory"]
+    )
+    assert any(
+        item.get("identifier") == "aiplugin-e2e-firebase"
+        and item.get("validation_status") == "VALIDATED"
+        for item in report_payload["context"]["cloud_validation_inventory"]
+    )
+    assert any(
+        item.get("identifier") == "ai-e2e-firebase"
+        and item.get("validation_status") == "VALIDATED"
+        for item in report_payload["context"]["cloud_validation_inventory"]
+    )
+    assert any(
+        item.get("identifier") == "plugin.acme.test/acme_plugin"
+        and item.get("validation_status") == "UNSUPPORTED"
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
     assert any(
@@ -588,6 +701,26 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert any(
         row.get("cloud_identifier") == "securitytxtvault"
         and row.get("validation_status") == "VALIDATED"
+        for row in validation_rows
+    )
+    assert any(
+        row.get("cloud_identifier") == "llmse2evault"
+        and row.get("validation_status") == "VALIDATED"
+        for row in validation_rows
+    )
+    assert any(
+        row.get("cloud_identifier") == "aiplugin-e2e-firebase"
+        and row.get("validation_status") == "VALIDATED"
+        for row in validation_rows
+    )
+    assert any(
+        row.get("cloud_identifier") == "ai-e2e-firebase"
+        and row.get("validation_status") == "VALIDATED"
+        for row in validation_rows
+    )
+    assert any(
+        row.get("cloud_identifier") == "plugin.acme.test/acme_plugin"
+        and row.get("validation_status") == "UNSUPPORTED"
         for row in validation_rows
     )
     assert any(
