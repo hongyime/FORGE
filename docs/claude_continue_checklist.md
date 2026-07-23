@@ -66,6 +66,33 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Report fallback integrity checkpoint:
+  Phase 6 reporting now falls back to the deterministic template when explicit
+  provider setup fails, when prompt/token budgets are exceeded, or when LLM
+  output attempts to weaken authoritative finding title/severity integrity.
+  Runtime fallback, prompt-overflow fallback, explicit-provider-misconfiguration
+  fallback, CSV/JSON lineage, checksum metadata, and raw export fallback remain
+  covered. This preserves the rule that LLMs may write narrative only and cannot
+  alter deterministic findings or severities. Verification: compile passed;
+  Ruff passed; focused Phase 6 fallback set passed (`9 passed, 76 deselected`);
+  provider/raw-export fallback set passed (`12 passed`); integration fallback
+  smoke passed (`4 passed, 5 deselected`). Handoff:
+  `.claude/handoffs/2026-07-24-report-fallback-integrity.md`. Commit:
+  `76f352d`.
+- [x] Pytest engagement cleanup checkpoint:
+  Test cleanup detection now covers pytest-owned engagement databases created
+  both as direct `engagement.db` files and as numeric
+  `.forge_data/engagements/<id>.db` files under pytest temp roots. Persistent
+  repository engagement inventory remains untouched. Verification: compile
+  passed; Ruff passed; cleanup script tests passed (`6 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-pytest-numeric-engagement-cleanup.md`. Commit:
+  `188f009`.
+- [ ] Next gate:
+  Pick the next broader deterministic acceptance gap after fallback and cleanup:
+  preferably mocked end-to-end kill-chain coverage that proves recursive
+  discovery plus validation/report/dashboard review together, or a concrete
+  provider/export parity gap found by audit. Do not reopen worker-pool
+  micro-optimization unless a new measured bottleneck appears.
 - [x] Fresh worker-pool audit exhaustion checkpoint:
   Two read-only sidecar audits plus local inspection found no worthwhile
   remaining safe sequential parser/extractor/enricher loops to migrate under the

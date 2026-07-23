@@ -25,30 +25,32 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: fresh worker-pool audit exhaustion is complete. Two
-read-only sidecar audits plus local inspection found no worthwhile remaining
-safe sequential parser/extractor/enricher loops to migrate under the bounded
-worker pool in the inspected structured YAML/text parser and artifact-extraction
-regions. Remaining candidates are already covered by outer worker batches,
-cheap fallback line scans, ordered flatten/dedupe merges, or stateful/shared
-handle parsers that should stay sequential.
+Latest checkpoint: report fallback integrity and pytest engagement cleanup are
+complete. Phase 6 now falls back to deterministic template output when explicit
+provider setup fails, prompt/token budgets are exceeded, runtime providers fail,
+or LLM output weakens authoritative finding title/severity integrity. Pytest
+cleanup now detects test-owned numeric `.forge_data/engagements/<id>.db` files
+under pytest temp roots as well as direct `engagement.db` files.
 
-Verification: structured parser worker coverage passed (`7 passed`); MSG/OLE
-worker coverage passed (`6 passed, 753 deselected`);
-PDF/OCR/embedded-archive/binary-string coverage passed
-(`6 passed, 753 deselected`); SQLite/plist/HAR coverage passed
-(`3 passed, 756 deselected`). Handoff:
-`.claude/handoffs/2026-07-24-worker-audit-exhaustion.md`.
+Verification: reporting compile/Ruff passed; focused Phase 6 fallback set
+passed (`9 passed, 76 deselected`); provider/raw-export fallback set passed
+(`12 passed`); integration fallback smoke passed (`4 passed, 5 deselected`);
+cleanup compile/Ruff passed; cleanup script tests passed (`6 passed`).
+Handoffs: `.claude/handoffs/2026-07-24-report-fallback-integrity.md` and
+`.claude/handoffs/2026-07-24-pytest-numeric-engagement-cleanup.md`. Commits:
+`76f352d`, `188f009`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: leave the worker-pool micro-optimization thread and pick the
-next broader deterministic acceptance gap, preferably offline/report-fallback or
-end-to-end cleanup verification unless a higher-severity failing test appears.
-Preserve deterministic ordering, compact tests, scope gates, provider caps,
+Current next gate: pick the next broader deterministic acceptance gap after
+fallback and cleanup, preferably mocked end-to-end kill-chain coverage that
+proves recursive discovery plus validation/report/dashboard review together, or
+a concrete provider/export parity gap found by audit. Do not reopen worker-pool
+micro-optimization unless a new measured bottleneck appears. Preserve
+deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
@@ -3158,7 +3160,7 @@ canonical active queue. Use `docs/engagement_overhaul_tasklist.md` ->
 
 - [ ] Add append-only remote storage for exported run-manifest bundles only if scoped customer storage is explicitly configured.
 - [ ] Broaden engagement-backed end-to-end fixtures beyond the now-verified local+remote+second-hop artifact/social/fallback paths with richer provider matrices and export assertions, without widening live service-validation scope.
-- [ ] Keep improving deterministic report/export auditability and overview parity beyond the newly fixed companion-export/raw-export parity and latest-family/history split: richer aggregate stats, clearer generation lineage, and deeper degraded-export regression coverage.
+- [ ] Keep improving deterministic report/export auditability and overview parity beyond the now-covered degraded fallback lineage: richer aggregate stats, clearer dashboard review of render history, and provider/export parity gaps found by current-code audit.
 - [x] MTGX entity typing/layout audit was completed and reconciled; do not
   reopen it from historical handoff text unless a new graph parity gap is proven
   with current code evidence.
