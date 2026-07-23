@@ -12,6 +12,7 @@ import pytest
 
 import forge.cli as cli
 from forge.core.errors import ProviderUnavailableError
+from forge.engagement_orchestrator import ArtifactDownloadResult, ArtifactQueueProcessor
 from forge.phase4 import cloud_validate
 from forge.phase6.report_synthesizer import ReportSynthesizer
 
@@ -159,6 +160,54 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
 
     def blocked(*args, **kwargs):  # noqa: ANN002, ANN003
         raise AssertionError(f"external network disabled: {args!r} {kwargs!r}")
+
+    jwks_url = "https://login.acme.test/.well-known/jwks.json"
+    jwks_body = json.dumps(
+        {
+            "owner": "jwks-owner@acme.test",
+            "keys": [
+                {
+                    "kid": "signing-key",
+                    "kty": "RSA",
+                    "x5u": "../certs/signing.pem",
+                },
+                {
+                    "kid": "delegated-key-set",
+                    "kty": "EC",
+                    "jku": "https://keys.acme.test/.well-known/tenant-jwks.json#ignored",
+                },
+                {
+                    "kid": "templated-noise",
+                    "x5u": "/certs/{tenant}/key.pem",
+                },
+            ],
+        },
+        sort_keys=True,
+    )
+
+    def remote_artifact_download(self, request):  # noqa: ANN001
+        del self
+        if request.source_url != jwks_url:
+            return ArtifactDownloadResult(
+                artifact_id=request.artifact_id,
+                source_url=request.source_url,
+                artifact_type=request.artifact_type,
+                error="mock remote artifact unavailable",
+            )
+        download_path = tmp_path / "downloads" / "jwks.json"
+        download_path.parent.mkdir(parents=True, exist_ok=True)
+        download_path.write_text(jwks_body, encoding="utf-8")
+        return ArtifactDownloadResult(
+            artifact_id=request.artifact_id,
+            source_url=request.source_url,
+            artifact_type=request.artifact_type,
+            path=download_path,
+            metadata_extra={
+                "content_type": "application/jwk-set+json",
+                "downloaded_from_remote": True,
+                "download_filename": "jwks.json",
+            },
+        )
 
     monkeypatch.setattr(socket, "create_connection", blocked)
     monkeypatch.setattr(socket, "gethostbyname", lambda host: ip(str(host)))
@@ -329,6 +378,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
     monkeypatch.setattr(cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips])
     monkeypatch.setattr(cli, "_run_forge_module_subprocess", fake_module)
+    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifact_request", remote_artifact_download)
     monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", validate_batch)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_asset_validations", sweep_assets)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_validations", lambda *_, **__: {"attempted": 0})
@@ -341,7 +391,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
 
     cli.kill_chain(
         "acme.test",
-        related_seed=["ops@acme.test", "ops@acme.test"],
+        related_seed=["ops@acme.test", "ops@acme.test", jwks_url],
         engagement=str(EID),
         max_iter=4,
         parallel_fanout=1,
@@ -385,6 +435,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("nested-web@acme.test", "email"),
             ("search-owner@acme.test", "email"),
             ("sso-owner@acme.test", "email"),
+            ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
             ("json-feed-owner@acme.test", "email"),
             ("app.acme.test", "subdomain"),
@@ -397,6 +448,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://logout.acme.test/saml/logout", "url"),
             ("https://artifact.acme.test/saml/artifact", "url"),
             ("https://www.acme.test/security/sso", "url"),
+            (jwks_url, "url"),
+            ("https://login.acme.test/certs/signing.pem", "url"),
+            ("https://keys.acme.test/.well-known/tenant-jwks.json", "url"),
             ("https://news.acme.test/blog", "url"),
             ("https://news.acme.test/posts/launch", "url"),
             ("https://media.acme.test/demo.mp4", "url"),
@@ -409,6 +463,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("http://search.yahoo.com/mrss/", "url") not in seeds
         assert ("https://jsonfeed.org/version/1.1", "url") not in seeds
         assert ("https://login.acme.test/tenant/{id}/metadata.xml", "url") not in seeds
+        assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
             "engagement_seeds": "seed_type, seed_value",
             "cloud_assets": "asset_type, identifier",
@@ -431,6 +486,15 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert saml_artifact is not None
         assert saml_artifact["status"] == "parsed"
         assert json.loads(saml_artifact["metadata_json"])["format"] == "saml-metadata"
+        jwks_artifact = con.execute(
+            "SELECT status, metadata_json FROM artifact_queue WHERE source_url=?",
+            (jwks_url,),
+        ).fetchone()
+        assert jwks_artifact is not None
+        assert jwks_artifact["status"] == "parsed"
+        jwks_metadata = json.loads(jwks_artifact["metadata_json"])
+        assert jwks_metadata["format"] == "jwks.json"
+        assert jwks_metadata["downloaded_from_remote"] is True
         feed_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%feed.xml'"
         ).fetchone()
