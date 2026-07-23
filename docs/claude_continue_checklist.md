@@ -66,6 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Fresh worker-pool audit exhaustion checkpoint:
+  Two read-only sidecar audits plus local inspection found no worthwhile
+  remaining safe sequential parser/extractor/enricher loops to migrate under the
+  bounded worker pool in the inspected structured YAML/text parser and
+  artifact-extraction regions. Remaining candidates are already covered by
+  outer worker batches, cheap fallback line scans, ordered flatten/dedupe merges,
+  or stateful/shared-handle parsers that should stay sequential. Verification:
+  structured parser worker coverage passed (`7 passed`); MSG/OLE worker coverage
+  passed (`6 passed, 753 deselected`); PDF/OCR/embedded-archive/binary-string
+  coverage passed (`6 passed, 753 deselected`); SQLite/plist/HAR coverage passed
+  (`3 passed, 756 deselected`). Handoff:
+  `.claude/handoffs/2026-07-24-worker-audit-exhaustion.md`.
+  Next gate: leave this micro-optimization thread and pick the next broader
+  deterministic acceptance gap, preferably offline/report-fallback or
+  end-to-end cleanup verification unless a higher-severity failing test appears.
 - [x] CircleCI workflow/container family worker checkpoint:
   CircleCI structured metadata extraction now routes workflow-name and container
   image families through `_yaml_ci_resource_family_candidates()` on the existing
@@ -75,9 +90,8 @@ historical notes only, not as current instructions.
   Verification: compile passed; Ruff passed; compact CI worker file plus general
   CI metadata ingestion fixture passed (`7 passed`). Handoff:
   `.claude/handoffs/2026-07-24-circleci-resource-family-workers.md`.
-  Next gate: fresh audit for remaining passive/static parser or enricher
-  hotspots. Skip code changes when the remaining loops are cheap, already
-  covered by an outer worker batch, or require shared mutable callbacks.
+  Later audit exhausted the remaining safe worker-pool micro-optimization
+  thread; continue with a broader deterministic acceptance gap.
 - [x] CI resource top-level fan-out worker checkpoint:
   Azure Pipelines, Bitbucket Pipelines, and GitLab CI structured metadata
   extraction now routes independent repository/include and container/service

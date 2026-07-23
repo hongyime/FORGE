@@ -25,26 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: CircleCI workflow/container family worker migration is
-complete. CircleCI structured metadata extraction now routes workflow-name and
-container-image families through `_yaml_ci_resource_family_candidates()` on the
-existing ordered bounded worker pool before deterministic dedupe. It does not
-run CircleCI, fetch orbs, contact CI providers, pull images, or change
-validation and reporting gates.
+Latest checkpoint: fresh worker-pool audit exhaustion is complete. Two
+read-only sidecar audits plus local inspection found no worthwhile remaining
+safe sequential parser/extractor/enricher loops to migrate under the bounded
+worker pool in the inspected structured YAML/text parser and artifact-extraction
+regions. Remaining candidates are already covered by outer worker batches,
+cheap fallback line scans, ordered flatten/dedupe merges, or stateful/shared
+handle parsers that should stay sequential.
 
-Verification: compile/Ruff passed; compact CI worker file plus general CI
-metadata ingestion fixture passed (`7 passed`). Handoff:
-`.claude/handoffs/2026-07-24-circleci-resource-family-workers.md`.
+Verification: structured parser worker coverage passed (`7 passed`); MSG/OLE
+worker coverage passed (`6 passed, 753 deselected`);
+PDF/OCR/embedded-archive/binary-string coverage passed
+(`6 passed, 753 deselected`); SQLite/plist/HAR coverage passed
+(`3 passed, 756 deselected`). Handoff:
+`.claude/handoffs/2026-07-24-worker-audit-exhaustion.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: fresh audit for remaining passive/static parser or enricher
-hotspots. Skip code changes when the remaining loops are cheap, already covered
-by an outer worker batch, or require shared mutable callbacks. Preserve
-deterministic ordering, compact tests, scope gates, provider caps,
+Current next gate: leave the worker-pool micro-optimization thread and pick the
+next broader deterministic acceptance gap, preferably offline/report-fallback or
+end-to-end cleanup verification unless a higher-severity failing test appears.
+Preserve deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
