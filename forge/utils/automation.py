@@ -379,40 +379,8 @@ class AutomationEngine:
             )
 
     def _suggest_correlation(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
-        # If we have services with versions, suggest exploit correlation
-        row = conn.execute(
-            """
-            SELECT COUNT(*) as count 
-            FROM services s
-            JOIN hosts h ON s.host_id = h.id
-            WHERE h.engagement_id = ? AND s.version IS NOT NULL
-            """,
-            (self.engagement_id,),
-        ).fetchone()
-
-        if row and row["count"] > 0:
-            # Check if correlation task already ran
-            check = conn.execute(
-                """
-                SELECT 1 FROM task_progress 
-                WHERE engagement_id = ? AND task_key = 'exploit:correlate'
-                AND status = 'complete'
-                """,
-                (self.engagement_id,),
-            ).fetchone()
-
-            if not check:
-                suggestions.append(
-                    Suggestion(
-                        id="exploit-correlate",
-                        title="Correlate services with known exploits",
-                        action="exploit:correlate",
-                        params={"engagement_id": self.engagement_id},
-                        reason=f"Found {row['count']} services with version strings.",
-                        priority=90,
-                        category="exploit",
-                    )
-                )
+        # The web automation executor has no scoped passive correlation task yet.
+        return
 
     def _suggest_reporting(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
         # If we have any findings, suggest generating a report

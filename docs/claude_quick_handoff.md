@@ -25,10 +25,10 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: automation exploit-correlation framing. Audit
-`_suggest_correlation()` and write the smallest failing suggestion/route test
-first, then reclassify it as passive vulnerability/exposure correlation or
-suppress it if the action path is not safely implemented.
+Current next gate: automation execute action admission. Audit
+`/api/automation/execute` and write the smallest failing API/route test first,
+then reject unsupported or sensitive action names before scheduling while
+preserving supported passive/recon suggestions.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -63,6 +63,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Legacy exploit-correlation suggestion guardrail completed:
+  `AutomationEngine` no longer emits `exploit:correlate` suggestions from
+  passive service version strings by default. The web automation executor has no
+  scoped passive correlation task handler for that legacy action, so the review
+  surface now suppresses it until an explicit vulnerability/exposure correlation
+  task model exists. Backprop: `SPEC.md` `B18`; existing
+  `V3`/`V6`/`V10`/`V13` cover the gate. Verification: failing TDD first showed
+  `exploit:correlate`; focused guardrail regression; compile/Ruff; full
+  playbook integration suite (`17 passed`); cleanup
+  `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-exploit-correlation-suggestion-guardrail.md`.
 - [x] Legacy credential-validation suggestion guardrail completed:
   `AutomationEngine` no longer emits `osint:validate` suggestions from
   unvalidated credential rows plus exposed services by default. Backprop:

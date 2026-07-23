@@ -500,3 +500,39 @@ def test_automation_suggestions_do_not_offer_credential_validation_by_default(tm
     suggestions = automation.get_suggestions()
 
     assert "osint:validate" not in {suggestion.action for suggestion in suggestions}
+
+
+def test_automation_suggestions_do_not_offer_exploit_correlation_by_default(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO hosts (id, engagement_id, ip, hostname)
+            VALUES (5, 7, '10.0.0.5', 'app.acme.example')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO services
+                (host_id, port, protocol, service_name, banner, version)
+            VALUES
+                (5, 443, 'tcp', 'https', 'nginx/1.20.1', '1.20.1')
+            """
+        )
+        conn.commit()
+
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    suggestions = automation.get_suggestions()
+
+    assert "exploit:correlate" not in {suggestion.action for suggestion in suggestions}
+    assert all(suggestion.category != "exploit" for suggestion in suggestions)
+    assert all("known exploit" not in suggestion.title.lower() for suggestion in suggestions)

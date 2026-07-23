@@ -229,10 +229,16 @@ historical notes only, not as current instructions.
   `SPEC.md` `B17`; existing `V3`/`V6`/`V10`/`V12` cover the gate.
   Verification: failing TDD first showed `osint:validate`, then focused
   regression, compile/Ruff, full playbook suite, and cleanup scan are green.
-- [ ] Immediate next implementation target: audit automation exploit-correlation
-  framing in `_suggest_correlation()`. Add the smallest failing suggestion/route
-  test first, then reclassify it as passive vulnerability/exposure correlation
-  or suppress it if the action path is not safely implemented.
+- [x] Legacy exploit-correlation suggestion guardrail completed:
+  `AutomationEngine` no longer emits `exploit:correlate` suggestions from
+  passive service version strings by default. Backprop: `SPEC.md` `B18`;
+  existing `V3`/`V6`/`V10`/`V13` cover the gate. Verification: failing TDD
+  first showed `exploit:correlate`, then focused regression, compile/Ruff, full
+  playbook suite, and cleanup scan are green.
+- [ ] Immediate next implementation target: audit `/api/automation/execute`
+  action admission. Add the smallest failing API/route test first, then reject
+  unsupported or sensitive action names before scheduling while preserving
+  supported passive/recon suggestions.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
