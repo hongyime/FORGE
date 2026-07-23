@@ -91,6 +91,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Report history lineage parity checkpoint:
+  Static dashboard and React detail report-history cards now expose historical
+  write-degradation details and findings checksums, not only fallback reason and
+  export count. Live API raw-export detail coverage now asserts requested
+  provider, upstream/render backend, fallback reason, write error, findings
+  checksum, raw-export status, export labels, artifact names, and raw JSON/CSV
+  downloads. Verification: compile passed; Ruff passed; focused report-history
+  and raw-export API/UI slice passed (`8 passed, 6 warnings`); web UI build
+  passed; web UI lint completed with existing unrelated React hook warnings;
+  pytest engagement cleanup removed four test-owned temp dirs and post-scan was
+  `0`. Handoff:
+  `.claude/handoffs/2026-07-24-report-history-lineage-parity.md`. Commit:
+  `82e0406`.
+- [ ] Next gate:
+  Continue with another concrete provider/export parity gap or mocked E2E
+  acceptance gap found by current-code audit. Do not reopen worker-pool
+  micro-optimization unless a new measured bottleneck appears.
 - [x] Recursive kill-chain dashboard review parity checkpoint:
   The mocked multi-seed recursive kill-chain E2E now proves the real generated
   dashboard/detail route can review the same engagement output. The run covers
@@ -107,10 +124,6 @@ sentences as historical notes only, not as current instructions.
   engagement cleanup removed four test-owned temp dirs and post-scan was `0`.
   Handoff:
   `.claude/handoffs/2026-07-24-recursive-kill-chain-dashboard-review-parity.md`.
-- [ ] Next gate:
-  Continue with a concrete provider/export parity gap or another mocked E2E
-  acceptance gap found by current-code audit. Do not reopen worker-pool
-  micro-optimization unless a new measured bottleneck appears.
 - [x] Report fallback integrity checkpoint:
   Phase 6 reporting now falls back to the deterministic template when explicit
   provider setup fails, when prompt/token budgets are exceeded, or when LLM

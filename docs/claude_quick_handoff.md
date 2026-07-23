@@ -25,20 +25,19 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: recursive kill-chain dashboard review parity is complete.
-The mocked multi-seed recursive kill-chain E2E now proves the real generated
-dashboard/detail route can review the same engagement output: recursive seed
-promotion, non-destructive validation/report gates, deterministic template
-fallback after LLM/provider failure, checksum/report-lineage exports, graph
-generation, slug detail routing, completed run metadata, report exports,
-validated findings, validation inventory, VULN graph-node validation status,
-Maltego workspace visibility, and fallback reason rendering.
+Latest checkpoint: report history lineage parity is complete. Static dashboard
+and React detail report-history cards now expose historical write-degradation
+details and findings checksums, not only fallback reason/export count. Live API
+raw-export detail coverage now asserts requested provider, upstream/render
+backend, fallback reason, write error, findings checksum, raw-export status,
+export labels, artifact names, and raw JSON/CSV downloads.
 
-Verification: compile/Ruff passed for the touched Phase 1 files; recursive E2E
-passed (`1 passed in 279.22s`); compact dashboard contract slice passed (`4
-passed`); pytest engagement cleanup removed four test-owned temp dirs and
-post-scan was `0`. Handoff:
-`.claude/handoffs/2026-07-24-recursive-kill-chain-dashboard-review-parity.md`.
+Verification: compile/Ruff passed; focused report-history and raw-export API/UI
+slice passed (`8 passed, 6 warnings`); web UI build passed; web UI lint
+completed with existing unrelated React hook warnings; pytest engagement cleanup
+removed four test-owned temp dirs and post-scan was `0`. Handoff:
+`.claude/handoffs/2026-07-24-report-history-lineage-parity.md`. Commit:
+`82e0406`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
