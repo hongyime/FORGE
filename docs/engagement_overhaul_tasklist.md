@@ -725,14 +725,36 @@ sentences as historical notes only, not as current instructions.
   credential use, package/SBOM/passkey/SSH/PKI execution, scope relaxation,
   validation-gate change, report-gate change, severity change, proxy/IP
   rotation, or rate-limit bypass.
-- [ ] Next implementation target: add well-known privacy/vendor metadata
+- [x] Well-known privacy/vendor metadata kill-chain E2E parity checkpoint:
+  the compact full-closeout multi-seed E2E now includes local `.well-known`
+  `gpc.json`, `tdmrep.json`, `pubvendors.json`, `trust.txt`,
+  `dnt-policy.txt`, and `privacy-sandbox-attestations.json` artifacts under
+  the normal artifact intake root. It proves owner contacts, stripped
+  privacy/vendor/trust/DNT/sandbox URL pivots, Supabase/Firebase refs,
+  validation inventory, deterministic findings, graph nodes, deterministic
+  template fallback report context, raw CSV validation rows, audit closeout,
+  and cleanup. Templated privacy/vendor URLs and sensitive query strings are
+  asserted absent from persisted URL seeds. The test-local graph export cap was
+  raised from 380 to 480 nodes so the expanded compact fixture retains asserted
+  privacy/vendor review nodes. Verification: compile passed; Ruff passed;
+  focused well-known privacy/public metadata tests passed (`12 passed`);
+  focused mocked E2E passed (`1 passed` in 237.24s); cleanup removed 13
+  test-owned DB/report files and left `remaining_test_owned_files=0`, with
+  persistent DB inventory unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-privacy-kill-chain-e2e-parity.md`.
+  Safety: mocked/offline E2E and passive well-known privacy/vendor metadata
+  only; no provider call beyond mocked validators, live probing, credential
+  use, policy/vendor API call, browser privacy-sandbox behavior, scope
+  relaxation, validation-gate change, report-gate change, severity change,
+  proxy/IP rotation, or rate-limit bypass.
+- [ ] Next implementation target: add well-known API/application metadata
   compact E2E parity. Extend the compact multi-seed mocked E2E with the
-  smallest local `.well-known` privacy/vendor metadata fixture set (for
-  example `trust.txt`, `gpc.json`, `tdmrep.json`, or adjacent public vendor
-  metadata) that proves contacts, sanitized recursive URLs, cloud refs,
-  passive review inventory, validation inventory where applicable,
-  graph/report/audit review, deterministic fallback output, and cleanup.
-  Likely files: `tests/phase1/kill_chain_multiseed_fixture.py`,
+  smallest local `.well-known` API/application metadata fixture set (for
+  example `agent-card.json`, `api-catalog`, `open-resource-discovery`,
+  `mercure`, or `webweaver.json`) that proves contacts, sanitized recursive
+  URLs, cloud refs, passive review inventory, validation inventory where
+  applicable, graph/report/audit review, deterministic fallback output, and
+  cleanup. Likely files: `tests/phase1/kill_chain_multiseed_fixture.py`,
   `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py`, and only minimal
   production code if the E2E exposes a real gap.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:

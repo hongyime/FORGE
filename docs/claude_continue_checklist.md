@@ -144,12 +144,28 @@ historical notes only, not as current instructions.
   pytest process holding a prior compact E2E temp DB was identified by exact
   command line and stopped before final cleanup. Handoff:
   `.claude/handoffs/2026-07-24-well-known-supply-chain-kill-chain-e2e-parity.md`.
-- [ ] Next implementation target: add well-known privacy/vendor metadata
+- [x] Well-known privacy/vendor metadata kill-chain E2E parity completed:
+  the compact full-closeout multi-seed E2E now includes local `.well-known`
+  `gpc.json`, `tdmrep.json`, `pubvendors.json`, `trust.txt`,
+  `dnt-policy.txt`, and `privacy-sandbox-attestations.json` artifacts and
+  proves owner contacts, stripped privacy/vendor/trust/DNT/sandbox URL pivots,
+  Supabase/Firebase refs, validation inventory, deterministic findings, graph
+  nodes, deterministic template fallback report context, raw CSV validation
+  rows, audit closeout, and cleanup. Templated privacy/vendor URLs and
+  sensitive query strings are asserted absent from persisted URL seeds. The E2E
+  graph export cap was raised from 380 to 480 nodes. Verification:
+  compile/Ruff passed; focused well-known privacy/public metadata tests -> `12
+  passed`; focused E2E -> `1 passed` in 237.24s; cleanup removed 13 test-owned
+  DB/report files and left `remaining_test_owned_files=0`; persistent
+  inventory remains `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-well-known-privacy-kill-chain-e2e-parity.md`.
+- [ ] Next implementation target: add well-known API/application metadata
   compact E2E parity. Extend the compact multi-seed mocked E2E with the
-  smallest local `trust.txt`, `gpc.json`, `tdmrep.json`, or adjacent public
-  vendor metadata fixture set proving contacts, sanitized recursive URLs, cloud
-  refs, passive review inventory, validation inventory where applicable,
-  graph/report/audit review, deterministic fallback output, and cleanup.
+  smallest local `agent-card.json`, `api-catalog`, `open-resource-discovery`,
+  `mercure`, or `webweaver.json` fixture set proving contacts, sanitized
+  recursive URLs, cloud refs, passive review inventory, validation inventory
+  where applicable, graph/report/audit review, deterministic fallback output,
+  and cleanup.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

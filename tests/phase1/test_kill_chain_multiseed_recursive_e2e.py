@@ -129,7 +129,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
                 min_severity="LOW",
                 critical_path_only=False,
                 snapshot=True,
-                max_nodes=380,
+                max_nodes=480,
             )
             return subprocess.CompletedProcess(["forge", *argv], 0, "graph built\n", "")
         if argv[:2] == ["report", "generate"]:
@@ -324,6 +324,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("passkey-e2e-owner@acme.test", "email"),
             ("sshknown-e2e-owner@acme.test", "email"),
             ("pki-e2e-owner@acme.test", "email"),
+            ("gpc-e2e-owner@acme.test", "email"),
+            ("tdm-e2e-owner@acme.test", "email"),
+            ("pubvendors-e2e-owner@acme.test", "email"),
+            ("trust-e2e-owner@acme.test", "email"),
+            ("dnt-e2e-owner@acme.test", "email"),
+            ("privacysandbox-e2e-owner@acme.test", "email"),
             ("oauth-owner@acme.test", "email"),
             ("jwks-owner@acme.test", "email"),
             ("feed-owner@acme.test", "email"),
@@ -363,6 +369,13 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("https://login.acme.test/passkeys/manage", "url"),
             ("https://ssh.acme.test/known-hosts", "url"),
             ("https://pki.acme.test/validation", "url"),
+            ("https://privacy.acme.test/gpc", "url"),
+            ("https://privacy.acme.test/tdm", "url"),
+            ("https://vendors.acme.test/policy", "url"),
+            ("https://trust.acme.test/policy", "url"),
+            ("https://trust.acme.test/transparency", "url"),
+            ("https://privacy.acme.test/dnt", "url"),
+            ("https://privacy.acme.test/sandbox/attestation", "url"),
             (openid_url, "url"),
             ("https://login.acme.test/oauth2/v1/authorize", "url"),
             ("https://login-api.acme.test/oauth2/v1/token", "url"),
@@ -409,6 +422,18 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("https://ssh.acme.test/known-hosts?api_key=hidden", "url") not in seeds
         assert ("https://pki.acme.test/validation?token=hidden", "url") not in seeds
         assert ("https://pki.acme.test/{tenant}/validation", "url") not in seeds
+        assert ("https://privacy.acme.test/gpc?token=hidden", "url") not in seeds
+        assert ("https://privacy.acme.test/{tenant}/gpc", "url") not in seeds
+        assert ("https://privacy.acme.test/tdm?api_key=hidden", "url") not in seeds
+        assert ("https://privacy.acme.test/{workspace}/tdm", "url") not in seeds
+        assert ("https://vendors.acme.test/policy?signature=hidden", "url") not in seeds
+        assert ("https://trust.acme.test/policy?token=hidden", "url") not in seeds
+        assert ("https://trust.acme.test/transparency?signature=hidden", "url") not in seeds
+        assert ("https://trust.acme.test/{tenant}/policy", "url") not in seeds
+        assert ("https://privacy.acme.test/dnt?api_key=hidden", "url") not in seeds
+        assert ("https://privacy.acme.test/{tenant}/dnt", "url") not in seeds
+        assert ("https://privacy.acme.test/sandbox/attestation?token=hidden", "url") not in seeds
+        assert ("https://privacy.acme.test/{tenant}/sandbox/attestation", "url") not in seeds
         assert ("https://login.acme.test/oauth/{tenant}/authorize", "url") not in seeds
         assert ("https://login.acme.test/certs/{tenant}/key.pem", "url") not in seeds
         for table, columns in {
@@ -466,6 +491,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("%passkey-endpoints", "passkey-endpoints"),
             ("%ssh-known-hosts", "ssh-known-hosts"),
             ("%pki-validation", "pki-validation"),
+            ("%gpc.json", "gpc.json"),
+            ("%tdmrep.json", "tdmrep.json"),
+            ("%pubvendors.json", "pubvendors.json"),
+            ("%trust.txt", "trust.txt"),
+            ("%dnt-policy.txt", "dnt-policy.txt"),
+            ("%privacy-sandbox-attestations.json", "privacy-sandbox-attestations.json"),
         ):
             public_metadata_artifact = con.execute(
                 "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE ?",
@@ -526,6 +557,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ("supabase", "passkeye2evault"),
             ("supabase", "sshknowne2evault"),
             ("firebase", "pki-e2e-firebase"),
+            ("supabase", "gpce2evault"),
+            ("firebase", "tdm-e2e-firebase"),
+            ("supabase", "pubvendorse2evault"),
+            ("supabase", "truste2evault"),
+            ("firebase", "dnt-e2e-firebase"),
+            ("supabase", "privacysandboxe2evault"),
             ("mobile_android_package", "com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.portal"),
             ("mobile_ios_app", "abcde12345.com.acme.credentials"),
@@ -553,6 +590,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert statuses[("supabase", "passkeye2evault")] == "VALIDATED"
         assert statuses[("supabase", "sshknowne2evault")] == "VALIDATED"
         assert statuses[("firebase", "pki-e2e-firebase")] == "VALIDATED"
+        assert statuses[("supabase", "gpce2evault")] == "VALIDATED"
+        assert statuses[("firebase", "tdm-e2e-firebase")] == "VALIDATED"
+        assert statuses[("supabase", "pubvendorse2evault")] == "VALIDATED"
+        assert statuses[("supabase", "truste2evault")] == "VALIDATED"
+        assert statuses[("firebase", "dnt-e2e-firebase")] == "VALIDATED"
+        assert statuses[("supabase", "privacysandboxe2evault")] == "VALIDATED"
         assert statuses[("mobile_android_package", "com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.credentials")] == "UNSUPPORTED"
@@ -652,6 +695,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "passkeye2evault",
         "sshknowne2evault",
         "pki-e2e-firebase",
+        "gpce2evault",
+        "tdm-e2e-firebase",
+        "pubvendorse2evault",
+        "truste2evault",
+        "dnt-e2e-firebase",
+        "privacysandboxe2evault",
     ):
         assert any(
             node.get("source_table") == "cloud_assets"
@@ -703,6 +752,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "supabase://passkeye2evault",
         "supabase://sshknowne2evault",
         "firebase://pki-e2e-firebase",
+        "supabase://gpce2evault",
+        "firebase://tdm-e2e-firebase",
+        "supabase://pubvendorse2evault",
+        "supabase://truste2evault",
+        "firebase://dnt-e2e-firebase",
+        "supabase://privacysandboxe2evault",
     ):
         assert expected_ref in finding_report
     assert "dead-firebase-prod" not in finding_report
@@ -744,6 +799,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "passkeye2evault",
         "sshknowne2evault",
         "pki-e2e-firebase",
+        "gpce2evault",
+        "tdm-e2e-firebase",
+        "pubvendorse2evault",
+        "truste2evault",
+        "dnt-e2e-firebase",
+        "privacysandboxe2evault",
     ):
         assert any(
             item.get("identifier") == identifier
@@ -805,6 +866,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         "passkeye2evault",
         "sshknowne2evault",
         "pki-e2e-firebase",
+        "gpce2evault",
+        "tdm-e2e-firebase",
+        "pubvendorse2evault",
+        "truste2evault",
+        "dnt-e2e-firebase",
+        "privacysandboxe2evault",
     ):
         assert any(
             row.get("cloud_identifier") == identifier

@@ -33,6 +33,7 @@ def write_local_artifact_fixtures(tmp_path: Path, *, supabase_jwt: str) -> None:
     _write_security_txt(config.parent / ".well-known" / "security.txt")
     _write_public_ai_metadata(config.parent)
     _write_well_known_supply_chain_metadata(config.parent / ".well-known")
+    _write_well_known_privacy_vendor_metadata(config.parent / ".well-known")
     _write_feed(config.parent / "feed.xml")
     _write_json_feed(config.parent / "feed.json")
 
@@ -396,6 +397,79 @@ def _write_well_known_supply_chain_metadata(well_known_dir: Path) -> None:
         Firebase: https://pki-e2e-firebase.firebaseio.com
         Template: https://pki.acme.test/{tenant}/validation
         """.strip(),
+        encoding="utf-8",
+    )
+
+
+def _write_well_known_privacy_vendor_metadata(well_known_dir: Path) -> None:
+    well_known_dir.mkdir(parents=True, exist_ok=True)
+    (well_known_dir / "gpc.json").write_text(
+        json.dumps(
+            {
+                "gpc": True,
+                "policy": "https://privacy.acme.test/gpc?token=hidden",
+                "contact": "gpc-e2e-owner@acme.test",
+                "supabase": "https://gpce2evault.supabase.co",
+                "template": "https://privacy.acme.test/{tenant}/gpc",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "tdmrep.json").write_text(
+        json.dumps(
+            {
+                "tdm-reservation": 1,
+                "policy": "https://privacy.acme.test/tdm?api_key=hidden",
+                "contact": "tdm-e2e-owner@acme.test",
+                "firebase": "https://tdm-e2e-firebase.firebaseio.com",
+                "template": "https://privacy.acme.test/{workspace}/tdm",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "pubvendors.json").write_text(
+        json.dumps(
+            {
+                "publisher": "Acme",
+                "vendors": [{"policyUrl": "https://vendors.acme.test/policy?signature=hidden"}],
+                "contact": "pubvendors-e2e-owner@acme.test",
+                "supabase": "https://pubvendorse2evault.supabase.co",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (well_known_dir / "trust.txt").write_text(
+        """
+        Contact: trust-e2e-owner@acme.test
+        Policy: https://trust.acme.test/policy?token=hidden
+        Transparency: https://trust.acme.test/transparency?signature=hidden
+        Supabase: https://truste2evault.supabase.co
+        Template: https://trust.acme.test/{tenant}/policy
+        """.strip(),
+        encoding="utf-8",
+    )
+    (well_known_dir / "dnt-policy.txt").write_text(
+        """
+        Contact: dnt-e2e-owner@acme.test
+        Policy: https://privacy.acme.test/dnt?api_key=hidden
+        Firebase: https://dnt-e2e-firebase.firebaseio.com
+        Template: https://privacy.acme.test/{tenant}/dnt
+        """.strip(),
+        encoding="utf-8",
+    )
+    (well_known_dir / "privacy-sandbox-attestations.json").write_text(
+        json.dumps(
+            {
+                "attestations": ["https://privacy.acme.test/sandbox/attestation?token=hidden"],
+                "contact": "privacysandbox-e2e-owner@acme.test",
+                "supabase": "https://privacysandboxe2evault.supabase.co",
+                "template": "https://privacy.acme.test/{tenant}/sandbox/attestation",
+            },
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
 
