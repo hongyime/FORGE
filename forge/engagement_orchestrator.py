@@ -25171,7 +25171,43 @@ class ArtifactQueueProcessor:
             return any(self._yaml_github_actions_has_runs_on(item) for item in value)
         return False
 
-    def _yaml_github_actions_uses_candidates(self, value: Any) -> list[str]:
+    def _yaml_worker_walk_values(
+        self,
+        value: Any,
+        state: Any,
+        worker: Callable[[tuple[Any, Any, Any]], list[Any]],
+        *,
+        use_workers: bool,
+        list_limit: int | None = None,
+    ) -> list[Any]:
+        if isinstance(value, dict):
+            child_jobs = [(raw_key, child, state) for raw_key, child in value.items()]
+        elif isinstance(value, list):
+            items = value if list_limit is None else value[:list_limit]
+            child_jobs = [(None, item, state) for item in items]
+        else:
+            return []
+        child_batches = (
+            self._run_ordered_local_batch(
+                child_jobs,
+                worker,
+                default_factory=list,
+            )
+            if use_workers
+            else [worker(child_job) for child_job in child_jobs]
+        )
+        return [
+            candidate
+            for child_values in child_batches
+            for candidate in child_values
+        ]
+
+    def _yaml_github_actions_uses_candidates(
+        self,
+        value: Any,
+        *,
+        use_workers: bool = True,
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
 
@@ -25184,19 +25220,41 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        def _walk(child: Any) -> None:
-            if isinstance(child, dict):
-                for key, item in child.items():
-                    if self._yaml_key_fingerprint(str(key or "")) == "uses":
-                        for candidate in self._yaml_github_actions_uses_candidate(item):
-                            _append(candidate)
-                    _walk(item)
-            elif isinstance(child, list):
-                for item in child:
-                    _walk(item)
-
-        _walk(value)
+        for candidate in self._yaml_github_actions_uses_candidate_values(
+            value,
+            use_workers=use_workers,
+        ):
+            _append(candidate)
         return candidates
+
+    def _yaml_github_actions_uses_candidate_values(
+        self,
+        value: Any,
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        return self._yaml_worker_walk_values(
+            value,
+            None,
+            self._yaml_github_actions_uses_child_candidate_values,
+            use_workers=use_workers,
+        )
+
+    def _yaml_github_actions_uses_child_candidate_values(
+        self,
+        child_job: tuple[Any, Any, Any],
+    ) -> list[str]:
+        raw_key, child, _state = child_job
+        values: list[str] = []
+        if raw_key is not None and self._yaml_key_fingerprint(str(raw_key or "")) == "uses":
+            values.extend(self._yaml_github_actions_uses_candidate(child))
+        values.extend(
+            self._yaml_github_actions_uses_candidate_values(
+                child,
+                use_workers=False,
+            )
+        )
+        return values
 
     def _yaml_github_actions_uses_candidate(self, value: Any) -> list[str]:
         raw_value = str(value or "").strip().strip("\"'")
@@ -25434,38 +25492,77 @@ class ArtifactQueueProcessor:
             names.append(identifier)
         return names
 
-    def _yaml_circleci_container_candidates(self, mapping: dict[str, Any]) -> list[str]:
+    def _yaml_circleci_container_candidates(
+        self,
+        mapping: dict[str, Any],
+        *,
+        use_workers: bool = True,
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
 
-        def _append(value: Any) -> None:
-            raw_value = str(value or "").strip().strip("\"'")
-            if not raw_value:
-                return
-            candidate = _artifact_container_image_url_candidate(raw_value, require_explicit_registry=True)
+        def _append(candidate: str) -> None:
             if not candidate or candidate.lower() in seen:
                 return
             seen.add(candidate.lower())
             candidates.append(candidate)
 
-        def _walk(value: Any, path_parts: tuple[str, ...]) -> None:
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    key_name = self._yaml_key_fingerprint(str(key or ""))
-                    child_path = (*path_parts, key_name)
-                    if key_name == "image" and (
-                        "docker" in path_parts
-                        or "executors" in path_parts
-                        or "jobs" in path_parts
-                    ):
-                        _append(child)
-                    _walk(child, child_path)
-            elif isinstance(value, list):
-                for item in value[:256]:
-                    _walk(item, path_parts)
-
-        _walk(mapping, ())
+        for candidate in self._yaml_circleci_container_candidate_values(
+            mapping,
+            (),
+            use_workers=use_workers,
+        ):
+            _append(candidate)
         return candidates
+
+    def _yaml_circleci_container_candidate_values(
+        self,
+        value: Any,
+        path_parts: tuple[str, ...],
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        return self._yaml_worker_walk_values(
+            value,
+            path_parts,
+            self._yaml_circleci_container_child_candidate_values,
+            use_workers=use_workers,
+            list_limit=256,
+        )
+
+    def _yaml_circleci_container_child_candidate_values(
+        self,
+        child_job: tuple[Any, Any, Any],
+    ) -> list[str]:
+        raw_key, child, path_parts = child_job
+        if raw_key is None:
+            return self._yaml_circleci_container_candidate_values(
+                child,
+                path_parts,
+                use_workers=False,
+            )
+        key_name = self._yaml_key_fingerprint(str(raw_key or ""))
+        child_path = (*path_parts, key_name)
+        values: list[str] = []
+        if key_name == "image" and (
+            "docker" in path_parts
+            or "executors" in path_parts
+            or "jobs" in path_parts
+        ):
+            candidate = _artifact_container_image_url_candidate(
+                str(child or "").strip().strip("\"'"),
+                require_explicit_registry=True,
+            )
+            if candidate:
+                values.append(candidate)
+        values.extend(
+            self._yaml_circleci_container_candidate_values(
+                child,
+                child_path,
+                use_workers=False,
+            )
+        )
+        return values
 
     def _yaml_buildkite_ci_structured_candidates(
         self,
@@ -25727,8 +25824,13 @@ class ArtifactQueueProcessor:
             seen.add(candidate.lower())
             candidates.append(candidate)
 
-        for repository_entry in repositories:
-            for candidate in self._yaml_azure_pipeline_repository_entry_candidates(repository_entry):
+        repository_batches = self._run_ordered_local_batch(
+            repositories,
+            self._yaml_azure_pipeline_repository_entry_candidates,
+            default_factory=list,
+        )
+        for repository_values in repository_batches:
+            for candidate in repository_values:
                 _append(candidate)
         return candidates
 
@@ -25772,7 +25874,12 @@ class ArtifactQueueProcessor:
                 return list(value.values())
         return []
 
-    def _yaml_azure_pipelines_container_candidates(self, mapping: dict[str, Any]) -> list[str]:
+    def _yaml_azure_pipelines_container_candidates(
+        self,
+        mapping: dict[str, Any],
+        *,
+        use_workers: bool = True,
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
 
@@ -25785,25 +25892,64 @@ class ArtifactQueueProcessor:
 
         resources = self._yaml_child_mapping(mapping, "resources")
         if resources:
-            for container_entry in self._yaml_ref_collection(resources, "containers"):
-                if not isinstance(container_entry, dict):
-                    _append(str(container_entry or ""))
-                    continue
-                normalized_container = self._yaml_normalized_mapping(container_entry)
-                _append(self._yaml_ref_value(normalized_container, "image", "container"))
+            container_batches = self._run_ordered_local_batch(
+                self._yaml_ref_collection(resources, "containers"),
+                self._yaml_azure_pipeline_container_resource_entry_candidates,
+                default_factory=list,
+            )
+            for container_values in container_batches:
+                for container_value in container_values:
+                    _append(container_value)
 
-        def _walk(value: Any) -> None:
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    if self._yaml_key_fingerprint(str(key or "")) == "container" and isinstance(child, str):
-                        _append(child)
-                    _walk(child)
-            elif isinstance(value, list):
-                for item in value:
-                    _walk(item)
-
-        _walk(mapping)
+        for candidate in self._yaml_azure_pipelines_container_walk_values(
+            mapping,
+            use_workers=use_workers,
+        ):
+            _append(candidate)
         return candidates
+
+    def _yaml_azure_pipeline_container_resource_entry_candidates(
+        self,
+        value: Any,
+    ) -> list[str]:
+        if not isinstance(value, dict):
+            return [str(value or "")]
+        normalized_container = self._yaml_normalized_mapping(value)
+        return [self._yaml_ref_value(normalized_container, "image", "container")]
+
+    def _yaml_azure_pipelines_container_walk_values(
+        self,
+        value: Any,
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        return self._yaml_worker_walk_values(
+            value,
+            None,
+            self._yaml_azure_pipelines_container_child_values,
+            use_workers=use_workers,
+        )
+
+    def _yaml_azure_pipelines_container_child_values(
+        self,
+        child_job: tuple[Any, Any, Any],
+    ) -> list[str]:
+        raw_key, child, _state = child_job
+        if raw_key is None:
+            return self._yaml_azure_pipelines_container_walk_values(
+                child,
+                use_workers=False,
+            )
+        values: list[str] = []
+        if self._yaml_key_fingerprint(str(raw_key or "")) == "container" and isinstance(child, str):
+            values.append(child)
+        values.extend(
+            self._yaml_azure_pipelines_container_walk_values(
+                child,
+                use_workers=False,
+            )
+        )
+        return values
 
     def _yaml_bitbucket_pipelines_structured_candidates(
         self,
@@ -25851,9 +25997,77 @@ class ArtifactQueueProcessor:
             for key in pipelines
         )
 
-    def _yaml_bitbucket_pipelines_repository_candidates(self, mapping: dict[str, Any]) -> list[str]:
+    def _yaml_bitbucket_pipelines_repository_candidates(
+        self,
+        mapping: dict[str, Any],
+        *,
+        use_workers: bool = True,
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
+
+        def _append(value: str) -> None:
+            candidate = str(value or "").strip()
+            if not candidate or candidate.lower() in seen:
+                return
+            seen.add(candidate.lower())
+            candidates.append(candidate)
+
+        for candidate in self._yaml_bitbucket_repository_candidate_values(
+            mapping,
+            (),
+            use_workers=use_workers,
+        ):
+            _append(candidate)
+        return candidates
+
+    def _yaml_bitbucket_repository_value_candidates(
+        self,
+        value: Any,
+        *,
+        allow_owner_repo: bool,
+    ) -> list[str]:
+        raw_value = str(value or "").strip().strip("\"'").strip("/")
+        if not raw_value or any(marker in raw_value for marker in ("${", "$(", "{{", "}}")):
+            return []
+        candidates_for_value = self._yaml_gitops_repository_candidates(raw_value)
+        if candidates_for_value:
+            return candidates_for_value
+        if not allow_owner_repo:
+            return []
+        parts = [part for part in raw_value.split("/") if part]
+        if len(parts) < 2:
+            return []
+        if not all(re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in parts[:2]):
+            return []
+        return [f"https://bitbucket.org/{parts[0]}/{parts[1]}"]
+
+    def _yaml_bitbucket_repository_candidate_values(
+        self,
+        value: Any,
+        path_parts: tuple[str, ...],
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        return self._yaml_worker_walk_values(
+            value,
+            path_parts,
+            self._yaml_bitbucket_repository_child_candidate_values,
+            use_workers=use_workers,
+            list_limit=256,
+        )
+
+    def _yaml_bitbucket_repository_child_candidate_values(
+        self,
+        child_job: tuple[Any, Any, Any],
+    ) -> list[str]:
+        raw_key, child, path_parts = child_job
+        if raw_key is None:
+            return self._yaml_bitbucket_repository_candidate_values(
+                child,
+                path_parts,
+                use_workers=False,
+            )
         repo_key_names = {
             "giturl",
             "cloneurl",
@@ -25863,81 +26077,96 @@ class ArtifactQueueProcessor:
             "repositories",
             "repo",
         }
+        key_name = self._yaml_key_fingerprint(str(raw_key or ""))
+        child_path = (*path_parts, key_name)
+        in_repository_context = any(
+            part in {"repository", "repositories", "repo"}
+            for part in path_parts
+        )
+        values: list[str] = []
+        if isinstance(child, str) and (key_name in repo_key_names or in_repository_context):
+            values.extend(
+                self._yaml_bitbucket_repository_value_candidates(
+                    child,
+                    allow_owner_repo=key_name in repo_key_names or in_repository_context,
+                )
+            )
+        values.extend(
+            self._yaml_bitbucket_repository_candidate_values(
+                child,
+                child_path,
+                use_workers=False,
+            )
+        )
+        return values
 
-        def _append(value: str) -> None:
-            candidate = str(value or "").strip()
-            if not candidate or candidate.lower() in seen:
-                return
-            seen.add(candidate.lower())
-            candidates.append(candidate)
-
-        def _repository_candidates_for_value(value: Any, *, allow_owner_repo: bool) -> list[str]:
-            raw_value = str(value or "").strip().strip("\"'").strip("/")
-            if not raw_value or any(marker in raw_value for marker in ("${", "$(", "{{", "}}")):
-                return []
-            candidates_for_value = self._yaml_gitops_repository_candidates(raw_value)
-            if candidates_for_value:
-                return candidates_for_value
-            if not allow_owner_repo:
-                return []
-            parts = [part for part in raw_value.split("/") if part]
-            if len(parts) < 2:
-                return []
-            if not all(re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in parts[:2]):
-                return []
-            return [f"https://bitbucket.org/{parts[0]}/{parts[1]}"]
-
-        def _walk(value: Any, path_parts: tuple[str, ...]) -> None:
-            in_repository_context = any(part in {"repository", "repositories", "repo"} for part in path_parts)
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    key_name = self._yaml_key_fingerprint(str(key or ""))
-                    child_path = (*path_parts, key_name)
-                    if isinstance(child, str) and (key_name in repo_key_names or in_repository_context):
-                        for candidate in _repository_candidates_for_value(
-                            child,
-                            allow_owner_repo=key_name in repo_key_names or in_repository_context,
-                        ):
-                            _append(candidate)
-                    _walk(child, child_path)
-            elif isinstance(value, list):
-                for item in value[:256]:
-                    _walk(item, path_parts)
-
-        _walk(mapping, ())
-        return candidates
-
-    def _yaml_bitbucket_pipelines_container_candidates(self, mapping: dict[str, Any]) -> list[str]:
+    def _yaml_bitbucket_pipelines_container_candidates(
+        self,
+        mapping: dict[str, Any],
+        *,
+        use_workers: bool = True,
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
 
-        def _append(value: Any) -> None:
-            raw_value = str(value or "").strip().strip("\"'")
-            if not raw_value:
-                return
-            candidate = _artifact_container_image_url_candidate(raw_value, require_explicit_registry=True)
+        def _append(candidate: str) -> None:
             if not candidate or candidate.lower() in seen:
                 return
             seen.add(candidate.lower())
             candidates.append(candidate)
 
-        def _walk(value: Any) -> None:
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    key_name = self._yaml_key_fingerprint(str(key or ""))
-                    if key_name in {"image", "container"}:
-                        if isinstance(child, dict):
-                            normalized_child = self._yaml_normalized_mapping(child)
-                            _append(self._yaml_ref_value(normalized_child, "name", "image", "container"))
-                        else:
-                            _append(child)
-                    _walk(child)
-            elif isinstance(value, list):
-                for item in value[:256]:
-                    _walk(item)
-
-        _walk(mapping)
+        for candidate in self._yaml_bitbucket_container_candidate_values(
+            mapping,
+            use_workers=use_workers,
+        ):
+            _append(candidate)
         return candidates
+
+    def _yaml_bitbucket_container_candidate_values(
+        self,
+        value: Any,
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        return self._yaml_worker_walk_values(
+            value,
+            None,
+            self._yaml_bitbucket_container_child_candidate_values,
+            use_workers=use_workers,
+            list_limit=256,
+        )
+
+    def _yaml_bitbucket_container_child_candidate_values(
+        self,
+        child_job: tuple[Any, Any, Any],
+    ) -> list[str]:
+        raw_key, child, _state = child_job
+        if raw_key is None:
+            return self._yaml_bitbucket_container_candidate_values(
+                child,
+                use_workers=False,
+            )
+        values: list[str] = []
+        key_name = self._yaml_key_fingerprint(str(raw_key or ""))
+        if key_name in {"image", "container"}:
+            if isinstance(child, dict):
+                normalized_child = self._yaml_normalized_mapping(child)
+                raw_value = self._yaml_ref_value(normalized_child, "name", "image", "container")
+            else:
+                raw_value = str(child or "").strip().strip("\"'")
+            candidate = _artifact_container_image_url_candidate(
+                raw_value,
+                require_explicit_registry=True,
+            )
+            if candidate:
+                values.append(candidate)
+        values.extend(
+            self._yaml_bitbucket_container_candidate_values(
+                child,
+                use_workers=False,
+            )
+        )
+        return values
 
     def _yaml_gitlab_ci_structured_candidates(
         self,
@@ -25993,7 +26222,12 @@ class ArtifactQueueProcessor:
                 return True
         return False
 
-    def _yaml_gitlab_ci_include_repository_candidates(self, mapping: dict[str, Any]) -> list[str]:
+    def _yaml_gitlab_ci_include_repository_candidates(
+        self,
+        mapping: dict[str, Any],
+        *,
+        use_workers: bool = True,
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
 
@@ -26004,31 +26238,98 @@ class ArtifactQueueProcessor:
             seen.add(candidate.lower())
             candidates.append(candidate)
 
-        def _walk_include(value: Any) -> None:
-            if isinstance(value, dict):
-                normalized = self._yaml_normalized_mapping(value)
-                remote_value = self._yaml_ref_value(normalized, "remote")
-                if remote_value:
-                    for remote_candidate in self._yaml_gitops_repository_candidates(remote_value):
-                        _append(remote_candidate)
-                project_value = self._yaml_ref_value(normalized, "project")
-                for project_candidate in self._yaml_gitlab_ci_project_repository_candidates(project_value):
-                    _append(project_candidate)
-                component_value = self._yaml_ref_value(normalized, "component")
-                for component_candidate in self._yaml_gitlab_ci_component_candidates(component_value):
-                    _append(component_candidate)
-                for child in value.values():
-                    if isinstance(child, (dict, list)):
-                        _walk_include(child)
-            elif isinstance(value, list):
-                for item in value:
-                    _walk_include(item)
-
         normalized = self._yaml_normalized_mapping(mapping)
         include_value = normalized.get("include")
         if include_value is not None:
-            _walk_include(include_value)
+            for candidate in self._yaml_gitlab_ci_include_candidate_values(
+                include_value,
+                use_workers=use_workers,
+            ):
+                _append(candidate)
         return candidates
+
+    def _yaml_gitlab_ci_include_candidate_values(
+        self,
+        value: Any,
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        if isinstance(value, dict):
+            direct_values: list[str] = []
+            normalized = self._yaml_normalized_mapping(value)
+            remote_value = self._yaml_ref_value(normalized, "remote")
+            if remote_value:
+                direct_values.extend(self._yaml_gitops_repository_candidates(remote_value))
+            direct_values.extend(
+                self._yaml_gitlab_ci_project_repository_candidates(
+                    self._yaml_ref_value(normalized, "project")
+                )
+            )
+            direct_values.extend(
+                self._yaml_gitlab_ci_component_candidates(
+                    self._yaml_ref_value(normalized, "component")
+                )
+            )
+            child_jobs = [
+                child
+                for child in value.values()
+                if isinstance(child, (dict, list))
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._yaml_gitlab_ci_include_child_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._yaml_gitlab_ci_include_candidate_values(
+                        child,
+                        use_workers=False,
+                    )
+                    for child in child_jobs
+                ]
+            )
+            return [
+                *direct_values,
+                *[
+                    candidate
+                    for child_values in child_batches
+                    for candidate in child_values
+                ],
+            ]
+        if isinstance(value, list):
+            item_jobs = list(value)
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._yaml_gitlab_ci_include_child_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._yaml_gitlab_ci_include_candidate_values(
+                        item,
+                        use_workers=False,
+                    )
+                    for item in item_jobs
+                ]
+            )
+            return [
+                candidate
+                for item_values in item_batches
+                for candidate in item_values
+            ]
+        return []
+
+    def _yaml_gitlab_ci_include_child_candidate_values(
+        self,
+        child: Any,
+    ) -> list[str]:
+        return self._yaml_gitlab_ci_include_candidate_values(
+            child,
+            use_workers=False,
+        )
 
     def _yaml_gitlab_ci_project_repository_candidates(self, value: Any) -> list[str]:
         raw_value = str(value or "").strip().strip("\"'").strip("/")
@@ -26057,7 +26358,12 @@ class ArtifactQueueProcessor:
             return []
         return [f"https://{parts[0].lower()}/{parts[1]}/{parts[2]}"]
 
-    def _yaml_gitlab_ci_service_container_candidates(self, mapping: dict[str, Any]) -> list[str]:
+    def _yaml_gitlab_ci_service_container_candidates(
+        self,
+        mapping: dict[str, Any],
+        *,
+        use_workers: bool = True,
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
 
@@ -26071,18 +26377,46 @@ class ArtifactQueueProcessor:
             seen.add(candidate.lower())
             candidates.append(candidate)
 
-        def _walk(value: Any) -> None:
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    if self._yaml_key_fingerprint(str(key or "")) == "services":
-                        self._yaml_gitlab_ci_collect_service_images(child, _append)
-                    _walk(child)
-            elif isinstance(value, list):
-                for item in value:
-                    _walk(item)
-
-        _walk(mapping)
+        for candidate in self._yaml_gitlab_ci_service_container_values(
+            mapping,
+            use_workers=use_workers,
+        ):
+            _append(candidate)
         return candidates
+
+    def _yaml_gitlab_ci_service_container_values(
+        self,
+        value: Any,
+        *,
+        use_workers: bool,
+    ) -> list[Any]:
+        return self._yaml_worker_walk_values(
+            value,
+            None,
+            self._yaml_gitlab_ci_service_container_child_values,
+            use_workers=use_workers,
+        )
+
+    def _yaml_gitlab_ci_service_container_child_values(
+        self,
+        child_job: tuple[Any, Any, Any],
+    ) -> list[Any]:
+        raw_key, child, _state = child_job
+        if raw_key is None:
+            return self._yaml_gitlab_ci_service_container_values(
+                child,
+                use_workers=False,
+            )
+        values: list[Any] = []
+        if self._yaml_key_fingerprint(str(raw_key or "")) == "services":
+            self._yaml_gitlab_ci_collect_service_images(child, values.append)
+        values.extend(
+            self._yaml_gitlab_ci_service_container_values(
+                child,
+                use_workers=False,
+            )
+        )
+        return values
 
     def _yaml_gitlab_ci_collect_service_images(
         self,

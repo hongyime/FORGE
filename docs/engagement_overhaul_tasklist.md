@@ -1060,6 +1060,21 @@ sentences as historical notes only, not as current instructions.
   execution, policy execution, endpoint probing, provider call, live probing,
   credential use, scope/ROE relaxation, validation/report-gate change, severity
   change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [x] CI/CD workflow YAML walker worker-pool checkpoint: GitHub Actions
+  `uses`, CircleCI containers, Azure repository/container resources,
+  Bitbucket repository/container refs, and GitLab include/service refs now
+  dispatch current mapping/list child scans or independent resource entries
+  through ordered bounded worker helpers while nested recursion and final
+  dedupe stay serial. Verification: compile passed; Ruff passed; focused
+  CI/CD worker tests passed (`3 passed`); persisted CI/CD workflow, Bitbucket,
+  Azure, and GitLab artifact slices passed (`4 passed`); cleanup left
+  `remaining_ci_workflow_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-ci-workflow-yaml-worker-pool.md`.
+  Safety: passive local static CI/CD config parsing only; no workflow
+  execution, repository clone/fetch, container image pull, package install,
+  endpoint probing, provider call, live probing, credential use,
+  scope/ROE relaxation, validation/report-gate change, severity change,
+  proxy/IP rotation, rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,

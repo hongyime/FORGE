@@ -382,11 +382,21 @@ historical notes only, not as current instructions.
   -> `4 passed`; cleanup left
   `remaining_security_scanner_runtime_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-security-scanner-json-worker-pool.md`.
+- [x] CI/CD workflow YAML walker worker-pool checkpoint completed: GitHub
+  Actions `uses`, CircleCI containers, Azure repository/container resources,
+  Bitbucket repository/container refs, and GitLab include/service refs now
+  dispatch current mapping/list child scans or independent resource entries
+  through ordered bounded worker helpers while nested recursion and final
+  dedupe stay serial. Verification: compile/Ruff passed; focused CI/CD worker
+  tests -> `3 passed`; persisted CI/CD workflow, Bitbucket, Azure, and GitLab
+  artifact slices -> `4 passed`; cleanup left
+  `remaining_ci_workflow_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-ci-workflow-yaml-worker-pool.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,
   provider caps, pacing/backoff, and passive-only behavior. Do not assume the
-  older ranked list is still current after the security-scanner checkpoint.
+  older ranked list is still current after the CI/CD checkpoint.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known
