@@ -951,6 +951,19 @@ sentences as historical notes only, not as current instructions.
   call, live probing, credential use, scope/ROE relaxation,
   validation/report-gate change, severity change, proxy/IP rotation,
   rate-limit bypass, or destructive behavior.
+- [x] GitOps repository walk worker-pool checkpoint: Argo/Flux GitOps
+  manifest repository extraction now dispatches the current mapping/list child
+  layer through ordered bounded worker helpers while nested traversal and final
+  repository normalization/dedupe remain serial. Recursive repository URL,
+  `git@`, and `ssh://git@` candidate order is preserved. Verification: compile
+  passed; Ruff passed; focused GitOps worker test passed (`1 passed`); focused
+  persisted structured YAML/GitOps artifact slice passed (`1 passed`); cleanup
+  left `remaining_gitops_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-gitops-repository-worker-pool.md`. Safety:
+  passive local static GitOps YAML/JSON parsing only; no repo clone/fetch,
+  manifest apply, cluster access, HTTP probing, provider call, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,

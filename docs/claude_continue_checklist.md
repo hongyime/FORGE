@@ -308,6 +308,15 @@ historical notes only, not as current instructions.
   dotfile artifact slice -> `1 passed`; cleanup left
   `remaining_goreleaser_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-goreleaser-worker-pool.md`.
+- [x] GitOps repository walk worker-pool checkpoint completed: Argo/Flux
+  GitOps manifest repository extraction now dispatches the current mapping/list
+  child layer through ordered bounded worker helpers while nested traversal and
+  final repository normalization/dedupe remain serial. Recursive repository
+  URL, `git@`, and `ssh://git@` candidate order is preserved. Verification:
+  compile/Ruff passed; focused GitOps worker test -> `1 passed`; focused
+  persisted structured YAML/GitOps artifact slice -> `1 passed`; cleanup left
+  `remaining_gitops_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-gitops-repository-worker-pool.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
   before editing. Preserve deterministic ordering, compact tests, scope gates,

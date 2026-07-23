@@ -29601,26 +29601,10 @@ class ArtifactQueueProcessor:
         return []
 
     def _yaml_gitops_repository_candidates_from_mapping(self, mapping: dict[str, Any]) -> list[str]:
-        values: list[str] = []
-
-        def _walk(value: Any) -> None:
-            if isinstance(value, dict):
-                normalized = self._yaml_normalized_mapping(value)
-                for key in ("repoURL", "repoUrl", "repo_url", "url"):
-                    ref_value = self._yaml_ref_value(normalized, key)
-                    if ref_value:
-                        values.append(ref_value)
-                name_hint = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "name"))
-                value_ref = self._yaml_ref_value(normalized, "value")
-                if value_ref and any(marker in name_hint for marker in ("repo", "repository", "sourceurl")):
-                    values.append(value_ref)
-                for child in value.values():
-                    _walk(child)
-            elif isinstance(value, list):
-                for item in value:
-                    _walk(item)
-
-        _walk(mapping)
+        values = self._yaml_gitops_repository_values_for_node(
+            mapping,
+            use_workers=True,
+        )
         candidates: list[str] = []
         seen: set[str] = set()
         for value in values:
@@ -29631,6 +29615,73 @@ class ArtifactQueueProcessor:
                 seen.add(lowered)
                 candidates.append(candidate)
         return candidates
+
+    def _yaml_gitops_repository_values_for_node(
+        self,
+        value: Any,
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        values: list[str] = []
+        if isinstance(value, dict):
+            normalized = self._yaml_normalized_mapping(value)
+            for key in ("repoURL", "repoUrl", "repo_url", "url"):
+                ref_value = self._yaml_ref_value(normalized, key)
+                if ref_value:
+                    values.append(ref_value)
+            name_hint = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "name"))
+            value_ref = self._yaml_ref_value(normalized, "value")
+            if value_ref and any(marker in name_hint for marker in ("repo", "repository", "sourceurl")):
+                values.append(value_ref)
+            child_jobs = list(enumerate(value.values()))
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._yaml_gitops_repository_child_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._yaml_gitops_repository_values_for_node(
+                        child,
+                        use_workers=False,
+                    )
+                    for _child_index, child in child_jobs
+                ]
+            )
+            for child_values in child_batches:
+                values.extend(child_values)
+            return values
+        if isinstance(value, list):
+            item_jobs = list(enumerate(value))
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._yaml_gitops_repository_child_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._yaml_gitops_repository_values_for_node(
+                        item,
+                        use_workers=False,
+                    )
+                    for _item_index, item in item_jobs
+                ]
+            )
+            for item_values in item_batches:
+                values.extend(item_values)
+        return values
+
+    def _yaml_gitops_repository_child_values(
+        self,
+        child_job: tuple[int, Any],
+    ) -> list[str]:
+        _child_index, child = child_job
+        return self._yaml_gitops_repository_values_for_node(
+            child,
+            use_workers=False,
+        )
 
     def _yaml_gitops_repository_candidates(self, value: Any) -> list[str]:
         raw_value = str(value or "").strip().strip("\"'")

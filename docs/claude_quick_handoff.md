@@ -25,17 +25,16 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: GoReleaser YAML traversal worker-pool migration is
-implemented. Static GoReleaser YAML/JSON structured traversal now dispatches
-the current child layer through ordered bounded worker helpers while worker
-tasks recurse serially and final candidate dedupe remains serial. Templated
-container image URL order, blob-bucket extraction, source gating, and passive
-artifact recursion are preserved.
+Latest checkpoint: GitOps repository walk worker-pool migration is implemented.
+Argo/Flux GitOps manifest repository extraction now dispatches the current
+mapping/list child layer through ordered bounded worker helpers while nested
+traversal and final repository normalization/dedupe remain serial. Recursive
+repository URL, `git@`, and `ssh://git@` candidate order is preserved.
 
-Verification: compile/Ruff passed; focused GoReleaser worker test passed
-(`1 passed`); focused persisted quality/release dotfile artifact slice passed
-(`1 passed`); cleanup left `remaining_goreleaser_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-goreleaser-worker-pool.md`.
+Verification: compile/Ruff passed; focused GitOps worker test passed
+(`1 passed`); focused persisted structured YAML/GitOps artifact slice passed
+(`1 passed`); cleanup left `remaining_gitops_runtime_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-gitops-repository-worker-pool.md`.
 
 Current next gate: re-audit remaining static parser/enricher candidates and
 select the next proven-safe bounded worker-pool migration before editing.
