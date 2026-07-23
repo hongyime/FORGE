@@ -25,29 +25,33 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Phase 6 dashboard/API lineage E2E parity is complete. A
-mocked integration slice now generates a real Phase 6 template report family
-from the existing engagement fixture and proves provider/checksum/render lineage
-agreement across generated JSON, static dashboard detail payload, live web API
-detail summary, JSON artifact download, and CSV artifact download.
+Latest checkpoint: Phase 6 raw-export lineage E2E parity is complete. Actual
+Phase 6 raw-export last-resort artifacts now have the same mocked
+dashboard/API/download parity proof. The test forces report-family persistence
+failure and verifies raw-export JSON/CSV lineage across static dashboard
+payload, live web API detail summary, JSON artifact download, and CSV artifact
+download.
 
-Verification: focused parity test passed (`1 passed, 34 deselected,
-3 warnings`); compile/Ruff passed; full web UI engagement API file passed
-(`35 passed, 68 warnings`); pytest engagement cleanup reported
-`removed=3 remaining=0 post_scan=0`. Handoff:
-`.claude/handoffs/2026-07-24-phase6-dashboard-api-lineage-e2e.md`. Commit:
-`5aa0431`.
+It also caught/fixed an orphan markdown tie-break bug: dashboard report-family
+sorting now prefers JSON-backed families on equal mtime so auditable lineage
+wins over failed same-run markdown leftovers. Verification: compile/Ruff passed;
+focused template/raw-export lineage slice passed (`2 passed, 34 deselected,
+6 warnings`); focused dashboard raw/latest family slice passed
+(`2 passed, 18 deselected`); full web UI engagement API file passed
+(`36 passed, 71 warnings`); full static dashboard file passed (`20 passed`);
+pytest engagement cleanup reported `removed=4 remaining=0 post_scan=0`.
+Handoff: `.claude/handoffs/2026-07-24-phase6-raw-export-lineage-e2e.md`.
+Commit: `d0806ff`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: add the same end-to-end lineage agreement proof for actual
-Phase 6 raw-export last-resort artifacts, or document why existing raw-export
-dashboard/API coverage is already equivalent. Do not reopen worker-pool
-micro-optimization unless a new measured bottleneck appears. Preserve
-deterministic ordering, compact tests, scope gates, provider caps,
+Current next gate: run a current-code audit for remaining dashboard/report/audit
+surface mismatches or a broader mocked kill-chain acceptance gap. Do not reopen
+worker-pool micro-optimization unless a new measured bottleneck appears.
+Preserve deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only

@@ -104,11 +104,26 @@ historical notes only, not as current instructions.
   `removed=3 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-phase6-dashboard-api-lineage-e2e.md`. Commit:
   `5aa0431`.
+- [x] Phase 6 raw-export lineage E2E checkpoint:
+  Actual Phase 6 raw-export last-resort artifacts now have the same mocked
+  dashboard/API/download parity proof. The test forces report-family persistence
+  failure, verifies raw-export JSON/CSV lineage across static dashboard payload,
+  live web API detail summary, JSON artifact download, and CSV artifact
+  download, and caught/fixed an orphan markdown tie-break bug. Dashboard report
+  family sorting now prefers JSON-backed families on equal mtime so auditable
+  lineage wins over failed same-run markdown leftovers. Verification: compile
+  passed; Ruff passed; focused template/raw-export lineage slice passed
+  (`2 passed, 34 deselected, 6 warnings`); focused dashboard raw/latest family
+  slice passed (`2 passed, 18 deselected`); full web UI engagement API file
+  passed (`36 passed, 71 warnings`); full static dashboard file passed
+  (`20 passed`); pytest engagement cleanup reported
+  `removed=4 remaining=0 post_scan=0`. Handoff:
+  `.claude/handoffs/2026-07-24-phase6-raw-export-lineage-e2e.md`. Commit:
+  `d0806ff`.
 - [ ] Next gate:
-  Add the same end-to-end lineage agreement proof for actual Phase 6 raw-export
-  last-resort artifacts, or document why existing raw-export dashboard/API
-  coverage is already equivalent. Do not reopen worker-pool micro-optimization
-  unless a new measured bottleneck appears.
+  Run a current-code audit for remaining dashboard/report/audit surface
+  mismatches or a broader mocked kill-chain acceptance gap. Do not reopen
+  worker-pool micro-optimization unless a new measured bottleneck appears.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
