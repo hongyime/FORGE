@@ -12,6 +12,12 @@ required for the recommended deterministic template/report path.
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
+Canonical one-line answer: FORGE must be one comprehensive, deterministic,
+authorized ASM engagement pipeline from scoped multi-seed intake through bounded
+recursive discovery, static artifact enrichment, non-destructive
+validation-before-reporting, rule-engine scoring, graph/dashboard/report/audit
+review, guaranteed template/raw fallback, and test-data cleanup.
+
 FORGE's end goal is one comprehensive, deterministic, authorized ASM workflow:
 multi-seed engagement intake, bounded recursive discovery, passive artifact and
 provider enrichment, scoped live checks only when ROE/scope explicitly allows
@@ -25,11 +31,18 @@ move the goal to UI-only polish, provider breadth without recursive value, or an
 path that weakens scope gates, validation gates, auditability, deterministic
 severity, or report fallback.
 
+Before editing code, state the deterministic gate being advanced: intake,
+discovery, recursion, artifact analysis, validation, scoring, review, fallback,
+or testing/cleanup. If none applies, stop and choose a concrete release-gate gap
+instead.
+
 Do not replace this goal with a new project direction in a task handoff. If the
 goal needs clarification, update `docs/end_goal.md`, `END_GOAL.md`, `SPEC.md`,
 `docs/deterministic_engagement_contract.md`, and
 `docs/engagement_overhaul_tasklist.md` together so every agent sees the same
-locked target.
+locked target. Refresh `docs/claude_continue_checklist.md` and
+`docs/claude_quick_handoff.md` too when active continuation wording would
+mislead the next agent.
 
 If runtime `/goal` text, chat summaries, or historical handoffs disagree with
 that chain, treat them as stale. Continue against the goal lock above and update

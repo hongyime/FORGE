@@ -25,6 +25,13 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
+Current next gate: validation/review parity. Audit whether Phase 6 reports,
+dashboard payloads, graph exports, raw exports, validation inventory, or audit
+surfaces can still expose stale pre-existing deterministic cloud/key finding
+rows when the latest validation row uses an unknown or non-reportable validation
+method. Write the smallest failing test first, then harden only the affected
+gate.
+
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
 `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog` as the

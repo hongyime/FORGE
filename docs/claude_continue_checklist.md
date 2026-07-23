@@ -159,10 +159,14 @@ historical notes only, not as current instructions.
   template/raw fallback, and test-data cleanup. Backprop: added `SPEC.md`
   `B8`. Verification: documentation grep and source-of-truth review only.
   Handoff: `.claude/handoffs/2026-07-20-end-goal-source-of-truth-refresh.md`.
-- [ ] Immediate next implementation target: audit the next concrete release-gate
-  gap before writing code. Prefer dashboard/graph/report parity, raw export
-  fallback, cleanup proof, MTGX analyst fidelity, or a concrete
-  identity-provider/passive-artifact parser gap.
+- [ ] Immediate next implementation target: validation/review parity audit.
+  Check whether Phase 6 reports, dashboard payloads, graph exports, raw exports,
+  validation inventory, and audit surfaces can still expose stale pre-existing
+  deterministic cloud/key finding rows when the latest validation row uses an
+  unknown or non-reportable validation method. Add the smallest failing test
+  first, then harden only the affected gate. This advances validation, scoring,
+  review, fallback, and testing/cleanup; do not broaden provider calls, live
+  probing, scope, proxy/IP behavior, or severity rules.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
