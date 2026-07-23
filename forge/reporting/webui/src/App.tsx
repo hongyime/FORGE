@@ -3269,13 +3269,22 @@ function DetailPage({
 
         <article className="panel" id="findings">
           <div className="panel-head">
-            <p className="section-kicker">Validated findings</p>
-            <strong>{formatCount(findingRows.length + keyFindingRows.length + cloudValidationRows.length)}</strong>
+            <p className="section-kicker">Reportable validated findings</p>
+            <strong>{formatCount(findingRows.length)}</strong>
           </div>
           <div className="panel-body findings-stack">
-            <DataList rows={keyFindingRows} emptyText="No key exposure rows captured yet." />
-            <DataList rows={cloudValidationRows} emptyText="No cloud validation rows captured yet." />
             <DataList rows={findingRows} emptyText="No validated finding rows captured yet." />
+          </div>
+        </article>
+
+        <article className="panel" id="validation-inventory">
+          <div className="panel-head">
+            <p className="section-kicker">Validation inventory</p>
+            <strong>{formatCount(keyFindingRows.length + cloudValidationRows.length)}</strong>
+          </div>
+          <div className="panel-body findings-stack">
+            <DataList rows={keyFindingRows} emptyText="No key validation inventory rows captured yet." />
+            <DataList rows={cloudValidationRows} emptyText="No cloud validation inventory rows captured yet." />
           </div>
         </article>
 

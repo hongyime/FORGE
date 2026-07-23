@@ -25,30 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: configurable kill-chain budgets are complete.
-`FORGE_KILL_CHAIN_SYNTHESIS_DEPTH` now controls synthesis depth with default
-`3` and bound `1..5`; `FORGE_KILL_CHAIN_VALIDATION_BATCH_LIMIT` controls
-pending cloud-validation batch size with default `16` and bound `1..64`.
-Invalid values fail closed, and effective values are recorded in
-`engagement_runs.metadata_json` for dashboard/audit review.
+Latest checkpoint: React validation inventory labeling is complete. The
+engagement detail page now counts only reportable `vulnerability_findings` plus
+`passive_vulns` rows under "Reportable validated findings"; key scanner and
+cloud validation rows render under a separate "Validation inventory" panel so
+non-reportable statuses remain visible without looking reportable.
 
-Verification: compile/Ruff passed; option normalizer tests passed (`2 passed`);
-CLI env rejection plus focused kill-chain metadata tests passed (`4 passed`);
-kill-chain convergence suite passed (`3 passed`); run telemetry metadata slice
-passed (`1 passed`); targeted slow pending-validation batch and recursive
-artifact/social/fallback slices passed with `-m slow` (`2 passed`). Handoff:
-`.claude/handoffs/2026-07-24-configurable-kill-chain-budgets.md`.
+Verification: focused web UI contract passed (`5 passed`); Python compile
+passed; Ruff passed; React build passed; `npm run lint` passed with existing
+hook-dependency warnings. Handoff:
+`.claude/handoffs/2026-07-24-react-validation-inventory-labeling.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: fix React engagement-detail review labeling so only
-reportable validated findings appear under "Validated findings"; non-reportable
-`UNVERIFIED`, `DEAD`, honeypot-suspected, and metadata-only cloud/key rows
-should render as validation inventory with explicit status. Add a focused
-`tests/reporting/test_webui_contract.py` assertion for this parity gap.
+Current next gate: add deterministic `conflicts_with` relation production for
+obvious cross-reference collisions such as the same email/phone tied to
+incompatible names or organizations. Prove conflict rows reduce/annotate
+synthesis confidence and remain visible in seed relations/dashboard review.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

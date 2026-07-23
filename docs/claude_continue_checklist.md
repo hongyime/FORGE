@@ -204,12 +204,21 @@ historical notes only, not as current instructions.
   targeted slow pending-validation batch and recursive artifact/social/fallback
   slices passed with `-m slow` (`2 passed`). Handoff:
   `.claude/handoffs/2026-07-24-configurable-kill-chain-budgets.md`.
+- [x] React validation inventory labeling checkpoint:
+  The engagement detail findings panel now counts only reportable
+  `vulnerability_findings` plus `passive_vulns` rows under "Reportable
+  validated findings". Key scanner rows and cloud validation rows render in a
+  separate "Validation inventory" panel so `UNVERIFIED`, `DEAD`,
+  honeypot-suspected, and metadata-only rows remain reviewable without looking
+  reportable. Verification: focused web UI contract passed (`5 passed`);
+  Python compile passed; Ruff passed; React build passed; `npm run lint`
+  passed with existing hook-dependency warnings. Handoff:
+  `.claude/handoffs/2026-07-24-react-validation-inventory-labeling.md`.
 - [ ] Next gate:
-  Fix React engagement-detail review labeling so only reportable validated
-  findings appear under "Validated findings"; `UNVERIFIED`, `DEAD`,
-  honeypot-suspected, and metadata-only cloud/key rows should render as
-  validation inventory with explicit status. Add a focused
-  `tests/reporting/test_webui_contract.py` assertion for this parity gap.
+  Add deterministic `conflicts_with` relation production for obvious
+  cross-reference collisions such as the same email/phone tied to incompatible
+  names or organizations. Prove conflict rows reduce/annotate synthesis
+  confidence and remain visible in seed relations/dashboard review.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

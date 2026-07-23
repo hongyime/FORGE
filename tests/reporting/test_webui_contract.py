@@ -42,3 +42,16 @@ def test_webui_prior_report_history_surfaces_degraded_lineage() -> None:
     assert "Write degradation: {historyEntry.report_write_error}" in source
     assert "historyEntry.findings_checksum" in source
     assert "<span className=\"mono-tag\">{historyEntry.findings_checksum}</span>" in source
+
+
+def test_webui_separates_reportable_findings_from_validation_inventory() -> None:
+    source = _app_source()
+
+    assert "Reportable validated findings" in source
+    assert "<strong>{formatCount(findingRows.length)}</strong>" in source
+    assert "findingRows.length + keyFindingRows.length + cloudValidationRows.length" not in source
+    assert "Validation inventory" in source
+    assert "id=\"validation-inventory\"" in source
+    assert "<strong>{formatCount(keyFindingRows.length + cloudValidationRows.length)}</strong>" in source
+    assert "No key validation inventory rows captured yet." in source
+    assert "No cloud validation inventory rows captured yet." in source
