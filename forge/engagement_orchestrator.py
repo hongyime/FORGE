@@ -30587,8 +30587,13 @@ class ArtifactQueueProcessor:
         )
         candidates: list[str] = []
         seen: set[str] = set()
-        for value in values:
-            for candidate in self._yaml_gitops_repository_candidates(value):
+        candidate_batches = self._run_ordered_local_batch(
+            values,
+            self._yaml_gitops_repository_candidates,
+            default_factory=list,
+        )
+        for candidate_batch in candidate_batches:
+            for candidate in candidate_batch:
                 lowered = candidate.lower()
                 if lowered in seen:
                     continue

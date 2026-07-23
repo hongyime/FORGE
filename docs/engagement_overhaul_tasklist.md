@@ -91,6 +91,17 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] GitOps repository normalization worker checkpoint:
+  GitOps repository value discovery was already workerized; final conversion of
+  discovered Git/SSH/OCI repository values into normalized URL candidates now
+  also uses the ordered bounded worker pool. This preserves discovery order and
+  deterministic dedupe without executing GitOps tools or contacting
+  repositories/registries. Verification: compile passed; Ruff passed; focused
+  GitOps worker tests and existing structured YAML cloud-asset integration slice
+  passed (`3 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-gitops-repository-workers.md`.
+  Next gate: wait for Jason's fresh audit if available; otherwise continue
+  inspecting remaining passive/static parser hotspots one candidate at a time.
 - [x] Renovate structured registry worker checkpoint:
   Renovate YAML/JSON structured registry host extraction now routes independent
   `matchHost`, `registryUrl`, `endpoint`, `npmRegistryServer`, and
