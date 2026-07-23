@@ -19,6 +19,13 @@ from forge.utils.playbooks import (
 )
 
 
+EXECUTABLE_AUTOMATION_ACTIONS: dict[str, str] = {
+    "recon:ports": "ports",
+    "recon:crawl": "crawl",
+    "vuln:passive": "passive",
+}
+
+
 @dataclass
 class Suggestion:
     id: str
@@ -242,31 +249,8 @@ class AutomationEngine:
         return
 
     def _suggest_osint_enrichment(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
-        # Suggest DeHashed or XposedOrNot for new emails
-        emails = conn.execute(
-            """
-            SELECT email FROM emails 
-            WHERE engagement_id = ? 
-            AND NOT EXISTS (
-                SELECT 1 FROM email_intelligence ei 
-                WHERE ei.engagement_id = ? AND ei.email = emails.email
-            )
-            """,
-            (self.engagement_id, self.engagement_id),
-        ).fetchall()
-
-        if emails:
-            suggestions.append(
-                Suggestion(
-                    id="osint-email-enrich",
-                    title=f"Enrich {len(emails)} emails via breach intelligence",
-                    action="osint:dehashed",
-                    params={"engagement_id": self.engagement_id, "query_type": "email", "query_value": emails[0]["email"]},
-                    reason=f"Found {len(emails)} new emails; ready for exposure check.",
-                    priority=65,
-                    category="recon",
-                )
-            )
+        # No supported web automation execute action exists for email OSINT yet.
+        return
 
     def _suggest_lateral_movement(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
         # The locked FORGE goal is authorized ASM, not post-exploitation.
@@ -383,28 +367,5 @@ class AutomationEngine:
         return
 
     def _suggest_reporting(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
-        # If we have any findings, suggest generating a report
-        deterministic_total = len(_reportable_vulnerability_rows(conn, self.engagement_id))
-        passive_row = conn.execute(
-            """
-            SELECT COUNT(*) as total
-            FROM passive_vulns
-            WHERE engagement_id = ? AND COALESCE(false_positive, 0)=0
-            """,
-            (self.engagement_id,),
-        ).fetchone()
-        passive_total = int(passive_row["total"] or 0) if passive_row else 0
-        total = deterministic_total + passive_total
-
-        if total > 0:
-            suggestions.append(
-                Suggestion(
-                    id="report-generate",
-                    title="Generate interim engagement report",
-                    action="report:generate",
-                    params={"engagement_id": self.engagement_id},
-                    reason=f"Found {total} total reportable vulnerabilities/findings.",
-                    priority=40,
-                    category="report",
-                )
-            )
+        # Report generation uses dedicated report commands/routes, not this queue.
+        return

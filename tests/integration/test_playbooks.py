@@ -10,7 +10,7 @@ from forge.phase1.stealth_recon import run_searxng_passive
 from forge.phase4.cloud_validate import run_cloud_validate
 from forge.phase4.rce_hunter import run_safe_check, run_weaponize
 from forge.phase4.spray import run_spray
-from forge.utils.automation import AutomationEngine
+from forge.utils.automation import AutomationEngine, EXECUTABLE_AUTOMATION_ACTIONS
 from forge.utils.playbooks import PlaybookEngine, PlaybookStep
 from forge.utils.playbooks.cloud_leak import run_cloud_leak_playbook
 
@@ -536,3 +536,40 @@ def test_automation_suggestions_do_not_offer_exploit_correlation_by_default(tmp_
     assert "exploit:correlate" not in {suggestion.action for suggestion in suggestions}
     assert all(suggestion.category != "exploit" for suggestion in suggestions)
     assert all("known exploit" not in suggestion.title.lower() for suggestion in suggestions)
+
+
+def test_automation_suggestions_only_emit_execute_supported_actions(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO emails (engagement_id, email, domain, source)
+            VALUES (7, 'operator@acme.example', 'acme.example', 'crawler')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO passive_vulns
+                (engagement_id, vuln_id, plugin, url, severity, false_positive)
+            VALUES
+                (7, 'pv-1', 'headers', 'https://app.acme.example', 'LOW', 0)
+            """
+        )
+        conn.commit()
+
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    suggestions = automation.get_suggestions()
+
+    unsupported_actions = {suggestion.action for suggestion in suggestions} - set(
+        EXECUTABLE_AUTOMATION_ACTIONS
+    )
+    assert unsupported_actions == set()

@@ -47,7 +47,7 @@ from forge.reporting.dashboard import (
     _table_columns,
     _table_exists,
 )
-from forge.utils.automation import AutomationEngine
+from forge.utils.automation import AutomationEngine, EXECUTABLE_AUTOMATION_ACTIONS
 from forge.utils.kill_chain_options import normalize_kill_chain_max_iter
 from forge.utils.playbooks import PlaybookEngine
 from forge.webui.auth import mint_token, validate_jwt_secret, verify_token
@@ -1094,12 +1094,7 @@ def create_app() -> Any:
         if not isinstance(params, dict):
             raise HTTPException(status_code=400, detail="params must be an object.")
 
-        allowed_actions = {
-            "recon:ports": "ports",
-            "recon:crawl": "crawl",
-            "vuln:passive": "passive",
-        }
-        task_type = allowed_actions.get(action)
+        task_type = EXECUTABLE_AUTOMATION_ACTIONS.get(action)
         if task_type is None:
             raise HTTPException(status_code=400, detail="Unsupported automation action.")
 

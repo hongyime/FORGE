@@ -244,11 +244,19 @@ historical notes only, not as current instructions.
   passed (`6 passed`), compile/Ruff passed, full web UI engagement API suite
   passed (`34 passed`), adjacent playbook suggestion suite passed (`17 passed`),
   and cleanup scan is green.
-- [ ] Immediate next implementation target: audit automation suggestions that
-  point to unsupported route actions, starting with `_suggest_osint_enrichment()`
-  and `osint:dehashed`. Add the smallest failing suggestion/route parity test
-  first, then suppress, reclassify, or wire only a scoped passive supported
-  action.
+- [x] Automation unsupported-suggestion parity checkpoint completed:
+  `AutomationEngine` no longer emits `osint:dehashed` or `report:generate`
+  suggestions through the web automation review surface until explicit
+  supported route actions exist. The executable action allowlist is shared by
+  `/api/automation/execute` and suggestion parity tests. Backprop: `SPEC.md`
+  `B20`; existing `V3`/`V6`/`V10`/`V12`/`V13` cover the gate. Verification:
+  failing TDD first showed unsupported actions, then focused parity regression,
+  compile/Ruff, full playbook suite, and API admission slice are green.
+- [ ] Immediate next implementation target: move back to concrete kill-chain
+  coverage. Add the smallest mocked E2E or focused integration test that proves
+  one missing recursive discovery path from `T1`/`T2` advances from discovered
+  passive evidence into a secondary seed, validation inventory, graph/report
+  review, or cleanup.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -25,10 +25,10 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: unsupported automation suggestion actions. Audit
-`_suggest_osint_enrichment()` and `osint:dehashed`, then write the smallest
-failing suggestion/route parity test first. Suppress, reclassify, or wire only a
-scoped passive supported action; do not add provider calls or new live behavior.
+Current next gate: concrete kill-chain coverage. Add the smallest mocked E2E or
+focused integration test that proves one missing recursive discovery path from
+`SPEC.md` `T1`/`T2` advances from discovered passive evidence into a secondary
+seed, validation inventory, graph/report review, or cleanup.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -63,6 +63,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Automation unsupported-suggestion parity checkpoint completed:
+  `AutomationEngine` no longer emits `osint:dehashed` or `report:generate`
+  suggestions through the web automation review surface until explicit
+  supported route actions exist. The executable action allowlist is shared by
+  `/api/automation/execute` and suggestion parity tests. Backprop: `SPEC.md`
+  `B20`; existing `V3`/`V6`/`V10`/`V12`/`V13` cover the gate. Verification:
+  failing TDD first showed unsupported actions `osint:dehashed` and
+  `report:generate`; focused parity regression; compile/Ruff; full playbook
+  suggestion suite (`18 passed`); automation execute API admission slice
+  (`6 passed`). Handoff:
+  `.claude/handoffs/2026-07-23-automation-suggestion-route-parity.md`.
 - [x] Automation execute action-admission checkpoint completed:
   `/api/automation/execute` now rejects unsupported or sensitive action names
   before queue writes and only schedules currently supported passive/recon

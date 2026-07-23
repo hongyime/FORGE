@@ -375,13 +375,26 @@ sentences as historical notes only, not as current instructions.
   `test_owned_engagement_db_count=0`. Safety: admission control only; no
   provider calls, live probing, credential use, exploitation, post-exploitation,
   proxy/IP behavior, rate-limit bypass, or new playbook capabilities.
-- [ ] Next implementation target: audit automation suggestions that point to
-  unsupported route actions, starting with `_suggest_osint_enrichment()` and
-  `osint:dehashed`. Add the smallest failing suggestion/route parity test
-  first, then suppress, reclassify, or wire only a scoped passive supported
-  action. Do not add provider calls, live probing, credential use, exploitation,
-  post-exploitation, proxy/IP behavior, rate-limit bypass, or new playbook
-  capabilities.
+- [x] Automation unsupported-suggestion parity checkpoint:
+  `AutomationEngine` no longer emits `osint:dehashed` or `report:generate`
+  suggestions through the web automation review surface until explicit
+  supported route actions exist. The executable action allowlist is shared by
+  `/api/automation/execute` and suggestion parity tests, so future suggestion
+  drift is caught. Backprop: `SPEC.md` `B20`; existing
+  `V3`/`V6`/`V10`/`V12`/`V13` cover the gate. Verification: failing TDD first
+  showed unsupported actions `osint:dehashed` and `report:generate`; focused
+  parity regression passed; compile/Ruff passed; full playbook suggestion suite
+  passed (`18 passed`); automation execute API admission slice passed
+  (`6 passed`). Safety: suggestion suppression and allowlist sharing only; no
+  provider calls, live probing, credential use, report generation behavior
+  change, exploitation, post-exploitation, proxy/IP behavior, rate-limit bypass,
+  or new playbook capabilities.
+- [ ] Next implementation target: move back to concrete kill-chain coverage.
+  Add the smallest mocked E2E or focused integration test that proves one
+  missing recursive discovery path from `T1`/`T2` advances from discovered
+  passive evidence into a secondary seed, validation inventory, graph/report
+  review, or cleanup. Prefer a gap that improves the real engagement pipeline
+  over another UI-only or automation-label cleanup.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn
