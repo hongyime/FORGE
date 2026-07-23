@@ -29,6 +29,7 @@ _REPORT_METADATA_KEYS = (
     "provider",
     "requested_provider",
     "render_backend",
+    "rendered_provider",
     "upstream_provider",
     "format",
     "generated_at",
@@ -55,6 +56,7 @@ def _report_text_and_metadata(results: Mapping[str, object]) -> tuple[str | None
         report_map = _string_map(report)
         text = (
             report_map.get("report_md")
+            or report_map.get("report_markdown")
             or report_map.get("markdown")
             or report_map.get("content")
         )
@@ -68,7 +70,22 @@ def _report_text_and_metadata(results: Mapping[str, object]) -> tuple[str | None
     return text, metadata
 
 
+def _normalise_lineage_aliases(metadata: Mapping[str, object]) -> dict[str, object]:
+    normalised = dict(metadata)
+    rendered_provider = normalised.get("rendered_provider")
+    render_backend = normalised.get("render_backend")
+    if render_backend in ("", None) and rendered_provider not in ("", None):
+        normalised["render_backend"] = rendered_provider
+    if rendered_provider in ("", None) and render_backend not in ("", None):
+        normalised["rendered_provider"] = render_backend
+    write_error = normalised.get("write_error")
+    if normalised.get("report_write_error") in ("", None) and write_error not in ("", None):
+        normalised["report_write_error"] = write_error
+    return normalised
+
+
 def _lineage_payload(metadata: Mapping[str, object]) -> dict[str, object]:
+    metadata = _normalise_lineage_aliases(metadata)
     return {
         key: metadata[key]
         for key in _REPORT_METADATA_KEYS

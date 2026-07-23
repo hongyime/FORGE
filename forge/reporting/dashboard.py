@@ -3276,6 +3276,25 @@ def _report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path
     return grouped
 
 
+def _report_payload_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _report_payload_value(
+    payload: dict[str, Any],
+    lineage: dict[str, Any],
+    *keys: str,
+) -> str:
+    for source in (payload, lineage):
+        for key in keys:
+            value = source.get(key)
+            if value not in ("", None):
+                return str(value).strip()
+    return ""
+
+
 def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
     history: list[dict[str, Any]] = []
     for family_stem, family_files in _report_family_groups(report_files):
@@ -3296,20 +3315,23 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
                 artifact_name = artifact.name
                 break
 
-        provider = str((parsed_payload or {}).get("provider") or "").strip()
-        requested_provider = str((parsed_payload or {}).get("requested_provider") or "").strip()
-        upstream_provider = str((parsed_payload or {}).get("upstream_provider") or "").strip()
-        fallback_reason = str((parsed_payload or {}).get("fallback_reason") or "").strip()
-        report_write_error = str((parsed_payload or {}).get("report_write_error") or "").strip()
-        format_name = str((parsed_payload or {}).get("format") or "").strip()
-        findings_checksum = str((parsed_payload or {}).get("findings_checksum") or "").strip()
+        payload = parsed_payload or {}
+        lineage = _report_payload_mapping(payload.get("report_lineage"))
+        provider = _report_payload_value(payload, lineage, "provider", "rendered_provider")
+        requested_provider = _report_payload_value(payload, lineage, "requested_provider")
+        upstream_provider = _report_payload_value(payload, lineage, "upstream_provider")
+        rendered_provider = _report_payload_value(lineage, payload, "rendered_provider", "render_backend", "provider")
+        fallback_reason = _report_payload_value(payload, lineage, "fallback_reason")
+        report_write_error = _report_payload_value(payload, lineage, "report_write_error", "write_error")
+        format_name = _report_payload_value(payload, lineage, "format")
+        findings_checksum = _report_payload_value(payload, lineage, "findings_checksum")
         raw_export = provider == "raw_export"
-        render_backend = upstream_provider if raw_export and upstream_provider else provider
+        render_backend = upstream_provider if raw_export and upstream_provider else rendered_provider
         latest_mtime = max(
             (path.stat().st_mtime for path in family_files),
             default=0.0,
         )
-        generated_at = _format_dt(str((parsed_payload or {}).get("generated_at") or ""))
+        generated_at = _format_dt(_report_payload_value(payload, lineage, "generated_at"))
         if not generated_at and latest_mtime:
             generated_at = _format_dt(datetime.fromtimestamp(latest_mtime).isoformat())
         available_exports = [
@@ -3323,6 +3345,7 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
                 "provider": provider,
                 "requested_provider": requested_provider,
                 "render_backend": render_backend,
+                "rendered_provider": rendered_provider,
                 "upstream_provider": upstream_provider,
                 "format": format_name,
                 "generated_at": generated_at,

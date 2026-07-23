@@ -500,18 +500,18 @@ class TestApiReportRoute:
                     intermediate_results=json.dumps(
                         {
                             "report": {
-                                "report_md": "# Raw export fallback\n",
+                                "report_markdown": "# Raw export fallback\n",
                                 "provider": "raw_export",
                                 "requested_provider": "auto",
                                 "upstream_provider": "template",
                                 "format": "raw_export",
                                 "fallback_reason": "RuntimeError: report write failed",
-                                "report_write_error": "RuntimeError: report write failed",
                                 "findings_checksum": "sha256:workflow-raw-export",
                             },
                             "report_lineage": {
-                                "render_backend": "raw_export",
+                                "rendered_provider": "raw_export",
                                 "generated_at": "2026-07-24T05:45:00+00:00",
+                                "write_error": "RuntimeError: report write failed",
                             },
                         },
                         sort_keys=True,
@@ -540,7 +540,10 @@ class TestApiReportRoute:
         assert payload["requested_provider"] == "auto"
         assert payload["upstream_provider"] == "template"
         assert payload["render_backend"] == "raw_export"
+        assert payload["rendered_provider"] == "raw_export"
         assert payload["fallback_reason"] == "RuntimeError: report write failed"
         assert payload["report_write_error"] == "RuntimeError: report write failed"
         assert payload["findings_checksum"] == "sha256:workflow-raw-export"
+        assert payload["report_lineage"]["render_backend"] == "raw_export"
+        assert payload["report_lineage"]["rendered_provider"] == "raw_export"
         assert payload["report_lineage"]["findings_checksum"] == "sha256:workflow-raw-export"

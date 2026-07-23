@@ -476,12 +476,19 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
                 "engagement_id": 1001,
                 "provider": "raw_export",
                 "requested_provider": "auto",
-                "upstream_provider": "template",
                 "format": "raw_export",
                 "generated_at": "2026-07-09T09:44:12+00:00",
                 "fallback_reason": "RuntimeError: report write failed",
-                "report_write_error": "RuntimeError: report write failed",
                 "findings_checksum": "sha256:test-checksum-raw-1001",
+                "report_lineage": {
+                    "requested_provider": "auto",
+                    "rendered_provider": "raw_export",
+                    "upstream_provider": "template",
+                    "format": "raw_export",
+                    "fallback_reason": "RuntimeError: report write failed",
+                    "write_error": "RuntimeError: report write failed",
+                    "findings_checksum": "sha256:test-checksum-raw-1001",
+                },
             }
         ),
         encoding="utf-8",
@@ -507,6 +514,7 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
         assert detail["report_summary"]["provider"] == "raw_export"
         assert detail["report_summary"]["requested_provider"] == "auto"
         assert detail["report_summary"]["render_backend"] == "template"
+        assert detail["report_summary"]["rendered_provider"] == "raw_export"
         assert detail["report_summary"]["upstream_provider"] == "template"
         assert detail["report_summary"]["fallback_reason"] == "RuntimeError: report write failed"
         assert detail["report_summary"]["report_write_error"] == "RuntimeError: report write failed"
