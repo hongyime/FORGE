@@ -25,21 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Renovate config text worker-pool migration is implemented.
-Static Renovate config text parsing keeps the line-oriented `registryUrls`
-state machine serial, then dispatches independent candidate normalization
-through ordered bounded worker helpers before final serial dedupe. `matchHost`,
-`registryUrl`, multiline `registryUrls` order, and sensitive-query stripping are
-preserved.
+Latest checkpoint: API spec traversal worker-pool migration is implemented.
+OpenAPI/Swagger/AsyncAPI recursive traversal now dispatches the current
+mapping/list child layer through ordered bounded worker helpers while nested
+recursion, Swagger server preface ordering, server mapping duplicate
+suppression, and final URL normalization/dedupe remain serial.
 
-Verification: compile/Ruff passed; focused Renovate worker test passed
-(`1 passed`); focused persisted repo-maintenance artifact slice passed
-(`1 passed`); cleanup left `remaining_renovate_runtime_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-renovate-text-worker-pool.md`.
+Verification: compile/Ruff passed; focused API-spec worker test passed
+(`2 passed`); existing API-spec worker regression and persisted API-spec/client
+artifact slice passed (`2 passed`); cleanup left
+`remaining_api_spec_runtime_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-api-spec-traversal-worker-pool.md`.
 
-Current next gate: recon tool output static parsing worker-pool migration.
-Preserve family order across whole-document JSON, XML tag extraction, and
-line-by-line extraction; do not execute recon tools or probe discovered hosts.
+Recon-output double-check: no code change was needed.
+`_recon_tool_output_structured_payload_text` already preserves family order and
+uses ordered bounded candidate normalization; existing focused worker regression
+and persisted recon-output artifact slice both passed.
+
+Current next gate: re-audit remaining static parser/enricher candidates and
+select the next proven-safe bounded worker-pool migration before editing.
+Preserve deterministic ordering, compact tests, scope gates, provider caps,
+pacing/backoff, and passive-only behavior.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

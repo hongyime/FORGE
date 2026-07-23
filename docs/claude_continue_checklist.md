@@ -326,10 +326,25 @@ historical notes only, not as current instructions.
   focused persisted repo-maintenance artifact slice -> `1 passed`; cleanup left
   `remaining_renovate_runtime_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-renovate-text-worker-pool.md`.
-- [ ] Next implementation target: recon tool output static parsing worker-pool
-  migration. Preserve family order across whole-document JSON, XML tag
-  extraction, and line-by-line extraction; do not execute recon tools or probe
-  discovered hosts.
+- [x] Recon tool output worker-pool double-check completed: no code change
+  needed. `_recon_tool_output_structured_payload_text` already preserves family
+  order across whole-document JSON, XML tag extraction, and line-by-line
+  extraction, then dispatches candidate normalization through ordered bounded
+  worker helpers before final serial dedupe. Existing focused worker regression
+  and focused persisted recon-output artifact slice both passed.
+- [x] API spec traversal worker-pool checkpoint completed: OpenAPI/Swagger/
+  AsyncAPI recursive traversal now dispatches the current mapping/list child
+  layer through ordered bounded worker helpers while nested recursion, Swagger
+  server preface ordering, server mapping duplicate suppression, and final URL
+  normalization/dedupe remain serial. Verification: compile/Ruff passed;
+  focused API-spec worker test -> `2 passed`; existing API-spec worker
+  regression plus persisted API-spec/client artifact slice -> `2 passed`;
+  cleanup left `remaining_api_spec_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-api-spec-traversal-worker-pool.md`.
+- [ ] Next implementation target: re-audit remaining static parser/enricher
+  candidates and select the next proven-safe bounded worker-pool migration
+  before editing. Preserve deterministic ordering, compact tests, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

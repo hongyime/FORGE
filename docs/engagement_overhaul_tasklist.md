@@ -978,10 +978,33 @@ sentences as historical notes only, not as current instructions.
   provider call, live probing, credential use, scope/ROE relaxation,
   validation/report-gate change, severity change, proxy/IP rotation,
   rate-limit bypass, or destructive behavior.
-- [ ] Next implementation target: recon tool output static parsing worker-pool
-  migration. Preserve family order across whole-document JSON, XML tag
-  extraction, and line-by-line extraction; do not execute recon tools or probe
-  discovered hosts.
+- [x] Recon tool output worker-pool double-check: no code change needed.
+  `_recon_tool_output_structured_payload_text` already preserves family order
+  across whole-document JSON, XML tag extraction, and line-by-line extraction,
+  then dispatches candidate normalization through ordered bounded worker
+  helpers before final serial dedupe. Verification: existing focused worker
+  regression passed (`1 passed`) and focused persisted recon-output artifact
+  slice passed (`1 passed`). Safety: passive parsing of already-collected recon
+  output only; no recon tool execution, live probing, provider calls, credential
+  use, scope/ROE relaxation, proxy/IP rotation, rate-limit bypass, or
+  validation/report-gate change.
+- [x] API spec traversal worker-pool checkpoint: OpenAPI/Swagger/AsyncAPI
+  recursive traversal now dispatches the current mapping/list child layer
+  through ordered bounded worker helpers while nested recursion, Swagger server
+  preface ordering, server mapping duplicate suppression, and final URL
+  normalization/dedupe remain serial. Verification: compile passed; Ruff passed;
+  focused API-spec worker test passed (`2 passed`); existing API-spec worker
+  regression and persisted API-spec/client artifact slice passed (`2 passed`);
+  cleanup left `remaining_api_spec_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-api-spec-traversal-worker-pool.md`. Safety:
+  passive local static API spec parsing only; no client generation, callback or
+  webhook execution, endpoint probing, provider call, live probing, credential
+  use, scope/ROE relaxation, validation/report-gate change, severity change,
+  proxy/IP rotation, rate-limit bypass, or destructive behavior.
+- [ ] Next implementation target: re-audit remaining static parser/enricher
+  candidates and select the next proven-safe bounded worker-pool migration
+  before editing. Preserve deterministic ordering, compact tests, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -27057,13 +27057,21 @@ class ArtifactQueueProcessor:
         values: list[str] = []
         if isinstance(document, dict):
             values.extend(self._api_spec_swagger_server_candidates(document))
-        values.extend(self._api_spec_value_candidate_values(document, ()))
+        values.extend(
+            self._api_spec_value_candidate_values(
+                document,
+                (),
+                use_workers=True,
+            )
+        )
         return values[:512]
 
     def _api_spec_value_candidate_values(
         self,
         value: Any,
         path: tuple[str, ...],
+        *,
+        use_workers: bool,
     ) -> list[str]:
         candidates: list[str] = []
         if isinstance(value, dict):
@@ -27071,34 +27079,115 @@ class ArtifactQueueProcessor:
             is_server_mapping = self._api_spec_server_mapping_looks_supported(normalized)
             if is_server_mapping:
                 candidates.extend(self._api_spec_server_mapping_candidates(value))
-            for key, child in value.items():
-                key_text = str(key or "").strip()
-                key_fingerprint = self._yaml_key_fingerprint(key_text)
-                child_path = (*path, key_fingerprint)
-                if is_server_mapping and key_fingerprint in {
-                    "url",
-                    "host",
-                    "hostname",
-                    "protocol",
-                    "scheme",
-                    "pathname",
-                    "path",
-                    "basepath",
-                }:
-                    continue
-                if self._api_spec_key_is_urlish(key_fingerprint, path) and isinstance(
-                    child,
-                    (str, int, float),
-                ):
-                    candidates.append(str(child))
-                if self._api_spec_path_allows_urlish_map_keys(child_path):
-                    candidates.extend(self._api_spec_mapping_urlish_keys(child))
-                candidates.extend(self._api_spec_value_candidate_values(child, child_path))
+            child_jobs = [
+                (child_index, key, child, path, is_server_mapping)
+                for child_index, (key, child) in enumerate(value.items())
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._api_spec_child_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._api_spec_child_candidate_values_for_node(
+                        key,
+                        child,
+                        path,
+                        is_server_mapping,
+                    )
+                    for _child_index, key, child, path, is_server_mapping in child_jobs
+                ]
+            )
+            for child_values in child_batches:
+                candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            for item in value[:256]:
-                candidates.extend(self._api_spec_value_candidate_values(item, path))
+            item_jobs = [
+                (item_index, item, path)
+                for item_index, item in enumerate(value[:256])
+            ]
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._api_spec_list_item_candidate_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._api_spec_value_candidate_values(
+                        item,
+                        path,
+                        use_workers=False,
+                    )
+                    for _item_index, item, path in item_jobs
+                ]
+            )
+            for item_values in item_batches:
+                candidates.extend(item_values)
         return candidates
+
+    def _api_spec_child_candidate_values(
+        self,
+        child_job: tuple[int, Any, Any, tuple[str, ...], bool],
+    ) -> list[str]:
+        _child_index, key, child, path, is_server_mapping = child_job
+        return self._api_spec_child_candidate_values_for_node(
+            key,
+            child,
+            path,
+            is_server_mapping,
+        )
+
+    def _api_spec_child_candidate_values_for_node(
+        self,
+        key: Any,
+        child: Any,
+        path: tuple[str, ...],
+        is_server_mapping: bool,
+    ) -> list[str]:
+        key_text = str(key or "").strip()
+        key_fingerprint = self._yaml_key_fingerprint(key_text)
+        child_path = (*path, key_fingerprint)
+        if is_server_mapping and key_fingerprint in {
+            "url",
+            "host",
+            "hostname",
+            "protocol",
+            "scheme",
+            "pathname",
+            "path",
+            "basepath",
+        }:
+            return []
+        candidates: list[str] = []
+        if self._api_spec_key_is_urlish(key_fingerprint, path) and isinstance(
+            child,
+            (str, int, float),
+        ):
+            candidates.append(str(child))
+        if self._api_spec_path_allows_urlish_map_keys(child_path):
+            candidates.extend(self._api_spec_mapping_urlish_keys(child))
+        candidates.extend(
+            self._api_spec_value_candidate_values(
+                child,
+                child_path,
+                use_workers=False,
+            )
+        )
+        return candidates
+
+    def _api_spec_list_item_candidate_values(
+        self,
+        item_job: tuple[int, Any, tuple[str, ...]],
+    ) -> list[str]:
+        _item_index, item, path = item_job
+        return self._api_spec_value_candidate_values(
+            item,
+            path,
+            use_workers=False,
+        )
 
     @staticmethod
     def _api_spec_key_is_urlish(key_fingerprint: str, path: tuple[str, ...]) -> bool:
