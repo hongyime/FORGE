@@ -91,6 +91,19 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] SOPS metadata worker checkpoint:
+  SOPS metadata extraction now routes independent AWS KMS, GCP KMS, Azure Key
+  Vault, and HashiCorp Vault metadata entries through the existing ordered
+  bounded worker pool while preserving section order, duplicate filtering, and
+  passive-only behavior. This does not decrypt SOPS data or use key material.
+  Verification: compile passed; Ruff passed; focused SOPS worker regression
+  passed (`1 passed`); engagement-backed container/orchestration artifact slice
+  covering SOPS metadata persistence passed (`1 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-sops-metadata-workers.md`.
+  Next gate: continue auditing remaining static parser/enricher candidates for a
+  proven worker-pool or coverage gap; do not widen into decryption, validation,
+  reporting, severity, provider, or live probing behavior without a separate
+  scoped task and mocked tests.
 - [x] CI YAML image-worker checkpoint:
   Cloud Build, Drone, Woodpecker, and Buildkite plugin image extraction now route
   independent image normalization/plugin-root jobs through the existing ordered

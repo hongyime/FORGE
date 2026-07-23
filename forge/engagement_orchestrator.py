@@ -31097,6 +31097,21 @@ class ArtifactQueueProcessor:
         if not isinstance(sops_mapping, dict):
             return []
 
+        sops_jobs: list[tuple[str, dict[str, Any]]] = []
+        for entry in self._yaml_sops_section_entries(sops_mapping, "kms"):
+            sops_jobs.append(("aws_kms", entry))
+        for entry in self._yaml_sops_section_entries(sops_mapping, "gcp_kms", "gcpKms", "gcp-kms"):
+            sops_jobs.append(("gcp_kms", entry))
+        for entry in self._yaml_sops_section_entries(sops_mapping, "azure_kv", "azureKv", "azure-kv"):
+            sops_jobs.append(("azure_kv", entry))
+        for entry in self._yaml_sops_section_entries(sops_mapping, "hc_vault", "hcVault", "hc-vault"):
+            sops_jobs.append(("hc_vault", entry))
+
+        candidate_entries = self._run_ordered_local_batch(
+            sops_jobs,
+            self._yaml_sops_metadata_entry_candidate,
+            default_factory=str,
+        )
         candidates: list[str] = []
         seen: set[str] = set()
 
@@ -31110,24 +31125,22 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        for entry in self._yaml_sops_section_entries(sops_mapping, "kms"):
+        for candidate in candidate_entries:
+            _append(candidate)
+        return candidates
+
+    def _yaml_sops_metadata_entry_candidate(self, sops_job: tuple[str, dict[str, Any]]) -> str:
+        family, entry = sops_job
+        if family == "aws_kms":
             arn = self._yaml_ref_value(entry, "arn")
-            if _AWS_KMS_ARN_RE.fullmatch(str(arn or "").strip()):
-                _append(str(arn).strip())
-
-        for entry in self._yaml_sops_section_entries(sops_mapping, "gcp_kms", "gcpKms", "gcp-kms"):
+            return str(arn).strip() if _AWS_KMS_ARN_RE.fullmatch(str(arn or "").strip()) else ""
+        if family == "gcp_kms":
             resource_id = str(self._yaml_ref_value(entry, "resource_id", "resourceId", "resource-id") or "").strip()
-            if _GCP_KMS_RESOURCE_RE.fullmatch(resource_id):
-                _append(resource_id)
-
-        for entry in self._yaml_sops_section_entries(sops_mapping, "azure_kv", "azureKv", "azure-kv"):
+            return resource_id if _GCP_KMS_RESOURCE_RE.fullmatch(resource_id) else ""
+        if family == "azure_kv":
             vault_url = str(self._yaml_ref_value(entry, "vault_url", "vaultUrl", "vault-url") or "").strip()
-            if vault_url:
-                normalized_url = _normalize_artifact_text_url(vault_url)
-                if normalized_url:
-                    _append(normalized_url)
-
-        for entry in self._yaml_sops_section_entries(sops_mapping, "hc_vault", "hcVault", "hc-vault"):
+            return _normalize_artifact_text_url(vault_url) if vault_url else ""
+        if family == "hc_vault":
             vault_address = str(
                 self._yaml_ref_value(
                     entry,
@@ -31141,11 +31154,8 @@ class ArtifactQueueProcessor:
                 )
                 or ""
             ).strip()
-            vault_url = self._yaml_vault_address_candidate(vault_address)
-            if vault_url:
-                _append(vault_url)
-
-        return candidates
+            return self._yaml_vault_address_candidate(vault_address)
+        return ""
 
     def _yaml_sops_section_entries(self, mapping: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
         normalized_keys = {self._yaml_key_fingerprint(key) for key in keys}

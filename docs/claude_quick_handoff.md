@@ -25,17 +25,16 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: CI YAML image-worker migration is complete. Cloud Build,
-Drone, Woodpecker, and Buildkite plugin image extraction now route independent
-image-normalization/plugin-root jobs through the existing ordered bounded worker
-pool while keeping nested plugin recursion serial and final dedupe
-deterministic.
+Latest checkpoint: SOPS metadata worker migration is complete. SOPS metadata
+extraction now routes independent AWS KMS, GCP KMS, Azure Key Vault, and
+HashiCorp Vault metadata entries through the existing ordered bounded worker
+pool while preserving section order, duplicate filtering, and passive-only
+behavior. It does not decrypt SOPS data or use key material.
 
-Verification: compile/Ruff passed; focused CI workflow worker tests passed
-(`4 passed`); engagement-backed CI workflow metadata and GitLab include
-integration slices passed (`2 passed`); adjacent observability and
-orchestration no-code boundary worker slices passed (`4 passed`). Handoff:
-`.claude/handoffs/2026-07-24-ci-yaml-image-workers.md`.
+Verification: compile/Ruff passed; focused SOPS worker regression passed
+(`1 passed`); engagement-backed container/orchestration artifact slice covering
+SOPS metadata persistence passed (`1 passed`). Handoff:
+`.claude/handoffs/2026-07-24-sops-metadata-workers.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
