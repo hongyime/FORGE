@@ -324,9 +324,22 @@ sentences as historical notes only, not as current instructions.
   cloud-leak auto-trigger enablement, scope changes, severity expansion,
   proxy/IP rotation, rate-limit bypass, resource enumeration expansion, storage
   scanning, or extraction behavior.
-- [ ] Next implementation target: audit remaining legacy automation suggestions
-  that still imply credential validation, lateral movement, post-exploitation,
-  or exploit correlation outside the authorized ASM guardrails. Add the
+- [x] Legacy post-exploitation suggestion guardrail checkpoint:
+  `AutomationEngine` no longer emits `post:lateral` suggestions from validated
+  credential rows. The lateral-movement suggestion path now returns without
+  adding post-exploitation actions, preserving the authorized ASM goal boundary.
+  Backprop: `SPEC.md` `B16`; existing `V3`/`V6`/`V10`/`V12` cover the gate.
+  Verification: failing TDD first showed `post:lateral` in automation
+  suggestions; focused guardrail regression passed; compile/Ruff passed; full
+  playbook integration suite passed (`15 passed`); adjacent API parity
+  regression passed (`1 passed`); cleanup `test_owned_engagement_db_count=0`.
+  Safety: suggestion suppression only; no provider calls, live probing,
+  credential use, scope changes, password attacks, exploitation,
+  post-exploitation, proxy/IP rotation, rate-limit bypass, or new playbook
+  capabilities.
+- [ ] Next implementation target: audit remaining automation suggestions that
+  still use exploit/credential-validation framing, especially
+  `_suggest_credential_validation()` and `_suggest_correlation()`. Add the
   smallest failing suggestion/route test first, then suppress, reclassify, or
   ROE-gate only the proven unsafe suggestion. This advances scoped active
   checks, review, and testing/cleanup; do not add password attacks,

@@ -25,11 +25,11 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: remaining legacy automation suggestion guardrails. Audit
-suggestions that still imply credential validation, lateral movement,
-post-exploitation, or exploit correlation outside authorized ASM boundaries.
-Write the smallest failing suggestion/route test first, then suppress,
-reclassify, or ROE-gate only the proven unsafe suggestion.
+Current next gate: remaining automation suggestion framing. Audit suggestions
+that still use exploit/credential-validation framing, especially
+`_suggest_credential_validation()` and `_suggest_correlation()`. Write the
+smallest failing suggestion/route test first, then suppress, reclassify, or
+ROE-gate only the proven unsafe suggestion.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -64,6 +64,14 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Legacy post-exploitation suggestion guardrail completed:
+  `AutomationEngine` no longer emits `post:lateral` suggestions from validated
+  credential rows. Backprop: `SPEC.md` `B16`; existing
+  `V3`/`V6`/`V10`/`V12` cover the gate. Verification: failing TDD first showed
+  `post:lateral` in suggestions; focused guardrail regression; compile/Ruff;
+  full playbook integration suite (`15 passed`); adjacent API parity regression
+  (`1 passed`); cleanup `test_owned_engagement_db_count=0`. Handoff:
+  `.claude/handoffs/2026-07-23-lateral-suggestion-guardrail.md`.
 - [x] Legacy cloud-leak key proof gate completed:
   `run_cloud_leak_playbook()` no longer trusts
   `key_scanner_findings.validation_state='ACTIVE'` by itself. Existing active

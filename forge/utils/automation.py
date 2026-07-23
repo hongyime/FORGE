@@ -304,24 +304,8 @@ class AutomationEngine:
             )
 
     def _suggest_lateral_movement(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
-        # If we have a successful credential validation, suggest lateral movement
-        valid_creds = conn.execute(
-            "SELECT validated_host, validated_service FROM credentials WHERE engagement_id = ? AND validated = 1",
-            (self.engagement_id,),
-        ).fetchall()
-
-        for cred in valid_creds:
-            suggestions.append(
-                Suggestion(
-                    id=f"lateral-{cred['validated_host']}",
-                    title=f"Attempt lateral movement from {cred['validated_host']}",
-                    action="post:lateral",
-                    params={"engagement_id": self.engagement_id, "target": cred["validated_host"]},
-                    reason=f"Valid credentials confirmed on {cred['validated_host']}.",
-                    priority=100,
-                    category="exploit",
-                )
-            )
+        # The locked FORGE goal is authorized ASM, not post-exploitation.
+        return
 
     def _suggest_port_scans(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
         # Find hosts that aren't in the services table yet

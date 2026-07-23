@@ -217,11 +217,17 @@ historical notes only, not as current instructions.
   enumeration, focused negative and positive regressions, compile/Ruff, full
   playbook suite, validation-proof parser, dashboard key gate slice, and Phase 6
   key selectors are green.
-- [ ] Immediate next implementation target: audit remaining legacy automation
-  suggestions that still imply credential validation, lateral movement,
-  post-exploitation, or exploit correlation outside authorized ASM guardrails.
-  Add the smallest failing suggestion/route test first, then suppress,
-  reclassify, or ROE-gate only the proven unsafe suggestion.
+- [x] Legacy post-exploitation suggestion guardrail completed:
+  `AutomationEngine` no longer emits `post:lateral` suggestions from validated
+  credential rows. Backprop: `SPEC.md` `B16`; existing
+  `V3`/`V6`/`V10`/`V12` cover the gate. Verification: failing TDD first showed
+  `post:lateral`, then focused regression, compile/Ruff, full playbook suite,
+  adjacent API parity regression, and cleanup scan are green.
+- [ ] Immediate next implementation target: audit remaining automation
+  suggestions that still use exploit/credential-validation framing, especially
+  `_suggest_credential_validation()` and `_suggest_correlation()`. Add the
+  smallest failing suggestion/route test first, then suppress, reclassify, or
+  ROE-gate only the proven unsafe suggestion.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

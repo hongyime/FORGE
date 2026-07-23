@@ -431,3 +431,32 @@ def test_cloud_leak_playbook_allows_active_key_with_linked_reportable_validation
     assert result["validated"] is True
     assert result["resources"] == [{"name": "[dry-run-firebase-bucket]", "type": "storage"}]
     assert result["sensitive_files"] == []
+
+
+def test_automation_suggestions_do_not_offer_lateral_movement(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO credentials
+                (engagement_id, email, password_hash, validated,
+                 validated_service, validated_host)
+            VALUES
+                (7, 'operator@acme.example', 'hash', 1, 'ssh', '10.0.0.5')
+            """
+        )
+        conn.commit()
+
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    suggestions = automation.get_suggestions()
+
+    assert "post:lateral" not in {suggestion.action for suggestion in suggestions}
