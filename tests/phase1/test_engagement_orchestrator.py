@@ -799,6 +799,101 @@ def test_synthesis_engine_parallelizes_seed_confidence_update_entries_and_preser
     assert username_metadata["synthesis"]["supporting_relations"] == 1
 
 
+def test_synthesis_engine_creates_conflict_relations_for_identity_collisions(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO engagement_seeds
+                (id, engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (2401, 1001, "+15559876543", "phone", "operator", "pending", 0, 1.0, "{}"),
+                (2402, 1001, "Alice Example", "name", "cross_reference", "pending", 1, 0.4, "{}"),
+                (2403, 1001, "Bob Builder", "name", "cross_reference", "pending", 1, 0.4, "{}"),
+                (2404, 1001, "Acme Research", "company", "cross_reference", "pending", 1, 0.4, "{}"),
+                (2405, 1001, "Builder Labs", "company", "cross_reference", "pending", 1, 0.4, "{}"),
+            ],
+        )
+        con.executemany(
+            """
+            INSERT INTO seed_relations
+                (engagement_id, source_seed_id, target_seed_id, relation_type, confidence, evidence_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (1001, 2401, 2402, "same_entity", 0.82, '{"rule":"provider_a_name"}'),
+                (1001, 2401, 2403, "same_entity", 0.81, '{"rule":"provider_b_name"}'),
+                (1001, 2401, 2404, "same_entity", 0.78, '{"rule":"provider_a_company"}'),
+                (1001, 2401, 2405, "same_entity", 0.77, '{"rule":"provider_b_company"}'),
+            ],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    assert summary.relations_inserted >= 2
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        relation_rows = con.execute(
+            """
+            SELECT
+                src.seed_value AS source_seed,
+                dst.seed_value AS target_seed,
+                sr.confidence AS confidence,
+                sr.evidence_json AS evidence_json
+            FROM seed_relations sr
+            JOIN engagement_seeds src ON src.id=sr.source_seed_id
+            JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.relation_type='conflicts_with'
+            ORDER BY src.seed_value, dst.seed_value
+            """
+        ).fetchall()
+        conflict_pairs = {
+            (str(row["source_seed"]), str(row["target_seed"]))
+            for row in relation_rows
+        }
+        assert ("Acme Research", "Builder Labs") in conflict_pairs
+        assert ("Alice Example", "Bob Builder") in conflict_pairs
+
+        for row in relation_rows:
+            evidence = json.loads(str(row["evidence_json"] or "{}"))
+            assert evidence["rule"] == "same_anchor_identity_collision"
+            assert evidence["anchor_seed_value"] == "+15559876543"
+            assert evidence["anchor_seed_type"] == "phone"
+            assert evidence["target_seed_type"] in {"company", "name"}
+            assert float(row["confidence"]) <= 0.7
+
+        target_rows = con.execute(
+            """
+            SELECT seed_value, metadata_json
+            FROM engagement_seeds
+            WHERE engagement_id=1001
+              AND seed_value IN ('Alice Example', 'Bob Builder', 'Acme Research', 'Builder Labs')
+            ORDER BY seed_value
+            """
+        ).fetchall()
+        assert len(target_rows) == 4
+        for row in target_rows:
+            metadata = json.loads(str(row["metadata_json"] or "{}"))
+            synthesis = metadata["synthesis"]
+            assert synthesis["conflict_count"] == 1
+            assert "conflicts_with" in synthesis["relation_types"]
+            assert synthesis["supporting_relations"] == 1
+    finally:
+        con.close()
+
+
 def test_synthesis_engine_parallelizes_seed_id_rows_and_preserves_mapping(
     tmp_path: Path,
     monkeypatch,

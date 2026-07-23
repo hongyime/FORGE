@@ -11879,6 +11879,7 @@ class EngagementSynthesisEngine:
                         ):
                             summary.relations_inserted += 1
 
+            summary.relations_inserted += self._insert_identity_conflict_relations(con)
             summary.corroborated_count = self._refresh_seed_confidence(con)
             summary.root_domains = self._collect_root_domains(con)
             con.commit()
@@ -17690,6 +17691,135 @@ class EngagementSynthesisEngine:
         if computed_confidence >= 0.76 or supporting_relations >= 1:
             return "medium"
         return "low"
+
+    def _insert_identity_conflict_relations(self, con: sqlite3.Connection) -> int:
+        if not _table_exists(con, "seed_relations"):
+            return 0
+        rows = con.execute(
+            """
+            SELECT
+                anchor.id AS anchor_id,
+                anchor.seed_value AS anchor_value,
+                anchor.seed_type AS anchor_type,
+                target.id AS target_id,
+                target.seed_value AS target_value,
+                target.seed_type AS target_type,
+                sr.confidence AS confidence,
+                sr.evidence_json AS evidence_json
+            FROM seed_relations sr
+            JOIN engagement_seeds anchor ON anchor.id=sr.source_seed_id
+            JOIN engagement_seeds target ON target.id=sr.target_seed_id
+            WHERE sr.engagement_id=?
+              AND sr.relation_type='same_entity'
+              AND anchor.seed_type IN ('email', 'phone')
+              AND target.seed_type IN ('name', 'company')
+            ORDER BY anchor.id ASC, target.seed_type ASC, target.id ASC
+            """,
+            (self._engagement_id,),
+        ).fetchall()
+        grouped: dict[tuple[int, str], list[dict[str, Any]]] = {}
+        for row in rows:
+            entry = {
+                "anchor_id": int(row["anchor_id"]),
+                "anchor_value": str(row["anchor_value"] or ""),
+                "anchor_type": str(row["anchor_type"] or ""),
+                "target_id": int(row["target_id"]),
+                "target_value": str(row["target_value"] or ""),
+                "target_type": str(row["target_type"] or ""),
+                "confidence": float(row["confidence"] or 0.0),
+                "evidence": _safe_json_loads(str(row["evidence_json"] or "{}")),
+            }
+            grouped.setdefault((entry["anchor_id"], entry["target_type"]), []).append(entry)
+
+        inserted = 0
+        for (_anchor_id, target_type), entries in grouped.items():
+            for left_index, left in enumerate(entries):
+                for right in entries[left_index + 1 :]:
+                    if not self._identity_seed_values_conflict(
+                        str(left["target_value"]),
+                        str(right["target_value"]),
+                        str(target_type),
+                    ):
+                        continue
+                    source_id, target_id = sorted((int(left["target_id"]), int(right["target_id"])))
+                    evidence = {
+                        "rule": "same_anchor_identity_collision",
+                        "anchor_seed_id": int(left["anchor_id"]),
+                        "anchor_seed_value": str(left["anchor_value"]),
+                        "anchor_seed_type": str(left["anchor_type"]),
+                        "target_seed_type": str(target_type),
+                        "left_value": str(left["target_value"]),
+                        "right_value": str(right["target_value"]),
+                        "left_evidence": left["evidence"] if isinstance(left["evidence"], dict) else {},
+                        "right_evidence": right["evidence"] if isinstance(right["evidence"], dict) else {},
+                    }
+                    if self._insert_relation(
+                        con,
+                        source_id,
+                        target_id,
+                        "conflicts_with",
+                        min(float(left["confidence"]), float(right["confidence"]), 0.7),
+                        evidence,
+                    ):
+                        inserted += 1
+        return inserted
+
+    @classmethod
+    def _identity_seed_values_conflict(cls, left: str, right: str, seed_type: str) -> bool:
+        left_norm = cls._identity_conflict_normalized_value(left, seed_type)
+        right_norm = cls._identity_conflict_normalized_value(right, seed_type)
+        if not left_norm or not right_norm or left_norm == right_norm:
+            return False
+        if left_norm in right_norm or right_norm in left_norm:
+            return False
+        left_tokens = cls._identity_conflict_tokens(left_norm, seed_type)
+        right_tokens = cls._identity_conflict_tokens(right_norm, seed_type)
+        if not left_tokens or not right_tokens:
+            return False
+        left_token_set = set(left_tokens)
+        right_token_set = set(right_tokens)
+        if left_token_set <= right_token_set or right_token_set <= left_token_set:
+            return False
+        if seed_type == "name":
+            return cls._name_identity_values_conflict(left_tokens, right_tokens)
+        if seed_type == "company":
+            return cls._company_identity_values_conflict(left_token_set, right_token_set)
+        return False
+
+    @staticmethod
+    def _identity_conflict_normalized_value(value: str, seed_type: str) -> str:
+        text = re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower())
+        tokens = [token for token in text.split() if token]
+        if seed_type == "company":
+            suffixes = {"co", "corp", "corporation", "inc", "llc", "ltd", "limited", "plc"}
+            tokens = [token for token in tokens if token not in suffixes]
+        return " ".join(tokens)
+
+    @staticmethod
+    def _identity_conflict_tokens(normalized_value: str, seed_type: str) -> list[str]:
+        stopwords = {"the", "and", "of", "for"}
+        if seed_type == "company":
+            stopwords |= {"group", "company"}
+        tokens: list[str] = []
+        seen: set[str] = set()
+        for token in normalized_value.split():
+            if len(token) <= 1 or token in stopwords or token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+        return tokens
+
+    @staticmethod
+    def _name_identity_values_conflict(left_tokens: list[str], right_tokens: list[str]) -> bool:
+        if len(left_tokens) < 2 or len(right_tokens) < 2:
+            return False
+        return left_tokens[0] != right_tokens[0] and left_tokens[-1] != right_tokens[-1]
+
+    @staticmethod
+    def _company_identity_values_conflict(left_tokens: set[str], right_tokens: set[str]) -> bool:
+        if len(left_tokens) < 2 or len(right_tokens) < 2:
+            return False
+        return left_tokens.isdisjoint(right_tokens)
 
     def _computed_seed_confidence(
         self,

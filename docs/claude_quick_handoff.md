@@ -25,26 +25,33 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: React validation inventory labeling is complete. The
-engagement detail page now counts only reportable `vulnerability_findings` plus
-`passive_vulns` rows under "Reportable validated findings"; key scanner and
-cloud validation rows render under a separate "Validation inventory" panel so
-non-reportable statuses remain visible without looking reportable.
+Latest checkpoint: deterministic identity conflict production is complete.
+`EngagementSynthesisEngine` now creates conservative `conflicts_with` seed
+relations when one email/phone anchor has incompatible `same_entity`
+name/company targets. Evidence JSON records the collision rule, anchor seed,
+target values, target type, and original relation evidence; seed confidence
+metadata now reflects `conflict_count` and `conflicts_with`.
 
-Verification: focused web UI contract passed (`5 passed`); Python compile
-passed; Ruff passed; React build passed; `npm run lint` passed with existing
-hook-dependency warnings. Handoff:
-`.claude/handoffs/2026-07-24-react-validation-inventory-labeling.md`.
+Verification: compile/Ruff passed; focused conflict/seed-confidence slice
+passed (`4 passed, 756 deselected`); single conflict regression passed
+(`1 passed`); kill-chain convergence suite passed (`3 passed`). Handoff:
+`.claude/handoffs/2026-07-24-deterministic-seed-conflicts.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Current next gate: add deterministic `conflicts_with` relation production for
-obvious cross-reference collisions such as the same email/phone tied to
-incompatible names or organizations. Prove conflict rows reduce/annotate
-synthesis confidence and remain visible in seed relations/dashboard review.
+Previous checkpoint: React validation inventory labeling is complete. The
+engagement detail page now counts only reportable `vulnerability_findings` plus
+`passive_vulns` rows under "Reportable validated findings"; key scanner and
+cloud validation rows render under a separate "Validation inventory" panel.
+
+Current next gate: gate evasion, brute-force, auth-bypass, and
+post-exploitation prerequisite hints out of the default authorized ASM
+kill-chain completion path. They may remain available only behind explicit
+opt-in/manual-only mode with clear ROE metadata, and default mocked kill-chain
+runs must not include them.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

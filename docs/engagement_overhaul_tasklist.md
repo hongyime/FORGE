@@ -239,11 +239,23 @@ sentences as historical notes only, not as current instructions.
   Python compile passed; Ruff passed; React build passed; `npm run lint`
   passed with existing hook-dependency warnings. Handoff:
   `.claude/handoffs/2026-07-24-react-validation-inventory-labeling.md`.
+- [x] Deterministic identity conflict checkpoint:
+  `EngagementSynthesisEngine` now creates conservative `conflicts_with`
+  seed relations when one email/phone anchor has incompatible `same_entity`
+  name/company targets. Evidence JSON records the collision rule, anchor seed,
+  target values, target type, and original relation evidence; `_refresh_seed_confidence()`
+  already consumes those rows, so affected seeds get `conflict_count` and
+  `conflicts_with` in synthesis metadata. Generic dashboard seed-relation
+  rendering already surfaces the relation and evidence. Verification: compile
+  passed; Ruff passed; focused conflict/seed-confidence slice passed
+  (`4 passed, 756 deselected`); single conflict regression passed (`1 passed`);
+  kill-chain convergence suite passed (`3 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-deterministic-seed-conflicts.md`.
 - [ ] Next gate:
-  Add deterministic `conflicts_with` relation production for obvious
-  cross-reference collisions such as the same email/phone tied to incompatible
-  names or organizations. Prove conflict rows reduce/annotate synthesis
-  confidence and remain visible in seed relations/dashboard review.
+  Gate evasion, brute-force, auth-bypass, and post-exploitation prerequisite
+  hints out of the default authorized ASM kill-chain completion path. They may
+  remain available only behind explicit opt-in/manual-only mode with clear ROE
+  metadata, and default mocked kill-chain runs must not include them.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and
