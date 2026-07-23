@@ -307,15 +307,31 @@ sentences as historical notes only, not as current instructions.
   probing, credential use, scope changes, severity expansion, proxy/IP
   rotation, rate-limit bypass, cloud-leak enablement, or new playbook
   capabilities.
-- [ ] Next implementation target: audit the legacy cloud-leak manual/future
-  re-enable path so `key_scanner_findings.validation_state='ACTIVE'` is never
-  enough by itself; require stable key proof parsing or an existing linked
-  reportable cloud validation before any cloud-leak playbook path proceeds.
-  Add the smallest failing test first and keep the auto-trigger disabled unless
-  a scoped cloud-secret model exists. This advances validation, scoped active
-  checks, review, and testing/cleanup; do not call providers, enumerate
-  resources, scan storage, broaden scope, add proxy/IP behavior, or enable
-  destructive/extraction behavior.
+- [x] Legacy cloud-leak key proof gate checkpoint: the manual/future re-enable
+  `run_cloud_leak_playbook()` path no longer trusts
+  `key_scanner_findings.validation_state='ACTIVE'` by itself. Existing active
+  key rows must pass the stable validation-proof parser or link to a reportable
+  cloud validation row before validation/enumeration flow proceeds. The
+  auto-trigger remains disabled, and linked reportable cloud validation still
+  permits dry-run review. Backprop: `SPEC.md` `B15`; existing
+  `V3`/`V6`/`V7`/`V8` cover the gate. Verification: failing TDD first showed a
+  stale active key returned `validated=True` with a dry-run resource; focused
+  cloud-leak regression passed; positive linked-validation regression passed;
+  compile/Ruff passed; full playbook integration suite passed (`14 passed`);
+  validation-proof parser passed (`104 passed`); dashboard key gate slice passed
+  (`3 passed`); Phase 6 key selectors passed (`2 passed, 80 deselected`).
+  Safety: proof gate only; no provider calls, live probing, credential use,
+  cloud-leak auto-trigger enablement, scope changes, severity expansion,
+  proxy/IP rotation, rate-limit bypass, resource enumeration expansion, storage
+  scanning, or extraction behavior.
+- [ ] Next implementation target: audit remaining legacy automation suggestions
+  that still imply credential validation, lateral movement, post-exploitation,
+  or exploit correlation outside the authorized ASM guardrails. Add the
+  smallest failing suggestion/route test first, then suppress, reclassify, or
+  ROE-gate only the proven unsafe suggestion. This advances scoped active
+  checks, review, and testing/cleanup; do not add password attacks,
+  exploitation, post-exploitation, provider calls, proxy/IP behavior, or new
+  playbook capabilities.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

@@ -206,11 +206,22 @@ historical notes only, not as current instructions.
   trigger failure; focused operational regressions, compile/Ruff, full playbook
   integration suite, adjacent API/detail parity slice, dashboard gate slice,
   and Phase 6 validation selectors are green.
-- [ ] Immediate next implementation target: audit the legacy cloud-leak
-  manual/future re-enable path so `key_scanner_findings.validation_state='ACTIVE'`
-  is never enough by itself. Require stable key proof parsing or linked
-  reportable cloud validation before any cloud-leak playbook path proceeds, and
-  keep the auto-trigger disabled unless a scoped cloud-secret model exists.
+- [x] Legacy cloud-leak key proof gate completed:
+  `run_cloud_leak_playbook()` no longer trusts
+  `key_scanner_findings.validation_state='ACTIVE'` by itself. Existing active
+  key rows must pass stable proof parsing or link to reportable cloud
+  validation before validation/enumeration flow proceeds. The auto-trigger
+  remains disabled, and linked reportable cloud validation still permits dry-run
+  review. Backprop: `SPEC.md` `B15`; existing `V3`/`V6`/`V7`/`V8` cover the
+  gate. Verification: failing TDD first for stale active key dry-run
+  enumeration, focused negative and positive regressions, compile/Ruff, full
+  playbook suite, validation-proof parser, dashboard key gate slice, and Phase 6
+  key selectors are green.
+- [ ] Immediate next implementation target: audit remaining legacy automation
+  suggestions that still imply credential validation, lateral movement,
+  post-exploitation, or exploit correlation outside authorized ASM guardrails.
+  Add the smallest failing suggestion/route test first, then suppress,
+  reclassify, or ROE-gate only the proven unsafe suggestion.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint completed:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

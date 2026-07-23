@@ -12,6 +12,7 @@ from forge.phase4.rce_hunter import run_safe_check, run_weaponize
 from forge.phase4.spray import run_spray
 from forge.utils.automation import AutomationEngine
 from forge.utils.playbooks import PlaybookEngine, PlaybookStep
+from forge.utils.playbooks.cloud_leak import run_cloud_leak_playbook
 
 
 class RecordingScheduler:
@@ -357,3 +358,76 @@ def test_automation_rce_trigger_ignores_unreportable_non_rce_findings(tmp_path):
     automation._handle_task_done(7, "vuln:passive:https://app.acme.example")
 
     assert scheduler.tasks == []
+
+
+def test_cloud_leak_playbook_rejects_active_key_without_stable_proof(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend,
+                 source_url, key_redacted, key_enc, validation_state,
+                 validation_detail)
+            VALUES
+                (81, 7, 'stale-firebase', 'firebase', 'firebase_api_key',
+                 'artifact', 'app.js', 'AIza...STALE', 'encrypted-key',
+                 'ACTIVE', 'ACTIVE:manual_validated_note:no deterministic proof')
+            """
+        )
+        conn.commit()
+
+        result = run_cloud_leak_playbook(7, 81, conn, dry_run=True)
+
+    assert result == {"validated": False, "resources": [], "sensitive_files": []}
+
+
+def test_cloud_leak_playbook_allows_active_key_with_linked_reportable_validation(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend,
+                 source_url, key_redacted, key_enc, validation_state,
+                 validation_detail)
+            VALUES
+                (82, 7, 'linked-firebase', 'firebase', 'firebase_api_key',
+                 'artifact', 'app.js', 'AIza...LINK', 'encrypted-key',
+                 'ACTIVE', 'ACTIVE:manual_validated_note:no deterministic proof')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, evidence, notes)
+            VALUES
+                (7, 'firebase', 'linked-firebase', 'VALIDATED',
+                 'firebase_database_shallow_read', 'non-empty live data',
+                 'deterministic proof method')
+            """
+        )
+        conn.commit()
+
+        result = run_cloud_leak_playbook(7, 82, conn, dry_run=True)
+
+    assert result["validated"] is True
+    assert result["resources"] == [{"name": "[dry-run-firebase-bucket]", "type": "storage"}]
+    assert result["sensitive_files"] == []

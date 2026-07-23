@@ -25,11 +25,11 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Current next gate: legacy cloud-leak key proof gate. Audit the manual/future
-re-enable cloud-leak path so `key_scanner_findings.validation_state='ACTIVE'` is
-never enough by itself; require stable key proof parsing or linked reportable
-cloud validation before any cloud-leak playbook path proceeds. Keep the
-auto-trigger disabled unless a scoped cloud-secret model exists.
+Current next gate: remaining legacy automation suggestion guardrails. Audit
+suggestions that still imply credential validation, lateral movement,
+post-exploitation, or exploit correlation outside authorized ASM boundaries.
+Write the smallest failing suggestion/route test first, then suppress,
+reclassify, or ROE-gate only the proven unsafe suggestion.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
@@ -64,6 +64,19 @@ stop and pick a smaller verified kill-chain or determinism gap.
 
 ## Operator Notes
 
+- [x] Legacy cloud-leak key proof gate completed:
+  `run_cloud_leak_playbook()` no longer trusts
+  `key_scanner_findings.validation_state='ACTIVE'` by itself. Existing active
+  key rows must pass the stable proof parser or link to reportable cloud
+  validation before validation/enumeration flow proceeds. The auto-trigger
+  remains disabled, and linked reportable cloud validation still permits dry-run
+  review. Backprop: `SPEC.md` `B15`; existing `V3`/`V6`/`V7`/`V8` cover the
+  gate. Verification: failing TDD first showed stale active key dry-run
+  enumeration; focused negative and positive cloud-leak regressions;
+  compile/Ruff; full playbook integration suite (`14 passed`);
+  validation-proof parser (`104 passed`); dashboard key gate slice (`3
+  passed`); Phase 6 key selectors (`2 passed, 80 deselected`). Handoff:
+  `.claude/handoffs/2026-07-23-cloud-leak-key-proof-gate.md`.
 - [x] Operational automation reportability gates completed:
   `AutomationEngine` report suggestions now count only shared reportable
   deterministic findings plus non-false-positive passive findings. The RCE

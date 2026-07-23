@@ -19,10 +19,73 @@ from typing import Any, Optional
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
 from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet, with_internet_retry
 from forge.phase5.approval_gate import ActionClassification, request_approval
+from forge.utils.cloud_exposure_gate import (
+    is_reportable_cloud_validation,
+    normalize_cloud_exposure_asset_type,
+)
+from forge.utils.validation_proof import parse_validated_detail
 
 _LOG = logging.getLogger(__name__)
 
 _RATE_LIMITER = AdaptiveRateLimiter(base_delay=2.0, max_delay=30.0, min_delay=2.0)
+
+
+def _validation_asset_types_for_key_service(service: str) -> list[str]:
+    normalized = normalize_cloud_exposure_asset_type(service)
+    return {
+        "amazon": ["aws_s3"],
+        "aws": ["aws_s3"],
+        "azure": ["azure_blob"],
+        "digitalocean": ["do_spaces"],
+        "do": ["do_spaces"],
+        "firebase": ["firebase"],
+        "gcp": ["gcs"],
+        "google": ["gcs"],
+        "supabase": ["supabase"],
+    }.get(normalized, [normalized] if normalized else [])
+
+
+def _linked_cloud_validation_is_reportable(
+    conn: sqlite3.Connection,
+    engagement_id: int,
+    service: str,
+    domain: str,
+) -> bool:
+    identifier = str(domain or "").strip().lower()
+    if not identifier:
+        return False
+    for asset_type in _validation_asset_types_for_key_service(service):
+        try:
+            rows = conn.execute(
+                """
+                SELECT validation_status, validation_method
+                FROM cloud_validation_results
+                WHERE engagement_id=? AND asset_type=? AND lower(identifier)=?
+                ORDER BY COALESCE(checked_at, '') DESC, id DESC
+                """,
+                (engagement_id, asset_type, identifier),
+            ).fetchall()
+        except sqlite3.Error:
+            continue
+        if any(
+            is_reportable_cloud_validation(asset_type, row[0], row[1])
+            for row in rows
+        ):
+            return True
+    return False
+
+
+def _active_key_is_reportable(
+    conn: sqlite3.Connection,
+    engagement_id: int,
+    service: str,
+    domain: str,
+    validation_detail: object,
+) -> bool:
+    proof = parse_validated_detail(validation_detail)
+    if str(proof["validation_status"] or "").strip().upper() == "VALIDATED":
+        return True
+    return _linked_cloud_validation_is_reportable(conn, engagement_id, service, domain)
 
 
 def run_cloud_leak_playbook(
@@ -41,7 +104,11 @@ def run_cloud_leak_playbook(
 
     # Load key finding
     row = eng_db_conn.execute(
-        "SELECT service, key_enc, validation_state, domain FROM key_scanner_findings WHERE id=? AND engagement_id=?",
+        """
+        SELECT service, key_enc, validation_state, domain, validation_detail
+        FROM key_scanner_findings
+        WHERE id=? AND engagement_id=?
+        """,
         (key_finding_id, engagement_id),
     ).fetchone()
 
@@ -49,13 +116,23 @@ def run_cloud_leak_playbook(
         _LOG.error("Cloud Leak: finding %d not found", key_finding_id)
         return _empty_result()
 
-    service, key_enc, validation_state, domain = row
+    service, key_enc, validation_state, domain, validation_detail = row
 
     print(f"[CLOUD LEAK] Playbook starting for {service} key in finding {key_finding_id}", flush=True)
     sys.stdout.flush()
 
     # --- Step 1: Validation ---
     if _SHUTDOWN.is_set():
+        return _empty_result()
+
+    if validation_state == "ACTIVE" and not _active_key_is_reportable(
+        eng_db_conn,
+        engagement_id,
+        service,
+        domain,
+        validation_detail,
+    ):
+        print("[CLOUD LEAK] Key ACTIVE state lacks deterministic proof — playbook stopped.", flush=True)
         return _empty_result()
 
     if validation_state != "ACTIVE":
