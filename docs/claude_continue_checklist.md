@@ -372,11 +372,21 @@ historical notes only, not as current instructions.
   artifact slices -> `4 passed`; cleanup left
   `remaining_orchestration_runtime_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-orchestration-worker-pool.md`.
+- [x] Security-scanner JSON structured walk worker-pool checkpoint completed:
+  source-gated security-scanner JSON config traversal now dispatches the
+  current mapping/list child layer through ordered bounded worker helpers while
+  nested recursion, the stateful line parser, final candidate normalization,
+  duplicate suppression, sensitive-query stripping, and template rejection
+  remain deterministic. Verification: compile/Ruff passed; focused
+  security-scanner worker tests plus persisted control/policy artifact slices
+  -> `4 passed`; cleanup left
+  `remaining_security_scanner_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-security-scanner-json-worker-pool.md`.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Security-scanner JSON structured walk is the currently ranked
-  candidate. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior.
+  before editing. Preserve deterministic ordering, compact tests, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior. Do not assume the
+  older ranked list is still current after the security-scanner checkpoint.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

@@ -1046,11 +1046,25 @@ sentences as historical notes only, not as current instructions.
   provider call, live probing, credential use, scope/ROE relaxation,
   validation/report-gate change, severity change, proxy/IP rotation,
   rate-limit bypass, or destructive behavior.
+- [x] Security-scanner JSON structured walk worker-pool checkpoint:
+  source-gated security-scanner JSON config traversal now dispatches the
+  current mapping/list child layer through ordered bounded worker helpers while
+  nested recursion, the stateful line parser, final candidate normalization,
+  duplicate suppression, sensitive-query stripping, and template rejection
+  remain deterministic. Verification: compile passed; Ruff passed; focused
+  security-scanner worker tests plus persisted control/policy artifact slices
+  passed (`4 passed`); cleanup left
+  `remaining_security_scanner_runtime_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-security-scanner-json-worker-pool.md`.
+  Safety: passive local static security-scanner config parsing only; no scanner
+  execution, policy execution, endpoint probing, provider call, live probing,
+  credential use, scope/ROE relaxation, validation/report-gate change, severity
+  change, proxy/IP rotation, rate-limit bypass, or destructive behavior.
 - [ ] Next implementation target: re-audit remaining static parser/enricher
   candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Security-scanner JSON structured walk is the currently ranked
-  candidate. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior.
+  before editing. Preserve deterministic ordering, compact tests, scope gates,
+  provider caps, pacing/backoff, and passive-only behavior. Do not assume the
+  older ranked list is still current after the security-scanner checkpoint.
 - [x] Yarn Berry `.yarnrc.yml` passive package-config checkpoint:
   `.yarnrc.yml` and cached `*.yarnrc-yml` names now classify as `yarnrc-yml`
   instead of generic YAML, while non-dot `yarnrc.yml` remains excluded. Yarn

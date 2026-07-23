@@ -25,17 +25,17 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Orchestration structured walk worker-pool migration is
-implemented. Kubernetes/Nomad/Helm-style static orchestration config traversal
-now dispatches the current per-key/list child layer through ordered bounded
-worker helpers while nested recursion, key-level endpoint extraction,
-routing-rule extraction, duplicate suppression, and final source-gated output
-order remain serial.
+Latest checkpoint: Security-scanner JSON structured walk worker-pool migration
+is implemented. Source-gated security-scanner JSON config traversal now
+dispatches the current mapping/list child layer through ordered bounded worker
+helpers while nested recursion, the stateful line parser, final candidate
+normalization, duplicate suppression, sensitive-query stripping, and template
+rejection remain deterministic.
 
-Verification: compile/Ruff passed; focused orchestration worker test plus
-Nomad/order and persisted orchestration artifact slices passed (`4 passed`);
-cleanup left `remaining_orchestration_runtime_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-orchestration-worker-pool.md`.
+Verification: compile/Ruff passed; focused security-scanner worker tests plus
+persisted control/policy artifact slices passed (`4 passed`); cleanup left
+`remaining_security_scanner_runtime_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-security-scanner-json-worker-pool.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -44,11 +44,10 @@ and persisted recon-output artifact slice both passed.
 
 Current next gate: re-audit remaining static parser/enricher candidates and
 select the next proven-safe bounded worker-pool migration before editing.
-Security-scanner JSON structured walk is the currently ranked candidate.
 Preserve deterministic ordering, compact tests, scope gates, provider caps,
 pacing/backoff, and passive-only behavior.
 
-Natural stop note: repo was clean after push `24be7b1`. Orchestration
+Natural stop note: repo was clean after push `10b8f4e`. Security-scanner JSON
 structured walk was then selected from the read-only subagent audit and
 implemented in the current checkpoint.
 

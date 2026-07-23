@@ -26389,38 +26389,14 @@ class ArtifactQueueProcessor:
                 return
             raw_candidates.append(value)
 
-        def _append_structured_value(raw_value: Any) -> None:
-            if len(raw_candidates) >= 4096:
-                return
-            if isinstance(raw_value, (str, int, float)):
-                _append_raw_candidate(str(raw_value))
-                return
-            if isinstance(raw_value, list):
-                for item in raw_value[:4096]:
-                    _append_structured_value(item)
-                return
-            if isinstance(raw_value, dict):
-                for item in list(raw_value.values())[:4096]:
-                    _append_structured_value(item)
-
-        def _walk_structured_document(raw_value: Any) -> None:
-            if len(raw_candidates) >= 4096:
-                return
-            if isinstance(raw_value, dict):
-                for raw_key, child in list(raw_value.items())[:4096]:
-                    key = self._yaml_key_fingerprint(str(raw_key or ""))
-                    if key in allowed_keys:
-                        _append_structured_value(child)
-                    if isinstance(child, (dict, list)):
-                        _walk_structured_document(child)
-                return
-            if isinstance(raw_value, list):
-                for item in raw_value[:4096]:
-                    _walk_structured_document(item)
-
         document = _safe_json_loads(str(text or "").strip())
         if isinstance(document, (dict, list)):
-            _walk_structured_document(document)
+            for candidate in self._security_scanner_structured_document_values(
+                document,
+                allowed_keys,
+                use_workers=True,
+            ):
+                _append_raw_candidate(candidate)
 
         assignment_pattern = re.compile(
             r"""
@@ -26477,6 +26453,124 @@ class ArtifactQueueProcessor:
             lines.append(normalized)
 
         return "\n".join(lines)
+
+    def _security_scanner_structured_document_values(
+        self,
+        value: Any,
+        allowed_keys: set[str],
+        *,
+        use_workers: bool,
+    ) -> list[str]:
+        if isinstance(value, dict):
+            child_jobs = [
+                (child_index, raw_key, child, allowed_keys)
+                for child_index, (raw_key, child) in enumerate(list(value.items())[:4096])
+            ]
+            child_batches = (
+                self._run_ordered_local_batch(
+                    child_jobs,
+                    self._security_scanner_structured_document_child_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._security_scanner_structured_document_child_values_for_entry(
+                        raw_key,
+                        child,
+                        allowed_keys,
+                    )
+                    for _child_index, raw_key, child, allowed_keys in child_jobs
+                ]
+            )
+            return [
+                candidate
+                for child_values in child_batches
+                for candidate in child_values
+            ][:4096]
+        if isinstance(value, list):
+            item_jobs = [
+                (item_index, None, item, allowed_keys)
+                for item_index, item in enumerate(value[:4096])
+            ]
+            item_batches = (
+                self._run_ordered_local_batch(
+                    item_jobs,
+                    self._security_scanner_structured_document_child_values,
+                    default_factory=list,
+                )
+                if use_workers
+                else [
+                    self._security_scanner_structured_document_values(
+                        item,
+                        allowed_keys,
+                        use_workers=False,
+                    )
+                    for _item_index, _raw_key, item, allowed_keys in item_jobs
+                ]
+            )
+            return [
+                candidate
+                for item_values in item_batches
+                for candidate in item_values
+            ][:4096]
+        return []
+
+    def _security_scanner_structured_document_child_values(
+        self,
+        child_job: tuple[int, Any, Any, set[str]],
+    ) -> list[str]:
+        _child_index, raw_key, child, allowed_keys = child_job
+        if raw_key is None:
+            return self._security_scanner_structured_document_values(
+                child,
+                allowed_keys,
+                use_workers=False,
+            )
+        return self._security_scanner_structured_document_child_values_for_entry(
+            raw_key,
+            child,
+            allowed_keys,
+        )
+
+    def _security_scanner_structured_document_child_values_for_entry(
+        self,
+        raw_key: Any,
+        child: Any,
+        allowed_keys: set[str],
+    ) -> list[str]:
+        values: list[str] = []
+        key = self._yaml_key_fingerprint(str(raw_key or ""))
+        if key in allowed_keys:
+            values.extend(self._security_scanner_structured_value_values(child))
+        if isinstance(child, (dict, list)):
+            values.extend(
+                self._security_scanner_structured_document_values(
+                    child,
+                    allowed_keys,
+                    use_workers=False,
+                )
+            )
+        return values[:4096]
+
+    def _security_scanner_structured_value_values(self, value: Any) -> list[str]:
+        if isinstance(value, (str, int, float)):
+            candidate = str(value).strip()
+            return [candidate] if candidate else []
+        if isinstance(value, list):
+            values: list[str] = []
+            for item in value[:4096]:
+                values.extend(self._security_scanner_structured_value_values(item))
+                if len(values) >= 4096:
+                    return values[:4096]
+            return values
+        if isinstance(value, dict):
+            values = []
+            for item in list(value.values())[:4096]:
+                values.extend(self._security_scanner_structured_value_values(item))
+                if len(values) >= 4096:
+                    return values[:4096]
+            return values
+        return []
 
     @staticmethod
     def _security_scanner_config_candidate_entry(raw_value: Any) -> str:
