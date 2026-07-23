@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -23,6 +24,56 @@ __all__ = ["router"]
 _LOG = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+_REPORT_METADATA_KEYS = (
+    "provider",
+    "requested_provider",
+    "render_backend",
+    "upstream_provider",
+    "format",
+    "generated_at",
+    "fallback_reason",
+    "report_write_error",
+    "findings_checksum",
+)
+
+
+def _string_map(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        str(key): item
+        for key, item in value.items()
+        if isinstance(key, str)
+    }
+
+
+def _report_text_and_metadata(results: Mapping[str, object]) -> tuple[str | None, dict[str, object]]:
+    report = results.get("report")
+    metadata: dict[str, object] = {}
+    if isinstance(report, Mapping):
+        report_map = _string_map(report)
+        text = (
+            report_map.get("report_md")
+            or report_map.get("markdown")
+            or report_map.get("content")
+        )
+        metadata.update(report_map)
+    else:
+        text = report
+    metadata.update(_string_map(results.get("report_metadata")))
+    metadata.update(_string_map(results.get("report_lineage")))
+    if not isinstance(text, str):
+        return None, metadata
+    return text, metadata
+
+
+def _lineage_payload(metadata: Mapping[str, object]) -> dict[str, object]:
+    return {
+        key: metadata[key]
+        for key in _REPORT_METADATA_KEYS
+        if key in metadata and metadata[key] not in ("", None)
+    }
 
 
 @router.get(
@@ -58,16 +109,21 @@ async def get_report(
     except json.JSONDecodeError:
         results = {}
 
-    report = results.get("report")
+    report, metadata = _report_text_and_metadata(results)
     if report is None:
         raise HTTPException(
             status_code=status.HTTP_425_TOO_EARLY,
             detail="report_not_yet_available",
         )
 
-    return {
+    lineage = _lineage_payload(metadata)
+    payload: dict[str, object] = {
         "workflow_id": workflow_id,
         "report": report,
-        "format": "markdown",
+        "format": str(metadata.get("format") or "markdown"),
         "is_complete": row.is_complete,
     }
+    payload.update(lineage)
+    if lineage:
+        payload["report_lineage"] = lineage
+    return payload

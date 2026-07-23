@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -27,7 +28,7 @@ from forge.agents.discovery import DiscoveryAgent
 from forge.agents.planner import PlannerAgent
 from forge.agents.reporting import ReportingAgent
 from forge.api.app import create_app
-from forge.api.deps import reset_dependencies
+from forge.api.deps import get_state_store, get_workflow_engine, reset_dependencies
 from forge.audit.logger import AuditLogger
 from forge.audit.models import AuditEventType
 from forge.bus.memory_bus import InMemoryMessageBus
@@ -479,3 +480,67 @@ class TestApiHealthCheck:
             assert body["status"] == "ok"
             assert body["bus_connected"] is True
             assert "version" in body
+
+
+class TestApiReportRoute:
+    """The legacy workflow report API preserves degraded report lineage."""
+
+    def test_report_route_surfaces_raw_export_lineage(self) -> None:
+        workflow_id = "workflow-raw-export"
+
+        class _Engine:
+            async def get_status(self, requested_id: str) -> dict[str, object] | None:
+                assert requested_id == workflow_id
+                return {"is_complete": True}
+
+        class _Store:
+            async def load_workflow(self, requested_id: str) -> object | None:
+                assert requested_id == workflow_id
+                return SimpleNamespace(
+                    intermediate_results=json.dumps(
+                        {
+                            "report": {
+                                "report_md": "# Raw export fallback\n",
+                                "provider": "raw_export",
+                                "requested_provider": "auto",
+                                "upstream_provider": "template",
+                                "format": "raw_export",
+                                "fallback_reason": "RuntimeError: report write failed",
+                                "report_write_error": "RuntimeError: report write failed",
+                                "findings_checksum": "sha256:workflow-raw-export",
+                            },
+                            "report_lineage": {
+                                "render_backend": "raw_export",
+                                "generated_at": "2026-07-24T05:45:00+00:00",
+                            },
+                        },
+                        sort_keys=True,
+                    ),
+                    is_complete=True,
+                )
+
+        reset_dependencies()
+        app = create_app()
+        app.dependency_overrides[get_workflow_engine] = lambda: _Engine()
+        app.dependency_overrides[get_state_store] = lambda: _Store()
+        try:
+            with TestClient(app) as client:
+                response = client.get(f"/reports/{workflow_id}")
+        finally:
+            app.dependency_overrides.clear()
+            reset_dependencies()
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["workflow_id"] == workflow_id
+        assert payload["report"] == "# Raw export fallback\n"
+        assert payload["format"] == "raw_export"
+        assert payload["is_complete"] is True
+        assert payload["provider"] == "raw_export"
+        assert payload["requested_provider"] == "auto"
+        assert payload["upstream_provider"] == "template"
+        assert payload["render_backend"] == "raw_export"
+        assert payload["fallback_reason"] == "RuntimeError: report write failed"
+        assert payload["report_write_error"] == "RuntimeError: report write failed"
+        assert payload["findings_checksum"] == "sha256:workflow-raw-export"
+        assert payload["report_lineage"]["findings_checksum"] == "sha256:workflow-raw-export"
