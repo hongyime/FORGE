@@ -137,6 +137,10 @@ from forge.utils.artifact_aasa import aasa_ios_app_ids
 from forge.utils.artifact_assetlinks import assetlinks_android_packages
 from forge.utils.artifact_open_resource_discovery import open_resource_discovery_urls
 from forge.utils.artifact_oauth_metadata import oauth_metadata_urls
+from forge.utils.artifact_opensearch_metadata import (
+    opensearch_description_artifact_label,
+    opensearch_description_urls,
+)
 from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
@@ -6035,6 +6039,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _observability_text_config_artifact_label(raw_lowered):
         return True
+    if opensearch_description_artifact_label(raw_lowered):
+        return True
     if saml_metadata_artifact_label(raw_lowered):
         return True
     if _kubernetes_secret_manifest_artifact_label(raw_lowered):
@@ -6225,6 +6231,9 @@ def _artifact_format_label(value: str | Path) -> str:
     observability_label = _observability_text_config_artifact_label(str(value or ""))
     if observability_label:
         return observability_label
+    opensearch_label = opensearch_description_artifact_label(str(value or ""))
+    if opensearch_label:
+        return opensearch_label
     saml_label = saml_metadata_artifact_label(str(value or ""))
     if saml_label:
         return saml_label
@@ -6967,6 +6976,8 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
     if _special_text_config_route_label(raw_url):
         return "config"
     parsed_remote = urlparse(raw_url)
+    if opensearch_description_artifact_label(unquote(parsed_remote.path or "")):
+        return "config"
     if saml_metadata_artifact_label(unquote(parsed_remote.path or "")):
         return "config"
     if package_manager_config_artifact_label(unquote(parsed_remote.path or "")):
@@ -7096,6 +7107,12 @@ def _select_remote_artifact_filename(
     if route_label:
         return route_label
     parsed_source = urlparse(source_url)
+    opensearch_label = opensearch_description_artifact_label(unquote(parsed_source.path or ""))
+    if opensearch_label:
+        candidate = Path(unquote(parsed_source.path or "")).name.strip()
+        if candidate and opensearch_description_artifact_label(candidate) and Path(candidate).suffix:
+            return candidate
+        return "opensearch.xml"
     saml_label = saml_metadata_artifact_label(unquote(parsed_source.path or ""))
     if saml_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
@@ -20447,6 +20464,7 @@ class ArtifactQueueProcessor:
                     "webweaver_metadata",
                     "oauth_metadata",
                     "jwks_metadata",
+                    "opensearch_description",
                     "saml_metadata",
                     "web_manifest_metadata",
                     "helm_index",
@@ -20677,6 +20695,12 @@ class ArtifactQueueProcessor:
             )
         if family == "jwks_metadata":
             return jwks_urls(
+                text,
+                source_label=_artifact_format_label(source_file),
+                base_url=source_file,
+            )
+        if family == "opensearch_description":
+            return opensearch_description_urls(
                 text,
                 source_label=_artifact_format_label(source_file),
                 base_url=source_file,

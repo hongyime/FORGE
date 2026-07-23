@@ -25,17 +25,18 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: SAML federation metadata passive recursion is implemented.
-Source-gated SAML metadata artifacts now keep `saml-metadata` labels and
-statically promote IdP/SP endpoint/document URLs from `entityID`, `Location`,
-`ResponseLocation`, `OrganizationURL`, and `AdditionalMetadataLocation` into
-recursive URL seeds through `forge.utils.artifact_saml_metadata` and the
-existing artifact URL-seed path. Focused TDD first failed on the missing parser
-module, then passed with adjacent OAuth/JWKS/Web Manifest metadata,
-artifact-helper/static-classification slices, compile/Ruff, and cleanup scan.
-Read-only sidecars found and drove fixes for SAML protocol query stripping in
-generic direct URL extraction plus mocked remote artifact provenance coverage.
-Claude CLI review was attempted but the local OAuth session was expired.
+Latest checkpoint: OpenSearch Description passive recursion is implemented.
+Source-gated OpenSearch XML artifacts now keep `opensearch-description` labels
+and statically promote concrete URL pivots from `<Url template=...>`,
+`moz:SearchForm`, and image links into recursive URL seeds through
+`forge.utils.artifact_opensearch_metadata` and the existing artifact URL-seed
+path. Search-template query values such as `{searchTerms}` are stripped instead
+of persisted, templated hosts/paths are excluded, and relative URLs resolve
+only from HTTP(S) source artifacts. Focused TDD first failed on the missing
+parser module, then passed with adjacent OpenSearch/SAML/OAuth/JWKS/Web
+Manifest/remote-static classification slices, compile/Ruff, and temp pytest DB
+cleanup. `SPEC.md` was not structurally edited for this checkpoint because `T2`
+remains ongoing and root `FORMAT.md` is absent.
 
 Current next gate: continue concrete kill-chain coverage. Add the smallest
 mocked E2E or focused integration test that proves one missing recursive

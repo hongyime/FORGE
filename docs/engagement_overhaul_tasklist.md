@@ -433,6 +433,28 @@ sentences as historical notes only, not as current instructions.
   token request, authentication attempt, provider call, live probing,
   credential use, validation-gate change, report-gate change, severity change,
   proxy/IP rotation, or rate-limit bypass.
+- [x] OpenSearch Description passive-recursion checkpoint:
+  source-gated OpenSearch Description artifacts such as `opensearch.xml`,
+  `open-search.xml`, `opensearchdescription.xml`, and scoped `/opensearch`
+  remote routes now keep an `opensearch-description` format label and
+  passively promote concrete URL pivots from `<Url template=...>`,
+  `moz:SearchForm`, and image links into recursive URL seeds. Search-template
+  query values such as `{searchTerms}` are stripped rather than persisted, and
+  templated hosts/paths are excluded. Relative URLs resolve only when the
+  source artifact has an HTTP(S) base. Backprop: no `SPEC.md` structural edit
+  for this checkpoint because `T2` remains ongoing and root `FORMAT.md` is
+  absent; existing `V1`/`V3`/`V4`/`V5` cover the gate. Verification: focused
+  TDD first failed on missing `forge.utils.artifact_opensearch_metadata`;
+  focused OpenSearch regression passed (`5 passed`); adjacent OpenSearch,
+  SAML, OAuth, JWKS, Web Manifest, and remote-static classification slice
+  passed (`33 passed`); compile passed; Ruff passed; cleanup removed temp
+  pytest engagement DBs and left `remaining_temp_pytest_engagement_dbs=0`,
+  with persistent DB inventory unchanged at `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-opensearch-description-passive-recursion.md`.
+  Safety: passive static OpenSearch XML parsing only; no search query
+  execution, provider call, live probing, credential use, scope relaxation,
+  validation-gate change, report-gate change, severity change, proxy/IP
+  rotation, or rate-limit bypass.
 - [ ] Next implementation target: continue concrete kill-chain coverage. Add
   the smallest mocked E2E or focused integration test that proves one missing
   recursive discovery path from `T1`/`T2` advances from discovered passive

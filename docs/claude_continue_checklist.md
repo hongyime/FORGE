@@ -291,6 +291,25 @@ historical notes only, not as current instructions.
   request, token request, authentication attempt, provider call, live probing,
   credential use, validation/report gate change, severity change, proxy/IP
   rotation, or rate-limit bypass.
+- [x] OpenSearch Description passive-recursion checkpoint completed:
+  source-gated OpenSearch Description artifacts such as `opensearch.xml`,
+  `open-search.xml`, `opensearchdescription.xml`, and scoped `/opensearch`
+  remote routes now keep an `opensearch-description` format label and
+  passively promote concrete URL pivots from `<Url template=...>`,
+  `moz:SearchForm`, and image links into recursive URL seeds. Query template
+  values such as `{searchTerms}` are stripped, templated hosts/paths are
+  excluded, and relative URLs resolve only when the source artifact has an
+  HTTP(S) base. Backprop: no `SPEC.md` structural edit because `T2` remains
+  ongoing and root `FORMAT.md` is absent; existing `V1`/`V3`/`V4`/`V5` cover
+  the gate. Verification: focused TDD first failed on missing helper module;
+  focused OpenSearch regression -> `5 passed`; adjacent OpenSearch/SAML/OAuth/
+  JWKS/Web Manifest/remote-static classification slice -> `33 passed`;
+  compile/Ruff passed; cleanup -> `remaining_temp_pytest_engagement_dbs=0`,
+  persistent DB inventory -> `1`, `5010`, `master.db`. Handoff:
+  `.claude/handoffs/2026-07-23-opensearch-description-passive-recursion.md`.
+  Safety: passive static OpenSearch XML parsing only; no search query
+  execution, provider call, live probing, credential use, validation/report
+  gate change, severity change, proxy/IP rotation, or rate-limit bypass.
 - [ ] Immediate next implementation target: continue concrete kill-chain
   coverage. Add the smallest mocked E2E or focused integration test that proves
   one missing recursive discovery path from `T1`/`T2` advances from discovered
