@@ -27713,7 +27713,7 @@ class ArtifactQueueProcessor:
         if family == "jmeter":
             return self._api_client_jmeter_text_candidate_values(text)
         if family == "k6":
-            return ArtifactQueueProcessor._api_client_k6_text_candidate_values(text)
+            return self._api_client_k6_text_candidate_values(text)
         if family == "locust":
             return ArtifactQueueProcessor._api_client_locust_text_candidate_values(text)
         return []
@@ -27872,8 +27872,7 @@ class ArtifactQueueProcessor:
             path=direct_path,
         )
 
-    @staticmethod
-    def _api_client_k6_text_candidate_values(text: str) -> list[str]:
+    def _api_client_k6_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
         if not any(marker in parse_text for marker in ("http.", "ws.connect", "WebSocket", "baseURL", "baseUrl")):
             return []
@@ -27901,14 +27900,28 @@ class ArtifactQueueProcessor:
                 re.IGNORECASE | re.VERBOSE,
             ),
         )
+        pattern_batches = self._run_ordered_local_batch(
+            [(pattern_index, pattern, parse_text) for pattern_index, pattern in enumerate(patterns)],
+            self._api_client_k6_pattern_candidate_entries,
+            default_factory=list,
+        )
         candidates: list[tuple[int, str]] = []
-        for pattern in patterns:
-            for match in pattern.finditer(parse_text):
-                value = str(match.group("value") or "").strip()
-                if value:
-                    candidates.append((match.start(), value))
+        for pattern_entries in pattern_batches:
+            candidates.extend(pattern_entries)
         candidates.sort(key=lambda item: item[0])
         return [value for _position, value in candidates[:512]]
+
+    def _api_client_k6_pattern_candidate_entries(
+        self,
+        item: tuple[int, re.Pattern[str], str],
+    ) -> list[tuple[int, str]]:
+        _pattern_index, pattern, parse_text = item
+        entries: list[tuple[int, str]] = []
+        for match in pattern.finditer(parse_text):
+            value = str(match.group("value") or "").strip()
+            if value:
+                entries.append((match.start(), value))
+        return entries
 
     @staticmethod
     def _api_client_locust_text_candidate_values(text: str) -> list[str]:

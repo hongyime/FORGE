@@ -229,10 +229,28 @@ historical notes only, not as current instructions.
   API-client worker suite -> `9 passed`; focused persisted JMeter/API artifact
   slice -> `2 passed`; cleanup left `remaining_jmeter_test_files=0`. Handoff:
   `.claude/handoffs/2026-07-24-jmeter-sampler-worker-pool.md`.
-- [ ] Next implementation target: identify the next proven-safe sequential
+- [x] Next implementation target: identify the next proven-safe sequential
   parser/enricher migration under the bounded worker-pool path before editing.
   Prefer compact feature tests, disjoint helper extraction, and no behavior
   expansion unless the selected parser is already covered by static fixtures.
+- [x] Next proven-safe parser target selected: read-only candidate audit ranked
+  Dredd/Schemathesis line scanners, K6 pattern scanner, Locust pattern scanner,
+  and GraphQL config traversal as the next static worker-pool candidates. K6
+  was completed first because it was already in progress and green; the next
+  concrete target is Dredd/Schemathesis.
+- [x] K6 API-client pattern scanner worker-pool checkpoint completed: static
+  `k6` script regex-pattern scans now run as independent ordered bounded worker
+  jobs and merge by original match position before the existing serial
+  normalization and dedupe stage. URL order, WebSocket extraction,
+  sensitive-query stripping, and template rejection are preserved.
+  Verification: compile/Ruff passed; focused API-client worker suite ->
+  `10 passed`; focused persisted K6/API artifact slice -> `2 passed`; cleanup
+  left `remaining_k6_test_files=0`. Handoff:
+  `.claude/handoffs/2026-07-24-k6-pattern-worker-pool.md`.
+- [ ] Next implementation target: move Dredd and Schemathesis API-client line
+  scanners under the bounded worker-pool path. Keep this local to static config
+  parsing and preserve line order, URL candidate extraction, sensitive-query
+  stripping, template rejection, and serial final dedupe.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

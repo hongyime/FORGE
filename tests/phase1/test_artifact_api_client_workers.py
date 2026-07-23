@@ -352,3 +352,65 @@ def test_jmeter_sampler_blocks_use_bounded_workers_and_preserve_order(
         "http://jmeter-three.acme.example:8080/health",
         "https://jmeter-four.acme.example/path?view=public",
     ]
+
+
+def test_k6_pattern_scans_use_bounded_workers_and_preserve_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001, max_workers=4)
+    payload = dedent(
+        """
+        import http from 'k6/http';
+        import ws from 'k6/ws';
+
+        export const options = { target: 'k6-target.acme.example/api' };
+
+        export default function () {
+          http.get('k6-one.acme.example/api');
+          http.request("GET", "k6-two.acme.example/v1");
+          ws.connect("wss://k6-three.acme.example/socket", {}, function () {});
+          http.post("https://k6-four.acme.example/path?token=hidden&view=public&api_key=hidden", "{}");
+          http.get("https://${tenant}.acme.example/template");
+        }
+        """
+    ).strip()
+    original_pattern = ArtifactQueueProcessor._api_client_k6_pattern_candidate_entries
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _tracking_pattern_entries(
+        self: ArtifactQueueProcessor,
+        item: tuple[int, object, str],
+    ) -> list[tuple[int, str]]:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_pattern(self, item)  # type: ignore[arg-type]
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_api_client_k6_pattern_candidate_entries",
+        _tracking_pattern_entries,
+    )
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="k6-test.js",
+    )
+
+    assert peak == 3
+    assert result.splitlines() == [
+        "https://k6-target.acme.example/api",
+        "https://k6-one.acme.example/api",
+        "https://k6-two.acme.example/v1",
+        "https://k6-three.acme.example/socket",
+        "https://k6-four.acme.example/path?view=public",
+    ]

@@ -25,22 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: JMeter sampler worker-pool migration is implemented. Static
-`.jmx` `HTTPSamplerProxy` block parsing now dispatches individual sampler
-bodies through the ordered bounded local worker helper while URL normalization,
-template rejection, sensitive-query stripping, and final dedupe remain serial
-and deterministic. Protocol/host/path/port reconstruction and direct full-URL
-sampler paths are preserved.
+Latest checkpoint: K6 API-client pattern scanner worker-pool migration is
+implemented. Static `k6` script regex-pattern scans now run as independent
+ordered bounded worker jobs and merge by original match position before the
+existing serial normalization and dedupe stage. URL order, WebSocket
+extraction, sensitive-query stripping, and template rejection are preserved.
 
 Verification: compile/Ruff passed; focused API-client worker suite passed
-(`9 passed`); focused persisted JMeter/API artifact slice passed (`2 passed`);
-cleanup left `remaining_jmeter_test_files=0`. Handoff:
-`.claude/handoffs/2026-07-24-jmeter-sampler-worker-pool.md`.
+(`10 passed`); focused persisted K6/API artifact slice passed (`2 passed`);
+cleanup left `remaining_k6_test_files=0`. Handoff:
+`.claude/handoffs/2026-07-24-k6-pattern-worker-pool.md`.
 
-Current next gate: identify the next proven-safe sequential parser/enricher
-migration under the bounded worker-pool path before editing. Prefer compact
-feature tests, disjoint helper extraction, and no behavior expansion unless the
-selected parser is already covered by static fixtures.
+Current next gate: move Dredd and Schemathesis API-client line scanners under
+the bounded worker-pool path. Keep this local to static config parsing and
+preserve line order, URL candidate extraction, sensitive-query stripping,
+template rejection, and serial final dedupe.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
