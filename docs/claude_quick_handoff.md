@@ -25,7 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Instagram business-contact recursion is complete. Public
+Latest checkpoint: Parquet columnar artifact parsing is complete. Passive
+`.parquet` artifacts now run through a bounded pyarrow-backed parser before
+generic binary string carving. The parser emits a `#parquet-table` payload with
+schema metadata and bounded string cell values from the first row groups, so
+encoded columnar exports can feed existing recursive email/URL/cloud discovery.
+If pyarrow is unavailable or parsing fails, artifacts fall back to the existing
+bounded binary-string path. Verification: parser-marker TDD failed first;
+compile/Ruff passed; focused Parquet parser/fallback tests passed (`2 passed`);
+Parquet plus remote static classification passed (`18 passed`); selected
+existing orchestrator columnar/binary/archive slice passed (`24 passed, 738
+deselected`); adjacent HAR/OCI/classification slice passed (`24 passed`);
+cleanup inventory found no new pytest/test-like engagement DBs. Handoff:
+`.claude/handoffs/2026-07-24-parquet-columnar-artifact-parser.md`.
+
+Previous checkpoint: Instagram business-contact recursion is complete. Public
 Instagram `business_email` and `business_phone_number`/alias fields from
 `web_profile_info` are now normalized into lookup results and persisted in
 `social_profiles`, so the existing synthesis engine can promote them into
@@ -60,9 +74,8 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: finish the Parquet columnar artifact parser gap already
-identified, then consider the read-only subagent finding that Realm mobile DB
-artifacts (`.realm`) are not classified and can be safely routed through the
+Current next gate: implement the read-only subagent finding that Realm mobile
+DB artifacts (`.realm`) are not classified and can be safely routed through the
 existing bounded binary-string extraction path. Do not add live target probing
 without explicit ROE/scope manifest and mocked tests.
 

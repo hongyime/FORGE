@@ -3430,6 +3430,7 @@ _WINDOWS_ACTIVITY_BINARY_STRING_SUFFIXES = {
 _PACKAGE_BINARY_STRING_SUFFIXES = {
     ".lockb",
 }
+_PARQUET_COLUMNAR_SUFFIXES = {".parquet"}
 _NATIVE_BINARY_STRING_SUFFIXES = {
     ".bin",
     ".arrow",
@@ -32742,6 +32743,8 @@ class ArtifactQueueProcessor:
                 )
             if path.suffix.lower() in _OCR_IMAGE_SUFFIXES:
                 return self._extract_image_payloads(path)
+            if path.suffix.lower() in _PARQUET_COLUMNAR_SUFFIXES:
+                return self._extract_parquet_payloads(path, depth=depth)
             if path.suffix.lower() in _BINARY_STRING_ARTIFACT_SUFFIXES:
                 return self._extract_legacy_binary_payloads(
                     path.read_bytes()[:_MAX_ARTIFACT_MEMBER_BYTES],
@@ -33282,6 +33285,13 @@ class ArtifactQueueProcessor:
             )
         if suffix in _OCR_IMAGE_SUFFIXES:
             return self._extract_image_member_payloads(source_file, member_name, data)
+        if suffix in _PARQUET_COLUMNAR_SUFFIXES:
+            return self._extract_parquet_bytes_payloads(
+                data[:_MAX_ARTIFACT_MEMBER_BYTES],
+                source_file,
+                member_name,
+                depth=depth,
+            )
         if suffix in _BINARY_STRING_ARTIFACT_SUFFIXES:
             return self._extract_legacy_binary_payloads(
                 data[:_MAX_ARTIFACT_MEMBER_BYTES],
@@ -37159,6 +37169,122 @@ class ArtifactQueueProcessor:
         for family_payloads in prepared_payload_families:
             payloads.extend(family_payloads)
         return payloads
+
+    def _extract_parquet_payloads(
+        self,
+        path: Path,
+        *,
+        depth: int,
+    ) -> list[tuple[str, str, str]]:
+        try:
+            if path.stat().st_size > _MAX_ARTIFACT_MEMBER_BYTES:
+                raise ValueError("parquet artifact exceeds bounded parse size")
+            data = path.read_bytes()
+        except Exception:  # noqa: BLE001
+            data = path.read_bytes()[:_MAX_ARTIFACT_MEMBER_BYTES] if path.exists() else b""
+            return self._extract_legacy_binary_payloads(
+                data,
+                str(path),
+                path.name,
+                depth=depth,
+            )
+        return self._extract_parquet_bytes_payloads(
+            data,
+            str(path),
+            path.name,
+            depth=depth,
+        )
+
+    def _extract_parquet_bytes_payloads(
+        self,
+        data: bytes,
+        source_file: str,
+        member_name: str,
+        *,
+        depth: int,
+    ) -> list[tuple[str, str, str]]:
+        try:
+            import pyarrow.parquet as pq
+
+            parquet_file = pq.ParquetFile(BytesIO(data))
+            lines = self._parquet_summary_lines(parquet_file)
+        except Exception:  # noqa: BLE001
+            return self._extract_legacy_binary_payloads(
+                data[:_MAX_ARTIFACT_MEMBER_BYTES],
+                source_file,
+                member_name,
+                depth=depth,
+            )
+        payloads = [(source_file, f"{member_name}#parquet-table", "\n".join(lines))]
+        payloads.extend(
+            self._extract_legacy_binary_payloads(
+                data[:_MAX_ARTIFACT_MEMBER_BYTES],
+                source_file,
+                member_name,
+                depth=depth,
+            )
+        )
+        return payloads
+
+    def _parquet_summary_lines(self, parquet_file: Any) -> list[str]:
+        columns = list(parquet_file.schema_arrow.names)[:64]
+        lines = ["format=parquet", f"columns={','.join(columns)}"]
+        metadata = parquet_file.metadata
+        if metadata is not None and getattr(metadata, "metadata", None):
+            for key, value in list(metadata.metadata.items())[:64]:
+                key_text = self._parquet_cell_text(key)
+                value_text = self._parquet_cell_text(value)
+                if key_text and value_text:
+                    lines.append(f"metadata.{key_text}={value_text}")
+        for row_group_index in range(min(int(parquet_file.num_row_groups or 0), 4)):
+            table = parquet_file.read_row_group(row_group_index, columns=columns)
+            lines.extend(self._parquet_table_lines(table, row_group_index))
+            if len(lines) >= 256:
+                break
+        return lines[:256]
+
+    def _parquet_table_lines(self, table: Any, row_group_index: int) -> list[str]:
+        lines: list[str] = []
+        row_count = min(int(getattr(table, "num_rows", 0) or 0), 64)
+        for column_name in list(table.column_names)[:64]:
+            values = table[column_name].slice(0, row_count).to_pylist()
+            for row_index, raw_value in enumerate(values):
+                value = self._parquet_cell_text(raw_value)
+                if not self._parquet_interesting_value(value):
+                    continue
+                lines.append(f"row_group[{row_group_index}].row[{row_index}].{column_name}={value}")
+                if len(lines) >= 192:
+                    return lines
+        return lines
+
+    @staticmethod
+    def _parquet_cell_text(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, bytes | bytearray):
+            return ArtifactQueueProcessor._decode_text_artifact_bytes(bytes(value), limit=512)
+        if isinstance(value, (dict, list, tuple)):
+            try:
+                return json.dumps(value, default=str, sort_keys=True)[:512]
+            except Exception:  # noqa: BLE001
+                return str(value)[:512]
+        return str(value).strip()[:512]
+
+    @staticmethod
+    def _parquet_interesting_value(value: str) -> bool:
+        lowered = str(value or "").lower()
+        return any(
+            marker in lowered
+            for marker in (
+                "@",
+                "://",
+                "firebaseio.com",
+                "supabase.co",
+                ".s3.",
+                "s3://",
+                "gs://",
+            )
+        )
 
     def _extract_legacy_binary_payload_family(
         self,
