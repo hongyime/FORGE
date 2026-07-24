@@ -17133,8 +17133,11 @@ def kill_chain(
     if report_max_loops is not None:
         report_args += ["--max-loops", str(int(report_max_loops))]
 
+    hibp_finalization_args = ["osint", "hibp", "--engagement", engagement]
+    if dry_run_all:
+        hibp_finalization_args.append("--dry-run")
     pre_validation_finalization_specs: list[tuple[list[str], str]] = [
-        (["osint", "hibp", "--engagement", engagement], "final HIBP domain"),
+        (hibp_finalization_args, "final HIBP domain"),
     ]
     if credential_validate:
         for svc in ("ssh", "smb", "rdp", "ftp", "http"):
@@ -17153,9 +17156,11 @@ def kill_chain(
                     f"cred validate ({svc})",
                 )
             )
-    post_validation_finalization_specs: list[tuple[list[str], str]] = [
+    network_capable_post_validation_specs: list[tuple[list[str], str]] = [
         (["vuln", "passive", "--engagement", engagement], "vuln passive fingerprint"),
         (["exploit", "correlate", "--engagement", engagement], "exploit correlate"),
+    ]
+    sequential_post_validation_specs: list[tuple[list[str], str]] = [
         (
             [
                 "graph",
@@ -17172,8 +17177,28 @@ def kill_chain(
         ),
         (list(report_args), "report generate"),
     ]
-    parallel_post_validation_specs = post_validation_finalization_specs[:2]
-    sequential_post_validation_specs = post_validation_finalization_specs[2:]
+    if dry_run_all:
+        skipped = ", ".join(label for _, label in network_capable_post_validation_specs)
+        _log(
+            "finalization dry-run",
+            f"[dim]skipped network-capable finalizers: {skipped}[/dim]",
+        )
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "dry_run_finalization_skipped",
+            target=domain,
+            result=f"labels={skipped}",
+        )
+        parallel_post_validation_specs: list[tuple[list[str], str]] = []
+    else:
+        parallel_post_validation_specs = list(network_capable_post_validation_specs)
+    post_validation_finalization_specs = [
+        *parallel_post_validation_specs,
+        *sequential_post_validation_specs,
+    ]
     finalization_specs = [
         *pre_validation_finalization_specs,
         *post_validation_finalization_specs,

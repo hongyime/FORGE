@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: latest validation linked-proof parity is complete. Linked
+Latest checkpoint: kill-chain dry-run finalization contract is complete.
+`forge kill-chain --dry-run` no longer schedules network-capable prereport
+`vuln passive` or `exploit correlate` finalizers. HIBP finalization now carries
+its own `--dry-run` argument, and the orchestrator writes
+`dry_run_finalization_skipped` audit evidence naming the skipped finalizers.
+
+Verification: compile passed; Ruff passed; focused dry-run finalization,
+telemetry, progress-event, and adjacent email batching regressions passed
+(`4 passed`). Review: sidecar `Heisenberg` confirmed the committed-head gap,
+the minimal skip strategy, and the audit assertion. Handoff:
+`.claude/handoffs/2026-07-24-kill-chain-dry-run-finalization-contract.md`.
+
+Recon-output double-check: no code change was needed.
+`_recon_tool_output_structured_payload_text` already preserves family order and
+uses ordered bounded candidate normalization; existing focused worker regression
+and persisted recon-output artifact slice both passed.
+
+Previous checkpoint: latest validation linked-proof parity is complete. Linked
 key/cloud proof gates now use a shared latest-row cloud validation reportability
 helper, so older `VALIDATED` rows no longer authorize deterministic key
 findings, Phase 6 key counts/report context, dashboard/API key counts, or
@@ -33,32 +50,12 @@ cloud-leak playbook admission after a newer row for the same asset becomes
 non-reportable. Direct key-validator proof on the key row still remains valid
 for that exact key.
 
-Verification: compile/Ruff passed; cross-surface latest-validation regression
-passed (`1 passed`); playbook linked-validation slice passed (`3 passed`); full
-deterministic findings file passed (`17 passed`); Phase 6 cloud/report key
-selectors passed (`2 passed`); full static dashboard file passed (`21 passed`);
-full web UI engagement API file passed (`37 passed, 75 warnings`); full playbook
-integration file passed (`19 passed`). Review: sidecar `Wegener` confirmed the
-stale linked-proof indexes and recommended the shared latest-row policy.
-Handoff: `.claude/handoffs/2026-07-24-latest-validation-linked-proof-parity.md`.
-
-Recon-output double-check: no code change was needed.
-`_recon_tool_output_structured_payload_text` already preserves family order and
-uses ordered bounded candidate normalization; existing focused worker regression
-and persisted recon-output artifact slice both passed.
-
-Previous checkpoint: dashboard malformed cloud finding gating is complete.
-Static dashboard and live API review now fail closed for malformed
-`DETERMINISTIC_CLOUD_EXPOSURE` rows and imported graph VULN nodes; deterministic
-cloud findings need a normalized asset, identifier, and reportable validation
-index proof before entering reportable review surfaces.
-
-Current next gate: fix kill-chain dry-run finalization contract. `forge
-kill-chain --dry-run` should not schedule finalization commands that can perform
-network-capable vulnerability/exploit correlation without explicit
-dry-run/scope arguments. Add the regression first, then pass explicit
-dry-run/scope flags to finalizers or skip network-capable finalizers in dry-run
-mode.
+Current next gate: choose the next concrete backend kill-chain gap from the
+compact active backlog: broader E2E kill-chain tests, provider-specific
+validation proof/decoy hardening, passive artifact/parser recursion coverage,
+or a fresh audit for a remaining bounded-worker migration. Do not switch to
+UI-only polish unless it proves dashboard/report/audit parity for the live
+engagement path.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

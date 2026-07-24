@@ -287,12 +287,22 @@ historical notes only, not as current instructions.
   (`19 passed`). Review: sidecar `Wegener` independently confirmed the stale
   linked-proof indexes and recommended the shared latest-row policy. Handoff:
   `.claude/handoffs/2026-07-24-latest-validation-linked-proof-parity.md`.
+- [x] Kill-chain dry-run finalization contract checkpoint:
+  `forge kill-chain --dry-run` no longer schedules the network-capable prereport
+  `vuln passive` or `exploit correlate` finalizers. HIBP finalization now carries
+  its own `--dry-run` flag, and the orchestrator persists a
+  `dry_run_finalization_skipped` audit row naming the skipped labels.
+  Verification: compile passed; Ruff passed; focused dry-run finalization,
+  telemetry, progress-event, and adjacent email batching regressions passed
+  (`4 passed`). Review: sidecar `Heisenberg` confirmed the committed-head gap,
+  the minimal skip strategy, and the audit assertion. Handoff:
+  `.claude/handoffs/2026-07-24-kill-chain-dry-run-finalization-contract.md`.
 - [ ] Next gate:
-  Fix kill-chain dry-run finalization contract. `forge kill-chain --dry-run`
-  should not schedule finalization commands that can perform network-capable
-  vulnerability/exploit correlation without explicit dry-run/scope arguments.
-  Add a regression first, then either pass explicit dry-run/scope flags to
-  finalizers or skip network-capable finalizers in dry-run mode.
+  Choose the next concrete backend kill-chain gap from the compact backlog:
+  broader E2E kill-chain tests, provider-specific validation proof/decoy
+  hardening, passive artifact/parser recursion coverage, or a fresh audit for a
+  remaining bounded-worker migration. Do not switch to UI-only polish unless it
+  proves dashboard/report/audit parity for the live engagement path.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

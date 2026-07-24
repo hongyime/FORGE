@@ -65732,7 +65732,7 @@ def test_kill_chain_dry_run_records_recent_run_telemetry_metadata(
         assert int(fanout_batch["completed"]) >= 1
         assert int(fanout_batch["pending"]) == 0
         finalization_batch = queue_metrics["finalization_batch"]
-        assert int(finalization_batch["completed"]) >= 5
+        assert int(finalization_batch["completed"]) >= 3
         assert int(finalization_batch["pending"]) == 0
         assert metadata["active_finalization_stage_label"] == "report generate"
         assert float(metadata["active_finalization_eta_seconds"]) >= 0.0
@@ -66758,7 +66758,7 @@ def test_kill_chain_dry_run_publishes_distributed_progress_events(
     assert final_payload["active_batch_label"]
     assert float(final_payload["active_batch_eta_seconds"]) >= 0.0
     assert int(final_payload["queue_metrics"]["fanout_batch"]["completed"]) >= 1
-    assert int(final_payload["queue_metrics"]["finalization_batch"]["completed"]) >= 5
+    assert int(final_payload["queue_metrics"]["finalization_batch"]["completed"]) >= 3
     assert final_payload["active_finalization_stage_label"] == "report generate"
     assert float(final_payload["active_finalization_eta_seconds"]) >= 0.0
     assert int(final_payload["last_iteration_delta"]["engagement_seeds"]) == 0
@@ -90059,7 +90059,7 @@ def test_kill_chain_parallel_batches_credential_validation_services(
     )
 
 
-def test_kill_chain_parallel_batches_prereport_finalization_modules(
+def test_kill_chain_dry_run_skips_network_capable_prereport_finalizers(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -90067,7 +90067,7 @@ def test_kill_chain_parallel_batches_prereport_finalization_modules(
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
 
-    batch_calls: list[tuple[tuple[str, ...], int]] = []
+    batch_calls: list[tuple[tuple[str, ...], tuple[tuple[str, ...], ...], int]] = []
     parse_batch_calls: list[tuple[str, int, int]] = []
 
     def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
@@ -90077,7 +90077,11 @@ def test_kill_chain_parallel_batches_prereport_finalization_modules(
 
     def _fake_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
         del run_module, progress_label, progress_callback
-        batch_calls.append((tuple(spec.label for spec in specs), int(max_workers)))
+        batch_calls.append((
+            tuple(spec.label for spec in specs),
+            tuple(tuple(spec.cmd_argv) for spec in specs),
+            int(max_workers),
+        ))
         return [0] * len(specs)
 
     monkeypatch.setattr("forge.cli._run_inprocess_batch", _fake_inprocess_batch)
@@ -90098,31 +90102,41 @@ def test_kill_chain_parallel_batches_prereport_finalization_modules(
         parallel_fanout=3,
     )
 
+    flattened_labels = tuple(label for labels, _, _ in batch_calls for label in labels)
+    assert "vuln passive fingerprint" not in flattened_labels
+    assert "exploit correlate" not in flattened_labels
     assert any(
-        labels == (
-            "final HIBP domain",
-            "vuln passive fingerprint",
-            "exploit correlate",
-        )
-        for labels, _ in batch_calls
+        labels == ("final HIBP domain",) and max_workers == 3
+        for labels, _, max_workers in batch_calls
     )
     assert any(
-        labels == (
-            "final HIBP domain",
-            "vuln passive fingerprint",
-            "exploit correlate",
-        )
-        and max_workers == 3
-        for labels, max_workers in batch_calls
+        args == (("osint", "hibp", "--engagement", "1001", "--dry-run"),)
+        for labels, args, _ in batch_calls
+        if labels == ("final HIBP domain",)
     )
     assert any(
-        label == "finalization pregraph spec prep" and max_workers == 3 and item_count >= 3
+        label == "finalization pregraph spec prep" and max_workers == 3 and item_count == 1
         for label, item_count, max_workers in parse_batch_calls
     )
     assert any(
         label == "finalization postgraph" and max_workers == 1 and item_count >= 2
         for label, item_count, max_workers in parse_batch_calls
     )
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    with sqlite3.connect(db_path) as con:
+        skip_row = con.execute(
+            """
+            SELECT result
+            FROM audit_log
+            WHERE engagement_id=1001
+              AND action='dry_run_finalization_skipped'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    assert skip_row is not None
+    assert "vuln passive fingerprint" in str(skip_row[0])
+    assert "exploit correlate" in str(skip_row[0])
 
 
 def test_kill_chain_parallel_batches_detected_prereqs_when_auto_run_enabled(
