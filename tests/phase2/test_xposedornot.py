@@ -17,6 +17,7 @@ import pytest
 from forge.utils.intel.exposure_check import (
     XposedOrNotClient,
     _parse_xon_response,
+    _scope_check,
     run_xposed_query,
 )
 
@@ -193,6 +194,13 @@ class TestXposedOrNotClient:
 
 
 class TestRunXposedQuery:
+    def test_scope_check_accepts_exact_email_and_wildcard_subdomain(self):
+        scope = ["security@example.com", "*.corp.example.com"]
+
+        assert _scope_check("security@example.com", scope)
+        assert _scope_check("alice@hr.corp.example.com", scope)
+        assert not _scope_check("alice@corp.example.com", scope)
+
     def test_queries_all_emails_from_db(self, engagement_db):
         queried: list[str] = []
 

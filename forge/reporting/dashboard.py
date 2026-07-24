@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 from forge.audit.manifest import _graph_artifact_names, summarize_run_audit_manifest
+from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.reporting.graph_validation_metadata import latest_cloud_validation_metadata_index
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
@@ -3372,7 +3373,7 @@ def _engagement_summary(db_path: Path) -> dict[str, Any]:
                 summary["created_at"] = _format_dt(str(row["created_at"] or ""))
                 summary["updated_at"] = _format_dt(str(row["updated_at"] or ""))
                 scope = _safe_json_loads(str(row["scope_json"] or "[]"))
-                summary["scope"] = scope if isinstance(scope, list) else []
+                summary["scope"] = scope_entries_from_payload(scope)
                 summary["tags"] = _engagement_tags(con, engagement_id)
 
         summary["counts"] = _summary_counts(con, engagement_id)

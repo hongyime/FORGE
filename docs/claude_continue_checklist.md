@@ -66,10 +66,26 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit remaining engagement `scope_json` readers for
-  list-only assumptions. Any reader used for scheduling, scope gates,
-  dashboards, or reports must either support dict/list shapes or explicitly
-  document why it only accepts legacy list scope.
+- [ ] Next checkpoint: document and test URL-scope semantics across host gates
+  and URL-prefix gates. Host-level gates may treat a URL entry as authorizing
+  that host, while crawler/path-sensitive gates must keep prefix/path drift
+  enforcement explicit. Add focused current-code tests only where a gap is
+  proven.
+- [x] Scope-json reader audit checkpoint:
+  Remaining engagement `scope_json` readers now use the shared
+  `scope_entries_from_payload()` manifest flattener or an explicit dict-aware
+  helper. Patched readers include OPSEC scope loading, passive xray fallback
+  target selection, report synthesizer fallback scope, static dashboard detail
+  scope display, live web API list/detail/scope-edit flows, Phase 2 email
+  enrichers, query/scavenger/keyscan gates, Phase 5 boundary checks, and TUI
+  engagement labels. Email OSINT scope checks now share exact-email/domain/
+  wildcard semantics, paste monitoring filters flattened scope to domain terms
+  only, and Phase 5 URL scope entries normalize to host as documented.
+  Verification: Ruff passed for changed files; focused manifest/email/boundary/
+  xray/report regressions passed (`18 passed`); broader touched Phase 2/opsec/
+  xray suite passed (`68 passed`); adjacent social/boundary/report selector
+  passed (`13 passed`). A read-only subagent audit found no remaining app-code
+  list-only `scope_json` reader after these patches.
 - [x] Dict-shaped scope seed backfill checkpoint:
   `_backfill_scope_seeds()` now accepts the same manifest object shape used by
   live scope manifests (`domains`, `domain_allowlist`, `urls`, `url_prefixes`,

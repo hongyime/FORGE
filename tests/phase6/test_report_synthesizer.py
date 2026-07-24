@@ -402,6 +402,48 @@ def test_context_builder_loads_scope(tmp_eng_db):
     assert "10.0.0.0/24" in ctx.scope
 
 
+def test_context_builder_loads_manifest_scope_json_fallback(tmp_path: Path):
+    db = tmp_path / "manifest-scope.db"
+    con = sqlite3.connect(db)
+    con.execute(
+        """
+        CREATE TABLE engagements (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            status TEXT,
+            operator TEXT,
+            scope_json TEXT
+        )
+        """
+    )
+    con.execute(
+        "INSERT INTO engagements VALUES (?, ?, ?, ?, ?)",
+        (
+            ENGAGEMENT_ID,
+            "Manifest Scope",
+            "ACTIVE",
+            "tester",
+            json.dumps(
+                {
+                    "domains": ["example.com"],
+                    "urls": ["https://portal.example.com/app"],
+                    "authorized_seeds": ["security@example.com"],
+                }
+            ),
+        ),
+    )
+    con.commit()
+    con.close()
+
+    ctx = ContextBuilder(db, ENGAGEMENT_ID).build()
+
+    assert ctx.scope == [
+        "example.com",
+        "https://portal.example.com/app",
+        "security@example.com",
+    ]
+
+
 def test_context_builder_loads_recon(tmp_eng_db):
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
     assert len(ctx.recon.hosts) == 1

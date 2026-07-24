@@ -23,6 +23,7 @@ Supported scope entry types:
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import re
 import sqlite3
@@ -65,9 +66,12 @@ def _load_scope_entries(db_path: Path, engagement_id: int) -> list[str]:
             ).fetchone()
             con.close()
             if row and row[0]:
-                import json
+                try:
+                    from forge.opsec.scope_gate import scope_entries_from_payload
 
-                return json.loads(row[0]) if row[0].startswith("[") else [row[0]]
+                    return scope_entries_from_payload(json.loads(str(row[0])))
+                except json.JSONDecodeError:
+                    return [str(row[0])]
         except Exception:
             pass
         _LOG.warning("Could not load scope from DB — operating with empty scope (deny all).")
@@ -85,6 +89,11 @@ def _extract_host(target: str) -> str:
 def _matches_entry(host: str, entry: str) -> bool:
     """Return True if host falls within scope entry."""
     entry = entry.strip()
+    if "://" in entry:
+        parsed = urlparse(entry)
+        entry_host = parsed.hostname or parsed.netloc
+        if entry_host:
+            entry = entry_host
 
     # CIDR check
     if "/" in entry:

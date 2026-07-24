@@ -113,7 +113,7 @@ def test_detected_prereq_child_argv_adds_live_authorization_once() -> None:
     assert already_hardened.count("--scope-manifest") == 1
 
 
-def _bootstrap_engagement(db_path: Path, *, scope: list[str]) -> None:
+def _bootstrap_engagement(db_path: Path, *, scope: object) -> None:
     con = get_engagement_db(db_path)
     try:
         con.execute(
@@ -950,3 +950,22 @@ def test_phase5_boundary_check_reads_scope_json(
     _bootstrap_engagement(db_path, scope=["allowed.example"])
 
     assert_in_scope("allowed.example", 1001, db_path)
+
+
+def test_phase5_boundary_check_reads_manifest_scope_json(
+    tmp_path: Path,
+) -> None:
+    from forge.utils.post.boundary_check import assert_in_scope
+
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(
+        db_path,
+        scope={
+            "domains": ["allowed.example"],
+            "urls": ["https://portal.allowed.example/app"],
+            "authorized_seeds": ["security@allowed.example"],
+        },
+    )
+
+    assert_in_scope("allowed.example", 1001, db_path)
+    assert_in_scope("https://portal.allowed.example/admin", 1001, db_path)

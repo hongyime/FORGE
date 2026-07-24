@@ -379,7 +379,7 @@ def run_scavenger(
     """
     if Session is None:
         raise ImportError("curl_cffi required: pip install curl_cffi")
-    from forge.opsec.scope_gate import ScopeViolationError
+    from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_entries_from_payload
 
     class _CompatScopeViolation(ScopeViolationError, ValueError):
         def __str__(self):
@@ -393,10 +393,13 @@ def run_scavenger(
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id=?", (engagement_id,)
     ).fetchone()
-    scope: list[str] = json.loads(scope_row[0] or "[]") if scope_row else []
-    if scope and not any(domain == s or domain.endswith("." + s) for s in scope):
-        con.close()
-        raise _CompatScopeViolation(domain, scope)
+    scope = scope_entries_from_payload(json.loads(scope_row[0] or "[]")) if scope_row else []
+    if scope:
+        try:
+            assert_in_scope(domain, scope)
+        except ScopeViolationError:
+            con.close()
+            raise _CompatScopeViolation(domain, scope)
 
     patterns  = load_patterns()
     backends  = backends or ["github", "gitlab"]

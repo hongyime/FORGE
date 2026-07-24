@@ -19,9 +19,11 @@ import logging
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Optional
 
+from forge.opsec.scope_gate import email_address_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
 
 _LOG = logging.getLogger(__name__)
@@ -79,8 +81,31 @@ def _is_stale(ts_iso: str, ttl_hours: int) -> bool:
 
 
 def _scope_check(email: str, scope: list[str]) -> bool:
-    domain = email.split("@")[-1].lower() if "@" in email else ""
-    return any(domain == s or domain.endswith("." + s) for s in scope)
+    return email_address_in_scope(email, scope)
+
+
+def _paste_monitor_domains(scope: list[str]) -> list[str]:
+    domains: list[str] = []
+    seen: set[str] = set()
+    for entry in scope:
+        candidate = str(entry or "").lower().strip().rstrip(".")
+        if not candidate or "@" in candidate or "://" in candidate or "/" in candidate:
+            continue
+        if candidate.startswith("*."):
+            candidate = candidate[2:]
+        try:
+            ip_address(candidate)
+            continue
+        except ValueError:
+            pass
+        if "." not in candidate:
+            continue
+        if any(ch not in "abcdefghijklmnopqrstuvwxyz0123456789-." for ch in candidate):
+            continue
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            domains.append(candidate)
+    return domains
 
 
 def _find_email_column(con: sqlite3.Connection) -> str:
@@ -186,7 +211,7 @@ def run_reputation_lookup(
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id=?", (engagement_id,)
     ).fetchone()
-    scope: list[str] = json.loads(scope_row[0] or "[]") if scope_row else []
+    scope = scope_entries_from_payload(json.loads(scope_row[0] or "[]")) if scope_row else []
 
     emails = emails if emails is not None else target_emails
     if emails is None:
@@ -265,7 +290,9 @@ def run_reputation_lookup(
         ).fetchone()
         con2.close()
         all_emails = [r[0] for r in e_rows]
-        all_domains = json.loads(d_rows[0] if d_rows else "[]")
+        all_domains = _paste_monitor_domains(
+            scope_entries_from_payload(json.loads(d_rows[0] if d_rows else "[]"))
+        )
 
         pm = PasteMonitor(
             engagement_id=engagement_id,

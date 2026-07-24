@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from forge.config import resolve_secret_pool
+from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
 
 _LOG = logging.getLogger(__name__)
@@ -232,16 +233,13 @@ def run_dehashed(
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id=?", (engagement_id,)
     ).fetchone()
-    scope = json.loads(scope_row[0] or "[]") if scope_row else []
-    if (
-        query_type == "domain"
-        and scope
-        and not any(query_value == s or query_value.endswith("." + s) for s in scope)
-    ):
-        from forge.opsec.scope_gate import ScopeViolationError
-
-        con.close()
-        raise ScopeViolationError(query_value, scope)
+    scope = scope_entries_from_payload(json.loads(scope_row[0] or "[]")) if scope_row else []
+    if query_type == "domain" and scope:
+        try:
+            assert_in_scope(query_value, scope)
+        except ScopeViolationError:
+            con.close()
+            raise
 
     # Incremental skip.
     row = con.execute(

@@ -233,6 +233,10 @@ def test_run_passive_http_collection_for_engagement_falls_back_to_discovered_hos
     con = get_engagement_db(db_path)
     try:
         con.execute(
+            "UPDATE engagements SET scope_json=? WHERE id=1001",
+            (json.dumps(["acme.example", "*.acme.example"]),),
+        )
+        con.execute(
             """
             INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context)
             VALUES (?, ?, ?, 'unknown', ?)
@@ -291,6 +295,48 @@ def test_run_passive_http_collection_for_engagement_falls_back_to_scope_entries(
     summary = summarize_passive_vulns(1001, db_path)
     assert summary["MEDIUM"] == 2
     assert summary["LOW"] == 2
+
+
+def test_run_passive_http_collection_for_engagement_accepts_manifest_scope_entries(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+    con = get_engagement_db(db_path)
+    try:
+        con.execute(
+            "UPDATE engagements SET scope_json=? WHERE id=1001",
+            (
+                json.dumps(
+                    {
+                        "domains": ["acme.example"],
+                        "urls": ["https://portal.acme.example/app"],
+                    }
+                ),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    requested_urls: list[str] = []
+
+    class _Resp:
+        text = "mysql stack trace"
+
+    def _fake_get(url: str, timeout: float, proxy: str | None = None):  # noqa: ANN001
+        requested_urls.append(url)
+        assert timeout == 12.0
+        assert proxy is None
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "get", _fake_get)
+
+    inserted = run_passive_http_collection_for_engagement(1001, db_path)
+
+    assert inserted == 4
+    assert requested_urls == ["https://acme.example", "https://portal.acme.example/app"]
 
 
 def test_run_passive_http_collection_for_engagement_parallelizes_in_scope_targets(

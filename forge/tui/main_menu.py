@@ -185,7 +185,7 @@ def _engagement_target(db_path: Path) -> str:
     Priority:
       1. `audit_log.kill_chain_start` target column (contains actual seed
          passed to `forge kill-chain <seed>`).
-      2. `engagements.scope_json[0]` (first scope entry).
+      2. `engagements.scope_json` (first flattened scope entry).
       3. `engagements.name` (falls back to the engagement's stored name).
 
     Returns "" on any failure. Never raises.
@@ -214,7 +214,7 @@ def _engagement_target(db_path: Path) -> str:
             except sqlite3.OperationalError:
                 pass
 
-            # Fallback: scope_json first entry
+            # Fallback: first flattened scope_json entry
             try:
                 row = con.execute(
                     "SELECT scope_json, name FROM engagements WHERE id=?",
@@ -225,8 +225,10 @@ def _engagement_target(db_path: Path) -> str:
                     if scope_json:
                         try:
                             import json
-                            scope = json.loads(scope_json)
-                            if isinstance(scope, list) and scope:
+                            from forge.opsec.scope_gate import scope_entries_from_payload
+
+                            scope = scope_entries_from_payload(json.loads(scope_json))
+                            if scope:
                                 return str(scope[0])[:40]
                         except Exception:  # noqa: BLE001
                             pass

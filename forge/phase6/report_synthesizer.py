@@ -52,6 +52,7 @@ from forge.core.errors import ProviderUnavailableError
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.phase6.artifact_inventory import load_artifact_inventory
+from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
@@ -1102,7 +1103,7 @@ class ContextBuilder:
             if not row or not row["scope_json"]:
                 return []
             try:
-                return json.loads(row["scope_json"])
+                return scope_entries_from_payload(json.loads(row["scope_json"]))
             except json.JSONDecodeError:
                 return []
 

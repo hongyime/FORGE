@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: dict-shaped scope seed backfill is complete.
+Latest checkpoint: scope-json reader audit is complete.
+Remaining engagement `scope_json` readers now use the shared
+`scope_entries_from_payload()` manifest flattener or an explicit dict-aware
+helper. Patched readers include OPSEC scope loading, passive xray fallback
+target selection, report synthesizer fallback scope, static dashboard detail
+scope display, live web API list/detail/scope-edit flows, Phase 2 email
+enrichers, query/scavenger/keyscan gates, Phase 5 boundary checks, and TUI
+engagement labels. Email OSINT scope checks now share exact-email/domain/
+wildcard semantics, paste monitoring filters flattened scope to domain terms
+only, and Phase 5 URL scope entries normalize to host as documented.
+Verification: Ruff passed for changed files; focused manifest/email/boundary/
+xray/report regressions passed (`18 passed`); broader touched Phase 2/opsec/
+xray suite passed (`68 passed`); adjacent social/boundary/report selector
+passed (`13 passed`). Read-only subagent audit found no remaining app-code
+list-only `scope_json` reader after the patches.
+
+Next checkpoint: document and test URL-scope semantics across host gates and
+URL-prefix gates. Host-level gates may treat a URL entry as authorizing that
+host, while crawler/path-sensitive gates must keep prefix/path drift enforcement
+explicit. Add focused current-code tests only where a gap is proven.
+
+Previous checkpoint: dict-shaped scope seed backfill is complete.
 `_backfill_scope_seeds()` now accepts the same manifest object shape used by
 live scope manifests (`domains`, `domain_allowlist`, `urls`, `url_prefixes`,
 `authorized_seeds`, `allowed_seeds`, `targets`, etc.) while preserving legacy
@@ -36,11 +57,6 @@ compile passed; Ruff passed; focused dict/list scope and URL-only narrowing
 tests passed (`4 passed`); combined scope/root/email selector passed (`10
 passed, 768 deselected`); `.forge_data/engagements` contained `0` non-master
 engagement DBs after the run.
-
-Next checkpoint: audit remaining engagement `scope_json` readers for list-only
-assumptions. Any reader used for scheduling, scope gates, dashboards, or reports
-must either support dict/list shapes or explicitly document why it only accepts
-legacy list scope.
 
 Previous checkpoint: non-email root promotion is complete.
 Generic discovered third-party `domain`/`subdomain` seeds from weak

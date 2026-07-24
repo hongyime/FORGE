@@ -17,10 +17,10 @@ import logging
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
-from ipaddress import ip_address, ip_network
 from pathlib import Path
 from typing import Optional
 
+from forge.opsec.scope_gate import email_address_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
 
 _LOG = logging.getLogger(__name__)
@@ -137,25 +137,7 @@ def _is_stale(queried_at_iso: str, ttl_hours: int) -> bool:
 
 
 def _scope_check(email: str, scope: list[str]) -> bool:
-    domain = email.split("@")[-1].lower() if "@" in email else ""
-    normalised_email = email.lower().strip()
-    for s in scope:
-        scope_item = (s or "").strip().lower()
-        if not scope_item:
-            continue
-        # Full-email scope entry (e.g. "user@example.com") — exact match.
-        if "@" in scope_item and scope_item == normalised_email:
-            return True
-        if "/" in scope_item:
-            try:
-                ip_address(domain)
-                if ip_address(domain) in ip_network(scope_item, strict=False):
-                    return True
-            except ValueError:
-                continue
-        if domain == scope_item or domain.endswith("." + scope_item):
-            return True
-    return False
+    return email_address_in_scope(email, scope)
 
 
 def _find_email_column(con: sqlite3.Connection) -> str:
@@ -220,7 +202,7 @@ def run_xposed(
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id = ?", (engagement_id,)
     ).fetchone()
-    scope: list[str] = json.loads(scope_row[0] or "[]") if scope_row else []
+    scope = scope_entries_from_payload(json.loads(scope_row[0] or "[]")) if scope_row else []
 
     # Load target emails.
     if emails is None:

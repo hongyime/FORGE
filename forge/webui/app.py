@@ -22,6 +22,7 @@ from forge.distributed.coordinator import QueueCoordinator
 from forge.distributed.scheduler import ScheduledTask, TaskScheduler
 from forge.engagement_ids import allocate_engagement_id, engagement_db_root, numeric_engagement_db_files
 from forge.models.pydantic_models import CommandEvent
+from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.reporting.dashboard import (
     _annotate_audit_manifest_bundle,
     _engagement_metadata,
@@ -750,11 +751,61 @@ def create_app() -> Any:
             (engagement_id,),
         ).fetchone()
         scope = _safe_json_loads(str(row[0] or "[]")) if row is not None else []
-        scope_list = [str(item).strip() for item in scope] if isinstance(scope, list) else []
+        remove_set = {str(item).strip() for item in remove_entries or [] if str(item).strip()}
+        if isinstance(scope, dict):
+            payload = dict(scope)
+            for key in (
+                "domains",
+                "domain_allowlist",
+                "ip_ranges",
+                "cidrs",
+                "cidr_ranges",
+                "urls",
+                "url_prefixes",
+                "seeds",
+                "authorized_seeds",
+                "allowed_seeds",
+                "targets",
+                "allowed_targets",
+            ):
+                raw_value = payload.get(key)
+                if raw_value is None:
+                    continue
+                raw_items = raw_value if isinstance(raw_value, list) else [raw_value]
+                kept = [
+                    str(item).strip()
+                    for item in raw_items
+                    if str(item).strip() and str(item).strip() not in remove_set
+                ]
+                if isinstance(raw_value, list):
+                    payload[key] = kept
+                elif kept:
+                    payload[key] = kept[0]
+                else:
+                    payload.pop(key, None)
+            filtered = scope_entries_from_payload(payload)
+            seen = set(filtered)
+            authorized = payload.get("authorized_seeds")
+            authorized_items = authorized if isinstance(authorized, list) else [authorized] if authorized else []
+            authorized_list = [str(item).strip() for item in authorized_items if str(item).strip()]
+            for entry in add_entries or []:
+                value = str(entry).strip()
+                if value and value not in seen:
+                    authorized_list.append(value)
+                    seen.add(value)
+            payload["authorized_seeds"] = authorized_list
+            filtered = scope_entries_from_payload(payload)
+            con.execute(
+                "UPDATE engagements SET scope_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (json.dumps(payload), engagement_id),
+            )
+            return filtered
+
+        scope_list = scope_entries_from_payload(scope)
         filtered = [
             item
             for item in scope_list
-            if item and item not in set(remove_entries or [])
+            if item and item not in remove_set
         ]
         seen = set(filtered)
         for entry in add_entries or []:
@@ -920,7 +971,7 @@ def create_app() -> Any:
     ) -> dict[str, Any]:
         engagement_id = int(row["id"])
         scope = _safe_json_loads(str(row["scope_json"] or "[]"))
-        scope_list = scope if isinstance(scope, list) else []
+        scope_list = scope_entries_from_payload(scope)
         seeds = _seed_list(con, engagement_id, scope_list)
         primary_seed = seeds[0] if seeds else ""
         slug_source = str(row["name"] or primary_seed or f"engagement-{engagement_id}")
@@ -1007,7 +1058,7 @@ def create_app() -> Any:
             path for path in _latest_report_family_files(report_files) if path.suffix.lower() == ".md"
         ]
         scope = _safe_json_loads(str(row["scope_json"] or "[]"))
-        scope_list = scope if isinstance(scope, list) else []
+        scope_list = scope_entries_from_payload(scope)
         payload = {
             **summary,
             "path": db_file.as_posix(),

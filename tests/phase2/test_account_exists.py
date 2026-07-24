@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from forge.utils.intel import account_exists
-from forge.utils.intel.account_exists import _holehe_command, run_holehe
+from forge.utils.intel.account_exists import _holehe_command, _in_scope, run_holehe
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +45,14 @@ def test_holehe_binary_env_used_when_command_absent(monkeypatch) -> None:
     )
 
     assert _holehe_command() == [r"C:\Tools\holehe\.venv\Scripts\holehe.exe"]
+
+
+def test_holehe_scope_accepts_exact_email_and_wildcard_subdomain() -> None:
+    scope = ["security@acme.example", "*.corp.acme.example"]
+
+    assert _in_scope("security@acme.example", scope)
+    assert _in_scope("analyst@ops.corp.acme.example", scope)
+    assert not _in_scope("analyst@corp.acme.example", scope)
 
 
 def _build_db(path: Path) -> Path:

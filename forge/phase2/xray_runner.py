@@ -394,16 +394,15 @@ def _engagement_passive_targets(
             ).fetchone()
             if row is not None:
                 try:
-                    scope_entries = json.loads(str(row["scope_json"] or "[]"))
+                    from forge.opsec.scope_gate import scope_entries_from_payload  # noqa: PLC0415
+
+                    scope_entries = scope_entries_from_payload(json.loads(str(row["scope_json"] or "[]")))
                 except json.JSONDecodeError:
                     scope_entries = []
-                if isinstance(scope_entries, list):
-                    for entry in scope_entries:
-                        if not isinstance(entry, str):
-                            continue
-                        _add_candidate(entry)
-                        if len(targets) >= max(1, int(limit)):
-                            break
+                for entry in scope_entries:
+                    _add_candidate(entry)
+                    if len(targets) >= max(1, int(limit)):
+                        break
     finally:
         con.close()
     return targets

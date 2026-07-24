@@ -27,6 +27,7 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.opsec.scope_gate import email_address_in_scope
 from forge.utils.intel.social_profile_hosts import (
     epieos_host_matches as _epieos_host_matches,
     epieos_is_federated_instance_candidate_host as _shared_federated_instance_candidate_host,
@@ -5691,18 +5692,7 @@ async def _query_epieos(email: str, proxy: Optional[str] = None) -> Optional[dic
 
 
 def _scope_check(email: str, scope: list[str]) -> bool:
-    domain = email.split("@")[-1].lower() if "@" in email else ""
-    normalised_email = email.lower().strip()
-    for s in scope:
-        s_norm = (s or "").strip().lower()
-        if not s_norm:
-            continue
-        # Full-email scope entry (e.g. "user@example.com") — exact match.
-        if "@" in s_norm and s_norm == normalised_email:
-            return True
-        if domain == s_norm or domain.endswith("." + s_norm):
-            return True
-    return False
+    return email_address_in_scope(email, scope)
 
 
 def _find_email_column(con: sqlite3.Connection) -> str:
@@ -5735,7 +5725,9 @@ def run_social_scraper(
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id=?", (engagement_id,)
     ).fetchone()
-    scope: list[str] = json.loads(scope_row[0] or "[]") if scope_row else []
+    from forge.opsec.scope_gate import scope_entries_from_payload
+
+    scope = scope_entries_from_payload(json.loads(scope_row[0] or "[]")) if scope_row else []
     email_col = _find_email_column(con)
 
     emails = emails if emails is not None else target_emails

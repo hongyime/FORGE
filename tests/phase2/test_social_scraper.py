@@ -23,6 +23,7 @@ from forge.utils.intel.social_scraper import (
     _epieos_email_values,
     _epieos_phone_values,
     _parse_epieos_response,
+    _scope_check,
     run_social_scraper,
 )
 
@@ -4706,6 +4707,13 @@ class TestEncryptionAtRest:
 
 
 class TestRunSocialScraper:
+    def test_scope_check_accepts_exact_email_and_wildcard_subdomain(self):
+        scope = ["security@example.com", "*.corp.example.com"]
+
+        assert _scope_check("security@example.com", scope)
+        assert _scope_check("alice@hr.corp.example.com", scope)
+        assert not _scope_check("alice@corp.example.com", scope)
+
     def test_profiles_written_to_db(self, engagement_db):
         with (
             patch(

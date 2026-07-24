@@ -3219,13 +3219,18 @@ def run_key_scanner(
     con.commit()
 
     # Scope gate.
+    from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_entries_from_payload
+
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id=?", (engagement_id,)
     ).fetchone()
-    scope: list[str] = json.loads(scope_row[0] or "[]") if scope_row else []
-    if scope and not any(domain == s or domain.endswith("." + s) for s in scope):
-        con.close()
-        raise ValueError(f"ScopeViolationError: {domain} not in engagement scope.")
+    scope = scope_entries_from_payload(json.loads(scope_row[0] or "[]")) if scope_row else []
+    if scope:
+        try:
+            assert_in_scope(domain, scope)
+        except ScopeViolationError:
+            con.close()
+            raise ValueError(f"ScopeViolationError: {domain} not in engagement scope.") from None
 
     if dry_run:
         patterns = load_key_patterns()

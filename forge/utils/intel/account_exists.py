@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from forge.opsec.scope_gate import email_address_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
 from forge.utils.intel.handle_finder import _find_tool  # venv-aware lookup
 
@@ -148,18 +149,7 @@ def _run_holehe_probe(
 
 
 def _in_scope(email: str, scope: list[str]) -> bool:
-    if not scope:
-        return False
-    domain = email.split("@", 1)[-1].lower().strip()
-    normalised_email = email.lower().strip()
-    for entry in scope:
-        e = entry.lstrip("*.").lower().strip()
-        # Full-email scope entry (e.g. "user@example.com") — exact match.
-        if "@" in e and e == normalised_email:
-            return True
-        if domain == e or domain.endswith("." + e):
-            return True
-    return False
+    return email_address_in_scope(email, scope)
 
 
 def run_holehe(
@@ -192,7 +182,7 @@ def run_holehe(
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id=?", (engagement_id,)
     ).fetchone()
-    scope: list[str] = json.loads(scope_row[0] or "[]") if scope_row else []
+    scope = scope_entries_from_payload(json.loads(scope_row[0] or "[]")) if scope_row else []
 
     # Default: emails already stored in engagement DB
     if emails is None:

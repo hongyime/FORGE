@@ -8,6 +8,7 @@ All HTTP calls mocked.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -16,7 +17,9 @@ import pytest
 
 from forge.utils.intel.reputation_lookup import (
     EmailRepClient,
+    _paste_monitor_domains,
     _parse_emailrep_response,
+    _scope_check,
     run_reputation_lookup,
 )
 
@@ -201,6 +204,28 @@ class TestEmailRepClient:
 
 
 class TestRunReputationLookup:
+    def test_scope_check_accepts_exact_email_and_wildcard_subdomain(self):
+        scope = ["security@example.com", "*.corp.example.com"]
+
+        assert _scope_check("security@example.com", scope)
+        assert _scope_check("alice@hr.corp.example.com", scope)
+        assert not _scope_check("alice@corp.example.com", scope)
+
+    def test_paste_monitor_domains_excludes_non_domain_scope_terms(self):
+        scope = [
+            "example.com",
+            "*.corp.example.com",
+            "security@example.com",
+            "https://portal.example.com/app",
+            "203.0.113.0/24",
+            "+15551234567",
+        ]
+
+        assert _paste_monitor_domains(scope) == [
+            "example.com",
+            "corp.example.com",
+        ]
+
     def test_results_written_to_email_intelligence(self, engagement_db):
         with patch(
             "forge.utils.intel.reputation_lookup.EmailRepClient.query",
@@ -260,6 +285,23 @@ class TestRunReputationLookup:
 
     def test_monitor_flag_starts_paste_monitor(self, engagement_db):
         """--monitor flag must spawn PasteMonitor thread."""
+        con = sqlite3.connect(engagement_db)
+        con.execute(
+            "UPDATE engagements SET scope_json=? WHERE id=1",
+            (
+                json.dumps(
+                    {
+                        "domains": ["example.com", "*.corp.example.com"],
+                        "urls": ["https://portal.example.com/app"],
+                        "authorized_seeds": ["security@example.com", "+15551234567"],
+                        "ip_ranges": ["203.0.113.0/24"],
+                    }
+                ),
+            ),
+        )
+        con.commit()
+        con.close()
+
         with (
             patch(
                 "forge.utils.intel.reputation_lookup.EmailRepClient.query",
@@ -273,6 +315,10 @@ class TestRunReputationLookup:
             run_reputation_lookup(engagement_db, 1, monitor=True)
 
         MockPM.assert_called_once()
+        assert MockPM.call_args.kwargs["target_domains"] == [
+            "example.com",
+            "corp.example.com",
+        ]
         instance.start.assert_called_once()
 
     def test_supports_canonical_email_schema(self, tmp_path: Path):
