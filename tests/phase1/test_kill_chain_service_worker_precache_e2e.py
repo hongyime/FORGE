@@ -5,6 +5,7 @@ import json
 import socket
 import sqlite3
 import subprocess
+from collections import Counter
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -92,7 +93,9 @@ def test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_repo
         ).fetchone()
         assert run["status"] == "completed"
         assert int(run["current_iteration"]) < 6
-        assert json.loads(run["metadata_json"])["last_iteration_stable"] is True
+        run_metadata = json.loads(run["metadata_json"])
+        assert run_metadata["last_iteration_stable"] is True
+        _assert_terminal_artifact_queue_metrics(con, run_metadata)
 
     _assert_report_exports(report_path, report_text, report_payload)
     _assert_graph_outputs(graph)
@@ -530,6 +533,63 @@ def _assert_graph_outputs(graph: dict[str, Any]) -> None:
     )
 
 
+def _assert_terminal_artifact_queue_metrics(
+    con: sqlite3.Connection,
+    run_metadata: dict[str, Any],
+) -> None:
+    status_counts = Counter(
+        {
+            row["status"]: int(row["count"])
+            for row in con.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM artifact_queue
+                WHERE engagement_id=?
+                GROUP BY status
+                """,
+                (EID,),
+            )
+        }
+    )
+    queue_metrics = run_metadata["queue_metrics"]
+    artifact_queue = queue_metrics["artifact_queue"]
+    assert artifact_queue == dict(status_counts)
+    assert artifact_queue["parsed"] >= 5
+    assert artifact_queue["failed"] >= 1
+    assert run_metadata["pending_work_total"] == 0
+    assert run_metadata["pending_work_counts"] == {}
+
+    processor_metrics = queue_metrics["artifact_processor"]
+    assert processor_metrics["pending"] == 0
+    assert processor_metrics["queue_depth"] == 0
+    assert processor_metrics["failed"] >= 1
+
+    cumulative = queue_metrics["artifact_processor_cumulative"]
+    assert cumulative["processed"] == artifact_queue["parsed"]
+    assert cumulative["failed"] == artifact_queue["failed"]
+    assert cumulative["invocations"] >= 1
+
+    audit_row = con.execute(
+        """
+        SELECT result
+        FROM audit_log
+        WHERE engagement_id=? AND action='artifact_queue_terminal_metrics'
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (EID,),
+    ).fetchone()
+    assert audit_row is not None
+    for expected in (
+        f"parsed={artifact_queue['parsed']}",
+        f"failed={artifact_queue['failed']}",
+        "queued=0",
+        "downloaded=0",
+        "pending_work_total=0",
+    ):
+        assert expected in audit_row["result"]
+
+
 def _assert_dashboard_outputs(data_dir: Path, reports_dir: Path) -> None:
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
@@ -550,6 +610,14 @@ def _assert_dashboard_outputs(data_dir: Path, reports_dir: Path) -> None:
     findings = detail_payload["sections"]["vulnerability_findings"]
     assert any(row["Target"] == "firebase://sw-report-firebase" for row in findings)
     assert not any("sw-precache-logs" in json.dumps(row, sort_keys=True) for row in findings)
+    artifact_rows = {
+        row["Artifact"]: row
+        for row in detail_payload["sections"]["artifact_queue"]
+        if row["Artifact"] in {MANIFEST_URL, SERVICE_WORKER_URL, PRECACHE_URL}
+    }
+    assert artifact_rows[MANIFEST_URL]["Status"] == "parsed"
+    assert artifact_rows[SERVICE_WORKER_URL]["Status"] == "parsed"
+    assert artifact_rows[PRECACHE_URL]["Status"] == "parsed"
     validation_rows = {
         (row["Type"], row["Asset"]): row
         for row in detail_payload["sections"]["cloud_validation_results"]

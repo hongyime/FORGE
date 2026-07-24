@@ -25,29 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: service-worker/precache graph-edge E2E is complete. The
-mocked local-safe fixture now proves page/manifest -> service worker ->
-root-relative precache chunk recursion into mixed cloud assets, validation
-inventory, validated findings only, graph/report/raw exports, dashboard review
-visibility, deterministic template fallback lineage, cleanup isolation, and
-exported attack-graph `derived_from` edges for
-`manifest -> service-worker -> precache -> chunk`. Service-worker
-`importScripts()` resolves relative imports against the remote service-worker
-source URL while local files without a remote base do not invent URLs. Node:
+Latest checkpoint: K2 terminal artifact queue metrics are complete. Stable
+termination with failed cloud URL artifact fetch rows is expected inventory
+behavior when `pending_work_total=0`, but it must be visible. `forge
+kill-chain` now writes an `artifact_queue_terminal_metrics` audit row at
+completion, and the service-worker/precache E2E asserts final run metadata
+exposes artifact queue status counts, cumulative processor processed/failed
+counts, zero pending work, dashboard artifact queue rows, and the terminal audit
+summary. The same fixture also proves page/manifest -> service worker ->
+root-relative precache chunk recursion and exported attack-graph
+`derived_from` edges for `manifest -> service-worker -> precache -> chunk`.
+Node:
 `tests/phase1/test_kill_chain_service_worker_precache_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`.
 
 Verification: compile passed; Ruff passed; focused service-worker/precache E2E
 passed (`1 passed`); pytest engagement cleanup reported `removed=2 remaining=0`.
-Prior static parser checkpoint remains in
-`.claude/handoffs/2026-07-24-service-worker-static-recursion.md`; current E2E
-handoff is `.claude/handoffs/2026-07-24-service-worker-precache-e2e.md`.
+Handoff:
+`.claude/handoffs/2026-07-24-k2-terminal-artifact-queue-metrics.md`.
+Prior static/E2E parser checkpoints remain in the adjacent 2026-07-24
+service-worker handoff files.
 
-Current next gate: audit the terminal-stability/K2 artifact queue edge observed
-by the service-worker fixture. Iteration 4 can queue cloud URL artifact rows
-after no new snapshot counts and then exit stable with those rows
-failed/processed silently; decide whether this is expected inventory behavior
-or whether final stability should include queued/failed artifact metrics and
-clearer audit logging. Keep fixes mocked/local and do not weaken report gates.
+Current next gate: add focused validator tests for stable-proof and
+honeypot/placeholder gating. Keep these local/mocked and prove
+`VALIDATED`-looking rows without stable proof stay out of deterministic
+findings/report/graph/dashboard surfaces.
 
 Previous checkpoint: runtime frontend config JS recursion is complete. Explicit
 public runtime config files such as `runtime-env.js`, `env-config.js`, and

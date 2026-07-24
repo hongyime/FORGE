@@ -8414,6 +8414,21 @@ def kill_chain(
         finally:
             con.close()
 
+    def _terminal_artifact_queue_summary(metadata: dict[str, object]) -> str:
+        queue_metrics = metadata.get("queue_metrics")
+        if not isinstance(queue_metrics, dict):
+            queue_metrics = {}
+        artifact_queue = queue_metrics.get("artifact_queue")
+        if not isinstance(artifact_queue, dict):
+            artifact_queue = {}
+        statuses = ("queued", "downloaded", "parsed", "failed", "skipped")
+        parts = [
+            f"{status}={int(artifact_queue.get(status) or 0)}"
+            for status in statuses
+        ]
+        parts.append(f"pending_work_total={int(metadata.get('pending_work_total') or 0)}")
+        return " ".join(parts)
+
     def _set_progress_counts(
         snapshot: tuple[int, ...] | None = None,
         *,
@@ -17422,6 +17437,15 @@ def kill_chain(
         }
         if prereq_metadata:
             final_metadata.update(prereq_metadata)
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "artifact_queue_terminal_metrics",
+            target=domain,
+            result=_terminal_artifact_queue_summary(final_metadata),
+        )
         engagement_run_tracker.finish_run(
             engagement_run_handle,
             status="completed",

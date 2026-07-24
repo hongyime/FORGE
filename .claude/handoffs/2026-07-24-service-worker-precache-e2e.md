@@ -50,11 +50,10 @@ Verification:
   passed after graph-edge assertions were added (`1 passed`).
 - Pytest engagement cleanup after graph-edge assertions reported
   `removed=2 remaining=0`.
+- K2 terminal artifact queue metrics were completed in
+  `.claude/handoffs/2026-07-24-k2-terminal-artifact-queue-metrics.md`.
 
 Next recommendations:
-- Audit the terminal-stability/K2 artifact queue edge observed by this fixture.
-  Iteration 4 can queue cloud URL artifact rows after no new snapshot counts and
-  then exit stable with those rows failed/processed silently. Decide whether
-  this is expected inventory behavior or whether final stability should include
-  queued/failed artifact metrics and clearer audit logging. Keep any fix
-  mocked/local and do not weaken report gates.
+- Add focused validator tests for stable-proof and honeypot/placeholder gating.
+  Keep these local/mocked and prove `VALIDATED`-looking rows without stable
+  proof stay out of deterministic findings/report/graph/dashboard surfaces.

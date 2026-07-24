@@ -99,13 +99,21 @@ historical notes only, not as current instructions.
   focused service-worker/precache E2E passed (`1 passed`); pytest engagement
   cleanup reported `removed=2 remaining=0`. Handoff:
   `.claude/handoffs/2026-07-24-service-worker-precache-e2e.md`.
-- [ ] Next target: audit the terminal-stability/K2 artifact queue edge observed
-  by the service-worker fixture. Iteration 4 can queue cloud URL artifact rows
-  after no new snapshot counts and then exit stable with those rows
-  failed/processed silently; decide whether this is expected inventory behavior
-  or whether final stability should include queued/failed artifact metrics and
-  clearer audit logging. Keep any fix mocked/local and do not weaken report
-  gates.
+- [x] K2 terminal artifact queue metrics checkpoint:
+  Audited the stable-exit edge in the service-worker fixture. Stable termination
+  with failed cloud URL artifact fetch rows is expected inventory behavior when
+  `pending_work_total=0`, but it must be visible. `forge kill-chain` now writes
+  an `artifact_queue_terminal_metrics` audit row at completion, and the E2E
+  asserts final run metadata exposes artifact queue status counts, cumulative
+  processor processed/failed counts, zero pending work, dashboard artifact queue
+  rows, and the terminal audit summary. Verification: compile passed; Ruff
+  passed; focused service-worker/precache E2E passed (`1 passed`); pytest
+  engagement cleanup reported `removed=2 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-k2-terminal-artifact-queue-metrics.md`.
+- [ ] Next target: add focused validator tests for stable-proof and
+  honeypot/placeholder gating. Keep these local/mocked and prove
+  `VALIDATED`-looking rows without stable proof stay out of deterministic
+  findings/report/graph/dashboard surfaces.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from
