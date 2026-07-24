@@ -66,9 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: constrain email-domain root promotion. Email domains
-  discovered from unrelated third-party addresses must not automatically become
-  root-domain fan-out targets unless scope/corroboration allows them.
+- [ ] Next checkpoint: constrain non-email root promotion. Generic discovered
+  third-party `domain`/`subdomain` seeds from weak URL/artifact/social pivots
+  must not become A/G/H/I root-domain fan-out targets unless scope,
+  operator intent, or independent corroboration allows them.
+- [x] Email-domain root promotion checkpoint:
+  Email domains discovered from unrelated third-party addresses no longer
+  automatically become promoted domain seeds or root-domain fan-out targets.
+  Promotion now requires explicit scope/operator roots, dict/list scope
+  manifest domain evidence including wildcards, observed non-email
+  host/crawl/artifact evidence, or an explicitly corroborated `email_domain`
+  seed. Generic discovered seed rows are not promotion proof. Verification:
+  compile passed; Ruff passed; focused email-domain/wildcard/generic-seed/root
+  policy tests passed (`4 passed`); broader synthesis candidate/root selector
+  passed (`11 passed, 761 deselected`).
 - [x] URL-surface recursive child depth checkpoint:
   D5 crawl URL children and public-profile URL children now preserve
   parent-relative depth via source metadata instead of resetting to `1`, so

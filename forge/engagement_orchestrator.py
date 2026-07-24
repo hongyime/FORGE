@@ -12108,6 +12108,7 @@ class EngagementSynthesisEngine:
 
     def _derive_candidates(self, con: sqlite3.Connection) -> list[SeedCandidate]:
         seed_depths = self._load_seed_depths(con)
+        email_domain_roots = self._email_domain_promotion_roots(con)
         prepared_email_candidate_batches: list[list[SeedCandidate]] = []
         if _table_exists(con, "emails"):
             rows = con.execute(
@@ -12116,7 +12117,11 @@ class EngagementSynthesisEngine:
             ).fetchall()
             email_candidate_batches = self._run_ordered_local_batch(
                 rows,
-                lambda row: self._email_seed_candidates_from_row(row, seed_depths),
+                lambda row: self._email_seed_candidates_from_row(
+                    row,
+                    seed_depths,
+                    email_domain_roots,
+                ),
                 default_factory=list,
             )
             prepared_email_candidate_batches = self._run_ordered_local_batch(
@@ -12211,6 +12216,7 @@ class EngagementSynthesisEngine:
         self,
         row: Any,
         seed_depths: dict[tuple[str, str], int],
+        eligible_domain_roots: set[str] | None = None,
     ) -> list[SeedCandidate]:
         email = str(row["email"] or "").lower().strip()
         if "@" not in email:
@@ -12240,20 +12246,176 @@ class EngagementSynthesisEngine:
                     metadata={"rule": "email_local_part"},
                 )
             )
-        candidates.append(
-            SeedCandidate(
-                seed_value=domain,
-                seed_type="domain",
-                source="cross_reference",
-                depth=min(self._depth_limit, max(1, email_depth) + 1),
-                confidence=0.68,
-                parent_value=email,
-                parent_type="email",
-                relation_type="related_asset",
-                metadata={"rule": "email_domain"},
+        if self._email_domain_is_promotable(domain, eligible_domain_roots or set()):
+            candidates.append(
+                SeedCandidate(
+                    seed_value=domain,
+                    seed_type="domain",
+                    source="cross_reference",
+                    depth=min(self._depth_limit, max(1, email_depth) + 1),
+                    confidence=0.68,
+                    parent_value=email,
+                    parent_type="email",
+                    relation_type="related_asset",
+                    metadata={"rule": "email_domain"},
+                )
             )
-        )
         return candidates
+
+    def _email_domain_promotion_roots(self, con: sqlite3.Connection) -> set[str]:
+        roots = self._scope_domain_roots(con)
+        roots.update(self._seed_domain_roots_for_email_promotion(con))
+        roots.update(self._observed_domain_roots_for_email_promotion(con))
+        return {root for root in roots if root}
+
+    def _scope_domain_roots(self, con: sqlite3.Connection) -> set[str]:
+        row = con.execute(
+            "SELECT scope_json FROM engagements WHERE id=?",
+            (self._engagement_id,),
+        ).fetchone()
+        if row is None or not row[0]:
+            return set()
+        scope_entries = self._scope_domainish_entries(_safe_json_loads(str(row[0])) or [])
+        roots: set[str] = set()
+        for entry in scope_entries:
+            root = self._domainish_root(entry)
+            if root:
+                roots.add(root)
+        return roots
+
+    def _seed_domain_roots_for_email_promotion(self, con: sqlite3.Connection) -> set[str]:
+        if not _table_exists(con, "engagement_seeds"):
+            return set()
+        roots: set[str] = set()
+        seed_rows = con.execute(
+            """
+            SELECT seed_type, seed_value, source, metadata_json
+            FROM engagement_seeds
+            WHERE engagement_id=?
+              AND seed_type IN ('domain','subdomain','url','apk_url')
+            """,
+            (self._engagement_id,),
+        ).fetchall()
+        for seed_row in seed_rows:
+            if not self._seed_row_allows_email_domain_promotion(seed_row):
+                continue
+            root = self._domainish_root(seed_row["seed_value"], str(seed_row["seed_type"] or ""))
+            if root:
+                roots.add(root)
+        return roots
+
+    def _observed_domain_roots_for_email_promotion(self, con: sqlite3.Connection) -> set[str]:
+        roots: set[str] = set()
+        if _table_exists(con, "hosts"):
+            for host_row in con.execute(
+                """
+                SELECT hostname
+                FROM hosts
+                WHERE engagement_id=?
+                """,
+                (self._engagement_id,),
+            ).fetchall():
+                root = self._domainish_root(host_row["hostname"])
+                if root:
+                    roots.add(root)
+        if _table_exists(con, "crawl_results"):
+            for crawl_row in con.execute(
+                """
+                SELECT url, final_url
+                FROM crawl_results
+                WHERE engagement_id=?
+                """,
+                (self._engagement_id,),
+            ).fetchall():
+                for value in (crawl_row["final_url"], crawl_row["url"]):
+                    root = self._domainish_root(value, "url")
+                    if root:
+                        roots.add(root)
+        if _table_exists(con, "artifact_queue"):
+            for artifact_row in con.execute(
+                """
+                SELECT source_url
+                FROM artifact_queue
+                WHERE engagement_id=?
+                """,
+                (self._engagement_id,),
+            ).fetchall():
+                root = self._domainish_root(artifact_row["source_url"], "url")
+                if root:
+                    roots.add(root)
+        return roots
+
+    @staticmethod
+    def _seed_row_allows_email_domain_promotion(seed_row: Any) -> bool:
+        metadata = _safe_json_loads(str(seed_row["metadata_json"] or "{}"))
+        metadata_dict = metadata if isinstance(metadata, dict) else {}
+        rule = str(metadata_dict.get("rule") or "").strip()
+        synthesis = metadata_dict.get("synthesis")
+        corroborated = isinstance(synthesis, dict) and bool(synthesis.get("corroborated"))
+        source = str(seed_row["source"] or "").strip().lower()
+        if source in {"scope", "operator"}:
+            return True
+        return rule == "email_domain" and corroborated
+
+    @staticmethod
+    def _scope_domainish_entries(payload: object) -> list[object]:
+        if isinstance(payload, list):
+            return list(payload)
+        if not isinstance(payload, dict):
+            return []
+        entries: list[object] = []
+        for key in (
+            "domains",
+            "domain_allowlist",
+            "urls",
+            "url_prefixes",
+            "seeds",
+            "authorized_seeds",
+            "allowed_seeds",
+            "targets",
+            "allowed_targets",
+        ):
+            value = payload.get(key)
+            if value is None:
+                continue
+            entries.extend(value if isinstance(value, list) else [value])
+        return entries
+
+    @staticmethod
+    def _domainish_root(value: object, seed_type: str = "") -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        kind = str(seed_type or "").strip().lower()
+        if kind == "email" or ("@" in raw and _classify_seed_value(raw) == "email"):
+            return ""
+        parsed = urlparse(raw)
+        if parsed.scheme in {"http", "https"} and parsed.hostname:
+            raw = str(parsed.hostname or "").strip().lower().strip(".")
+        elif kind in {"url", "apk_url"}:
+            return ""
+        if raw.startswith("*."):
+            raw = raw[2:]
+        classified = kind or _classify_seed_value(raw)
+        if classified not in {"domain", "subdomain"}:
+            return ""
+        return _normalize_root_domain(raw)
+
+    @staticmethod
+    def _email_domain_is_promotable(domain: str, eligible_domain_roots: set[str]) -> bool:
+        normalized = str(domain or "").strip().lower().strip(".")
+        if not normalized:
+            return False
+        root = _normalize_root_domain(normalized)
+        for eligible in eligible_domain_roots:
+            allowed = str(eligible or "").strip().lower().strip(".")
+            if allowed.startswith("*."):
+                allowed = allowed[2:]
+            if not allowed:
+                continue
+            if normalized == allowed or root == allowed or normalized.endswith(f".{allowed}"):
+                return True
+        return False
 
     def _host_seed_candidates_from_row(
         self,
@@ -18435,6 +18597,7 @@ class EngagementSynthesisEngine:
             return
 
     def _collect_root_domains(self, con: sqlite3.Connection) -> list[str]:
+        email_domain_roots = self._email_domain_promotion_roots(con)
         rows = con.execute(
             """
             SELECT DISTINCT seed_type, seed_value
@@ -18447,7 +18610,7 @@ class EngagementSynthesisEngine:
         ).fetchall()
         domain_batches = self._run_ordered_local_batch(
             rows,
-            self._root_domain_from_seed_row,
+            lambda row: self._root_domain_from_seed_row_with_policy(row, email_domain_roots),
             default_factory=str,
         )
         domains: list[str] = []
@@ -18455,6 +18618,19 @@ class EngagementSynthesisEngine:
             if domain and domain not in domains:
                 domains.append(domain)
         return domains
+
+    def _root_domain_from_seed_row_with_policy(
+        self,
+        row: Any,
+        eligible_email_domain_roots: set[str],
+    ) -> str:
+        seed_type = str(row["seed_type"])
+        seed_value = str(row["seed_value"])
+        if seed_type == "email" and "@" in seed_value:
+            email_domain = seed_value.split("@", 1)[1].lower()
+            if not self._email_domain_is_promotable(email_domain, eligible_email_domain_roots):
+                return ""
+        return self._root_domain_from_seed_row(row)
 
     @staticmethod
     def _root_domain_from_seed_row(row: Any) -> str:

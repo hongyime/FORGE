@@ -272,6 +272,153 @@ def test_synthesis_engine_backfills_scope_and_promotes_discovered_seeds(tmp_path
         con.close()
 
 
+def test_synthesis_engine_does_not_promote_unrelated_email_domains(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO emails (engagement_id, email, domain, source)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (1001, "security@acme.example", "acme.example", "crawler"),
+                (1001, "vendor@unrelated.example", "unrelated.example", "crawler"),
+            ],
+        )
+        con.execute(
+            """
+            INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context)
+            VALUES (1001, '203.0.113.20', 'app.acme.example', 'linux', '{}')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = {
+            (str(row[0]), str(row[1]))
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert ("security@acme.example", "email") in seed_rows
+    assert ("vendor@unrelated.example", "email") in seed_rows
+    assert ("security", "username") in seed_rows
+    assert ("vendor", "username") in seed_rows
+    assert ("acme.example", "domain") in seed_rows
+    assert ("unrelated.example", "domain") not in seed_rows
+    assert "acme.example" in summary.root_domains
+    assert "unrelated.example" not in summary.root_domains
+
+
+def test_synthesis_engine_email_domain_promotion_honors_scope_manifest_dict_wildcard(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE engagements
+            SET scope_json=?
+            WHERE id=1001
+            """,
+            (json.dumps({"domains": ["*.acme.example"]}),),
+        )
+        con.executemany(
+            """
+            INSERT INTO emails (engagement_id, email, domain, source)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (1001, "admin@acme.example", "acme.example", "crawler"),
+                (1001, "ops@mail.acme.example", "mail.acme.example", "crawler"),
+                (1001, "vendor@unrelated.example", "unrelated.example", "crawler"),
+            ],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = {
+            (str(row[0]), str(row[1]))
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert ("acme.example", "domain") in seed_rows
+    assert ("mail.acme.example", "domain") in seed_rows
+    assert ("unrelated.example", "domain") not in seed_rows
+    assert "acme.example" in summary.root_domains
+    assert "unrelated.example" not in summary.root_domains
+
+
+def test_email_domain_promotion_roots_ignore_generic_discovered_seed_rows(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+    engine = EngagementSynthesisEngine(db_path, 1001)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE engagements
+            SET scope_json='[]'
+            WHERE id=1001
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES
+                (1001, 'unrelated.example', 'domain', 'discovered', 'pending', 1, 0.51, ?)
+            """,
+            (json.dumps({"rule": "generic_domain_extract"}),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        roots = engine._email_domain_promotion_roots(con)
+    finally:
+        con.close()
+
+    assert "unrelated.example" not in roots
+
+
 def test_synthesis_engine_parallelizes_scope_seed_backfill_and_preserves_upsert_order(
     tmp_path: Path,
     monkeypatch,
@@ -431,6 +578,7 @@ def test_synthesis_engine_parallelizes_root_domain_collection_and_preserves_orde
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     try:
+        eligible_email_roots = engine._email_domain_promotion_roots(con)
         expected_rows = con.execute(
             """
             SELECT DISTINCT seed_type, seed_value
@@ -445,7 +593,7 @@ def test_synthesis_engine_parallelizes_root_domain_collection_and_preserves_orde
         con.close()
     expected_values: list[str] = []
     for row in expected_rows:
-        domain = original_root_domain_from_seed_row(row)
+        domain = engine._root_domain_from_seed_row_with_policy(row, eligible_email_roots)
         if domain and domain not in expected_values:
             expected_values.append(domain)
 
@@ -483,7 +631,7 @@ def test_synthesis_engine_parallelizes_root_domain_collection_and_preserves_orde
 
     assert peak == 4
     assert values == expected_values
-    assert values.count("beta.example") == 1
+    assert "beta.example" not in values
 
 
 def test_synthesis_engine_parallelizes_seed_confidence_seed_entries_and_preserves_outcome(
@@ -6828,6 +6976,7 @@ def test_synthesis_engine_parallelizes_email_seed_rows_and_preserves_order(
         self,
         row: Any,
         seed_depths: dict[tuple[str, str], int],
+        eligible_domain_roots: set[str] | None = None,
     ) -> list[SeedCandidate]:
         email = str(row["email"] or "").lower().strip()
         nonlocal active, peak
@@ -6836,7 +6985,7 @@ def test_synthesis_engine_parallelizes_email_seed_rows_and_preserves_order(
             peak = max(peak, active)
         try:
             time.sleep(delays[email])
-            return original_email_seed_candidates(self, row, seed_depths)
+            return original_email_seed_candidates(self, row, seed_depths, eligible_domain_roots)
         finally:
             with lock:
                 active -= 1
@@ -7158,8 +7307,9 @@ def test_synthesis_engine_parallelizes_email_seed_candidate_batch_entries_and_pr
         self,
         row: Any,
         seed_depths: dict[tuple[str, str], int],
+        eligible_domain_roots: set[str] | None = None,
     ) -> list[Any]:
-        del self, seed_depths
+        del self, seed_depths, eligible_domain_roots
         email = str(row["email"] or "").lower().strip()
         local = email.split("@", 1)[0]
         return [
@@ -7549,8 +7699,9 @@ def test_synthesis_engine_parallelizes_derive_candidate_family_merges_and_preser
         self,
         row: Any,
         seed_depths: dict[tuple[str, str], int],
+        eligible_domain_roots: set[str] | None = None,
     ) -> list[SeedCandidate]:
-        del self, row, seed_depths
+        del self, row, seed_depths, eligible_domain_roots
         return [
             SeedCandidate(
                 seed_value="alpha@acme.example",

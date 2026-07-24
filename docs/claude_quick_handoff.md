@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: URL-surface recursive child depth is complete.
+Latest checkpoint: email-domain root promotion is complete.
+Email domains discovered from unrelated third-party addresses no longer
+automatically become promoted domain seeds or root-domain fan-out targets.
+Promotion now requires explicit scope/operator roots, dict/list scope manifest
+domain evidence including wildcards, observed non-email host/crawl/artifact
+evidence, or an explicitly corroborated `email_domain` seed. Generic discovered
+seed rows are not promotion proof. Verification: compile passed; Ruff passed;
+focused email-domain/wildcard/generic-seed/root policy tests passed (`4
+passed`); broader synthesis candidate/root selector passed (`11 passed, 761
+deselected`).
+
+Next checkpoint from subagent audit: constrain non-email root promotion. Generic
+discovered third-party `domain`/`subdomain` seeds from weak URL/artifact/social
+pivots must not become A/G/H/I root-domain fan-out targets unless scope,
+operator intent, or independent corroboration allows them.
+
+Previous checkpoint: URL-surface recursive child depth is complete.
 D5 crawl URL children and public-profile URL children now preserve
 parent-relative depth via source metadata instead of resetting to `1`, so depth
 budgets and scheduling priority cannot be bypassed by same-iteration URL surface
@@ -34,9 +50,6 @@ uniform live authorization policy. Verification: compile passed; Ruff passed;
 focused URL-surface recursion test passed (`1 passed`); adjacent
 artifact-depth/local-graph/URL-depth/public-profile checkpoint set passed (`4 passed`);
 `.forge_data/engagements` contained `0` non-master engagement DBs after the run.
-
-Next checkpoint from subagent audit: constrain discovered third-party email
-domains so they do not become root fan-out targets without scope/corroboration.
 
 Previous checkpoint: uniform live authorization policy is complete.
 CLI and WebUI kill-chain launches now require both ROE ID and scope manifest for
