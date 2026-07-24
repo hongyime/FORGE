@@ -25,7 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Phase 6 raw export validation-proof parity is complete.
+Latest checkpoint: compact cleanup/regression sweep is complete.
+After the dashboard graph and Phase 6 proof-export parity commits, the repo was
+clean at `89cc545`, `.forge_data/engagements` contained `0` entries, and the
+focused review/export smoke set stayed green. Verification: Phase 6
+validation/export selector passed (`8 passed, 83 deselected`); dashboard/API
+graph review selector passed (`4 passed`); cloud-gating/alias suite passed (`2
+passed`). Handoff:
+`.claude/handoffs/2026-07-24-compact-review-export-regression-sweep.md`.
+
+Next checkpoint: audit another concrete deterministic review/export parity gap,
+preferably remaining long-tail validator proof reviewability. Keep live
+provider calls mocked unless an explicit ROE/scope manifest and target are
+supplied.
+
+Previous checkpoint: Phase 6 raw export validation-proof parity is complete.
 Phase 6 now exposes explicit `validation_proof` fields alongside existing
 backward-compatible `validation_notes` fields for findings, cloud validation
 inventory, cloud asset inventory, companion JSON context, raw JSON fallback, and
@@ -38,12 +52,6 @@ focused standalone key/proof/cloud export tests passed (`3 passed`); broader
 Phase 6 validation/export selector passed (`8 passed, 83 deselected`);
 cloud-gating/alias suite passed (`2 passed`). Handoff:
 `.claude/handoffs/2026-07-24-phase6-validation-proof-export-parity.md`.
-
-Next checkpoint: audit another concrete deterministic review/export parity gap,
-preferably remaining long-tail validator proof reviewability or a compact
-cleanup/regression sweep proving no test engagement debris remains. Keep live
-provider calls mocked unless an explicit ROE/scope manifest and target are
-supplied.
 
 Previous checkpoint: graph snapshot latest cloud validation metadata is
 complete.
