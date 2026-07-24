@@ -91,17 +91,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: close cleanup inventory for local `.forge_data`
-  leftovers by classifying/deleting only confirmed test artifacts or
-  documenting non-test leftovers, then verify
-  `tests/scripts/test_run_phase1_orchestrator_partitions.py` and
-  `tests/phase1/test_engagement_ids.py`.
-- [ ] Then unify scope-gate semantics between `forge/governance/scope_gate.py`
+- [ ] Next checkpoint: unify scope-gate semantics between `forge/governance/scope_gate.py`
   and `forge/opsec/scope_gate.py`, with tests proving live/direct modules fail
   closed before network/tool execution when scope or ROE is missing.
 - [ ] Then harden explicit LLM/provider fallback regressions for
   quota/rate-limit/auth/timeout failures so every adapter degrades through
   cascade/template/raw export deterministically.
+- [x] Cleanup inventory checkpoint:
+  Confirmed and removed stale local test/backup artifacts from `.forge_data`:
+  old Phase 3 template files under `.forge_data/engagements/1` and
+  `.forge_data/engagements/5010`, the zero-byte allocator scratch
+  `.forge_data/engagements/master.db`, and
+  `.forge_data/tmp_attack_backup_20260426.db`. Empty OneDrive/read-only
+  placeholder directories were removed after clearing the read-only attribute.
+  Final inventory: `.forge_data/engagements` has no entries; the backup DB is
+  gone. Verification: `tests/scripts/test_run_phase1_orchestrator_partitions.py`
+  passed (`6 passed`); `tests/phase1/test_engagement_ids.py` passed (`3
+  passed`). Handoff:
+  `.claude/handoffs/2026-07-24-cleanup-inventory.md`.
 - [x] Compact regression sweep and live asset-context route parity checkpoint:
   Artifact recursion/scope/review parity, dashboard cloud/detail paths, cloud
   stable-proof gates, and report synthesis metadata all remained green. During

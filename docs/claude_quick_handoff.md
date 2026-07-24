@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: compact regression sweep and live asset-context route parity
+Latest checkpoint: cleanup inventory is complete. Stale local test/backup
+artifacts were removed from `.forge_data`: old Phase 3 template files under
+`.forge_data/engagements/1` and `.forge_data/engagements/5010`, the zero-byte
+allocator scratch `.forge_data/engagements/master.db`, and
+`.forge_data/tmp_attack_backup_20260426.db`. Empty OneDrive/read-only
+placeholder directories were removed after clearing the read-only attribute.
+Final inventory: `.forge_data/engagements` has no entries; the backup DB is
+gone. Verification: `tests/scripts/test_run_phase1_orchestrator_partitions.py`
+passed (`6 passed`); `tests/phase1/test_engagement_ids.py` passed (`3 passed`).
+Handoff: `.claude/handoffs/2026-07-24-cleanup-inventory.md`.
+
+Next checkpoint: unify scope-gate semantics between
+`forge/governance/scope_gate.py` and `forge/opsec/scope_gate.py`, with tests
+proving live/direct modules fail closed before network/tool execution when
+scope or ROE is missing. After that, harden LLM/provider quota/rate-limit/auth
+and timeout fallback regressions.
+
+Previous checkpoint: compact regression sweep and live asset-context route parity
 are complete. Artifact recursion/scope/review parity, dashboard cloud/detail
 paths, cloud stable-proof gates, and report synthesis metadata all remained
 green. During the direct API route audit, `/api/assets/{host}/context` was
@@ -41,13 +58,6 @@ metadata slice passed (`3 passed, 83 deselected`); focused asset-context
 regression passed (`1 passed`); adjacent API reportability slice passed (`3
 passed, 38 deselected`); compile/Ruff passed for touched route/test files.
 Handoff: `.claude/handoffs/2026-07-24-live-asset-context-reportability.md`.
-
-Next checkpoint: close cleanup inventory for local `.forge_data` leftovers by
-classifying/deleting only confirmed test artifacts or documenting non-test
-leftovers, then verify `tests/scripts/test_run_phase1_orchestrator_partitions.py`
-and `tests/phase1/test_engagement_ids.py`. After that, unify scope-gate
-semantics between governance and opsec gates, then harden LLM/provider
-quota/rate-limit/auth/timeout fallback regressions.
 
 Previous checkpoint: dashboard storage stable-proof fixture is complete. The
 stale dashboard storage-validation fixture now uses the current strict proof
