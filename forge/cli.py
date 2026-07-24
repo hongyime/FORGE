@@ -5595,17 +5595,26 @@ def kill_chain(
         inserted = 0
         for target in targets:
             asset_type = str(target.get("service") or "").strip().lower()
-            identifier = str(target.get("ref") or "").strip()
+            provider_identifier = str(target.get("ref") or "").strip()
+            identifier = provider_identifier.lower()
             if not asset_type or not identifier:
                 continue
             try:
                 cursor = con.execute(
                     """
-                    INSERT OR IGNORE INTO cloud_assets
+                    INSERT INTO cloud_assets
                         (engagement_id, asset_type, identifier, provider_identifier, source)
                     VALUES (?, ?, ?, ?, 'kill_chain_cloud_ref')
+                    ON CONFLICT(engagement_id, asset_type, identifier) DO UPDATE SET
+                        provider_identifier = CASE
+                            WHEN cloud_assets.provider_identifier IS NULL
+                              OR TRIM(cloud_assets.provider_identifier) = ''
+                              OR cloud_assets.provider_identifier = cloud_assets.identifier
+                            THEN excluded.provider_identifier
+                            ELSE cloud_assets.provider_identifier
+                        END
                     """,
-                    (engagement_id, asset_type, identifier, identifier),
+                    (engagement_id, asset_type, identifier, provider_identifier),
                 )
                 inserted += int(getattr(cursor, "rowcount", 0) or 0)
             except Exception:  # noqa: BLE001
@@ -10088,6 +10097,13 @@ def kill_chain(
     def _resume_normalize(value: str) -> str:
         return value.strip().lower()
 
+    def _normalize_cloud_ref_key(service: str, ref: str) -> str:
+        service_name = str(service or "").strip().lower()
+        ref_value = str(ref or "").strip()
+        if not service_name or not ref_value:
+            return ""
+        return _resume_normalize(f"{service_name}:{ref_value}")
+
     def _normalize_username_value(value: str) -> str:
         return value.strip().lower().lstrip("@")
 
@@ -10555,7 +10571,7 @@ def kill_chain(
         processed_refs: set[str],
     ) -> dict[str, object]:
         service, ref = item
-        key = f"{service}:{ref}"
+        key = _normalize_cloud_ref_key(service, ref)
         command = cloud_commands_map.get(service)
         return {
             "service": service,
@@ -10733,20 +10749,20 @@ def kill_chain(
         refs_by_service: dict[str, list[str]],
     ) -> list[tuple[str, str]]:
         prepared: list[tuple[str, str]] = []
-        seen: set[tuple[str, str]] = set()
+        seen: set[str] = set()
         for service, refs in (refs_by_service or {}).items():
-            service_name = str(service or "").strip()
+            service_name = str(service or "").strip().lower()
             if not service_name:
                 continue
             for ref in refs or []:
                 normalized_ref = str(ref or "").strip()
                 if not normalized_ref:
                     continue
-                pair = (service_name, normalized_ref)
-                if pair in seen:
+                key = _normalize_cloud_ref_key(service_name, normalized_ref)
+                if not key or key in seen:
                     continue
-                seen.add(pair)
-                prepared.append(pair)
+                seen.add(key)
+                prepared.append((service_name, normalized_ref))
         return prepared
 
     def _apply_cloud_target_source_group_item(
@@ -11548,7 +11564,12 @@ def kill_chain(
             return 0
         added_count = 0
         for service, ref in item:
-            if ref not in cloud_refs_out[service]:
+            existing_keys = {
+                _normalize_cloud_ref_key(service, existing_ref)
+                for existing_ref in cloud_refs_out[service]
+            }
+            key = _normalize_cloud_ref_key(service, ref)
+            if key and key not in existing_keys:
                 cloud_refs_out[service].append(ref)
                 added_count += 1
         return added_count
@@ -11570,7 +11591,7 @@ def kill_chain(
         decision = item.get("decision") if isinstance(item.get("decision"), dict) else {}
         service = str(target.get("service") or decision.get("service") or "").strip().lower()
         ref = str(target.get("ref") or decision.get("ref") or "").strip()
-        key = str(target.get("key") or f"{service}:{ref}").strip()
+        key = str(target.get("key") or _normalize_cloud_ref_key(service, ref)).strip()
         if not service or not ref or not key:
             return None
         reason = str(decision.get("reason") or "scope_denied").strip()
@@ -11610,7 +11631,7 @@ def kill_chain(
     ) -> dict[str, object] | None:
         service = str(target.get("service") or "").strip().lower()
         ref = str(target.get("ref") or "").strip()
-        key = str(target.get("key") or f"{service}:{ref}").strip()
+        key = str(target.get("key") or _normalize_cloud_ref_key(service, ref)).strip()
         if not service or not ref or not key:
             return None
         reason = "unsupported_cloud_service"
@@ -13928,7 +13949,7 @@ def kill_chain(
                 normalized_ref = str(ref or "").strip()
                 if not normalized_ref:
                     continue
-                key = f"{service_name}:{normalized_ref}"
+                key = _normalize_cloud_ref_key(service_name, normalized_ref)
                 if key not in processed_cloud_refs:
                     pending_refs.add(key)
         return len(pending_refs)
@@ -14088,7 +14109,14 @@ def kill_chain(
                 SELECT COUNT(*)
                 FROM artifact_queue
                 WHERE engagement_id=?
-                  AND status IN ('queued','downloaded')
+                  AND (
+                    status IN ('queued','downloaded')
+                    OR (
+                        status='failed'
+                        AND COALESCE(max_attempts, 3) > 0
+                        AND COALESCE(attempt_count, 0) < COALESCE(max_attempts, 3)
+                    )
+                  )
                 """,
                 (engagement_id,),
             ),

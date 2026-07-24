@@ -19000,11 +19000,20 @@ class ArtifactQueueProcessor:
                 SELECT id, source_url, local_path, artifact_type, status
                 FROM artifact_queue
                 WHERE engagement_id=?
-                  AND status IN ('queued','downloaded')
+                  AND (
+                    status IN ('queued','downloaded')
+                    OR (
+                        status='failed'
+                        AND COALESCE(max_attempts, 3) > 0
+                        AND COALESCE(attempt_count, 0) < COALESCE(max_attempts, 3)
+                    )
+                  )
                 ORDER BY queued_at ASC, id ASC
                 """,
                 (self._engagement_id,),
             ).fetchall()
+            self._mark_artifact_attempts(con, [int(row["id"]) for row in rows])
+            con.commit()
             ready_slots: list[ArtifactWorkItem | None] = [None] * len(rows)
             remote_requests: list[tuple[int, ArtifactDownloadRequest]] = []
             skipped_rows: list[tuple[int, str]] = []
@@ -19118,6 +19127,23 @@ class ArtifactQueueProcessor:
         finally:
             con.close()
         return summary
+
+    @staticmethod
+    def _mark_artifact_attempts(
+        con: sqlite3.Connection,
+        artifact_ids: list[int],
+    ) -> None:
+        if not artifact_ids:
+            return
+        con.executemany(
+            """
+            UPDATE artifact_queue
+            SET attempt_count=COALESCE(attempt_count, 0) + 1,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+            """,
+            [(artifact_id,) for artifact_id in artifact_ids],
+        )
 
     def _artifact_queue_dispatch_entry(
         self,

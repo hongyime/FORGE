@@ -3,6 +3,7 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
+from forge.engagement_orchestrator import ArtifactDownloadResult, ArtifactQueueProcessor
 from tests.phase1.test_engagement_orchestrator import _bootstrap_engagement
 
 
@@ -34,6 +35,71 @@ def _latest_run_metadata(db_path: Path) -> dict[str, object]:
     finally:
         con.close()
     return json.loads(str((row or ["{}"])[0] or "{}"))
+
+
+def test_artifact_queue_retries_failed_rows_until_attempts_exhausted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+    source_url = "https://downloads.acme.example/transient.apk"
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, artifact_type, discovered_from, status, max_attempts)
+            VALUES
+                (1001, ?, 'apk', 'engagement_seed', 'queued', 2)
+            """,
+            (source_url,),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    attempts: list[str] = []
+
+    def _fake_downloads(self, requests, **_kwargs):  # noqa: ANN001
+        del self
+        attempts.extend(str(request.source_url) for request in requests)
+        return [
+            ArtifactDownloadResult(
+                artifact_id=request.artifact_id,
+                source_url=request.source_url,
+                artifact_type=request.artifact_type,
+                error="simulated transient download failure",
+            )
+            for request in requests
+        ]
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifacts", _fake_downloads)
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    first = processor.process()
+    second = processor.process()
+    exhausted = processor.process()
+
+    assert first.failed == 1
+    assert second.failed == 1
+    assert exhausted.failed == 0
+    assert attempts == [source_url, source_url]
+
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT status, attempt_count, max_attempts, notes
+            FROM artifact_queue
+            WHERE engagement_id=1001 AND source_url=?
+            """,
+            (source_url,),
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert row == ("failed", 2, 2, "simulated transient download failure")
 
 
 def test_kill_chain_known_host_surface_backlog_advances_beyond_first_batch(
@@ -1017,6 +1083,260 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
     assert skipped_metadata["unsupported_before_scan"] is True
     assert skipped_metadata["service"] == "netlify"
     assert skipped_metadata["ref"] == "echo"
+
+
+def test_kill_chain_retries_failed_artifact_queue_rows_and_keeps_pending_work(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    artifact_url = "https://downloads.acme.example/mobile.apk"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example", "downloads.acme.example"],
+                "urls": [artifact_url],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    download_attempts: list[str] = []
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        if str(progress_label or "").endswith(".D cloud+HTML fetch"):
+            return [f'<html><a href="{artifact_url}">mobile</a></html>' for _ in specs]
+        if str(progress_label or "").endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    def _fake_downloads(self, requests, **_kwargs):  # noqa: ANN001
+        del self
+        download_attempts.extend(str(request.source_url) for request in requests)
+        return [
+            ArtifactDownloadResult(
+                artifact_id=request.artifact_id,
+                source_url=request.source_url,
+                artifact_type=request.artifact_type,
+                error="simulated artifact download failure",
+            )
+            for request in requests
+        ]
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifacts", _fake_downloads)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=2,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    assert download_attempts == [artifact_url, artifact_url]
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    metadata = _latest_run_metadata(db_path)
+    assert metadata["pending_work_counts"]["artifact_queue"] == 1
+    assert metadata["pending_work_total"] >= 1
+    assert metadata["last_iteration_stable"] is False
+
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT status, attempt_count, max_attempts, notes
+            FROM artifact_queue
+            WHERE engagement_id=1001 AND source_url=?
+            """,
+            (artifact_url,),
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert row == ("failed", 2, 3, "simulated artifact download failure")
+
+
+def test_kill_chain_mixed_case_unsupported_cloud_ref_is_resume_stable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example", "Echo.netlify.app"],
+                "urls": ["https://Echo.netlify.app"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        if str(progress_label or "").endswith(".D cloud+HTML fetch"):
+            return ["<html>https://Echo.netlify.app</html>" for _ in specs]
+        if str(progress_label or "").endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+
+    from forge.cli import kill_chain
+
+    for _ in range(2):
+        kill_chain(
+            seed="acme.example",
+            engagement="1001",
+            max_iter=1,
+            tor=False,
+            dry_run=False,
+            attack_mode=False,
+            roe_id="ROE-TEST-2026-07",
+            scope_manifest=str(manifest_path),
+            skip_cloud=False,
+            skip_keyscan=True,
+            parallel_fanout=1,
+            report_provider="template",
+        )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT es.seed_value, sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_j_cloud_scan'
+              AND es.seed_value='netlify:echo'
+            ORDER BY sr.id
+            """
+        ).fetchall()
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier, provider_identifier, source
+            FROM cloud_assets
+            WHERE engagement_id=1001 AND asset_type='netlify'
+            ORDER BY id
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert len(rows) == 1
+    assert rows[0][0] == "netlify:echo"
+    assert rows[0][1] == "skipped"
+    assert rows[0][2] == "unsupported_cloud_service"
+    skipped_metadata = json.loads(str(rows[0][3] or "{}"))
+    assert skipped_metadata["service"] == "netlify"
+    assert skipped_metadata["ref"] == "Echo"
+    assert cloud_assets == [
+        ("netlify", "echo", "Echo", "kill_chain_cloud_ref"),
+    ]
 
 
 def test_kill_chain_cloud_asset_pending_count_is_alias_aware(

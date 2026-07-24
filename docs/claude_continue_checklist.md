@@ -66,13 +66,22 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: implement bounded failed-artifact retry state and
-  resume-stable cloud-reference keys. Failed `artifact_queue` rows should retry
-  up to deterministic attempt limits and keep pending work/stability honest
-  until exhausted; mixed-case cloud refs such as Netlify/Vercel labels should
-  dedupe across resume using one normalized processed-key helper while keeping
-  original refs in audit metadata. Acceptance stages: recursion, artifact
-  analysis, validation, testing/cleanup.
+- [ ] Next checkpoint: reconcile the sidecar audit output if available, then
+  perform a fresh current-code audit for the next real kill-chain correctness
+  gap before adding provider breadth or UI polish. Prioritize validation/report
+  gates, recursive queue termination, artifact/static extraction fidelity, or
+  dashboard evidence lineage.
+- [x] Bounded artifact retry and cloud-ref resume checkpoint:
+  `artifact_queue` now has deterministic `attempt_count` / `max_attempts`
+  state. The artifact processor claims one attempt per dispatch, retries
+  failed rows until attempts are exhausted, and kill-chain pending-work counts
+  include retryable failures so stable termination does not hide unfinished
+  static-analysis work. Fan-out J cloud refs now use one normalized
+  `service:ref` processed key for current-run, pending-count, skipped-row, and
+  resume dedupe while preserving original refs in command/audit metadata.
+  Verification: focused retry/cloud regressions passed (`5 passed`); adjacent
+  artifact retry/cloud alias tests passed (`2 passed`); Ruff and py_compile
+  passed for touched backend/test files.
 - [x] Terraform archive-member DNS recursion checkpoint:
   Generic artifact discovery now carries a parser-only member-aware
   `source_hint` through the bounded worker-pool path, so Terraform DNS records

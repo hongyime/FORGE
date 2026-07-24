@@ -809,6 +809,8 @@ def _m0015_multi_seed_orchestration(conn: sqlite3.Connection) -> None:
             sha256          TEXT,
             notes           TEXT,
             metadata_json   TEXT    NOT NULL DEFAULT '{}',
+            attempt_count   INTEGER NOT NULL DEFAULT 0,
+            max_attempts    INTEGER NOT NULL DEFAULT 3,
             queued_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (engagement_id, source_url)
@@ -1045,6 +1047,20 @@ def _m0024_distributed_task_running_attempt_backfill(conn: sqlite3.Connection) -
     conn.commit()
 
 
+def _m0025_artifact_queue_attempts(conn: sqlite3.Connection) -> None:
+    """Add bounded retry accounting to static artifact queue rows."""
+    if _table_sql_contains(conn, "artifact_queue", "artifact_queue"):
+        _safe_alter(
+            conn,
+            "ALTER TABLE artifact_queue ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0",
+        )
+        _safe_alter(
+            conn,
+            "ALTER TABLE artifact_queue ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3",
+        )
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -1074,6 +1090,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (22, "cloud_asset_metadata", _m0022_cloud_asset_metadata),
     (23, "distributed_task_attempts", _m0023_distributed_task_attempts),
     (24, "distributed_task_running_attempt_backfill", _m0024_distributed_task_running_attempt_backfill),
+    (25, "artifact_queue_attempts", _m0025_artifact_queue_attempts),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

@@ -25,20 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Terraform DNS record extraction now works from archive
+Latest checkpoint: bounded artifact retry and cloud-reference resume stability
+are complete. `artifact_queue` now has deterministic `attempt_count` /
+`max_attempts` state, retryable failed rows remain pending until exhausted, and
+Fan-out J cloud refs use one normalized `service:ref` key across current-run,
+pending-count, skipped-row, and resume paths while keeping original refs in
+command/audit/provider metadata. Verification: focused retry/cloud slice passed
+(`5 passed`); adjacent artifact retry/cloud alias tests passed (`2 passed`);
+Ruff and py_compile passed for touched backend/test files.
+
+Next checkpoint: reconcile any fresh sidecar audit output if available, then
+perform a current-code audit for the next real kill-chain correctness gap before
+adding provider breadth or UI polish. Prioritize validation/report gates,
+recursive queue termination, artifact/static extraction fidelity, or dashboard
+evidence lineage.
+
+Previous checkpoint: Terraform DNS record extraction now works from archive
 members. Generic artifact discovery carries a parser-only member-aware
 `source_hint` through the bounded worker-pool path, so `terraform/main.tf`
 inside zip/OCI/Docker-style archive members promotes recursive host seeds while
 persisted `source_file`/`source_url` provenance remains the outer artifact.
 Verification: Terraform/archive/OCI focused slice passed (`8 passed`); Ruff and
 py_compile passed for touched files.
-
-Next checkpoint: implement bounded failed-artifact retry state and
-resume-stable cloud-reference keys. Failed `artifact_queue` rows should retry
-up to deterministic attempt limits and keep pending work/stability honest until
-exhausted; mixed-case cloud refs such as Netlify/Vercel labels should dedupe
-across resume using one normalized processed-key helper while keeping original
-refs in audit metadata.
 
 Previous checkpoint: static dashboard and live web API report summaries now
 carry Phase 6 `render_path` lineage in addition to requested/rendered/backend

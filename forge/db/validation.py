@@ -100,6 +100,8 @@ _REQUIRED_TABLE_COLUMNS: dict[str, set[str]] = {
         "sha256",
         "notes",
         "metadata_json",
+        "attempt_count",
+        "max_attempts",
         "queued_at",
         "updated_at",
     },

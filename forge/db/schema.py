@@ -168,6 +168,8 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         sha256         TEXT,
         notes          TEXT,
         metadata_json  TEXT    NOT NULL DEFAULT '{}',
+        attempt_count  INTEGER NOT NULL DEFAULT 0,
+        max_attempts   INTEGER NOT NULL DEFAULT 3,
         queued_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (engagement_id, source_url)
