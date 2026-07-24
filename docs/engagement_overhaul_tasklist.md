@@ -102,12 +102,31 @@ sentences as historical notes only, not as current instructions.
   Ruff passed; focused runtime/service-worker suite passed (`5 passed`);
   adjacent artifact-label/runtime-worker slice passed (`7 passed`). Handoff:
   `.claude/handoffs/2026-07-24-service-worker-static-recursion.md`.
-- [ ] Next E2E target: add a mocked local-safe service-worker/precache kill-chain
-  fixture that proves page/manifest -> service worker -> precache/Workbox
-  artifact recursion into mixed cloud assets, validation inventory, validated
-  findings only, graph/report/raw exports, dashboard review visibility, fallback
-  lineage, and cleanup. Recommended node:
-  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`.
+- [x] Service-worker/precache kill-chain E2E checkpoint:
+  Added a mocked local-safe fixture proving page/manifest -> service worker ->
+  root-relative precache chunk recursion into mixed cloud assets, validation
+  inventory, validated findings only, graph/report/raw exports, dashboard
+  review visibility, deterministic template fallback lineage, and cleanup
+  isolation. Service-worker `importScripts()` now resolves relative imports
+  against the remote service-worker source URL while local files without a
+  remote base do not invent URLs.
+  Node:
+  `tests/phase1/test_kill_chain_service_worker_precache_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`.
+  Verification: compile passed; Ruff passed; affected parser/E2E slice passed
+  (`7 passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-service-worker-precache-e2e.md`.
+- [ ] Next target: add graph edge assertions for the service-worker recursion
+  chain (`manifest -> service-worker -> precache -> chunk`) or implement missing
+  relation edges if the graph export lacks them. Keep the fixture mocked/local
+  and preserve current report gates.
+- [ ] Next target: audit the terminal-stability/K2 artifact queue edge observed
+  by the service-worker fixture. Iteration 4 can queue cloud URL artifact rows
+  after no new snapshot counts and then exit stable with those rows
+  failed/processed silently; decide whether this is expected inventory behavior
+  or whether final stability should include queued/failed artifact metrics and
+  clearer audit logging. Keep any fix mocked/local and do not weaken report
+  gates.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from

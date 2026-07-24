@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 
 _RUNTIME_JS_CONFIG_EXACT_NAMES = frozenset(
@@ -61,8 +62,8 @@ _IMPORT_SCRIPTS_PATTERN = re.compile(
     r"\bimportScripts\s*\((?P<body>[^)]{0,3000})\)",
     re.IGNORECASE | re.DOTALL,
 )
-_QUOTED_HTTP_URL_PATTERN = re.compile(
-    r"""(?P<quote>["'])(?P<value>https?://[^"'\s,)]+)(?P=quote)""",
+_QUOTED_IMPORT_SCRIPT_VALUE_PATTERN = re.compile(
+    r"""(?P<quote>["'])(?P<value>[^"'\s,)]+)(?P=quote)""",
     re.IGNORECASE,
 )
 _FIREBASE_PROJECT_ASSIGNMENT_PATTERN = re.compile(
@@ -128,6 +129,7 @@ def service_worker_js_candidate_entries(
     text: str,
     *,
     derived_candidates: Callable[[dict[str, str]], Iterable[str]],
+    base_url: str = "",
 ) -> list[tuple[int, str]]:
     raw_text = str(text or "")
     entries: list[tuple[int, str]] = []
@@ -136,9 +138,14 @@ def service_worker_js_candidate_entries(
         body = str(import_match.group("body") or "")
         body_offset = import_match.start("body")
         entries.extend(
-            (body_offset + value_match.start("value"), value)
-            for value_match in _QUOTED_HTTP_URL_PATTERN.finditer(body)
-            if (value := str(value_match.group("value") or "").strip())
+            (body_offset + value_match.start("value"), resolved)
+            for value_match in _QUOTED_IMPORT_SCRIPT_VALUE_PATTERN.finditer(body)
+            if (
+                resolved := _resolve_import_script_url(
+                    str(value_match.group("value") or "").strip(),
+                    base_url=base_url,
+                )
+            )
         )
 
     for project_match in _FIREBASE_PROJECT_ASSIGNMENT_PATTERN.finditer(raw_text):
@@ -153,6 +160,25 @@ def service_worker_js_candidate_entries(
         )
 
     return entries
+
+
+def _resolve_import_script_url(value: str, *, base_url: str = "") -> str:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return ""
+    parsed = urlparse(raw_value)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return raw_value
+    if parsed.scheme or raw_value.startswith(("#", "//")):
+        return ""
+    parsed_base = urlparse(str(base_url or "").strip())
+    if parsed_base.scheme not in {"http", "https"} or not parsed_base.netloc:
+        return ""
+    resolved = urljoin(parsed_base.geturl(), raw_value)
+    resolved_parts = urlparse(resolved)
+    if resolved_parts.scheme not in {"http", "https"} or not resolved_parts.netloc:
+        return ""
+    return resolved
 
 
 def _env_key_is_recursive_candidate(key: str) -> bool:

@@ -112,6 +112,34 @@ def test_service_worker_js_extracts_public_imports_and_cloud_refs(tmp_path: Path
     )
 
 
+def test_service_worker_js_resolves_relative_imports_from_remote_source(
+    tmp_path: Path,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+    payload = """
+    importScripts("/precache-manifest.abc123.js", "./workbox-helper.js", "data:text/plain,nope");
+    """.strip()
+
+    assert (
+        processor._js_runtime_text_structured_payload_text(
+            payload,
+            source_hint="https://app.acme.example/service-worker.js",
+            base_url="https://app.acme.example/service-worker.js",
+        ).splitlines()
+        == [
+            "https://app.acme.example/precache-manifest.abc123.js",
+            "https://app.acme.example/workbox-helper.js",
+        ]
+    )
+    assert (
+        processor._js_runtime_text_structured_payload_text(
+            payload,
+            source_hint="public/service-worker.js",
+        )
+        == ""
+    )
+
+
 def test_runtime_js_config_artifact_recurses_public_endpoints_and_cloud_refs(
     tmp_path: Path,
 ) -> None:

@@ -25,27 +25,31 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: service-worker/precache static recursion is complete.
-Public service-worker-style artifacts now use the source-gated
-`service-worker-js` label for `service-worker*.js`, `workbox*.js`,
-`precache-manifest*.js`, `firebase-messaging-sw.js`, and OneSignal worker
-files. `importScripts()` URLs, browser endpoint config such as `apiUrl`, and
-Firebase messaging `projectId` refs now enter the same bounded ordered
-recursive candidate path as other static artifacts. Arbitrary `app.js` remains
-outside structured JS parsing.
+Latest checkpoint: service-worker/precache kill-chain E2E is complete. The new
+mocked local-safe fixture proves page/manifest -> service worker ->
+root-relative precache chunk recursion into mixed cloud assets, validation
+inventory, validated findings only, graph/report/raw exports, dashboard review
+visibility, deterministic template fallback lineage, and cleanup isolation.
+Service-worker `importScripts()` now resolves relative imports against the
+remote service-worker source URL while local files without a remote base do not
+invent URLs. Node:
+`tests/phase1/test_kill_chain_service_worker_precache_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`.
 
-Verification: compile passed; Ruff passed; focused runtime/service-worker suite
-passed (`5 passed`); adjacent artifact-label/runtime-worker slice passed
-(`7 passed`). Review: sidecar `Ptolemy` identified the service-worker gap and
-`Erdos` identified the next broader E2E fixture. Handoff:
-`.claude/handoffs/2026-07-24-service-worker-static-recursion.md`.
+Verification: compile passed; Ruff passed; affected parser/E2E slice passed
+(`7 passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
+Prior static parser checkpoint remains in
+`.claude/handoffs/2026-07-24-service-worker-static-recursion.md`; current E2E
+handoff is `.claude/handoffs/2026-07-24-service-worker-precache-e2e.md`.
 
-Current next gate: implement the mocked local-safe E2E fixture
-`tests/phase1/test_kill_chain_multiseed_recursive_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`
-to prove page/manifest -> service worker -> precache/Workbox recursion into
-mixed cloud assets, validation inventory, validated findings only,
-graph/report/raw exports, dashboard review visibility, fallback lineage, and
-cleanup.
+Current next gates: first add graph edge assertions for the service-worker
+recursion chain (`manifest -> service-worker -> precache -> chunk`) or
+implement missing relation edges if the graph export lacks them. Then audit the
+terminal-stability/K2 artifact queue edge observed by the service-worker
+fixture. Iteration 4 can queue cloud URL artifact rows after no new snapshot
+counts and then exit stable with those rows failed/processed silently; decide
+whether this is expected inventory behavior or whether final stability should
+include queued/failed artifact metrics and clearer audit logging. Keep fixes
+mocked/local and do not weaken report gates.
 
 Previous checkpoint: runtime frontend config JS recursion is complete. Explicit
 public runtime config files such as `runtime-env.js`, `env-config.js`, and

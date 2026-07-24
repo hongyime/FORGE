@@ -19997,6 +19997,7 @@ class ArtifactQueueProcessor:
             return self._js_runtime_text_structured_payload_text(
                 text,
                 source_hint=source_hint,
+                base_url=source_file,
             )
         if family == "static_hosting_control_text":
             return self._static_hosting_control_text_structured_payload_text(
@@ -27580,6 +27581,7 @@ class ArtifactQueueProcessor:
         text: str,
         *,
         source_hint: str = "",
+        base_url: str = "",
     ) -> str:
         raw_text = str(text or "")
         source_label = _js_runtime_config_artifact_label(source_hint)
@@ -27589,6 +27591,7 @@ class ArtifactQueueProcessor:
         raw_values = self._js_runtime_text_candidate_values(
             raw_text,
             source_label=source_label,
+            base_url=base_url,
         )
         candidate_entries = self._run_ordered_local_batch(
             raw_values,
@@ -27605,7 +27608,13 @@ class ArtifactQueueProcessor:
             lines.append(normalized)
         return "\n".join(lines)
 
-    def _js_runtime_text_candidate_values(self, text: str, *, source_label: str = "") -> list[str]:
+    def _js_runtime_text_candidate_values(
+        self,
+        text: str,
+        *,
+        source_label: str = "",
+        base_url: str = "",
+    ) -> list[str]:
         raw_text = str(text or "")
         entries: list[tuple[int, str]] = []
         if source_label == "firebase-hosting-config":
@@ -27659,6 +27668,7 @@ class ArtifactQueueProcessor:
             entries.extend(
                 service_worker_js_candidate_entries(
                     raw_text,
+                    base_url=base_url,
                     derived_candidates=lambda env_map: self._run_ordered_local_batch(
                         self._yaml_structured_candidates_from_env_map(
                             env_map,
