@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: React Native bundle member recursion is complete. Passive
+Latest checkpoint: artifact text discovered-artifact queueing is complete.
+Artifact text URL persistence now immediately queues artifact-like HTTP(S) URLs
+using the existing passive remote artifact classifier, without fetching those
+URLs in the same processing pass. Source maps, static manifests, and nested
+archives discovered inside already-parsed artifacts therefore move into
+`artifact_queue` with `discovered_from='artifact_text'` and `status='queued'`,
+while non-artifact API URLs remain seeds only. Existing queue rows are
+preserved by `(engagement_id, source_url)` conflict handling, so parsed,
+downloaded, and failed rows are not reset. Verification: focused TDD failed
+first with no queued artifact rows; compile/Ruff passed; focused recursive
+queue tests passed (`2 passed`); recursive queue plus React Native and remote
+static classification tests passed (`22 passed`); selected artifact
+queue/route orchestrator slice passed (`20 passed, 742 deselected`); selected
+extensionless remote download wrappers passed (`3 passed, 759 deselected`);
+cleanup inventory found only `.forge_data/engagements` `1`, `5010`, and
+`master.db`. Handoff:
+`.claude/handoffs/2026-07-24-artifact-text-recursive-queue.md`.
+
+Previous checkpoint: React Native bundle member recursion is complete. Passive
 archive/member and remote route discovery now recognize React Native
 JavaScript bundles (`.jsbundle`, `index.android.bundle`, `index.ios.bundle`)
 plus Hermes bytecode bundles (`.hbc`). JS bundles route through existing text
@@ -135,16 +153,15 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: implement immediate passive queueing for artifact-like URLs
-discovered inside artifacts. Target `_persist_generic_text_discovery_batch` and
-`_store_artifact_url_seed` in `forge/engagement_orchestrator.py`; prove with a
-mocked/local regression that a discovered source map, manifest, or nested
-static artifact URL moves into `artifact_queue` without waiting for a later
-outer CLI pass. Next after that: broaden inventory-only allowlisted AWS ARN
-cloud-reference parsing, then add conservative calendar/vCard identity
-enrichment, then add graph/report/dashboard parity checks for recursive
-artifact-derived pivots. Do not add live target probing without explicit
-ROE/scope manifest and mocked tests.
+Current next gate: broaden inventory-only allowlisted AWS ARN cloud-reference
+parsing in generic artifact text beyond S3/KMS. Target
+`_artifact_text_cloud_asset_family_candidates` and generic cloud-asset family
+dispatch in `forge/engagement_orchestrator.py`; add mocked/local tests proving
+Lambda/IAM/SQS/SNS/ECR/CloudFront/API Gateway-style ARNs persist as passive
+cloud inventory with provenance and no resolve/read calls. Next after that:
+conservative calendar/vCard identity enrichment, then graph/report/dashboard
+parity checks for recursive artifact-derived pivots. Do not add live target
+probing without explicit ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

@@ -22173,7 +22173,46 @@ class ArtifactQueueProcessor:
             source="artifact_url_extract",
             cloud_asset_entries=list(entry["cloud_asset_entries"]),
         )
+        self._queue_artifact_text_discovered_url(
+            con,
+            str(entry["url"]),
+            seed_type=str(entry["seed_type"]),
+            relation_metadata=dict(entry["relation_metadata"]),
+        )
         return inserted
+
+    def _queue_artifact_text_discovered_url(
+        self,
+        con: sqlite3.Connection,
+        url: str,
+        *,
+        seed_type: str,
+        relation_metadata: dict[str, Any] | None = None,
+    ) -> int:
+        artifact_type = _classify_remote_artifact_candidate(url, seed_type)
+        if artifact_type is None:
+            return 0
+        metadata = dict(relation_metadata or {})
+        source_rule = str(metadata.get("rule") or "").strip()
+        metadata["rule"] = "artifact_text_discovered_artifact_queue"
+        if source_rule:
+            metadata["source_rule"] = source_rule
+        metadata["source_seed_type"] = seed_type
+        try:
+            metadata_json = json.dumps(metadata, sort_keys=True)
+        except (TypeError, ValueError):
+            metadata_json = "{}"
+        before_changes = con.total_changes
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, artifact_type, discovered_from, status, metadata_json)
+            VALUES (?, ?, ?, 'artifact_text', 'queued', ?)
+            ON CONFLICT(engagement_id, source_url) DO NOTHING
+            """,
+            (self._engagement_id, url, artifact_type, metadata_json),
+        )
+        return 1 if con.total_changes > before_changes else 0
 
     def _store_social_profile_url_pivots(
         self,

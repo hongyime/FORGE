@@ -66,22 +66,33 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: immediately enqueue artifact-like URLs discovered inside
-  artifacts using existing passive classification only. Target
-  `forge/engagement_orchestrator.py` `_persist_generic_text_discovery_batch`
-  and `_store_artifact_url_seed`; add a mocked/local regression proving a
-  discovered source map, manifest, or nested static artifact URL moves from
-  generic artifact text discovery into `artifact_queue` without requiring a
-  later outer CLI pass.
-- [ ] Then broaden inventory-only AWS ARN cloud-reference parsing in generic
-  artifact text for allowlisted service families beyond S3/KMS. Do not resolve
-  or read resources; persist passive cloud inventory with provenance only.
+- [ ] Next checkpoint: broaden inventory-only AWS ARN cloud-reference parsing
+  in generic artifact text for allowlisted service families beyond S3/KMS. Do
+  not resolve or read resources; persist passive cloud inventory with
+  provenance only.
 - [ ] Then add conservative calendar/vCard identity enrichment from explicit
   contact fields (`FN`, `N`, `ORG`, `TITLE`) with provenance, keeping email/
   phone/URL pivots unchanged and avoiding inferred identities from free text.
 - [ ] Then add graph/report/dashboard parity checks for newly recursive
   artifact-derived pivots so RN/source-map/cloud refs appear in review/export
   surfaces with lineage and deterministic report gates.
+- [x] Artifact text discovered-artifact queue checkpoint:
+  Artifact text URL persistence now immediately queues artifact-like HTTP(S)
+  URLs using the existing passive remote artifact classifier, without fetching
+  those URLs in the same processing pass. Source maps, static manifests, and
+  nested archives discovered inside already-parsed artifacts therefore move
+  into `artifact_queue` with `discovered_from='artifact_text'` and
+  `status='queued'`, while non-artifact API URLs remain seeds only. Existing
+  queue rows are preserved by `(engagement_id, source_url)` conflict handling,
+  so parsed/downloaded/failed rows are not reset. Verification: focused TDD
+  failed first with no queued artifact rows; compile passed; Ruff passed;
+  focused recursive queue tests passed (`2 passed`); recursive queue plus React
+  Native and remote static classification tests passed (`22 passed`); selected
+  artifact queue/route orchestrator slice passed (`20 passed, 742
+  deselected`); selected extensionless remote download wrappers passed (`3
+  passed, 759 deselected`); cleanup inventory found only `.forge_data/
+  engagements` `1`, `5010`, and `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-artifact-text-recursive-queue.md`.
 - [x] React Native bundle member recursion checkpoint:
   Passive archive/member and remote route discovery now recognize React Native
   JavaScript bundles (`.jsbundle`, `index.android.bundle`, `index.ios.bundle`)
