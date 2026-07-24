@@ -25,16 +25,16 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Buf/Protobuf registry config static artifact discovery is
-complete. `buf.yaml`, `buf.yml`, `buf.gen.yaml`, `buf.gen.yml`,
-`buf.work.yaml`, `buf.work.yml`, and `buf.lock` are now first-class static
-config artifacts. The interface-definition structured discovery path extracts
-passive Buf Schema Registry pivots such as `buf.build/org/repo`, plugin
-remotes, custom Buf registry FQDNs, and split lock tuples
-(`remote`/`owner`/`repository`) into recursive URL seeds. No Buf CLI execution,
-registry fetch, schema resolution, credential validation, or live probing was
-added. Verification: focused Buf/interface worker and pipeline tests passed
-(`4 passed`), adjacent API-format/interface ingestion tests passed (`2 passed`),
+Latest checkpoint: Backstage service-catalog static artifact discovery is
+complete. `catalog-info.yaml`, `catalog-info.yml`, and `catalog-info.json` are
+now first-class static config artifacts. Backstage component/API catalog
+mappings pass through the existing bounded YAML structured-discovery path and
+extract passive recursive URL seeds from repository annotations,
+source/view/edit and TechDocs locations, metadata links, and URL-backed API
+definitions. No Backstage API calls, repository fetches, service probing,
+credential validation, or scope relaxation were added. Verification: focused
+Backstage/API metadata tests passed (`4 passed`), combined
+Buf/interface/Backstage/API metadata artifact regression slice passed (`8 passed`),
 py_compile passed for touched files, Ruff passed for touched files,
 `git diff --check` passed, and no `.forge_data/engagements` leftovers were
 present.
@@ -44,6 +44,20 @@ current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
 identity/provider-shape gap. Prefer compact focused regression coverage and keep
 implementation passive/proof-bound: recursive seeds/cloud refs only unless an
 explicitly scoped live check is already required by the validation contract.
+
+Previous checkpoint: Buf/Protobuf registry config static artifact discovery is
+complete. `buf.yaml`, `buf.yml`, `buf.gen.yaml`, `buf.gen.yml`,
+`buf.work.yaml`, `buf.work.yml`, and `buf.lock` are now first-class static
+config artifacts. The interface-definition structured discovery path extracts
+passive Buf Schema Registry pivots such as `buf.build/org/repo`, Pro-host
+`*.buf.dev/org/repo` refs, plugin remotes, custom Buf registry FQDNs, and split
+lock tuples (`remote`/`owner`/`repository`) into recursive URL seeds. No Buf CLI
+execution, registry fetch, schema resolution, credential validation, or live
+probing was added. Verification: focused Buf/interface worker and pipeline tests passed
+(`4 passed`), adjacent API-format/interface ingestion tests passed (`2 passed`),
+py_compile passed for touched files, Ruff passed for touched files,
+`git diff --check` passed, and no `.forge_data/engagements` leftovers were
+present.
 
 Previous checkpoint: offensive scheduled-task queue-source hardening is
 complete. Playbook scheduling, automation `_next_steps`, breach-triggered

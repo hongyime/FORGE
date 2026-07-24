@@ -97,14 +97,28 @@ sentences as historical notes only, not as current instructions.
   focused regression coverage, and keep implementation passive/proof-bound:
   recursive seeds/cloud refs only unless an explicitly scoped live check is
   already required by the validation contract.
+- [x] Backstage service-catalog artifact checkpoint:
+  `catalog-info.yaml`, `catalog-info.yml`, and `catalog-info.json` are now
+  first-class static config artifacts. Backstage component/API catalog mappings
+  pass through the existing bounded YAML structured-discovery path and extract
+  passive recursive URL seeds from repository annotations, source/view/edit and
+  TechDocs locations, metadata links, and URL-backed API definitions. This
+  remains static-only: no Backstage API calls, repository fetches, service
+  probing, credential validation, or scope relaxation were added. Verification:
+  focused Backstage/API metadata tests passed (`4 passed`), combined
+  Buf/interface/Backstage/API metadata artifact regression slice passed (`8 passed`),
+  py_compile passed for touched files, Ruff passed for touched files,
+  `git diff --check` passed, and no `.forge_data/engagements` leftovers were
+  present.
 - [x] Buf/Protobuf registry config artifact checkpoint:
   `buf.yaml`, `buf.yml`, `buf.gen.yaml`, `buf.gen.yml`, `buf.work.yaml`,
   `buf.work.yml`, and `buf.lock` are now first-class static config artifacts.
   The existing interface-definition structured discovery path extracts passive
-  Buf Schema Registry pivots such as `buf.build/org/repo`, plugin remotes, custom
-  Buf registry FQDNs, and split lock tuples (`remote`/`owner`/`repository`) into
-  recursive URL seeds. This remains static-only: no Buf CLI execution, registry
-  fetch, schema resolution, credential validation, or live probing was added.
+  Buf Schema Registry pivots such as `buf.build/org/repo`, Pro-host
+  `*.buf.dev/org/repo` refs, plugin remotes, custom Buf registry FQDNs, and split
+  lock tuples (`remote`/`owner`/`repository`) into recursive URL seeds. This
+  remains static-only: no Buf CLI execution, registry fetch, schema resolution,
+  credential validation, or live probing was added.
   Verification: focused Buf/interface worker and pipeline tests passed (`4
   passed`), adjacent API-format/interface ingestion tests passed (`2 passed`),
   py_compile passed for touched files, Ruff passed for touched files,

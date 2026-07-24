@@ -76,6 +76,7 @@ def test_buf_config_structured_payload_extracts_registry_modules_with_bounded_wo
         deps:
           - buf.build/acme/paymentapis
           - buf.internal.acme.example/platform/privateapis
+          - acme.buf.dev/platform/proapis
         plugins:
           - remote: buf.build/protocolbuffers/go:v1.35.1
         breaking:
@@ -107,10 +108,12 @@ def test_buf_config_structured_payload_extracts_registry_modules_with_bounded_wo
         [
             "buf.build/acme/paymentapis",
             "buf.internal.acme.example/platform/privateapis",
+            "acme.buf.dev/platform/proapis",
             "buf.build/protocolbuffers/go",
             "buf.build/acme/previous-api",
             "buf.build/acme/paymentapis",
             "buf.internal.acme.example/platform/privateapis",
+            "acme.buf.dev/platform/proapis",
             "buf.build/protocolbuffers/go",
             "buf.build/acme/previous-api",
         ]
@@ -118,6 +121,7 @@ def test_buf_config_structured_payload_extracts_registry_modules_with_bounded_wo
     assert result.splitlines() == [
         "https://buf.build/acme/paymentapis",
         "https://buf.internal.acme.example/platform/privateapis",
+        "https://acme.buf.dev/platform/proapis",
         "https://buf.build/protocolbuffers/go",
         "https://buf.build/acme/previous-api",
     ]

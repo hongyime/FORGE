@@ -44,6 +44,7 @@ def test_artifact_queue_processor_extracts_buf_module_registry_artifacts(
             name: buf.build/acme/rootapis
             deps:
               - buf.build/acme/paymentapis
+              - acme.buf.dev/platform/proapis
             # buf-owner@acme.example
             """
         ).strip(),
@@ -117,6 +118,7 @@ def test_artifact_queue_processor_extracts_buf_module_registry_artifacts(
         }
         assert ("https://buf.build/acme/rootapis", "url") in seeds
         assert ("https://buf.build/acme/paymentapis", "url") in seeds
+        assert ("https://acme.buf.dev/platform/proapis", "url") in seeds
         assert ("https://buf.build/protocolbuffers/go", "url") in seeds
         assert ("https://buf.build/acme/ledgerapis", "url") in seeds
         assert ("https://buf.internal.acme.example/platform/privateapis", "url") in seeds

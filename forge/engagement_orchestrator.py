@@ -142,6 +142,11 @@ from forge.utils.artifact_ad_metadata import (
 )
 from forge.utils.artifact_aasa import aasa_ios_app_ids
 from forge.utils.artifact_assetlinks import assetlinks_android_packages
+from forge.utils.artifact_backstage_catalog import (
+    backstage_catalog_artifact_label,
+    backstage_catalog_candidates,
+    backstage_catalog_mapping_looks_supported,
+)
 from forge.utils.artifact_open_resource_discovery import open_resource_discovery_urls
 from forge.utils.artifact_oauth_metadata import oauth_metadata_urls
 from forge.utils.artifact_opensearch_metadata import (
@@ -6262,6 +6267,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _buf_config_artifact_label(raw_lowered):
         return True
+    if backstage_catalog_artifact_label(raw_lowered):
+        return True
     if _iac_manifest_artifact_label(raw_lowered):
         return True
     if _looks_like_gcloud_text_config_artifact_name(raw_lowered):
@@ -6504,6 +6511,9 @@ def _artifact_format_label(value: str | Path) -> str:
     buf_config_label = _buf_config_artifact_label(str(value or ""))
     if buf_config_label:
         return buf_config_label
+    backstage_catalog_label = backstage_catalog_artifact_label(str(value or ""))
+    if backstage_catalog_label:
+        return backstage_catalog_label
     iac_manifest_label = _iac_manifest_artifact_label(str(value or ""))
     if iac_manifest_label:
         return iac_manifest_label
@@ -25864,6 +25874,7 @@ class ArtifactQueueProcessor:
                 "dependabot_config",
                 "renovate_config",
                 "goreleaser_config",
+                "backstage_catalog",
                 "docker_auth_map",
                 "borg_path",
                 "embedded_env_map",
@@ -26176,6 +26187,13 @@ class ArtifactQueueProcessor:
             return self._yaml_renovate_config_structured_candidates(mapping, normalized, path_hint)
         if family == "goreleaser_config":
             return self._yaml_goreleaser_config_structured_candidates(mapping, normalized, path_hint)
+        if family == "backstage_catalog":
+            if not (
+                backstage_catalog_artifact_label(source_hint)
+                or backstage_catalog_mapping_looks_supported(mapping)
+            ):
+                return []
+            return backstage_catalog_candidates(mapping)
         if family == "docker_auth_map":
             if not self._yaml_mapping_looks_like_docker_auth_config(mapping, normalized, path_hint):
                 return []
@@ -31675,6 +31693,8 @@ class ArtifactQueueProcessor:
             (?P<value>
                 (?:
                     (?:https?://)?buf\.build
+                    |
+                    (?:https?://)?(?:[A-Za-z0-9-]+\.)+buf\.dev
                     |
                     (?:https?://)?(?:[A-Za-z0-9-]+\.)*buf[A-Za-z0-9-]*
                     \.[A-Za-z0-9.-]+\.[A-Za-z]{2,}
