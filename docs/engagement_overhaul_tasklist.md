@@ -91,11 +91,22 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit another concrete passive-to-live
-  validation/report/API parity gap, preferably imported graph/raw-export shape
-  mismatches for validation proof fields or provider-specific proof/detail
-  reviewability for remaining long-tail validators. Keep live provider calls
-  mocked unless an explicit ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: audit another concrete deterministic review/export
+  parity gap, preferably graph snapshot stale cloud metadata refresh, raw CSV
+  proof/detail parity for provider-specific validators, or remaining
+  long-tail validator proof reviewability. Keep live provider calls mocked
+  unless an explicit ROE/scope manifest and target are supplied.
+- [x] Imported graph validation-proof parity checkpoint:
+  Imported GraphML/MTGX payloads now normalize `validation_detail` into
+  `validation_status`, `validation_method`, and scrubbed `validation_proof`
+  metadata for returned graph nodes/edges. This aligns imported analyst graph
+  artifacts with generated graph JSON and report/raw-export proof surfaces
+  instead of requiring dashboard/API consumers to reverse-parse free-form
+  detail strings. Static dashboard and live API regressions use local MTGX
+  fixtures only; no live provider calls are made. Verification: Ruff passed;
+  compile passed; focused static/API MTGX graph parity tests passed (`2
+  passed`). Handoff:
+  `.claude/handoffs/2026-07-24-imported-graph-validation-proof-parity.md`.
 - [x] Slack validation proof finding-row parity checkpoint:
   Dashboard/API vulnerability finding rows now expose parsed validation status,
   method, and scrubbed proof from method-tagged deterministic finding evidence.

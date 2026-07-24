@@ -1334,7 +1334,7 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
                     <mtg:Property name="forge.on_critical_path" type="string"><mtg:Value>1</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.source_table" type="string"><mtg:Value>hosts</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.source_id" type="string"><mtg:Value>12</mtg:Value></mtg:Property>
-                    <mtg:Property name="forge.validation_detail" type="string"><mtg:Value>VALIDATED:firebase_database_shallow_read:records=1</mtg:Value></mtg:Property>
+                    <mtg:Property name="forge.validation_detail" type="string"><mtg:Value>VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data.</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.key_enc" type="string"><mtg:Value>encrypted-secret-never-render</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.metadata_json" type="string"><mtg:Value>{"seed_type":"url","source":"mtgx-fixture","depth":1}</mtg:Value></mtg:Property>
                   </mtg:Properties>
@@ -1385,7 +1385,14 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
     assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["seed_type"] == "url"
     assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["source"] == "mtgx-fixture"
     assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_detail"] == (
-        "VALIDATED:firebase_database_shallow_read:records=1"
+        "VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data."
+    )
+    assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_status"] == "VALIDATED"
+    assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_method"] == (
+        "firebase_database_shallow_read"
+    )
+    assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_proof"] == (
+        "Firebase project reference responded with non-empty data."
     )
     assert "key_enc" not in detail_payload["graph_payload"]["nodes"][0]["metadata"]
     assert detail_payload["graph_payload"]["edges"][0]["edge_type"] == "exposes"

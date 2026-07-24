@@ -27,6 +27,7 @@ from forge.utils.cloud_exposure_gate import (
     latest_cloud_validation_reportability_index,
     normalize_cloud_exposure_asset_type,
 )
+from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
 GRAPHML_NS = {"g": "http://graphml.graphdrawing.org/xmlns"}
@@ -926,8 +927,29 @@ def _merge_metadata_json(metadata: dict[str, Any], raw: str) -> None:
     parsed_metadata = _safe_json_loads(raw)
     if isinstance(parsed_metadata, dict):
         metadata.update(_safe_graph_metadata(parsed_metadata))
+        detail = metadata.get("validation_detail")
+        if detail:
+            _merge_validation_detail_metadata(metadata, detail)
     else:
         metadata["metadata_json"] = raw
+
+
+def _merge_validation_detail_metadata(metadata: dict[str, Any], raw: object) -> None:
+    detail = str(raw or "").strip()
+    if not detail:
+        return
+    metadata["validation_detail"] = detail
+    proof = parse_validated_detail(detail)
+    method = str(proof["validation_method"] or "").strip()
+    if not method:
+        return
+    metadata["validation_status"] = str(proof["validation_status"] or "").strip()
+    metadata["validation_method"] = method
+    safe_proof = _safe_validation_summary(proof["validation_proof"])
+    if safe_proof:
+        metadata["validation_proof"] = safe_proof
+    else:
+        metadata.pop("validation_proof", None)
 
 
 def _merge_safe_forge_property(
@@ -944,6 +966,9 @@ def _merge_safe_forge_property(
         return
     key = name.removeprefix("forge.").strip()
     if not key or key in control_properties or _is_sensitive_metadata_key(key):
+        return
+    if key == "validation_detail":
+        _merge_validation_detail_metadata(metadata, raw_value)
         return
     metadata.setdefault(key, _safe_metadata_property_value(raw_value))
 
@@ -1048,7 +1073,10 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
                 _merge_metadata_json(node_payload["metadata"], text)
             elif text:
                 if not _is_sensitive_metadata_key(key):
-                    node_payload["metadata"][key] = text
+                    if key == "validation_detail":
+                        _merge_validation_detail_metadata(node_payload["metadata"], text)
+                    else:
+                        node_payload["metadata"][key] = text
         nodes.append(node_payload)
 
     for edge in root.findall(".//g:edge", GRAPHML_NS):
@@ -1114,7 +1142,10 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
             elif key in {"metadata_json", "edge_metadata_json"} and text:
                 _merge_metadata_json(edge_payload["metadata"], text)
             elif text and not _is_sensitive_metadata_key(key):
-                edge_payload["metadata"][key] = text
+                if key == "validation_detail":
+                    _merge_validation_detail_metadata(edge_payload["metadata"], text)
+                else:
+                    edge_payload["metadata"][key] = text
         edges.append(edge_payload)
 
     if not nodes:

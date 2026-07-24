@@ -1134,6 +1134,7 @@ def test_engagement_api_parses_mtgx_graph_payload_when_graphml_is_missing(
                     <mtg:Property name="forge.severity" type="string"><mtg:Value>LOW</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.source_table" type="string"><mtg:Value>hosts</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.source_id" type="string"><mtg:Value>12</mtg:Value></mtg:Property>
+                    <mtg:Property name="forge.validation_detail" type="string"><mtg:Value>VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data.</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.metadata_json" type="string"><mtg:Value>{"seed_type":"url","source":"api-mtgx-fixture","depth":1}</mtg:Value></mtg:Property>
                     <mtg:Property name="forge.on_critical_path" type="string"><mtg:Value>1</mtg:Value></mtg:Property>
                   </mtg:Properties>
@@ -1183,6 +1184,13 @@ def test_engagement_api_parses_mtgx_graph_payload_when_graphml_is_missing(
         assert detail["graph_payload"]["nodes"][0]["source_id"] == 12
         assert detail["graph_payload"]["nodes"][0]["metadata"]["seed_type"] == "url"
         assert detail["graph_payload"]["nodes"][0]["metadata"]["source"] == "api-mtgx-fixture"
+        assert detail["graph_payload"]["nodes"][0]["metadata"]["validation_status"] == "VALIDATED"
+        assert detail["graph_payload"]["nodes"][0]["metadata"]["validation_method"] == (
+            "firebase_database_shallow_read"
+        )
+        assert detail["graph_payload"]["nodes"][0]["metadata"]["validation_proof"] == (
+            "Firebase project reference responded with non-empty data."
+        )
         assert detail["graph_payload"]["edges"][0]["edge_type"] == "exposes"
         assert detail["graph_payload"]["edges"][0]["weight"] == 55.0
         assert any(
