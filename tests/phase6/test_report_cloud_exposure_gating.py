@@ -127,7 +127,10 @@ def _create_cloud_exposure_db(path: Path) -> None:
                 "VALIDATED",
                 "s3_list_bucket",
                 200,
-                "latest object metadata listing",
+                (
+                    "<ListBucketResult><Contents><Key>prod/customer-records.csv"
+                    "</Key></Contents></ListBucketResult>"
+                ),
                 "2026-07-02T00:00:00Z",
             ),
             (
@@ -211,9 +214,9 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert inventory_by_identifier["acct-unsupported"]["evidence_summary"] == (
         "token=[REDACTED] unsupported provider"
     )
-    assert inventory_by_identifier["validated-bucket"]["evidence_summary"] == (
-        "latest object metadata listing"
-    )
+    assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"][
+        "evidence_summary"
+    ]
     assert inventory_by_identifier["manual-note-bucket"]["validation_status"] == "VALIDATED"
     assert inventory_by_identifier["manual-note-bucket"]["method"] == "manual_validated_note"
     validated_finding = next(
@@ -221,9 +224,9 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         for item in ctx.exploits.exploited
         if item.get("resource_id") == "validated-bucket"
     )
-    assert validated_finding["validation_evidence_summary"] == (
-        "latest object metadata listing"
-    )
+    assert "prod/customer-records.csv" in validated_finding[
+        "validation_evidence_summary"
+    ]
 
     csv_titles = {
         str(row["title"])

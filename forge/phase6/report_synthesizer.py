@@ -1210,19 +1210,38 @@ class ContextBuilder:
         row: sqlite3.Row,
         validation_index: dict[tuple[str, str], str],
     ) -> bool:
-        proof = parse_validated_detail(row["validation_detail"])
-        if proof["validation_status"] == "VALIDATED":
-            return True
         service = self._normalize_validation_asset_type(str(row["service"] or ""))
         identifier = str(row["domain"] or "").strip().lower()
-        if not service or not identifier:
-            return False
-        direct = validation_index.get((service, identifier)) == "VALIDATED"
-        linked = any(
-            validation_index.get((asset_type, identifier)) == "VALIDATED"
-            for asset_type in self._validation_asset_types_for_provider(service)
+        linked_reportable = self._linked_cloud_validation_reportability(
+            validation_index,
+            (service, *self._validation_asset_types_for_provider(service)),
+            identifier,
         )
-        return direct or linked
+        if linked_reportable is not None:
+            return linked_reportable
+        proof = parse_validated_detail(row["validation_detail"])
+        return proof["validation_status"] == "VALIDATED"
+
+    @staticmethod
+    def _linked_cloud_validation_reportability(
+        validation_index: dict[tuple[str, str], str],
+        asset_types: tuple[str, ...],
+        identifier: str,
+    ) -> bool | None:
+        normalized_identifier = str(identifier or "").strip().lower()
+        if not normalized_identifier:
+            return None
+        matches: list[bool] = []
+        for asset_type in asset_types:
+            normalized_asset = ContextBuilder._normalize_validation_asset_type(asset_type)
+            if not normalized_asset:
+                continue
+            key = (normalized_asset, normalized_identifier)
+            if key in validation_index:
+                matches.append(validation_index[key] == "VALIDATED")
+        if not matches:
+            return None
+        return any(matches)
 
     def _load_exploits(self, con: sqlite3.Connection) -> ExploitContext:
         columns = self._table_columns(con, "vulnerability_findings")
@@ -1317,6 +1336,16 @@ class ContextBuilder:
         title = str(finding.get("title") or "").strip().lower()
         if vuln_type != "DETERMINISTIC_KEY_EXPOSURE" and not title.startswith("active exposed "):
             return False
+        asset_type = str(finding.get("validation_asset_type") or "").split(":", 1)[0]
+        if asset_type:
+            return not is_reportable_cloud_validation(
+                asset_type,
+                str(finding.get("validation_status") or ""),
+                str(finding.get("validation_method") or ""),
+                evidence=finding.get("validation_evidence_summary"),
+                notes=finding.get("validation_notes"),
+                require_stable_proof=True,
+            )
         return str(finding.get("validation_status") or "").strip().upper() != "VALIDATED"
 
     @classmethod

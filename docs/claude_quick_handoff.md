@@ -25,29 +25,34 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: stable-proof validator surface gates are complete. Phase 6
-deterministic-cloud report filtering now requires stable proof for proof-bound
-cloud methods, matching deterministic findings, graph, dashboard, and API
-gates. Phase 6 raw CSV finding rows now include non-sensitive target identity
-fields (`target_url`, `parameter`, `cloud_provider`, `resource_id`) so raw
-exports can be audited by asset. The new focused local integration fixture
-proves weak `VALIDATED` Firebase/S3 rows and a honeypot Supabase row remain
-validation inventory only and stay out of deterministic findings, Phase 6
-template/JSON/CSV outputs, attack graph vuln nodes, dashboard detail, and web
-API severity summaries. Node:
+Latest checkpoint: broader validation/reportability regression gate is
+complete. Latest linked cloud validation now wins for deterministic
+key-exposure rows across deterministic synthesis, Phase 6 key/report context,
+attack graph VULN nodes, dashboard/API finding tables, key-scanner counts, and
+imported graph payload filtering. Stale `VALIDATED` proof text can no longer
+override weak, placeholder, unverified, or honeypot latest inventory for the
+same cloud asset/identifier. The stable-proof fixture now includes stale
+Firebase/Supabase key exposures and stale snapshot VULN nodes. Node:
 `tests/integration/test_cloud_validation_stable_proof_surfaces.py::test_stable_proof_gate_filters_validated_looking_cloud_rows_across_surfaces`.
 
-Verification: compile passed; Ruff passed; focused stable-proof surface test
-passed (`1 passed`); adjacent latest-row reportability slice passed with it
-(`2 passed`); pytest engagement cleanup reported `removed=2 remaining=0`.
-Handoff: `.claude/handoffs/2026-07-24-stable-proof-surface-gates.md`.
+Verification: compile/Ruff passed; expanded stable-proof surface fixture passed
+(`1 passed, 9 warnings`); broader local reportability slice passed (`129
+passed, 19 warnings`); deterministic finding suite passed (`18 passed`);
+pytest engagement cleanup reported `removed=4 remaining=0`.
+Handoff:
+`.claude/handoffs/2026-07-24-key-exposure-latest-validation-gates.md`.
 
-Current next gate: run a broader validation/reportability regression slice and
-fix any drift. Recommended local subset: core validation proof parsing, latest
-validation reportability integration, attack graph stale-validation gates,
-reporting dashboard validation gates, and the new stable-proof surface fixture.
-Keep it local/mocked and preserve inventory visibility while keeping reportable
-findings proof-bound.
+Current next gate: resume recursive discovery worker-pool backlog. Continue
+moving remaining safe sequential enrichers under the bounded worker-pool path
+one source-gated passive/static family at a time, with local/mocked fixtures,
+no live target assumptions, and no rate-limit bypass/proxy rotation.
+
+Previous checkpoint: stable-proof validator surface gates are complete. Phase 6
+deterministic-cloud report filtering now requires stable proof for proof-bound
+cloud methods, matching deterministic findings, graph, dashboard, and API
+gates. Phase 6 raw CSV finding rows include non-sensitive target identity
+fields (`target_url`, `parameter`, `cloud_provider`, `resource_id`). Handoff:
+`.claude/handoffs/2026-07-24-stable-proof-surface-gates.md`.
 
 Previous checkpoint: runtime frontend config JS recursion is complete. Explicit
 public runtime config files such as `runtime-env.js`, `env-config.js`, and

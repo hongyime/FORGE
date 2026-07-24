@@ -23,6 +23,7 @@ from forge.models.attack_graph_models import (
 from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
     is_reportable_cloud_validation,
+    linked_cloud_validation_reportability,
     normalize_cloud_exposure_asset_type,
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
@@ -938,6 +939,13 @@ class AttackGraphBuilder:
             (validation_lookup_service,),
         )
 
+    @staticmethod
+    def _vuln_is_deterministic_key_exposure(vuln_type: str, title: str) -> bool:
+        return (
+            str(vuln_type or "").strip().upper() == "DETERMINISTIC_KEY_EXPOSURE"
+            or str(title or "").strip().lower().startswith("active exposed ")
+        )
+
     def _load_vulns(self, con: sqlite3.Connection) -> None:
         if not _table_exists(con, "vulnerability_findings"):
             return
@@ -999,6 +1007,19 @@ class AttackGraphBuilder:
                 if validation_lookup_service and resource_id_str:
                     self._node_for_cloud(validation_lookup_service, resource_id_str)
                 continue
+            if self._vuln_is_deterministic_key_exposure(vuln_type_str, str(title or "")):
+                linked_reportable = linked_cloud_validation_reportability(
+                    {
+                        key: value.get("validation_reportable") is True
+                        for key, value in self._cloud_validation_by_key.items()
+                    },
+                    (validation_lookup_service,),
+                    resource_id_str,
+                )
+                if linked_reportable is False:
+                    if validation_lookup_service and resource_id_str:
+                        self._node_for_cloud(validation_lookup_service, resource_id_str)
+                    continue
             metadata: dict[str, Any] = {
                 "vuln_type": vuln_type_str,
                 "parameter": str(parameter or ""),

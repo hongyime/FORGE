@@ -24,6 +24,8 @@ WEAK_FIREBASE = "weak-firebase-lab"
 STABLE_BUCKET = "stable-report-bucket"
 PLACEHOLDER_BUCKET = "placeholder-report-bucket"
 HONEYPOT_SUPABASE = "honeypotbase"
+WEAK_KEY_TARGET = f"artifact://{WEAK_FIREBASE}/app.js"
+HONEYPOT_KEY_TARGET = f"artifact://{HONEYPOT_SUPABASE}/app.js"
 
 
 def test_stable_proof_gate_filters_validated_looking_cloud_rows_across_surfaces(
@@ -149,6 +151,23 @@ def _build_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
         _insert_stale_finding(con, "aws_s3", STABLE_BUCKET)
         _insert_stale_finding(con, "aws_s3", PLACEHOLDER_BUCKET)
         _insert_stale_finding(con, "supabase", HONEYPOT_SUPABASE)
+        _insert_stale_key_finding(
+            con,
+            "firebase",
+            WEAK_FIREBASE,
+            WEAK_KEY_TARGET,
+            "firebase_database_shallow_read",
+            "Firebase project reference responded with non-empty data.",
+        )
+        _insert_stale_key_finding(
+            con,
+            "supabase",
+            HONEYPOT_SUPABASE,
+            HONEYPOT_KEY_TARGET,
+            "supabase_rest_root",
+            "Supabase REST endpoint returned live data.",
+        )
+        _insert_stale_graph_snapshot(con)
         con.commit()
     finally:
         con.close()
@@ -189,6 +208,122 @@ def _insert_stale_finding(
             provider,
             identifier,
         ),
+    )
+
+
+def _insert_stale_key_finding(
+    con: sqlite3.Connection,
+    asset_type: str,
+    identifier: str,
+    target_url: str,
+    method: str,
+    proof: str,
+) -> None:
+    validation_detail = f"VALIDATED:{method}:{proof}"
+    con.execute(
+        """
+        INSERT INTO key_scanner_findings
+            (engagement_id, domain, service, pattern_name, source_backend,
+             source_url, repo_name, key_redacted, validation_state,
+             validation_detail)
+        VALUES (?, ?, ?, ?, 'artifact', ?, 'app.js', 'KEY...TEST',
+                'ACTIVE', ?)
+        """,
+        (
+            ENGAGEMENT_ID,
+            identifier,
+            asset_type,
+            f"{asset_type}_api_key",
+            target_url,
+            validation_detail,
+        ),
+    )
+    con.execute(
+        """
+        INSERT INTO vulnerability_findings
+            (engagement_id, vuln_type, target_url, parameter, severity, title,
+             description, evidence, cloud_provider, resource_id,
+             compliance_control, remediation_cli)
+        VALUES (?, 'DETERMINISTIC_KEY_EXPOSURE', ?, ?, 'HIGH', ?, ?, ?, ?, ?,
+                'SECRET_MANAGEMENT', 'rotate exposed key')
+        """,
+        (
+            ENGAGEMENT_ID,
+            target_url,
+            f"{asset_type}:{asset_type}_api_key",
+            f"Validated exposed {asset_type} credential reference",
+            f"Stale key exposure row for {identifier}",
+            f"validation={validation_detail}",
+            {
+                "firebase": "firebase",
+                "supabase": "supabase",
+            }[asset_type],
+            identifier,
+        ),
+    )
+
+
+def _insert_stale_graph_snapshot(con: sqlite3.Connection) -> None:
+    graph = {
+        "nodes": [
+            {
+                "node_id": "VULN::weak-key",
+                "node_type": "VULN",
+                "label": "Validated exposed firebase credential reference",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "DETERMINISTIC_KEY_EXPOSURE",
+                    "validation_asset_type": "firebase",
+                    "resource_id": WEAK_FIREBASE,
+                    "validation_status": "VALIDATED",
+                    "validation_method": "firebase_database_shallow_read",
+                    "validation_proof": "Firebase project reference responded with non-empty data.",
+                },
+            },
+            {
+                "node_id": "VULN::honeypot-key",
+                "node_type": "VULN",
+                "label": "Validated exposed supabase credential reference",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "DETERMINISTIC_KEY_EXPOSURE",
+                    "validation_asset_type": "supabase",
+                    "resource_id": HONEYPOT_SUPABASE,
+                    "validation_status": "VALIDATED",
+                    "validation_method": "supabase_rest_root",
+                    "validation_proof": "Supabase REST endpoint returned live data.",
+                },
+            },
+            {
+                "node_id": "CLOUD::weak-firebase",
+                "node_type": "CLOUD",
+                "label": WEAK_FIREBASE,
+                "source_table": "cloud_assets",
+                "metadata": {
+                    "service": "firebase",
+                    "identifier": WEAK_FIREBASE,
+                    "validation_status": "VALIDATED",
+                    "validation_method": "firebase_database_shallow_read",
+                },
+            },
+        ],
+        "edges": [
+            {
+                "source_node_id": "VULN::weak-key",
+                "target_node_id": "CLOUD::weak-firebase",
+            }
+        ],
+        "critical_path_nodes": ["VULN::weak-key", "CLOUD::weak-firebase"],
+    }
+    con.execute(
+        """
+        INSERT INTO attack_graph_snapshots
+            (engagement_id, snapshot_at, node_count, edge_count,
+             critical_path_weight, min_severity, pruned, graph_json,
+             mermaid_output, dot_output)
+        VALUES (?, '2026-07-24T00:00:00Z', 3, 1, 90.0, 'LOW', 0, ?, '', '')
+        """,
+        (ENGAGEMENT_ID, json.dumps(graph, sort_keys=True)),
     )
 
 
@@ -252,6 +387,8 @@ def _assert_phase6_report_surface_filters_stale_rows(
     assert f"firebase://{WEAK_FIREBASE}" not in report_text
     assert f"aws_s3://{PLACEHOLDER_BUCKET}" not in report_text
     assert f"supabase://{HONEYPOT_SUPABASE}" not in report_text
+    assert WEAK_KEY_TARGET not in report_text
+    assert HONEYPOT_KEY_TARGET not in report_text
     inventory = payload["context"]["cloud_validation_inventory"]
     assert _inventory_status(inventory, "firebase", WEAK_FIREBASE) == "VALIDATED"
     assert _inventory_status(inventory, "aws_s3", PLACEHOLDER_BUCKET) == "VALIDATED"
@@ -312,6 +449,8 @@ def _assert_dashboard_filters_stale_rows(data_dir: Path, reports_dir: Path) -> s
         f"firebase://{STABLE_FIREBASE}",
     }
     assert detail["severity_summary"]["HIGH"] == 2
+    assert detail["counts"]["key_scanner_findings"] == 0
+    _assert_graph_payload_excludes_stale_key_nodes(detail)
     validation_rows = {
         (row["Type"], row["Asset"]): row["Status"]
         for row in detail["sections"]["cloud_validation_results"]
@@ -341,7 +480,9 @@ def _assert_api_filters_stale_rows(slug: str) -> None:
         f"firebase://{STABLE_FIREBASE}",
     }
     assert detail["severity_summary"]["HIGH"] == 2
+    assert detail["counts"]["key_scanner_findings"] == 0
     assert summary["vulnerability_findings"].get("HIGH", 0) == 2
+    _assert_graph_payload_excludes_stale_key_nodes(detail)
 
 
 def _assert_deterministic_engine_removes_unstable_findings(db_path: Path) -> None:
@@ -406,3 +547,20 @@ def _dashboard_targets(detail_payload: dict[str, object]) -> set[str]:
     rows = sections.get("vulnerability_findings")
     assert isinstance(rows, list)
     return {str(row.get("Target") or "") for row in rows if isinstance(row, dict)}
+
+
+def _assert_graph_payload_excludes_stale_key_nodes(
+    detail_payload: dict[str, object],
+) -> None:
+    graph_payload = detail_payload.get("graph_payload")
+    assert isinstance(graph_payload, dict)
+    nodes = graph_payload.get("nodes")
+    assert isinstance(nodes, list)
+    node_ids = {
+        str(node.get("node_id") or "")
+        for node in nodes
+        if isinstance(node, dict)
+    }
+    assert "VULN::weak-key" not in node_ids
+    assert "VULN::honeypot-key" not in node_ids
+    assert "VULN::weak-key" not in graph_payload.get("critical_path_nodes", [])

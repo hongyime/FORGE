@@ -21,6 +21,7 @@ from xml.etree import ElementTree
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
+    linked_cloud_validation_reportability,
     latest_cloud_validation_reportability_index,
     normalize_cloud_exposure_asset_type,
 )
@@ -523,15 +524,17 @@ def _key_row_is_reportable(
     state = str(row["validation_state"] or "").strip().upper() if "validation_state" in row.keys() else ""
     if state != "ACTIVE":
         return False
-    if _key_validation_detail_is_reportable(row["validation_detail"] if "validation_detail" in row.keys() else ""):
-        return True
     identifier = str(row["domain"] or "").strip().lower() if "domain" in row.keys() else ""
-    if not identifier:
-        return False
     service = str(row["service"] or "").strip().lower() if "service" in row.keys() else ""
-    return any(
-        validation_index.get((asset_type, identifier)) is True
-        for asset_type in _validation_asset_types_for_key_service(service)
+    linked_reportable = linked_cloud_validation_reportability(
+        validation_index,
+        _validation_asset_types_for_key_service(service),
+        identifier,
+    )
+    if linked_reportable is not None:
+        return linked_reportable
+    return _key_validation_detail_is_reportable(
+        row["validation_detail"] if "validation_detail" in row.keys() else ""
     )
 
 
@@ -614,6 +617,14 @@ def _vulnerability_row_is_reportable(
         reportable = validation_index.get((asset, identifier))
         return reportable is True
     if vuln_type == "DETERMINISTIC_KEY_EXPOSURE" or title.lower().startswith("active exposed "):
+        identifier = _vulnerability_validation_identifier(row)
+        linked_reportable = linked_cloud_validation_reportability(
+            validation_index,
+            (asset,),
+            identifier,
+        )
+        if linked_reportable is not None:
+            return linked_reportable
         proof = parse_validated_detail(str(row["evidence"] or "") if "evidence" in row.keys() else "")
         return str(proof["validation_status"] or "").strip().upper() == "VALIDATED"
     return True
@@ -1160,7 +1171,12 @@ def _graph_node_validation_key(node: dict[str, Any]) -> tuple[str, str]:
     node_text = f"{node.get('label') or ''} {metadata.get('target_url') or ''}".lower()
     if asset in {"aws", "amazon"} and "s3" in node_text:
         asset = "aws_s3"
-    identifier = str(metadata.get("resource_id") or metadata.get("identifier") or "").strip().lower()
+    identifier = str(
+        metadata.get("resource_id")
+        or metadata.get("identifier")
+        or metadata.get("domain")
+        or ""
+    ).strip().lower()
     return asset, identifier
 
 
@@ -1193,14 +1209,32 @@ def _graph_node_key_validation_detail(node: dict[str, Any]) -> str:
     return ""
 
 
-def _graph_node_is_unreportable_key_finding(node: dict[str, Any]) -> bool:
+def _graph_node_is_unreportable_key_finding(
+    node: dict[str, Any],
+    validation_index: dict[tuple[str, str], bool],
+) -> bool:
     node_type = str(node.get("node_type") or node.get("entity_type") or "").strip().upper()
     source_table = str(node.get("source_table") or "").strip().lower()
     metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
-    if node_type != "APIKEY" and source_table != "key_scanner_findings":
+    vuln_type = str(metadata.get("vuln_type") or node.get("vuln_type") or "").strip().upper()
+    label = str(node.get("label") or node.get("title") or "").strip().lower()
+    is_key_scanner_node = node_type == "APIKEY" or source_table == "key_scanner_findings"
+    is_key_finding_node = (
+        source_table == "vulnerability_findings"
+        and (vuln_type == "DETERMINISTIC_KEY_EXPOSURE" or label.startswith("active exposed "))
+    )
+    if not is_key_scanner_node and not is_key_finding_node:
         return False
-    if source_table and source_table != "key_scanner_findings" and node_type != "APIKEY":
+    if source_table and source_table not in {"key_scanner_findings", "vulnerability_findings"} and node_type != "APIKEY":
         return False
+    asset, identifier = _graph_node_validation_key(node)
+    linked_reportable = linked_cloud_validation_reportability(
+        validation_index,
+        (asset,),
+        identifier,
+    )
+    if linked_reportable is not None:
+        return not linked_reportable
     detail = _graph_node_key_validation_detail(node)
     if not detail and not any(
         str(metadata.get(key) or "").strip()
@@ -1228,7 +1262,7 @@ def _filter_graph_payload_for_validation(
         if _graph_node_is_unreportable_cloud_finding(
             node,
             validation_index,
-        ) or _graph_node_is_unreportable_key_finding(node):
+        ) or _graph_node_is_unreportable_key_finding(node, validation_index):
             if node_id:
                 removed.add(node_id)
             continue

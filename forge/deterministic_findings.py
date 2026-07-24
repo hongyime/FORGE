@@ -13,6 +13,7 @@ from forge.utils.cloud_exposure_gate import (
     STORAGE_LISTING_VALIDATION_METHODS,
     STORAGE_METADATA_VALIDATION_METHODS,
     is_reportable_cloud_validation,
+    linked_cloud_validation_reportability,
     latest_cloud_validation_reportability_index,
 )
 from forge.utils.validation_proof import parse_validated_detail
@@ -80,6 +81,21 @@ def _cloud_provider(asset_type: str) -> str | None:
         "gcs": "gcp",
         "azure_blob": "azure",
     }.get(asset_type)
+
+
+def _validation_asset_types_for_key_service(service: str) -> tuple[str, ...]:
+    normalized = _normalize_asset_type(service)
+    return {
+        "amazon": ("aws_s3",),
+        "aws": ("aws_s3",),
+        "azure": ("azure_blob",),
+        "digitalocean": ("do_spaces",),
+        "do": ("do_spaces",),
+        "firebase": ("firebase",),
+        "gcp": ("gcs",),
+        "google": ("gcs",),
+        "supabase": ("supabase",),
+    }.get(normalized, (normalized,) if normalized else ())
 
 
 def _asset_label(asset_type: str) -> str:
@@ -340,10 +356,16 @@ class DeterministicFindingEngine:
         if validation_state != "ACTIVE" or not service:
             return None
 
-        linked_confirmed = validation_index.get((service, domain.lower())) is True
-        parsed_validation = parse_validated_detail(validation_detail)
-        validator_confirmed = parsed_validation["validation_status"] == "VALIDATED"
-        confirmed = linked_confirmed or validator_confirmed
+        linked_reportable = linked_cloud_validation_reportability(
+            validation_index,
+            _validation_asset_types_for_key_service(service),
+            domain,
+        )
+        if linked_reportable is not None:
+            confirmed = linked_reportable
+        else:
+            parsed_validation = parse_validated_detail(validation_detail)
+            confirmed = parsed_validation["validation_status"] == "VALIDATED"
         if not confirmed:
             return None
         description = (

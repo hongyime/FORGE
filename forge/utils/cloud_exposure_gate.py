@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import sqlite3
 
 from forge.utils.validation_proof import parse_validated_detail
@@ -196,3 +196,26 @@ def latest_cloud_validation_reportability_index(
         )
         index[(asset_type, identifier)] = reportable
     return index
+
+
+def linked_cloud_validation_reportability(
+    validation_index: Mapping[tuple[str, str], bool],
+    asset_types: Iterable[str],
+    identifier: str,
+) -> bool | None:
+    """Return latest linked reportability when a cloud validation row exists."""
+
+    normalized_identifier = str(identifier or "").strip().lower()
+    if not normalized_identifier:
+        return None
+    matches: list[bool] = []
+    for raw_asset_type in asset_types:
+        asset_type = normalize_cloud_exposure_asset_type(str(raw_asset_type or ""))
+        if not asset_type:
+            continue
+        key = (asset_type, normalized_identifier)
+        if key in validation_index:
+            matches.append(validation_index[key] is True)
+    if not matches:
+        return None
+    return any(matches)

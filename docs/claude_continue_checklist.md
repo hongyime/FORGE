@@ -125,12 +125,26 @@ historical notes only, not as current instructions.
   reportability slice passed with it (`2 passed`); pytest engagement cleanup
   reported `removed=2 remaining=0`. Handoff:
   `.claude/handoffs/2026-07-24-stable-proof-surface-gates.md`.
-- [ ] Next target: run a broader validation/reportability regression slice and
-  fix any drift. Recommended local subset: core validation proof parsing,
-  latest validation reportability integration, attack graph stale-validation
-  gates, reporting dashboard validation gates, and the new stable-proof surface
-  fixture. Keep it local/mocked and preserve inventory visibility while keeping
-  reportable findings proof-bound.
+- [x] Broader validation/reportability regression checkpoint:
+  Latest linked cloud validation now wins for deterministic key-exposure rows
+  across deterministic synthesis, Phase 6 key-finding counts/report context,
+  attack graph VULN nodes, dashboard/API finding tables, key-scanner counts,
+  and imported graph payload filtering. If a linked latest validation row exists
+  for the same cloud asset and identifier, stale `VALIDATED` proof text can no
+  longer override weak, placeholder, unverified, or honeypot inventory. The
+  stable-proof surface fixture now includes stale Firebase/Supabase key
+  exposures plus stale snapshot VULN nodes and proves they remain inventory
+  only. The older Phase 6 S3 report fixture was corrected to use concrete object
+  listing proof instead of low-signal "object metadata" text. Verification:
+  compile/Ruff passed; expanded stable-proof surface fixture passed (`1 passed,
+  9 warnings`); broader local reportability slice passed (`129 passed, 19
+  warnings`); deterministic finding suite passed (`18 passed`); pytest
+  engagement cleanup reported `removed=4 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-key-exposure-latest-validation-gates.md`.
+- [ ] Next target: resume recursive discovery worker-pool backlog. Continue
+  moving remaining safe sequential enrichers under the bounded worker-pool path
+  one source-gated passive/static family at a time, with local/mocked fixtures,
+  no live target assumptions, and no rate-limit bypass/proxy rotation.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from
