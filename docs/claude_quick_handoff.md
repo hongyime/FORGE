@@ -25,7 +25,18 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: artifact queue/cloud inventory audit-lineage is complete.
+Latest checkpoint: dashboard storage stable-proof fixture is complete. The stale
+dashboard storage-validation fixture now uses the current strict proof formats:
+S3/Spaces XML object listings and GCS storage JSON object inventory. The
+dashboard cloud/graph/detail selector is green without weakening validation
+gates or changing production code. Verification: Ruff/compile passed; dashboard
+cloud/graph/detail selector passed (`11 passed, 14 deselected`);
+validation-proof cloud listing/legacy slice passed (`22 passed, 83
+deselected`); stable-proof surface integration passed (`1 passed`); dashboard
+cloud-alias graph test passed (`1 passed`). Handoff:
+`.claude/handoffs/2026-07-24-dashboard-storage-stable-proof-fixture.md`.
+
+Previous checkpoint: artifact queue/cloud inventory audit-lineage is complete.
 `ArtifactQueueProcessor` now writes bounded non-sensitive audit rows when
 artifact text queues a follow-on artifact URL (`artifact_text_url_queued`) and
 when artifact parsing stores a new cloud inventory row
@@ -244,10 +255,10 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: audit/update the stale dashboard storage-validation
-stable-proof fixture so the `tests/reporting/test_dashboard.py -k "cloud or
-graph or detail"` selector is green under current strict proof gates. Do not
-add live target probing without explicit ROE/scope manifest and mocked tests.
+Current next gate: run a compact regression sweep across artifact recursion,
+cloud stable-proof gates, dashboard detail, report context/raw export, and
+cleanup inventory before opening the next implementation slice. Do not add live
+target probing without explicit ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

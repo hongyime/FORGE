@@ -2298,7 +2298,10 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
                     "service": "aws_s3",
                     "validation_status": "VALIDATED",
                     "validation_method": "s3_list_bucket",
-                    "validation_evidence": "HTTP 200 listed object keys: invoices/,backups/",
+                    "validation_evidence": (
+                        "<ListBucketResult><Contents><Key>reports/customer-data.csv</Key>"
+                        "</Contents></ListBucketResult>"
+                    ),
                 },
             },
             {
@@ -2313,7 +2316,10 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
                     "service": "gcs",
                     "validation_status": "VALIDATED",
                     "validation_method": "gcs_list_bucket",
-                    "validation_evidence": "HTTP 200 listed object keys: reports/final.pdf",
+                    "validation_evidence": (
+                        '{"kind":"storage#objects","items":'
+                        '[{"name":"reports/final.pdf","bucket":"acme-gcs-public"}]}'
+                    ),
                 },
             },
             {
@@ -2343,7 +2349,10 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
                     "service": "do_spaces",
                     "validation_status": "VALIDATED",
                     "validation_method": "do_spaces_list_bucket",
-                    "validation_evidence": "HTTP 200 listed object keys: exports/client.csv",
+                    "validation_evidence": (
+                        "<ListBucketResult><Contents><Key>exports/client.csv</Key>"
+                        "</Contents></ListBucketResult>"
+                    ),
                 },
             },
         ],
@@ -2400,7 +2409,10 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
                     "VALIDATED",
                     "s3_list_bucket",
                     200,
-                    "HTTP 200 listed object keys: invoices/,backups/",
+                    (
+                        "<ListBucketResult><Contents><Key>reports/customer-data.csv</Key>"
+                        "</Contents></ListBucketResult>"
+                    ),
                     "storage proof; honeypot heuristics passed",
                     "2026-07-09T09:30:00",
                 ),
@@ -2410,7 +2422,10 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
                     "VALIDATED",
                     "gcs_list_bucket",
                     200,
-                    "HTTP 200 listed object keys: reports/final.pdf",
+                    (
+                        '{"kind":"storage#objects","items":'
+                        '[{"name":"reports/final.pdf","bucket":"acme-gcs-public"}]}'
+                    ),
                     "gcs proof; honeypot heuristics passed",
                     "2026-07-09T09:31:00",
                 ),
@@ -2430,7 +2445,10 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
                     "VALIDATED",
                     "do_spaces_list_bucket",
                     200,
-                    "HTTP 200 listed object keys: exports/client.csv",
+                    (
+                        "<ListBucketResult><Contents><Key>exports/client.csv</Key>"
+                        "</Contents></ListBucketResult>"
+                    ),
                     "spaces proof; honeypot heuristics passed",
                     "2026-07-09T09:33:00",
                 ),
@@ -2470,7 +2488,7 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
         for row in detail_payload["sections"]["cloud_validation_results"]
     }
     assert validation_rows[("aws_s3", "acme-public-assets")]["Status"] == "VALIDATED"
-    assert "listed object keys" in validation_rows[("gcs", "acme-gcs-public")]["Evidence"]
+    assert "storage#objects" in validation_rows[("gcs", "acme-gcs-public")]["Evidence"]
     assert validation_rows[("azure_blob", "acmeblob/public")]["Status"] == (
         "ACCESSIBLE_BUT_NO_DATA"
     )

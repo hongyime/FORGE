@@ -91,9 +91,19 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit/update the stale dashboard storage-validation
-  stable-proof fixture so the `tests/reporting/test_dashboard.py -k "cloud or
-  graph or detail"` selector is green under current strict proof gates.
+- [ ] Next checkpoint: run a compact regression sweep across artifact recursion,
+  cloud stable-proof gates, dashboard detail, report context/raw export, and
+  cleanup inventory before opening the next implementation slice.
+- [x] Dashboard storage stable-proof fixture checkpoint:
+  Updated the stale dashboard storage-validation fixture to use the current
+  strict proof formats: S3/Spaces XML object listings and GCS storage JSON
+  object inventory. The dashboard cloud/graph/detail selector is now green
+  without weakening validation gates or changing production code. Verification:
+  Ruff passed; compile passed; dashboard cloud/graph/detail selector passed
+  (`11 passed, 14 deselected`); validation-proof cloud listing/legacy slice
+  passed (`22 passed, 83 deselected`); stable-proof surface integration passed
+  (`1 passed`); dashboard cloud-alias graph test passed (`1 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-dashboard-storage-stable-proof-fixture.md`.
 - [x] Artifact queue/cloud inventory audit-lineage checkpoint:
   `ArtifactQueueProcessor` now writes bounded non-sensitive audit rows when
   artifact text queues a follow-on artifact URL
