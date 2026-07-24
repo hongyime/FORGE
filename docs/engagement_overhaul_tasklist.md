@@ -91,12 +91,18 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: implement host-surface resume retry fairness. Sidecar
-  audit found retryable `fanout_d_host_surface` seed runs can be starved behind
-  new never-attempted hosts when the first-20 batch is full. Patch
-  `forge/cli.py` to reserve or prioritize retryable host surfaces in the batch,
-  then add a focused resume regression proving a stale running host is retried
-  in the first resumed iteration while new-host backlog remains pending.
+- [ ] Next checkpoint: perform a fresh current-code audit for the next real
+  kill-chain correctness gap before adding provider breadth or UI polish.
+  Prioritize validation/report gates, recursive queue termination,
+  artifact/static extraction fidelity, or dashboard evidence lineage.
+- [x] Host-surface resume retry fairness checkpoint:
+  Pending `fanout_d_host_surface` rows that were attempted before but not
+  completed now run before never-attempted known hosts, so abandoned/recovered
+  host-surface work is retried in the next resumed D-stage batch while
+  remaining new-host backlog stays visible in pending-work metadata.
+  Verification: focused host-surface retry/backlog slice passed (`2 passed`),
+  adjacent stale-running recovery regression passed (`1 passed`), and Ruff
+  plus py_compile passed for touched files.
 - [x] Legacy validation-inventory report-gate checkpoint:
   `vulnerability_findings` rows tagged as validation inventory, or generic rows
   whose evidence parses to non-reportable validation detail such as

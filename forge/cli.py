@@ -14002,7 +14002,7 @@ def kill_chain(
             for hostname in pending_hosts
             if hostname in attempted_host_surfaces
         ]
-        return [*never_attempted, *retryable]
+        return [*retryable, *never_attempted]
 
     def _pending_host_surface_count() -> int:
         return len(_pending_host_surface_values(max_workers=parallel_workers))

@@ -20,6 +20,100 @@ def _write_report_if_requested(module_argv: tuple[str, ...], tmp_path: Path) -> 
     report_path.write_text("# Final report\n", encoding="utf-8")
 
 
+def _host_from_url(url: str) -> str:
+    return url.split("://", 1)[1].split("/", 1)[0].lower()
+
+
+def _emit_done_progress(
+    items: object,
+    *,
+    progress_label: str | None,
+    progress_callback,
+) -> None:  # noqa: ANN001
+    if progress_callback is None or not progress_label:
+        return
+    total = len(items) if hasattr(items, "__len__") else 0
+    progress_callback(
+        progress_label,
+        {
+            "total": total,
+            "workers": min(1, total) if total else 0,
+            "running": 0,
+            "pending": 0,
+            "queue_depth": 0,
+            "completed": total,
+            "failed": 0,
+            "eta_seconds": 0.0,
+        },
+    )
+
+
+def _install_host_surface_test_mocks(
+    monkeypatch,
+    tmp_path: Path,
+    *,
+    fetched_hosts_by_label: dict[str, list[str]] | None = None,
+    fetched_hosts: list[str] | None = None,
+) -> None:  # noqa: ANN001
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        label = str(progress_label or "")
+        if label.endswith(".D cloud+HTML fetch"):
+            hosts = [_host_from_url(str(spec.url)) for spec in specs]
+            if fetched_hosts_by_label is not None:
+                fetched_hosts_by_label.setdefault(label, []).extend(hosts)
+            if fetched_hosts is not None:
+                fetched_hosts.extend(hosts)
+            return ["<html><title>ok</title></html>" for _ in specs]
+        if label.endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        _emit_done_progress(
+            items,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del lookup_func, max_workers
+        _emit_done_progress(
+            ips,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
+        return [(str(ip), "") for ip in ips]
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+    monkeypatch.setattr("forge.cli._run_ptr_lookup_batch", _fake_ptr_lookup_batch)
+
+
 def _latest_run_metadata(db_path: Path) -> dict[str, object]:
     con = sqlite3.connect(db_path)
     try:
@@ -145,84 +239,11 @@ def test_kill_chain_known_host_surface_backlog_advances_beyond_first_batch(
         con.close()
 
     fetched_hosts_by_label: dict[str, list[str]] = {}
-
-    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
-        del kwargs
-        module_argv = tuple(str(item) for item in cmd_argv)
-        _write_report_if_requested(module_argv, tmp_path)
-        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
-
-    def _host_from_url(url: str) -> str:
-        return url.split("://", 1)[1].split("/", 1)[0].lower()
-
-    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
-        label = str(progress_label or "")
-        if label.endswith(".D cloud+HTML fetch"):
-            fetched_hosts_by_label.setdefault(label, []).extend(
-                _host_from_url(str(spec.url))
-                for spec in specs
-            )
-            return ["<html><title>ok</title></html>" for _ in specs]
-        if label.endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
-            return ["" for _ in specs]
-        raise AssertionError(f"unexpected html batch label: {progress_label}")
-
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
-        del worker, max_workers
-        if progress_callback is not None and progress_label:
-            progress_callback(
-                progress_label,
-                {
-                    "total": len(items),
-                    "workers": min(1, len(items)) if items else 0,
-                    "running": 0,
-                    "pending": 0,
-                    "queue_depth": 0,
-                    "completed": len(items),
-                    "failed": 0,
-                    "eta_seconds": 0.0,
-                },
-            )
-        progress_name = str(progress_label or "")
-        if progress_name.endswith(".G DNS enrichment"):
-            return [
-                {
-                    "root_domain": str(item),
-                    "queried_hosts": [str(item)],
-                    "cname_targets": [],
-                    "signals": [],
-                }
-                for item in items
-            ]
-        if progress_name.endswith(".H whois/RDAP"):
-            return [{"root_domain": str(item), "rdap": {}} for item in items]
-        if progress_name.endswith(".I Wayback CDX"):
-            return [{"root_domain": str(item), "urls": []} for item in items]
-        raise AssertionError(f"unexpected callable batch label: {progress_label}")
-
-    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
-        del lookup_func, max_workers
-        if progress_callback is not None and progress_label:
-            progress_callback(
-                progress_label,
-                {
-                    "total": len(ips),
-                    "workers": min(1, len(ips)) if ips else 0,
-                    "running": 0,
-                    "pending": 0,
-                    "queue_depth": 0,
-                    "completed": len(ips),
-                    "failed": 0,
-                    "eta_seconds": 0.0,
-                },
-            )
-        return [(str(ip), "") for ip in ips]
-
-    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
-    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
-    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
-    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
-    monkeypatch.setattr("forge.cli._run_ptr_lookup_batch", _fake_ptr_lookup_batch)
+    _install_host_surface_test_mocks(
+        monkeypatch,
+        tmp_path,
+        fetched_hosts_by_label=fetched_hosts_by_label,
+    )
 
     from forge.cli import kill_chain
 
@@ -275,6 +296,123 @@ def test_kill_chain_known_host_surface_backlog_advances_beyond_first_batch(
         json.loads(str(metadata_json or "{}"))["fetch_status"] == "payload"
         for _seed_value, _status, metadata_json in rows
     )
+
+
+def test_kill_chain_resume_prioritizes_retryable_host_surface_rows(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+    stale_host = "zz-retry.acme.example"
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context)
+            VALUES (?, ?, ?, 'unknown', '{}')
+            """,
+            [
+                (1001, f"198.51.100.{index + 1}", f"host{index:02d}.acme.example")
+                for index in range(25)
+            ]
+            + [(1001, "198.51.100.250", stale_host)],
+        )
+        cur = con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES (?, ?, 'subdomain', 'discovered', 'running', 1, 0.8, '{}')
+            """,
+            (1001, stale_host),
+        )
+        stale_seed_id = int(cur.lastrowid)
+        con.execute(
+            """
+            INSERT INTO seed_runs
+                (engagement_id, seed_id, loop_name, status, input_count, output_count,
+                 metadata_json, started_at)
+            VALUES (?, ?, 'fanout_d_host_surface', 'running', 1, 0, '{"iteration":0}',
+                    '2026-07-09 08:00:00')
+            """,
+            (1001, stale_seed_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    fetched_hosts: list[str] = []
+    _install_host_surface_test_mocks(
+        monkeypatch,
+        tmp_path,
+        fetched_hosts=fetched_hosts,
+    )
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    first_batch_hosts = set(fetched_hosts)
+    assert stale_host in first_batch_hosts
+    assert "host16.acme.example" in first_batch_hosts
+    assert "host17.acme.example" not in first_batch_hosts
+
+    metadata = _latest_run_metadata(db_path)
+    pending_counts = metadata.get("pending_work_counts", {})
+    assert pending_counts["host_surfaces"] >= 1
+    assert metadata["last_iteration_stable"] is False
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_d_host_surface'
+              AND es.seed_value=?
+            ORDER BY sr.id
+            """,
+            (stale_host,),
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert [row[0] for row in rows] == ["failed", "completed"]
+    assert "abandoned before explicit completion" in str(rows[0][1] or "")
+    completed_meta = json.loads(str(rows[1][2] or "{}"))
+    assert completed_meta["fetch_status"] == "payload"
+    assert completed_meta["hostname"] == stale_host
 
 
 def test_kill_chain_skips_over_depth_persisted_recursive_seeds(
