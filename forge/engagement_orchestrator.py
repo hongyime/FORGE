@@ -176,6 +176,10 @@ from forge.utils.artifact_storage_client_config import (
     storage_client_config_candidates,
     storage_client_config_public_payload_text,
 )
+from forge.utils.artifact_supabase_config import (
+    supabase_cli_config_artifact_label,
+    supabase_cli_config_urls,
+)
 from forge.utils.artifact_terraform_dns import terraform_dns_record_hosts
 from forge.utils.artifact_secret_provider_class import secret_provider_class_candidates
 from forge.utils.artifact_sbom import sbom_multisuffix_format_label
@@ -6181,6 +6185,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if storage_client_config_artifact_label(raw_lowered):
         return True
+    if supabase_cli_config_artifact_label(raw_lowered):
+        return True
     if amplify_client_config_artifact_label(raw_lowered):
         return True
     if ecs_task_definition_artifact_label(raw_lowered):
@@ -6378,6 +6384,9 @@ def _artifact_format_label(value: str | Path) -> str:
     storage_client_label = storage_client_config_artifact_label(str(value or ""))
     if storage_client_label:
         return storage_client_label
+    supabase_config_label = supabase_cli_config_artifact_label(str(value or ""))
+    if supabase_config_label:
+        return supabase_config_label
     amplify_client_label = amplify_client_config_artifact_label(str(value or ""))
     if amplify_client_label:
         return amplify_client_label
@@ -18735,6 +18744,7 @@ class ArtifactQueueProcessor:
         "connection_client_text",
         "database_client_text",
         "storage_client_config_text",
+        "supabase_cli_config_text",
         "amplify_client_config_text",
         "hashicorp_config_text",
         "framework_config_text",
@@ -20467,6 +20477,13 @@ class ArtifactQueueProcessor:
             return self._storage_client_config_structured_payload_text(
                 text,
                 source_hint=source_hint,
+            )
+        if family == "supabase_cli_config_text":
+            return "\n".join(
+                supabase_cli_config_urls(
+                    text,
+                    source_hint=source_hint,
+                )
             )
         if family == "amplify_client_config_text":
             return self._amplify_client_config_structured_payload_text(
