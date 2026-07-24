@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import zipfile
 from pathlib import Path
 from textwrap import dedent
 
@@ -174,3 +175,137 @@ def test_artifact_well_known_terraform_json_dns_records_recurse_to_host_seeds(
     assert ("docs.acme.example", "subdomain") in seeds
     assert ("docs-origin.acme.example", "subdomain") in seeds
     assert ("acme.example", "domain") in seeds
+
+
+def test_artifact_terraform_dns_records_recurse_from_archive_member(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    bootstrap_engagement(db_path, scope_json='["acme.example"]')
+    artifact_root = tmp_path / "artifacts"
+    artifact_root.mkdir()
+    archive_path = artifact_root / "infra.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("terraform/main.tf", TERRAFORM_DNS_PAYLOAD)
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    assert processor.ingest_local_artifacts([artifact_root]) == 1
+    summary = processor.process()
+
+    assert summary.processed == 1
+    assert summary.discovered_seeds >= 7
+
+    con = sqlite3.connect(db_path)
+    try:
+        metadata = con.execute(
+            """
+            SELECT metadata_json
+            FROM artifact_queue
+            WHERE engagement_id=1001 AND source_url=?
+            """,
+            (archive_path.resolve().as_posix(),),
+        ).fetchone()
+        assert metadata is not None
+        artifact_metadata = json.loads(str(metadata[0] or "{}"))
+        assert artifact_metadata["format"] == "zip"
+        assert artifact_metadata["payload_count"] >= 1
+
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert ("api.acme.example", "subdomain") in seeds
+    assert ("portal.acme.example", "subdomain") in seeds
+    assert ("origin.acme.example", "subdomain") in seeds
+    assert ("cdn.acme.example", "subdomain") in seeds
+    assert ("edge.acme.example", "subdomain") in seeds
+    assert ("docs.acme.example", "subdomain") in seeds
+    assert ("docs-origin.acme.example", "subdomain") in seeds
+    assert ("acme.example", "domain") in seeds
+
+
+def test_remote_artifact_terraform_dns_archive_member_preserves_derived_from_provenance(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    bootstrap_engagement(db_path, scope_json='["acme.example"]')
+    archive_path = tmp_path / "remote-infra.zip"
+    source_url = "https://downloads.acme.example/remote-infra.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("terraform/main.tf", TERRAFORM_DNS_PAYLOAD)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES
+                (1001, ?, 'url', 'scope', 'pending', 0, 0.88, '{}')
+            """,
+            (source_url,),
+        )
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, local_path, artifact_type, discovered_from, status, metadata_json)
+            VALUES
+                (1001, ?, ?, 'archive', 'engagement_seed', 'downloaded', '{}')
+            """,
+            (source_url, archive_path.resolve().as_posix()),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = ArtifactQueueProcessor(db_path, 1001).process()
+
+    assert summary.processed == 1
+    assert summary.discovered_seeds >= 7
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        relation_row = con.execute(
+            """
+            SELECT source.seed_value, target.seed_value, sr.evidence_json
+            FROM seed_relations sr
+            JOIN engagement_seeds source ON source.id=sr.source_seed_id
+            JOIN engagement_seeds target ON target.id=sr.target_seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.relation_type='derived_from'
+              AND source.seed_value=?
+              AND target.seed_value='api.acme.example'
+            """,
+            (source_url,),
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert ("api.acme.example", "subdomain") in seeds
+    assert ("portal.acme.example", "subdomain") in seeds
+    assert ("origin.acme.example", "subdomain") in seeds
+    assert relation_row is not None
+    assert relation_row[0] == source_url
+    assert relation_row[1] == "api.acme.example"
+    evidence = json.loads(str(relation_row[2] or "{}"))
+    assert evidence["source_file"] == source_url
+    assert evidence["format"] == "zip"

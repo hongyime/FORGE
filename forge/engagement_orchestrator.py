@@ -20307,7 +20307,7 @@ class ArtifactQueueProcessor:
     def _expand_structured_discovery_jobs(
         self,
         payloads: list[tuple[str, str, str]],
-    ) -> list[tuple[str, str]]:
+    ) -> list[tuple[str, str, str]]:
         payload_job_batches = self._run_ordered_local_batch(
             payloads,
             self._structured_discovery_payload_job,
@@ -20330,7 +20330,7 @@ class ArtifactQueueProcessor:
             self._structured_discovery_result_entry,
             default_factory=lambda: None,
         )
-        discovery_jobs: list[tuple[str, str]] = []
+        discovery_jobs: list[tuple[str, str, str]] = []
         for result in result_batches:
             if not isinstance(result, list):
                 continue
@@ -20358,10 +20358,11 @@ class ArtifactQueueProcessor:
     def _structured_discovery_jobs_for_payload(
         self,
         payload: tuple[str, str, str],
-    ) -> list[tuple[str, str]]:
+    ) -> list[tuple[str, str, str]]:
         source_file, extract_path, text = payload
         if not text.strip():
             return []
+        source_hint = f"{source_file}/{extract_path}" if source_file else extract_path
         structured_payloads = self._run_ordered_local_batch(
             self._STRUCTURED_DISCOVERY_FAMILIES,
             lambda family: self._build_structured_discovery_payload_fragment(
@@ -20377,6 +20378,7 @@ class ArtifactQueueProcessor:
             lambda payload_batch: self._structured_discovery_payload_entry(
                 payload_batch,
                 source_file=source_file,
+                source_hint=source_hint,
             ),
             default_factory=lambda: None,
         )
@@ -20391,12 +20393,13 @@ class ArtifactQueueProcessor:
         payload_batch: tuple[int, str],
         *,
         source_file: str,
-    ) -> tuple[str, str] | None:
+        source_hint: str,
+    ) -> tuple[str, str, str] | None:
         _payload_index, structured_payload = payload_batch
         payload_text = str(structured_payload or "").strip()
         if not payload_text:
             return None
-        return source_file, payload_text
+        return source_file, source_hint, payload_text
 
     def _build_structured_discovery_payload_fragment(
         self,
@@ -21087,7 +21090,7 @@ class ArtifactQueueProcessor:
 
     def _collect_generic_text_discovery_batches(
         self,
-        discovery_jobs: list[tuple[str, str]],
+        discovery_jobs: list[tuple[str, str, str]],
     ) -> list[ArtifactTextDiscoveryBatch]:
         job_batches = self._run_ordered_local_batch(
             discovery_jobs,
@@ -21106,22 +21109,23 @@ class ArtifactQueueProcessor:
 
     @staticmethod
     def _generic_text_discovery_job(
-        discovery_job: tuple[str, str],
-    ) -> tuple[str, str] | None:
-        source_file, text = discovery_job
+        discovery_job: tuple[str, str, str],
+    ) -> tuple[str, str, str] | None:
+        source_file, source_hint, text = discovery_job
         if not str(text or "").strip():
             return None
-        return str(source_file), text
+        return str(source_file), str(source_hint or source_file), text
 
     def _collect_generic_text_discovery_job_result(
         self,
-        discovery_job: tuple[str, str],
+        discovery_job: tuple[str, str, str],
     ) -> ArtifactTextDiscoveryBatch:
-        source_file, text = discovery_job
+        source_file, source_hint, text = discovery_job
         try:
             return self._collect_generic_text_discoveries(
                 text,
                 source_file=source_file,
+                source_hint=source_hint,
             )
         except Exception:  # noqa: BLE001
             return ArtifactTextDiscoveryBatch(source_file=source_file)
@@ -21131,6 +21135,7 @@ class ArtifactQueueProcessor:
         text: str,
         *,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:
         family_batches = self._run_ordered_local_batch(
             (
@@ -21147,6 +21152,7 @@ class ArtifactQueueProcessor:
                 family,
                 text=text,
                 source_file=source_file,
+                source_hint=source_hint or source_file,
             ),
             default_factory=lambda: ArtifactTextDiscoveryBatch(source_file=source_file),
         )
@@ -21205,9 +21211,11 @@ class ArtifactQueueProcessor:
         *,
         text: str,
         source_file: str,
+        source_hint: str = "",
     ) -> ArtifactTextDiscoveryBatch:
         from forge.utils.intel.secret_finder import _parse_azure_storage_connection_string  # noqa: PLC0415
 
+        source_label = source_hint or source_file
         batch = ArtifactTextDiscoveryBatch(source_file=source_file)
         if family == "emails":
             email_scan_text = _strip_artifact_url_userinfo_in_text(text)
@@ -21245,24 +21253,24 @@ class ArtifactQueueProcessor:
                 text,
                 source_file=source_file,
             )
-            if _looks_like_gitreview_text_config_name(source_file):
+            if _looks_like_gitreview_text_config_name(source_label):
                 host_candidates.extend(_extract_artifact_gitreview_host_seeds(text))
-            if _artifact_format_label(source_file) == "mta-sts.txt":
+            if _artifact_format_label(source_label) == "mta-sts.txt":
                 for mx_host in mta_sts_mx_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(mx_host))
-            if _artifact_format_label(source_file) == "matrix-server":
+            if _artifact_format_label(source_label) == "matrix-server":
                 for matrix_host in matrix_server_delegated_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(matrix_host))
-            if _artifact_format_label(source_file) in {"did.json", "did-configuration.json"}:
+            if _artifact_format_label(source_label) in {"did.json", "did-configuration.json"}:
                 for did_host in did_web_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
-            if _artifact_format_label(source_file) == "atproto-did":
+            if _artifact_format_label(source_label) == "atproto-did":
                 for did_host in did_web_hosts_from_lines(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
-            if _artifact_format_label(source_file) == "nostr.json":
+            if _artifact_format_label(source_label) == "nostr.json":
                 for relay_host in nostr_relay_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(relay_host))
-            if _artifact_format_label(source_file) in {"terraform", "terraform.json"}:
+            if _artifact_format_label(source_label) in {"terraform", "terraform.json"}:
                 for dns_host in terraform_dns_record_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(dns_host))
             for host_value, host_seed_type in host_candidates:

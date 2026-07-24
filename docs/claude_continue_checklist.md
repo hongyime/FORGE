@@ -66,12 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: perform a fresh current-code audit for the next
-  real kill-chain correctness gap before adding more provider breadth or UI
-  polish. Prioritize validation/report-gate fidelity, dashboard/report source
-  fidelity for key findings, or bounded recursive execution behavior. Do not
-  edit code until the audited gap maps to intake, discovery, recursion,
-  artifact analysis, validation, scoring, review, fallback, or testing/cleanup.
+- [ ] Next checkpoint: implement bounded failed-artifact retry state and
+  resume-stable cloud-reference keys. Failed `artifact_queue` rows should retry
+  up to deterministic attempt limits and keep pending work/stability honest
+  until exhausted; mixed-case cloud refs such as Netlify/Vercel labels should
+  dedupe across resume using one normalized processed-key helper while keeping
+  original refs in audit metadata. Acceptance stages: recursion, artifact
+  analysis, validation, testing/cleanup.
+- [x] Terraform archive-member DNS recursion checkpoint:
+  Generic artifact discovery now carries a parser-only member-aware
+  `source_hint` through the bounded worker-pool path, so Terraform DNS records
+  inside zip/OCI/Docker archive members promote recursive host seeds while
+  persisted `source_file`/`source_url` provenance remains the outer artifact.
+  Verification: Terraform/archive/OCI focused slice passed (`8 passed`);
+  Ruff and py_compile passed for touched files.
 - [x] Dashboard/API render-path lineage visibility checkpoint:
   Static dashboard and live web API report summaries now carry Phase 6
   `render_path` lineage in addition to requested/rendered/backend provider

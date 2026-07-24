@@ -25,11 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: static dashboard and live web API report summaries now carry
-Phase 6 `render_path` lineage in addition to requested/rendered/backend provider
-fields, and the static dashboard backend summary renders the path for review.
-Verification: focused static dashboard/API lineage tests passed (`3 passed`);
-Ruff, py_compile, and `git diff --check` passed.
+Latest checkpoint: Terraform DNS record extraction now works from archive
+members. Generic artifact discovery carries a parser-only member-aware
+`source_hint` through the bounded worker-pool path, so `terraform/main.tf`
+inside zip/OCI/Docker-style archive members promotes recursive host seeds while
+persisted `source_file`/`source_url` provenance remains the outer artifact.
+Verification: Terraform/archive/OCI focused slice passed (`8 passed`); Ruff and
+py_compile passed for touched files.
+
+Next checkpoint: implement bounded failed-artifact retry state and
+resume-stable cloud-reference keys. Failed `artifact_queue` rows should retry
+up to deterministic attempt limits and keep pending work/stability honest until
+exhausted; mixed-case cloud refs such as Netlify/Vercel labels should dedupe
+across resume using one normalized processed-key helper while keeping original
+refs in audit metadata.
+
+Previous checkpoint: static dashboard and live web API report summaries now
+carry Phase 6 `render_path` lineage in addition to requested/rendered/backend
+provider fields, and the static dashboard backend summary renders the path for
+review. Verification: focused static dashboard/API lineage tests passed
+(`3 passed`); Ruff, py_compile, and `git diff --check` passed.
 
 Previous checkpoint: static dashboard and live web API report-family discovery now
 include deterministic `.html` Phase 6 report companions alongside Markdown,
@@ -68,13 +83,6 @@ elsewhere. Verification: stable-proof surface integration passed (`1 passed`);
 focused dashboard key/validation slice passed (`13 passed, 16 deselected`);
 focused report-synthesizer key exclusion tests passed (`2 passed`); Ruff,
 py_compile, and `git diff --check` passed.
-
-Next checkpoint: perform a fresh current-code audit for the next real
-kill-chain correctness gap before adding more provider breadth or UI polish.
-Prioritize validation/report-gate fidelity, dashboard/report source fidelity
-for key findings, or bounded recursive execution behavior. Do not edit code
-until the audited gap maps to intake, discovery, recursion, artifact analysis,
-validation, scoring, review, fallback, or testing/cleanup.
 
 Previous checkpoint: Fan-out F GitHub-org keyscan scope was re-verified.
 Current `main` already routes discovered GitHub orgs as root-attributed
