@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 import json
 import os
 from dataclasses import dataclass
@@ -97,24 +98,29 @@ def _retry_after_seconds(headers: httpx.Headers | dict[str, str]) -> float | Non
     return max(0.0, min(300.0, seconds))
 
 
+class _HrefCollector(HTMLParser):
+    def __init__(self, base_url: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self._base_url = base_url
+        self.links: list[str] = []
+
+    def handle_starttag(self, _tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        for name, value in attrs:
+            if name.lower() != "href":
+                continue
+            raw = str(value or "").strip()
+            if not raw or raw.startswith("#") or raw.lower().startswith("javascript:"):
+                continue
+            self.links.append(urljoin(self._base_url, raw))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+
 def _extract_links(base_url: str, html: str) -> list[str]:
-    links: list[str] = []
-    marker = 'href="'
-    idx = 0
-    while True:
-        start = html.find(marker, idx)
-        if start == -1:
-            break
-        start += len(marker)
-        end = html.find('"', start)
-        if end == -1:
-            break
-        raw = html[start:end].strip()
-        idx = end + 1
-        if not raw or raw.startswith("#") or raw.startswith("javascript:"):
-            continue
-        links.append(urljoin(base_url, raw))
-    return links
+    collector = _HrefCollector(base_url)
+    collector.feed(html)
+    return collector.links
 
 
 def _extract_title(html: str) -> str:

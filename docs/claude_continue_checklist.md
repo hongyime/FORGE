@@ -66,13 +66,25 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit one current-code deterministic kill-chain,
-  passive-recursion, validation, report/export, or dashboard/API review gap not
-  already covered by the report route 404, workflow status 404, Playwright
-  screenshot scope, workflow history bounds, crawler redirect scope, artifact
-  inventory, or workflow lineage checkpoints. Prefer compact helpers and
-  focused tests over growing large files. Keep live calls mocked unless an
-  explicit ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: fix the dashboard cloud asset validation alias join gap
+  found by read-only subagent audit. `cloud_assets.asset_type='s3'` rows can
+  display as `aws_s3` while missing a latest validation row stored as
+  `cloud_validation_results.asset_type='aws_s3'`. Normalize both sides of that
+  join, add a focused static dashboard regression, then run compile/Ruff plus
+  the focused dashboard test. Keep live calls mocked unless an explicit
+  ROE/scope manifest and target are supplied.
+- [x] Crawler href parser recursion checkpoint:
+  `_extract_links()` now uses `HTMLParser` so `_crawl_http()` follows
+  same-origin hrefs regardless of attribute case or quote style while
+  continuing to ignore empty, fragment, and `javascript:` links. Added a
+  focused fake-client regression proving an uppercase single-quoted same-origin
+  link is crawled at depth 1. No live probing, pacing, retry, provider, proxy,
+  validation, severity, report, dashboard, or API behavior changed.
+  Verification: compile passed; Ruff passed; focused href parser test passed
+  (`1 passed, 4 deselected`); full crawler unit file passed (`5 passed`);
+  workspace `.forge_data/engagements` contained `0` entries after the run.
+  Handoff:
+  `.claude/handoffs/2026-07-24-crawler-href-parser-recursion.md`.
 - [x] Report route unknown-workflow 404 checkpoint:
   `GET /reports/{workflow_id}` now catches `WorkflowEngine.get_status()`
   `KeyError` and returns deterministic `404` with

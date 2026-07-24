@@ -92,6 +92,47 @@ def test_crawl_http_retries_rate_limited_response_with_retry_after(monkeypatch) 
     assert result == [("https://acme.example/", "<html><title>Recovered</title></html>", {})]
 
 
+def test_crawl_http_follows_single_quoted_href_links(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> object:
+            calls.append(url)
+            if url.endswith("/next"):
+                return types.SimpleNamespace(
+                    status_code=200,
+                    headers={},
+                    text="<html><title>Next</title></html>",
+                    url=url,
+                )
+            return types.SimpleNamespace(
+                status_code=200,
+                headers={},
+                text=(
+                    "<html><a HREF='/next'>Next</a>"
+                    "<a href='javascript:void(0)'>Skip</a>"
+                    "<a href='#fragment'>Skip</a></html>"
+                ),
+                url=url,
+            )
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    result = crawler.asyncio.run(crawler._crawl_http("https://acme.example/", depth=1, timeout=1.0))
+
+    assert calls == ["https://acme.example/", "https://acme.example/next"]
+    assert [row[0] for row in result] == ["https://acme.example/", "https://acme.example/next"]
+
+
 def test_crawl_http_drops_out_of_scope_redirect_final_url(monkeypatch) -> None:
     calls: list[str] = []
 

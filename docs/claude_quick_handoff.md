@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: report route unknown-workflow 404 is complete.
+Latest checkpoint: crawler href parser recursion is complete.
+`_extract_links()` now uses `HTMLParser` so `_crawl_http()` follows same-origin
+hrefs regardless of attribute case or quote style while continuing to ignore
+empty, fragment, and `javascript:` links. Verification: compile passed; Ruff
+passed; focused href parser test passed (`1 passed, 4 deselected`); full
+crawler unit file passed (`5 passed`); `.forge_data/engagements` contained `0`
+entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-crawler-href-parser-recursion.md`.
+
+Next checkpoint: fix the dashboard cloud asset validation alias join gap found
+by read-only subagent audit. `cloud_assets.asset_type='s3'` rows can display as
+`aws_s3` while missing a latest validation row stored as
+`cloud_validation_results.asset_type='aws_s3'`. Normalize both sides of that
+join, add a focused static dashboard regression, then run compile/Ruff plus the
+focused dashboard test. Keep live calls mocked unless an explicit ROE/scope
+manifest and target are supplied.
+
+Previous checkpoint: report route unknown-workflow 404 is complete.
 `GET /reports/{workflow_id}` now catches `WorkflowEngine.get_status()`
 `KeyError` and returns deterministic `404` with
 `workflow_not_found:{workflow_id}` before loading report state. Verification:
@@ -33,14 +50,6 @@ compile passed; Ruff passed; focused missing-report workflow test passed (`1
 passed`); full `TestApiReportRoute` class passed (`3 passed`);
 `.forge_data/engagements` contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-report-route-unknown-404.md`.
-
-Next checkpoint: audit one current-code deterministic kill-chain,
-passive-recursion, validation, report/export, or dashboard/API review gap not
-already covered by the report route 404, workflow status 404, Playwright
-screenshot scope, workflow history bounds, crawler redirect scope, artifact
-inventory, or workflow lineage checkpoints. Prefer compact helpers and focused
-tests over growing large files. Keep live calls mocked unless an explicit
-ROE/scope manifest and target are supplied.
 
 Previous checkpoint: workflow status unknown-ID 404 is complete.
 `GET /workflows/{workflow_id}/status` now catches
