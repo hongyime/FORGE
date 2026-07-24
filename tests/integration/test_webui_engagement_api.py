@@ -3537,7 +3537,7 @@ def test_automation_execute_allows_supported_passive_recon_action_with_roe_scope
     monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
     db_path = _build_engagement(tmp_path)
-    scope_manifest = {"roe_id": "ROE-WEB-2026-07", "domains": ["acme.example"]}
+    scope_manifest = {"roe_id": "ROE-WEB-2026-07", "domains": ["app.acme.example"]}
 
     app = create_app()
     with TestClient(app) as client:
@@ -3571,6 +3571,61 @@ def test_automation_execute_allows_supported_passive_recon_action_with_roe_scope
     assert payload["task_type"] == "crawl"
     assert payload["roe_id"] == "ROE-WEB-2026-07"
     assert payload["scope_manifest"] == scope_manifest
+
+
+def test_automation_execute_rejects_scope_manifest_denied_target_before_queue(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    scope_manifest = {
+        "roe_id": "ROE-WEB-2026-07",
+        "domains": ["app.acme.example"],
+        "urls": ["https://app.acme.example/app/"],
+    }
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/automation/execute",
+            json={
+                "engagement_id": 1001,
+                "action": "recon:crawl",
+                "roe_id": "ROE-WEB-2026-07",
+                "scope_manifest": scope_manifest,
+                "params": {"target": "https://app.acme.example/admin"},
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 400, response.text
+    assert "scope_manifest_denied" in response.text
+    with sqlite3.connect(db_path) as con:
+        queued = con.execute(
+            "SELECT COUNT(*) FROM distributed_tasks WHERE engagement_id=1001"
+        ).fetchone()[0]
+        audit_row = con.execute(
+            """
+            SELECT action, target, result
+            FROM audit_log
+            WHERE engagement_id=1001
+              AND module='automation'
+              AND action='automation_scope_denied'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    assert queued == 0
+    assert audit_row is not None
+    assert audit_row[1] == "https://app.acme.example/admin"
+    assert "task_type=crawl" in audit_row[2]
+    assert "reason=scope_manifest_denied" in audit_row[2]
 
 
 def test_automation_playbook_route_requires_roe_scope_context(
@@ -3654,3 +3709,58 @@ def test_automation_playbook_route_preserves_roe_scope_context(
         and step["params"]["scope_manifest"] == scope_manifest
         for step in payload["_next_steps"]
     )
+
+
+def test_automation_playbook_route_rejects_scope_manifest_denied_target_before_queue(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    scope_manifest = {
+        "roe_id": "ROE-WEB-2026-07",
+        "domains": ["app.acme.example"],
+        "urls": ["https://app.acme.example/app/"],
+    }
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/automation/playbook",
+            json={
+                "engagement_id": 1001,
+                "playbook": "vuln_discovery",
+                "target": "https://app.acme.example/admin",
+                "roe_id": "ROE-WEB-2026-07",
+                "scope_manifest": scope_manifest,
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 400, response.text
+    assert "scope_manifest_denied" in response.text
+    with sqlite3.connect(db_path) as con:
+        queued = con.execute(
+            "SELECT COUNT(*) FROM distributed_tasks WHERE engagement_id=1001"
+        ).fetchone()[0]
+        audit_row = con.execute(
+            """
+            SELECT action, target, result
+            FROM audit_log
+            WHERE engagement_id=1001
+              AND module='automation'
+              AND action='automation_scope_denied'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    assert queued == 0
+    assert audit_row is not None
+    assert audit_row[1] == "https://app.acme.example/admin"
+    assert "task_type=crawl" in audit_row[2]
+    assert "reason=scope_manifest_denied" in audit_row[2]

@@ -69,8 +69,18 @@ historical notes only, not as current instructions.
 - [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
   pick one compact implementation/test task that advances intake, discovery,
   recursion, artifact analysis, validation, scoring, review, fallback, or
-  cleanup. The scheduled validation ROE/scope gate is now closed; do not reopen
+  cleanup. The automation API scope preflight gate is now closed; do not reopen
   it unless a regression is found.
+- [x] Automation API scope preflight checkpoint:
+  `/api/automation/execute` and `/api/automation/playbook` now validate the
+  requested target against the submitted ROE scope manifest before queue
+  insertion. Out-of-scope targets return `scope_manifest_denied`, enqueue no
+  distributed task, and write an `automation_scope_denied` audit-log row for
+  dashboard review. The helper lives in `forge.webui.automation_scope` and
+  reuses the same manifest loader and entry validator as distributed/cloud
+  validation gates. Verification: compile passed; Ruff passed; focused web
+  automation selector passed (`11 passed, 39 deselected`); full engagement API
+  integration file passed (`50 passed`).
 - [x] Scheduled validation ROE/scope gate checkpoint:
   Distributed `validate` tasks now require non-empty `roe_id` and
   `scope_manifest` before `run_cloud_validate()` can execute. Missing ROE,

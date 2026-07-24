@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: scheduled validation ROE/scope gating is complete.
+Latest checkpoint: automation API scope preflight is complete.
+`/api/automation/execute` and `/api/automation/playbook` now validate the
+requested target against the submitted ROE scope manifest before queue
+insertion. Out-of-scope targets return `scope_manifest_denied`, enqueue no
+distributed task, and write an `automation_scope_denied` audit-log row for
+dashboard review. The helper lives in `forge.webui.automation_scope` and reuses
+the same manifest loader and entry validator as distributed/cloud validation
+gates. Verification: compile passed; Ruff passed; focused web automation
+selector passed (`11 passed, 39 deselected`); full engagement API integration
+file passed (`50 passed`).
+
+Next checkpoint: perform a fresh current-code deterministic gap audit and pick
+one compact implementation/test task that advances intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
+The automation API scope preflight gate is now closed; do not reopen it unless
+a regression is found.
+
+Previous checkpoint: scheduled validation ROE/scope gating is complete.
 Distributed `validate` tasks now require non-empty `roe_id` and
 `scope_manifest` before `run_cloud_validate()` can execute. Missing ROE,
 missing manifest, and ROE/manifest mismatch all fail before provider
@@ -34,12 +51,6 @@ intact once both controls are present. Verification: compile passed; Ruff
 passed; full distributed runnable scope file passed (`9 passed`); focused
 scheduled key-validation selector passed (`2 passed, 3 deselected`); full
 key-validation runtime file passed (`5 passed`).
-
-Next checkpoint: perform a fresh current-code deterministic gap audit and pick
-one compact implementation/test task that advances intake, discovery,
-recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
-The scheduled validation ROE/scope gate is now closed; do not reopen it unless
-a regression is found.
 
 Previous checkpoint: automation/playbook ROE gating is complete.
 `PlaybookEngine` now refuses to schedule playbooks unless the payload carries

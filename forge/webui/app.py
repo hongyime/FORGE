@@ -59,6 +59,11 @@ from forge.utils.playbooks import (
     require_roe_scope_context,
 )
 from forge.webui.auth import mint_token, validate_jwt_secret, verify_token
+from forge.webui.automation_scope import (
+    AutomationScopeError,
+    assert_automation_target_in_scope,
+    audit_automation_scope_denial,
+)
 from forge.webui.cloud_assets import cloud_assets_payload
 from forge.webui.command_center import CommandCenterService
 from forge.webui.state import ProgressEvent, broker
@@ -1187,8 +1192,18 @@ def create_app() -> Any:
         payload = inherit_roe_scope_context(body, {"task_type": task_type, **params})
         try:
             require_roe_scope_context(payload)
+            assert_automation_target_in_scope(payload, target)
         except PlaybookAuthorizationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except AutomationScopeError as exc:
+            audit_automation_scope_denial(
+                cfg.engagement_db_path(str(engagement_id)),
+                int(engagement_id),
+                task_type,
+                target,
+                exc.reason,
+            )
+            raise HTTPException(status_code=400, detail=exc.reason) from exc
 
         scheduler.schedule(
             ScheduledTask(
@@ -1213,6 +1228,8 @@ def create_app() -> Any:
             raise HTTPException(
                 status_code=400, detail="engagement_id, playbook, and target are required."
             )
+        if playbook not in {"recon_full", "vuln_discovery"}:
+            raise HTTPException(status_code=400, detail=f"Unknown playbook: {playbook}")
 
         scheduler = TaskScheduler(
             db_path=cfg.engagement_db_path(str(engagement_id)),
@@ -1225,16 +1242,26 @@ def create_app() -> Any:
             body,
             {key: context[key] for key in ROE_SCOPE_CONTEXT_KEYS if key in context},
         )
+        playbook_task_type = "crawl" if playbook == "vuln_discovery" else "subdomains"
 
         try:
+            require_roe_scope_context(context)
+            assert_automation_target_in_scope(context, str(target))
             if playbook == "recon_full":
                 engine.run_recon_full(engagement_id, target, context=context)
             elif playbook == "vuln_discovery":
                 engine.run_vuln_discovery(engagement_id, target, context=context)
-            else:
-                raise HTTPException(status_code=400, detail=f"Unknown playbook: {playbook}")
         except PlaybookAuthorizationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except AutomationScopeError as exc:
+            audit_automation_scope_denial(
+                cfg.engagement_db_path(str(engagement_id)),
+                int(engagement_id),
+                playbook_task_type,
+                str(target),
+                exc.reason,
+            )
+            raise HTTPException(status_code=400, detail=exc.reason) from exc
 
         return {"status": "playbook_started"}
 
