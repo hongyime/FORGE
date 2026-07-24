@@ -91,9 +91,25 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: harden explicit LLM/provider fallback regressions for
-  quota/rate-limit/auth/timeout failures so every adapter degrades through
-  cascade/template/raw export deterministically.
+- [ ] Next checkpoint: finish explicit LLM/provider adapter fallback
+  regressions for quota/rate-limit/auth/timeout failures, including local
+  llama exception/malformed-response handling and provider-cascade 429/401/403
+  timeout coverage.
+- [x] LLM validation non-convergence fallback checkpoint:
+  Phase 6 now treats failed LLM validation/correction convergence as a hard
+  report gate. If the LLM repeatedly introduces unsupported findings such as a
+  hallucinated CVE and final approval remains false after the configured
+  correction loop budget, `ReportSynthesizer.generate()` switches to the
+  deterministic template backend before writing report artifacts. Feedback
+  telemetry still records the failed LLM response hash and hallucination score,
+  while Markdown/JSON/CSV/PDF outputs carry template lineage and fallback
+  reason. The stale managed-cloud seed summary fixture was also updated to use
+  current strict validation methods and stable storage proofs. Verification:
+  the new TDD regression failed before the production fix; full Phase 6
+  synthesizer suite passed (`88 passed`); provider/fallback/property slice
+  passed (`78 passed`); LLM validation plus cloud report-gating slice passed
+  (`16 passed`); Ruff/compile passed for touched files. Handoff:
+  `.claude/handoffs/2026-07-24-llm-validation-nonconvergence-fallback.md`.
 - [x] Scope-gate unification checkpoint:
   `forge/opsec/scope_gate.py` now matches the governance gate: missing or empty
   scope fails closed, bare domains authorize only exact apex matches, wildcard

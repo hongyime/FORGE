@@ -2223,11 +2223,28 @@ class ReportSynthesizer:
                 feedback_text=telemetry.feedback_text,
             )
 
+        feedback_response_text = response_text
+        if not telemetry.final_approval and self._render_backend != "template":
+            validation_reason = (
+                "LLM validation did not receive final approval after "
+                f"{telemetry.correction_loops + 1} attempt(s); "
+                "falling back to deterministic template."
+            )
+            prior_reason = str(self._fallback_reason or "").strip()
+            reason = (
+                f"{prior_reason} | {validation_reason}"
+                if prior_reason
+                else validation_reason
+            )
+            logger.warning("%s", reason)
+            self._set_render_backend("template", fallback_reason=reason)
+            response_text = self._render_fallback_report(ctx, reason)
+
         # 5. Persist telemetry
         self._persist_feedback(
             engagement_id=engagement_id,
             prompt_text=prompt,
-            response_text=response_text,
+            response_text=feedback_response_text,
             telemetry=telemetry,
         )
 

@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: scope-gate unification is complete.
+Latest checkpoint: LLM validation non-convergence fallback is complete.
+Phase 6 now treats failed LLM validation/correction convergence as a hard
+report gate. If the LLM repeatedly introduces unsupported findings such as a
+hallucinated CVE and final approval remains false after the configured
+correction loop budget, `ReportSynthesizer.generate()` switches to the
+deterministic template backend before writing report artifacts. Feedback
+telemetry still records the failed LLM response hash and hallucination score,
+while Markdown/JSON/CSV/PDF outputs carry template lineage and fallback reason.
+The stale managed-cloud seed summary fixture was also updated to use current
+strict validation methods and stable storage proofs. Verification: the new TDD
+regression failed before the production fix; full Phase 6 synthesizer suite
+passed (`88 passed`); provider/fallback/property slice passed (`78 passed`);
+LLM validation plus cloud report-gating slice passed (`16 passed`);
+Ruff/compile passed for touched files. Handoff:
+`.claude/handoffs/2026-07-24-llm-validation-nonconvergence-fallback.md`.
+
+Next checkpoint: finish explicit LLM/provider adapter fallback regressions for
+quota/rate-limit/auth/timeout failures, including local llama
+exception/malformed-response handling and provider-cascade 429/401/403 timeout
+coverage.
+
+Previous checkpoint: scope-gate unification is complete.
 `forge/opsec/scope_gate.py` now matches the governance gate: missing or empty
 scope fails closed, bare domains authorize only exact apex matches, wildcard
 entries authorize subdomains only, and CIDR matching uses Python's `ipaddress`
@@ -37,10 +58,6 @@ distributed scope suites passed (`38 passed`); engagement ID plus scope gate
 suite passed (`40 passed`); FastAPI live scope-manifest selector passed (`3
 passed, 38 deselected`); Ruff/compile passed for touched files. Handoff:
 `.claude/handoffs/2026-07-24-scope-gate-unification.md`.
-
-Next checkpoint: harden LLM/provider quota/rate-limit/auth and timeout fallback
-regressions so every adapter degrades through cascade/template/raw export
-deterministically.
 
 Previous checkpoint: cleanup inventory is complete. Stale local test/backup
 artifacts were removed from `.forge_data`: old Phase 3 template files under

@@ -556,27 +556,111 @@ def test_context_builder_filters_non_validated_managed_cloud_seeds_from_summary(
                 engagement_id INTEGER,
                 asset_type TEXT,
                 identifier TEXT,
-                validation_status TEXT
+                validation_status TEXT,
+                validation_method TEXT,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
             )
             """
         )
         con.executemany(
             """
             INSERT INTO cloud_validation_results
-                (engagement_id, asset_type, identifier, validation_status)
-            VALUES (?, ?, ?, ?)
+                (engagement_id, asset_type, identifier, validation_status, validation_method, evidence, notes, checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, '2026-07-24T00:00:00Z')
             """,
             [
-                (ENGAGEMENT_ID, "gcs", "validated-gcs", "VALIDATED"),
-                (ENGAGEMENT_ID, "gcs", "decoy-gcs", "HONEYPOT_SUSPECTED"),
-                (ENGAGEMENT_ID, "azure_blob", "validblob/public", "VALIDATED"),
-                (ENGAGEMENT_ID, "azure_blob", "decoyblob/public", "HONEYPOT_SUSPECTED"),
-                (ENGAGEMENT_ID, "azure_blob", "validlake/raw", "VALIDATED"),
-                (ENGAGEMENT_ID, "azure_blob", "decoylake/raw", "HONEYPOT_SUSPECTED"),
-                (ENGAGEMENT_ID, "azure_blob", "validstatic/$web", "VALIDATED"),
-                (ENGAGEMENT_ID, "azure_blob", "decoystatic/$web", "HONEYPOT_SUSPECTED"),
-                (ENGAGEMENT_ID, "do_spaces", "nyc3/valid-space", "VALIDATED"),
-                (ENGAGEMENT_ID, "do_spaces", "nyc3/decoy-space", "HONEYPOT_SUSPECTED"),
+                (
+                    ENGAGEMENT_ID,
+                    "gcs",
+                    "validated-gcs",
+                    "VALIDATED",
+                    "gcs_list_bucket",
+                    '{"kind":"storage#objects","items":[{"name":"reports/customer-data.csv","bucket":"validated-gcs"}]}',
+                    "GCS object listing returned customer report metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "gcs",
+                    "decoy-gcs",
+                    "HONEYPOT_SUSPECTED",
+                    "gcs_list_bucket",
+                    '{"kind":"storage#objects","items":[{"name":"sample/test-data.json","bucket":"decoy-gcs"}]}',
+                    "Synthetic sample object metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "azure_blob",
+                    "validblob/public",
+                    "VALIDATED",
+                    "azure_blob_list_container",
+                    "<EnumerationResults><Blobs><Blob><Name>reports/customer-data.csv</Name></Blob></Blobs></EnumerationResults>",
+                    "Azure blob listing returned customer report metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "azure_blob",
+                    "decoyblob/public",
+                    "HONEYPOT_SUSPECTED",
+                    "azure_blob_list_container",
+                    "<EnumerationResults><Blobs><Blob><Name>sample/test-data.csv</Name></Blob></Blobs></EnumerationResults>",
+                    "Synthetic sample object metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "azure_blob",
+                    "validlake/raw",
+                    "VALIDATED",
+                    "azure_blob_list_container",
+                    "<EnumerationResults><Blobs><Blob><Name>reports/customer-data.csv</Name></Blob></Blobs></EnumerationResults>",
+                    "Azure Data Lake listing returned customer report metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "azure_blob",
+                    "decoylake/raw",
+                    "HONEYPOT_SUSPECTED",
+                    "azure_blob_list_container",
+                    "<EnumerationResults><Blobs><Blob><Name>sample/test-data.csv</Name></Blob></Blobs></EnumerationResults>",
+                    "Synthetic sample object metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "azure_blob",
+                    "validstatic/$web",
+                    "VALIDATED",
+                    "azure_blob_list_container",
+                    "<EnumerationResults><Blobs><Blob><Name>reports/customer-data.csv</Name></Blob></Blobs></EnumerationResults>",
+                    "Azure static site listing returned customer report metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "azure_blob",
+                    "decoystatic/$web",
+                    "HONEYPOT_SUSPECTED",
+                    "azure_blob_list_container",
+                    "<EnumerationResults><Blobs><Blob><Name>sample/test-data.csv</Name></Blob></Blobs></EnumerationResults>",
+                    "Synthetic sample object metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "do_spaces",
+                    "nyc3/valid-space",
+                    "VALIDATED",
+                    "do_spaces_list_bucket",
+                    "<ListBucketResult><Contents><Key>reports/customer-data.csv</Key></Contents></ListBucketResult>",
+                    "Spaces object listing returned customer report metadata.",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "do_spaces",
+                    "nyc3/decoy-space",
+                    "HONEYPOT_SUSPECTED",
+                    "do_spaces_list_bucket",
+                    "<ListBucketResult><Contents><Key>sample/test-data.json</Key></Contents></ListBucketResult>",
+                    "Synthetic sample object metadata.",
+                ),
             ],
         )
         con.executemany(
@@ -2108,6 +2192,64 @@ def test_synthesizer_auto_runtime_failure_falls_back_to_local_llama(
     assert payload["fallback_reason"] == "quota exceeded"
 
 
+def test_synthesizer_auto_local_validation_fallback_preserves_provider_reason(
+    tmp_eng_db, tmp_path, patch_confirm_approve, monkeypatch
+):
+    class _FakeLlama:
+        def create_chat_completion(self, **kwargs):  # noqa: ANN003
+            del kwargs
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                _build_valid_report("CRITICAL")
+                                + "\nUnsupported claim: CVE-2099-99999 affects the estate."
+                            )
+                        }
+                    }
+                ],
+            }
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="auto",
+        max_correction_loops=0,
+    )
+
+    def _fake_ensure_provider_loaded() -> None:
+        synth._llm_provider = object()
+
+    def _fake_ensure_model_loaded(*, allow_auto_local: bool = False) -> None:
+        del allow_auto_local
+        synth._llm = _FakeLlama()
+
+    def _fake_infer(prompt: str) -> str:
+        if synth._llm_provider is not None:
+            raise ProviderUnavailableError("quota exceeded")
+        return synth._infer_via_llama_cpp(prompt)
+
+    monkeypatch.setattr(synth, "_ensure_provider_loaded", _fake_ensure_provider_loaded)
+    monkeypatch.setattr(synth, "_ensure_model_loaded", _fake_ensure_model_loaded)
+    monkeypatch.setattr(synth, "_infer", _fake_infer)
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert "template mode, no LLM" in content
+    assert "CVE-2099-99999" not in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "auto"
+    assert "quota exceeded" in str(payload["fallback_reason"] or "")
+    assert "validation did not receive final approval" in str(
+        payload["fallback_reason"] or ""
+    )
+    assert payload["report_lineage"]["fallback_reason"] == payload["fallback_reason"]
+
+
 def test_synthesizer_dry_run_skips_llm(tmp_eng_db, tmp_path, patch_confirm_approve):
     synth = ReportSynthesizer(
         db_path    = tmp_eng_db,
@@ -2222,6 +2364,58 @@ def test_synthesizer_llm_cannot_downgrade_authoritative_finding_severity(
     assert payload["provider"] == "template"
     assert payload["requested_provider"] == "llama_cpp"
     assert "authoritative finding integrity check" in str(payload["fallback_reason"] or "")
+
+
+def test_synthesizer_validation_nonconvergence_falls_back_to_template(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+):
+    fake_gguf = tmp_path / "fake.gguf"
+    fake_gguf.write_bytes(b"\x00" * 64)
+    hallucinated_report = (
+        _build_valid_report("CRITICAL")
+        + "\nAdditional unsupported claim: CVE-2099-99999 affects the estate."
+    )
+    mock_llama_cls = mock.MagicMock()
+    mock_llama_cls.return_value.create_chat_completion.return_value = {
+        "choices": [{"message": {"content": hallucinated_report}}]
+    }
+
+    with mock.patch("forge.phase6.report_synthesizer.Llama", mock_llama_cls, create=True):
+        synth = ReportSynthesizer(
+            db_path=tmp_eng_db,
+            model_path=fake_gguf,
+            output_dir=tmp_path,
+            max_correction_loops=1,
+        )
+        synth._llm = mock_llama_cls.return_value
+        out = synth.generate(ENGAGEMENT_ID, dry_run=False)
+
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert mock_llama_cls.return_value.create_chat_completion.call_count == 2
+    assert "template mode, no LLM" in content
+    assert "LLM validation did not receive final approval" in content
+    assert "CVE-2099-99999" not in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "llama_cpp"
+    assert "validation did not receive final approval" in str(payload["fallback_reason"] or "")
+
+    con = sqlite3.connect(tmp_eng_db)
+    con.row_factory = sqlite3.Row
+    row = con.execute(
+        "SELECT correction_loops, hallucination_score, final_approval "
+        "FROM llm_feedback WHERE engagement_id=? ORDER BY id DESC LIMIT 1",
+        (ENGAGEMENT_ID,),
+    ).fetchone()
+    con.close()
+
+    assert row is not None
+    assert row["correction_loops"] == 1
+    assert row["hallucination_score"] >= 0.5
+    assert row["final_approval"] == 0
 
 
 def test_synthesizer_persists_feedback_telemetry(tmp_eng_db, tmp_path, patch_confirm_approve):
