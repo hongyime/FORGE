@@ -492,6 +492,7 @@ def _reportable_cloud_validation_index(
     return latest_cloud_validation_reportability_index(
         con,
         engagement_id,
+        require_stable_proof=True,
     )
 
 

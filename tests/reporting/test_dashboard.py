@@ -453,7 +453,7 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
             VALUES (
                 1001, 'firebase', 'acme-firebase-prod', 'VALIDATED',
                 'firebase_database_shallow_read', 200, '{"users":1}',
-                'base deterministic fixture proof', '2026-07-09T08:00:00'
+                'Firebase project reference responded with non-empty data.', '2026-07-09T08:00:00'
             )
             """
         )
@@ -2003,7 +2003,8 @@ def test_generate_dashboard_filters_malformed_deterministic_cloud_findings(
             VALUES (
                 1001, 'firebase', 'acme-firebase-prod', 'VALIDATED',
                 'firebase_database_shallow_read', 200, '{"users":1}',
-                'deterministic proof fixture', '2026-07-09T09:43:00'
+                'Firebase project reference responded with non-empty data.',
+                '2026-07-09T09:43:00'
             )
             """
         )

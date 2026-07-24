@@ -100,7 +100,7 @@ def test_deterministic_findings_scores_validated_supabase_rest_access_high(tmp_p
                 (engagement_id, asset_type, identifier, validation_status, validation_method, http_status, evidence, notes)
             VALUES
                 (1001, 'supabase', 'acme-workspace', 'VALIDATED', 'supabase_rest_root', 200,
-                 '[{"id":1,"email":"ops@acme.io"}]', 'Supabase REST endpoint responded successfully.')
+                 '[{"id":1,"email":"ops@acme.io"}]', 'Supabase REST endpoint returned live data.')
             """
         )
         con.commit()
@@ -128,6 +128,98 @@ def test_deterministic_findings_scores_validated_supabase_rest_access_high(tmp_p
             "supabase",
             "acme-workspace",
         )
+    finally:
+        con.close()
+
+
+def test_deterministic_findings_skip_direct_cloud_rows_without_stable_proof(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status, validation_method,
+                 http_status, evidence, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    1001,
+                    "aws_s3",
+                    "acme-public-assets",
+                    "VALIDATED",
+                    "s3_list_bucket",
+                    200,
+                    "Bucket listing returned object metadata.",
+                    "Generic listing note without object names.",
+                ),
+                (
+                    1001,
+                    "firebase",
+                    "acme-firebase-prod",
+                    "VALIDATED",
+                    "firebase_database_shallow_read",
+                    200,
+                    '{"projectId":"acme-firebase-prod"}',
+                    "Firebase shallow probe exposed only low-signal scaffold keys.",
+                ),
+            ],
+        )
+        con.executemany(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, cloud_provider, resource_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    1001,
+                    "DETERMINISTIC_CLOUD_EXPOSURE",
+                    "aws_s3://acme-public-assets",
+                    "aws_s3",
+                    "HIGH",
+                    "Stale S3 finding",
+                    "weak proof",
+                    "Bucket listing returned object metadata.",
+                    "aws",
+                    "acme-public-assets",
+                ),
+                (
+                    1001,
+                    "DETERMINISTIC_CLOUD_EXPOSURE",
+                    "firebase://acme-firebase-prod",
+                    "firebase",
+                    "HIGH",
+                    "Stale Firebase finding",
+                    "weak proof",
+                    "Firebase shallow probe exposed only low-signal scaffold keys.",
+                    "firebase",
+                    "acme-firebase-prod",
+                ),
+            ],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = DeterministicFindingEngine(db_path, 1001).run()
+
+    assert summary.inserted == 0
+    assert summary.removed == 2
+    assert summary.active_findings == 0
+
+    con = sqlite3.connect(db_path)
+    try:
+        findings = con.execute(
+            "SELECT COUNT(*) FROM vulnerability_findings WHERE engagement_id=1001"
+        ).fetchone()[0]
+        assert findings == 0
     finally:
         con.close()
 

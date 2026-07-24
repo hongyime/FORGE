@@ -12,7 +12,7 @@ from forge.utils.cloud_exposure_gate import (
     STORAGE_CLOUD_ASSET_TYPES,
     STORAGE_LISTING_VALIDATION_METHODS,
     STORAGE_METADATA_VALIDATION_METHODS,
-    is_reportable_cloud_validation_method,
+    is_reportable_cloud_validation,
     latest_cloud_validation_reportability_index,
 )
 from forge.utils.validation_proof import parse_validated_detail
@@ -145,10 +145,6 @@ def _is_low_signal_public_cloud_metadata(
     }
 
 
-def _is_reportable_cloud_validation_status(validation_status: str) -> bool:
-    return str(validation_status or "").upper().strip() == "VALIDATED"
-
-
 def _is_reportable_linked_key_validation(row: sqlite3.Row) -> bool:
     status = str(row["validation_status"] or "").upper().strip()
     if status != "VALIDATED":
@@ -264,9 +260,14 @@ class DeterministicFindingEngine:
         title = ""
         description = ""
         severity = ""
-        if not _is_reportable_cloud_validation_status(validation_status):
-            return None
-        if not is_reportable_cloud_validation_method(asset_type, validation_method):
+        if not is_reportable_cloud_validation(
+            asset_type,
+            validation_status,
+            validation_method,
+            evidence=evidence,
+            notes=notes,
+            require_stable_proof=True,
+        ):
             return None
 
         if validation_status == "VALIDATED":

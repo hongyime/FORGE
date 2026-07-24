@@ -322,12 +322,23 @@ sentences as historical notes only, not as current instructions.
   (`4 passed`). Review: sidecar `Heisenberg` confirmed the committed-head gap,
   the minimal skip strategy, and the audit assertion. Handoff:
   `.claude/handoffs/2026-07-24-kill-chain-dry-run-finalization-contract.md`.
+- [x] Direct cloud stable-proof report gate checkpoint:
+  Direct `DETERMINISTIC_CLOUD_EXPOSURE` synthesis, dashboard/API reportability,
+  and attack graph VULN gating now require stable parser-approved proof for
+  proof-bound cloud data/listing methods, not only `VALIDATED` plus an
+  allowlisted method. LOW storage reachability findings from metadata-only probe
+  methods are preserved. Verification: compile passed; Ruff passed;
+  deterministic/Phase 6 proof-gate slice passed (`20 passed`); attack graph plus
+  dashboard suites passed (`129 passed`); full web UI engagement API file passed
+  (`37 passed, 75 warnings`). Review: sidecar `Carson` reproduced the direct
+  deterministic cloud-finding bypass and recommended the stable parser gate.
+  Handoff: `.claude/handoffs/2026-07-24-direct-cloud-stable-proof-gate.md`.
 - [ ] Next gate:
-  Choose the next concrete backend kill-chain gap from the compact backlog:
-  broader E2E kill-chain tests, provider-specific validation proof/decoy
-  hardening, passive artifact/parser recursion coverage, or a fresh audit for a
-  remaining bounded-worker migration. Do not switch to UI-only polish unless it
-  proves dashboard/report/audit parity for the live engagement path.
+  Implement the runtime frontend config JS recursion gap from sidecar `Gauss`.
+  Source-gated public files such as `runtime-env.js`, `env-config.js`, and
+  `config.js` should promote host-only API values plus Firebase/Supabase project
+  refs into recursive URL/cloud candidates without turning arbitrary JS into env
+  parsing.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

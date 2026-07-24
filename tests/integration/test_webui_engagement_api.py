@@ -180,7 +180,7 @@ def _build_engagement(tmp_path: Path) -> Path:
             INSERT INTO cloud_validation_results
                 (engagement_id, asset_type, identifier, validation_status, validation_method, http_status, evidence, notes)
             VALUES
-                (1001, 'firebase', 'acme-firebase-prod', 'VALIDATED', 'firebase_database_shallow_read', 200, '{"users":1}', 'Live data returned')
+                (1001, 'firebase', 'acme-firebase-prod', 'VALIDATED', 'firebase_database_shallow_read', 200, '{"users":1}', 'Firebase project reference responded with non-empty data.')
             """
         )
         con.execute(

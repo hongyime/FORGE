@@ -745,6 +745,8 @@ class TestLoadCloudAssets:
                     validation_status TEXT NOT NULL,
                     validation_method TEXT,
                     http_status INTEGER,
+                    evidence TEXT,
+                    notes TEXT,
                     checked_at TIMESTAMP
                 );
                 """
@@ -752,10 +754,22 @@ class TestLoadCloudAssets:
             con.executemany(
                 """
                 INSERT INTO cloud_validation_results
-                    (engagement_id, asset_type, identifier, validation_status, validation_method, http_status, checked_at)
-                VALUES (1, 'aws_s3', ?, 'VALIDATED', 's3_list_bucket', 200, '2026-07-15T09:30:00+00:00')
+                    (engagement_id, asset_type, identifier, validation_status,
+                     validation_method, http_status, evidence, notes, checked_at)
+                VALUES (1, 'aws_s3', ?, 'VALIDATED', 's3_list_bucket', 200, ?,
+                        'Public object metadata observed',
+                        '2026-07-15T09:30:00+00:00')
                 """,
-                [("bucket-a",), ("bucket-b",)],
+                [
+                    (
+                        "bucket-a",
+                        "<ListBucketResult><Contents><Key>reports/bucket-a.csv</Key></Contents></ListBucketResult>",
+                    ),
+                    (
+                        "bucket-b",
+                        "<ListBucketResult><Contents><Key>reports/bucket-b.csv</Key></Contents></ListBucketResult>",
+                    ),
+                ],
             )
             con.executemany(
                 """
@@ -813,6 +827,8 @@ class TestLoadCloudAssets:
                     validation_status TEXT NOT NULL,
                     validation_method TEXT,
                     http_status INTEGER,
+                    evidence TEXT,
+                    notes TEXT,
                     checked_at TIMESTAMP
                 );
                 """
@@ -821,9 +837,11 @@ class TestLoadCloudAssets:
                 """
                 INSERT INTO cloud_validation_results
                     (engagement_id, asset_type, identifier, validation_status,
-                     validation_method, http_status, checked_at)
+                     validation_method, http_status, evidence, notes, checked_at)
                 VALUES (1, 'firebase', 'provider-firebase', 'VALIDATED',
                         'firebase_database_shallow_read', 200,
+                        '{"records":1}',
+                        'Firebase project reference responded with non-empty data.',
                         '2026-07-19T00:00:00+00:00')
                 """
             )
@@ -870,6 +888,8 @@ class TestLoadCloudAssets:
                     validation_status TEXT NOT NULL,
                     validation_method TEXT,
                     http_status INTEGER,
+                    evidence TEXT,
+                    notes TEXT,
                     checked_at TIMESTAMP
                 );
 
@@ -881,12 +901,15 @@ class TestLoadCloudAssets:
 
                 INSERT INTO cloud_validation_results
                     (engagement_id, asset_type, identifier, provider_identifier,
-                     validation_status, validation_method, http_status, checked_at)
+                     validation_status, validation_method, http_status, evidence, notes, checked_at)
                 VALUES
                     (1, 'aws_s3', 'shared-id', 'AWSExactShared',
-                     'VALIDATED', 's3_list_bucket', 200, '2026-07-15T09:30:00+00:00'),
+                     'VALIDATED', 's3_list_bucket', 200,
+                     '<ListBucketResult><Contents><Key>reports/shared.csv</Key></Contents></ListBucketResult>',
+                     'Public object metadata observed', '2026-07-15T09:30:00+00:00'),
                     (1, 'gcs', 'shared-id', 'GCSExactShared',
-                     'ACCESSIBLE', 'gcs_storage_get', 200, '2026-07-15T09:31:00+00:00');
+                     'ACCESSIBLE', 'gcs_storage_get', 200, '', '',
+                     '2026-07-15T09:31:00+00:00');
 
                 INSERT INTO vulnerability_findings
                     (engagement_id, vuln_type, target_url, parameter, severity, title,
@@ -972,27 +995,38 @@ class TestLoadCloudAssets:
 
                 INSERT INTO cloud_validation_results
                     (engagement_id, asset_type, identifier, validation_status,
-                     validation_method, http_status, checked_at)
+                     validation_method, http_status, evidence, notes, checked_at)
                 VALUES
                     (1, 'aws_s3', 'bucket-stale', 'VALIDATED',
-                     's3_list_bucket', 200, '2026-07-15T09:00:00+00:00'),
+                     's3_list_bucket', 200,
+                     '<ListBucketResult><Contents><Key>reports/stale.csv</Key></Contents></ListBucketResult>',
+                     'Older public object metadata observed',
+                     '2026-07-15T09:00:00+00:00'),
                     (1, 'aws_s3', 'bucket-stale', 'HONEYPOT_SUSPECTED',
-                     's3_list_bucket', 200, '2026-07-15T10:00:00+00:00'),
+                     's3_list_bucket', 200, '', 'Synthetic listing suspected',
+                     '2026-07-15T10:00:00+00:00'),
                     (1, 'aws_s3', 'bucket-good', 'DEAD',
-                     's3_list_bucket', 404, '2026-07-15T09:00:00+00:00'),
+                     's3_list_bucket', 404, '', 'Not reachable',
+                     '2026-07-15T09:00:00+00:00'),
                     (1, 'aws_s3', 'bucket-good', 'VALIDATED',
-                     's3_list_bucket', 200, '2026-07-15T10:00:00+00:00'),
+                     's3_list_bucket', 200,
+                     '<ListBucketResult><Contents><Key>reports/customer-records.csv</Key></Contents></ListBucketResult>',
+                     'Probe notes token=raw-secret-value',
+                     '2026-07-15T10:00:00+00:00'),
                     (1, 'aws_s3', 'manual-note-bucket', 'VALIDATED',
-                     'manual_validated_note', 200, '2026-07-15T10:00:00+00:00'),
+                     'manual_validated_note', 200, 'operator note', 'manual proof',
+                     '2026-07-15T10:00:00+00:00'),
                     (1, 'stripe', 'acct-unsupported', 'UNSUPPORTED',
-                     'registry_dispatch', NULL, '2026-07-15T10:00:00+00:00'),
+                     'registry_dispatch', NULL, '', 'Unsupported provider',
+                     '2026-07-15T10:00:00+00:00'),
                     (1, 'gcs', 'metadata-bucket', 'ACCESSIBLE_BUT_NO_DATA',
-                     'gcs_http_probe', 200, '2026-07-15T10:00:00+00:00');
+                     'gcs_http_probe', 200, '<ok />', 'Metadata only',
+                     '2026-07-15T10:00:00+00:00');
 
                 UPDATE cloud_validation_results
-                SET notes='Probe notes token=raw-secret-value',
+                SET notes='Unsupported probe token=raw-secret-value',
                     evidence='HTTP response api_key=raw-key-value was bounded'
-                WHERE identifier IN ('bucket-good', 'acct-unsupported');
+                WHERE identifier='acct-unsupported';
 
                 INSERT INTO vulnerability_findings
                     (engagement_id, vuln_type, target_url, parameter, severity, title,
@@ -1035,9 +1069,9 @@ class TestLoadCloudAssets:
         assert cloud_nodes["bucket-good"].metadata["validation_notes"] == (
             "Probe notes token=[REDACTED]"
         )
-        assert cloud_nodes["bucket-good"].metadata["validation_evidence_summary"] == (
-            "HTTP response api_key=[REDACTED] was bounded"
-        )
+        assert "reports/customer-records.csv" in cloud_nodes["bucket-good"].metadata[
+            "validation_evidence_summary"
+        ]
         assert "Stale cloud exposure" not in vuln_by_label
         assert "Validated cloud exposure" in vuln_by_label
         assert "Manual note cloud exposure" not in vuln_by_label

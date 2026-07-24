@@ -494,6 +494,14 @@ class AttackGraphBuilder:
                 "validation_asset_type": svc,
                 "validation_status": str(status or ""),
                 "validation_method": str(method or ""),
+                "validation_reportable": is_reportable_cloud_validation(
+                    svc,
+                    str(status or ""),
+                    str(method or ""),
+                    evidence=evidence,
+                    notes=notes,
+                    require_stable_proof=True,
+                ),
                 "checked_at": str(checked_at or ""),
             }
             if http_status is not None:
@@ -907,10 +915,15 @@ class AttackGraphBuilder:
     def _cloud_exposure_is_validated(validation_metadata: dict[str, Any] | None) -> bool:
         if not validation_metadata:
             return False
+        if "validation_reportable" in validation_metadata:
+            return validation_metadata.get("validation_reportable") is True
         return is_reportable_cloud_validation(
             str(validation_metadata.get("validation_asset_type") or ""),
             str(validation_metadata.get("validation_status") or ""),
             str(validation_metadata.get("validation_method") or ""),
+            evidence=validation_metadata.get("validation_evidence_summary"),
+            notes=validation_metadata.get("validation_notes"),
+            require_stable_proof=True,
         )
 
     @staticmethod

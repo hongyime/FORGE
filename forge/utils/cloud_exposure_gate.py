@@ -93,15 +93,50 @@ def is_reportable_cloud_validation_method(asset_type: str, validation_method: st
     return asset in STORAGE_CLOUD_ASSET_TYPES and method in STORAGE_METADATA_VALIDATION_METHODS
 
 
+def cloud_validation_requires_stable_proof(asset_type: str, validation_method: str) -> bool:
+    asset = normalize_cloud_exposure_asset_type(asset_type)
+    method = str(validation_method or "").strip().lower()
+    return method in CLOUD_DATA_VALIDATION_METHODS.get(asset, frozenset()) or (
+        asset in STORAGE_CLOUD_ASSET_TYPES
+        and method in STORAGE_LISTING_VALIDATION_METHODS
+    )
+
+
+def _has_stable_validation_proof(validation_method: str, *proof_values: object) -> bool:
+    method = str(validation_method or "").strip()
+    if not method:
+        return False
+    for proof_value in proof_values:
+        proof = str(proof_value or "").strip()
+        if not proof:
+            continue
+        parsed = parse_validated_detail(f"VALIDATED:{method}:{proof}")
+        if str(parsed["validation_status"] or "").strip().upper() == "VALIDATED":
+            return True
+    return False
+
+
 def is_reportable_cloud_validation(
     asset_type: str,
     validation_status: str,
     validation_method: str,
+    *,
+    evidence: object = None,
+    notes: object = None,
+    require_stable_proof: bool = False,
 ) -> bool:
-    return (
+    reportable = (
         str(validation_status or "").strip().upper() == "VALIDATED"
         and is_reportable_cloud_validation_method(asset_type, validation_method)
     )
+    if not reportable:
+        return False
+    if require_stable_proof and cloud_validation_requires_stable_proof(
+        asset_type,
+        validation_method,
+    ):
+        return _has_stable_validation_proof(validation_method, evidence, notes)
+    return True
 
 
 def _cloud_validation_columns(con: sqlite3.Connection) -> set[str]:
@@ -151,10 +186,13 @@ def latest_cloud_validation_reportability_index(
         if not asset_type or not identifier:
             continue
         method = str(method_raw or "").strip()
-        reportable = is_reportable_cloud_validation(asset_type, str(status_raw or ""), method)
-        if reportable and require_stable_proof:
-            proof = str(evidence_raw or notes_raw or "").strip()
-            parsed = parse_validated_detail(f"VALIDATED:{method}:{proof}")
-            reportable = str(parsed["validation_status"] or "").strip().upper() == "VALIDATED"
+        reportable = is_reportable_cloud_validation(
+            asset_type,
+            str(status_raw or ""),
+            method,
+            evidence=evidence_raw,
+            notes=notes_raw,
+            require_stable_proof=require_stable_proof,
+        )
         index[(asset_type, identifier)] = reportable
     return index
