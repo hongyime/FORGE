@@ -605,10 +605,19 @@ def test_scheduled_ports_requires_scope_and_passes_scope_override(
 
     monkeypatch.setattr(runnable, "scan_engagement_enhanced", _fake_scan)
 
+    with pytest.raises(RuntimeError, match="roe_id_required"):
+        runnable.run_scheduled_task(
+            1001,
+            "ports:default",
+            {"task_type": "ports"},
+            db_path,
+        )
+    assert calls == []
+
     runnable.run_scheduled_task(
         1001,
         "ports:default",
-        {"task_type": "ports"},
+        {"task_type": "ports", "roe_id": "ROE-ACME-2026-07"},
         db_path,
     )
     assert calls[0]["scope_override"] == ["10.10.0.0/16"]
@@ -619,7 +628,7 @@ def test_scheduled_ports_requires_scope_and_passes_scope_override(
         runnable.run_scheduled_task(
             1001,
             "ports:default",
-            {"task_type": "ports"},
+            {"task_type": "ports", "roe_id": "ROE-ACME-2026-07"},
             empty_db_path,
         )
 

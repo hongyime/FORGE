@@ -9023,7 +9023,15 @@ above.
 - [x] Audit the native MTGX/GraphML artifact quality against the intended analyst workflow and tighten entity typing or layout fidelity if the workspace still feels too lossy. Reconciled on 2026-07-18 against the recorded native workspace, manifest/readme, deterministic layout, Maltego entity typing, and GraphML/MTGX fallback-test checkpoints.
 - [x] Scheduled scope-denial reviewability is now covered: static dashboard detail JSON/HTML and the live engagement detail API expose old `scheduled_task_scope_denied` rows through `sections.scope_denials`, even when the event is outside the recent audit timeline. The React evidence board has a title for that section, and regressions prove the visible denial reason does not leak raw distributed-task `scope_manifest` payloads or sentinels. Verification: Python ruff touched files, focused static/API tests (`2 passed`), frontend lint exit 0 with existing hook warnings, frontend build success, and `git diff --check`.
   Handoff: `.claude/handoffs/2026-07-24-scheduled-scope-denial-review.md`.
-- [ ] Next: integrate the broad kill-chain gap audit from the active sidecar agent, then pick one smallest safe code gap that improves recursive discovery or deterministic validation without widening live-service scope.
+- [x] Scheduled port scans now require ROE before live probing: `ports` is part of `_SENSITIVE_SCHEDULED_TASK_TYPES`, and the distributed runnable regression proves missing `roe_id` denies before `scan_engagement_enhanced()` is called while scoped ROE-backed execution still passes `scope_override`.
+  Verification: `python -m py_compile forge\distributed\runnable.py tests\distributed\test_runnable_scope.py`; `python -m ruff check forge/distributed/runnable.py tests/distributed/test_runnable_scope.py`; `python -m pytest tests/distributed/test_runnable_scope.py` -> `19 passed`.
+- [ ] Next sidecar gap 1: add a retry budget for stale distributed tasks so indefinitely requeued running tasks eventually become terminal failed; start at `forge/distributed/scheduler.py`, `forge/db/schema.py`, and `tests/distributed/test_worker_claiming.py`.
+- [ ] Next sidecar gap 2: make timed-out distributed live/sensitive handlers actually terminate or cooperatively cancel instead of leaving daemon threads running; start at `forge/distributed/worker.py` and `tests/distributed/test_worker_timeouts.py`.
+- [ ] Next sidecar gap 3: if final `report generate` fails, force template/raw fallback or mark the run `completed_degraded` instead of plain `completed`; start at `forge/cli.py` finalization and a focused monkeypatched failure regression.
+- [ ] Next sidecar gap 4: only mark recursive social/phone/IP/name/company/cloud-ref chains processed on completed or intentional skipped outcomes, so failed chains retry in later iterations.
+- [ ] Next sidecar gap 5: replace known-host surface fetch first-20 hard cap with a deterministic host backlog/cursor or completed-host exclusion.
+- [ ] Next sidecar gap 6: prevent high-depth persisted/resumed seeds from executing beyond `synthesis_depth_limit` while still preserving them as inventory.
+- [ ] Next sidecar gap 7: refresh dashboard data on pause/cancel lifecycle exits, not only normal completion.
 
 ## Intentionally gated
 

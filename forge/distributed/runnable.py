@@ -24,6 +24,7 @@ from forge.phase4.rce_hunter import run_safe_check, run_weaponize
 
 _SENSITIVE_SCHEDULED_TASK_TYPES = {
     "auth-bypass",
+    "ports",
     "safe_check",
     "spray",
     "validate",
