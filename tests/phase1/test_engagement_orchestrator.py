@@ -69288,6 +69288,17 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": ["acme.example", "*.acme.example"],
+                "authorized_seeds": ["urlseed-firebase"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     fetched_urls: list[str] = []
     root_html = (
@@ -69315,6 +69326,8 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
     careers_html = (
         "<html><body>"
         '<a href="mailto:urlseed@acme.example">Jobs</a>'
+        '<a href="/team">Team</a>'
+        '<a href="https://github.com/acme-careers">GitHub</a>'
         " Firebase https://urlseed-firebase.firebaseio.com "
         "</body></html>"
     )
@@ -69482,6 +69495,8 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=2,
@@ -69558,6 +69573,20 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
         assert ("https://acme.example/static/css/main-a1b2c3d4.css", "url") in url_seeds
         assert ("https://acme.example/assets/app.chunk.js.map", "url") in url_seeds
         assert ("https://acme.example/src/internal.ts", "url") not in url_seeds
+        url_depths = {
+            (str(row[0]), str(row[1])): int(row[2])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, depth
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                  AND seed_type IN ('url', 'apk_url')
+                """
+            ).fetchall()
+        }
+        assert url_depths[("https://acme.example/careers", "url")] == 1
+        assert url_depths[("https://acme.example/team", "url")] == 2
+        assert url_depths[("https://github.com/acme-careers", "url")] == 2
 
         artifact_urls = {
             str(row[0])
@@ -74952,6 +74981,16 @@ def test_kill_chain_html_public_profile_urls_feed_recursive_identity_and_company
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": ["acme.example", "*.acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     fetched_urls: list[str] = []
     html_blob = (
@@ -75087,6 +75126,8 @@ def test_kill_chain_html_public_profile_urls_feed_recursive_identity_and_company
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=True,
         skip_keyscan=True,
         parallel_fanout=2,
@@ -77573,6 +77614,16 @@ def test_kill_chain_local_api_and_security_output_artifacts_feed_recursive_graph
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": ["acme.example", "*.acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     artifact_root = tmp_path / "data" / "artifacts"
     artifact_root.mkdir(parents=True, exist_ok=True)
@@ -77815,6 +77866,8 @@ def test_kill_chain_local_api_and_security_output_artifacts_feed_recursive_graph
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=True,
         skip_keyscan=True,
         parallel_fanout=2,

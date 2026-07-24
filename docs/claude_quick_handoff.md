@@ -25,7 +25,20 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: uniform live authorization policy is complete.
+Latest checkpoint: URL-surface recursive child depth is complete.
+D5 crawl URL children and public-profile URL children now preserve
+parent-relative depth via source metadata instead of resetting to `1`, so depth
+budgets and scheduling priority cannot be bypassed by same-iteration URL surface
+recursion. Fake-live regressions now carry explicit ROE/scope fixtures under the
+uniform live authorization policy. Verification: compile passed; Ruff passed;
+focused URL-surface recursion test passed (`1 passed`); adjacent
+artifact-depth/local-graph/URL-depth/public-profile checkpoint set passed (`4 passed`);
+`.forge_data/engagements` contained `0` non-master engagement DBs after the run.
+
+Next checkpoint from subagent audit: constrain discovered third-party email
+domains so they do not become root fan-out targets without scope/corroboration.
+
+Previous checkpoint: uniform live authorization policy is complete.
 CLI and WebUI kill-chain launches now require both ROE ID and scope manifest for
 every non-dry-run run, not only attack-mode or auto-run follow-ups. Live
 remote-artifact, cloud-validation, and key-validation scope callbacks fail
@@ -34,13 +47,6 @@ Dry-run preview remains available without ROE/scope. Verification: compile
 passed; Ruff passed; focused CLI/WebUI live-launch rejection tests passed (`8
 passed`); WebUI launch selector passed (`8 passed, 43 deselected`); adjacent CLI
 scope selector passed (`11 passed, 758 deselected`).
-
-Next checkpoint: fix URL-surface recursive child depth. D5 and public-profile
-URL-surface children should preserve parent-relative depth instead of resetting
-to `1`, so depth budgets and scheduling priority cannot be bypassed.
-
-Follow-up checkpoint from subagent audit: constrain discovered third-party email
-domains so they do not become root fan-out targets without scope/corroboration.
 
 Previous checkpoint: artifact-derived child seed depth is complete.
 `ArtifactQueueProcessor` now preserves source-relative recursion depth for

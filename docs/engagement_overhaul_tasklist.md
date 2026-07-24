@@ -91,12 +91,19 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix URL-surface recursive child depth. D5 and public
-  profile URL-surface children should preserve parent-relative depth instead of
-  resetting to `1`, so depth budgets and scheduling priority cannot be bypassed.
-- [ ] Follow-up checkpoint: constrain email-domain root promotion. Email domains
+- [ ] Next checkpoint: constrain email-domain root promotion. Email domains
   discovered from unrelated third-party addresses must not automatically become
   root-domain fan-out targets unless scope/corroboration allows them.
+- [x] URL-surface recursive child depth checkpoint:
+  D5 crawl URL children and public-profile URL children now preserve
+  parent-relative depth via source metadata instead of resetting to `1`, so
+  depth budgets and scheduling priority cannot be bypassed by same-iteration
+  URL surface recursion. The regression also keeps fake-live fixtures explicit
+  about ROE/scope under the uniform live authorization policy. Verification:
+  compile passed; Ruff passed; focused URL-surface recursion test passed
+  (`1 passed`); adjacent artifact-depth/local-graph/URL-depth/public-profile
+  checkpoint set passed (`4 passed`); workspace `.forge_data/engagements` contained `0`
+  non-master engagement DBs after the run.
 - [x] Uniform live authorization policy checkpoint:
   CLI and WebUI kill-chain launches now require both ROE ID and scope manifest
   for every non-dry-run run, not only attack-mode or auto-run follow-ups. Live

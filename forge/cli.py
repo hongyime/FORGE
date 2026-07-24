@@ -8077,7 +8077,7 @@ def kill_chain(
                         seed_type,
                         source="discovered",
                         status="pending",
-                        depth=1,
+                        depth=_child_seed_depth_from_metadata(source_metadata),
                         confidence=0.78 if seed_type == "url" else 0.8,
                         metadata=source_metadata,
                     )
@@ -8109,10 +8109,19 @@ def kill_chain(
             con.close()
         return inserted
 
+    def _child_seed_depth_from_metadata(metadata: dict[str, Any] | None) -> int:
+        if not isinstance(metadata, dict):
+            return 1
+        try:
+            return max(1, int(metadata.get("child_seed_depth") or 1))
+        except (TypeError, ValueError):
+            return 1
+
     def _persist_discovered_public_profile_urls(
         urls: set[str],
         *,
         discovery: str,
+        url_metadata: dict[str, dict[str, Any]] | None = None,
         max_workers: int = 1,
         progress_label: str | None = None,
         progress_callback: Callable[[str, dict[str, object]], None] | None = None,
@@ -8176,6 +8185,7 @@ def kill_chain(
                 lambda prepared_url: _prepare_public_profile_url_persist_reduction_item(
                     prepared_url,
                     existing_url_seeds=existing_url_seeds,
+                    source_metadata=url_metadata,
                 ),
                 max_workers=max_workers,
                 progress_label=reduction_progress_label,
@@ -8191,6 +8201,7 @@ def kill_chain(
                 normalized_url = str(prepared_url_entry["normalized_url"] or "").strip()
                 seed_type = str(prepared_url_entry["seed_type"] or "").strip()
                 should_insert_seed = bool(prepared_url_entry["insert_seed"])
+                source_metadata = cast(dict[str, Any], prepared_url_entry.get("metadata") or {})
                 inserted_seed = 0
                 if should_insert_seed and normalized_url not in existing_url_seeds:
                     _upsert_engagement_seed(
@@ -8199,8 +8210,9 @@ def kill_chain(
                         seed_type,
                         source="discovered",
                         status="pending",
-                        depth=1,
+                        depth=_child_seed_depth_from_metadata(source_metadata),
                         confidence=0.77 if seed_type == "url" else 0.8,
+                        metadata=source_metadata,
                     )
                     existing_url_seeds.add(normalized_url)
                     inserted_seed = 1
@@ -10466,6 +10478,7 @@ def kill_chain(
         }
         return {
             "source_url": str(url_seed or "").strip(),
+            "source_depth": int(_url_depth or 0),
             "url_handle": url_handle,
             "has_payload": bool(payload),
             "mined": mined,
@@ -11818,16 +11831,19 @@ def kill_chain(
         prepared_url: tuple[str, str] | None,
         *,
         existing_url_seeds: set[str],
+        source_metadata: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, object] | None:
         if prepared_url is None:
             return None
         normalized_url, seed_type = prepared_url
         if not normalized_url:
             return None
+        metadata = (source_metadata or {}).get(normalized_url, {})
         return {
             "normalized_url": normalized_url,
             "seed_type": seed_type,
             "insert_seed": normalized_url not in existing_url_seeds,
+            "metadata": metadata if isinstance(metadata, dict) else {},
         }
 
     def _artifact_source_metadata(raw_metadata_json: str) -> dict[str, Any]:
@@ -11928,9 +11944,17 @@ def kill_chain(
         finally:
             con.close()
         metadata_by_url: dict[str, dict[str, Any]] = {}
+        depth_by_url = {
+            _normalize_url_seed_value(str(url_seed or "").strip()): int(depth or 0)
+            for url_seed, depth in url_seed_batch
+            if str(url_seed or "").strip()
+        }
         for seed_value, metadata_json in rows:
             source_url = str(seed_value or "").strip()
             metadata = _url_seed_source_metadata(str(metadata_json or "{}"), source_url)
+            source_depth = depth_by_url.get(_normalize_url_seed_value(source_url))
+            if source_depth is not None:
+                metadata["source_seed_depth"] = source_depth
             if source_url and metadata:
                 metadata_by_url[_normalize_url_seed_value(source_url)] = metadata
         return metadata_by_url
@@ -11998,16 +12022,27 @@ def kill_chain(
         metadata = dict(source_metadata)
         metadata["discovered_from"] = "url_seed_extract"
         metadata["source_url"] = source_url
+        try:
+            source_depth = int(entry.get("source_depth") or metadata.get("source_seed_depth") or 0)
+        except (TypeError, ValueError):
+            source_depth = 0
+        metadata["source_seed_depth"] = max(0, source_depth)
+        metadata["child_seed_depth"] = max(1, source_depth + 1)
         mined = cast(dict[str, Any], entry.get("mined") or {})
         pairs: list[tuple[str, dict[str, Any]]] = []
-        for raw_child_url in mined.get("crawl_urls", []) or []:
-            prepared_child = _prepare_discovered_seed_url(
-                str(raw_child_url or ""),
-                require_scope=True,
-            )
-            if prepared_child is None:
-                continue
-            pairs.append((prepared_child[0], dict(metadata)))
+        child_url_groups = (
+            (mined.get("crawl_urls", []) or [], True),
+            (mined.get("public_profile_urls", []) or [], False),
+        )
+        for raw_child_urls, require_scope in child_url_groups:
+            for raw_child_url in raw_child_urls:
+                prepared_child = _prepare_discovered_seed_url(
+                    str(raw_child_url or ""),
+                    require_scope=require_scope,
+                )
+                if prepared_child is None:
+                    continue
+                pairs.append((prepared_child[0], dict(metadata)))
         return pairs
 
     def _prepare_artifact_classification_reduction_item(
@@ -14343,6 +14378,7 @@ def kill_chain(
                 url_profile_urls_added = _persist_discovered_public_profile_urls(
                     url_batch_mined["public_profile_urls"],
                     discovery="url_seed_extract",
+                    url_metadata=url_child_metadata,
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.D5 public profile persist prep",
                     progress_callback=_record_batch_progress,
