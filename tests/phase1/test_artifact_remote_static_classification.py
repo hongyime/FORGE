@@ -167,11 +167,32 @@ def test_classify_remote_artifact_url_recognizes_model_binary_artifacts() -> Non
     assert _classify_remote_artifact_url("https://models.acme.example/keras-model.keras") == "archive"
     assert _classify_remote_artifact_url("https://models.acme.example/ranker.onnx") == "document"
     assert _classify_remote_artifact_url("https://models.acme.example/embed.safetensors?download=1") == "document"
+    assert _classify_remote_artifact_url("https://models.acme.example/mobile/model.tflite") == "document"
+    assert _classify_remote_artifact_url("https://models.acme.example/ios/Classifier.mlmodel") == "document"
+    assert _classify_remote_artifact_url("https://models.acme.example/ios/Model.mlmodelc?dl=1") == "document"
+    assert _classify_remote_artifact_url("https://models.acme.example/tf/saved_model.pb") == "document"
+    assert _classify_remote_artifact_url("https://models.acme.example/tf/graph.pbtxt") == "document"
     assert _classify_remote_artifact_url("https://models.acme.example/vectorizer.joblib") == "document"
     assert _classify_remote_artifact_url("https://models.acme.example/pipeline.pkl") == "document"
     assert _classify_remote_artifact_url("https://models.acme.example/checkpoint.pt") == "document"
     assert _classify_remote_artifact_url("https://models.acme.example/weights.pth") == "document"
     assert _classify_remote_artifact_url("https://models.acme.example/train.ckpt") == "document"
+
+
+def test_model_content_types_and_routes_map_to_static_artifacts() -> None:
+    assert _suffix_from_content_type("application/x-tflite") == ".tflite"
+    assert _suffix_from_content_type("application/vnd.tensorflow.lite") == ".tflite"
+    assert _suffix_from_content_type("application/x-coreml") == ".mlmodel"
+    assert _suffix_from_content_type("application/vnd.apple.coreml") == ".mlmodel"
+    assert _suffix_from_content_type("application/octet-stream+coreml") == ".mlmodel"
+    assert _suffix_from_content_type("application/x-protobuf") == ".pb"
+    assert _extract_artifact_relative_route_urls(
+        'const model = "/static/mobile/model.tflite"; const graph = "/models/tf/graph.pbtxt";',
+        base_url="https://models.acme.example/app.js",
+    ) == [
+        "https://models.acme.example/static/mobile/model.tflite",
+        "https://models.acme.example/models/tf/graph.pbtxt",
+    ]
 
 
 def test_classify_remote_artifact_url_recognizes_compiled_mobile_jvm_artifacts() -> None:

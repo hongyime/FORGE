@@ -25,7 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Realm mobile DB artifact recursion is complete. Passive
+Latest checkpoint: static ML model binary artifact recursion is complete.
+Passive TensorFlow Lite/CoreML/protobuf model artifacts (`.tflite`,
+`.mlmodel`, `.mlmodelc`, `.pb`, `.pbtxt`) now classify as document/static
+binary artifacts, route-discovered model URLs can enter artifact queueing, and
+safe model MIME types infer bounded binary artifact suffixes. A local fixture
+proves discovered model files feed recursive email/URL/Firebase/Supabase/S3/GCS
+pivots through existing binary-string extraction only. Verification: focused
+TDD failed first on local ingestion returning `0`, missing remote
+classification, and missing model MIME mappings; compile/Ruff passed; focused
+model tests passed (`3 passed`); model plus full remote classification passed
+(`18 passed`); selected orchestrator route/binary slice passed (`33 passed, 729
+deselected`); adjacent Realm/Parquet/HAR/OCI slice passed (`11 passed`);
+cleanup inventory found no new pytest/test-like engagement DBs. Handoff:
+`.claude/handoffs/2026-07-24-static-ml-model-artifact-recursion.md`.
+
+Previous checkpoint: Realm mobile DB artifact recursion is complete. Passive
 `.realm` mobile database artifacts now classify as document/static dump
 artifacts for local discovery and remote artifact MIME/suffix inference, then
 route through the existing bounded binary-string extraction path. A local
@@ -89,11 +104,11 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: collect read-only subagent `Pauli`'s next backend gap audit,
-then implement one compact safe static/passive recursion, provider
-normalization, validation-proof, or bounded-worker dispatch gap with mocked or
-local tests. Do not add live target probing without explicit ROE/scope manifest
-and mocked tests.
+Current next gate: run or collect a fresh bounded backend gap audit, then
+implement one compact safe static/passive recursion, provider normalization,
+validation-proof, or bounded-worker dispatch gap with mocked or local tests. Do
+not add live target probing without explicit ROE/scope manifest and mocked
+tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

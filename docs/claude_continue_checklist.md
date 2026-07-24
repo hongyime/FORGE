@@ -66,6 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Static ML model binary artifact recursion checkpoint:
+  Passive TensorFlow Lite/CoreML/protobuf model artifacts (`.tflite`,
+  `.mlmodel`, `.mlmodelc`, `.pb`, `.pbtxt`) now classify as document/static
+  binary artifacts, route-discovered model URLs can enter artifact queueing, and
+  safe model MIME types infer bounded binary artifact suffixes. A local fixture
+  proves discovered model files feed recursive email/URL/Firebase/Supabase/S3/
+  GCS pivots through existing binary-string extraction only. Verification:
+  focused TDD failed first on local ingestion returning `0`, missing remote
+  classification, and missing model MIME mappings; compile passed; Ruff passed;
+  focused model tests passed (`3 passed`); model plus full remote
+  classification passed (`18 passed`); selected orchestrator route/binary slice
+  passed (`33 passed, 729 deselected`); adjacent Realm/Parquet/HAR/OCI slice
+  passed (`11 passed`); cleanup inventory found no new pytest/test-like
+  engagement DBs. Handoff:
+  `.claude/handoffs/2026-07-24-static-ml-model-artifact-recursion.md`.
 - [x] Realm mobile DB artifact recursion checkpoint:
   Passive `.realm` mobile database artifacts now classify as document/static
   dump artifacts for both local discovery and remote artifact MIME/suffix
