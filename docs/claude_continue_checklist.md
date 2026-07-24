@@ -25,7 +25,7 @@ pipeline target before discussing task status.
 - Historical backprop notes that say `No SPEC.md exists` are stale after
   2026-07-20. New invariant or bug-contract notes should update `SPEC.md` plus
   active continuation docs.
-- Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, and tested with mocks or local fixtures unless a real target is explicitly provided for that run. Live `--attack-mode` and `--auto-run-detected` execution must carry `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; `FORGE_REQUIRE_SCOPE_MANIFEST=1` extends the manifest requirement to every non-dry-run kill-chain launch. Use `--dry-run` to preview without live execution.
+- Live probing and tool execution are allowed when the engagement scope/config explicitly authorizes them. They must be bounded, logged, resumable, and tested with mocks or local fixtures unless a real target is explicitly provided for that run. Every non-dry-run kill-chain launch must carry `--roe-id`/`FORGE_ROE_ID` plus `--scope-manifest`/`FORGE_SCOPE_MANIFEST`; use `--dry-run` to preview without live execution.
 - Default automation must not silently cross scope or perform destructive exploitation, password attacks, persistence, lateral movement, or post-exploitation actions.
 
 ## End Goal To Preserve
@@ -66,19 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: implement uniform live authorization policy. Any
-  non-dry-run kill-chain launch must require both ROE ID and scope manifest by
-  default, and live scope callbacks must fail closed with
-  `scope_manifest_required` when no manifest is loaded. Update CLI and WebUI
-  launch paths first, then add focused local/mock tests for CLI live-launch
-  rejection and WebUI route rejection. Do not add proxy/Tor/IP bypass,
-  destructive validation, or scope relaxation.
-- [ ] Follow-up checkpoint: fix URL-surface recursive child depth. D5 and public
+- [ ] Next checkpoint: fix URL-surface recursive child depth. D5 and public
   profile URL-surface children should preserve parent-relative depth instead of
   resetting to `1`, so depth budgets and scheduling priority cannot be bypassed.
 - [ ] Follow-up checkpoint: constrain email-domain root promotion. Email domains
   discovered from unrelated third-party addresses must not automatically become
   root-domain fan-out targets unless scope/corroboration allows them.
+- [x] Uniform live authorization policy checkpoint:
+  CLI and WebUI kill-chain launches now require both ROE ID and scope manifest
+  for every non-dry-run run, not only attack-mode or auto-run follow-ups. Live
+  remote-artifact, cloud-validation, and key-validation scope callbacks fail
+  closed with `scope_manifest_required` if invoked without a loaded manifest.
+  Dry-run preview remains available without ROE/scope. Verification: compile
+  passed; Ruff passed; focused CLI/WebUI live-launch rejection tests passed
+  (`8 passed`); WebUI launch selector passed (`8 passed, 43 deselected`);
+  adjacent CLI scope selector passed (`11 passed, 758 deselected`).
 - [x] Artifact-derived child seed depth checkpoint:
   `ArtifactQueueProcessor` now preserves source-relative recursion depth for
   artifact-derived emails, phones, IPs, hosts, URLs, social pivots, Firebase

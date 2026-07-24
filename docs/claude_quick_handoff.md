@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: artifact-derived child seed depth is complete.
+Latest checkpoint: uniform live authorization policy is complete.
+CLI and WebUI kill-chain launches now require both ROE ID and scope manifest for
+every non-dry-run run, not only attack-mode or auto-run follow-ups. Live
+remote-artifact, cloud-validation, and key-validation scope callbacks fail
+closed with `scope_manifest_required` if invoked without a loaded manifest.
+Dry-run preview remains available without ROE/scope. Verification: compile
+passed; Ruff passed; focused CLI/WebUI live-launch rejection tests passed (`8
+passed`); WebUI launch selector passed (`8 passed, 43 deselected`); adjacent CLI
+scope selector passed (`11 passed, 758 deselected`).
+
+Next checkpoint: fix URL-surface recursive child depth. D5 and public-profile
+URL-surface children should preserve parent-relative depth instead of resetting
+to `1`, so depth budgets and scheduling priority cannot be bypassed.
+
+Follow-up checkpoint from subagent audit: constrain discovered third-party email
+domains so they do not become root fan-out targets without scope/corroboration.
+
+Previous checkpoint: artifact-derived child seed depth is complete.
 `ArtifactQueueProcessor` now preserves source-relative recursion depth for
 artifact-derived emails, phones, IPs, hosts, URLs, social pivots, Firebase
 project/storage/RTDB seeds, and Supabase project URL/ref seeds. Existing seeds
@@ -34,18 +51,6 @@ remain intact. Verification: compile passed; Ruff passed; focused artifact
 depth/mobile/persistence tests passed (`3 passed`); slow local kill-chain
 artifact graph smoke passed with slow filtering disabled (`1 passed`);
 `.forge_data/engagements` contained `0` non-master engagement DBs after the run.
-
-Next checkpoint: implement uniform live authorization policy. Any non-dry-run
-kill-chain launch should require both ROE ID and scope manifest by default, and
-live scope callbacks should fail closed with `scope_manifest_required` when no
-manifest is loaded. Update CLI and WebUI launch paths first, then add focused
-local/mock tests for CLI live-launch rejection and WebUI route rejection. Do not
-add proxy/Tor/IP bypass, destructive validation, or scope relaxation.
-
-Follow-up checkpoints from subagent audit: fix URL-surface recursive child depth
-so D5/public-profile children do not reset to `1`, and constrain discovered
-third-party email domains so they do not become root fan-out targets without
-scope/corroboration.
 
 Previous checkpoint: report-state overview filtering is complete.
 Static dashboard overview rows and React overview cards can now be filtered by

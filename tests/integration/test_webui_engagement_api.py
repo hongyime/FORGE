@@ -2746,6 +2746,7 @@ def test_launch_engagement_kill_chain_route_passes_scope_manifest_when_required_
             json={
                 "max_iter": 2,
                 "dry_run": False,
+                "roe_id": "ROE-WEB-2026-07",
                 "scope_manifest": str(scope_manifest_path),
                 "skip_cloud": True,
                 "skip_keyscan": True,
@@ -2757,12 +2758,57 @@ def test_launch_engagement_kill_chain_route_passes_scope_manifest_when_required_
         assert payload["status"] == "started"
         assert payload["pid"] == 53535
         assert payload["dry_run"] is False
+        assert payload["roe_id"] == "ROE-WEB-2026-07"
         assert payload["scope_manifest"] == str(scope_manifest_path)
 
         command = launched["command"]
         assert "--dry-run" not in command
+        assert "--roe-id" in command
+        assert "ROE-WEB-2026-07" in command
         assert "--scope-manifest" in command
         assert str(scope_manifest_path) in command
+
+
+def test_launch_engagement_kill_chain_route_rejects_live_without_roe_scope_by_default(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    monkeypatch.delenv("FORGE_SCOPE_MANIFEST", raising=False)
+    _build_engagement(tmp_path)
+
+    launched = False
+
+    class _FakePopen:
+        def __init__(self, command, **kwargs) -> None:  # noqa: ANN001
+            nonlocal launched
+            del command, kwargs
+            launched = True
+            self.pid = 54545
+
+    monkeypatch.setattr("forge.webui.app.subprocess.Popen", _FakePopen)
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/engagements/engagement-1001-acme-example/runs/kill-chain",
+            json={
+                "max_iter": 2,
+                "dry_run": False,
+                "skip_cloud": True,
+                "skip_keyscan": True,
+            },
+            headers=headers,
+        )
+        assert response.status_code == 400, response.text
+        assert "requires roe_id" in response.text
+        assert launched is False
 
 
 def test_launch_engagement_kill_chain_route_rejects_live_sensitive_modes_without_roe(
@@ -2909,13 +2955,14 @@ def test_launch_engagement_kill_chain_route_rejects_live_without_scope_manifest_
             json={
                 "max_iter": 2,
                 "dry_run": False,
+                "roe_id": "ROE-WEB-2026-07",
                 "skip_cloud": True,
                 "skip_keyscan": True,
             },
             headers=headers,
         )
         assert response.status_code == 400, response.text
-        assert "FORGE_REQUIRE_SCOPE_MANIFEST=1 requires scope_manifest" in response.text
+        assert "requires scope_manifest" in response.text
         assert launched is False
 
 

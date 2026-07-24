@@ -5035,20 +5035,16 @@ def kill_chain(
     report_provider = str(report_provider or "").strip() or None
     if report_max_loops is not None and int(report_max_loops) < 0:
         raise typer.BadParameter("--report-max-loops must be zero or greater.")
-    sensitive_live_mode = bool(not dry_run_all and (active_recon or auto_run_detected))
-    require_scope_manifest = sensitive_live_mode or (
-        not dry_run_all
-        and str(os.environ.get("FORGE_REQUIRE_SCOPE_MANIFEST", "")).strip().lower()
-        in {"1", "true", "yes", "on"}
-    )
-    if sensitive_live_mode and not roe_id:
+    live_launch = not dry_run_all
+    require_scope_manifest = live_launch
+    if live_launch and not roe_id:
         raise typer.BadParameter(
-            "live --attack-mode or --auto-run-detected requires --roe-id or FORGE_ROE_ID. "
+            "live kill-chain execution requires --roe-id or FORGE_ROE_ID. "
             "Use --dry-run to preview without live execution."
         )
     if require_scope_manifest and not scope_manifest:
         raise typer.BadParameter(
-            "live --attack-mode or --auto-run-detected requires --scope-manifest or "
+            "live kill-chain execution requires --scope-manifest or "
             "FORGE_SCOPE_MANIFEST so live execution is bounded to explicit authorization. "
             "Use --dry-run to preview without live execution."
         )
@@ -5955,7 +5951,7 @@ def kill_chain(
 
     def _live_execution_policy_metadata() -> dict[str, object]:
         live_allowed = not dry_run_all
-        requires_roe = bool(active_recon or credential_validate or auto_run_detected)
+        requires_roe = live_allowed
         authorized_seed_count = 0
         denied_seed_count = 0
         if isinstance(scope_manifest_validation, dict):
@@ -9170,6 +9166,12 @@ def kill_chain(
         if parsed.scheme not in {"http", "https"} or not hostname:
             return {"allowed": False, "reason": "invalid_url"}
         if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
+            if not dry_run_all:
+                return {
+                    "allowed": False,
+                    "reason": "scope_manifest_required",
+                    "hostname": hostname,
+                }
             return {"allowed": True, "reason": "no_scope_manifest", "hostname": hostname}
         recursive_scope = _validate_scope_manifest_seed_values(
             scope_manifest_metadata,
@@ -9354,6 +9356,13 @@ def kill_chain(
         if not raw_ref:
             return {"allowed": False, "reason": "empty", "service": service_name}
         if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
+            if not dry_run_all:
+                return {
+                    "allowed": False,
+                    "reason": "scope_manifest_required",
+                    "service": service_name,
+                    "ref": raw_ref,
+                }
             return {
                 "allowed": True,
                 "reason": "no_scope_manifest",
@@ -9490,6 +9499,8 @@ def kill_chain(
 
     def _key_validation_scope_decision(row_payload: dict[str, Any]) -> dict[str, object]:
         if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
+            if not dry_run_all:
+                return {"allowed": False, "reason": "scope_manifest_required"}
             return {"allowed": True, "reason": "no_scope_manifest"}
         source_url = str(row_payload.get("source_url") or "").strip()
         source_backend = str(row_payload.get("source_backend") or "").strip().lower()

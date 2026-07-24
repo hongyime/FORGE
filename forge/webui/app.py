@@ -1782,12 +1782,8 @@ def create_app() -> Any:
         auto_run_detected = bool(options.get("auto_run_detected", False))
         roe_id = " ".join(str(options.get("roe_id") or os.environ.get("FORGE_ROE_ID", "")).strip().split())[:160]
         scope_manifest = str(options.get("scope_manifest") or os.environ.get("FORGE_SCOPE_MANIFEST", "")).strip()
-        require_scope_manifest = str(os.environ.get("FORGE_REQUIRE_SCOPE_MANIFEST", "")).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        live_launch = not dry_run
+        require_scope_manifest = live_launch
         skip_cloud = bool(options.get("skip_cloud", False))
         skip_keyscan = bool(options.get("skip_keyscan", False))
         try:
@@ -1807,29 +1803,20 @@ def create_app() -> Any:
             raise HTTPException(status_code=400, detail=f"Invalid report provider: {report_provider}")
         if report_max_loops is not None and (report_max_loops < 0 or report_max_loops > 10):
             raise HTTPException(status_code=400, detail="report_max_loops must be between 0 and 10.")
-        if not dry_run and not roe_id and (attack_mode or auto_run_detected):
+        if live_launch and not roe_id:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Live attack_mode or auto_run_detected requires roe_id or FORGE_ROE_ID. "
+                    "Live kill-chain execution requires roe_id or FORGE_ROE_ID. "
                     "Use dry_run to preview without live execution."
                 ),
             )
-        if not dry_run and (attack_mode or auto_run_detected) and not scope_manifest:
+        if require_scope_manifest and not scope_manifest:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Live attack_mode or auto_run_detected requires scope_manifest or "
+                    "Live kill-chain execution requires scope_manifest or "
                     "FORGE_SCOPE_MANIFEST so execution is bounded to explicit authorization. "
-                    "Use dry_run to preview without live execution."
-                ),
-            )
-        if not dry_run and require_scope_manifest and not scope_manifest:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "FORGE_REQUIRE_SCOPE_MANIFEST=1 requires scope_manifest or "
-                    "FORGE_SCOPE_MANIFEST for non-dry-run kill-chain launches. "
                     "Use dry_run to preview without live execution."
                 ),
             )

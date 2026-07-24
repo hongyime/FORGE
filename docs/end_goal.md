@@ -172,7 +172,7 @@ hits quota, has no key, or exceeds token limits.
 
 - FORGE exists for authorized security assessment, OSINT, misconfiguration validation, and executive reporting.
 - Passive discovery, static artifact analysis, recursive enrichment, and deterministic synthesis are the default path.
-- Live probing and tool execution are allowed only when the engagement scope/config explicitly authorizes them. Live `--attack-mode` and `--auto-run-detected` execution must carry `--roe-id` or `FORGE_ROE_ID` plus `--scope-manifest` or `FORGE_SCOPE_MANIFEST`.
+- Live probing and tool execution are allowed only when the engagement scope/config explicitly authorizes them. Every non-dry-run kill-chain launch must carry `--roe-id` or `FORGE_ROE_ID` plus `--scope-manifest` or `FORGE_SCOPE_MANIFEST`; use dry-run preview when that context is not present.
 - Automation must be bounded, logged, resumable, dry-run capable, and safe to stop/restart.
 - External providers and target services must be handled with bounded concurrency, timeouts, backoff, and provider-aware rate limits. Do not add IP rotation, proxy rotation, or rate-limit bypass as a way to evade limits.
 - FORGE's end goal excludes destructive exploitation, password spraying, persistence, lateral movement, post-exploitation, data modification, and privilege escalation. Do not add those capabilities to the product path or continuation backlog.

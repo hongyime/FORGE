@@ -66400,6 +66400,60 @@ def test_scope_manifest_rejects_unlisted_initial_seed(tmp_path: Path) -> None:
     ]
 
 
+def test_kill_chain_live_passive_requires_roe_scope_manifest_before_fetch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import typer
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    monkeypatch.delenv("FORGE_SCOPE_MANIFEST", raising=False)
+
+    fetched = False
+
+    def _fail_fetch(*args, **kwargs):  # noqa: ANN001
+        nonlocal fetched
+        del args, kwargs
+        fetched = True
+        raise AssertionError("live fetch should not run before ROE/scope preflight")
+
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fail_fetch)
+
+    from forge.cli import kill_chain
+
+    with pytest.raises(typer.BadParameter, match="requires --roe-id"):
+        kill_chain(
+            seed="acme.example",
+            related_seed=[],
+            engagement="1001",
+            max_iter=1,
+            tor=False,
+            dry_run=False,
+            attack_mode=False,
+            skip_cloud=True,
+            skip_keyscan=True,
+        )
+    assert fetched is False
+
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-ACME-2026-07")
+    with pytest.raises(typer.BadParameter, match="requires --scope-manifest"):
+        kill_chain(
+            seed="acme.example",
+            related_seed=[],
+            engagement="1001",
+            max_iter=1,
+            tor=False,
+            dry_run=False,
+            attack_mode=False,
+            skip_cloud=True,
+            skip_keyscan=True,
+        )
+    assert fetched is False
+
+
 def test_kill_chain_live_sensitive_modes_require_scope_manifest_after_roe(
     tmp_path: Path,
     monkeypatch,
@@ -66640,6 +66694,7 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_recursive_url_without_fet
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
         scope_manifest=str(manifest_path),
         skip_cloud=True,
         skip_keyscan=True,
@@ -67503,6 +67558,7 @@ def test_kill_chain_ip_shodan_child_receives_scope_manifest(
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
         scope_manifest=str(manifest_path),
         skip_cloud=True,
         skip_keyscan=True,
