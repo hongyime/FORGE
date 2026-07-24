@@ -91,11 +91,27 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
-  pick one compact implementation/test task that advances intake, discovery,
-  recursion, artifact analysis, validation, scoring, review, fallback, or
-  cleanup. The automation API scope preflight gate is now closed; do not reopen
-  it unless a regression is found.
+- [ ] Next checkpoint: add compact validation-inventory/reportability summary
+  fields to `report_summary` so dashboard/API review can prove whether the
+  generated report carried validation review context without opening the report
+  JSON artifact. Suggested fields: cloud validation inventory count, cloud
+  asset inventory count, reportable/unreportable validation counts, and compact
+  validation status summary. Do not reopen scheduler/automation scope gates
+  unless a regression is found.
+- [x] Generic scheduler and Command Center ROE/scope preflight checkpoint:
+  `/api/tasks/enqueue` now requires `roe_id` and `scope_manifest`, validates a
+  submitted target against the manifest before queue insertion, preserves
+  authorized context in `distributed_tasks.payload`, and writes
+  `scheduled_task_scope_denied` audit rows on missing/denied context. Command
+  Center execute/approve now accepts the same ROE/scope context, refuses manual
+  dispatch before queueing without it, validates action targets before
+  scheduling, records `command_center_scope_denied` audit evidence, and fails
+  autonomous dispatch closed with a timeline event rather than silently queuing.
+  The patch only gates/suppresses scheduling and does not add proxy/Tor/IP
+  bypass, scope relaxation, WAF-evasion expansion, destructive exploitation, or
+  new live probing behavior. Verification: compile passed; Ruff passed;
+  dedicated preflight file passed (`6 passed`); full adjacent web/scheduler
+  scope suite passed (`86 passed`).
 - [x] Automation API scope preflight checkpoint:
   `/api/automation/execute` and `/api/automation/playbook` now validate the
   requested target against the submitted ROE scope manifest before queue

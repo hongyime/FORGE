@@ -23,6 +23,12 @@ from forge.models.pydantic_models import (
     CommandTargetType,
     SentryConfigModel,
 )
+from forge.utils.playbooks import inherit_roe_scope_context
+from forge.webui.automation_scope import (
+    AutomationScopeError,
+    assert_automation_target_in_scope,
+    has_roe_scope_context,
+)
 
 
 PublishEvent = Callable[[CommandEvent], None]
@@ -450,7 +456,7 @@ class CommandCenterService:
             self._maybe_emit_critical_finding(con, host, context, state)
             con.commit()
         for action_id in dispatchable_ids:
-            self.dispatch_action(action_id, autonomous=True)
+            self._try_autonomous_dispatch(action_id)
         with get_engagement_db(self._db_path) as con:
             self._refresh_action_statuses(con)
             context = self._build_host_context(con, host)
@@ -467,26 +473,58 @@ class CommandCenterService:
             dispatchable_ids = self._sync_host_actions(con, host, context, state)
             con.commit()
         for action_id in dispatchable_ids:
-            self.dispatch_action(action_id, autonomous=True)
+            self._try_autonomous_dispatch(action_id)
         with get_engagement_db(self._db_path) as con:
             self._refresh_action_statuses(con)
             actions = self._fetch_actions(con, host, include_hidden=include_hidden)
             return [action.model_dump(mode="json") for action in actions]
 
-    def approve_action(self, action_id: str) -> dict[str, Any]:
+    def approve_action(
+        self,
+        action_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         action = self._get_action(action_id)
         if action.status not in {CommandActionStatus.QUEUED, CommandActionStatus.SUGGESTED}:
             raise ValueError(f"Action {action_id} is not awaiting approval.")
         if action.policy_outcome == CommandPolicyOutcome.HIDDEN:
             raise ValueError(f"Action {action_id} is hidden and cannot be approved.")
-        dispatched = self.dispatch_action(action_id, autonomous=action.execution_mode == "autonomous")
+        dispatched = self.dispatch_action(
+            action_id,
+            autonomous=action.execution_mode == "autonomous",
+            context=context,
+        )
         return {"status": "approved", "action": dispatched.model_dump(mode="json")}
 
-    def execute_action(self, action_id: str) -> dict[str, Any]:
-        action = self.dispatch_action(action_id, autonomous=False)
+    def execute_action(
+        self,
+        action_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        action = self.dispatch_action(action_id, autonomous=False, context=context)
         return {"status": "queued", "action": action.model_dump(mode="json")}
 
-    def dispatch_action(self, action_id: str, autonomous: bool) -> CommandAction:
+    def _try_autonomous_dispatch(self, action_id: str) -> None:
+        try:
+            self.dispatch_action(action_id, autonomous=True)
+        except ValueError as exc:
+            self.record_event(
+                CommandEvent(
+                    event_id=uuid.uuid4().hex,
+                    event_type="action_dispatch_blocked",
+                    engagement_id=self.engagement_id,
+                    timestamp=utc_now(),
+                    payload={"action_id": action_id, "reason": str(exc)},
+                    severity="warning",
+                )
+            )
+
+    def dispatch_action(
+        self,
+        action_id: str,
+        autonomous: bool,
+        context: dict[str, Any] | None = None,
+    ) -> CommandAction:
         con = get_engagement_db(self._db_path)
         try:
             state = self._load_sentry_state(con)
@@ -509,7 +547,15 @@ class CommandCenterService:
                 raise ValueError(f"Action {action_id} is already terminal: {action.status.value}")
             target, task_type, extra_payload = self._task_spec_for_action(action)
             task_key = f"{task_type}:{target or action.target_ref}"
-            updated_params = {**action.params, **extra_payload, "task_key": task_key, "target": target}
+            dispatch_payload = self._scoped_dispatch_payload(
+                con,
+                action,
+                task_type=task_type,
+                target=target,
+                extra_payload=extra_payload,
+                context=context,
+            )
+            updated_params = {**dispatch_payload, "task_key": task_key}
             execution_mode = "autonomous" if autonomous else "manual"
             updated_action = action.model_copy(
                 update={
@@ -552,6 +598,51 @@ class CommandCenterService:
         )
         self.record_event(event)
         return self._get_action(action_id)
+
+    def _scoped_dispatch_payload(
+        self,
+        con: sqlite3.Connection,
+        action: CommandAction,
+        *,
+        task_type: str,
+        target: str,
+        extra_payload: dict[str, Any],
+        context: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        payload = inherit_roe_scope_context(
+            context or {},
+            {
+                **action.params,
+                **extra_payload,
+                "task_type": task_type,
+                "target": target,
+            },
+        )
+        reason = ""
+        if not has_roe_scope_context(payload):
+            reason = "command center dispatch requires roe_id and scope_manifest"
+        else:
+            try:
+                assert_automation_target_in_scope(payload, target)
+            except AutomationScopeError as exc:
+                reason = exc.reason
+        if reason:
+            con.execute(
+                """
+                INSERT INTO audit_log
+                    (engagement_id, phase, module, action, target, result, operator)
+                VALUES (?, 'webui', 'command_center', 'command_center_scope_denied',
+                        ?, ?, 'webui')
+                """,
+                (
+                    self.engagement_id,
+                    target,
+                    f"task_type={task_type} reason={reason}"[:500],
+                ),
+            )
+            con.commit()
+            raise ValueError(reason)
+        return payload
 
     def sync_action_status_for_task(self, task_key: str) -> None:
         with get_engagement_db(self._db_path) as con:

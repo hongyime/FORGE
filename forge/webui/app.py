@@ -61,8 +61,11 @@ from forge.utils.playbooks import (
 from forge.webui.auth import mint_token, validate_jwt_secret, verify_token
 from forge.webui.automation_scope import (
     AutomationScopeError,
+    assert_automation_scope_context_valid,
     assert_automation_target_in_scope,
     audit_automation_scope_denial,
+    audit_scope_denial,
+    require_web_task_scope_context,
 )
 from forge.webui.cloud_assets import cloud_assets_payload
 from forge.webui.command_center import CommandCenterService
@@ -2153,7 +2156,25 @@ def create_app() -> Any:
             raise HTTPException(status_code=400, detail="task_type is required.")
         task_type = task_type_raw.strip().lower()
         target = str(target_raw or "").strip()
-        payload = {"task_type": task_type, "target": target}
+        payload = {key: value for key, value in body.items() if key != "engagement_id"}
+        payload["task_type"] = task_type
+        payload["target"] = target
+        try:
+            require_web_task_scope_context(payload, "task scheduling")
+            assert_automation_scope_context_valid(payload)
+            if target:
+                assert_automation_target_in_scope(payload, target)
+        except AutomationScopeError as exc:
+            audit_scope_denial(
+                cfg.engagement_db_path(str(engagement_id_raw)),
+                int(engagement_id_raw),
+                task_type,
+                target,
+                exc.reason,
+                module="scheduled_task",
+                action="scheduled_task_scope_denied",
+            )
+            raise HTTPException(status_code=400, detail=exc.reason) from exc
         scheduler = TaskScheduler(
             db_path=cfg.engagement_db_path(str(engagement_id_raw)),
             queue=coordinator,
@@ -2585,11 +2606,17 @@ def create_app() -> Any:
     ) -> dict[str, Any]:
         engagement_id = body.get("engagement_id")
         if not engagement_id:
-            from fastapi import HTTPException
-
             raise HTTPException(status_code=400, detail="engagement_id required in body")
         svc = get_command_center(engagement_id)
-        return svc.execute_action(action_id)
+        context = body.get("context") if isinstance(body.get("context"), dict) else {}
+        context = inherit_roe_scope_context(
+            body,
+            {key: context[key] for key in ROE_SCOPE_CONTEXT_KEYS if key in context},
+        )
+        try:
+            return svc.execute_action(action_id, context=context)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/actions/{action_id}/approve")
     def approve_action_api(
@@ -2597,11 +2624,17 @@ def create_app() -> Any:
     ) -> dict[str, Any]:
         engagement_id = body.get("engagement_id")
         if not engagement_id:
-            from fastapi import HTTPException
-
             raise HTTPException(status_code=400, detail="engagement_id required in body")
         svc = get_command_center(engagement_id)
-        return svc.approve_action(action_id)
+        context = body.get("context") if isinstance(body.get("context"), dict) else {}
+        context = inherit_roe_scope_context(
+            body,
+            {key: context[key] for key in ROE_SCOPE_CONTEXT_KEYS if key in context},
+        )
+        try:
+            return svc.approve_action(action_id, context=context)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/sentry/toggle")
     def toggle_sentry_api(

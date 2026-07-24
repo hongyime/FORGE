@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: automation API scope preflight is complete.
+Latest checkpoint: generic scheduler and Command Center ROE/scope preflight is
+complete. `/api/tasks/enqueue` now requires `roe_id` and `scope_manifest`,
+validates submitted targets before queue insertion, preserves authorized
+context in `distributed_tasks.payload`, and writes `scheduled_task_scope_denied`
+audit rows on missing/denied context. Command Center execute/approve now
+accepts the same ROE/scope context, refuses manual dispatch before queueing
+without it, validates action targets before scheduling, records
+`command_center_scope_denied` audit evidence, and fails autonomous dispatch
+closed with a timeline event rather than silently queuing. Verification:
+compile passed; Ruff passed; dedicated preflight file passed (`6 passed`); full
+adjacent web/scheduler scope suite passed (`86 passed`).
+
+Next checkpoint: add compact validation-inventory/reportability summary fields
+to `report_summary` so dashboard/API review can prove whether the generated
+report carried validation review context without opening the report JSON
+artifact. Suggested fields: cloud validation inventory count, cloud asset
+inventory count, reportable/unreportable validation counts, and compact
+validation status summary. Do not reopen scheduler/automation scope gates unless
+a regression is found.
+
+Previous checkpoint: automation API scope preflight is complete.
 `/api/automation/execute` and `/api/automation/playbook` now validate the
 requested target against the submitted ROE scope manifest before queue
 insertion. Out-of-scope targets return `scope_manifest_denied`, enqueue no
@@ -35,12 +55,6 @@ the same manifest loader and entry validator as distributed/cloud validation
 gates. Verification: compile passed; Ruff passed; focused web automation
 selector passed (`11 passed, 39 deselected`); full engagement API integration
 file passed (`50 passed`).
-
-Next checkpoint: perform a fresh current-code deterministic gap audit and pick
-one compact implementation/test task that advances intake, discovery,
-recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
-The automation API scope preflight gate is now closed; do not reopen it unless
-a regression is found.
 
 Previous checkpoint: scheduled validation ROE/scope gating is complete.
 Distributed `validate` tasks now require non-empty `roe_id` and
