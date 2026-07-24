@@ -721,6 +721,96 @@ def test_context_builder_loads_scrubbed_artifact_seed_relation_provenance(tmp_en
     assert "never-render-this" not in json.dumps(ctx.seed_summary.relations, sort_keys=True)
 
 
+def test_synthesizer_exports_artifact_cloud_asset_provenance(tmp_eng_db, tmp_path):
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute(
+            """
+            CREATE TABLE cloud_assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                provider_identifier TEXT,
+                source TEXT,
+                metadata_json TEXT,
+                discovered_at TEXT
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier, source, metadata_json, discovered_at)
+            VALUES (?, 'firebase', 'provenance-firebase', 'provenance-firebase',
+                    'artifact_url_extract', ?, '2026-07-24T10:00:00Z')
+            """,
+            (
+                ENGAGEMENT_ID,
+                json.dumps(
+                    {
+                        "artifact_provenance": True,
+                        "artifact_source_seed_id": 42,
+                        "source_url": "https://downloads.acme.local/app-config.json",
+                        "source_file": "https://downloads.acme.local/app-config.json",
+                        "extract_rule": "artifact_text_extract",
+                        "format": "json",
+                        "artifact_type": "config",
+                        "provider_sources": ["urlscan"],
+                        "token": "must-not-export",
+                        "key_enc": "age-secret-ciphertext",
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+
+    assert len(ctx.cloud_asset_inventory) == 1
+    asset = ctx.cloud_asset_inventory[0]
+    assert asset["asset_type"] == "firebase"
+    assert asset["artifact_provenance"] is True
+    assert asset["artifact_source_seed_id"] == 42
+    assert asset["artifact_source_url"] == "https://downloads.acme.local/app-config.json"
+    assert asset["artifact_source_file"] == "https://downloads.acme.local/app-config.json"
+    assert asset["artifact_extract_rule"] == "artifact_text_extract"
+    assert asset["artifact_format"] == "json"
+    assert asset["metadata"]["provider_sources"] == ["urlscan"]
+    assert "token" not in asset["metadata"]
+    assert "key_enc" not in asset["metadata"]
+    assert "must-not-export" not in json.dumps(ctx.cloud_asset_inventory, sort_keys=True)
+
+    raw_row = next(
+        row
+        for row in ReportSynthesizer._raw_export_csv_rows(ctx)
+        if row["record_type"] == "cloud_asset"
+    )
+    assert raw_row["cloud_artifact_provenance"] == "True"
+    assert raw_row["cloud_artifact_source_seed_id"] == "42"
+    assert raw_row["cloud_artifact_extract_rule"] == "artifact_text_extract"
+    assert raw_row["cloud_artifact_format"] == "json"
+    assert "must-not-export" not in raw_row["cloud_metadata_json"]
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        output_dir=tmp_path,
+        provider="template",
+        assume_yes=True,
+    )
+    report_path = synth.generate(ENGAGEMENT_ID)
+    report_text = report_path.read_text(encoding="utf-8")
+    payload = json.loads(report_path.with_suffix(".json").read_text(encoding="utf-8"))
+    exported_asset = payload["context"]["cloud_asset_inventory"][0]
+    assert exported_asset["artifact_source_seed_id"] == 42
+    assert exported_asset["artifact_extract_rule"] == "artifact_text_extract"
+    assert "artifact_text_extract / json / https://downloads.acme.local/app-config.json" in report_text
+    assert "must-not-export" not in json.dumps(payload, sort_keys=True)
+
+
 def test_context_builder_filters_non_validated_managed_cloud_seeds_from_summary(
     tmp_eng_db,
 ):

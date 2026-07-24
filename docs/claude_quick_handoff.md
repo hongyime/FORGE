@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: artifact-derived cloud asset provenance is complete.
+Latest checkpoint: Phase 6 artifact cloud provenance export parity is complete.
+The fresh deterministic audit found that artifact-derived cloud provenance
+reached dashboard/graph review but not Phase 6 report/export surfaces.
+`ContextBuilder` now loads scrubbed `cloud_assets.metadata_json` into
+`cloud_asset_inventory`, companion JSON/raw JSON preserve artifact source seed
+ID, source URL/file, extract rule, format, and safe metadata, raw CSV
+cloud-asset rows include the same provenance fields, and deterministic template
+reports show a bounded provenance column without leaking secret metadata.
+Verification: compile passed; Ruff passed; focused Phase 6 provenance export
+test passed (`1 passed`); adjacent Phase 6 provenance/raw export selector
+passed (`21 passed, 84 deselected`).
+
+Next checkpoint: skipped seed-run status cleanup. `SeedRunTracker` currently
+sets a seed to `running` on start, but finishing that run as `skipped` can leave
+the parent `engagement_seeds.status` as `running`. Clear skipped running seeds
+to `ignored` while preserving completed/failed states. Regression targets:
+`test_seed_run_tracker_skipped_run_clears_running_seed_status` and a dry-run
+kill-chain assertion that all seed runs are terminal with zero running seeds.
+
+Previous checkpoint: artifact-derived cloud asset provenance is complete.
 `cloud_assets` now stores scrubbed `metadata_json` provenance, including source
 artifact seed ID, source URL/file, extract rule, format, artifact type,
 provider/source metadata, and bounded parser context when cloud refs are
@@ -38,12 +57,6 @@ focused artifact provenance test passed (`1 passed`); full artifact
 cloud-reference file passed (`2 passed`); dashboard graph/raw-export selector
 passed (`12 passed, 17 deselected`); full static dashboard suite passed (`29
 passed`).
-
-Next checkpoint: perform a fresh current-code deterministic gap audit and pick
-one compact implementation/test task that advances intake, discovery,
-recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
-The latest subagent-audited trio is now closed; do not reopen them unless a
-regression is found.
 
 Previous checkpoint: raw-export fallback orphan report cleanup is complete.
 Phase 6 now removes partial `.md/.json/.pdf/.csv` report-family artifacts if

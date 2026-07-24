@@ -485,6 +485,13 @@ class ContextBuilder:
         return entries
 
     @staticmethod
+    def _safe_json_loads(raw: str) -> Any:
+        try:
+            return json.loads(raw)
+        except Exception:  # noqa: BLE001
+            return {}
+
+    @staticmethod
     def _scrub_evidence_metadata(value: Any) -> dict[str, Any]:
         if not isinstance(value, dict):
             return {}
@@ -768,6 +775,7 @@ class ContextBuilder:
         )
         source_expr = "source" if "source" in columns else "NULL AS source"
         discovered_expr = "discovered_at" if "discovered_at" in columns else "NULL AS discovered_at"
+        metadata_expr = "metadata_json" if "metadata_json" in columns else "'{}' AS metadata_json"
         try:
             rows = con.execute(
                 f"""
@@ -775,6 +783,7 @@ class ContextBuilder:
                        identifier,
                        {provider_expr},
                        {source_expr},
+                       {metadata_expr},
                        {discovered_expr}
                 FROM cloud_assets
                 WHERE engagement_id=?
@@ -793,6 +802,8 @@ class ContextBuilder:
             if not asset_type or not identifier:
                 continue
             validation = validation_metadata.get((asset_type, identifier), {})
+            raw_metadata = self._safe_json_loads(str(row["metadata_json"] or "{}"))
+            metadata = self._scrub_evidence_metadata(raw_metadata)
             inventory.append(
                 {
                     "asset_type": asset_type,
@@ -801,6 +812,13 @@ class ContextBuilder:
                     "provider_identifier": str(row["provider_identifier"] or row["identifier"] or "").strip(),
                     "source": str(row["source"] or "").strip(),
                     "discovered_at": str(row["discovered_at"] or "").strip(),
+                    "metadata": metadata,
+                    "artifact_provenance": metadata.get("artifact_provenance") is True,
+                    "artifact_source_seed_id": metadata.get("artifact_source_seed_id"),
+                    "artifact_source_url": str(metadata.get("source_url") or ""),
+                    "artifact_source_file": str(metadata.get("source_file") or ""),
+                    "artifact_extract_rule": str(metadata.get("extract_rule") or ""),
+                    "artifact_format": str(metadata.get("format") or ""),
                     "validation_status": str(validation.get("validation_status") or "UNVALIDATED"),
                     "stored_validation_status": str(
                         validation.get("stored_validation_status") or "UNVALIDATED"
@@ -2889,6 +2907,26 @@ class ReportSynthesizer:
                     ),
                     "cloud_source": str(asset.get("source") or ""),
                     "cloud_discovered_at": str(asset.get("discovered_at") or ""),
+                    "cloud_artifact_provenance": str(
+                        asset.get("artifact_provenance") is True
+                    ),
+                    "cloud_artifact_source_seed_id": str(
+                        asset.get("artifact_source_seed_id") or ""
+                    ),
+                    "cloud_artifact_source_url": str(
+                        asset.get("artifact_source_url") or ""
+                    ),
+                    "cloud_artifact_source_file": str(
+                        asset.get("artifact_source_file") or ""
+                    ),
+                    "cloud_artifact_extract_rule": str(
+                        asset.get("artifact_extract_rule") or ""
+                    ),
+                    "cloud_artifact_format": str(asset.get("artifact_format") or ""),
+                    "cloud_metadata_json": json.dumps(
+                        asset.get("metadata") if isinstance(asset.get("metadata"), dict) else {},
+                        sort_keys=True,
+                    ),
                     "validation_checked_at": str(asset.get("checked_at") or ""),
                     "validation_notes": str(asset.get("notes") or ""),
                     "validation_evidence_summary": str(
@@ -3100,6 +3138,13 @@ class ReportSynthesizer:
             "validation_reportable": "",
             "cloud_source": "",
             "cloud_discovered_at": "",
+            "cloud_artifact_provenance": "",
+            "cloud_artifact_source_seed_id": "",
+            "cloud_artifact_source_url": "",
+            "cloud_artifact_source_file": "",
+            "cloud_artifact_extract_rule": "",
+            "cloud_artifact_format": "",
+            "cloud_metadata_json": "",
             "key_service": "",
             "key_pattern_name": "",
             "key_domain": "",
@@ -3189,6 +3234,13 @@ class ReportSynthesizer:
                 "cloud_provider_identifier": "",
                 "cloud_source": "",
                 "cloud_discovered_at": "",
+                "cloud_artifact_provenance": "",
+                "cloud_artifact_source_seed_id": "",
+                "cloud_artifact_source_url": "",
+                "cloud_artifact_source_file": "",
+                "cloud_artifact_extract_rule": "",
+                "cloud_artifact_format": "",
+                "cloud_metadata_json": "",
                 "validation_checked_at": "",
                 "validation_proof": "",
                 "validation_notes": "",
@@ -3828,6 +3880,12 @@ class ReportSynthesizer:
         )
         cloud_asset_rows = []
         for asset in ctx.cloud_asset_inventory[:25]:
+            provenance_bits = [
+                str(asset.get("artifact_extract_rule") or "").strip(),
+                str(asset.get("artifact_format") or "").strip(),
+                str(asset.get("artifact_source_file") or asset.get("artifact_source_url") or "").strip(),
+            ]
+            provenance = " / ".join(bit for bit in provenance_bits if bit)
             cloud_asset_rows.append(
                 "| "
                 + " | ".join(
@@ -3835,6 +3893,7 @@ class ReportSynthesizer:
                         _md_cell(asset.get("asset_type")),
                         f"`{_md_cell(asset.get('provider_identifier') or asset.get('identifier'))}`",
                         _md_cell(asset.get("source")),
+                        _md_cell(provenance),
                         _md_cell(asset.get("validation_status")),
                         "yes" if asset.get("validation_reportable") is True else "no",
                     ]
@@ -3842,8 +3901,8 @@ class ReportSynthesizer:
                 + " |"
             )
         cloud_asset_table = (
-            "| Type | Identifier | Source | Validation | Reportable |\n"
-            "|---|---|---|---|---|\n"
+            "| Type | Identifier | Source | Provenance | Validation | Reportable |\n"
+            "|---|---|---|---|---|---|\n"
             + "\n".join(cloud_asset_rows)
             if cloud_asset_rows
             else "_No cloud asset inventory was recorded in this reporting window._"
