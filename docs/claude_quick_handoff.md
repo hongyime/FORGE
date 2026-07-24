@@ -25,7 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Phase 6 artifact cloud provenance export parity is complete.
+Latest checkpoint: skipped seed-run status cleanup is complete.
+`SeedRunTracker.finish_run(..., status='skipped')` now clears a parent seed
+stuck in `running` to `ignored`, while preserving completed/failed states. The
+tracker regression proves skipped completion clears running seed status, and
+the dry-run kill-chain regression proves terminal skipped fan-outs leave zero
+`engagement_seeds.status='running'` rows. Verification: compile passed; Ruff
+passed; focused tracker/dry-run tests passed (`2 passed, 765 deselected`);
+adjacent seed-run/resume selector passed (`5 passed, 762 deselected`).
+
+Next checkpoint: perform a fresh current-code deterministic gap audit and pick
+one compact implementation/test task that advances intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
+The skipped seed-run status gap is now closed; do not reopen it unless a
+regression is found.
+
+Previous checkpoint: Phase 6 artifact cloud provenance export parity is complete.
 The fresh deterministic audit found that artifact-derived cloud provenance
 reached dashboard/graph review but not Phase 6 report/export surfaces.
 `ContextBuilder` now loads scrubbed `cloud_assets.metadata_json` into
@@ -36,13 +51,6 @@ reports show a bounded provenance column without leaking secret metadata.
 Verification: compile passed; Ruff passed; focused Phase 6 provenance export
 test passed (`1 passed`); adjacent Phase 6 provenance/raw export selector
 passed (`21 passed, 84 deselected`).
-
-Next checkpoint: skipped seed-run status cleanup. `SeedRunTracker` currently
-sets a seed to `running` on start, but finishing that run as `skipped` can leave
-the parent `engagement_seeds.status` as `running`. Clear skipped running seeds
-to `ignored` while preserving completed/failed states. Regression targets:
-`test_seed_run_tracker_skipped_run_clears_running_seed_status` and a dry-run
-kill-chain assertion that all seed runs are terminal with zero running seeds.
 
 Previous checkpoint: artifact-derived cloud asset provenance is complete.
 `cloud_assets` now stores scrubbed `metadata_json` provenance, including source

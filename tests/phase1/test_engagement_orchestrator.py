@@ -65371,6 +65371,19 @@ def test_seed_run_tracker_records_status_transitions(tmp_path: Path) -> None:
         metadata={"iteration": 1, "returncode": 1},
     )
 
+    skipped_run = tracker.start_run(
+        "skip.acme.example",
+        "domain",
+        "fanout_d3_shodan",
+        source="operator",
+        metadata={"iteration": 1},
+    )
+    tracker.finish_run(
+        skipped_run,
+        status="skipped",
+        metadata={"iteration": 1, "mode": "dry_run"},
+    )
+
     con = sqlite3.connect(db_path)
     try:
         rows = con.execute(
@@ -65393,6 +65406,10 @@ def test_seed_run_tracker_records_status_transitions(tmp_path: Path) -> None:
         assert rows[1][1] == "fanout_e_holehe"
         assert rows[1][2] == "failed"
         assert "quota exceeded" in str(rows[1][4] or "")
+        assert rows[2][0] == "skip.acme.example"
+        assert rows[2][1] == "fanout_d3_shodan"
+        assert rows[2][2] == "skipped"
+        assert rows[2][6]
 
         seed_status = {
             row[0]: row[1]
@@ -65402,6 +65419,7 @@ def test_seed_run_tracker_records_status_transitions(tmp_path: Path) -> None:
         }
         assert seed_status["acme.example"] == "completed"
         assert seed_status["security@acme.example"] == "failed"
+        assert seed_status["skip.acme.example"] == "ignored"
     finally:
         con.close()
 
@@ -65613,6 +65631,14 @@ def test_kill_chain_dry_run_populates_seed_runs_for_seeded_fanouts(
         assert engagement_run[2] == 1
         assert engagement_run[3] == 1
         assert engagement_run[4] == 1
+        running_seed_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM engagement_seeds
+            WHERE engagement_id=1001 AND status='running'
+            """
+        ).fetchone()[0]
+        assert int(running_seed_count or 0) == 0
     finally:
         con.close()
 

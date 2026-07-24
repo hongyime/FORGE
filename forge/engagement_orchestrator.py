@@ -10738,7 +10738,7 @@ class SeedRunTracker:
                     """
                     UPDATE engagement_seeds
                     SET status=CASE
-                            WHEN status IN ('pending', 'ignored') THEN 'ignored'
+                            WHEN status IN ('pending', 'ignored', 'running') THEN 'ignored'
                             ELSE status
                         END,
                         updated_at=?

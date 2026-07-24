@@ -91,13 +91,20 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: skipped seed-run status cleanup. `SeedRunTracker`
-  currently sets a seed to `running` on start, but finishing that run as
-  `skipped` can leave the parent `engagement_seeds.status` as `running`.
-  Clear skipped running seeds to `ignored` while preserving completed/failed
-  states. Regression targets:
-  `test_seed_run_tracker_skipped_run_clears_running_seed_status` and a dry-run
-  kill-chain assertion that all seed runs are terminal with zero running seeds.
+- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
+  pick one compact implementation/test task that advances intake, discovery,
+  recursion, artifact analysis, validation, scoring, review, fallback, or
+  cleanup. The skipped seed-run status gap is now closed; do not reopen it
+  unless a regression is found.
+- [x] Skipped seed-run status cleanup checkpoint:
+  `SeedRunTracker.finish_run(..., status='skipped')` now clears a parent seed
+  stuck in `running` to `ignored`, while preserving completed/failed states.
+  The tracker regression proves skipped completion clears running seed status,
+  and the dry-run kill-chain regression proves terminal skipped fan-outs leave
+  zero `engagement_seeds.status='running'` rows. Verification: compile passed;
+  Ruff passed; focused tracker/dry-run tests passed (`2 passed, 765
+  deselected`); adjacent seed-run/resume selector passed (`5 passed, 762
+  deselected`).
 - [x] Phase 6 artifact cloud provenance export parity checkpoint:
   The fresh deterministic audit found that artifact-derived cloud provenance
   reached dashboard/graph review but not Phase 6 report/export surfaces.
