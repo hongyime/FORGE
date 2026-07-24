@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Supabase CLI config static artifact discovery is complete.
+Latest checkpoint: Sanity CMS config static artifact discovery is complete.
+`sanity.config.*`, `sanity.cli.*`, and `sanity.json` are now first-class static
+config artifacts. Static `projectId` plus `dataset` context is parsed from
+JavaScript/TypeScript, JSON, or YAML-like files and emitted as the passive
+`https://<project>.api.sanity.io` recursive URL seed. No Sanity API calls,
+dataset reads, credential validation, service probing, or scope relaxation were
+added. Verification: focused Sanity/Supabase/Redocly tests passed (`6 passed`),
+broader current artifact regression slice passed (`14 passed`), py_compile
+passed for touched files, Ruff passed for touched files, `git diff --check`
+passed, and no `.forge_data/engagements` leftovers were present.
+
+Next checkpoint: implement scout-confirmed passive Cloud Run provider-shape
+support for qualified `*.run.app` URLs. Add managed-provider/domain handling,
+`gcp_cloud_run` cloud-asset mapping, and registry validation wiring using the
+existing managed-hosting reachability contract. Keep it passive/proof-bound: no
+service probing beyond existing validation contract, no credential use, and no
+generic `run.app` domain seed promotion.
+
+Previous checkpoint: Supabase CLI config static artifact discovery is complete.
 `supabase/config.toml` is now a first-class static config artifact. Bare
 `project_id`, `project_ref`, or `ref` values are parsed from TOML or bounded
 key-value fallback and emitted as passive `https://<ref>.supabase.co`
@@ -36,12 +54,6 @@ Supabase/Redocly/Backstage tests passed (`6 passed`), broader current artifact
 regression slice passed (`12 passed`), py_compile passed for touched files,
 Ruff passed for touched files, `git diff --check` passed, and no
 `.forge_data/engagements` leftovers were present.
-
-Next checkpoint: continue the automated artifact discovery chain with one more
-current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
-identity/provider-shape gap. Prefer compact focused regression coverage and keep
-implementation passive/proof-bound: recursive seeds/cloud refs only unless an
-explicitly scoped live check is already required by the validation contract.
 
 Previous checkpoint: Redocly API-docs config static artifact discovery is
 complete. `.redocly.yaml`, `.redocly.yml`, `.redocly.json`, `redocly.yaml`,

@@ -91,12 +91,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: continue the automated artifact discovery chain with one
-  more current-code-audited passive parser/OCR gap, provider-proof hardening
-  gap, or identity/provider-shape gap. Prefer a high-value path with compact
-  focused regression coverage, and keep implementation passive/proof-bound:
-  recursive seeds/cloud refs only unless an explicitly scoped live check is
-  already required by the validation contract.
+- [ ] Next checkpoint: implement scout-confirmed passive Cloud Run provider-shape
+  support for qualified `*.run.app` URLs. Add managed-provider/domain handling,
+  `gcp_cloud_run` cloud-asset mapping, and registry validation wiring using the
+  existing managed-hosting reachability contract. Keep it passive/proof-bound:
+  no service probing beyond existing validation contract, no credential use, and
+  no generic `run.app` domain seed promotion.
+- [x] Sanity CMS config artifact checkpoint:
+  `sanity.config.*`, `sanity.cli.*`, and `sanity.json` are now first-class static
+  config artifacts. Static `projectId` plus `dataset` context is parsed from
+  JavaScript/TypeScript, JSON, or YAML-like files and emitted as the passive
+  `https://<project>.api.sanity.io` recursive URL seed. This remains
+  static-only: no Sanity API calls, dataset reads, credential validation, service
+  probing, or scope relaxation were added. Verification: focused
+  Sanity/Supabase/Redocly tests passed (`6 passed`), broader current artifact
+  regression slice passed (`14 passed`), py_compile passed for touched files,
+  Ruff passed for touched files, `git diff --check` passed, and no
+  `.forge_data/engagements` leftovers were present.
 - [x] Supabase CLI config artifact checkpoint:
   `supabase/config.toml` is now a first-class static config artifact. Bare
   `project_id`, `project_ref`, or `ref` values are parsed from TOML or bounded

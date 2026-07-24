@@ -170,6 +170,10 @@ from forge.utils.artifact_redocly_config import (
     redocly_config_urls,
 )
 from forge.utils.artifact_saml_metadata import saml_metadata_artifact_label, saml_metadata_urls
+from forge.utils.artifact_sanity_config import (
+    sanity_config_artifact_label,
+    sanity_config_urls,
+)
 from forge.utils.artifact_sst_config import sst_config_artifact_label, sst_config_candidates
 from forge.utils.artifact_storage_client_config import (
     storage_client_config_artifact_label,
@@ -6277,6 +6281,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if redocly_config_artifact_label(raw_lowered):
         return True
+    if sanity_config_artifact_label(raw_lowered):
+        return True
     if _buf_config_artifact_label(raw_lowered):
         return True
     if backstage_catalog_artifact_label(raw_lowered):
@@ -6526,6 +6532,9 @@ def _artifact_format_label(value: str | Path) -> str:
     redocly_config_label = redocly_config_artifact_label(str(value or ""))
     if redocly_config_label:
         return redocly_config_label
+    sanity_config_label = sanity_config_artifact_label(str(value or ""))
+    if sanity_config_label:
+        return sanity_config_label
     buf_config_label = _buf_config_artifact_label(str(value or ""))
     if buf_config_label:
         return buf_config_label
@@ -18757,6 +18766,7 @@ class ArtifactQueueProcessor:
         "graphql_config_text",
         "interface_definition_text",
         "json",
+        "sanity_config_text",
         "key_value",
         "ci_text",
         "yaml",
@@ -20422,6 +20432,13 @@ class ArtifactQueueProcessor:
             return self._json_structured_payload_text(
                 text,
                 source_hint=extract_path,
+            )
+        if family == "sanity_config_text":
+            return "\n".join(
+                sanity_config_urls(
+                    text,
+                    source_hint=source_hint,
+                )
             )
         if family == "firebaserc":
             return self._firebaserc_structured_payload_text(
