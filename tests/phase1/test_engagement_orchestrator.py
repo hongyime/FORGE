@@ -86753,7 +86753,16 @@ def test_kill_chain_parallel_batches_cloud_target_prep(
         _emit(len(items))
         return results
 
-    def _fake_cloud_validation_batch(engagement_id, items, db_path, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_cloud_validation_batch(  # noqa: ANN001
+        engagement_id,
+        items,
+        db_path,
+        *,
+        max_workers,
+        progress_label=None,
+        progress_callback=None,
+        **_kwargs,
+    ):
         del engagement_id, db_path, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -86839,6 +86848,10 @@ def test_kill_chain_parallel_batches_cloud_target_prep(
     )
     assert any(
         label == "1.J cloud pending merge" and max_workers == 1 and item_count >= 4
+        for label, item_count, max_workers in parse_batch_calls
+    )
+    assert any(
+        label == "1.J cloud validation target prep" and max_workers == 2 and item_count >= 4
         for label, item_count, max_workers in parse_batch_calls
     )
     assert any(
@@ -86963,7 +86976,16 @@ def test_kill_chain_parallel_batches_cloud_ref_prep(
         _emit(len(items))
         return results
 
-    def _fake_cloud_validation_batch(engagement_id, items, db_path, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_cloud_validation_batch(  # noqa: ANN001
+        engagement_id,
+        items,
+        db_path,
+        *,
+        max_workers,
+        progress_label=None,
+        progress_callback=None,
+        **_kwargs,
+    ):
         del engagement_id, db_path, max_workers
         cloud_validation_items.extend((str(item[0]), str(item[1])) for item in items)
         if progress_callback is not None and progress_label:

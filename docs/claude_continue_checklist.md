@@ -71,6 +71,14 @@ historical notes only, not as current instructions.
   D1/D2/D5 parse paths. Keep DB writes/final ordering serial and add focused
   tests for deterministic order. Prefer compact helpers in `forge/cli.py` and
   focused regressions in `tests/phase1/test_engagement_orchestrator.py`.
+- [x] Fan-out J cloud validation target prep worker checkpoint:
+  `kill_chain()` now prepares `(service, ref)` validation target tuples through
+  `_run_inprocess_batch()` before calling `run_cloud_asset_validate_batch()`.
+  The validator call, scope checker, validation execution, persistence, and
+  final log/result ordering remain unchanged and bounded. Verification:
+  compile passed; Ruff passed; focused cloud target batching regression passed
+  (`1 passed`). Claude sidecar review was attempted but unavailable because
+  the local Claude CLI OAuth session was expired.
 - [x] D5 denied recursive URL seed-run persistence checkpoint:
   D5 URL seed scope decisions now persist deterministic denied-before-fetch URLs
   as skipped `fanout_d5_url_seed_html` seed runs, including deny reason,

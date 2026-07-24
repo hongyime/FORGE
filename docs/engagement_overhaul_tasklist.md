@@ -91,11 +91,22 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: continue moving remaining safe sequential prep/reduction
-  enrichers under the bounded worker-pool path beyond the already-covered
-  D1/D2/D5 parse paths. Keep DB writes/final ordering serial and add focused
-  tests for deterministic order. Prefer compact helpers in `forge/cli.py` and
-  focused regressions in `tests/phase1/test_engagement_orchestrator.py`.
+- [ ] Next checkpoint: add API auxiliary-route validation/reportability parity
+  outside the main engagement detail route. Direct routes such as assets,
+  vulnerability summary, and asset tree should prove stale, unvalidated, or
+  non-reportable cloud/key evidence cannot inflate reportable counts or review
+  surfaces. Minimal files: `forge/webui/app.py` and
+  `tests/integration/test_webui_engagement_api.py`.
+- [x] Fan-out J cloud validation target prep worker checkpoint:
+  `kill_chain()` now prepares `(service, ref)` validation target tuples through
+  `_run_inprocess_batch()` before calling `run_cloud_asset_validate_batch()`.
+  The validator call, scope checker, validation execution, persistence, and
+  final log/result ordering remain unchanged and bounded. Verification:
+  compile passed; Ruff passed; focused cloud target batching regression passed
+  (`1 passed`); adjacent cloud batching selector passed (`2 passed, 764
+  deselected`). Workspace `.forge_data/engagements` contained `0` entries after
+  the run. Handoff:
+  `.claude/handoffs/2026-07-24-cloud-validation-target-worker-prep.md`.
 - [x] D5 denied recursive URL seed-run persistence checkpoint:
   D5 URL seed scope decisions now persist deterministic denied-before-fetch URLs
   as skipped `fanout_d5_url_seed_html` seed runs, including deny reason,

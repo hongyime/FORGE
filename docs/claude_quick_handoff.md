@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: D5 denied recursive URL seed-run persistence is complete.
+Latest checkpoint: Fan-out J cloud validation target prep worker migration is
+complete. `kill_chain()` now prepares `(service, ref)` validation target tuples
+through `_run_inprocess_batch()` before calling
+`run_cloud_asset_validate_batch()`. The validator call, scope checker,
+validation execution, persistence, and final log/result ordering remain
+unchanged and bounded. Verification: compile passed; Ruff passed; focused cloud
+target batching regression passed (`1 passed`). Claude sidecar review was
+attempted but unavailable because the local Claude CLI OAuth session was
+expired. Handoff:
+`.claude/handoffs/2026-07-24-fanout-j-validation-target-worker.md`.
+
+Next checkpoint: continue moving remaining safe sequential prep/reduction
+enrichers under the bounded worker-pool path beyond the already-covered
+D1/D2/D5 parse paths. Keep DB writes/final ordering serial and add focused
+tests for deterministic order.
+
+Previous checkpoint: D5 denied recursive URL seed-run persistence is complete.
 D5 URL seed scope decisions now persist deterministic denied-before-fetch URLs
 as skipped `fanout_d5_url_seed_html` seed runs, including deny reason,
 hostname, scope gate/source, iteration, and `denied_before_fetch=true`
@@ -38,11 +54,6 @@ compile passed; Ruff passed; focused scope-manifest denial/resume test passed
 related remote artifact scope-manifest denial test passed (`1 passed`);
 `.forge_data/engagements` contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-d5-denied-url-seed-runs.md`.
-
-Next checkpoint: continue moving remaining safe sequential prep/reduction
-enrichers under the bounded worker-pool path beyond the already-covered
-D1/D2/D5 parse paths. Keep DB writes/final ordering serial and add focused
-tests for deterministic order.
 
 Previous checkpoint: web/API seed URL canonicalization and fallback graph
 validation parity are complete.

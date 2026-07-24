@@ -17226,12 +17226,24 @@ def kill_chain(
                         progress_callback=_record_batch_progress,
                     )
                 if not dry_run_all:
+                    if len(pending_cloud_targets) > 1 and parallel_workers > 1:
+                        _log(
+                            f"{iteration}.J cloud validation target prep",
+                            (
+                                f"[dim]parallel parse x"
+                                f"{min(parallel_workers, len(pending_cloud_targets))}[/dim]"
+                            ),
+                        )
+                    validation_targets = _run_inprocess_batch(
+                        pending_cloud_targets,
+                        lambda item: (str(item["service"]), str(item["ref"])),
+                        max_workers=parallel_workers,
+                        progress_label=f"{iteration}.J cloud validation target prep",
+                        progress_callback=_record_batch_progress,
+                    )
                     validation_batch = run_cloud_asset_validate_batch(
                         engagement_id,
-                        [
-                            (str(item["service"]), str(item["ref"]))
-                            for item in pending_cloud_targets
-                        ],
+                        validation_targets,
                         db_path,
                         max_workers=parallel_workers,
                         progress_label=f"{iteration}.J cloud validation",
