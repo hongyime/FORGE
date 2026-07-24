@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: initial URL seed canonicalization is complete.
+Latest checkpoint: legacy ReportingAgent fallback lineage is complete.
+Legacy `ReportingAgent` deterministic fallback output now includes payload-only
+`report_lineage` metadata with `requested_provider`, `rendered_provider`,
+`render_backend`, `format`, and sanitized `fallback_reason` codes for no-LLM,
+`ProviderUnavailableError`, and generic exception fallback branches. Requested
+provider remains `llm` when an LLM was configured but failed. The
+`/reports/{workflow_id}` API route now has explicit legacy-agent lineage
+coverage for nested `report_md` payloads. Markdown content, findings,
+provenance footers, severity rules, provider behavior, live probing, report
+rendering, dashboard, and frontend behavior are unchanged. Verification:
+compile passed; Ruff passed; focused fallback/API route set passed (`7
+passed`); full reporting property file passed (`13 passed`);
+`.forge_data/engagements` contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-legacy-reporting-fallback-lineage.md`.
+
+Next checkpoint: audit one current-code deterministic kill-chain,
+passive-recursion, validation, report/export, dashboard/API review, or cleanup
+gap not already covered by recent URL canonicalization or legacy reporting
+fallback lineage checkpoints. Prefer compact helpers and focused tests over
+growing large files. Keep live calls mocked unless an explicit ROE/scope
+manifest and target are supplied.
+
+Previous checkpoint: initial URL seed canonicalization is complete.
 Operator-supplied initial `url` and `apk_url` seeds now canonicalize before
 initial seed dedupe and persistence, using the same HTTP canonicalizer as
 recursive URL persistence. Equivalent raw variants such as
@@ -37,13 +59,6 @@ deselected`); adjacent initial seed canonicalization selector passed (`2
 passed, 764 deselected`); `.forge_data/engagements` contained `0` entries after
 the run. Handoff:
 `.claude/handoffs/2026-07-24-initial-url-seed-canonicalization.md`.
-
-Next checkpoint: make legacy `ReportingAgent` deterministic fallback lineage
-API-reviewable. It already falls back when LLMs are disabled or unavailable,
-but its outbound payload lacks structured `report_lineage` / `fallback_reason`
-for the `/reports/{workflow_id}` route. Add payload-only lineage metadata for
-disabled, provider-unavailable, and generic fallback branches without changing
-markdown content or adding raw findings/secrets.
 
 Previous checkpoint: recursive discovered URL seed persistence canonicalization
 is complete.

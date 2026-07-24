@@ -77,6 +77,13 @@ class _UnavailableLLM(_StubLLM):
         raise ProviderUnavailableError("simulated LLM outage")
 
 
+class _BrokenLLM(_StubLLM):
+    """LLM provider that raises an unexpected backend exception."""
+
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        raise RuntimeError("unexpected backend failure")
+
+
 def _findings(n: int = 3) -> list[dict[str, Any]]:
     """Produce N synthetic findings with provenance refs."""
     severities = ("critical", "high", "medium", "low", "info")
@@ -259,8 +266,15 @@ class TestProperty35GracefulDegradation:
             _msg({"findings": _findings(2)})
         )
         report = str(outputs[0].payload.get("report_md", ""))
+        lineage = outputs[0].payload.get("report_lineage")
         assert len(report) > 0
         assert "Executive Summary" in report
+        assert isinstance(lineage, dict)
+        assert lineage["requested_provider"] == "legacy_reporting_agent"
+        assert lineage["rendered_provider"] == "template"
+        assert lineage["render_backend"] == "template"
+        assert lineage["format"] == "markdown"
+        assert lineage["fallback_reason"] == "llm_disabled"
 
     @pytest.mark.asyncio
     async def test_llm_outage_does_not_abort_report(self) -> None:
@@ -273,8 +287,15 @@ class TestProperty35GracefulDegradation:
         )
         # Still produces a complete report
         report = str(outputs[0].payload.get("report_md", ""))
+        lineage = outputs[0].payload.get("report_lineage")
         assert "Executive Summary" in report
         assert "Detailed Findings" in report
+        assert isinstance(lineage, dict)
+        assert lineage["requested_provider"] == "llm"
+        assert lineage["rendered_provider"] == "template"
+        assert lineage["render_backend"] == "template"
+        assert lineage["format"] == "markdown"
+        assert lineage["fallback_reason"] == "provider_unavailable"
         # And audits a degradation warning
         from forge.audit.models import AuditEventType
 
@@ -286,3 +307,20 @@ class TestProperty35GracefulDegradation:
         assert len(warnings) >= 1, (
             "LLM outage during reporting must emit at least one WARNING audit"
         )
+
+    @pytest.mark.asyncio
+    async def test_unexpected_llm_error_records_fallback_lineage(self) -> None:
+        agent = ReportingAgent(llm_provider=_BrokenLLM(), audit=AuditLogger())
+        outputs = await agent.receive_message(
+            _msg({"findings": _findings(2)})
+        )
+        report = str(outputs[0].payload.get("report_md", ""))
+        lineage = outputs[0].payload.get("report_lineage")
+        assert "Executive Summary" in report
+        assert isinstance(lineage, dict)
+        assert lineage["requested_provider"] == "llm"
+        assert lineage["rendered_provider"] == "template"
+        assert lineage["render_backend"] == "template"
+        assert lineage["format"] == "markdown"
+        assert lineage["fallback_reason"] == "llm_exception:RuntimeError"
+        assert "unexpected backend failure" not in str(lineage)

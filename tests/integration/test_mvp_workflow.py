@@ -632,3 +632,56 @@ class TestApiReportRoute:
         assert payload["report_lineage"]["render_backend"] == "template"
         assert payload["report_lineage"]["rendered_provider"] == "template"
         assert payload["report_lineage"]["findings_checksum"] == "sha256:phase6-nested"
+
+    def test_report_route_surfaces_legacy_reporting_agent_lineage(self) -> None:
+        workflow_id = "workflow-legacy-reporting-lineage"
+
+        class _Engine:
+            async def get_status(self, requested_id: str) -> dict[str, object] | None:
+                assert requested_id == workflow_id
+                return {"is_complete": True}
+
+        class _Store:
+            async def load_workflow(self, requested_id: str) -> object | None:
+                assert requested_id == workflow_id
+                return SimpleNamespace(
+                    intermediate_results=json.dumps(
+                        {
+                            "report": {
+                                "report_md": "# Legacy deterministic report\n",
+                                "format": "markdown",
+                                "report_lineage": {
+                                    "requested_provider": "legacy_reporting_agent",
+                                    "rendered_provider": "template",
+                                    "render_backend": "template",
+                                    "format": "markdown",
+                                    "fallback_reason": "llm_disabled",
+                                },
+                            },
+                        },
+                        sort_keys=True,
+                    ),
+                    is_complete=True,
+                )
+
+        reset_dependencies()
+        app = create_app()
+        app.dependency_overrides[get_workflow_engine] = lambda: _Engine()
+        app.dependency_overrides[get_state_store] = lambda: _Store()
+        try:
+            with TestClient(app) as client:
+                response = client.get(f"/reports/{workflow_id}")
+        finally:
+            app.dependency_overrides.clear()
+            reset_dependencies()
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["workflow_id"] == workflow_id
+        assert payload["report"] == "# Legacy deterministic report\n"
+        assert payload["format"] == "markdown"
+        assert payload["requested_provider"] == "legacy_reporting_agent"
+        assert payload["render_backend"] == "template"
+        assert payload["rendered_provider"] == "template"
+        assert payload["fallback_reason"] == "llm_disabled"
+        assert payload["report_lineage"]["fallback_reason"] == "llm_disabled"

@@ -94,6 +94,19 @@ _SEVERITY_WEIGHT: dict[str, int] = {
 }
 
 
+def _report_lineage(fallback_reason: str | None, *, llm_requested: bool) -> dict[str, object]:
+    rendered = "template" if fallback_reason else "llm"
+    lineage: dict[str, object] = {
+        "requested_provider": "llm" if llm_requested else "legacy_reporting_agent",
+        "rendered_provider": rendered,
+        "render_backend": rendered,
+        "format": "markdown",
+    }
+    if fallback_reason:
+        lineage["fallback_reason"] = fallback_reason
+    return lineage
+
+
 class ReportingAgent:
     """Render engagement findings into a Markdown report with provenance.
 
@@ -171,7 +184,7 @@ class ReportingAgent:
         )
 
         # ---- 1. Section bodies ----------------------------------------
-        exec_summary = await self._build_executive_summary(
+        exec_summary, fallback_reason = await self._build_executive_summary(
             ordered, analysis_summary, correlation_id=cid
         )
         details_md = self._render_detailed_findings(ordered)
@@ -207,6 +220,10 @@ class ReportingAgent:
             "report_md": report_md,
             "format": "markdown",
             "provenance": provenance,
+            "report_lineage": _report_lineage(
+                fallback_reason,
+                llm_requested=self._llm is not None,
+            ),
             "sections": {
                 "executive_summary": exec_summary,
                 "detailed_findings": details_md,
@@ -242,7 +259,7 @@ class ReportingAgent:
         analysis_summary: str,
         *,
         correlation_id: str,
-    ) -> str:
+    ) -> tuple[str, str | None]:
         """Synthesise (or stub) the executive summary section.
 
         When an LLM provider is configured the summary is requested from it;
@@ -263,10 +280,10 @@ class ReportingAgent:
                     success=True,
                 )
             )
-            return deterministic
+            return deterministic, "llm_disabled"
 
         if not findings:
-            return deterministic
+            return deterministic, None
 
         prompt = self._build_summary_prompt(findings, analysis_summary)
         request = CompletionRequest(
@@ -295,14 +312,14 @@ class ReportingAgent:
                     error_detail=str(exc),
                 )
             )
-            return deterministic
+            return deterministic, "provider_unavailable"
         except Exception as exc:  # noqa: BLE001 - never break rendering
             _LOG.warning(
                 "ReportingAgent[%s]: LLM raised %s; using deterministic summary",
                 correlation_id,
                 exc.__class__.__name__,
             )
-            return deterministic
+            return deterministic, f"llm_exception:{exc.__class__.__name__}"
 
         latency_ms = (time.perf_counter() - start) * 1000.0
         # WS1d: surface router tier/backend in audit when applicable.
@@ -330,7 +347,7 @@ class ReportingAgent:
             )
         )
         text = response.text.strip()
-        return text if text else deterministic
+        return (text if text else deterministic), None
 
     @staticmethod
     def _stub_executive_summary(
