@@ -66,6 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Service-worker/precache static recursion checkpoint:
+  Public service-worker-style artifacts now use the source-gated
+  `service-worker-js` label for `service-worker*.js`, `workbox*.js`,
+  `precache-manifest*.js`, `firebase-messaging-sw.js`, and OneSignal worker
+  files. `importScripts()` URLs, browser endpoint config such as `apiUrl`, and
+  Firebase messaging `projectId` refs now enter the same bounded ordered
+  recursive candidate path as other static artifacts. Arbitrary `app.js`
+  remains excluded from structured JS parsing. Verification: compile passed;
+  Ruff passed; focused runtime/service-worker suite passed (`5 passed`);
+  adjacent artifact-label/runtime-worker slice passed (`7 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-service-worker-static-recursion.md`.
+- [ ] Next E2E target: add a mocked local-safe service-worker/precache kill-chain
+  fixture that proves page/manifest -> service worker -> precache/Workbox
+  artifact recursion into mixed cloud assets, validation inventory, validated
+  findings only, graph/report/raw exports, dashboard review visibility, fallback
+  lineage, and cleanup. Recommended node:
+  `tests/phase1/test_kill_chain_multiseed_recursive_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from
@@ -897,12 +914,12 @@ historical notes only, not as current instructions.
   family, payload-family, resource-candidate, and candidate-entry worker slices
   -> `6 passed`; cleanup left `remaining_terraform_state_test_files=0`.
   Handoff: `.claude/handoffs/2026-07-24-terraform-state-iterator-audit.md`.
-- [ ] Next implementation target: re-audit remaining static parser/enricher
-  candidates and select the next proven-safe bounded worker-pool migration
-  before editing. Preserve deterministic ordering, compact tests, scope gates,
-  provider caps, pacing/backoff, and passive-only behavior. Terraform state
-  resource collection has been audited and covered without code changes; pick a
-  new proven gap before editing.
+- [x] Static parser/enricher re-audit target reconciled:
+  Later checkpoints completed the remaining bounded-worker audit thread and
+  closed the proven runtime frontend config recursion gap. Future parser work
+  should start from a fresh concrete missing artifact/source shape, not this
+  stale placeholder. Preserve deterministic ordering, compact tests, scope
+  gates, provider caps, pacing/backoff, and passive-only behavior.
 
 - [x] Deterministic validation-method report-gate completed:
   `DeterministicFindingEngine` now requires `VALIDATED` cloud rows to use known

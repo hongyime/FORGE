@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: runtime frontend config JS recursion is complete. Explicit
+Latest checkpoint: service-worker/precache static recursion is complete.
+Public service-worker-style artifacts now use the source-gated
+`service-worker-js` label for `service-worker*.js`, `workbox*.js`,
+`precache-manifest*.js`, `firebase-messaging-sw.js`, and OneSignal worker
+files. `importScripts()` URLs, browser endpoint config such as `apiUrl`, and
+Firebase messaging `projectId` refs now enter the same bounded ordered
+recursive candidate path as other static artifacts. Arbitrary `app.js` remains
+outside structured JS parsing.
+
+Verification: compile passed; Ruff passed; focused runtime/service-worker suite
+passed (`5 passed`); adjacent artifact-label/runtime-worker slice passed
+(`7 passed`). Review: sidecar `Ptolemy` identified the service-worker gap and
+`Erdos` identified the next broader E2E fixture. Handoff:
+`.claude/handoffs/2026-07-24-service-worker-static-recursion.md`.
+
+Current next gate: implement the mocked local-safe E2E fixture
+`tests/phase1/test_kill_chain_multiseed_recursive_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`
+to prove page/manifest -> service worker -> precache/Workbox recursion into
+mixed cloud assets, validation inventory, validated findings only,
+graph/report/raw exports, dashboard review visibility, fallback lineage, and
+cleanup.
+
+Previous checkpoint: runtime frontend config JS recursion is complete. Explicit
 public runtime config files such as `runtime-env.js`, `env-config.js`, and
 `runtime-config.js`, plus public/static/build-path `config.js`, now get the
 `runtime-js-config` label. Uppercase env-style `API_HOST`, `API_BASE`,
@@ -34,12 +56,7 @@ recursive URL seeds and Firebase/Supabase cloud assets through the existing
 artifact queue path. Arbitrary `notes.js` and root generic `config.js` stay
 outside JS-runtime structured parsing.
 
-Verification: compile passed; Ruff passed; focused runtime JS config suite
-passed (`3 passed`); adjacent artifact label/runtime worker slice passed
-(`2 passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
-Review: sidecar `Gauss` identified the original gap, `Volta` supplied the
-persistence-test pattern, and `Descartes` caught the root `config.js`
-false-positive risk before commit. Handoff:
+Runtime config handoff:
 `.claude/handoffs/2026-07-24-runtime-js-config-recursion.md`.
 
 Recon-output double-check: no code change was needed.
@@ -52,7 +69,7 @@ Previous checkpoint: kill-chain dry-run finalization contract is complete.
 `vuln passive` or `exploit correlate` finalizers, HIBP finalization carries
 `--dry-run`, and skipped labels are audited.
 
-Current next gate: use `docs/engagement_overhaul_tasklist.md` ->
+Fallback next-gate rule: use `docs/engagement_overhaul_tasklist.md` ->
 `## Compact active backlog` and pick the next proven deterministic acceptance
 gap. Prefer a focused audit or mocked regression over broad retesting unless a
 specific failing behavior is known.

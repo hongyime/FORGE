@@ -36,6 +36,18 @@ _RUNTIME_JS_CONFIG_PUBLIC_PARTS = frozenset(
         "wwwroot",
     }
 )
+_SERVICE_WORKER_JS_EXACT_NAMES = frozenset(
+    {
+        "firebase-messaging-sw.js",
+        "onesignalsdkupdaterworker.js",
+        "onesignalsdkworker.js",
+    }
+)
+_SERVICE_WORKER_JS_NAME_PATTERNS = (
+    re.compile(r"service-worker(?:[._-][a-z0-9][a-z0-9._-]*)?\.(?:cjs|js|mjs)$"),
+    re.compile(r"workbox(?:[._-][a-z0-9][a-z0-9._-]*)?\.(?:cjs|js|mjs)$"),
+    re.compile(r"precache-manifest(?:[._-][a-z0-9][a-z0-9._-]*)?\.(?:cjs|js|mjs)$"),
+)
 _ENV_ASSIGNMENT_PATTERN = re.compile(
     r"""
     (?<![A-Za-z0-9_$])
@@ -44,6 +56,27 @@ _ENV_ASSIGNMENT_PATTERN = re.compile(
     (?P<quote>["'])(?P<value>[^"'\r\n]+)(?P=quote)
     """,
     re.VERBOSE,
+)
+_IMPORT_SCRIPTS_PATTERN = re.compile(
+    r"\bimportScripts\s*\((?P<body>[^)]{0,3000})\)",
+    re.IGNORECASE | re.DOTALL,
+)
+_QUOTED_HTTP_URL_PATTERN = re.compile(
+    r"""(?P<quote>["'])(?P<value>https?://[^"'\s,)]+)(?P=quote)""",
+    re.IGNORECASE,
+)
+_FIREBASE_PROJECT_ASSIGNMENT_PATTERN = re.compile(
+    r"""
+    ["']?
+    (?P<key>
+        FIREBASE_PROJECT_ID|firebaseProjectId|firebase_project_id|
+        projectId|project_id
+    )
+    ["']?
+    \s*(?::|=)\s*
+    (?P<quote>["'])(?P<value>[a-z0-9][a-z0-9-]{1,80})(?P=quote)
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
 
 
@@ -59,6 +92,10 @@ def runtime_js_config_artifact_label(value: str) -> str:
         part in _RUNTIME_JS_CONFIG_PUBLIC_PARTS for part in parts[:-1]
     ):
         return "runtime-js-config"
+    if name in _SERVICE_WORKER_JS_EXACT_NAMES or any(
+        pattern.fullmatch(name) for pattern in _SERVICE_WORKER_JS_NAME_PATTERNS
+    ):
+        return "service-worker-js"
     return ""
 
 
@@ -84,6 +121,37 @@ def runtime_js_env_assignment_entries(
         for index, candidate in enumerate(derived_candidates(env_map))
         if candidate
     )
+    return entries
+
+
+def service_worker_js_candidate_entries(
+    text: str,
+    *,
+    derived_candidates: Callable[[dict[str, str]], Iterable[str]],
+) -> list[tuple[int, str]]:
+    raw_text = str(text or "")
+    entries: list[tuple[int, str]] = []
+
+    for import_match in _IMPORT_SCRIPTS_PATTERN.finditer(raw_text):
+        body = str(import_match.group("body") or "")
+        body_offset = import_match.start("body")
+        entries.extend(
+            (body_offset + value_match.start("value"), value)
+            for value_match in _QUOTED_HTTP_URL_PATTERN.finditer(body)
+            if (value := str(value_match.group("value") or "").strip())
+        )
+
+    for project_match in _FIREBASE_PROJECT_ASSIGNMENT_PATTERN.finditer(raw_text):
+        project_id = str(project_match.group("value") or "").strip().lower()
+        if not project_id:
+            continue
+        derived = derived_candidates({"FIREBASE_PROJECT_ID": project_id})
+        entries.extend(
+            (project_match.start("value") + index, candidate)
+            for index, candidate in enumerate(derived)
+            if candidate
+        )
+
     return entries
 
 
