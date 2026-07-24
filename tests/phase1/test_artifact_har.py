@@ -221,3 +221,89 @@ def test_artifact_queue_processor_parses_large_har_before_image_response(
     payloads = ArtifactQueueProcessor(db_path, 1001)._extract_har_payloads(har_path)
 
     assert any("large-har-image@acme.example" in text for _, _, text in payloads)
+
+
+def test_artifact_queue_processor_parses_har_websocket_message_payloads(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_har_websocket"
+    artifact_root.mkdir()
+    _bootstrap_engagement(db_path)
+
+    har_path = artifact_root / "websocket.har"
+    har_path.write_text(
+        json.dumps(
+            {
+                "log": {
+                    "version": "1.2",
+                    "entries": [
+                        {
+                            "request": {
+                                "method": "GET",
+                                "url": "wss://stream.acme.example/socket",
+                            },
+                            "response": {"status": 101},
+                            "_webSocketMessages": [
+                                {
+                                    "type": "send",
+                                    "time": 1721810000.0,
+                                    "opcode": 1,
+                                    "data": (
+                                        "owner=ws-owner@acme.example "
+                                        "api=https://ws-api.acme.example/v1 "
+                                        "firebase=https://ws-live.firebaseio.com "
+                                        "supabase=https://ws-project.supabase.co "
+                                        "s3=s3://ws-public-bucket "
+                                        "gcs=gs://ws-public-assets"
+                                    ),
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    assert processor.ingest_local_artifacts([artifact_root]) == 1
+    summary = processor.process()
+
+    con = sqlite3.connect(db_path)
+    try:
+        emails = {
+            row[0]
+            for row in con.execute(
+                "SELECT email FROM emails WHERE engagement_id=1001"
+            ).fetchall()
+        }
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                "SELECT seed_value, seed_type FROM engagement_seeds WHERE engagement_id=1001"
+            ).fetchall()
+        }
+        cloud_assets = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert summary.processed == 1
+    assert summary.discovered_seeds >= 4
+    assert "ws-owner@acme.example" in emails
+    assert ("https://ws-api.acme.example/v1", "url") in seeds
+    assert ("ws-api.acme.example", "subdomain") in seeds
+    assert ("aws_s3", "ws-public-bucket") in cloud_assets
+    assert ("gcs", "ws-public-assets") in cloud_assets
+    assert ("firebase", "ws-live") in cloud_assets
+    assert ("supabase", "ws-project") in cloud_assets

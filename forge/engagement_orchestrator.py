@@ -35658,7 +35658,7 @@ class ArtifactQueueProcessor:
         if not isinstance(entry, dict):
             return []
         line_families = self._run_ordered_local_batch(
-            ("started", "request", "response"),
+            ("started", "request", "response", "websocket_messages"),
             lambda family: self._har_entry_family_lines(family, entry=entry),
             default_factory=list,
         )
@@ -35679,6 +35679,8 @@ class ArtifactQueueProcessor:
             return self._har_request_lines(entry.get("request"))
         if family == "response":
             return self._har_response_lines(entry.get("response"))
+        if family == "websocket_messages":
+            return self._har_websocket_message_lines(entry)
         return []
 
     def _har_entry_started_lines(self, entry: dict[str, Any]) -> list[str]:
@@ -35686,6 +35688,36 @@ class ArtifactQueueProcessor:
         if started:
             return [f"startedDateTime={started}"]
         return []
+
+    def _har_websocket_message_lines(self, entry: dict[str, Any]) -> list[str]:
+        messages = entry.get("_webSocketMessages")
+        if not isinstance(messages, list):
+            return []
+        message_batches = self._run_ordered_local_batch(
+            list(enumerate(messages[:64], start=1)),
+            self._har_websocket_message_line_batch,
+            default_factory=list,
+        )
+        lines: list[str] = []
+        for message_lines in message_batches:
+            lines.extend(message_lines)
+        return lines
+
+    def _har_websocket_message_line_batch(self, item: tuple[int, Any]) -> list[str]:
+        message_index, message = item
+        if not isinstance(message, dict):
+            return []
+        lines: list[str] = []
+        for key, limit in (
+            ("type", 64),
+            ("time", 64),
+            ("opcode", 64),
+            ("data", 4096),
+        ):
+            value = self._har_scalar_text(message.get(key), limit=limit)
+            if value:
+                lines.append(f"websocket.message[{message_index}].{key}={value}")
+        return lines
 
     def _har_request_lines(self, request: Any) -> list[str]:
         if not isinstance(request, dict):

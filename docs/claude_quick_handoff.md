@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: dashboard/API key-section proof gating is complete. Static
+Latest checkpoint: HAR WebSocket message static recursion is complete. Passive
+HAR parsing now reads bounded `_webSocketMessages[]` payloads and feeds message
+type/time/opcode/data lines through the existing recursive artifact text
+discovery path. A local fixture proves WebSocket message data can surface
+emails, URLs, Firebase, Supabase, S3, and GCS references without browser
+replay, live probing, credential use, or scope relaxation. Verification: TDD
+fixture failed first with `discovered_seeds=0`; compile/Ruff passed; focused
+HAR suite passed (`6 passed`); packaged Helm/API-label/orchestration parser
+slice passed (`8 passed`); HAR plus adjacent public metadata/Charles parser
+slice passed (`10 passed`); artifact helper/static-classification/container
+slice passed (`31 passed`); mocked service-worker kill-chain E2E passed (`1
+passed`); pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
+
+Current next gate: run a fresh bounded audit for one concrete backend
+kill-chain gap. Good targets are another verified passive parser/container/OCR
+source shape, provider-proof hardening, identity/provider normalization where a
+source payload is missing, or bounded-worker migration for a proven pure-local
+sequential enricher. Do not add live target probing without explicit ROE/scope
+manifest and mocked tests.
+
+Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared
 latest-validation proof gate for key-scanner findings. Stale ACTIVE key rows
 with embedded `VALIDATED` detail no longer leak into
@@ -37,13 +58,6 @@ passed`); cloud exposure and validation-proof suites passed (`119 passed`);
 report cloud-validation metadata slice passed (`1 passed`); pytest engagement
 cleanup reported `removed=2 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-dashboard-key-section-proof-gate.md`.
-
-Current next gate: implement the verified passive HAR WebSocket message parser
-gap. Extend `_har_entry_lines()` / `_har_entry_family_lines()` to read bounded
-`_webSocketMessages[]` data and add fixture coverage that recursive seeds/cloud
-assets are produced without browser replay, live probing, credential use, scope
-relaxation, proxy/IP rotation, or rate-limit bypass. If that is already done in
-a newer commit, continue concrete backend kill-chain gaps only.
 
 Previous checkpoint: packaged Helm chart values recursion is complete. Passive
 archive extraction now recognizes packaged Helm chart member paths such as
