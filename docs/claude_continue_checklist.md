@@ -66,6 +66,16 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] HAR WebSocket message alias checkpoint:
+  Passive HAR parsing now accepts both Chrome-style `_webSocketMessages[]` and
+  unprefixed `webSocketMessages[]` arrays, so exporter variants do not drop
+  captured message payloads before recursive artifact discovery. Verification:
+  focused alias TDD failed first on missing `ws-alias@acme.example`; compile
+  passed; Ruff passed; focused HAR suite passed (`6 passed`); adjacent HAR/
+  public-metadata/Charles parser slice passed (`10 passed`); mocked
+  service-worker kill-chain E2E passed (`1 passed`); pytest engagement cleanup
+  reported `removed=4 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-har-websocket-message-alias.md`.
 - [x] Dashboard/API key-section proof-gate checkpoint:
   Static dashboard and live engagement detail API section payloads now reuse the
   shared latest-validation proof gate for key-scanner findings. Stale ACTIVE key

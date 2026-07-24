@@ -259,6 +259,22 @@ def test_artifact_queue_processor_parses_har_websocket_message_payloads(
                                     ),
                                 }
                             ],
+                        },
+                        {
+                            "request": {
+                                "method": "GET",
+                                "url": "wss://alias-stream.acme.example/socket",
+                            },
+                            "response": {"status": 101},
+                            "webSocketMessages": [
+                                {
+                                    "type": "receive",
+                                    "data": (
+                                        "owner=ws-alias@acme.example "
+                                        "api=https://ws-alias-api.acme.example/v2"
+                                    ),
+                                }
+                            ],
                         }
                     ],
                 }
@@ -300,9 +316,11 @@ def test_artifact_queue_processor_parses_har_websocket_message_payloads(
 
     assert summary.processed == 1
     assert summary.discovered_seeds >= 4
-    assert "ws-owner@acme.example" in emails
+    assert {"ws-owner@acme.example", "ws-alias@acme.example"} <= emails
     assert ("https://ws-api.acme.example/v1", "url") in seeds
+    assert ("https://ws-alias-api.acme.example/v2", "url") in seeds
     assert ("ws-api.acme.example", "subdomain") in seeds
+    assert ("ws-alias-api.acme.example", "subdomain") in seeds
     assert ("aws_s3", "ws-public-bucket") in cloud_assets
     assert ("gcs", "ws-public-assets") in cloud_assets
     assert ("firebase", "ws-live") in cloud_assets

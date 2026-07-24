@@ -25,18 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: HAR WebSocket message static recursion is complete. Passive
-HAR parsing now reads bounded `_webSocketMessages[]` payloads and feeds message
-type/time/opcode/data lines through the existing recursive artifact text
-discovery path. A local fixture proves WebSocket message data can surface
-emails, URLs, Firebase, Supabase, S3, and GCS references without browser
-replay, live probing, credential use, or scope relaxation. Verification: TDD
-fixture failed first with `discovered_seeds=0`; compile/Ruff passed; focused
-HAR suite passed (`6 passed`); packaged Helm/API-label/orchestration parser
-slice passed (`8 passed`); HAR plus adjacent public metadata/Charles parser
-slice passed (`10 passed`); artifact helper/static-classification/container
-slice passed (`31 passed`); mocked service-worker kill-chain E2E passed (`1
-passed`); pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
+Latest checkpoint: HAR WebSocket message alias support is complete. Passive HAR
+parsing now accepts both Chrome-style `_webSocketMessages[]` and unprefixed
+`webSocketMessages[]` arrays, so exporter variants do not drop captured message
+payloads before recursive artifact discovery. Verification: focused alias TDD
+failed first on missing `ws-alias@acme.example`; compile/Ruff passed; focused
+HAR suite passed (`6 passed`); adjacent HAR/public-metadata/Charles parser
+slice passed (`10 passed`); mocked service-worker kill-chain E2E passed (`1
+passed`); pytest engagement cleanup reported `removed=4 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-har-websocket-message-alias.md`.
+
+Previous checkpoint: HAR WebSocket message static recursion is complete.
+Passive HAR parsing now reads bounded `_webSocketMessages[]` payloads and feeds
+message type/time/opcode/data lines through the existing recursive artifact
+text discovery path. A local fixture proves WebSocket message data can surface
+emails, URLs, Firebase, Supabase, S3, and GCS references without browser replay,
+live probing, credential use, or scope relaxation. Verification: TDD fixture
+failed first with `discovered_seeds=0`; compile/Ruff passed; focused HAR suite
+passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
+(`8 passed`); HAR plus adjacent public metadata/Charles parser slice passed
+(`10 passed`); artifact helper/static-classification/container slice passed
+(`31 passed`); mocked service-worker kill-chain E2E passed (`1 passed`);
+pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
 Current next gate: run a fresh bounded audit for one concrete backend

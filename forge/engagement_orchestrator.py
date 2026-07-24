@@ -35690,7 +35690,7 @@ class ArtifactQueueProcessor:
         return []
 
     def _har_websocket_message_lines(self, entry: dict[str, Any]) -> list[str]:
-        messages = entry.get("_webSocketMessages")
+        messages = self._har_websocket_message_values(entry)
         if not isinstance(messages, list):
             return []
         message_batches = self._run_ordered_local_batch(
@@ -35718,6 +35718,13 @@ class ArtifactQueueProcessor:
             if value:
                 lines.append(f"websocket.message[{message_index}].{key}={value}")
         return lines
+
+    @staticmethod
+    def _har_websocket_message_values(entry: dict[str, Any]) -> Any:
+        messages = entry.get("_webSocketMessages")
+        if isinstance(messages, list):
+            return messages
+        return entry.get("webSocketMessages")
 
     def _har_request_lines(self, request: Any) -> list[str]:
         if not isinstance(request, dict):
