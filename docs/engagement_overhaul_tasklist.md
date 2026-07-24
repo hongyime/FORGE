@@ -93,11 +93,23 @@ sentences as historical notes only, not as current instructions.
 
 - [ ] Next checkpoint: audit one current-code deterministic kill-chain,
   passive-recursion, validation, report/export, or dashboard/API review gap not
-  already covered by the workflow status 404, Playwright screenshot scope,
-  workflow history bounds, crawler redirect scope, artifact inventory, or
-  workflow lineage checkpoints. Prefer compact helpers and focused tests over
-  growing large files. Keep live calls mocked unless an explicit ROE/scope
-  manifest and target are supplied.
+  already covered by the report route 404, workflow status 404, Playwright
+  screenshot scope, workflow history bounds, crawler redirect scope, artifact
+  inventory, or workflow lineage checkpoints. Prefer compact helpers and
+  focused tests over growing large files. Keep live calls mocked unless an
+  explicit ROE/scope manifest and target are supplied.
+- [x] Report route unknown-workflow 404 checkpoint:
+  `GET /reports/{workflow_id}` now catches `WorkflowEngine.get_status()`
+  `KeyError` and returns deterministic `404` with
+  `workflow_not_found:{workflow_id}` before loading report state. Added a
+  focused regression in `tests/integration/test_mvp_workflow.py` proving the
+  store is not called for a missing workflow. No report lineage, rendering,
+  fallback, workflow state-store, kill-chain, live execution, validation,
+  severity, scope, or dashboard behavior changed. Verification: compile passed;
+  Ruff passed; focused missing-report workflow test passed (`1 passed`); full
+  `TestApiReportRoute` class passed (`3 passed`); workspace
+  `.forge_data/engagements` contained `0` entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-report-route-unknown-404.md`.
 - [x] Workflow status unknown-ID 404 checkpoint:
   `GET /workflows/{workflow_id}/status` now catches `WorkflowEngine.get_status()`
   `KeyError` and returns deterministic `404` with

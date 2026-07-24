@@ -485,6 +485,32 @@ class TestApiHealthCheck:
 class TestApiReportRoute:
     """The legacy workflow report API preserves degraded report lineage."""
 
+    def test_report_route_missing_workflow_returns_404(self) -> None:
+        workflow_id = "missing-report-workflow"
+
+        class _Engine:
+            async def get_status(self, requested_id: str) -> dict[str, object] | None:
+                assert requested_id == workflow_id
+                raise KeyError(workflow_id)
+
+        class _Store:
+            async def load_workflow(self, requested_id: str) -> object | None:
+                raise AssertionError(f"store should not be called for {requested_id}")
+
+        reset_dependencies()
+        app = create_app()
+        app.dependency_overrides[get_workflow_engine] = lambda: _Engine()
+        app.dependency_overrides[get_state_store] = lambda: _Store()
+        try:
+            with TestClient(app) as client:
+                response = client.get(f"/reports/{workflow_id}")
+        finally:
+            app.dependency_overrides.clear()
+            reset_dependencies()
+
+        assert response.status_code == 404, response.text
+        assert response.json()["detail"] == f"workflow_not_found:{workflow_id}"
+
     def test_report_route_surfaces_raw_export_lineage(self) -> None:
         workflow_id = "workflow-raw-export"
 

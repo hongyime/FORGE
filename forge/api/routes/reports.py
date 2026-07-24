@@ -105,7 +105,13 @@ async def get_report(
     state_store: StateStore = Depends(get_state_store),
 ) -> dict[str, object]:
     """Return the markdown report or an explanatory error."""
-    status_data = await engine.get_status(workflow_id)
+    try:
+        status_data = await engine.get_status(workflow_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"workflow_not_found:{workflow_id}",
+        ) from exc
     if status_data is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

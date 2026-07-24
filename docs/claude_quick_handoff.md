@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: workflow status unknown-ID 404 is complete.
+Latest checkpoint: report route unknown-workflow 404 is complete.
+`GET /reports/{workflow_id}` now catches `WorkflowEngine.get_status()`
+`KeyError` and returns deterministic `404` with
+`workflow_not_found:{workflow_id}` before loading report state. Verification:
+compile passed; Ruff passed; focused missing-report workflow test passed (`1
+passed`); full `TestApiReportRoute` class passed (`3 passed`);
+`.forge_data/engagements` contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-report-route-unknown-404.md`.
+
+Next checkpoint: audit one current-code deterministic kill-chain,
+passive-recursion, validation, report/export, or dashboard/API review gap not
+already covered by the report route 404, workflow status 404, Playwright
+screenshot scope, workflow history bounds, crawler redirect scope, artifact
+inventory, or workflow lineage checkpoints. Prefer compact helpers and focused
+tests over growing large files. Keep live calls mocked unless an explicit
+ROE/scope manifest and target are supplied.
+
+Previous checkpoint: workflow status unknown-ID 404 is complete.
 `GET /workflows/{workflow_id}/status` now catches
 `WorkflowEngine.get_status()` `KeyError` and returns deterministic `404` with
 `workflow_not_found:{workflow_id}` instead of relying on the dead `result is
@@ -33,14 +50,6 @@ None` branch. Verification: compile passed; Ruff passed; focused
 unknown-status test passed (`1 passed`); full history/status route suite passed
 (`10 passed`); `.forge_data/engagements` contained `0` entries after the run.
 Handoff: `.claude/handoffs/2026-07-24-workflow-status-unknown-404.md`.
-
-Next checkpoint: audit one current-code deterministic kill-chain,
-passive-recursion, validation, report/export, or dashboard/API review gap not
-already covered by the workflow status 404, Playwright screenshot scope,
-workflow history bounds, crawler redirect scope, artifact inventory, or
-workflow lineage checkpoints. Prefer compact helpers and focused tests over
-growing large files. Keep live calls mocked unless an explicit ROE/scope
-manifest and target are supplied.
 
 Previous checkpoint: Playwright screenshot scope gate is complete.
 `crawl_target(..., screenshot=True)` now installs a Playwright route guard
