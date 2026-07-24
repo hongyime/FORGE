@@ -1613,6 +1613,90 @@ def test_engagement_detail_api_orders_cloud_validation_results_by_latest_checked
     assert validation_rows[1]["Evidence"] == "older dead proof"
 
 
+def test_engagement_detail_api_cloud_assets_use_latest_validation_result(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            DROP TABLE cloud_validation_results;
+            CREATE TABLE cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                provider_identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier, source, discovered_at)
+            VALUES
+                (1001, 'firebase', 'acme-firebase-prod', 'Acme-Firebase-Prod',
+                 'artifact_static_extract', '2026-07-09T09:00:00')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES
+                (1001, 'firebase', 'acme-firebase-prod', 'DEAD',
+                 'firebase_database_shallow_read', 404, 'older dead proof',
+                 'older stale proof', '2026-07-09T09:00:00')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES
+                (1001, 'firebase', 'acme-firebase-prod', 'VALIDATED',
+                 'firebase_database_shallow_read', 200,
+                 'HTTP 200 real data keys: customers,billing',
+                 'Firebase project reference responded with non-empty data.',
+                 '2026-07-09T10:00:00')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail = detail_resp.json()
+
+    asset_rows = detail["sections"]["cloud_assets"]
+    assert len([row for row in asset_rows if row["Asset"] == "Acme-Firebase-Prod"]) == 1
+    asset_row = next(row for row in asset_rows if row["Asset"] == "Acme-Firebase-Prod")
+    assert asset_row["Validation"] == "VALIDATED"
+    assert asset_row["Method"] == "firebase_database_shallow_read"
+    assert asset_row["Reportable"] == "yes"
+    assert asset_row["Checked"] == "2026-07-09 10:00:00"
+
+
 def test_engagement_detail_api_surfaces_validated_key_provider_inventory(
     tmp_path: Path,
     monkeypatch,

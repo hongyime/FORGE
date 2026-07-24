@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Shodan provider contract and D3/D4 dry-run parity are
+Latest checkpoint: cloud asset latest-validation review parity is complete.
+Static dashboard and live engagement-detail API cloud asset sections now join
+each asset to only the latest validation row for the same `(engagement_id,
+asset_type, identifier)`, ordered by `checked_at` then row id. This prevents
+legacy/non-unique validation-history tables from duplicating one asset row or
+showing stale proof beside a newer validation result while preserving the
+existing validation inventory ordering. Verification: Ruff passed; compile
+passed; focused static dashboard validation-order slice passed (`2 passed, 24
+deselected`); focused live API validation-order slice passed (`2 passed, 40
+deselected`). Handoff:
+`.claude/handoffs/2026-07-24-cloud-asset-latest-validation-parity.md`.
+
+Next checkpoint: surface method-tagged Slack validation proof on dashboard/API
+vulnerability finding rows. Phase 6 already preserves
+`VALIDATED:slack_auth_test:...` proof in report context/raw CSV, but
+`_detail_sections()` currently renders vulnerability rows without validation
+status/method/proof fields. Add mocked/local dashboard and live API regressions;
+do not call Slack or any live provider.
+
+Previous checkpoint: Shodan provider contract and D3/D4 dry-run parity are
 complete. Shodan domain enrichment is now documented and tested as the current
 `/dns/resolve` plus capped `/shodan/host/{ip}` enrichment model; stale
 `/dns/domain` and incorrect free-domain-endpoint wording was removed from the
@@ -36,12 +55,6 @@ passed; compile passed; focused D3/D4 dry-run orchestrator tests passed (`2
 passed, 763 deselected`); focused Shodan lookup contract/pacing tests passed
 (`2 passed, 6 deselected`). Handoff:
 `.claude/handoffs/2026-07-24-shodan-dry-run-provider-parity.md`.
-
-Next checkpoint: audit another concrete passive-to-live validation/report/API
-parity gap, preferably provider-specific proof/detail reviewability for
-long-tail validators or imported graph/raw-export shape mismatches. Keep live
-provider calls mocked unless an explicit ROE/scope manifest and target are
-supplied.
 
 Previous checkpoint: kill-chain child scope-manifest propagation is complete.
 Explicit `scope_manifest` values now propagate into live-capable child dispatch

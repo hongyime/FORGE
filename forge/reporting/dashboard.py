@@ -2956,9 +2956,15 @@ def _detail_sections(
             """
             validation_join = """
             LEFT JOIN cloud_validation_results cvr
-              ON cvr.engagement_id=ca.engagement_id
-             AND cvr.asset_type=ca.asset_type
-             AND cvr.identifier=ca.identifier
+              ON cvr.id = (
+                  SELECT cvr_latest.id
+                  FROM cloud_validation_results cvr_latest
+                  WHERE cvr_latest.engagement_id=ca.engagement_id
+                    AND cvr_latest.asset_type=ca.asset_type
+                    AND cvr_latest.identifier=ca.identifier
+                  ORDER BY COALESCE(cvr_latest.checked_at, '') DESC, cvr_latest.id DESC
+                  LIMIT 1
+              )
             """
         else:
             validation_select = """
