@@ -46,6 +46,12 @@ def _start_and_advance_three_stages(client: TestClient) -> str:
     return wid
 
 
+def test_status_unknown_workflow_returns_404(client: TestClient) -> None:
+    resp = client.get("/workflows/does-not-exist/status")
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["detail"] == "workflow_not_found:does-not-exist"
+
+
 def test_history_endpoint_returns_chronological_rows(client: TestClient) -> None:
     wid = _start_and_advance_three_stages(client)
     resp = client.get(f"/workflows/{wid}/history")

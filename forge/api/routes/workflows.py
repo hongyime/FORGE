@@ -124,7 +124,13 @@ async def get_workflow_status(
     engine: WorkflowEngine = Depends(get_workflow_engine),
 ) -> dict[str, object]:
     """Return current stage, elapsed time, and completion percentage."""
-    result = await engine.get_status(workflow_id)
+    try:
+        result = await engine.get_status(workflow_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"workflow_not_found:{workflow_id}",
+        ) from exc
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

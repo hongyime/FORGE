@@ -93,10 +93,23 @@ sentences as historical notes only, not as current instructions.
 
 - [ ] Next checkpoint: audit one current-code deterministic kill-chain,
   passive-recursion, validation, report/export, or dashboard/API review gap not
-  already covered by the Playwright screenshot scope, workflow history bounds,
-  crawler redirect scope, artifact inventory, or workflow lineage checkpoints.
-  Prefer compact helpers and focused tests over growing large files. Keep live
-  calls mocked unless an explicit ROE/scope manifest and target are supplied.
+  already covered by the workflow status 404, Playwright screenshot scope,
+  workflow history bounds, crawler redirect scope, artifact inventory, or
+  workflow lineage checkpoints. Prefer compact helpers and focused tests over
+  growing large files. Keep live calls mocked unless an explicit ROE/scope
+  manifest and target are supplied.
+- [x] Workflow status unknown-ID 404 checkpoint:
+  `GET /workflows/{workflow_id}/status` now catches `WorkflowEngine.get_status()`
+  `KeyError` and returns deterministic `404` with
+  `workflow_not_found:{workflow_id}` instead of relying on the dead `result is
+  None` branch. Added a focused integration regression in
+  `tests/integration/test_history_routes.py`. No workflow state-store, history,
+  replay, kill-chain, live execution, report, validation, severity, scope, or
+  dashboard behavior changed. Verification: compile passed; Ruff passed;
+  focused unknown-status test passed (`1 passed`); full history/status route
+  suite passed (`10 passed`); workspace `.forge_data/engagements` contained `0`
+  entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-workflow-status-unknown-404.md`.
 - [x] Playwright screenshot scope gate checkpoint:
   `crawl_target(..., screenshot=True)` now installs a Playwright route guard
   before navigation and aborts off-scope HTTP(S) requests using the same

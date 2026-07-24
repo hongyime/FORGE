@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Playwright screenshot scope gate is complete.
+Latest checkpoint: workflow status unknown-ID 404 is complete.
+`GET /workflows/{workflow_id}/status` now catches
+`WorkflowEngine.get_status()` `KeyError` and returns deterministic `404` with
+`workflow_not_found:{workflow_id}` instead of relying on the dead `result is
+None` branch. Verification: compile passed; Ruff passed; focused
+unknown-status test passed (`1 passed`); full history/status route suite passed
+(`10 passed`); `.forge_data/engagements` contained `0` entries after the run.
+Handoff: `.claude/handoffs/2026-07-24-workflow-status-unknown-404.md`.
+
+Next checkpoint: audit one current-code deterministic kill-chain,
+passive-recursion, validation, report/export, or dashboard/API review gap not
+already covered by the workflow status 404, Playwright screenshot scope,
+workflow history bounds, crawler redirect scope, artifact inventory, or
+workflow lineage checkpoints. Prefer compact helpers and focused tests over
+growing large files. Keep live calls mocked unless an explicit ROE/scope
+manifest and target are supplied.
+
+Previous checkpoint: Playwright screenshot scope gate is complete.
 `crawl_target(..., screenshot=True)` now installs a Playwright route guard
 before navigation and aborts off-scope HTTP(S) requests using the same
 `scope_filter` as the crawler. It also checks the browser final URL before
@@ -35,12 +52,6 @@ passed; focused screenshot scope test passed (`1 passed`); full crawler unit
 file passed (`4 passed`); `.forge_data/engagements` contained `0` entries after
 the run. Handoff:
 `.claude/handoffs/2026-07-24-playwright-screenshot-scope-gate.md`.
-
-Next checkpoint: fix `GET /workflows/{workflow_id}/status` unknown-workflow
-handling. `WorkflowEngine.get_status()` raises `KeyError` for missing workflows,
-so the route's dead `result is None` 404 branch should be replaced or guarded
-with deterministic 404 handling. Suggested focused test:
-`tests/integration/test_history_routes.py::test_status_unknown_workflow_returns_404`.
 
 Previous checkpoint: workflow history limit validation is complete.
 `GET /workflows/{workflow_id}/history` now validates optional `limit` with
