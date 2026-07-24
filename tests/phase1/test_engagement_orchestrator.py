@@ -84125,6 +84125,101 @@ def test_kill_chain_dry_run_routes_discovered_username_and_company_seeds_through
         con.close()
 
 
+def test_kill_chain_depth_limit_skips_over_depth_persisted_recursive_seeds(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH", "1")
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+
+    over_depth_seeds = [
+        ("https://portal.acme.example/over-depth", "url", "fanout_d5_url_seed_html"),
+        ("deep-email@acme.example", "email", "fanout_e_chain"),
+        ("deepuser", "username", "fanout_k_seed_username"),
+        ("+15550009999", "phone", "fanout_l_seed_phone"),
+        ("203.0.113.42", "ipv4", "fanout_o_seed_ip"),
+        ("2001:db8::42", "ipv6", "fanout_o_seed_ip"),
+        ("Deep Person", "name", "fanout_m_seed_name"),
+        ("Deep Org", "company", "fanout_n_seed_company"),
+    ]
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES (?, ?, ?, 'cross_reference', 'pending', 2, 0.7, '{}')
+            """,
+            [(1001, seed_value, seed_type) for seed_value, seed_type, _loop in over_depth_seeds],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=2,
+    )
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        stored_depths = {
+            (str(row["seed_value"]), str(row["seed_type"])): int(row["depth"])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, depth
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        for seed_value, seed_type, _loop in over_depth_seeds:
+            assert stored_depths[(seed_value, seed_type)] == 2
+
+        rows = con.execute(
+            """
+            SELECT es.seed_value, sr.loop_name, sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+            ORDER BY sr.id
+            """
+        ).fetchall()
+        run_map = {(str(row["seed_value"]), str(row["loop_name"])): row for row in rows}
+        for seed_value, _seed_type, loop_name in over_depth_seeds:
+            row = run_map[(seed_value, loop_name)]
+            metadata = json.loads(str(row["metadata_json"] or "{}"))
+            assert str(row["status"]) == "skipped"
+            assert str(row["error"]) == "synthesis_depth_limit_exceeded"
+            assert metadata["skip_reason"] == "synthesis_depth_limit_exceeded"
+            assert metadata["seed_depth"] == 2
+            assert metadata["synthesis_depth_limit"] == 1
+        assert not any(
+            str(row["seed_value"]) in {seed_value for seed_value, _seed_type, _loop in over_depth_seeds}
+            and str(row["status"]) == "completed"
+            for row in rows
+        )
+    finally:
+        con.close()
+
+
 @pytest.mark.slow
 def test_kill_chain_dry_run_promotes_operator_social_url_seeds_into_recursive_identity_fanouts(
     tmp_path: Path,

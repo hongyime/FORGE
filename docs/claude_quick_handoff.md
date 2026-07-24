@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: scoped cloud-reference inventory and deterministic finding
+Latest checkpoint: recursive depth-limit persisted-seed coverage is complete.
+Existing kill-chain code already filters over-depth persisted URL, email,
+username, phone, IP, name, and company seeds before executable dispatch and
+records auditable skipped seed-run receipts with
+`synthesis_depth_limit_exceeded`. Added a focused dry-run regression proving
+over-limit persisted seeds remain stored at their original depth while each
+major recursive fan-out writes only a skipped receipt and no completed
+follow-on run. Verification: Ruff and py_compile passed for
+`tests/phase1/test_engagement_orchestrator.py`; focused depth-limit test passed
+(`1 passed in 21.89s`).
+
+Next checkpoint: fix Fan-out F discovered GitHub-org keyscan dispatch semantics
+under ROE/scope manifests. Sidecar audits found discovered org slugs can still
+be queued as bare `forge osint keyscan --domain <org>`, which fails scope
+validation unless the org slug is separately authorized. Keep root-domain scans
+unchanged, but route discovered org scans as root-attributed
+`--domain <in-scope-root> --org <github_org>` work items with deterministic
+dedupe/seed-run metadata and parser-level regression coverage.
+
+Previous checkpoint: scoped cloud-reference inventory and deterministic finding
 finalization are complete. HTML/passive-text cloud refs that pass scope now
 persist into `cloud_assets` before Fan-out J validation, and a final
 deterministic finding synthesis pass runs after final cloud validation before
@@ -39,15 +58,6 @@ touched files; focused dashboard tests passed; artifact/static adjacent tests
 passed (`13 passed`); cloud validation focused slice passed (`5 passed, 128
 deselected`); the mocked recursive kill-chain E2E passed (`1 passed in
 280.80s`); no workspace `.forge_data/engagements` leftovers were listed.
-
-Next checkpoint: enforce the configured recursive depth limit across persisted
-seed inventory loaders and pending-work counts. A completed sidecar audit found
-that persisted `engagement_seeds` rows above `synthesis_depth_limit` can still
-be dispatched for URL, email, username, phone, IP, name, and company fan-outs
-because several loaders order by depth but do not filter by it. Keep over-limit
-rows stored for audit/review, but suppress over-limit dispatch and pending-work
-accounting; add focused regression tests proving over-limit persisted seeds do
-not create follow-on `seed_runs`.
 
 Previous checkpoint: AndroidManifest attribute-aware static extraction is
 complete. `AndroidManifest.xml` is now a first-class static artifact label.

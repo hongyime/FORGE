@@ -66,15 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: enforce the configured recursive depth limit across
-  persisted seed inventory loaders and pending-work counts. A completed
-  sidecar audit found that persisted `engagement_seeds` rows above
-  `synthesis_depth_limit` can still be dispatched for URL, email, username,
-  phone, IP, name, and company fan-outs because several loaders order by depth
-  but do not filter by it. Keep rows stored for audit/review, but suppress
-  over-limit dispatch and pending-work accounting; add focused regression tests
-  proving over-limit persisted seeds remain in the DB without creating
-  follow-on `seed_runs`.
+- [ ] Next checkpoint: fix Fan-out F discovered GitHub-org keyscan dispatch
+  semantics under ROE/scope manifests. Sidecar audits found discovered org
+  slugs can still be queued as bare `forge osint keyscan --domain <org>`,
+  which fails scope validation unless the org slug is separately authorized.
+  Keep root-domain scans unchanged, but route discovered org scans as
+  root-attributed `--domain <in-scope-root> --org <github_org>` work items with
+  deterministic dedupe/seed-run metadata and parser-level regression coverage.
+- [x] Recursive depth-limit persisted-seed coverage checkpoint:
+  Existing kill-chain code already filters over-depth persisted URL, email,
+  username, phone, IP, name, and company seeds before executable dispatch and
+  records auditable skipped seed-run receipts with
+  `synthesis_depth_limit_exceeded`. Added a focused dry-run regression proving
+  over-limit persisted seeds remain stored at their original depth while each
+  major recursive fan-out writes only a skipped receipt and no completed
+  follow-on run. Verification: Ruff and py_compile passed for
+  `tests/phase1/test_engagement_orchestrator.py`; focused depth-limit test
+  passed (`1 passed in 21.89s`).
 - [x] Scoped cloud-reference inventory and deterministic finding finalization
   checkpoint: HTML/passive-text cloud refs that pass scope now persist into
   `cloud_assets` before Fan-out J validation, and a final deterministic finding
