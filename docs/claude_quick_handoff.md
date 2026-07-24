@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: HTML surface URL-family worker migration is complete.
+Latest checkpoint: HTML data aggregation worker audit is closed with no runtime
+change. `_extract_html_data()` was inspected after the URL-family worker
+migration; the remaining extraction is low-cost local aggregation and the only
+clearly heavy subpath is already `_extract_html_surface_urls()`. Do not split
+DB apply/merge/write/finalization barriers or add nested worker pools here.
+Subagent attempts were made: Claude failed because OAuth is expired, and Codex
+read-only sandbox could not spawn PowerShell. Handoff:
+`.claude/handoffs/2026-07-24-html-data-aggregation-worker-audit.md`.
+
+Current next gate: resume real kill-chain correctness work by auditing
+passive-to-live validator handoff coverage with mocked read-only proof
+endpoints and provider-specific proof details. Prioritize deterministic
+validation/report/graph/dashboard parity over more micro-optimization. Do not
+add live target probing without explicit ROE/scope manifest and local/mocked
+regression coverage.
+
+Previous checkpoint: HTML surface URL-family worker migration is complete.
 `_extract_html_surface_urls()` now splits passive HTML URL extraction into
 ordered families (`literal`, `attribute`, `meta_refresh`, `srcset`, `css_url`,
 `css_import`, `js`) and can dispatch them through `_run_inprocess_batch()` for
@@ -37,12 +53,6 @@ parallel dispatch suite passed (`31 passed`); D1/D2/D5 scheduling slice passed
 (`3 passed`); compact HTML-mining plus service-worker/precache smoke passed
 (`2 passed`); cleanup reported `removed=4 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-html-surface-url-family-worker.md`.
-
-Current next gate: inspect the higher-risk `_extract_html_data()` aggregation
-path for a concrete safe in-process worker split, or stop the worker-pool
-migration if no source-gated passive/static family remains. Do not move serial
-DB apply/merge/write/finalization barriers. Keep tests local/mocked and
-preserve scope gates, pacing, and deterministic persistence order.
 
 Previous checkpoint: social-profile pivot worker migration is complete.
 Identity/social-profile recursive pivot construction now routes handle, email,

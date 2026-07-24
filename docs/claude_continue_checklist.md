@@ -167,11 +167,25 @@ historical notes only, not as current instructions.
   passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
   Handoff:
   `.claude/handoffs/2026-07-24-html-surface-url-family-worker.md`.
-- [ ] Next target: inspect the higher-risk `_extract_html_data()` aggregation
-  path for a concrete safe in-process worker split, or stop the worker-pool
-  migration if no source-gated passive/static family remains. Do not move
-  serial DB apply/merge/write/finalization barriers. Keep tests local/mocked and
-  preserve scope gates, pacing, and deterministic persistence order.
+- [x] HTML data aggregation worker audit checkpoint:
+  `_extract_html_data()` was inspected after the URL-family worker migration.
+  The remaining work in that function is low-cost local aggregation across
+  emails, phones, IP seeds, GitHub hints, social-profile hints, and crawl URL
+  set construction. The only clearly heavy subpath is already
+  `_extract_html_surface_urls()`. No further worker split is being added here:
+  extra nested scheduling would increase code size and concurrency complexity
+  for limited kill-chain benefit. Keep DB apply/merge/write/finalization
+  barriers serial. Subagent attempts were made; Claude could not run because
+  OAuth was expired, and Codex read-only sandbox could not spawn PowerShell.
+  Local checks from the prior code checkpoint remain the verification baseline.
+  Handoff:
+  `.claude/handoffs/2026-07-24-html-data-aggregation-worker-audit.md`.
+- [ ] Next target: resume real kill-chain correctness work by auditing
+  passive-to-live validator handoff coverage with mocked read-only proof
+  endpoints and provider-specific proof details. Prioritize deterministic
+  validation/report/graph/dashboard parity over more micro-optimization. Do not
+  add live target probing without explicit ROE/scope manifest and local/mocked
+  regression coverage.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from
