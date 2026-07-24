@@ -36,6 +36,181 @@ def _latest_run_metadata(db_path: Path) -> dict[str, object]:
     return json.loads(str((row or ["{}"])[0] or "{}"))
 
 
+def test_kill_chain_known_host_surface_backlog_advances_beyond_first_batch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context)
+            VALUES (?, ?, ?, 'unknown', '{}')
+            """,
+            [
+                (
+                    1001,
+                    f"198.51.100.{index + 1}",
+                    f"host{index:02d}.acme.example",
+                )
+                for index in range(45)
+            ],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    fetched_hosts_by_label: dict[str, list[str]] = {}
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _host_from_url(url: str) -> str:
+        return url.split("://", 1)[1].split("/", 1)[0].lower()
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        label = str(progress_label or "")
+        if label.endswith(".D cloud+HTML fetch"):
+            fetched_hosts_by_label.setdefault(label, []).extend(
+                _host_from_url(str(spec.url))
+                for spec in specs
+            )
+            return ["<html><title>ok</title></html>" for _ in specs]
+        if label.endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del lookup_func, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(ips),
+                    "workers": min(1, len(ips)) if ips else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(ips),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        return [(str(ip), "") for ip in ips]
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+    monkeypatch.setattr("forge.cli._run_ptr_lookup_batch", _fake_ptr_lookup_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=2,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    first_hosts = set(fetched_hosts_by_label["1.D cloud+HTML fetch"])
+    second_hosts = set(fetched_hosts_by_label["2.D cloud+HTML fetch"])
+    assert "acme.example" in first_hosts
+    assert "downloads.acme.example" in first_hosts
+    assert "host00.acme.example" in first_hosts
+    assert "host17.acme.example" in first_hosts
+    assert "host18.acme.example" not in first_hosts
+    assert "host18.acme.example" in second_hosts
+    assert "host37.acme.example" in second_hosts
+    assert "host00.acme.example" not in second_hosts
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT es.seed_value, sr.status, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_d_host_surface'
+            ORDER BY sr.id
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    completed_hosts = {str(seed_value) for seed_value, status, _meta in rows if status == "completed"}
+    assert len(completed_hosts) == 40
+    assert "host37.acme.example" in completed_hosts
+    assert "host38.acme.example" not in completed_hosts
+    assert all(
+        json.loads(str(metadata_json or "{}"))["fetch_status"] == "payload"
+        for _seed_value, _status, metadata_json in rows
+    )
+
+
 def test_kill_chain_retries_failed_recursive_seed_fanouts_only(
     tmp_path: Path,
     monkeypatch,

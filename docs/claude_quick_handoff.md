@@ -25,8 +25,31 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: recursive non-root fan-out retry semantics are verified and
-hardened. Social handle, phone, IP, name, company, and executable cloud-ref
+Latest checkpoint: known-host surface backlog is complete. Fan-out D no longer
+re-fetches the same first 20 known hosts every iteration. Known-host D/D2
+surface mining now selects a deterministic normalized host backlog, excludes
+completed/skipped `fanout_d_host_surface` seed-run targets, prioritizes
+never-attempted hosts before retryable attempted hosts, and records one
+host-surface seed-run receipt per selected hostname. Empty but completed fetch
+attempts are recorded with `fetch_status=empty`, while payload-bearing hosts
+record payload counts. `pending_work_counts` now includes `host_surfaces`, so
+resumable known-host inventory is visible to the stable-loop gate.
+Verification: recursive retry-state suite passed (`9 passed`), focused
+known-host backlog regression passed, adjacent D/D2 HTML batching test passed
+(`1 passed` with explicit test ROE/scope env), root child scope propagation
+plus root retry-state tests passed (`2 passed`), Ruff passed, `py_compile`
+passed, and `git diff --check` passed. Read-only sidecar audit confirmed the
+original starvation risk and recommended the durable seed-run state model before
+implementation.
+
+Next checkpoint: prevent high-depth persisted/resumed seeds from executing
+beyond `synthesis_depth_limit` while still preserving them as inventory.
+Recursive loaders should filter or skip over-depth seed rows before fan-out
+dispatch, persist deterministic skipped receipts where appropriate, and keep
+pending-work counts from treating over-depth inventory as executable work.
+
+Previous checkpoint: recursive non-root fan-out retry semantics are verified
+and hardened. Social handle, phone, IP, name, company, and executable cloud-ref
 child fan-outs now have focused regression proof that failed outcomes are not
 added to processed sets and remain visible through `pending_work_counts` /
 `last_iteration_stable` metadata for later retry within `max_iter`. Persisted
@@ -40,12 +63,6 @@ cloud scope-manifest regression passed (`1 passed`), Ruff passed for
 files, and `git diff --check` passed. Built-in read-only sidecar audits
 independently confirmed the retry semantics and highlighted the unsupported
 cloud audit-receipt gap before implementation.
-
-Next checkpoint: replace known-host surface fetch first-20 hard cap with a
-deterministic host backlog/cursor or completed-host exclusion. Known-host and
-host-surface recursion should not permanently starve hosts beyond the first
-batch; processed/skipped/failed host-surface state must be auditable,
-resumable, and visible to the stable-loop gate.
 
 Previous checkpoint: GitHub org keyscan attribution/scope is complete. Fan-out
 F no longer treats discovered GitHub org names as standalone `--domain <org>`

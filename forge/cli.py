@@ -5927,6 +5927,8 @@ def kill_chain(
     processed_social_handles: set[str] = set()
     processed_keyscan_targets: set[str] = set()
     processed_cloud_refs: set[str] = set()
+    processed_host_surfaces: set[str] = set()
+    attempted_host_surfaces: set[str] = set()
     processed_phone_seeds: set[str] = set()
     processed_ip_seeds: set[str] = set()
     processed_username_seeds: set[str] = set()
@@ -6057,6 +6059,7 @@ def kill_chain(
             "processed_social_handles": len(processed_social_handles),
             "processed_keyscan_targets": len(processed_keyscan_targets),
             "processed_cloud_refs": len(processed_cloud_refs),
+            "processed_host_surfaces": len(processed_host_surfaces),
             "processed_phone_seeds": len(processed_phone_seeds),
             "processed_ip_seeds": len(processed_ip_seeds),
             "processed_username_seeds": len(processed_username_seeds),
@@ -10003,11 +10006,14 @@ def kill_chain(
         "github_pages": [], "gitlab_pages": [],
         "vercel": [], "netlify": [],
     }
+    host_surface_batch_limit = 20
     all_github_orgs: set[str] = set()  # populated in fan-out D, used in fan-out F
     processed_emails: set[str] = set()          # emails already sent through xposed/holehe/social/sherlock
     processed_github_orgs: set[str] = set()      # GH orgs already keyscanned
     processed_keyscan_targets: set[str] = set()  # domains/orgs already keyscanned
     processed_cloud_refs: set[str] = set()       # cloud service:ref pairs already scanned
+    processed_host_surfaces: set[str] = set()    # hostnames already D/D2 surface-fetched
+    attempted_host_surfaces: set[str] = set()    # hostnames attempted; prevents first-batch starvation
     processed_url_seeds: set[str] = set()        # in-scope URL seeds already surface-fetched
     processed_social_handles: set[str] = set()   # social_profiles handles already Sherlocked
     processed_phone_seeds: set[str] = set()      # phone seeds already routed through phone enrichment
@@ -10023,6 +10029,18 @@ def kill_chain(
 
     def _normalize_url_seed_value(value: str) -> str:
         return _canonical_http_url_value(value) or str(value or "").strip().lower()
+
+    def _normalize_host_surface_value(value: str) -> str:
+        return str(value or "").strip().lower().strip(".")
+
+    def _host_surface_seed_type(value: str) -> str:
+        normalized_host = _normalize_host_surface_value(value)
+        root_set = {
+            _normalize_host_surface_value(root_domain)
+            for root_domain in root_domains
+            if str(root_domain or "").strip()
+        }
+        return "domain" if normalized_host in root_set else "subdomain"
 
     def _url_seed_scope_decision(value: str) -> dict[str, object]:
         raw_value = _canonical_http_url_value(value) or ""
@@ -10067,10 +10085,11 @@ def kill_chain(
         suffix = Path(str(parsed.path or "").strip()).suffix.lower()
         return suffix in {"", ".html", ".htm", ".php", ".asp", ".aspx", ".jsp", ".jspx"}
 
-    def _load_completed_seed_values(
+    def _load_seed_run_values(
         loop_names: list[str],
         *,
         seed_type: str | None = None,
+        statuses: set[str] | None = None,
     ) -> set[str]:
         if not resume_enabled or not loop_names:
             return set()
@@ -10081,9 +10100,19 @@ def kill_chain(
             "FROM seed_runs sr "
             "JOIN engagement_seeds es ON es.id=sr.seed_id "
             "WHERE sr.engagement_id=? "
-            f"AND sr.loop_name IN ({placeholders}) "
-            "AND sr.status IN ('completed','skipped')"
+            f"AND sr.loop_name IN ({placeholders})"
         )
+        if statuses is not None:
+            status_values = sorted(
+                str(status or "").strip()
+                for status in statuses
+                if str(status or "").strip()
+            )
+            if not status_values:
+                return set()
+            status_placeholders = ",".join("?" for _ in status_values)
+            sql += f" AND sr.status IN ({status_placeholders})"
+            params.extend(status_values)
         if seed_type is not None:
             sql += " AND es.seed_type=?"
             params.append(seed_type)
@@ -10100,6 +10129,17 @@ def kill_chain(
             for row in rows
             if str(row[0] or "").strip()
         }
+
+    def _load_completed_seed_values(
+        loop_names: list[str],
+        *,
+        seed_type: str | None = None,
+    ) -> set[str]:
+        return _load_seed_run_values(
+            loop_names,
+            seed_type=seed_type,
+            statuses={"completed", "skipped"},
+        )
 
     completed_a_domains = _load_completed_seed_values(["fanout_a_subdomains"], seed_type="domain")
     completed_b_domains = _load_completed_seed_values(["fanout_b_harvest"], seed_type="domain")
@@ -10118,6 +10158,15 @@ def kill_chain(
         if "::github_org::" in target
     }
     processed_cloud_refs = _load_completed_seed_values(["fanout_j_cloud_scan"], seed_type="other")
+    completed_host_surfaces = _load_completed_seed_values(["fanout_d_host_surface"])
+    processed_host_surfaces = {
+        _normalize_host_surface_value(item)
+        for item in completed_host_surfaces
+    }
+    attempted_host_surfaces = {
+        _normalize_host_surface_value(item)
+        for item in _load_seed_run_values(["fanout_d_host_surface"])
+    }
     processed_url_seeds = {
         _normalize_url_seed_value(item)
         for item in completed_url_seeds
@@ -10148,6 +10197,7 @@ def kill_chain(
             + len(processed_emails)
             + len(processed_keyscan_targets)
             + len(processed_cloud_refs)
+            + len(processed_host_surfaces)
             + len(completed_url_seeds)
             + len(completed_phone_seeds)
             + len(completed_ipv4_seeds)
@@ -10805,6 +10855,60 @@ def kill_chain(
         if status in {"completed", "skipped"} and source_url:
             return source_url
         return None
+
+    def _prepare_host_surface_finalize_entry(
+        item: tuple[str, object | None, int],
+    ) -> dict[str, object] | None:
+        hostname, host_handle, payload_count = item
+        normalized_host = _normalize_host_surface_value(hostname)
+        if not normalized_host or host_handle is None:
+            return None
+        finalization_entry = _prepare_module_seed_run_finalization_entry(
+            (
+                host_handle,
+                {"metadata": {"iteration": iteration}},
+            ),
+            base_metadata_value={},
+            status="completed",
+            output_count=max(0, int(payload_count or 0)),
+            extra_metadata={
+                "iteration": iteration,
+                "hostname": normalized_host,
+                "fetch_status": "payload" if int(payload_count or 0) > 0 else "empty",
+                "payload_surfaces": max(0, int(payload_count or 0)),
+                "surface_count": 6,
+            },
+        )
+        if finalization_entry is not None:
+            finalization_entry["hostname"] = normalized_host
+        return finalization_entry
+
+    def _apply_host_surface_finalize_entry(
+        item: dict[str, object] | None,
+    ) -> dict[str, str] | None:
+        if item is None:
+            return None
+        hostname = _normalize_host_surface_value(str(item.get("hostname") or ""))
+        status = _apply_module_seed_run_finalization_entry(item)
+        if not hostname or not status:
+            return None
+        return {"hostname": hostname, "status": str(status)}
+
+    def _apply_host_surface_processed_result_item(
+        item: dict[str, str] | None,
+        *,
+        attempted_out: set[str],
+        processed_out: set[str],
+    ) -> str | None:
+        if item is None:
+            return None
+        hostname = _normalize_host_surface_value(item.get("hostname", ""))
+        if not hostname:
+            return None
+        attempted_out.add(hostname)
+        if str(item.get("status") or "") in {"completed", "skipped"}:
+            processed_out.add(hostname)
+        return hostname
 
     def _extract_wayback_hostname(url_value: str) -> str | None:
         match = _re.match(
@@ -13701,6 +13805,46 @@ def kill_chain(
         )
         return sum(1 for seed_value, _depth in pending_rows if _url_seed_is_in_scope(seed_value))
 
+    def _pending_host_surface_values(
+        *,
+        max_workers: int = 1,
+        progress_label: str | None = None,
+        progress_callback: Callable[[str, dict[str, object]], None] | None = None,
+    ) -> list[str]:
+        if dry_run_all:
+            return []
+        hostnames = _load_known_hostnames(
+            max_workers=max_workers,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
+        candidates = sorted(
+            {
+                _normalize_host_surface_value(hostname)
+                for hostname in hostnames
+                if _normalize_host_surface_value(hostname)
+            }
+        )
+        pending_hosts = [
+            hostname
+            for hostname in candidates
+            if hostname not in processed_host_surfaces
+        ]
+        never_attempted = [
+            hostname
+            for hostname in pending_hosts
+            if hostname not in attempted_host_surfaces
+        ]
+        retryable = [
+            hostname
+            for hostname in pending_hosts
+            if hostname in attempted_host_surfaces
+        ]
+        return [*never_attempted, *retryable]
+
+    def _pending_host_surface_count() -> int:
+        return len(_pending_host_surface_values(max_workers=parallel_workers))
+
     def _pending_root_domain_count(completed_domains: set[str]) -> int:
         if dry_run_all or not root_domains:
             return 0
@@ -13737,6 +13881,7 @@ def kill_chain(
             "root_dns_domains": _pending_root_domain_count(completed_dns_domains),
             "root_rdap_domains": _pending_root_domain_count(completed_rdap_domains),
             "root_archive_domains": _pending_root_domain_count(completed_wayback_domains),
+            "host_surfaces": _pending_host_surface_count(),
             "url_seeds": _pending_url_seed_count(),
             "emails": len(_load_new_emails(processed_emails, max_workers=parallel_workers)),
             "social_handles": len(
@@ -14146,11 +14291,28 @@ def kill_chain(
         # After fetch, we mine HTML for: cloud refs, new emails, GitHub
         # orgs, and same-domain subdomains referenced in href/src attrs.
         if not dry_run_all:
-            hostnames = _load_known_hostnames(
+            pending_host_surfaces = _pending_host_surface_values(
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.D known host prep",
                 progress_callback=_record_batch_progress,
-            )[:20]  # cap for runtime
+            )
+            hostnames = pending_host_surfaces[:host_surface_batch_limit]
+            host_surface_handles = _start_seed_run_handles_from_contexts(
+                [
+                    _seed_context(
+                        hostname,
+                        _host_surface_seed_type(hostname),
+                        source="discovered",
+                        depth=1,
+                        confidence=0.8,
+                        metadata={"iteration": iteration},
+                    )
+                    for hostname in hostnames
+                ],
+                loop_name_value="fanout_d_host_surface",
+                base_metadata_value={},
+                progress_label_prefix=f"{iteration}.D host surface",
+            )
             fetch_spec_inputs = [
                 (host, scheme)
                 for host in hostnames
@@ -14209,6 +14371,7 @@ def kill_chain(
                 progress_label=f"{iteration}.D cloud+HTML fetch",
                 progress_callback=_record_batch_progress,
             )
+            passive_text_results: list[Any] = []
             passive_text_urls: set[str] = set()
             html_surface_urls: set[str] = set()
             mined = _empty_html_mined_result()
@@ -14427,6 +14590,67 @@ def kill_chain(
                 discovery="passive_text_extract",
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.D crawl URL persist prep",
+                progress_callback=_record_batch_progress,
+            )
+            host_surface_payload_counts = {hostname: 0 for hostname in hostnames}
+            for result_index, payload in enumerate(html_results):
+                if result_index >= len(fetch_spec_inputs) or not payload:
+                    continue
+                host_surface_payload_counts[
+                    _normalize_host_surface_value(fetch_spec_inputs[result_index][0])
+                ] += 1
+            for result_index, payload in enumerate(passive_text_results):
+                if result_index >= len(passive_text_spec_inputs) or not payload:
+                    continue
+                host_surface_payload_counts[
+                    _normalize_host_surface_value(passive_text_spec_inputs[result_index][0])
+                ] += 1
+            host_surface_finalize_inputs = [
+                (
+                    hostname,
+                    host_surface_handles[index]
+                    if index < len(host_surface_handles)
+                    else None,
+                    int(host_surface_payload_counts.get(hostname, 0)),
+                )
+                for index, hostname in enumerate(hostnames)
+            ]
+            if len(host_surface_finalize_inputs) > 1 and parallel_workers > 1:
+                _log(
+                    f"{iteration}.D host surface finalize prep",
+                    (
+                        f"[dim]parallel parse x"
+                        f"{min(parallel_workers, len(host_surface_finalize_inputs))}[/dim]"
+                    ),
+                )
+            prepared_host_surface_finalize_entries = _run_inprocess_batch(
+                host_surface_finalize_inputs,
+                _prepare_host_surface_finalize_entry,
+                max_workers=parallel_workers,
+                progress_label=f"{iteration}.D host surface finalize prep",
+                progress_callback=_record_batch_progress,
+            )
+            if len(host_surface_finalize_inputs) > 1:
+                _log(
+                    f"{iteration}.D host surface finalize",
+                    "[dim]sequential dispatch x1[/dim]  [dim]host finalization order preserved[/dim]",
+                )
+            host_surface_processed_results = _run_inprocess_batch(
+                prepared_host_surface_finalize_entries,
+                _apply_host_surface_finalize_entry,
+                max_workers=1,
+                progress_label=f"{iteration}.D host surface finalize",
+                progress_callback=_record_batch_progress,
+            )
+            _run_inprocess_batch(
+                host_surface_processed_results,
+                lambda item: _apply_host_surface_processed_result_item(
+                    item,
+                    attempted_out=attempted_host_surfaces,
+                    processed_out=processed_host_surfaces,
+                ),
+                max_workers=1,
+                progress_label=f"{iteration}.D host surface processed-set update",
                 progress_callback=_record_batch_progress,
             )
             cloud_summary = (
