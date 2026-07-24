@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: crawler href parser recursion is complete.
+Latest checkpoint: dashboard cloud asset validation alias is complete.
+Static engagement detail cloud-asset rows now normalize both sides of the
+latest-validation join, so assets stored as aliases such as `s3` pick up
+canonical validation rows stored as `aws_s3` for the same identifier.
+Verification: compile passed; Ruff passed; focused alias dashboard test passed
+(`1 passed`); adjacent dashboard cloud-validation slice passed (`4 passed, 24
+deselected`); full static dashboard suite passed (`28 passed`);
+`.forge_data/engagements` contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-dashboard-cloud-asset-alias-validation.md`.
+
+Next checkpoint: canonicalize crawler URLs before recursive enqueue/fetch so
+href parser expansion does not create duplicate deterministic crawl rows for
+fragment-only variants like `/app`, `/app#top`, and `/app#pricing`. Drop
+fragments, normalize scheme/host casing, reject non-HTTP(S), and mark canonical
+links as seen when enqueuing. Add a focused crawler regression. Keep live calls
+mocked unless an explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: crawler href parser recursion is complete.
 `_extract_links()` now uses `HTMLParser` so `_crawl_http()` follows same-origin
 hrefs regardless of attribute case or quote style while continuing to ignore
 empty, fragment, and `javascript:` links. Verification: compile passed; Ruff
@@ -33,14 +50,6 @@ passed; focused href parser test passed (`1 passed, 4 deselected`); full
 crawler unit file passed (`5 passed`); `.forge_data/engagements` contained `0`
 entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-crawler-href-parser-recursion.md`.
-
-Next checkpoint: fix the dashboard cloud asset validation alias join gap found
-by read-only subagent audit. `cloud_assets.asset_type='s3'` rows can display as
-`aws_s3` while missing a latest validation row stored as
-`cloud_validation_results.asset_type='aws_s3'`. Normalize both sides of that
-join, add a focused static dashboard regression, then run compile/Ruff plus the
-focused dashboard test. Keep live calls mocked unless an explicit ROE/scope
-manifest and target are supplied.
 
 Previous checkpoint: report route unknown-workflow 404 is complete.
 `GET /reports/{workflow_id}` now catches `WorkflowEngine.get_status()`

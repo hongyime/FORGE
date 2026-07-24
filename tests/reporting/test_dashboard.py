@@ -1912,6 +1912,77 @@ def test_generate_dashboard_cloud_assets_use_latest_validation_result(
     assert asset_row["Checked"] == "2026-07-09 10:00:00"
 
 
+def test_generate_dashboard_cloud_assets_join_validation_across_asset_type_alias(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS cloud_assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                provider_identifier TEXT,
+                source TEXT,
+                discovered_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier, source, discovered_at)
+            VALUES
+                (1001, 's3', 'alias-assets', 'AliasAssetsExact',
+                 'artifact_static_extract', '2026-07-09T09:00:00')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES
+                (1001, 'aws_s3', 'alias-assets', 'VALIDATED',
+                 's3_list_bucket', 200,
+                 '<ListBucketResult><Contents><Key>reports/customer-records.csv</Key></Contents></ListBucketResult>',
+                 'Canonical validation row for alias asset type.',
+                 '2026-07-09T10:00:00')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    asset_row = next(
+        row for row in detail_payload["sections"]["cloud_assets"] if row["Asset"] == "AliasAssetsExact"
+    )
+
+    assert asset_row["Type"] == "aws_s3"
+    assert asset_row["Stored Type"] == "s3"
+    assert asset_row["Validation"] == "VALIDATED"
+    assert asset_row["Method"] == "s3_list_bucket"
+    assert asset_row["Reportable"] == "yes"
+
+
 def test_generate_dashboard_surfaces_slack_validation_proof_on_finding_rows(
     tmp_path: Path,
 ) -> None:

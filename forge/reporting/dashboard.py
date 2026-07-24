@@ -1642,6 +1642,18 @@ def _cloud_validation_section_row(row: sqlite3.Row) -> dict[str, str]:
     }
 
 
+def _normalized_cloud_asset_type_sql(column: str) -> str:
+    normalized = f"LOWER(TRIM(COALESCE({column}, '')))"
+    return (
+        f"CASE {normalized} "
+        "WHEN 'azure_blob_storage' THEN 'azure_blob' "
+        "WHEN 'digitalocean_spaces' THEN 'do_spaces' "
+        "WHEN 'google_cloud_storage' THEN 'gcs' "
+        "WHEN 's3' THEN 'aws_s3' "
+        f"ELSE {normalized} END"
+    )
+
+
 def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
     stored_type = str(row["asset_type"] or "").strip().lower()
     asset_type = normalize_cloud_exposure_asset_type(stored_type)
@@ -3034,6 +3046,8 @@ def _detail_sections(
     sections["cloud_assets"] = []
     if _table_exists(con, "cloud_assets"):
         cloud_columns = _table_columns(con, "cloud_assets")
+        ca_asset_type_key = _normalized_cloud_asset_type_sql("ca.asset_type")
+        cvr_asset_type_key = _normalized_cloud_asset_type_sql("cvr_latest.asset_type")
         provider_expr = (
             "COALESCE(NULLIF(ca.provider_identifier, ''), ca.identifier) AS display_identifier"
             if "provider_identifier" in cloud_columns
@@ -3057,13 +3071,13 @@ def _detail_sections(
                    cvr.notes,
                    cvr.checked_at
             """
-            validation_join = """
+            validation_join = f"""
             LEFT JOIN cloud_validation_results cvr
               ON cvr.id = (
                   SELECT cvr_latest.id
                   FROM cloud_validation_results cvr_latest
                   WHERE cvr_latest.engagement_id=ca.engagement_id
-                    AND cvr_latest.asset_type=ca.asset_type
+                    AND {cvr_asset_type_key}={ca_asset_type_key}
                     AND cvr_latest.identifier=ca.identifier
                   ORDER BY COALESCE(cvr_latest.checked_at, '') DESC, cvr_latest.id DESC
                   LIMIT 1
