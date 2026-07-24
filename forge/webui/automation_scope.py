@@ -7,6 +7,10 @@ from typing import Any, Mapping
 from urllib.parse import urlparse
 
 from forge.db.session import get_engagement_db
+from forge.distributed.scheduler import (
+    UNSUPPORTED_SCHEDULED_TASK_REASON,
+    is_unsupported_scheduled_task_type,
+)
 from forge.phase4.cloud_validate import (
     load_cloud_validation_scope_manifest,
     validate_scope_manifest_entries,
@@ -79,6 +83,11 @@ def has_roe_scope_context(payload: Mapping[str, Any]) -> bool:
 def require_web_task_scope_context(payload: Mapping[str, Any], label: str) -> None:
     if not has_roe_scope_context(payload):
         raise AutomationScopeError(f"{label} requires roe_id and scope_manifest")
+
+
+def assert_web_task_type_allowed(task_type: str) -> None:
+    if is_unsupported_scheduled_task_type(task_type):
+        raise AutomationScopeError(UNSUPPORTED_SCHEDULED_TASK_REASON)
 
 
 def audit_scope_denial(

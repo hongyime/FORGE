@@ -18,6 +18,32 @@ class ScheduledTask:
     priority: int = 100
 
 
+UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES = frozenset(
+    {"safe_check", "spray", "weaponize"}
+)
+UNSUPPORTED_SCHEDULED_TASK_REASON = "unsupported_scheduled_task"
+
+
+class UnsupportedScheduledTaskError(ValueError):
+    def __init__(self, task_type: object) -> None:
+        self.task_type = _canonical_task_type(task_type)
+        self.reason = UNSUPPORTED_SCHEDULED_TASK_REASON
+        super().__init__(f"scheduled task type denied: {self.reason}:{self.task_type}")
+
+
+def _canonical_task_type(task_type: object) -> str:
+    return str(task_type or "").strip().lower()
+
+
+def is_unsupported_scheduled_task_type(task_type: object) -> bool:
+    return _canonical_task_type(task_type) in UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES
+
+
+def assert_scheduled_task_type_supported(task_type: object) -> None:
+    if is_unsupported_scheduled_task_type(task_type):
+        raise UnsupportedScheduledTaskError(task_type)
+
+
 def _positive_seconds(value: object) -> float | None:
     try:
         seconds = float(value)  # type: ignore[arg-type]
@@ -50,6 +76,7 @@ class TaskScheduler:
         self._max_task_attempts = max_task_attempts
 
     def schedule(self, task: ScheduledTask) -> None:
+        assert_scheduled_task_type_supported(task.payload.get("task_type"))
         con = get_engagement_db(self._db_path)
         max_attempts = _positive_int(task.payload.get("max_attempts")) or self._resolved_max_task_attempts()
         try:

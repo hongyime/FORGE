@@ -3706,6 +3706,7 @@ def test_launch_route_rejects_overlapping_running_engagement_run(tmp_path: Path,
     [
         "exploit:correlate",
         "exploit:safe_check",
+        "exploit:weaponize",
         "post:lateral",
         "auth:spray",
         "unknown:thing",

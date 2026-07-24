@@ -25,7 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: scheduled offensive task fail-closed hardening is complete.
+Latest checkpoint: offensive scheduled-task queue-source hardening is complete.
+Playbook scheduling, automation `_next_steps`, breach-triggered zero-to-DA,
+RCE-triggered automation, direct `/api/tasks/enqueue`, and
+`TaskScheduler.schedule()` now share a fail-closed denied scheduled-task policy
+for `spray`, `safe_check`, and `weaponize`. Denied task types are blocked
+before distributed-task insertion or queue publish, web/API denial records
+sanitized audit rows, and automation execute remains limited to the existing
+passive/recon allowlist. Verification: py_compile passed for touched
+backend/test files, Ruff passed for touched files, distributed
+scheduler/runnable admission suite passed (`30 passed`), focused playbook
+trigger/admission selector passed (`10 passed, 19 deselected`), web enqueue
+preflight suite passed (`7 passed`), automation execute API selector passed (`6
+passed, 47 deselected`), full playbook integration suite passed (`29 passed`),
+full distributed suite passed (`35 passed`), full web engagement API suite
+passed (`53 passed`), `git diff --check` passed, and no
+`.forge_data/engagements` leftovers were present.
+
+Next checkpoint: continue the automated artifact discovery chain with one more
+current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
+identity/provider-shape gap. Prefer compact focused regression coverage and keep
+implementation passive/proof-bound: recursive seeds/cloud refs only unless an
+explicitly scoped live check is already required by the validation contract.
+
+Previous checkpoint: scheduled offensive task fail-closed hardening is complete.
 `run_scheduled_task()` now explicitly denies scheduled `spray`, `safe_check`,
 and `weaponize` tasks before ROE/scope checks or handler dispatch. The legacy
 scheduler imports and dispatch branches for those offensive stubs were removed,
@@ -35,18 +58,6 @@ payload carries valid-looking ROE and scope context. Verification: focused
 distributed scheduler scope suite passed (`22 passed`), full distributed suite
 passed (`32 passed`), py_compile passed for touched files, Ruff passed for
 touched files, and `git diff --check` passed.
-
-Next checkpoint: block offensive playbook/API queue sources before scheduler
-insertion. `run_zero_to_da()` and `run_rce_hunter()` must not queue `spray`,
-`safe_check`, or `weaponize` as `_next_steps` or event-driven tasks, and
-`/api/tasks/enqueue` should reject those denied task types before
-`TaskScheduler.schedule()`. Prefer a shared fail-closed policy helper so
-playbook scheduling, web/API enqueue, and `run_scheduled_task()` cannot drift.
-Focus files/tests: `forge/utils/playbooks/__init__.py`,
-`forge/utils/automation.py`, `forge/webui/app.py`,
-`forge/webui/automation_scope.py`, `tests/integration/test_playbooks.py`, and
-`tests/integration/test_webui_scope_preflight.py`. Keep this backend-only and
-do not weaken ROE/scope checks.
 
 Previous checkpoint: current-user provider proof-hash hardening is complete.
 Vercel, Netlify, Notion, and PostHog validation details now include a

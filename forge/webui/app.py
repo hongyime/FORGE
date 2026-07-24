@@ -64,6 +64,7 @@ from forge.webui.automation_scope import (
     AutomationScopeError,
     assert_automation_scope_context_valid,
     assert_automation_target_in_scope,
+    assert_web_task_type_allowed,
     audit_automation_scope_denial,
     audit_scope_denial,
     require_web_task_scope_context,
@@ -2204,6 +2205,7 @@ def create_app() -> Any:
         payload["task_type"] = task_type
         payload["target"] = target
         try:
+            assert_web_task_type_allowed(task_type)
             require_web_task_scope_context(payload, "task scheduling")
             assert_automation_scope_context_valid(payload)
             if target:

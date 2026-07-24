@@ -5,7 +5,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, List
 
-from forge.distributed.scheduler import ScheduledTask, TaskScheduler
+from forge.distributed.scheduler import (
+    ScheduledTask,
+    TaskScheduler,
+    assert_scheduled_task_type_supported,
+)
 
 ROE_SCOPE_CONTEXT_KEYS = (
     "roe_id",
@@ -49,6 +53,10 @@ def inherit_roe_scope_context(
         if key not in inherited and key in parent_metadata:
             inherited[key] = parent_metadata[key]
     return inherited
+
+
+def _task_type_from_action(action: str) -> str:
+    return str(action or "").split(":")[-1].strip().lower()
 
 
 @dataclass
@@ -179,8 +187,10 @@ class PlaybookEngine:
     ):
         if not steps:
             return
+        for step in steps:
+            assert_scheduled_task_type_supported(_task_type_from_action(step.action))
         first_step = steps[0]
-        task_type = first_step.action.split(":")[-1]
+        task_type = _task_type_from_action(first_step.action)
         target = first_step.params.get("target", first_step.params.get("domain", "default"))
         task_key = f"{task_type}:{target}:{int(time.time()*1000)}"
         payload = inherit_roe_scope_context(

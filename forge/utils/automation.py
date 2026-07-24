@@ -10,7 +10,11 @@ from typing import Any
 from forge.config import ForgeConfig
 from forge.db.session import get_engagement_db
 from forge.distributed.coordinator import QueueCoordinator
-from forge.distributed.scheduler import TaskScheduler
+from forge.distributed.scheduler import (
+    TaskScheduler,
+    UnsupportedScheduledTaskError,
+    is_unsupported_scheduled_task_type,
+)
 from forge.reporting.dashboard import _reportable_vulnerability_rows
 from forge.utils.playbooks import (
     PlaybookEngine,
@@ -90,6 +94,8 @@ class AutomationEngine:
                         n_action = next_step_data["action"]
                         n_params = next_step_data["params"]
                         n_task_type = n_action.split(":")[-1]
+                        if is_unsupported_scheduled_task_type(n_task_type):
+                            return
                         n_target = n_params.get("target", n_params.get("domain", "default"))
                         
                         import time
@@ -101,7 +107,13 @@ class AutomationEngine:
                         )
                         if not has_required_roe_scope_context(n_payload):
                             return
-                        if remaining:
+                        remaining_supported = []
+                        for step in remaining:
+                            step_action = str(step.get("action") or "")
+                            if is_unsupported_scheduled_task_type(step_action.split(":")[-1]):
+                                break
+                            remaining_supported.append(step)
+                        if remaining_supported:
                             n_payload["_next_steps"] = [
                                 {
                                     "action": step["action"],
@@ -110,7 +122,7 @@ class AutomationEngine:
                                         step["params"],
                                     ),
                                 }
-                                for step in remaining
+                                for step in remaining_supported
                             ]
                             
                         from forge.distributed.scheduler import ScheduledTask
@@ -133,11 +145,14 @@ class AutomationEngine:
                 # Just get the latest credential id as a simplification for trigger
                 row = conn.execute("SELECT id FROM credentials ORDER BY id DESC LIMIT 1").fetchone()
                 if row:
-                    self.playbooks.run_zero_to_da(
-                        engagement_id,
-                        row["id"],
-                        context=parent_context,
-                    )
+                    try:
+                        self.playbooks.run_zero_to_da(
+                            engagement_id,
+                            row["id"],
+                            context=parent_context,
+                        )
+                    except UnsupportedScheduledTaskError:
+                        return
 
         # Cloud Leak playbook trigger disabled — no cloud-secret model exists yet.
         # The credentials table has no 'description' column, and breach credentials
@@ -167,12 +182,15 @@ class AutomationEngine:
                     ).fetchone()
                     if not host_row:
                         continue
-                    self.playbooks.run_rce_hunter(
-                        engagement_id,
-                        str(row["id"]),
-                        host_row["ip"],
-                        context=parent_context,
-                    )
+                    try:
+                        self.playbooks.run_rce_hunter(
+                            engagement_id,
+                            str(row["id"]),
+                            host_row["ip"],
+                            context=parent_context,
+                        )
+                    except UnsupportedScheduledTaskError:
+                        return
                     break
 
     def _handle_task_failed(self, engagement_id: int, task_key: str, error: str):

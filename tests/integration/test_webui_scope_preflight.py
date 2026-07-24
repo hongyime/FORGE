@@ -142,6 +142,42 @@ def test_task_enqueue_rejects_mismatched_scope_manifest_before_queue(
     assert "reason=roe_id_scope_manifest_mismatch" in audit_row[1]
 
 
+def test_task_enqueue_rejects_offensive_task_type_before_queue(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = _prepare(tmp_path, monkeypatch)
+    scope_manifest = {"roe_id": "ROE-WEB-2026-07", "domains": ["app.acme.example"]}
+
+    app = create_app()
+    with TestClient(app) as client:
+        for task_type in ("spray", "safe_check", "weaponize"):
+            response = client.post(
+                "/api/tasks/enqueue",
+                json={
+                    "engagement_id": 1001,
+                    "task_type": task_type,
+                    "target": "https://app.acme.example",
+                    "roe_id": "ROE-WEB-2026-07",
+                    "scope_manifest": scope_manifest,
+                },
+                headers=_auth_headers(),
+            )
+
+            assert response.status_code == 400, response.text
+            assert "unsupported_scheduled_task" in response.text
+            assert _queued_count(db_path) == 0
+            audit_row = _latest_denial(
+                db_path,
+                "scheduled_task",
+                "scheduled_task_scope_denied",
+            )
+            assert audit_row is not None
+            assert audit_row[0] == "https://app.acme.example"
+            assert f"task_type={task_type}" in audit_row[1]
+            assert "reason=unsupported_scheduled_task" in audit_row[1]
+
+
 def test_task_enqueue_preserves_roe_scope_context(
     tmp_path: Path,
     monkeypatch,

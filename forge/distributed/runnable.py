@@ -8,6 +8,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from forge.db.session import get_engagement_db
+from forge.distributed.scheduler import (
+    UNSUPPORTED_SCHEDULED_TASK_REASON,
+    is_unsupported_scheduled_task_type,
+)
 from forge.phase1.crawler import crawl_target_sync
 from forge.phase1.port_scanner import scan_engagement_enhanced
 from forge.phase1.stealth_recon import run_crawl_stealth, run_searxng_passive
@@ -21,7 +25,6 @@ from forge.phase4.cloud_validate import (
 )
 
 
-_UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES = {"safe_check", "spray", "weaponize"}
 _SENSITIVE_SCHEDULED_TASK_TYPES = {
     "auth-bypass",
     "ports",
@@ -366,12 +369,12 @@ def run_scheduled_task(
     task_type = str(task_type_raw or "").strip().lower()
     target = str(target_raw or "").strip()
 
-    if task_type in _UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES:
+    if is_unsupported_scheduled_task_type(task_type):
         _deny_scheduled_task(
             engagement_id,
             task_type,
             target,
-            "unsupported_scheduled_task",
+            UNSUPPORTED_SCHEDULED_TASK_REASON,
             db_path,
             action="scheduled_task_denied",
         )

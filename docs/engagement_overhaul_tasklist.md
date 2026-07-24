@@ -91,18 +91,32 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: block offensive playbook/API queue sources before
-  scheduler insertion. `run_zero_to_da()` and `run_rce_hunter()` must not queue
-  `spray`, `safe_check`, or `weaponize` as `_next_steps` or event-driven tasks,
-  and `/api/tasks/enqueue` should reject those denied task types before
-  `TaskScheduler.schedule()`. Prefer a shared fail-closed policy helper so
-  playbook scheduling, web/API enqueue, and `run_scheduled_task()` cannot drift.
-  Focus files/tests: `forge/utils/playbooks/__init__.py`,
-  `forge/utils/automation.py`, `forge/webui/app.py`,
-  `forge/webui/automation_scope.py`, `tests/integration/test_playbooks.py`,
-  `tests/integration/test_webui_scope_preflight.py`, and the relevant
-  engagement API enqueue selectors. Keep this backend-only and do not weaken
-  ROE/scope checks.
+- [ ] Next checkpoint: continue the automated artifact discovery chain with one
+  more current-code-audited passive parser/OCR gap, provider-proof hardening
+  gap, or identity/provider-shape gap. Prefer a high-value path with compact
+  focused regression coverage, and keep implementation passive/proof-bound:
+  recursive seeds/cloud refs only unless an explicitly scoped live check is
+  already required by the validation contract.
+- [x] Offensive scheduled-task queue-source hardening checkpoint:
+  Playbook scheduling, automation `_next_steps`, breach-triggered zero-to-DA,
+  RCE-triggered automation, direct `/api/tasks/enqueue`, and
+  `TaskScheduler.schedule()` now share a fail-closed denied scheduled-task
+  policy for `spray`, `safe_check`, and `weaponize`. Denied task types are
+  blocked before distributed-task insertion or queue publish, web/API denial
+  records sanitized audit rows, and automation execute remains limited to the
+  existing passive/recon allowlist. Existing direct stub tests still prove the
+  underlying offensive handlers are not implemented. This does not add live
+  probes, credential attacks, exploitation behavior, scope relaxation, provider
+  concurrency changes, proxy/IP rotation, or post-exploitation execution.
+  Verification: py_compile passed for touched backend/test files, Ruff passed
+  for touched files, distributed scheduler/runnable admission suite passed
+  (`30 passed`), focused playbook trigger/admission selector passed (`10
+  passed, 19 deselected`), web enqueue preflight suite passed (`7 passed`),
+  automation execute API selector passed (`6 passed, 47 deselected`), full
+  playbook integration suite passed (`29 passed`), full distributed suite passed
+  (`35 passed`), full web engagement API suite passed (`53 passed`),
+  `git diff --check` passed, and no `.forge_data/engagements` leftovers were
+  present.
 - [x] Scheduled offensive task fail-closed checkpoint:
   `run_scheduled_task()` now explicitly denies scheduled `spray`, `safe_check`,
   and `weaponize` tasks before ROE/scope checks or handler dispatch. The legacy

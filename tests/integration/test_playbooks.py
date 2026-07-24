@@ -10,6 +10,7 @@ from forge.phase1.stealth_recon import run_searxng_passive
 from forge.phase4.cloud_validate import run_cloud_validate
 from forge.phase4.rce_hunter import run_safe_check, run_weaponize
 from forge.phase4.spray import run_spray
+from forge.distributed.scheduler import UnsupportedScheduledTaskError
 from forge.utils.automation import AutomationEngine, EXECUTABLE_AUTOMATION_ACTIONS
 from forge.utils.playbooks import PlaybookAuthorizationError, PlaybookEngine, PlaybookStep
 from forge.utils.playbooks.cloud_leak import run_cloud_leak_playbook
@@ -128,10 +129,9 @@ def test_playbook_steps_propagate_roe_scope_context(tmp_path):
             PlaybookStep("recon:crawl", {"target": "https://example.com", **parent_context}),
             PlaybookStep("vuln:passive", {"target": "https://example.com"}),
             PlaybookStep(
-                "exploit:safe_check",
+                "recon:ports",
                 {
-                    "target": "https://example.com",
-                    "vuln_id": "vuln-1",
+                    "target": "example.com",
                     "roe_id": "roe-child",
                     "require_scope_manifest": False,
                 },
@@ -141,15 +141,15 @@ def test_playbook_steps_propagate_roe_scope_context(tmp_path):
 
     payload = scheduler.tasks[0].payload
     passive_params = payload["_next_steps"][0]["params"]
-    safe_check_params = payload["_next_steps"][1]["params"]
+    ports_params = payload["_next_steps"][1]["params"]
     assert passive_params["roe_id"] == "roe-parent"
     assert passive_params["scope_manifest"] == scope_manifest
     assert passive_params["require_roe"] is True
     assert passive_params["require_scope_manifest"] is True
-    assert safe_check_params["roe_id"] == "roe-child"
-    assert safe_check_params["scope_manifest"] == scope_manifest
-    assert safe_check_params["require_roe"] is True
-    assert safe_check_params["require_scope_manifest"] is False
+    assert ports_params["roe_id"] == "roe-child"
+    assert ports_params["scope_manifest"] == scope_manifest
+    assert ports_params["require_roe"] is True
+    assert ports_params["require_scope_manifest"] is False
 
     db_path = tmp_path / "engagement.db"
     parent_task_key = "custom:parent"
@@ -166,10 +166,9 @@ def test_playbook_steps_propagate_roe_scope_context(tmp_path):
                 },
             },
             {
-                "action": "exploit:safe_check",
+                "action": "recon:ports",
                 "params": {
-                    "target": "https://example.com",
-                    "vuln_id": "vuln-1",
+                    "target": "example.com",
                     "require_scope_manifest": False,
                 },
             },
@@ -200,6 +199,113 @@ def test_playbook_steps_propagate_roe_scope_context(tmp_path):
     assert remaining_params["scope_manifest"] == scope_manifest
     assert remaining_params["require_roe"] is True
     assert remaining_params["require_scope_manifest"] is False
+
+
+@pytest.mark.parametrize(
+    ("action", "params", "expected_task_type"),
+    [
+        (
+            "exploit:spray",
+            {"credential_id": 42, "target": "https://example.com"},
+            "spray",
+        ),
+        (
+            "exploit:safe_check",
+            {"target": "https://example.com", "vuln_id": "vuln-1"},
+            "safe_check",
+        ),
+        (
+            "exploit:weaponize",
+            {"target": "https://example.com", "vuln_id": "vuln-1"},
+            "weaponize",
+        ),
+    ],
+)
+def test_playbook_engine_rejects_offensive_steps_before_queue(
+    action: str,
+    params: dict[str, object],
+    expected_task_type: str,
+) -> None:
+    scheduler = RecordingScheduler()
+    playbooks = PlaybookEngine(scheduler)
+    context = {
+        "roe_id": "roe-parent",
+        "scope_manifest": {"roe_id": "roe-parent", "domains": ["example.com"]},
+    }
+
+    with pytest.raises(UnsupportedScheduledTaskError, match=expected_task_type):
+        playbooks._execute_steps(
+            7,
+            [
+                PlaybookStep("recon:crawl", {"target": "https://example.com"}),
+                PlaybookStep(action, params),
+            ],
+            context=context,
+        )
+
+    assert scheduler.tasks == []
+
+
+def test_automation_chained_next_step_rejects_offensive_task_before_queue(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    context = {
+        "roe_id": "roe-parent",
+        "scope_manifest": {"roe_id": "roe-parent", "domains": ["example.com"]},
+        "require_roe": True,
+        "require_scope_manifest": True,
+    }
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE distributed_tasks (engagement_id INTEGER, task_key TEXT, payload TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO distributed_tasks (engagement_id, task_key, payload) VALUES (?, ?, ?)",
+            (
+                7,
+                "custom:parent",
+                json.dumps(
+                    {
+                        "task_type": "crawl",
+                        "target": "https://example.com",
+                        **context,
+                        "_next_steps": [
+                            {
+                                "action": "exploit:safe_check",
+                                "params": {
+                                    "target": "https://example.com",
+                                    "vuln_id": "vuln-1",
+                                },
+                            }
+                        ],
+                    }
+                ),
+            ),
+        )
+
+    scheduler = RecordingScheduler()
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    automation.scheduler = scheduler
+    automation._handle_task_done(7, "custom:parent")
+
+    assert scheduler.tasks == []
+
+
+def test_offensive_playbook_methods_reject_before_queue() -> None:
+    scheduler = RecordingScheduler()
+    playbooks = PlaybookEngine(scheduler)
+    context = {
+        "roe_id": "roe-parent",
+        "scope_manifest": {"roe_id": "roe-parent", "domains": ["example.com"]},
+    }
+
+    with pytest.raises(UnsupportedScheduledTaskError, match="spray"):
+        playbooks.run_zero_to_da(7, 42, context=context)
+
+    with pytest.raises(UnsupportedScheduledTaskError, match="safe_check"):
+        playbooks.run_rce_hunter(7, "vuln-1", "https://example.com", context=context)
+
+    assert scheduler.tasks == []
 
 
 def test_cloud_leak_loop_requires_roe_scope_context():
@@ -238,7 +344,7 @@ def test_cloud_leak_loop_schedules_key_validation_with_roe_scope_context():
     assert task.payload["require_scope_manifest"] is True
 
 
-def test_automation_triggered_playbook_preserves_roe_scope_context(tmp_path):
+def test_automation_triggered_offensive_playbook_is_not_queued(tmp_path):
     db_path = tmp_path / "engagement.db"
     context = {
         "roe_id": "roe-parent",
@@ -268,12 +374,7 @@ def test_automation_triggered_playbook_preserves_roe_scope_context(tmp_path):
     automation.playbooks = PlaybookEngine(scheduler)
     automation._handle_task_done(7, "osint:breach_check:one")
 
-    payload = scheduler.tasks[0].payload
-    assert payload["task_type"] == "spray"
-    assert payload["roe_id"] == "roe-parent"
-    assert payload["scope_manifest"] == context["scope_manifest"]
-    assert payload["require_roe"] is True
-    assert payload["require_scope_manifest"] is True
+    assert scheduler.tasks == []
 
 
 def test_automation_triggered_playbook_suppresses_without_roe_scope_context(tmp_path):
@@ -416,6 +517,70 @@ def test_automation_rce_trigger_ignores_unreportable_non_rce_findings(tmp_path):
                  'Validated Firebase data exposure',
                  'Stale deterministic row should not trigger RCE automation.',
                  'manual note only', 'firebase', 'stale-firebase')
+            """
+        )
+        conn.commit()
+
+    scheduler = RecordingScheduler()
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    automation.scheduler = scheduler
+    automation.playbooks = PlaybookEngine(scheduler)
+    automation._handle_task_done(7, "vuln:passive:https://app.acme.example")
+
+    assert scheduler.tasks == []
+
+
+def test_automation_rce_trigger_does_not_queue_offensive_playbook(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    context = {
+        "roe_id": "roe-parent",
+        "scope_manifest": {"roe_id": "roe-parent", "domains": ["10.0.0.5"]},
+        "require_roe": True,
+        "require_scope_manifest": True,
+    }
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(vulnerability_findings)").fetchall()
+        }
+        if "host_id" not in columns:
+            conn.execute("ALTER TABLE vulnerability_findings ADD COLUMN host_id INTEGER")
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["10.0.0.5"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO distributed_tasks (engagement_id, task_key, payload)
+            VALUES (?, ?, ?)
+            """,
+            (
+                7,
+                "vuln:passive:https://app.acme.example",
+                json.dumps({"task_type": "passive", **context}),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO hosts (id, engagement_id, ip, hostname)
+            VALUES (5, 7, '10.0.0.5', 'app.acme.example')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, host_id, vuln_type, target_url, parameter,
+                 severity, title, description, evidence)
+            VALUES
+                (7, 5, 'RCE', 'https://app.acme.example', 'q',
+                 'CRITICAL', 'Remote code execution candidate',
+                 'Reportable RCE candidate should not queue safe_check.',
+                 'deterministic local fixture')
             """
         )
         conn.commit()

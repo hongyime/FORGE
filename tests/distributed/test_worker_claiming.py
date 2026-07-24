@@ -3,9 +3,15 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from forge.db.session import get_engagement_db
 from forge.distributed.coordinator import QueueCoordinator
-from forge.distributed.scheduler import ScheduledTask, TaskScheduler
+from forge.distributed.scheduler import (
+    ScheduledTask,
+    TaskScheduler,
+    UnsupportedScheduledTaskError,
+)
 from forge.distributed.worker import Worker
 
 
@@ -41,6 +47,29 @@ def test_scheduler_claims_a_queued_task_once(tmp_path: Path) -> None:
             "SELECT status, worker_id FROM distributed_tasks WHERE engagement_id=1"
         ).fetchone()
     assert row == ("done", "worker-a")
+
+
+@pytest.mark.parametrize("task_type", ["spray", "safe_check", "weaponize"])
+def test_scheduler_rejects_offensive_task_types_before_insert(
+    tmp_path: Path,
+    task_type: str,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _seed_engagement(db_path)
+    queue = QueueCoordinator()
+    scheduler = TaskScheduler(db_path=db_path, queue=queue)
+
+    with pytest.raises(UnsupportedScheduledTaskError, match=task_type):
+        scheduler.schedule(
+            ScheduledTask(1, f"{task_type}:blocked", {"task_type": task_type})
+        )
+
+    with sqlite3.connect(db_path) as con:
+        queued = con.execute(
+            "SELECT COUNT(*) FROM distributed_tasks WHERE engagement_id=1"
+        ).fetchone()[0]
+    assert queued == 0
+    assert queue.consume_topic("forge.tasks", timeout_seconds=0.01) is None
 
 
 def test_worker_treats_queue_message_as_wakeup_not_authority(tmp_path: Path) -> None:
