@@ -91,6 +91,17 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Live API audit-manifest verification parity checkpoint:
+  Live `/api/engagements` summaries now use the same verified latest-run audit
+  manifest default as static dashboard/detail payloads, and
+  `/api/engagements/{ref}/runs` now verifies manifests by default. Operators
+  can still request the cheaper non-verifying run list with
+  `?verify_manifests=false`, which returns `not_checked` explicitly instead of
+  silently drifting from dashboard review semantics. Verification: compile
+  passed; Ruff passed; focused web API route contract passed (`1 passed`);
+  adjacent static slug/detail dashboard contract passed (`1 passed`); pytest
+  engagement cleanup reported `removed=3 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-live-api-audit-manifest-parity.md`.
 - [x] Canonical graph artifact isolation checkpoint:
   Static dashboard and live web API graph artifact discovery now only accept
   manifest-defined graph filenames for each engagement:

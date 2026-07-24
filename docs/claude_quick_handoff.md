@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: canonical graph artifact isolation is complete. Static
+Latest checkpoint: live API audit-manifest verification parity is complete.
+Live `/api/engagements` summaries now use the same verified latest-run audit
+manifest default as static dashboard/detail payloads, and
+`/api/engagements/{ref}/runs` verifies manifests by default. Operators can
+still request the cheaper non-verifying run list with
+`?verify_manifests=false`, which returns `not_checked` explicitly instead of
+silently drifting from dashboard review semantics. Verification:
+compile/Ruff passed; focused web API route contract passed (`1 passed`);
+adjacent static slug/detail dashboard contract passed (`1 passed`); pytest
+engagement cleanup reported `removed=3 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-live-api-audit-manifest-parity.md`.
+
+Current next gate: audit another concrete dashboard/API/report artifact or
+validation-review parity gap. Prefer mocked route-contract regressions over
+broad feature work unless a deterministic kill-chain acceptance gate is failing.
+
+Previous checkpoint: canonical graph artifact isolation is complete. Static
 dashboard and live web API graph artifact discovery now only accept
 manifest-defined graph filenames for each engagement:
 `{id}_attack_graph.json`, `.graphml`, `.mtgx`, `_nodes.csv`, and `_edges.csv`.
@@ -35,12 +51,6 @@ downloaded through the live artifact endpoint. Verification: compile/Ruff
 passed; focused dashboard/API graph/report prefix collision slice passed (`5
 passed`); pytest engagement cleanup reported `removed=2 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-canonical-graph-artifact-isolation.md`.
-
-Current next gate: fix live API audit-manifest verification parity. A subagent
-found that static dashboard verifies latest run manifests by default, while
-live `/api/engagements` and default `/api/engagements/{ref}/runs` currently
-return `verification_status: not_checked`. Prefer explicit default parity with
-static dashboard unless a documented performance reason requires an opt-out.
 
 Previous checkpoint: report artifact/API isolation is complete. Static
 dashboard and live web API report/audit discovery now require ID-delimited

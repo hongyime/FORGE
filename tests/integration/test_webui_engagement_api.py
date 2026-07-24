@@ -318,7 +318,8 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["run_summary"]["metadata"]["phase"] == "completed"
         list_manifest = items[0]["run_summary"]["audit_manifest"]
         assert list_manifest["present"] is True
-        assert list_manifest["verification_status"] == "not_checked"
+        assert list_manifest["verification_status"] == "verified"
+        assert list_manifest["verified"] is True
         assert list_manifest["short_hash"] == list_manifest["manifest_hash"][:12]
         assert items[0]["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
         assert items[0]["run_summary"]["live_probing_allowed"] is True
@@ -406,15 +407,15 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         runs_resp = client.get("/api/engagements/engagement-1001-acme-example/runs", headers=headers)
         assert runs_resp.status_code == 200, runs_resp.text
         runs = runs_resp.json()["items"]
-        assert runs[0]["audit_manifest"]["verification_status"] == "not_checked"
+        assert runs[0]["audit_manifest"]["verification_status"] == "verified"
         assert runs[0]["audit_manifest"]["short_hash"] == list_manifest["short_hash"]
 
-        verified_runs_resp = client.get(
-            "/api/engagements/engagement-1001-acme-example/runs?verify_manifests=true",
+        unverified_runs_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/runs?verify_manifests=false",
             headers=headers,
         )
-        assert verified_runs_resp.status_code == 200, verified_runs_resp.text
-        assert verified_runs_resp.json()["items"][0]["audit_manifest"]["verification_status"] == "verified"
+        assert unverified_runs_resp.status_code == 200, unverified_runs_resp.text
+        assert unverified_runs_resp.json()["items"][0]["audit_manifest"]["verification_status"] == "not_checked"
 
         artifact_resp = client.get(
             "/api/engagements/engagement-1001-acme-example/artifacts/"

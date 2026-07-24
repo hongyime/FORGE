@@ -919,7 +919,6 @@ def create_app() -> Any:
                 con,
                 engagement_id,
                 db_path=db_file,
-                verify_manifest=False,
             ),
             "seed_graph_summary": _seed_graph_summary(con, engagement_id),
             "report_count": len(report_files),
@@ -1844,7 +1843,7 @@ def create_app() -> Any:
     @app.get("/api/engagements/{engagement_ref}/runs")
     def list_engagement_runs(
         engagement_ref: str,
-        verify_manifests: bool = False,
+        verify_manifests: bool = True,
         _subject: str = Depends(_auth_subject),
     ) -> dict[str, list[dict[str, Any]]]:
         resolved = _resolve_engagement_db(engagement_ref)
