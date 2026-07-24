@@ -13527,8 +13527,22 @@ def kill_chain(
         )
         return sum(1 for seed_value, _depth in pending_rows if _url_seed_is_in_scope(seed_value))
 
+    def _pending_root_domain_count(completed_domains: set[str]) -> int:
+        if dry_run_all or not root_domains:
+            return 0
+        return sum(
+            1
+            for root_domain in root_domains
+            if _resume_normalize(str(root_domain or "")) not in completed_domains
+        )
+
     def _pending_work_counts() -> dict[str, int]:
         counts = {
+            "root_subdomain_domains": _pending_root_domain_count(completed_a_domains),
+            "root_harvest_domains": _pending_root_domain_count(completed_b_domains),
+            "root_dns_domains": _pending_root_domain_count(completed_dns_domains),
+            "root_rdap_domains": _pending_root_domain_count(completed_rdap_domains),
+            "root_archive_domains": _pending_root_domain_count(completed_wayback_domains),
             "url_seeds": _pending_url_seed_count(),
             "emails": len(_load_new_emails(processed_emails, max_workers=parallel_workers)),
             "social_handles": len(

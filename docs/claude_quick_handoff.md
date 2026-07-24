@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: DNS/RDAP/Wayback provider-status gating is complete. DNS
+Latest checkpoint: stable-loop retry budgeting is complete for A/B/G/H/I. The
+spider stability gate now counts root-domain fan-outs A, B, G, H, and I as
+pending work whenever a root domain is not in that fan-out's completed set.
+This fixes the confirmed gap where failed seed-runs were retryable in state but
+the loop exited as stable because `_snapshot()` does not count `seed_runs`.
+Completed/skipped true no-data outcomes remain terminal; `dry_run_all` and
+rootless engagements contribute zero root pending work. Verification: focused
+provider/root retry suite passed (`5 passed`), root-domain idempotency passed
+(`1 passed`), recursive retry-state suite passed (`7 passed`), adjacent
+DNS/RDAP/Wayback bounded parse tests passed with explicit ROE/scope env (`2
+passed`), Ruff passed for touched files, py_compile passed for touched files,
+and sidecar audit confirmed the approach with the B2/D3/D4 caveat.
+
+Next checkpoint: audit first-iteration-only B2/D3/D4 provider scheduling. Do
+not add B2/D3/D4 to stable-loop pending counts unless their scheduling is also
+changed so failed pending domains can actually dispatch on later iterations.
+Patch only if the retry path can stay bounded, provider-paced, ROE/scope-gated,
+and terminal for completed/skipped no-data outcomes.
+
+Previous checkpoint: DNS/RDAP/Wayback provider-status gating is complete. DNS
 record lookup, RDAP, Wayback, and Common Crawl results now carry status/error
 metadata through G/H/I seed-run finalization. Transient provider/network
 failures finalize as `failed`; RDAP 404/no-data and test DNS suppression remain
@@ -33,19 +52,7 @@ intentional terminal skips; true empty DNS/archive results remain terminal
 completed no-data. Fan-out I records per-provider archive statuses and partial
 provider errors while keeping useful URLs if one archive provider succeeds.
 Failed G/H/I rows are not added to completed-domain sets, so they are
-retryable on resumed kill-chain runs. Verification: focused provider-status
-regressions passed (`3 passed`), root-domain idempotency passed (`1 passed`),
-recursive retry-state suite passed (`7 passed`), adjacent DNS/RDAP/Wayback
-bounded parse tests passed with explicit ROE/scope env (`2 passed`), Ruff
-passed for touched files, and py_compile passed for touched files.
-
-Next checkpoint: audit stable-loop termination versus retryable provider/tool
-failures. Patch only confirmed cases where a failed provider/tool outcome
-should schedule a bounded later-iteration retry inside the same kill-chain run
-without creating tight retry loops, weakening provider pacing, or making true
-no-data outcomes non-terminal. Current invariant: retryable failed G/H/I
-provider runs retry on resumed kill-chain invocation; same-run retry requires a
-separate explicit slow-and-steady budget decision.
+retryable on resumed kill-chain runs.
 
 Previous checkpoint: D5 URL/root-domain same-run retry gating is complete. D5
 URL seed fetches with empty/failed payloads now finalize as failed with

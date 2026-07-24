@@ -5,6 +5,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from tests.phase1.test_kill_chain_retry_state import _direct_batch, _write_report_if_requested
 
 ROOT_DOMAIN = "acme.example"
@@ -20,11 +22,30 @@ def _install_status_case_fakes(
     monkeypatch,
     factories: dict[str, Callable[[str], dict[str, Any]]],
     attempts: list[tuple[str, str]],
+    *,
+    module_fail_stages: set[str] | None = None,
 ) -> None:
     def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
         del kwargs
         module_argv = tuple(str(item) for item in cmd_argv)
+        stage = ""
+        target = ""
+        if module_argv[:2] == ("recon", "subdomains") and "--domain" in module_argv:
+            stage = "A"
+            target = module_argv[module_argv.index("--domain") + 1]
+        elif module_argv[:2] == ("osint", "harvest") and "--domain" in module_argv:
+            stage = "B"
+            target = module_argv[module_argv.index("--domain") + 1]
+        if stage:
+            attempts.append((stage, target))
         _write_report_if_requested(module_argv, tmp_path)
+        if stage and stage in (module_fail_stages or set()):
+            return subprocess.CompletedProcess(
+                ["forge", *module_argv],
+                1,
+                stdout="",
+                stderr=f"simulated {stage} failure",
+            )
         return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
 
     def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
@@ -81,6 +102,7 @@ def _run_status_case(
     *,
     max_iter: int,
     runs: int = 1,
+    module_fail_stages: set[str] | None = None,
 ) -> tuple[Path, list[tuple[str, str]]]:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
@@ -97,7 +119,13 @@ def _run_status_case(
         encoding="utf-8",
     )
     attempts: list[tuple[str, str]] = []
-    _install_status_case_fakes(tmp_path, monkeypatch, factories, attempts)
+    _install_status_case_fakes(
+        tmp_path,
+        monkeypatch,
+        factories,
+        attempts,
+        module_fail_stages=module_fail_stages,
+    )
 
     from forge.cli import kill_chain
 
@@ -199,8 +227,7 @@ def test_provider_failures_finalize_failed_and_retry(tmp_path: Path, monkeypatch
                 error="wayback:timeout; commoncrawl:timeout",
             ),
         },
-        max_iter=1,
-        runs=2,
+        max_iter=2,
     )
 
     assert attempts.count(("G", ROOT_DOMAIN)) == 2
@@ -212,6 +239,62 @@ def test_provider_failures_finalize_failed_and_retry(tmp_path: Path, monkeypatch
         for loop in PROVIDER_LOOPS.values()
     }
     assert failed_by_loop == {loop: 2 for loop in PROVIDER_LOOPS.values()}
+
+
+@pytest.mark.parametrize(
+    ("failed_stage", "failed_loop"),
+    [
+        ("A", "fanout_a_subdomains"),
+        ("B", "fanout_b_harvest"),
+    ],
+)
+def test_root_tool_failure_keeps_same_run_retry_budget_alive(
+    tmp_path: Path,
+    monkeypatch,
+    failed_stage: str,
+    failed_loop: str,
+) -> None:
+    db_path, attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(domain, "completed"),
+        },
+        max_iter=2,
+        module_fail_stages={failed_stage},
+    )
+
+    assert attempts.count((failed_stage, ROOT_DOMAIN)) == 2
+    for completed_stage in {"A", "B"} - {failed_stage}:
+        assert attempts.count((completed_stage, ROOT_DOMAIN)) == 1
+    assert attempts.count(("G", ROOT_DOMAIN)) == 1
+    assert attempts.count(("H", ROOT_DOMAIN)) == 1
+    assert attempts.count(("I", ROOT_DOMAIN)) == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        failed_a_runs = con.execute(
+            """
+            SELECT sr.status, sr.error
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND es.seed_value=?
+              AND sr.loop_name=?
+              AND sr.status='failed'
+            ORDER BY sr.id
+            """,
+            (ROOT_DOMAIN, failed_loop),
+        ).fetchall()
+    finally:
+        con.close()
+    assert len(failed_a_runs) == 2
+    assert all(
+        f"simulated {failed_stage} failure" in str(error or "")
+        for _status, error in failed_a_runs
+    )
 
 
 def test_provider_true_no_data_is_terminal(tmp_path: Path, monkeypatch) -> None:

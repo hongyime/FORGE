@@ -91,14 +91,27 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit stable-loop termination versus retryable
-  provider/tool failures. Patch only confirmed cases where a failed
-  provider/tool outcome should schedule a bounded later-iteration retry inside
-  the same kill-chain run without creating tight retry loops, weakening
-  provider pacing, or making true no-data outcomes non-terminal. Current
-  invariant: retryable failed G/H/I provider runs are retried on resumed
-  kill-chain invocation; same-run retry requires a separate explicit
-  slow-and-steady budget decision.
+- [ ] Next checkpoint: audit first-iteration-only B2/D3/D4 provider scheduling.
+  Do not add B2/D3/D4 to stable-loop pending counts unless their scheduling is
+  also changed so failed pending domains can actually dispatch on later
+  iterations. Patch only if the retry path can stay bounded, provider-paced,
+  ROE/scope-gated, and terminal for completed/skipped no-data outcomes.
+- [x] Stable-loop retry budget checkpoint:
+  The spider stability gate now counts root-domain fan-outs A, B, G, H, and I
+  as pending work whenever a root domain is not in that fan-out's completed set.
+  This fixes the confirmed gap where failed seed-runs were correctly left
+  retryable, but `_snapshot()` row counts did not include `seed_runs`, causing
+  the loop to exit as stable before using the remaining `max_iter` retry
+  budget. Completed/skipped true no-data outcomes still enter completed sets
+  and remain terminal. `dry_run_all` and rootless engagements contribute zero
+  root pending work, avoiding dry-run retry loops. B2/D3/D4 are intentionally
+  not counted in this checkpoint because they are still first-iteration-only
+  fan-outs. Verification: focused provider/root retry suite passed (`5
+  passed`), root-domain idempotency passed (`1 passed`), recursive retry-state
+  suite passed (`7 passed`), adjacent DNS/RDAP/Wayback bounded parse tests
+  passed with explicit ROE/scope env (`2 passed`), Ruff passed for touched
+  files, py_compile passed for touched files, and sidecar audit confirmed the
+  A/B/G/H/I approach with the B2/D3/D4 caveat.
 - [x] DNS/RDAP/Wayback provider-status checkpoint:
   DNS enrichment now carries status/error/provider metadata from record lookup
   through G seed-run finalization. Missing `dnspython`, resolver/runtime
