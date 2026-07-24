@@ -5905,7 +5905,26 @@ def _graphql_config_artifact_label(value: str) -> str:
     return ""
 
 
+def _buf_config_artifact_label(value: str) -> str:
+    normalized = str(value or "").strip().replace("\\", "/").strip("/").lower()
+    if not normalized:
+        return ""
+    name = Path(normalized).name
+    return {
+        "buf.yaml": "buf-config",
+        "buf.yml": "buf-config",
+        "buf.gen.yaml": "buf-generation-config",
+        "buf.gen.yml": "buf-generation-config",
+        "buf.work.yaml": "buf-workspace",
+        "buf.work.yml": "buf-workspace",
+        "buf.lock": "buf-lock",
+    }.get(name, "")
+
+
 def _interface_definition_artifact_label(value: str) -> str:
+    buf_label = _buf_config_artifact_label(value)
+    if buf_label:
+        return buf_label
     name = Path(str(value or "").strip().replace("\\", "/")).name.lower()
     suffix = Path(name).suffix.lower()
     return {
@@ -6241,6 +6260,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _graphql_config_artifact_label(raw_lowered):
         return True
+    if _buf_config_artifact_label(raw_lowered):
+        return True
     if _iac_manifest_artifact_label(raw_lowered):
         return True
     if _looks_like_gcloud_text_config_artifact_name(raw_lowered):
@@ -6480,6 +6501,9 @@ def _artifact_format_label(value: str | Path) -> str:
     graphql_config_label = _graphql_config_artifact_label(str(value or ""))
     if graphql_config_label:
         return graphql_config_label
+    buf_config_label = _buf_config_artifact_label(str(value or ""))
+    if buf_config_label:
+        return buf_config_label
     iac_manifest_label = _iac_manifest_artifact_label(str(value or ""))
     if iac_manifest_label:
         return iac_manifest_label
@@ -31539,9 +31563,13 @@ class ArtifactQueueProcessor:
         *,
         source_hint: str = "",
     ) -> str:
-        if not _interface_definition_artifact_label(source_hint):
+        source_label = _interface_definition_artifact_label(source_hint)
+        if not source_label:
             return ""
-        raw_values = self._interface_definition_text_candidate_values(text)
+        raw_values = self._interface_definition_text_candidate_values(
+            text,
+            source_hint=source_hint,
+        )
         candidate_entries = self._run_ordered_local_batch(
             raw_values,
             self._interface_definition_url_candidate_entry,
@@ -31557,7 +31585,12 @@ class ArtifactQueueProcessor:
             lines.append(normalized)
         return "\n".join(lines)
 
-    def _interface_definition_text_candidate_values(self, text: str) -> list[str]:
+    def _interface_definition_text_candidate_values(
+        self,
+        text: str,
+        *,
+        source_hint: str = "",
+    ) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
         if not parse_text.strip():
             return []
@@ -31595,18 +31628,27 @@ class ArtifactQueueProcessor:
             re.IGNORECASE | re.VERBOSE,
         )
 
+        is_buf_config = bool(_buf_config_artifact_label(source_hint))
+        pattern_jobs: list[tuple[str, Any, str]] = [
+            ("key_value", key_value_pattern, parse_text),
+            ("xml_attr", xml_attr_pattern, parse_text),
+            ("proto_option", proto_option_pattern, parse_text),
+        ]
+        if is_buf_config:
+            pattern_jobs.append(("buf_registry", self._buf_config_registry_ref_pattern(), parse_text))
+
         candidates: list[tuple[int, str]] = []
         pattern_batches = self._run_ordered_local_batch(
-            [
-                ("key_value", key_value_pattern, parse_text),
-                ("xml_attr", xml_attr_pattern, parse_text),
-                ("proto_option", proto_option_pattern, parse_text),
-            ],
+            pattern_jobs,
             self._interface_definition_pattern_candidates,
             default_factory=list,
         )
         for batch in pattern_batches:
             candidates.extend(batch)
+        if is_buf_config:
+            offset = len(parse_text) + 1
+            for index, value in enumerate(self._buf_config_document_candidate_values(parse_text)):
+                candidates.append((offset + index, value))
         candidates.sort(key=lambda item: item[0])
         return [value for _position, value in candidates[:512]]
 
@@ -31625,6 +31667,71 @@ class ArtifactQueueProcessor:
     @staticmethod
     def _interface_definition_url_candidate_entry(raw_value: str) -> str:
         return ArtifactQueueProcessor._api_spec_url_candidate_entry(raw_value)
+
+    @staticmethod
+    def _buf_config_registry_ref_pattern() -> re.Pattern[str]:
+        return re.compile(
+            r"""
+            (?P<value>
+                (?:
+                    (?:https?://)?buf\.build
+                    |
+                    (?:https?://)?(?:[A-Za-z0-9-]+\.)*buf[A-Za-z0-9-]*
+                    \.[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+                )
+                /
+                [A-Za-z0-9_.-]{1,128}
+                /
+                [A-Za-z0-9_.-]{1,128}
+                (?:/[A-Za-z0-9_.@+-]{1,128}){0,8}
+            )
+            """,
+            re.IGNORECASE | re.VERBOSE,
+        )
+
+    def _buf_config_document_candidate_values(self, text: str) -> list[str]:
+        document = self._api_spec_load_document(text)
+        if not isinstance(document, (dict, list)):
+            return []
+        return self._buf_config_node_candidate_values(document, depth=0)[:256]
+
+    def _buf_config_node_candidate_values(self, value: Any, *, depth: int) -> list[str]:
+        if depth > 10:
+            return []
+        candidates: list[str] = []
+        if isinstance(value, dict):
+            normalized = self._yaml_normalized_mapping(value)
+            triplet = self._buf_config_module_triplet_candidate(normalized)
+            if triplet:
+                candidates.append(triplet)
+            for child in list(value.values())[:512]:
+                candidates.extend(self._buf_config_node_candidate_values(child, depth=depth + 1))
+            return candidates
+        if isinstance(value, list):
+            for child in value[:512]:
+                candidates.extend(self._buf_config_node_candidate_values(child, depth=depth + 1))
+            return candidates
+        if isinstance(value, (str, int, float)):
+            return [
+                match.group("value")
+                for match in self._buf_config_registry_ref_pattern().finditer(str(value))
+            ][:32]
+        return []
+
+    @classmethod
+    def _buf_config_module_triplet_candidate(cls, mapping: dict[str, Any]) -> str:
+        remote = cls._yaml_ref_value(mapping, "remote")
+        owner = cls._yaml_ref_value(mapping, "owner")
+        repository = cls._yaml_ref_value(mapping, "repository", "repo")
+        if not remote or not owner or not repository:
+            return ""
+        owner = owner.strip("/")
+        repository = repository.strip("/").split(":", 1)[0]
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", owner):
+            return ""
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", repository):
+            return ""
+        return f"{remote.rstrip('/')}/{owner}/{repository}"
 
     def _yaml_goreleaser_config_structured_candidates(
         self,

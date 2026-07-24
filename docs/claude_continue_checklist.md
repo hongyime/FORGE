@@ -72,6 +72,19 @@ historical notes only, not as current instructions.
   focused regression coverage, and keep implementation passive/proof-bound:
   recursive seeds/cloud refs only unless an explicitly scoped live check is
   already required by the validation contract.
+- [x] Buf/Protobuf registry config artifact checkpoint:
+  `buf.yaml`, `buf.yml`, `buf.gen.yaml`, `buf.gen.yml`, `buf.work.yaml`,
+  `buf.work.yml`, and `buf.lock` are now first-class static config artifacts.
+  The existing interface-definition structured discovery path extracts passive
+  Buf Schema Registry pivots such as `buf.build/org/repo`, plugin remotes, custom
+  Buf registry FQDNs, and split lock tuples (`remote`/`owner`/`repository`) into
+  recursive URL seeds. This remains static-only: no Buf CLI execution, registry
+  fetch, schema resolution, credential validation, or live probing was added.
+  Verification: focused Buf/interface worker and pipeline tests passed (`4
+  passed`), adjacent API-format/interface ingestion tests passed (`2 passed`),
+  py_compile passed for touched files, Ruff passed for touched files,
+  `git diff --check` passed, and no `.forge_data/engagements` leftovers were
+  present.
 - [x] Offensive scheduled-task queue-source hardening checkpoint:
   Playbook scheduling, automation `_next_steps`, breach-triggered zero-to-DA,
   RCE-triggered automation, direct `/api/tasks/enqueue`, and

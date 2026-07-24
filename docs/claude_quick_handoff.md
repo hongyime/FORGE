@@ -25,9 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: offensive scheduled-task queue-source hardening is complete.
-Playbook scheduling, automation `_next_steps`, breach-triggered zero-to-DA,
-RCE-triggered automation, direct `/api/tasks/enqueue`, and
+Latest checkpoint: Buf/Protobuf registry config static artifact discovery is
+complete. `buf.yaml`, `buf.yml`, `buf.gen.yaml`, `buf.gen.yml`,
+`buf.work.yaml`, `buf.work.yml`, and `buf.lock` are now first-class static
+config artifacts. The interface-definition structured discovery path extracts
+passive Buf Schema Registry pivots such as `buf.build/org/repo`, plugin
+remotes, custom Buf registry FQDNs, and split lock tuples
+(`remote`/`owner`/`repository`) into recursive URL seeds. No Buf CLI execution,
+registry fetch, schema resolution, credential validation, or live probing was
+added. Verification: focused Buf/interface worker and pipeline tests passed
+(`4 passed`), adjacent API-format/interface ingestion tests passed (`2 passed`),
+py_compile passed for touched files, Ruff passed for touched files,
+`git diff --check` passed, and no `.forge_data/engagements` leftovers were
+present.
+
+Next checkpoint: continue the automated artifact discovery chain with one more
+current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
+identity/provider-shape gap. Prefer compact focused regression coverage and keep
+implementation passive/proof-bound: recursive seeds/cloud refs only unless an
+explicitly scoped live check is already required by the validation contract.
+
+Previous checkpoint: offensive scheduled-task queue-source hardening is
+complete. Playbook scheduling, automation `_next_steps`, breach-triggered
+zero-to-DA, RCE-triggered automation, direct `/api/tasks/enqueue`, and
 `TaskScheduler.schedule()` now share a fail-closed denied scheduled-task policy
 for `spray`, `safe_check`, and `weaponize`. Denied task types are blocked
 before distributed-task insertion or queue publish, web/API denial records
@@ -41,12 +61,6 @@ passed, 47 deselected`), full playbook integration suite passed (`29 passed`),
 full distributed suite passed (`35 passed`), full web engagement API suite
 passed (`53 passed`), `git diff --check` passed, and no
 `.forge_data/engagements` leftovers were present.
-
-Next checkpoint: continue the automated artifact discovery chain with one more
-current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
-identity/provider-shape gap. Prefer compact focused regression coverage and keep
-implementation passive/proof-bound: recursive seeds/cloud refs only unless an
-explicitly scoped live check is already required by the validation contract.
 
 Previous checkpoint: scheduled offensive task fail-closed hardening is complete.
 `run_scheduled_task()` now explicitly denies scheduled `spray`, `safe_check`,
