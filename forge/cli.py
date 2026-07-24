@@ -13540,6 +13540,9 @@ def kill_chain(
         counts = {
             "root_subdomain_domains": _pending_root_domain_count(completed_a_domains),
             "root_harvest_domains": _pending_root_domain_count(completed_b_domains),
+            "root_linkedin_domains": _pending_root_domain_count(completed_b2_domains),
+            "root_shodan_domains": _pending_root_domain_count(completed_d3_domains),
+            "root_urlscan_domains": _pending_root_domain_count(completed_d4_domains),
             "root_dns_domains": _pending_root_domain_count(completed_dns_domains),
             "root_rdap_domains": _pending_root_domain_count(completed_rdap_domains),
             "root_archive_domains": _pending_root_domain_count(completed_wayback_domains),
@@ -13743,28 +13746,27 @@ def kill_chain(
             skipped_b2_domains: list[str] = []
             pending_b2_norms: set[str] = set()
             skipped_b2_norms: set[str] = set()
-            if iteration == 1:
-                pending_b2_domains, skipped_b2_domains = _partition_root_domains(
-                    root_domains,
-                    completed_domains=completed_b2_domains,
-                    max_workers=parallel_workers,
-                    progress_label=f"{iteration}.B2 root-domain prep",
-                    progress_callback=_record_batch_progress,
-                )
-                pending_b2_norms = _collect_normalized_value_set(
-                    pending_b2_domains,
-                    normalizer=_resume_normalize,
-                    max_workers=parallel_workers,
-                    progress_label=f"{iteration}.B2 pending-domain norm prep",
-                    progress_callback=_record_batch_progress,
-                )
-                skipped_b2_norms = _collect_normalized_value_set(
-                    skipped_b2_domains,
-                    normalizer=_resume_normalize,
-                    max_workers=parallel_workers,
-                    progress_label=f"{iteration}.B2 skipped-domain norm prep",
-                    progress_callback=_record_batch_progress,
-                )
+            pending_b2_domains, skipped_b2_domains = _partition_root_domains(
+                root_domains,
+                completed_domains=completed_b2_domains,
+                max_workers=parallel_workers,
+                progress_label=f"{iteration}.B2 root-domain prep",
+                progress_callback=_record_batch_progress,
+            )
+            pending_b2_norms = _collect_normalized_value_set(
+                pending_b2_domains,
+                normalizer=_resume_normalize,
+                max_workers=parallel_workers,
+                progress_label=f"{iteration}.B2 pending-domain norm prep",
+                progress_callback=_record_batch_progress,
+            )
+            skipped_b2_norms = _collect_normalized_value_set(
+                skipped_b2_domains,
+                normalizer=_resume_normalize,
+                max_workers=parallel_workers,
+                progress_label=f"{iteration}.B2 skipped-domain norm prep",
+                progress_callback=_record_batch_progress,
+            )
             b_specs: list[ModuleDispatchSpec] = []
             if len(root_domains) > 1 and parallel_workers > 1:
                 _log(
@@ -13778,8 +13780,8 @@ def kill_chain(
                     "normalized_root_domain": _resume_normalize(root_domain),
                     "skip_b": _resume_normalize(root_domain) in skipped_b_norms,
                     "run_b": _resume_normalize(root_domain) in pending_b_norms,
-                    "skip_b2": iteration == 1 and _resume_normalize(root_domain) in skipped_b2_norms,
-                    "run_b2": iteration == 1 and _resume_normalize(root_domain) in pending_b2_norms,
+                    "skip_b2": _resume_normalize(root_domain) in skipped_b2_norms,
+                    "run_b2": _resume_normalize(root_domain) in pending_b2_norms,
                     "dispatch_specs": [
                         *(
                             [
@@ -13822,7 +13824,7 @@ def kill_chain(
                                     metadata={"iteration": iteration},
                                 )
                             ]
-                            if iteration == 1 and _resume_normalize(root_domain) in pending_b2_norms
+                            if _resume_normalize(root_domain) in pending_b2_norms
                             else []
                         ),
                     ],
@@ -14234,12 +14236,12 @@ def kill_chain(
                  f"gh_orgs={len(mined['github_orgs'])}")
 
             # ─── Fan-out D3: Shodan enrichment per host discovered ───
-            # Runs only on iteration 1 for the seed domain. Domain mode
+            # Runs once per root unless a prior attempt failed. Domain mode
             # uses /dns/resolve and capped /shodan/host IP enrichment.
             # Persists discovered hosts + services + CVEs into standard tables.
             d_specs: list[ModuleDispatchSpec] = []
             d_schedule_merge_inputs: list[dict[str, object]] = []
-            if iteration == 1 and root_domains:
+            if root_domains:
                 pending_d3_domains, skipped_d3_domains = _partition_root_domains(
                     root_domains,
                     completed_domains=completed_d3_domains,
@@ -14283,9 +14285,9 @@ def kill_chain(
                 )
 
             # ─── Fan-out D4: URLScan.io related-domain discovery ─────
-            # Public search API (100/day anon). Only fires on iteration 1
-            # for the seed domain to conserve rate limit.
-            if iteration == 1 and root_domains:
+            # Public search API (100/day anon). Completed roots stay terminal;
+            # failed roots retry only within the existing max-iteration budget.
+            if root_domains:
                 pending_d4_domains, skipped_d4_domains = _partition_root_domains(
                     root_domains,
                     completed_domains=completed_d4_domains,
@@ -14352,7 +14354,7 @@ def kill_chain(
                     d_returncodes = _run_module_batch(
                         d_specs,
                         _run_module,
-                        max_workers=parallel_workers,
+                        max_workers=d_provider_workers,
                         progress_label=f"{iteration}.D passive enrichers",
                         progress_callback=_record_batch_progress,
                     )

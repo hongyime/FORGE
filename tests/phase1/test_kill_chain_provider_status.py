@@ -36,6 +36,15 @@ def _install_status_case_fakes(
         elif module_argv[:2] == ("osint", "harvest") and "--domain" in module_argv:
             stage = "B"
             target = module_argv[module_argv.index("--domain") + 1]
+        elif module_argv[:2] == ("osint", "linkedin") and "--domain" in module_argv:
+            stage = "B2"
+            target = module_argv[module_argv.index("--domain") + 1]
+        elif module_argv[:2] == ("osint", "shodan") and "--target" in module_argv:
+            stage = "D3"
+            target = module_argv[module_argv.index("--target") + 1]
+        elif module_argv[:2] == ("osint", "urlscan") and "--hostname" in module_argv:
+            stage = "D4"
+            target = module_argv[module_argv.index("--hostname") + 1]
         if stage:
             attempts.append((stage, target))
         _write_report_if_requested(module_argv, tmp_path)
@@ -170,6 +179,23 @@ def _provider_seed_runs(db_path: Path) -> list[tuple[str, str, str, dict[str, An
     ]
 
 
+def _latest_run_metadata(db_path: Path) -> dict[str, Any]:
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        con.close()
+    return json.loads(str((row or ["{}"])[0] or "{}"))
+
+
 def _dns_result(domain: str, status: str, error: str = "") -> dict[str, Any]:
     return {
         "root_domain": domain,
@@ -242,10 +268,13 @@ def test_provider_failures_finalize_failed_and_retry(tmp_path: Path, monkeypatch
 
 
 @pytest.mark.parametrize(
-    ("failed_stage", "failed_loop"),
+    ("failed_stage", "failed_loop", "pending_key"),
     [
-        ("A", "fanout_a_subdomains"),
-        ("B", "fanout_b_harvest"),
+        ("A", "fanout_a_subdomains", "root_subdomain_domains"),
+        ("B", "fanout_b_harvest", "root_harvest_domains"),
+        ("B2", "fanout_b2_linkedin", "root_linkedin_domains"),
+        ("D3", "fanout_d3_shodan", "root_shodan_domains"),
+        ("D4", "fanout_d4_urlscan", "root_urlscan_domains"),
     ],
 )
 def test_root_tool_failure_keeps_same_run_retry_budget_alive(
@@ -253,6 +282,7 @@ def test_root_tool_failure_keeps_same_run_retry_budget_alive(
     monkeypatch,
     failed_stage: str,
     failed_loop: str,
+    pending_key: str,
 ) -> None:
     db_path, attempts = _run_status_case(
         tmp_path,
@@ -267,7 +297,7 @@ def test_root_tool_failure_keeps_same_run_retry_budget_alive(
     )
 
     assert attempts.count((failed_stage, ROOT_DOMAIN)) == 2
-    for completed_stage in {"A", "B"} - {failed_stage}:
+    for completed_stage in {"A", "B", "B2", "D3", "D4"} - {failed_stage}:
         assert attempts.count((completed_stage, ROOT_DOMAIN)) == 1
     assert attempts.count(("G", ROOT_DOMAIN)) == 1
     assert attempts.count(("H", ROOT_DOMAIN)) == 1
@@ -295,6 +325,10 @@ def test_root_tool_failure_keeps_same_run_retry_budget_alive(
         f"simulated {failed_stage} failure" in str(error or "")
         for _status, error in failed_a_runs
     )
+    run_metadata = _latest_run_metadata(db_path)
+    assert run_metadata["pending_work_counts"][pending_key] == 1
+    assert run_metadata["pending_work_total"] >= 1
+    assert run_metadata["last_iteration_stable"] is False
 
 
 def test_provider_true_no_data_is_terminal(tmp_path: Path, monkeypatch) -> None:

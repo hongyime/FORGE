@@ -25,24 +25,37 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: stable-loop retry budgeting is complete for A/B/G/H/I. The
+Latest checkpoint: B2/D3/D4 bounded retry scheduling is complete. B2 LinkedIn,
+D3 Shodan, and D4 URLScan no longer have first-iteration-only dispatch gates.
+They now partition pending root domains every iteration, rely on existing
+completed-domain sets for terminal completed/skipped outcomes, and retry failed
+non-zero subprocess runs only inside the existing `max_iter` budget.
+Stable-loop pending counts now include `root_linkedin_domains`,
+`root_shodan_domains`, and `root_urlscan_domains` because those stages now have
+a later-iteration dispatch path. D3/D4 command arguments, scope-manifest
+propagation, provider endpoints, and provider pacing remain unchanged; D
+passive dispatch now uses the existing provider-bounded worker count directly.
+Verification: focused provider/root retry suite passed (`8 passed`) with
+run-metadata pending-key assertions, dry-run D3/D4 skip regressions passed (`2
+passed`), root-domain idempotency passed (`1 passed`), recursive retry-state
+suite passed (`7 passed`), adjacent DNS/RDAP/Wayback bounded parse tests passed
+with explicit ROE/scope env (`2 passed`), Ruff passed for touched files,
+py_compile passed for touched files, and sidecar audit confirmed the paired
+scheduling + pending-count change.
+
+Next checkpoint: audit synthesized root-domain scope gating before
+A/B/B2/D3/D4/G/H/I scheduling and pending-count retry budgeting. Confirm
+`_refresh_root_domains()` cannot promote out-of-scope roots into passive
+provider dispatch or stable-loop pending counts; patch only scope-filtering
+gaps with focused regressions.
+
+Previous checkpoint: stable-loop retry budgeting is complete for A/B/G/H/I. The
 spider stability gate now counts root-domain fan-outs A, B, G, H, and I as
 pending work whenever a root domain is not in that fan-out's completed set.
 This fixes the confirmed gap where failed seed-runs were retryable in state but
 the loop exited as stable because `_snapshot()` does not count `seed_runs`.
 Completed/skipped true no-data outcomes remain terminal; `dry_run_all` and
-rootless engagements contribute zero root pending work. Verification: focused
-provider/root retry suite passed (`5 passed`), root-domain idempotency passed
-(`1 passed`), recursive retry-state suite passed (`7 passed`), adjacent
-DNS/RDAP/Wayback bounded parse tests passed with explicit ROE/scope env (`2
-passed`), Ruff passed for touched files, py_compile passed for touched files,
-and sidecar audit confirmed the approach with the B2/D3/D4 caveat.
-
-Next checkpoint: audit first-iteration-only B2/D3/D4 provider scheduling. Do
-not add B2/D3/D4 to stable-loop pending counts unless their scheduling is also
-changed so failed pending domains can actually dispatch on later iterations.
-Patch only if the retry path can stay bounded, provider-paced, ROE/scope-gated,
-and terminal for completed/skipped no-data outcomes.
+rootless engagements contribute zero root pending work.
 
 Previous checkpoint: DNS/RDAP/Wayback provider-status gating is complete. DNS
 record lookup, RDAP, Wayback, and Common Crawl results now carry status/error

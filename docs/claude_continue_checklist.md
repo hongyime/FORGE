@@ -66,11 +66,29 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit first-iteration-only B2/D3/D4 provider scheduling.
-  Do not add B2/D3/D4 to stable-loop pending counts unless their scheduling is
-  also changed so failed pending domains can actually dispatch on later
-  iterations. Patch only if the retry path can stay bounded, provider-paced,
-  ROE/scope-gated, and terminal for completed/skipped no-data outcomes.
+- [ ] Next checkpoint: audit synthesized root-domain scope gating before
+  A/B/B2/D3/D4/G/H/I scheduling and pending-count retry budgeting. Confirm
+  `_refresh_root_domains()` cannot promote out-of-scope roots into passive
+  provider dispatch or stable-loop pending counts; patch only scope-filtering
+  gaps with focused regressions.
+- [x] B2/D3/D4 bounded retry scheduling checkpoint:
+  B2 LinkedIn, D3 Shodan, and D4 URLScan no longer have first-iteration-only
+  dispatch gates. They now partition pending root domains every iteration, rely
+  on their existing completed-domain sets for terminal completed/skipped
+  outcomes, and retry failed non-zero subprocess runs only within the existing
+  `max_iter` budget. Stable-loop pending counts now include
+  `root_linkedin_domains`, `root_shodan_domains`, and `root_urlscan_domains`,
+  but only because those stages now have a later-iteration dispatch path. D3/D4
+  command arguments, scope-manifest propagation, provider endpoints, and
+  provider pacing remain unchanged; D passive dispatch now uses the existing
+  provider-bounded worker count directly. Verification: focused provider/root
+  retry suite passed (`8 passed`) with run-metadata pending-key assertions,
+  dry-run D3/D4 skip regressions passed (`2 passed`), root-domain idempotency
+  passed (`1 passed`), recursive retry-state suite passed (`7 passed`),
+  adjacent DNS/RDAP/Wayback bounded parse tests passed with explicit ROE/scope
+  env (`2 passed`), Ruff passed for touched files, py_compile passed for
+  touched files, and sidecar audit confirmed the paired scheduling + pending
+  count change.
 - [x] Stable-loop retry budget checkpoint:
   The spider stability gate now counts root-domain fan-outs A, B, G, H, and I
   as pending work whenever a root domain is not in that fan-out's completed set.
