@@ -26,7 +26,7 @@ def _write_mtgx_graph(path: Path, graphml: str) -> None:
         archive.writestr("Graphs/Graph1.graphml", graphml.strip())
 
 
-def _build_engagement(tmp_path: Path) -> Path:
+def _build_engagement(tmp_path: Path, *, include_distributed_task: bool = False) -> Path:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"
     db_root = data_dir / "engagements"
@@ -38,6 +38,20 @@ def _build_engagement(tmp_path: Path) -> Path:
     try:
         apply_schema(con)
         run_migrations(con)
+        scoped_task_payload = json.dumps(
+            {
+                "task_type": "validate",
+                "key_id": 42,
+                "roe_id": "ROE-ACME-2026-07",
+                "require_roe": True,
+                "require_scope_manifest": True,
+                "scope_manifest": {
+                    "domains": ["app.acme.example"],
+                    "operator": "delta-one",
+                    "sentinel": "DO-NOT-LEAK-SCOPE-SENTINEL",
+                },
+            }
+        )
         con.execute(
             """
             INSERT INTO engagements (id, name, scope_json, status, operator, metadata_json, created_at, updated_at)
@@ -124,9 +138,20 @@ def _build_engagement(tmp_path: Path) -> Path:
                 (1001, 'kill_chain', 'completed', 'acme.example', 'domain', 3, 4,
                  1, 1, 0, 0, NULL,
                  '{"phase":"completed","roe_id":"ROE-ACME-2026-07","live_execution_policy":{"scope_gate":"engagement_scope_json_root_domains","roe_id":"ROE-ACME-2026-07","roe_present":true,"roe_missing":false,"live_probing_allowed":true,"tool_execution_allowed":true,"active_recon_allowed":false,"credential_validation_allowed":false,"destructive_actions_allowed":false,"post_exploitation_allowed":false,"requires_explicit_roe":false}}',
-                 '2026-07-09T09:00:00', '2026-07-09T09:44:12', '2026-07-09T09:44:12')
+                '2026-07-09T09:00:00', '2026-07-09T09:44:12', '2026-07-09T09:44:12')
             """
         )
+        if include_distributed_task:
+            con.execute(
+                """
+                INSERT INTO distributed_tasks
+                    (engagement_id, task_key, status, priority, payload, worker_id, error, created_at, updated_at)
+                VALUES
+                    (1001, 'validate:key:42:20260709T094414', 'queued', 80, ?, 'worker-a',
+                     NULL, '2026-07-09T09:44:14', '2026-07-09T09:44:15')
+                """,
+                (scoped_task_payload,),
+            )
         con.execute(
             """
             INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context, discovered_at)
@@ -310,7 +335,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("FORGE_ENV", "test")
     monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
     monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
-    _build_engagement(tmp_path)
+    _build_engagement(tmp_path, include_distributed_task=True)
 
     app = create_app()
     with TestClient(app) as client:
@@ -319,6 +344,9 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         list_resp = client.get("/api/engagements", headers=headers)
         assert list_resp.status_code == 200, list_resp.text
         items = list_resp.json()["items"]
+        list_payload_json = json.dumps(items, sort_keys=True)
+        assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in list_payload_json
+        assert "scope_manifest" not in list_payload_json
         assert len(items) == 1
         assert items[0]["slug"] == "engagement-1001-acme-example"
         assert items[0]["detail_route"] == "/engagements/engagement-1001-acme-example"
@@ -329,6 +357,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["severity_summary"]["HIGH"] == 1
         assert items[0]["counts"]["seed_runs"] == 1
         assert items[0]["counts"]["engagement_runs"] == 1
+        assert items[0]["counts"]["distributed_tasks"] == 1
         assert items[0]["report_count"] == 4
         assert items[0]["audit_count"] == 2
         assert items[0]["counts"]["email_intelligence"] == 2
@@ -353,6 +382,9 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
         assert detail_resp.status_code == 200, detail_resp.text
         detail = detail_resp.json()
+        detail_payload_json = json.dumps(detail, sort_keys=True)
+        assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_payload_json
+        assert "scope_manifest" not in detail_payload_json
         assert detail["id"] == 1001
         assert detail["tags"] == ["external", "priority-high"]
         assert detail["graph_summary"]["nodes"] == 3
@@ -419,6 +451,25 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert detail["sections"]["engagement_runs"][0]["Live"] == "probe=yes tools=yes active=no creds=no"
         assert detail["sections"]["engagement_runs"][0]["Destructive"] == "no"
         assert detail["sections"]["engagement_runs"][0]["Post-Ex"] == "no"
+        assert detail["counts"]["distributed_tasks"] == 1
+        task_row = detail["sections"]["distributed_tasks"][0]
+        assert task_row == {
+            "Task Key": "validate:key:42:20260709T094414",
+            "Type": "validate",
+            "Status": "queued",
+            "Priority": "80",
+            "Worker ID": "worker-a",
+            "ROE Context": "yes",
+            "Scope Manifest": "yes",
+            "Created": "2026-07-09 09:44:14",
+            "Updated": "2026-07-09 09:44:15",
+            "Error": "",
+        }
+        task_row_json = json.dumps(task_row, sort_keys=True)
+        assert "scope_manifest" not in task_row_json
+        assert "domains" not in task_row_json
+        assert "ROE-ACME-2026-07" not in task_row_json
+        assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in task_row_json
         assert detail["run_summary"]["current_iteration"] == 1
         assert detail["run_summary"]["metadata"]["phase"] == "completed"
         assert detail["run_summary"]["audit_manifest"]["verification_status"] == "verified"

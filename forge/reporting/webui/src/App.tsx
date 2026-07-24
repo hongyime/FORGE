@@ -628,6 +628,7 @@ const SECTION_TITLES: Record<string, string> = {
   seed_relations: 'Seed relations',
   seed_runs: 'Seed runs',
   engagement_runs: 'Engagement runs',
+  distributed_tasks: 'Distributed tasks',
   email_intelligence: 'Email intelligence',
   services: 'Services',
   key_scanner_findings: 'Key findings',

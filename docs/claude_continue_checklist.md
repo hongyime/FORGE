@@ -66,11 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add `distributed_tasks` to engagement detail
-  counts/sections for static dashboard JSON and web API detail review. Surface
-  safe scheduling state only: task key, status, priority, worker ID, error,
-  timestamps, task type, and boolean ROE/scope-manifest presence. Do not expose
-  full task payloads or scope manifest contents.
+- [ ] Next checkpoint: audit current-code report/export/dashboard/API parity for
+  one concrete review-surface gap, preferably report render-history aggregate
+  stats or provider/export parity found from code evidence. Keep provider calls
+  mocked unless explicit ROE/scope manifest and target are supplied.
+- [x] Distributed task dashboard/API review checkpoint:
+  Engagement detail counts/sections for static dashboard JSON, static dashboard
+  HTML, live web API list/detail review, and React detail labels now expose
+  `distributed_tasks` scheduling inventory using only safe fields: task key,
+  status, priority, worker ID, error, timestamps, task type, and boolean
+  ROE/scope-manifest presence. Full task payloads and scope manifest contents
+  remain omitted and are covered by sentinel non-leak assertions. Verification:
+  compile passed; Ruff passed; frontend build passed; focused dashboard/API
+  route contracts passed (`2 passed`); full static dashboard plus web
+  engagement API suites passed (`79 passed`); workspace `.forge_data/engagements`
+  contained `0` non-master engagement DBs after the run.
 - [x] Explicit cloud-leak validation scheduling checkpoint:
   `PlaybookEngine.run_cloud_leak_loop()` now fails closed without ROE/scope
   context and, when explicitly invoked with an authorized key finding ID, queues

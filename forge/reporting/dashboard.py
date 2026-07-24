@@ -2268,6 +2268,7 @@ def _summary_counts(con: sqlite3.Connection, engagement_id: int) -> dict[str, in
         "seed_runs": 0,
         "engagement_runs": 0,
         "seed_relations": 0,
+        "distributed_tasks": 0,
         "artifact_queue": 0,
         "crawl_results": 0,
         "social_profiles": 0,
@@ -2307,6 +2308,7 @@ def _summary_counts(con: sqlite3.Connection, engagement_id: int) -> dict[str, in
         "seed_runs",
         "engagement_runs",
         "seed_relations",
+        "distributed_tasks",
         "artifact_queue",
         "crawl_results",
         "social_profiles",
@@ -2627,6 +2629,47 @@ def _engagement_run_section_row(
     return result
 
 
+def _distributed_task_payload_has_roe(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return any(payload.get(key) for key in ("roe_id", "roe", "roe_context"))
+
+
+def _distributed_task_payload_has_scope_manifest(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return any(
+        payload.get(key)
+        for key in ("scope_manifest", "scope_manifest_json", "scope_manifest_payload")
+    )
+
+
+def _distributed_task_type(task_key: str, payload: Any) -> str:
+    if isinstance(payload, dict):
+        for key in ("task_type", "type", "loop_name"):
+            value = str(payload.get(key) or "").strip()
+            if value:
+                return _truncate(value, 64)
+    return _truncate(task_key.split(":", 1)[0] if ":" in task_key else task_key, 64)
+
+
+def _distributed_task_section_row(row: sqlite3.Row) -> dict[str, str]:
+    task_key = str(row["task_key"] or "").strip()
+    payload = _safe_json_loads(str(row["payload_json"] or "{}"))
+    return {
+        "Task Key": _truncate(task_key, 120),
+        "Type": _distributed_task_type(task_key, payload),
+        "Status": str(row["status"] or ""),
+        "Priority": str(row["priority"] or ""),
+        "Worker ID": str(row["worker_id"] or ""),
+        "ROE Context": "yes" if _distributed_task_payload_has_roe(payload) else "no",
+        "Scope Manifest": "yes" if _distributed_task_payload_has_scope_manifest(payload) else "no",
+        "Created": _format_dt(str(row["created_at"] or "")),
+        "Updated": _format_dt(str(row["updated_at"] or "")),
+        "Error": _truncate(row["error"], 120),
+    }
+
+
 def _detail_sections(
     con: sqlite3.Connection,
     engagement_id: int,
@@ -2884,6 +2927,61 @@ def _detail_sections(
         )
         for row in engagement_run_rows
     ]
+
+    sections["distributed_tasks"] = []
+    if _table_exists(con, "distributed_tasks"):
+        distributed_task_columns = _table_columns(con, "distributed_tasks")
+
+        def _task_column(column: str, fallback: str) -> str:
+            if column in distributed_task_columns:
+                return f"{column} AS {column}"
+            return f"{fallback} AS {column}"
+
+        payload_expr = (
+            "payload AS payload_json"
+            if "payload" in distributed_task_columns
+            else "NULL AS payload_json"
+        )
+        order_terms = []
+        if "status" in distributed_task_columns:
+            order_terms.append(
+                """
+                CASE status
+                    WHEN 'running' THEN 0
+                    WHEN 'queued' THEN 1
+                    WHEN 'failed' THEN 2
+                    WHEN 'done' THEN 3
+                    WHEN 'completed' THEN 3
+                    ELSE 4
+                END
+                """
+            )
+        if "priority" in distributed_task_columns:
+            order_terms.append("priority ASC")
+        if "updated_at" in distributed_task_columns:
+            order_terms.append("updated_at DESC")
+        order_terms.append("rowid DESC")
+        sections["distributed_tasks"] = [
+            _distributed_task_section_row(row)
+            for row in _fetch_rows(
+                con,
+                f"""
+                SELECT {_task_column("task_key", "''")},
+                       {_task_column("status", "''")},
+                       {_task_column("priority", "100")},
+                       {_task_column("worker_id", "''")},
+                       {_task_column("error", "''")},
+                       {_task_column("created_at", "''")},
+                       {_task_column("updated_at", "''")},
+                       {payload_expr}
+                FROM distributed_tasks
+                WHERE engagement_id=?
+                ORDER BY {", ".join(order_terms)}
+                LIMIT ?
+                """,
+                (engagement_id, SECTION_LIMIT),
+            )
+        ]
 
     sections["services"] = [
         {
@@ -4315,6 +4413,7 @@ def _render_engagement_page(
         "engagement_seeds": "Engagement Seeds",
         "seed_runs": "Recent Seed Runs",
         "engagement_runs": "Recent Engagement Runs",
+        "distributed_tasks": "Distributed Task Queue",
         "services": "Recent Services",
         "key_scanner_findings": "Recent Key Findings",
         "cloud_assets": "Cloud Asset Inventory",

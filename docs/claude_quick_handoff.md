@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: explicit cloud-leak validation scheduling is complete.
+Latest checkpoint: distributed task dashboard/API review is complete.
+Engagement detail counts/sections for static dashboard JSON, static dashboard
+HTML, live web API list/detail review, and React detail labels now expose
+`distributed_tasks` scheduling inventory using only safe fields: task key,
+status, priority, worker ID, error, timestamps, task type, and boolean
+ROE/scope-manifest presence. Full task payloads and scope manifest contents
+remain omitted and are covered by sentinel non-leak assertions. Verification:
+compile passed; Ruff passed; frontend build passed; focused dashboard/API route
+contracts passed (`2 passed`); full static dashboard plus web engagement API
+suites passed (`79 passed`); `.forge_data/engagements` contained `0`
+non-master engagement DBs after the run.
+
+Next checkpoint: audit current-code report/export/dashboard/API parity for one
+concrete review-surface gap, preferably report render-history aggregate stats or
+provider/export parity found from code evidence. Keep provider calls mocked
+unless explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: explicit cloud-leak validation scheduling is complete.
 `PlaybookEngine.run_cloud_leak_loop()` now fails closed without ROE/scope
 context and, when explicitly invoked with an authorized key finding ID, queues
 the existing distributed `validate` worker task with `require_roe` and
@@ -36,12 +53,6 @@ expansion, scope relaxation, or destructive behavior. Verification: compile
 passed; Ruff passed; focused cloud-leak playbook selector passed (`6 passed, 17
 deselected`); full playbook plus distributed runnable scope suites passed (`32
 passed`).
-
-Next checkpoint: add `distributed_tasks` to engagement detail counts/sections
-for static dashboard JSON and web API detail review. Surface safe scheduling
-state only: task key, status, priority, worker ID, error, timestamps, task type,
-and boolean ROE/scope-manifest presence. Do not expose full task payloads or
-scope manifest contents.
 
 Previous checkpoint: report-summary validation inventory parity is complete.
 `report_summary` and every `report_history` item now include compact validation

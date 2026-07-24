@@ -171,6 +171,18 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
                 completed_at TEXT,
                 updated_at TEXT
             );
+            CREATE TABLE distributed_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                task_key TEXT,
+                status TEXT,
+                priority INTEGER,
+                payload TEXT,
+                worker_id TEXT,
+                error TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
             CREATE TABLE run_audit_manifests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 engagement_id INTEGER,
@@ -218,6 +230,20 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
                 dot_output TEXT
             );
             """
+        )
+        scoped_task_payload = json.dumps(
+            {
+                "task_type": "validate",
+                "key_id": 42,
+                "roe_id": "ROE-ACME-2026-07",
+                "require_roe": True,
+                "require_scope_manifest": True,
+                "scope_manifest": {
+                    "domains": ["app.acme.example"],
+                    "operator": "delta-one",
+                    "sentinel": "DO-NOT-LEAK-SCOPE-SENTINEL",
+                },
+            }
         )
         con.execute(
             """
@@ -435,6 +461,16 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
                  '{"phase":"completed","roe_id":"ROE-ACME-2026-07","live_execution_policy":{"scope_gate":"engagement_scope_json_root_domains","roe_id":"ROE-ACME-2026-07","roe_present":true,"roe_missing":false,"live_probing_allowed":true,"tool_execution_allowed":true,"active_recon_allowed":false,"credential_validation_allowed":false,"destructive_actions_allowed":false,"post_exploitation_allowed":false,"requires_explicit_roe":false}}',
                  '2026-07-09T09:00:00', '2026-07-09T09:44:12', '2026-07-09T09:44:12')
             """
+        )
+        con.execute(
+            """
+            INSERT INTO distributed_tasks
+                (engagement_id, task_key, status, priority, payload, worker_id, error, created_at, updated_at)
+            VALUES
+                (1001, 'validate:key:42:20260709T094414', 'queued', 80, ?, 'worker-a',
+                 NULL, '2026-07-09T09:44:14', '2026-07-09T09:44:15')
+            """,
+            (scoped_task_payload,),
         )
         con.execute(
             """
@@ -699,6 +735,9 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "data-finding-count='" in site_html
 
     overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
+    overview_payload_json = json.dumps(overview_payload, sort_keys=True)
+    assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in overview_payload_json
+    assert "scope_manifest" not in overview_payload_json
     assert overview_payload["items"][0]["detail_route"] == "engagements/engagement-1001-acme-example/"
     assert overview_payload["items"][0]["detail_data"] == "data/engagements/engagement-1001-acme-example.json"
     assert overview_payload["items"][0]["tags"] == ["external", "priority-high"]
@@ -708,6 +747,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["audit_count"] == 2
     assert overview_payload["items"][0]["counts"]["seed_runs"] == 1
     assert overview_payload["items"][0]["counts"]["engagement_runs"] == 1
+    assert overview_payload["items"][0]["counts"]["distributed_tasks"] == 1
     assert overview_payload["items"][0]["counts"]["email_intelligence"] == 2
     assert overview_payload["items"][0]["counts"]["account_existence"] == 2
     assert overview_payload["items"][0]["run_summary"]["status"] == "completed"
@@ -739,6 +779,9 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     ]
 
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    detail_payload_json = json.dumps(detail_payload, sort_keys=True)
+    assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_payload_json
+    assert "scope_manifest" not in detail_payload_json
     assert detail_payload["tags"] == ["external", "priority-high"]
     assert detail_payload["report_previews"][0]["name"] == "engagement_1001_report_20260709T014412.md"
     assert detail_payload["report_summary"]["provider"] == "template"
@@ -784,6 +827,23 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     )
     assert detail_payload["sections"]["engagement_runs"][0]["Destructive"] == "no"
     assert detail_payload["sections"]["engagement_runs"][0]["Post-Ex"] == "no"
+    assert detail_payload["counts"]["distributed_tasks"] == 1
+    task_row = detail_payload["sections"]["distributed_tasks"][0]
+    assert task_row == {
+        "Task Key": "validate:key:42:20260709T094414",
+        "Type": "validate",
+        "Status": "queued",
+        "Priority": "80",
+        "Worker ID": "worker-a",
+        "ROE Context": "yes",
+        "Scope Manifest": "yes",
+        "Created": "2026-07-09 09:44:14",
+        "Updated": "2026-07-09 09:44:15",
+        "Error": "",
+    }
+    task_row_json = json.dumps(task_row, sort_keys=True)
+    assert "domains" not in task_row_json
+    assert "ROE-ACME-2026-07" not in task_row_json
     assert detail_payload["sections"]["engagement_seeds"][0]["Band"] in {"confirmed", "medium"}
     assert detail_payload["sections"]["engagement_seeds"][0]["Relations"] in {"0", "2"}
     assert detail_payload["sections"]["seed_relations"][0]["Relation"] == "related_asset"
@@ -849,6 +909,10 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "Report JSON" in detail_html
     assert "Validations" in detail_html
     assert "Reportable" in detail_html
+    assert "Distributed Task Queue" in detail_html
+    assert "validate:key:42:20260709T094414" in detail_html
+    assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_html
+    assert "scope_manifest" not in detail_html
     assert manifest_hash[:12] in detail_html
 
 
