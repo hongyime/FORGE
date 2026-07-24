@@ -26,6 +26,14 @@ def _positive_seconds(value: object) -> float | None:
     return seconds if seconds > 0 else None
 
 
+def _positive_int(value: object) -> int | None:
+    try:
+        number = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
 class TaskScheduler:
     def __init__(
         self,
@@ -33,14 +41,17 @@ class TaskScheduler:
         queue: QueueCoordinator,
         event_publisher: Callable[[int, str, dict[str, Any]], None] | None = None,
         stale_task_seconds: float | None = None,
+        max_task_attempts: int | None = None,
     ) -> None:
         self._db_path = db_path
         self._queue = queue
         self._event_publisher = event_publisher
         self._stale_task_seconds = stale_task_seconds
+        self._max_task_attempts = max_task_attempts
 
     def schedule(self, task: ScheduledTask) -> None:
         con = get_engagement_db(self._db_path)
+        max_attempts = _positive_int(task.payload.get("max_attempts")) or self._resolved_max_task_attempts()
         try:
             con.execute(
                 """
@@ -53,10 +64,23 @@ class TaskScheduler:
             )
             con.execute(
                 """
-                INSERT INTO distributed_tasks (engagement_id, task_key, status, priority, payload)
-                VALUES (?, ?, 'queued', ?, ?)
+                INSERT INTO distributed_tasks (
+                    engagement_id,
+                    task_key,
+                    status,
+                    priority,
+                    payload,
+                    max_attempts
+                )
+                VALUES (?, ?, 'queued', ?, ?, ?)
                 """,
-                (task.engagement_id, task.task_key, task.priority, json.dumps(task.payload)),
+                (
+                    task.engagement_id,
+                    task.task_key,
+                    task.priority,
+                    json.dumps(task.payload),
+                    max_attempts,
+                ),
             )
             metrics = self._snapshot_queue_metrics(con, task.engagement_id)
             con.commit()
@@ -116,10 +140,13 @@ class TaskScheduler:
         metrics: dict[str, int] | None = None
         try:
             con.execute("BEGIN IMMEDIATE")
-            self._requeue_stale_running(con)
+            stale_updates = self._requeue_stale_running(con)
             row = con.execute(select_sql, params).fetchone()
             if row is None:
-                con.rollback()
+                if stale_updates:
+                    con.commit()
+                else:
+                    con.rollback()
                 return None
             claimed = self._claim_row(con, row, worker_id)
             if claimed is None:
@@ -311,13 +338,27 @@ class TaskScheduler:
         task_key = str(row[2])
         payload = self._decode_payload(row[3])
         priority = int(row[4])
+        fallback_max_attempts = self._resolved_max_task_attempts()
         updated = con.execute(
             """
             UPDATE distributed_tasks
-            SET status='running', worker_id=?, error=NULL, updated_at=CURRENT_TIMESTAMP
-            WHERE id=? AND status='queued'
+            SET status='running',
+                worker_id=?,
+                error=NULL,
+                attempt_count=attempt_count + 1,
+                max_attempts=CASE
+                    WHEN max_attempts < 1 THEN ?
+                    ELSE max_attempts
+                END,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+              AND status='queued'
+              AND attempt_count < CASE
+                    WHEN max_attempts < 1 THEN ?
+                    ELSE max_attempts
+              END
             """,
-            (worker_id, task_id),
+            (worker_id, fallback_max_attempts, task_id, fallback_max_attempts),
         ).rowcount
         if updated != 1:
             return None
@@ -342,18 +383,57 @@ class TaskScheduler:
         stale_after_seconds = self._resolved_stale_task_seconds()
         if stale_after_seconds is None:
             return 0
-        return con.execute(
+        stale_rows = con.execute(
             """
-            UPDATE distributed_tasks
-            SET status='queued',
-                worker_id=NULL,
-                error='requeued after stale worker claim',
-                updated_at=CURRENT_TIMESTAMP
+            SELECT id, engagement_id, task_key, attempt_count, max_attempts
+            FROM distributed_tasks
             WHERE status='running'
               AND strftime('%s', 'now') - strftime('%s', updated_at) >= ?
             """,
             (max(1, int(stale_after_seconds)),),
-        ).rowcount
+        ).fetchall()
+        changed = 0
+        for row in stale_rows:
+            task_id = int(row[0])
+            engagement_id = int(row[1])
+            task_key = str(row[2])
+            attempt_count = max(0, int(row[3] or 0))
+            max_attempts = max(1, int(row[4] or self._resolved_max_task_attempts()))
+            if attempt_count >= max_attempts:
+                error = f"stale worker claim attempts exhausted ({attempt_count}/{max_attempts})"
+                changed += con.execute(
+                    """
+                    UPDATE distributed_tasks
+                    SET status='failed',
+                        error=?,
+                        updated_at=CURRENT_TIMESTAMP
+                    WHERE id=? AND status='running'
+                    """,
+                    (error, task_id),
+                ).rowcount
+                con.execute(
+                    """
+                    UPDATE task_progress
+                    SET status='failed',
+                        completed_at=CURRENT_TIMESTAMP,
+                        checkpoint=?
+                    WHERE engagement_id=? AND task_key=?
+                    """,
+                    (json.dumps({"error": error}), engagement_id, task_key),
+                )
+                continue
+            changed += con.execute(
+                """
+                UPDATE distributed_tasks
+                SET status='queued',
+                    worker_id=NULL,
+                    error='requeued after stale worker claim',
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=? AND status='running'
+                """,
+                (task_id,),
+            ).rowcount
+        return changed
 
     def _resolved_stale_task_seconds(self) -> float | None:
         if self._stale_task_seconds is not None:
@@ -368,6 +448,14 @@ class TaskScheduler:
         except Exception:  # noqa: BLE001
             timeout_seconds = None
         return max(60.0, (timeout_seconds or 3600.0) * 2.0)
+
+    def _resolved_max_task_attempts(self) -> int:
+        if self._max_task_attempts is not None:
+            return _positive_int(self._max_task_attempts) or 3
+        raw_value = os.environ.get("FORGE_DISTRIBUTED_TASK_MAX_ATTEMPTS")
+        if raw_value is not None:
+            return _positive_int(raw_value) or 3
+        return 3
 
     def _decode_payload(self, payload_raw: Any) -> dict[str, Any]:
         if not isinstance(payload_raw, str) or not payload_raw:

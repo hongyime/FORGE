@@ -715,6 +715,8 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         payload       TEXT,
         worker_id     TEXT,
         error         TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        max_attempts  INTEGER NOT NULL DEFAULT 3,
         created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (engagement_id, task_key)

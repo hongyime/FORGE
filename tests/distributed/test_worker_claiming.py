@@ -92,3 +92,65 @@ def test_scheduler_reclaims_stale_running_task_once(tmp_path: Path) -> None:
             "SELECT status, worker_id FROM distributed_tasks WHERE engagement_id=1"
         ).fetchone()
     assert row == ("done", "worker-b")
+
+
+def test_scheduler_fails_stale_task_after_attempt_budget(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _seed_engagement(db_path)
+    scheduler = TaskScheduler(
+        db_path=db_path,
+        queue=QueueCoordinator(),
+        stale_task_seconds=1,
+        max_task_attempts=2,
+    )
+    scheduler.schedule(ScheduledTask(1, "validate:key:1", {"task_type": "validate"}))
+    assert scheduler.claim_next("worker-a") is not None
+
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            UPDATE distributed_tasks
+            SET updated_at=datetime('now', '-120 seconds')
+            WHERE engagement_id=1 AND task_key='validate:key:1'
+            """
+        )
+        con.commit()
+
+    reclaimed = scheduler.claim_next("worker-b")
+    assert reclaimed is not None
+
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            UPDATE distributed_tasks
+            SET updated_at=datetime('now', '-120 seconds')
+            WHERE engagement_id=1 AND task_key='validate:key:1'
+            """
+        )
+        con.commit()
+
+    assert scheduler.claim_next("worker-c") is None
+    assert scheduler.mark_done(1, "validate:key:1", "worker-b") is False
+
+    with sqlite3.connect(db_path) as con:
+        row = con.execute(
+            """
+            SELECT status, worker_id, error, attempt_count, max_attempts
+            FROM distributed_tasks
+            WHERE engagement_id=1
+            """
+        ).fetchone()
+        progress = con.execute(
+            """
+            SELECT status, checkpoint
+            FROM task_progress
+            WHERE engagement_id=1 AND task_key='validate:key:1'
+            """
+        ).fetchone()
+
+    assert row[0] == "failed"
+    assert row[1] == "worker-b"
+    assert "attempts exhausted (2/2)" in row[2]
+    assert row[3:] == (2, 2)
+    assert progress[0] == "failed"
+    assert "attempts exhausted" in progress[1]

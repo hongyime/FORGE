@@ -9025,13 +9025,13 @@ above.
   Handoff: `.claude/handoffs/2026-07-24-scheduled-scope-denial-review.md`.
 - [x] Scheduled port scans now require ROE before live probing: `ports` is part of `_SENSITIVE_SCHEDULED_TASK_TYPES`, and the distributed runnable regression proves missing `roe_id` denies before `scan_engagement_enhanced()` is called while scoped ROE-backed execution still passes `scope_override`.
   Verification: `python -m py_compile forge\distributed\runnable.py tests\distributed\test_runnable_scope.py`; `python -m ruff check forge/distributed/runnable.py tests/distributed/test_runnable_scope.py`; `python -m pytest tests/distributed/test_runnable_scope.py` -> `19 passed`.
-- [ ] Next sidecar gap 1: add a retry budget for stale distributed tasks so indefinitely requeued running tasks eventually become terminal failed; start at `forge/distributed/scheduler.py`, `forge/db/schema.py`, and `tests/distributed/test_worker_claiming.py`.
-- [ ] Next sidecar gap 2: make timed-out distributed live/sensitive handlers actually terminate or cooperatively cancel instead of leaving daemon threads running; start at `forge/distributed/worker.py` and `tests/distributed/test_worker_timeouts.py`.
-- [ ] Next sidecar gap 3: if final `report generate` fails, force template/raw fallback or mark the run `completed_degraded` instead of plain `completed`; start at `forge/cli.py` finalization and a focused monkeypatched failure regression.
-- [ ] Next sidecar gap 4: only mark recursive social/phone/IP/name/company/cloud-ref chains processed on completed or intentional skipped outcomes, so failed chains retry in later iterations.
-- [ ] Next sidecar gap 5: replace known-host surface fetch first-20 hard cap with a deterministic host backlog/cursor or completed-host exclusion.
-- [ ] Next sidecar gap 6: prevent high-depth persisted/resumed seeds from executing beyond `synthesis_depth_limit` while still preserving them as inventory.
-- [ ] Next sidecar gap 7: refresh dashboard data on pause/cancel lifecycle exits, not only normal completion.
+- [x] Distributed stale-task retry budget is now bounded: `distributed_tasks` has `attempt_count`/`max_attempts`, migrations upgrade existing DBs, scheduler claims increment attempts, stale running tasks requeue only while attempts remain, and exhausted stale tasks become terminal `failed` with `task_progress` marked failed. Verification: compile/Ruff for scheduler/schema/migration/test files, worker-claiming suite (`4 passed`), distributed scheduler/scope/timeout slice (`24 passed`), and schema migration suite (`4 passed`).
+- [ ] Next sidecar gap 1: make timed-out distributed live/sensitive handlers actually terminate or cooperatively cancel instead of leaving daemon threads running; start at `forge/distributed/worker.py` and `tests/distributed/test_worker_timeouts.py`.
+- [ ] Next sidecar gap 2: if final `report generate` fails, force template/raw fallback or mark the run `completed_degraded` instead of plain `completed`; start at `forge/cli.py` finalization and a focused monkeypatched failure regression.
+- [ ] Next sidecar gap 3: only mark recursive social/phone/IP/name/company/cloud-ref chains processed on completed or intentional skipped outcomes, so failed chains retry in later iterations.
+- [ ] Next sidecar gap 4: replace known-host surface fetch first-20 hard cap with a deterministic host backlog/cursor or completed-host exclusion.
+- [ ] Next sidecar gap 5: prevent high-depth persisted/resumed seeds from executing beyond `synthesis_depth_limit` while still preserving them as inventory.
+- [ ] Next sidecar gap 6: refresh dashboard data on pause/cancel lifecycle exits, not only normal completion.
 
 ## Intentionally gated
 
