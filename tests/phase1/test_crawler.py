@@ -289,6 +289,46 @@ def test_crawl_http_drops_out_of_scope_redirect_final_url(monkeypatch) -> None:
     assert result == []
 
 
+def test_crawl_http_does_not_auto_follow_out_of_prefix_redirect(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _RedirectResponse:
+        status_code = 302
+        headers = {"location": "https://acme.example/admin"}
+        text = ""
+        url = "https://acme.example/app/"
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> _RedirectResponse:
+            calls.append(url)
+            if url == "https://acme.example/admin":
+                raise AssertionError("out-of-prefix redirect must not be fetched")
+            return _RedirectResponse()
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    result = crawler.asyncio.run(
+        crawler._crawl_http(
+            "https://acme.example/app/",
+            depth=1,
+            timeout=1.0,
+            scope_filter=lambda value: value.startswith("https://acme.example/app/"),
+        )
+    )
+
+    assert calls == ["https://acme.example/app/"]
+    assert result == []
+
+
 def test_crawl_target_screenshot_aborts_out_of_scope_browser_redirect(
     tmp_path,
     monkeypatch,

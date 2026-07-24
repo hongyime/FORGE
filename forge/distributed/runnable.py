@@ -38,6 +38,11 @@ _TARGET_SCOPED_TASK_TYPES = {
     "searxng_passive",
     "weaponize",
 }
+_DEFAULT_SCHEDULED_SEARXNG_URLS = {
+    "http://searxng:8080",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+}
 
 
 def _payload_bool(value: object) -> bool:
@@ -46,6 +51,47 @@ def _payload_bool(value: object) -> bool:
     if isinstance(value, (int, float)):
         return bool(value)
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _canonical_provider_base_url(value: str) -> str:
+    parsed = urlparse(str(value or "").strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    path = (parsed.path or "").rstrip("/")
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+
+
+def _scheduled_searxng_allowed_urls() -> set[str]:
+    raw_values = [
+        *_DEFAULT_SCHEDULED_SEARXNG_URLS,
+        *str(
+            os.environ.get("FORGE_SCHEDULED_SEARXNG_ALLOWED_URLS")
+            or os.environ.get("FORGE_SEARXNG_ALLOWED_URLS")
+            or ""
+        ).replace(";", ",").split(","),
+    ]
+    return {
+        canonical
+        for canonical in (_canonical_provider_base_url(item) for item in raw_values)
+        if canonical
+    }
+
+
+def _assert_scheduled_searxng_url(
+    engagement_id: int,
+    task_type: str,
+    searxng_url: str,
+    db_path: Path,
+) -> None:
+    canonical = _canonical_provider_base_url(searxng_url)
+    if canonical not in _scheduled_searxng_allowed_urls():
+        _deny_scheduled_task(
+            engagement_id,
+            task_type,
+            searxng_url,
+            "provider_url_denied",
+            db_path,
+        )
 
 
 def _scope_manifest_ref(payload: dict[str, object]) -> object:
@@ -367,6 +413,7 @@ def run_scheduled_task(
     if task_type == "searxng_passive":
         searxng_url = str(payload.get("searxng_url", "http://searxng:8080"))
         use_tor = bool(payload.get("use_tor", False))
+        _assert_scheduled_searxng_url(engagement_id, task_type, searxng_url, db_path)
         run_searxng_passive(target, searxng_url, use_tor, db_path)
         return
         
@@ -417,21 +464,35 @@ def run_scheduled_task(
     if task_type == "passive":
         if not target:
             raise RuntimeError("passive task requires target.")
+        scope_options = _scheduled_url_fetch_scope_options(
+            engagement_id,
+            task_type,
+            payload,
+            db_path,
+        )
         run_passive_http_collection(
             engagement_id=engagement_id,
             db_path=db_path,
             target_url=target,
             proxy=None,
+            **scope_options,
         )
         return
     if task_type == "auth-bypass":
         if not target:
             raise RuntimeError("auth-bypass task requires target.")
+        scope_options = _scheduled_url_fetch_scope_options(
+            engagement_id,
+            task_type,
+            payload,
+            db_path,
+        )
         run_bypass_assessment(
             engagement_id=engagement_id,
             db_path=db_path,
             target_url=target,
             technique="sql-injection",
+            **scope_options,
         )
         return
     raise RuntimeError(f"unsupported task type for {task_key}: {task_type or 'unknown'}")

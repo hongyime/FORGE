@@ -146,6 +146,43 @@ def test_run_passive_http_collection_denies_db_url_scope_path_drift_before_fetch
         )
 
 
+def test_run_passive_http_collection_uses_explicit_url_prefix_scope(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+    con = get_engagement_db(db_path)
+    try:
+        con.execute("UPDATE engagements SET scope_json='[]' WHERE id=1001")
+        con.commit()
+    finally:
+        con.close()
+
+    requested_urls: list[str] = []
+
+    class _Resp:
+        text = "mysql"
+
+    def _fake_get(url: str, *_args: object, **_kwargs: object) -> _Resp:
+        requested_urls.append(url)
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "get", _fake_get)
+
+    inserted = run_passive_http_collection(
+        1001,
+        db_path,
+        "https://app.acme.example/app/status",
+        scope_values=["app.acme.example"],
+        url_prefixes=["https://app.acme.example/app/"],
+        require_scope=True,
+    )
+
+    assert inserted == 1
+    assert requested_urls == ["https://app.acme.example/app/status"]
+
+
 def test_run_passive_http_collection_for_engagement_uses_crawl_results_and_dedupes_targets(
     tmp_path: Path,
     monkeypatch,

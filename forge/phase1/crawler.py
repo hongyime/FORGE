@@ -197,7 +197,7 @@ async def _crawl_http(
     delay_seconds = _crawl_request_delay_seconds() if request_delay is None else max(0.0, request_delay)
     rate_limit_retries = _crawl_rate_limit_retries()
     fallback_backoff = _crawl_rate_limit_backoff_seconds()
-    async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+    async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
         while queue:
             current_url, current_depth = queue.pop(0)
             if current_url in processed:
@@ -225,6 +225,22 @@ async def _crawl_http(
                 if retry_delay > 0:
                     await asyncio.sleep(retry_delay)
             if resp is None:
+                continue
+            status_code = int(getattr(resp, "status_code", 0) or 0)
+            if 300 <= status_code < 400:
+                location = str(getattr(resp, "headers", {}).get("location", "") or "").strip()
+                redirect_url = _canonical_crawl_url(urljoin(current_url, location)) if location else None
+                if redirect_url is None:
+                    continue
+                if urlsplit(redirect_url).netloc != seed_host:
+                    queued.add(redirect_url)
+                    continue
+                if scope_filter is not None and not scope_filter(redirect_url):
+                    queued.add(redirect_url)
+                    continue
+                if redirect_url not in queued and redirect_url not in processed:
+                    queued.add(redirect_url)
+                    queue.append((redirect_url, current_depth))
                 continue
             final_url = _canonical_crawl_url(str(resp.url))
             if final_url is None:

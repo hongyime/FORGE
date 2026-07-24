@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: scheduled stealth/browser URL-prefix propagation is complete.
+Latest checkpoint: remaining scheduled dispatcher scope propagation is complete.
+Scheduled `passive` and `auth-bypass` now receive manifest/DB URL-fetch scope
+options downstream instead of relying on stale DB reloads after scheduler
+preflight. Passive collection accepts explicit scope options and can run under
+manifest scope even when DB scope is empty/stale. Scheduled `searxng_passive`
+now rejects caller-controlled provider base URLs unless they are default-local
+or explicitly allowlisted via environment. The crawler no longer follows
+redirects automatically; it checks redirect `Location` against same-host URL
+prefix scope before enqueueing, so an in-prefix seed cannot fetch an
+out-of-prefix redirect first. `safe_check` and `weaponize` remain
+ROE/target-scoped scheduler entries with no downstream provider/network
+implementation. Verification: Ruff and compile passed for dispatcher/passive/
+crawler changes; focused regression set passed (`6 passed`); broader
+crawler/distributed/passive suite passed (`43 passed`). Read-only subagent
+audit identified the crawl redirect and SearXNG provider URL gaps and verified
+`crawl_stealth`, `passive`, `auth-bypass`, `safe_check`, and `weaponize` status.
+
+Next checkpoint: add one combined scheduled URL-bound workflow fixture. Prove
+scheduled crawl redirect denial, stealth browser bounds, passive/auth explicit
+scope propagation, and SearXNG provider URL denial under one narrow manifest,
+with mocked/local execution and cleanup assertions.
+
+Previous checkpoint: scheduled stealth/browser URL-prefix propagation is complete.
 Scheduled `crawl_stealth` now receives the same manifest/DB scope options as
 scheduled crawl. Playwright stealth navigation installs a route guard that
 aborts out-of-prefix HTTP(S) resources before fetch, rejects out-of-prefix final
@@ -36,13 +58,6 @@ stealth/scheduler regression set passed (`6 passed`); full distributed scope
 plus stealth unit suite passed (`16 passed`). Read-only subagent audit
 independently confirmed the original `crawl_stealth` gap and final redirect
 risk before the patch.
-
-Next checkpoint: audit remaining scheduled target-scoped dispatchers for
-downstream scope propagation. Start with `passive`, `auth-bypass`,
-`safe_check`, `weaponize`, and `searxng_passive`; verify they cannot validate
-only the initial target and then follow redirects, provider calls, or
-module-level fetches under broader DB host scope when a manifest URL prefix is
-narrower. Add focused current-code tests only where a reachable gap is proven.
 
 Previous checkpoint: URL-scope host-vs-prefix semantics are complete.
 Host-level gates may treat a URL scope entry as authorizing that host, while

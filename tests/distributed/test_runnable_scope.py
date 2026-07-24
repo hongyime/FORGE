@@ -312,6 +312,131 @@ def test_scheduled_crawl_stealth_audits_runtime_scope_denial(
     assert "scope_manifest_denied" in row[2]
 
 
+def test_scheduled_passive_passes_manifest_url_prefix_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    calls: list[dict[str, object]] = []
+
+    def _fake_passive(*args: object, **kwargs: object) -> int:
+        calls.append({"args": args, "kwargs": kwargs})
+        return 0
+
+    monkeypatch.setattr(runnable, "run_passive_http_collection", _fake_passive)
+
+    runnable.run_scheduled_task(
+        1001,
+        "passive:https://allowed.example/app/",
+        {
+            "task_type": "passive",
+            "target": "https://allowed.example/app/",
+            "scope_manifest": json.dumps(
+                {
+                    "roe_id": "ROE-ACME-2026-07",
+                    "domains": ["allowed.example"],
+                    "urls": ["https://allowed.example/app/"],
+                }
+            ),
+            "roe_id": "ROE-ACME-2026-07",
+        },
+        db_path,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["kwargs"]["scope_values"] == ["allowed.example"]
+    assert calls[0]["kwargs"]["url_prefixes"] == ["https://allowed.example/app/"]
+    assert calls[0]["kwargs"]["require_scope"] is True
+
+
+def test_scheduled_auth_bypass_passes_manifest_url_prefix_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    calls: list[dict[str, object]] = []
+
+    def _fake_bypass(*args: object, **kwargs: object) -> object:
+        calls.append({"args": args, "kwargs": kwargs})
+        return object()
+
+    monkeypatch.setattr(runnable, "run_bypass_assessment", _fake_bypass)
+
+    runnable.run_scheduled_task(
+        1001,
+        "auth-bypass:https://allowed.example/app/login",
+        {
+            "task_type": "auth-bypass",
+            "target": "https://allowed.example/app/login",
+            "scope_manifest": json.dumps(
+                {
+                    "roe_id": "ROE-ACME-2026-07",
+                    "domains": ["allowed.example"],
+                    "urls": ["https://allowed.example/app/"],
+                }
+            ),
+            "roe_id": "ROE-ACME-2026-07",
+        },
+        db_path,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["kwargs"]["scope_values"] == ["allowed.example"]
+    assert calls[0]["kwargs"]["url_prefixes"] == ["https://allowed.example/app/"]
+    assert calls[0]["kwargs"]["require_scope"] is True
+
+
+def test_scheduled_searxng_passive_denies_untrusted_provider_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+
+    def _fail_searxng(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("untrusted SearXNG provider URL must not be called")
+
+    monkeypatch.setattr(runnable, "run_searxng_passive", _fail_searxng)
+
+    with pytest.raises(RuntimeError, match="provider_url_denied"):
+        runnable.run_scheduled_task(
+            1001,
+            "searxng_passive:allowed.example",
+            {
+                "task_type": "searxng_passive",
+                "target": "allowed.example",
+                "searxng_url": "https://outside.example",
+            },
+            db_path,
+        )
+
+
+def test_scheduled_searxng_passive_allows_default_provider_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    calls: list[tuple[str, str]] = []
+
+    def _fake_searxng(target: str, searxng_url: str, *_args: object) -> dict[str, object]:
+        calls.append((target, searxng_url))
+        return {"status": "success"}
+
+    monkeypatch.setattr(runnable, "run_searxng_passive", _fake_searxng)
+
+    runnable.run_scheduled_task(
+        1001,
+        "searxng_passive:allowed.example",
+        {"task_type": "searxng_passive", "target": "allowed.example"},
+        db_path,
+    )
+
+    assert calls == [("allowed.example", "http://searxng:8080")]
+
+
 def test_scheduled_sensitive_auth_bypass_requires_roe_before_execution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

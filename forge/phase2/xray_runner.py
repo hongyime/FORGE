@@ -241,9 +241,22 @@ def run_passive_http_collection(
     target_url: str,
     proxy: str | None = None,
     timeout: float = 12.0,
+    scope_values: list[str] | None = None,
+    url_prefixes: list[str] | None = None,
+    require_scope: bool = False,
 ) -> int:
     from forge.opsec.scope_gate import load_scope_from_db
-    scope = load_scope_from_db(str(db_path), engagement_id)
+    scope = (
+        [str(item) for item in scope_values if str(item or "").strip()]
+        if scope_values is not None
+        else load_scope_from_db(str(db_path), engagement_id)
+    )
+    prefixes = [str(item) for item in url_prefixes or [] if str(item or "").strip()]
+    if require_scope and not scope and not prefixes:
+        from forge.opsec.scope_gate import ScopeViolationError
+
+        raise ScopeViolationError(target_url, [])
+    scope = [*scope, *prefixes]
     _assert_passive_target_in_scope(target_url, scope)
 
     try:
