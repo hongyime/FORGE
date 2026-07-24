@@ -5359,6 +5359,8 @@ def kill_chain(
                 return str(ipaddress.ip_address(value))
             except ValueError:
                 return value.lower()
+        if seed_type_value in {"url", "apk_url"}:
+            return _canonical_http_url_value(value) or value
         return value
 
     def _initial_seed_dedupe_key(seed_entry: dict[str, str]) -> tuple[str, str]:

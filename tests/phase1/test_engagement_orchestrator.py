@@ -65760,6 +65760,68 @@ def test_kill_chain_canonicalizes_duplicate_initial_domain_and_email_seeds(
         con.close()
 
 
+def test_kill_chain_canonicalizes_duplicate_initial_url_seeds(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="HTTPS://ACME.EXAMPLE:443/login#top",
+        related_seed=[
+            "https://acme.example/login",
+            "HTTPS://downloads.acme.example:443/mobile/app.apk#download",
+            "https://downloads.acme.example/mobile/app.apk",
+        ],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=4,
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = con.execute(
+            """
+            SELECT seed_value, seed_type
+            FROM engagement_seeds
+            WHERE engagement_id=1001
+              AND seed_type IN ('url', 'apk_url')
+            ORDER BY seed_type, seed_value
+            """
+        ).fetchall()
+        assert seed_rows == [
+            ("https://downloads.acme.example/mobile/app.apk", "apk_url"),
+            ("https://acme.example/login", "url"),
+        ]
+        run_counts = {
+            (str(row[0]), str(row[1])): int(row[2])
+            for row in con.execute(
+                """
+                SELECT es.seed_value, sr.loop_name, COUNT(*)
+                FROM seed_runs sr
+                JOIN engagement_seeds es ON es.id=sr.seed_id
+                WHERE sr.engagement_id=1001
+                  AND sr.loop_name IN ('fanout_d5_url_seed_html')
+                GROUP BY es.seed_value, sr.loop_name
+                """
+            ).fetchall()
+        }
+        assert run_counts[("https://acme.example/login", "fanout_d5_url_seed_html")] == 1
+    finally:
+        con.close()
+
+
 def test_kill_chain_auto_engagement_id_uses_shared_sequence(
     tmp_path: Path,
     monkeypatch,

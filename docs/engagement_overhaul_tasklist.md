@@ -91,12 +91,26 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit one current-code deterministic kill-chain,
-  passive-recursion, validation, report/export, dashboard/API review, or
-  cleanup gap not already covered by recent crawler URL canonicalization,
-  dashboard alias validation, or report-route checkpoints. Prefer compact
-  helpers and focused tests over growing large files. Keep live calls mocked
-  unless an explicit ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: make legacy `ReportingAgent` deterministic fallback
+  lineage API-reviewable. It already falls back when LLMs are disabled or
+  unavailable, but its outbound payload lacks structured `report_lineage` /
+  `fallback_reason` for the `/reports/{workflow_id}` route. Add payload-only
+  lineage metadata for disabled, provider-unavailable, and generic fallback
+  branches without changing markdown content or adding raw findings/secrets.
+- [x] Initial URL seed canonicalization checkpoint:
+  Operator-supplied initial `url` and `apk_url` seeds now canonicalize before
+  initial seed dedupe and persistence, using the same HTTP canonicalizer as
+  recursive URL persistence. Equivalent raw variants such as
+  `HTTPS://ACME.EXAMPLE:443/login#top` plus `https://acme.example/login`, and
+  mobile bundle variants with default ports/fragments, persist as one canonical
+  seed each and produce one dry-run URL fan-out row. No live probing,
+  provider behavior, rate-limit behavior, validation gate, severity rule,
+  report generation, dashboard, API, or frontend behavior changed.
+  Verification: compile passed; Ruff passed; focused URL seed regression passed
+  (`1 passed, 765 deselected`); adjacent initial seed canonicalization selector
+  passed (`2 passed, 764 deselected`); workspace `.forge_data/engagements`
+  contained `0` entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-initial-url-seed-canonicalization.md`.
 - [x] Recursive discovered URL seed persistence canonicalization checkpoint:
   Recursive discovered URL persistence now uses a shared CLI HTTP URL
   canonicalizer before archive-provider dedupe, URL metadata keying, crawl row
