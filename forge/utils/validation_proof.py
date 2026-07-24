@@ -205,12 +205,15 @@ _UUID_OR_32_HEX_RE = re.compile(
 )
 
 
-def _empty_proof() -> dict[str, Any]:
-    return {
+def _empty_proof(*, include_raw_proof: bool = False) -> dict[str, Any]:
+    proof = {
         "validation_status": "",
         "validation_method": "",
         "validation_proof": "",
     }
+    if include_raw_proof:
+        proof["validation_raw_proof"] = ""
+    return proof
 
 
 def _looks_sequential_numeric_identifier(value: object) -> bool:
@@ -862,7 +865,12 @@ def _validated_proof_is_reportable(method: str, proof: str) -> bool:
     return False
 
 
-def parse_validated_detail(value: object, *, proof_limit: int = 280) -> dict[str, Any]:
+def parse_validated_detail(
+    value: object,
+    *,
+    proof_limit: int = 280,
+    include_raw_proof: bool = False,
+) -> dict[str, Any]:
     """Parse method-tagged validation detail into safe structured fields.
 
     Key scanner rows and deterministic findings historically persisted provider
@@ -874,25 +882,34 @@ def parse_validated_detail(value: object, *, proof_limit: int = 280) -> dict[str
     text = str(value or "").strip()
     match = _VALIDATION_DETAIL_RE.search(text)
     if not match:
-        return _empty_proof()
+        return _empty_proof(include_raw_proof=include_raw_proof)
 
     status = str(match.group(1) or match.group(4) or "").strip().upper()
     method = str(match.group(2) or match.group(5) or "").strip()
     proof = str(match.group(3) or match.group(6) or "").strip()[:proof_limit]
     if status != "VALIDATED":
-        return {
+        result = {
             "validation_status": status,
             "validation_method": method,
             "validation_proof": "",
         }
+        if include_raw_proof:
+            result["validation_raw_proof"] = proof
+        return result
     if not _validated_proof_is_reportable(method, proof):
-        return {
+        result = {
             "validation_status": "UNVERIFIED",
             "validation_method": method,
             "validation_proof": "",
         }
-    return {
+        if include_raw_proof:
+            result["validation_raw_proof"] = proof
+        return result
+    result = {
         "validation_status": "VALIDATED",
         "validation_method": method,
         "validation_proof": proof,
     }
+    if include_raw_proof:
+        result["validation_raw_proof"] = proof
+    return result

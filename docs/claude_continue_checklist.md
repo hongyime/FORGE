@@ -66,10 +66,28 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit another concrete deterministic review/export
-  parity gap, preferably remaining long-tail validator proof reviewability.
-  Keep live provider calls mocked unless an explicit ROE/scope manifest and
-  target are supplied.
+- [ ] Next checkpoint: run a compact mocked end-to-end kill-chain/report/dashboard
+  smoke that proves recursive discovery output, validation inventory, graph
+  review, deterministic template/raw fallback, and test-engagement cleanup still
+  compose after the latest proof-reviewability changes. Keep live provider calls
+  mocked unless an explicit ROE/scope manifest and target are supplied.
+- [x] Long-tail and non-promoted validator proof reviewability checkpoint:
+  Phase 6 standalone reportable key-scanner proof exports now have a
+  parameterized regression covering Cloudflare, Discord, GitLab, HuggingFace,
+  Netlify, Notion, PostHog, SendGrid, Sentry, Stripe, Telegram, Twilio, and
+  Vercel. The shared proof parser also supports opt-in raw proof extraction for
+  analyst review surfaces. Datadog remains non-promoted (`UNVERIFIED` with empty
+  `validation_proof`), but its read-only `/validate` proof detail is preserved
+  in Phase 6 `validation_notes`, raw CSV rows, dashboard vulnerability rows,
+  dashboard key inventory notes when applicable, and graph metadata notes. No
+  report gate, severity rule, live provider call, endpoint, retry, proxy,
+  rate-limit, or scope behavior changed. Verification: compile passed; Ruff
+  passed; shared proof parser suite passed (`106 passed`); focused parser/report
+  dashboard suite passed (`121 passed`); broader Phase 6 validation/export
+  selector passed (`22 passed, 82 deselected`); cloud-gating/alias suite passed
+  (`2 passed`); dashboard validation selector passed (`5 passed, 22
+  deselected`). Handoff:
+  `.claude/handoffs/2026-07-24-long-tail-validator-proof-reviewability.md`.
 - [x] Compact cleanup/regression checkpoint:
   After the dashboard graph and Phase 6 proof-export parity commits, the repo
   was clean at `89cc545`, `.forge_data/engagements` contained `0` entries, and

@@ -886,7 +886,7 @@ class ContextBuilder:
 
     @staticmethod
     def _finding_key_validation_metadata(evidence: str) -> dict[str, Any]:
-        proof = parse_validated_detail(evidence)
+        proof = parse_validated_detail(evidence, include_raw_proof=True)
         if not proof["validation_method"]:
             return {
                 "validation_status": "",
@@ -902,7 +902,9 @@ class ContextBuilder:
             "validation_method": proof["validation_method"],
             "validation_http_status": None,
             "validation_proof": proof["validation_proof"],
-            "validation_notes": proof["validation_proof"],
+            "validation_notes": _safe_validation_summary(
+                proof["validation_proof"] or proof["validation_raw_proof"]
+            ),
             "validation_evidence_summary": "",
             "validation_checked_at": "",
         }

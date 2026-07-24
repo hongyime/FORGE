@@ -542,11 +542,9 @@ def _key_row_is_reportable(
     )
 
 
-def _reportable_key_scanner_rows(
+def _key_scanner_rows(
     con: sqlite3.Connection,
     engagement_id: int,
-    *,
-    limit: int | None = None,
 ) -> list[sqlite3.Row]:
     columns = _table_columns(con, "key_scanner_findings")
     if not {"engagement_id", "validation_state"}.issubset(columns):
@@ -563,7 +561,7 @@ def _reportable_key_scanner_rows(
         "validation_detail" if "validation_detail" in columns else "NULL AS validation_detail",
         "validated_at" if "validated_at" in columns else "NULL AS validated_at",
     ]
-    rows = _fetch_rows(
+    return _fetch_rows(
         con,
         f"""
         SELECT {', '.join(select_parts)}
@@ -573,9 +571,34 @@ def _reportable_key_scanner_rows(
         """,
         (engagement_id,),
     )
+
+
+def _reportable_key_scanner_rows(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    *,
+    limit: int | None = None,
+) -> list[sqlite3.Row]:
+    rows = _key_scanner_rows(con, engagement_id)
     validation_index = _reportable_cloud_validation_index(con, engagement_id)
     reportable = [row for row in rows if _key_row_is_reportable(row, validation_index)]
     return reportable[:limit] if limit is not None else reportable
+
+
+def _key_scanner_inventory_rows(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    *,
+    limit: int | None = None,
+) -> list[sqlite3.Row]:
+    validation_index = _reportable_cloud_validation_index(con, engagement_id)
+    rows = [
+        row
+        for row in _key_scanner_rows(con, engagement_id)
+        if _key_row_is_reportable(row, validation_index)
+        or str(row["validation_detail"] or "").strip().upper().startswith("VALIDATED:")
+    ]
+    return rows[:limit] if limit is not None else rows
 
 
 def _vulnerability_validation_asset(row: sqlite3.Row) -> str:
@@ -641,7 +664,10 @@ def _vulnerability_row_is_reportable(
 
 
 def _vulnerability_finding_section_row(row: sqlite3.Row) -> dict[str, str]:
-    proof = parse_validated_detail(str(row["evidence"] or "") if "evidence" in row.keys() else "")
+    proof = parse_validated_detail(
+        str(row["evidence"] or "") if "evidence" in row.keys() else "",
+        include_raw_proof=True,
+    )
     return {
         "Severity": str(row["severity"] or ""),
         "Type": str(row["vuln_type"] or ""),
@@ -650,6 +676,10 @@ def _vulnerability_finding_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Validation Status": str(proof["validation_status"] or ""),
         "Validation Method": str(proof["validation_method"] or ""),
         "Validation Proof": _truncate(proof["validation_proof"], 120),
+        "Validation Notes": _truncate(
+            proof["validation_proof"] or proof["validation_raw_proof"],
+            120,
+        ),
         "Seen": _format_dt(str(row["found_at"] or "")),
     }
 
@@ -940,7 +970,7 @@ def _merge_validation_detail_metadata(metadata: dict[str, Any], raw: object) -> 
     if not detail:
         return
     metadata["validation_detail"] = detail
-    proof = parse_validated_detail(detail)
+    proof = parse_validated_detail(detail, include_raw_proof=True)
     method = str(proof["validation_method"] or "").strip()
     if not method:
         return
@@ -951,6 +981,9 @@ def _merge_validation_detail_metadata(metadata: dict[str, Any], raw: object) -> 
         metadata["validation_proof"] = safe_proof
     else:
         metadata.pop("validation_proof", None)
+    safe_raw_proof = _safe_validation_summary(proof["validation_raw_proof"])
+    if safe_raw_proof:
+        metadata["validation_notes"] = safe_proof or safe_raw_proof
 
 
 def _merge_safe_forge_property(
@@ -2812,8 +2845,8 @@ def _detail_sections(
     ]
 
     sections["key_scanner_findings"] = []
-    for row in _reportable_key_scanner_rows(con, engagement_id, limit=SECTION_LIMIT):
-        proof = parse_validated_detail(row["validation_detail"])
+    for row in _key_scanner_inventory_rows(con, engagement_id, limit=SECTION_LIMIT):
+        proof = parse_validated_detail(row["validation_detail"], include_raw_proof=True)
         sections["key_scanner_findings"].append(
             {
                 "Domain": str(row["domain"] or ""),
@@ -2826,6 +2859,10 @@ def _detail_sections(
                 "Validation Status": str(proof["validation_status"] or ""),
                 "Validation Method": str(proof["validation_method"] or ""),
                 "Validation Proof": _truncate(proof["validation_proof"], 120),
+                "Validation Notes": _truncate(
+                    proof["validation_proof"] or proof["validation_raw_proof"],
+                    120,
+                ),
                 "Proof": _truncate(row["validation_detail"], 120),
                 "Validated": _format_dt(str(row["validated_at"] or "")),
                 "Seen": _format_dt(str(row["found_at"] or "")),

@@ -67,6 +67,21 @@ def test_parse_validated_detail_preserves_unverified_method_without_proof() -> N
     }
 
 
+def test_parse_validated_detail_can_return_raw_proof_for_review_notes() -> None:
+    proof = parse_validated_detail(
+        "UNVERIFIED:datadog_api_key_validate:"
+        "Datadog API key valid: site=datadoghq.eu proof=valid_true",
+        include_raw_proof=True,
+    )
+
+    assert proof == {
+        "validation_status": "UNVERIFIED",
+        "validation_method": "datadog_api_key_validate",
+        "validation_proof": "",
+        "validation_raw_proof": "Datadog API key valid: site=datadoghq.eu proof=valid_true",
+    }
+
+
 def test_parse_validated_detail_preserves_labelled_embedded_validation_field() -> None:
     proof = parse_validated_detail(
         "key=AKIA...MPLE; "

@@ -1659,7 +1659,7 @@ def test_generate_dashboard_surfaces_provider_matrix_artifacts_and_validation_ev
                 'firebase_database_shallow_read',
                 200,
                 'HTTP 200 real data keys: customers,billing',
-                'provider matrix proof; honeypot heuristics passed',
+                'Firebase project reference responded with non-empty data.; provider matrix proof; honeypot heuristics passed',
                 '2026-07-09T09:30:00'
             )
             """
@@ -2867,21 +2867,43 @@ def test_generate_dashboard_surfaces_unverified_key_validation_method(tmp_path: 
             "Datadog API key valid: site=datadoghq.eu proof=valid_true"
         ),
     )
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, title, severity, evidence)
+            VALUES (?, 'VALIDATION_INVENTORY', 'Datadog validation inventory note', 'LOW', ?)
+            """,
+            (
+                1001,
+                "validation=UNVERIFIED:datadog_api_key_validate:"
+                "Datadog API key valid: site=datadoghq.eu proof=valid_true",
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
 
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
     detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
-    key_row = detail_payload["sections"]["key_scanner_findings"][0]
+    finding_rows = {
+        row["Title"]: row for row in detail_payload["sections"]["vulnerability_findings"]
+    }
+    finding_row = finding_rows["Datadog validation inventory note"]
 
     assert detail_payload["counts"]["key_scanner_findings"] == 0
-    assert key_row["Service"] == "datadog"
-    assert key_row["State"] == "ACTIVE"
-    assert key_row["Validation Status"] == "UNVERIFIED"
-    assert key_row["Validation Method"] == "datadog_api_key_validate"
-    assert key_row["Validation Proof"] == ""
-    assert "UNVERIFIED:datadog_api_key_validate" in key_row["Proof"]
+    assert detail_payload["sections"]["key_scanner_findings"] == []
+    assert finding_row["Validation Status"] == "UNVERIFIED"
+    assert finding_row["Validation Method"] == "datadog_api_key_validate"
+    assert finding_row["Validation Proof"] == ""
+    assert (
+        finding_row["Validation Notes"]
+        == "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+    )
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 

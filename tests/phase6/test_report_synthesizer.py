@@ -506,6 +506,150 @@ def test_context_builder_exports_standalone_reportable_key_findings(
     assert exported_keys[0]["validation_proof"] == key_finding["validation_proof"]
 
 
+@pytest.mark.parametrize(
+    ("service", "method", "proof"),
+    [
+        (
+            "cloudflare",
+            "cloudflare_token_verify",
+            "Cloudflare token valid: token_id=abcdef1234567890abcdef1234567890 status=active",
+        ),
+        (
+            "discord",
+            "discord_current_user",
+            "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true",
+        ),
+        (
+            "gitlab",
+            "gitlab_current_user_api",
+            (
+                "GitLab user ok: user_id=928374 username=acmebot "
+                "user_profile_present=true profile_url_matches_login=true"
+            ),
+        ),
+        (
+            "huggingface",
+            "huggingface_whoami_v2",
+            "Hugging Face auth ok: user=acme-mlops user_profile_present=true",
+        ),
+        (
+            "netlify",
+            "netlify_current_user",
+            "Netlify user ok: user_id=netlify-user-123 user_profile_present=true",
+        ),
+        (
+            "notion",
+            "notion_users_me",
+            (
+                "Notion users me ok: "
+                "user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
+                "user_profile_present=true"
+            ),
+        ),
+        (
+            "posthog",
+            "posthog_users_me",
+            (
+                "PostHog users me ok: host=eu.posthog.com "
+                "user_id=018f9b7d-1234-4567-9abc-def012345678 "
+                "user_profile_present=true"
+            ),
+        ),
+        (
+            "sendgrid",
+            "sendgrid_profile_api",
+            (
+                "SendGrid profile ok: profile_hash=4d9672c2a5f84e6a "
+                "email_present=true username_present=false"
+            ),
+        ),
+        (
+            "sentry",
+            "sentry_list_organizations",
+            (
+                "Sentry organizations ok: org_id=4505524236910592 "
+                "org_slug_present=true org_slug_stable=true "
+                "org_slug_hash=d2836b7de9447c4a"
+            ),
+        ),
+        (
+            "stripe",
+            "stripe_balance_api",
+            "Stripe balance accessible: mode=live currencies=sgd,usd balances=available:1,pending:1",
+        ),
+        (
+            "telegram",
+            "telegram_get_me",
+            "Telegram bot auth ok: bot_id=725419863 bot_profile_present=true",
+        ),
+        (
+            "twilio",
+            "twilio_account_api",
+            (
+                "Twilio account accessible: "
+                "sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 status=active type=Full"
+            ),
+        ),
+        (
+            "vercel",
+            "vercel_user_get",
+            "Vercel user ok: user_id=usr_abcdefghijklmnop user_profile_present=true",
+        ),
+    ],
+)
+def test_context_builder_exports_long_tail_key_validation_proofs(
+    tmp_eng_db,
+    service: str,
+    method: str,
+    proof: str,
+):
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN service TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN pattern_name TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN domain TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN source_backend TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN source_url TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN repo_name TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN key_redacted TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validation_detail TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validated_at TEXT")
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, validation_state, service, pattern_name, domain,
+                 source_backend, source_url, repo_name, key_redacted,
+                 validation_detail, validated_at)
+            VALUES (?, 'ACTIVE', ?, ?, '', 'artifact', '', 'long-tail.env',
+                    'redacted-key', ?, '2026-07-24T10:00:00')
+            """,
+            (ENGAGEMENT_ID, service, f"{service}_validated_key", f"VALIDATED:{method}:{proof}"),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+
+    matching = [
+        item for item in ctx.key_findings if item["validation_method"] == method
+    ]
+    assert len(matching) == 1
+    assert matching[0]["service"] == service
+    assert matching[0]["validation_status"] == "VALIDATED"
+    assert matching[0]["validation_proof"] == proof
+
+    raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
+    key_row = next(
+        row
+        for row in raw_rows
+        if row["record_type"] == "key_finding" and row["validation_method"] == method
+    )
+    assert key_row["key_service"] == service
+    assert key_row["validation_proof"] == proof
+    assert key_row["validation_detail"].startswith(f"VALIDATED:{method}:")
+
+
 def test_context_builder_unions_seed_only_hosts_and_emails(tmp_eng_db):
     con = sqlite3.connect(tmp_eng_db)
     try:
@@ -1663,7 +1807,11 @@ def test_synthesizer_preserves_unverified_key_validation_method_without_promotio
     assert ctx.osint.key_findings_count == 0
     assert finding["validation_status"] == "UNVERIFIED"
     assert finding["validation_method"] == "datadog_api_key_validate"
-    assert finding["validation_notes"] == ""
+    assert finding["validation_proof"] == ""
+    assert (
+        finding["validation_notes"]
+        == "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+    )
 
     raw_row = next(
         row
@@ -1672,7 +1820,11 @@ def test_synthesizer_preserves_unverified_key_validation_method_without_promotio
     )
     assert raw_row["validation_status"] == "UNVERIFIED"
     assert raw_row["validation_method"] == "datadog_api_key_validate"
-    assert raw_row["validation_notes"] == ""
+    assert raw_row["validation_proof"] == ""
+    assert (
+        raw_row["validation_notes"]
+        == "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+    )
 
 
 def test_synthesizer_does_not_promote_unlabelled_embedded_validated_evidence(
