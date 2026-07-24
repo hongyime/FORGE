@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: over-depth recursive seed resume is complete. Persisted
+Latest checkpoint: pause/cancel dashboard-review refresh is complete.
+Interrupted kill-chain exits now refresh the same static dashboard/detail review
+surface as normal completion. `_maybe_interrupt_run()` finishes cancelled and
+paused runs with terminal metadata, clears run-control markers, emits a
+`dashboard_review_refresh` audit row, and writes `reports/dashboard.html` plus
+per-engagement detail JSON so operators can review the partial run without
+pretending it completed successfully. Normal completion uses the same shared
+refresh helper. Verification: pause/cancel lifecycle regressions passed (`2
+passed`), adjacent paused-dashboard and report-finalization regressions passed
+(`3 passed`), py_compile passed for touched files, and Ruff passed for touched
+files.
+
+Next checkpoint: extend the automated artifact discovery chain with one
+current-code-audited passive parser gap. Start by identifying a high-value
+unsupported or weakly supported artifact/container/OCR fallback path, then add a
+focused regression and compact implementation that feeds safe recursive
+seeds/cloud refs without executing the artifact or widening live probing.
+
+Previous checkpoint: over-depth recursive seed resume is complete. Persisted
 `engagement_seeds` rows deeper than `synthesis_depth_limit` stay in inventory
 but no longer execute recursive fan-outs after resume. URL D5, email E,
 username K, phone L, IP O, name M, and company N all apply a shared depth gate
@@ -40,12 +58,6 @@ passed`); relevant orchestrator recursive route slice passed (`5 passed, 1
 deselected`). Read-only sidecar audit confirmed the original over-depth
 execution/pending-count gap. Claude CLI reviewer could not run because the
 local OAuth session was expired.
-
-Next checkpoint: refresh dashboard/report-review data on pause/cancel
-lifecycle exits, not only normal completion. Pause/cancel/interrupted
-kill-chain runs should persist enough final metadata, dashboard artifacts, and
-audit state for the engagement detail page to review what happened before exit
-without pretending the run completed successfully.
 
 Previous checkpoint: known-host surface backlog is complete. Fan-out D no
 longer re-fetches the same first 20 known hosts every iteration. Known-host

@@ -66,11 +66,22 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: refresh dashboard/report-review data on pause/cancel
-  lifecycle exits, not only normal completion. Pause/cancel/interrupted
-  kill-chain runs should persist enough final metadata, dashboard artifacts, and
-  audit state for the engagement detail page to review what happened before
-  exit without pretending the run completed successfully.
+- [ ] Next checkpoint: extend the automated artifact discovery chain with one
+  current-code-audited passive parser gap. Start by identifying a high-value
+  unsupported or weakly supported artifact/container/OCR fallback path, then add
+  a focused regression and compact implementation that feeds safe recursive
+  seeds/cloud refs without executing the artifact or widening live probing.
+- [x] Pause/cancel dashboard-review refresh checkpoint:
+  Interrupted kill-chain exits now refresh the same static dashboard/detail
+  review surface as normal completion. `_maybe_interrupt_run()` finishes
+  cancelled and paused runs with terminal metadata, clears run-control markers,
+  emits a `dashboard_review_refresh` audit row, and writes
+  `reports/dashboard.html` plus per-engagement detail JSON so operators can
+  review the partial run without pretending it completed successfully. Normal
+  completion uses the same shared refresh helper. Verification: pause/cancel
+  lifecycle regressions passed (`2 passed`), adjacent paused-dashboard and
+  report-finalization regressions passed (`3 passed`), py_compile passed for
+  touched files, and Ruff passed for touched files.
 - [x] Over-depth recursive seed resume checkpoint:
   Persisted `engagement_seeds` rows deeper than `synthesis_depth_limit` now stay
   in inventory but no longer execute recursive fan-outs after resume. URL D5,
@@ -9241,10 +9252,10 @@ above.
   Verified: focused report fallback/telemetry/raw-export tests (`5 passed`),
   including fallback-failure and empty-artifact negative regressions; Ruff
   touched files, py_compile touched files, and `git diff --check`.
-- [ ] Next sidecar gap 2: only mark recursive social/phone/IP/name/company/cloud-ref chains processed on completed or intentional skipped outcomes, so failed chains retry in later iterations.
+- [x] Sidecar gap 2 completed: recursive social/phone/IP/name/company/cloud-ref chains now have regression coverage proving failed outcomes remain retryable while completed or intentionally skipped outcomes advance processed state.
 - [x] Sidecar gap 3 completed: known-host surface fetch first-20 hard cap replaced with deterministic `fanout_d_host_surface` seed-run backlog/exclusion state.
 - [x] Sidecar gap 4 completed: high-depth persisted/resumed seeds are preserved as inventory but skipped before recursive fan-out dispatch when they exceed `synthesis_depth_limit`; skipped receipts and pending-count filtering are covered.
-- [ ] Next sidecar gap 5: refresh dashboard data on pause/cancel lifecycle exits, not only normal completion.
+- [x] Sidecar gap 5 completed: pause/cancel lifecycle exits refresh dashboard/detail review artifacts through the shared review-surface helper.
 
 ## Intentionally gated
 

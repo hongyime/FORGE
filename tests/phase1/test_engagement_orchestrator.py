@@ -92086,6 +92086,117 @@ def test_kill_chain_pause_request_transitions_run_to_paused_metadata(
         con.close()
 
     assert not pause_marker.exists()
+    dashboard_path = tmp_path / "reports" / "dashboard.html"
+    index_json = tmp_path / "reports" / "dashboard" / "data" / "engagements.json"
+    assert dashboard_path.is_file()
+    assert index_json.is_file()
+    overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
+    detail_json = tmp_path / "reports" / "dashboard" / overview_payload["items"][0]["detail_data"]
+    assert detail_json.is_file()
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    assert detail_payload["run_summary"]["status"] == "paused"
+    assert detail_payload["sections"]["engagement_runs"][0]["Status"] == "paused"
+
+    con = sqlite3.connect(db_path)
+    try:
+        refresh_row = con.execute(
+            """
+            SELECT result
+            FROM audit_log
+            WHERE engagement_id=1001
+              AND action='dashboard_review_refresh'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert refresh_row is not None
+        assert "reason=paused" in str(refresh_row[0])
+    finally:
+        con.close()
+
+
+def test_kill_chain_cancel_request_refreshes_dashboard_review_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+
+    stop_marker = tmp_path / ".forge_data" / "run_control" / "engagement_1001_stop.json"
+
+    def _cancel_during_synthesis(_self) -> SynthesisSummary:  # noqa: ANN001
+        stop_marker.parent.mkdir(parents=True, exist_ok=True)
+        stop_marker.write_text(
+            json.dumps({"reason": "operator cancel", "requested_by": "test-suite"}),
+            encoding="utf-8",
+        )
+        return SynthesisSummary(root_domains=["acme.example"])
+
+    monkeypatch.setattr(
+        "forge.engagement_orchestrator.EngagementSynthesisEngine.run",
+        _cancel_during_synthesis,
+    )
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=["security@acme.example"],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT status, metadata_json, completed_at
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "cancelled"
+        metadata = json.loads(str(row[1] or "{}"))
+        assert metadata["lifecycle_state"] == "cancelled"
+        assert metadata["cancel_requested_by"] == "test-suite"
+        assert metadata["cancel_reason"] == "operator cancel"
+        assert row[2]
+        refresh_row = con.execute(
+            """
+            SELECT result
+            FROM audit_log
+            WHERE engagement_id=1001
+              AND action='dashboard_review_refresh'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert refresh_row is not None
+        assert "reason=cancelled" in str(refresh_row[0])
+    finally:
+        con.close()
+
+    assert not stop_marker.exists()
+    dashboard_path = tmp_path / "reports" / "dashboard.html"
+    index_json = tmp_path / "reports" / "dashboard" / "data" / "engagements.json"
+    assert dashboard_path.is_file()
+    assert index_json.is_file()
+    overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
+    detail_json = tmp_path / "reports" / "dashboard" / overview_payload["items"][0]["detail_data"]
+    assert detail_json.is_file()
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    assert detail_payload["run_summary"]["status"] == "cancelled"
+    assert detail_payload["sections"]["engagement_runs"][0]["Status"] == "cancelled"
 
 
 def test_kill_chain_dry_run_queues_seed_artifact_urls_and_processes_remote_apk(

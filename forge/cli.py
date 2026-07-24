@@ -9932,6 +9932,41 @@ def kill_chain(
             ),
         )
 
+    def _refresh_dashboard_review_surface(reason: str) -> Path | None:
+        try:
+            from forge.reporting.dashboard import generate_dashboard  # noqa: PLC0415
+
+            dash_path = Path("reports/dashboard.html")
+            dash_path.parent.mkdir(parents=True, exist_ok=True)
+            _cli_audit(
+                db_path,
+                engagement_id,
+                "orchestrator",
+                "kill_chain",
+                "dashboard_review_refresh",
+                target=domain or seed,
+                result=f"reason={reason} path={dash_path}",
+            )
+            refreshed = generate_dashboard(
+                data_dir=Path(cfg.data_dir),
+                reports_dir=Path("reports"),
+                output_path=dash_path,
+            )
+            console.print(f"[dim]Dashboard:[/dim] {refreshed} [dim](refreshed)[/dim]")
+            return refreshed
+        except Exception as exc:  # noqa: BLE001
+            _cli_audit(
+                db_path,
+                engagement_id,
+                "orchestrator",
+                "kill_chain",
+                "dashboard_review_refresh_failed",
+                target=domain or seed,
+                result=f"reason={reason} error={str(exc)[:180]}",
+            )
+            console.print(f"[dim]Dashboard refresh skipped: {exc}[/dim]")
+            return None
+
     def _maybe_interrupt_run(phase: str) -> bool:
         stop_request = _read_stop_request() or _run_control_requested_via_metadata("stop_requested")
         if stop_request is not None:
@@ -9954,6 +9989,7 @@ def kill_chain(
                 },
             )
             _clear_run_control_markers()
+            _refresh_dashboard_review_surface("cancelled")
             console.print(
                 f"\n[yellow]Kill-chain cancelled[/yellow] during {phase} "
                 f"(requested by {requested_by})."
@@ -9983,6 +10019,7 @@ def kill_chain(
             },
         )
         _clear_run_control_markers()
+        _refresh_dashboard_review_surface("paused")
         console.print(
             f"\n[yellow]Kill-chain paused[/yellow] during {phase} "
             f"(requested by {requested_by})."
@@ -19228,19 +19265,7 @@ def kill_chain(
 
         # Refresh review surfaces only after all optional follow-on work has
         # landed in the DB and the run manifest has been written.
-        try:
-            from forge.reporting.dashboard import generate_dashboard  # noqa: PLC0415
-            _dash_path = _P3("reports/dashboard.html")
-            _dash_path.parent.mkdir(parents=True, exist_ok=True)
-            generate_dashboard(
-                data_dir=_P3(cfg.data_dir),
-                reports_dir=_P3("reports"),
-                output_path=_dash_path,
-            )
-            console.print(f"[dim]Dashboard:[/dim] {_dash_path} "
-                          "[dim](refreshed)[/dim]")
-        except Exception as _exc:  # noqa: BLE001
-            console.print(f"[dim]Dashboard refresh skipped: {_exc}[/dim]")
+        _refresh_dashboard_review_surface(run_status)
 
     # ═══════════════════════════════════════════════════════════════════
     # PREREQUISITE DETECTION - tell the operator which extra tools would
