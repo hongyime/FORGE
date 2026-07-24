@@ -25,20 +25,32 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: bounded artifact retry and cloud-reference resume stability
-are complete. `artifact_queue` now has deterministic `attempt_count` /
-`max_attempts` state, retryable failed rows remain pending until exhausted, and
-Fan-out J cloud refs use one normalized `service:ref` key across current-run,
-pending-count, skipped-row, and resume paths while keeping original refs in
-command/audit/provider metadata. Verification: focused retry/cloud slice passed
-(`5 passed`); adjacent artifact retry/cloud alias tests passed (`2 passed`);
-Ruff and py_compile passed for touched backend/test files.
+Latest checkpoint: legacy validation-inventory finding gates are hardened.
+`vulnerability_findings` rows tagged as validation inventory, or generic rows
+whose evidence parses to non-reportable validation detail such as
+`validation=UNVERIFIED:*`, no longer appear in Phase 6 reports, report JSON,
+raw CSV exports, static dashboard finding sections/counts, live detail severity
+summaries, or `/vuln-summary`. Verification: focused Phase 6/dashboard/API
+regressions passed (`3 passed`), adjacent report gate slice passed
+(`5 passed`), adjacent dashboard gate slice passed (`7 passed`), and Ruff plus
+py_compile passed for touched files.
 
-Next checkpoint: reconcile any fresh sidecar audit output if available, then
-perform a current-code audit for the next real kill-chain correctness gap before
-adding provider breadth or UI polish. Prioritize validation/report gates,
-recursive queue termination, artifact/static extraction fidelity, or dashboard
-evidence lineage.
+Next checkpoint: implement host-surface resume retry fairness. Sidecar audit
+found that retryable `fanout_d_host_surface` seed runs can be starved behind
+new never-attempted hosts when the first-20 batch is full. Patch
+`forge/cli.py` to reserve or prioritize retryable host surfaces in the batch,
+then add a focused resume regression proving a stale running host is retried in
+the first resumed iteration while new-host backlog remains pending.
+
+Previous checkpoint: bounded artifact retry and cloud-reference resume
+stability are complete. `artifact_queue` now has deterministic `attempt_count`
+/ `max_attempts` state, retryable failed rows remain pending until exhausted,
+and Fan-out J cloud refs use one normalized `service:ref` key across
+current-run, pending-count, skipped-row, and resume paths while keeping
+original refs in command/audit/provider metadata. Verification: focused
+retry/cloud slice passed (`5 passed`); adjacent artifact retry/cloud alias
+tests passed (`2 passed`); Ruff and py_compile passed for touched backend/test
+files.
 
 Previous checkpoint: Terraform DNS record extraction now works from archive
 members. Generic artifact discovery carries a parser-only member-aware

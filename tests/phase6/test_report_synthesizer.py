@@ -1906,8 +1906,10 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     assert "key_enc" not in json.dumps(exported_finding)
 
 
-def test_synthesizer_preserves_unverified_key_validation_method_without_promotion(
+def test_synthesizer_excludes_unverified_legacy_validation_inventory_rows(
     tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
 ):
     evidence = (
         "key=0123...cdef; backend=artifact; "
@@ -1944,32 +1946,40 @@ def test_synthesizer_preserves_unverified_key_validation_method_without_promotio
         con.close()
 
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
-    finding = next(
-        item
-        for item in ctx.exploits.exploited
-        if item.get("title") == "Datadog validation inventory note"
-    )
 
     assert ctx.osint.key_findings_count == 0
-    assert finding["validation_status"] == "UNVERIFIED"
-    assert finding["validation_method"] == "datadog_api_key_validate"
-    assert finding["validation_proof"] == ""
-    assert (
-        finding["validation_notes"]
-        == "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+    assert all(
+        item.get("title") != "Datadog validation inventory note"
+        for item in ctx.exploits.exploited
     )
 
-    raw_row = next(
-        row
-        for row in ReportSynthesizer._raw_export_csv_rows(ctx)
-        if row["title"] == "Datadog validation inventory note"
+    raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
+    assert all(
+        row.get("title") != "Datadog validation inventory note"
+        for row in raw_rows
     )
-    assert raw_row["validation_status"] == "UNVERIFIED"
-    assert raw_row["validation_method"] == "datadog_api_key_validate"
-    assert raw_row["validation_proof"] == ""
-    assert (
-        raw_row["validation_notes"]
-        == "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+
+    assert "Datadog validation inventory note" not in content
+    assert "datadog_api_key_validate" not in content
+    assert all(
+        item.get("title") != "Datadog validation inventory note"
+        for item in payload["context"]["exploits"]["exploited"]
+    )
+    assert all(
+        row.get("title") != "Datadog validation inventory note"
+        for row in csv_rows
     )
 
 

@@ -91,11 +91,22 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: reconcile the sidecar audit output if available, then
-  perform a fresh current-code audit for the next real kill-chain correctness
-  gap before adding provider breadth or UI polish. Prioritize validation/report
-  gates, recursive queue termination, artifact/static extraction fidelity, or
-  dashboard evidence lineage.
+- [ ] Next checkpoint: implement host-surface resume retry fairness. Sidecar
+  audit found retryable `fanout_d_host_surface` seed runs can be starved behind
+  new never-attempted hosts when the first-20 batch is full. Patch
+  `forge/cli.py` to reserve or prioritize retryable host surfaces in the batch,
+  then add a focused resume regression proving a stale running host is retried
+  in the first resumed iteration while new-host backlog remains pending.
+- [x] Legacy validation-inventory report-gate checkpoint:
+  `vulnerability_findings` rows tagged as validation inventory, or generic rows
+  whose evidence parses to non-reportable validation detail such as
+  `validation=UNVERIFIED:*`, no longer enter Phase 6 report context, Markdown,
+  report JSON, raw CSV export, static dashboard finding sections/counts, live
+  detail severity summaries, or `/vuln-summary`. Stable validated findings
+  remain reportable through the existing deterministic gates. Verification:
+  focused Phase 6/dashboard/API regressions passed (`3 passed`), adjacent
+  report gate slice passed (`5 passed`), adjacent dashboard gate slice passed
+  (`7 passed`), and Ruff plus py_compile passed for touched files.
 - [x] Bounded artifact retry and cloud-ref resume checkpoint:
   `artifact_queue` now has deterministic `attempt_count` / `max_attempts`
   state. The artifact processor claims one attempt per dispatch, retries

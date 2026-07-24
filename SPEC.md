@@ -1,6 +1,6 @@
 # FORGE Spec
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
@@ -150,3 +150,4 @@ review, and guaranteed template/raw exports when LLM providers fail.
 | B44 | 2026-07-24 | Crawler HTTP requests used automatic redirects, so an in-prefix URL could fetch an out-of-prefix redirect before the final URL scope check ran. | Disabled automatic redirects in `_crawl_http`, checked redirect `Location` against same-host URL-prefix scope before enqueueing, and added a regression proving `/app/` cannot auto-fetch redirected `/admin`. |
 | B45 | 2026-07-24 | Scheduled `passive`/`auth-bypass` could authorize a manifest target but leave downstream modules to reload stale DB scope, and scheduled `searxng_passive` accepted caller-controlled provider base URLs. | Passed manifest/DB scope options into scheduled passive/auth dispatch, added explicit passive scope inputs, restricted scheduled SearXNG provider URLs to default-local or environment allowlisted bases, and covered the dispatcher paths with focused tests. |
 | B46 | 2026-07-24 | Scheduled URL-bound safeguards were proven by separate focused tests but lacked one combined workflow fixture tying crawl redirect denial, stealth/passive/auth scope propagation, and provider URL denial together. | Added a mocked distributed scheduler fixture that exercises crawl, crawl_stealth, passive, auth-bypass, and searxng_passive under one narrow URL manifest and verifies no out-of-prefix redirect/provider dispatch occurs. |
+| B47 | 2026-07-25 | Legacy or loosely typed `vulnerability_findings` rows could embed `validation=UNVERIFIED:*` key/cloud evidence and still appear as reportable findings in Phase 6 reports, raw CSV/JSON exports, dashboard detail sections, severity summaries, and `/vuln-summary`. | Added a shared validation-inventory finding gate that excludes inventory-only vulnerability types and non-reportable embedded validation details from report/dashboard/API finding surfaces while leaving stable validated findings intact. |

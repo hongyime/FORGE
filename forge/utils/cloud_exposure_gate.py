@@ -68,6 +68,13 @@ _LOW_SIGNAL_STORAGE_METADATA_MARKERS = (
     "synthetic",
     "test data",
 )
+_INVENTORY_ONLY_VULNERABILITY_TYPES = frozenset(
+    {
+        "VALIDATION_INVENTORY",
+        "VALIDATION_REVIEW",
+        "VALIDATION_NOTE",
+    }
+)
 
 
 def normalize_cloud_exposure_asset_type(value: str) -> str:
@@ -94,6 +101,29 @@ def is_deterministic_cloud_exposure(
         normalized_title.endswith(_TITLE_SUFFIXES)
         or " data exposure" in normalized_title
     )
+
+
+def vulnerability_finding_evidence_is_reportable(
+    vuln_type: str,
+    title: str,
+    evidence: object,
+    asset_hints: Iterable[str] = (),
+) -> bool:
+    """Gate legacy finding rows that embed validation inventory in evidence."""
+
+    normalized_type = str(vuln_type or "").strip().upper()
+    if normalized_type in _INVENTORY_ONLY_VULNERABILITY_TYPES:
+        return False
+    normalized_title = str(title or "").strip().lower()
+    if normalized_type == "DETERMINISTIC_KEY_EXPOSURE" or normalized_title.startswith(
+        "active exposed "
+    ):
+        return True
+    if is_deterministic_cloud_exposure(normalized_type, title, asset_hints):
+        return True
+    proof = parse_validated_detail(evidence)
+    status = str(proof["validation_status"] or "").strip().upper()
+    return not status or status == "VALIDATED"
 
 
 def is_reportable_cloud_validation_method(asset_type: str, validation_method: str) -> bool:

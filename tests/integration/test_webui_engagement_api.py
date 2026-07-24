@@ -2157,6 +2157,21 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
                  'CRITICAL', 0, 1, '2026-07-09T10:00:00')
             """
         )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at)
+            VALUES (
+                1001, 'VALIDATION_INVENTORY',
+                'artifact://bundle/observability.env', 'datadog_api_key', 'LOW',
+                'Datadog validation inventory note',
+                'Validation inventory must not become a reportable finding.',
+                'validation=UNVERIFIED:datadog_api_key_validate:Datadog API key valid: site=datadoghq.eu proof=valid_true',
+                '2026-07-09 10:20:00'
+            )
+            """
+        )
         con.commit()
     finally:
         con.close()
@@ -2169,6 +2184,7 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
         assert detail_resp.status_code == 200, detail_resp.text
         detail = detail_resp.json()
         assert detail["severity_summary"]["HIGH"] == 0
+        assert detail["severity_summary"]["LOW"] == 0
 
         summary_resp = client.get("/api/engagements/1001/vuln-summary", headers=headers)
         assert summary_resp.status_code == 200, summary_resp.text
@@ -2181,7 +2197,13 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
         asset_tree_payload = tree_resp.json()
 
     assert summary["vulnerability_findings"].get("HIGH", 0) == 0
+    assert summary["vulnerability_findings"].get("LOW", 0) == 0
     assert summary["passive_vulns"].get("CRITICAL", 0) == 0
+    assert all(
+        row.get("Title") != "Datadog validation inventory note"
+        for row in detail["sections"]["vulnerability_findings"]
+    )
+    assert "datadog_api_key_validate" not in json.dumps(detail)
     assert assets["passive_vulns"] == []
     assert all("findings" not in item and "severity" not in item for item in asset_tree_payload["items"])
     graph_nodes = {node["node_id"]: node for node in detail["graph_payload"]["nodes"]}

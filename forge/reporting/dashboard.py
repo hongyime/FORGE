@@ -28,6 +28,7 @@ from forge.utils.cloud_exposure_gate import (
     linked_cloud_validation_reportability,
     latest_cloud_validation_reportability_index,
     normalize_cloud_exposure_asset_type,
+    vulnerability_finding_evidence_is_reportable,
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
@@ -677,7 +678,12 @@ def _vulnerability_row_is_reportable(
             return linked_reportable
         proof = parse_validated_detail(str(row["evidence"] or "") if "evidence" in row.keys() else "")
         return str(proof["validation_status"] or "").strip().upper() == "VALIDATED"
-    return True
+    return vulnerability_finding_evidence_is_reportable(
+        vuln_type,
+        title,
+        str(row["evidence"] or "") if "evidence" in row.keys() else "",
+        (asset,),
+    )
 
 
 def _vulnerability_finding_section_row(row: sqlite3.Row) -> dict[str, str]:

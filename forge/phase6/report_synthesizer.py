@@ -59,6 +59,7 @@ from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
     is_reportable_cloud_validation,
     latest_cloud_validation_reportability_index,
+    vulnerability_finding_evidence_is_reportable,
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
@@ -1476,6 +1477,16 @@ class ContextBuilder:
             if self._finding_is_unvalidated_key_exposure(finding):
                 continue
             if self._finding_is_unvalidated_deterministic_cloud_exposure(finding):
+                continue
+            if not vulnerability_finding_evidence_is_reportable(
+                str(finding.get("vuln_type") or ""),
+                str(finding.get("title") or ""),
+                evidence,
+                (
+                    str(finding.get("validation_asset_type") or ""),
+                    str(finding.get("parameter") or "").split(":", 1)[0],
+                ),
+            ):
                 continue
             exploited.append(finding)
         severity_order = {

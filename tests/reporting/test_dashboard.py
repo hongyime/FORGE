@@ -7,7 +7,11 @@ import zipfile
 from pathlib import Path
 
 from forge.audit.manifest import write_run_audit_manifest
-from forge.reporting.dashboard import _relation_evidence_preview, generate_dashboard
+from forge.reporting.dashboard import (
+    _relation_evidence_preview,
+    _reportable_vulnerability_rows,
+    generate_dashboard,
+)
 
 
 def _write_mtgx_graph(path: Path, graphml: str) -> None:
@@ -3180,7 +3184,9 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 
-def test_generate_dashboard_surfaces_unverified_key_validation_method(tmp_path: Path) -> None:
+def test_generate_dashboard_filters_unverified_validation_inventory_from_findings(
+    tmp_path: Path,
+) -> None:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"
     db_root = data_dir / "engagements"
@@ -3222,19 +3228,29 @@ def test_generate_dashboard_surfaces_unverified_key_validation_method(tmp_path: 
 
     detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
-    finding_rows = {
-        row["Title"]: row for row in detail_payload["sections"]["vulnerability_findings"]
-    }
-    finding_row = finding_rows["Datadog validation inventory note"]
-
     assert detail_payload["counts"]["key_scanner_findings"] == 0
     assert detail_payload["sections"]["key_scanner_findings"] == []
-    assert finding_row["Validation Status"] == "UNVERIFIED"
-    assert finding_row["Validation Method"] == "datadog_api_key_validate"
-    assert finding_row["Validation Proof"] == ""
+    assert detail_payload["counts"]["vulnerability_findings"] == 1
+    finding_titles = {
+        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
+    }
+    assert finding_titles == {"Validated Firebase data exposure"}
+    assert detail_payload["severity_summary"]["LOW"] == 0
+    assert "Datadog validation inventory note" not in json.dumps(detail_payload)
+    assert "datadog_api_key_validate" not in json.dumps(detail_payload)
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        reportable_titles = {
+            row["title"] for row in _reportable_vulnerability_rows(con, 1001)
+        }
+        assert reportable_titles == {"Validated Firebase data exposure"}
+    finally:
+        con.close()
     assert (
-        finding_row["Validation Notes"]
-        == "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+        "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+        not in json.dumps(detail_payload)
     )
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
