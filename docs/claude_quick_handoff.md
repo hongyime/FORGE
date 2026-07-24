@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: URL-scope host-vs-prefix semantics are complete.
+Latest checkpoint: scheduled stealth/browser URL-prefix propagation is complete.
+Scheduled `crawl_stealth` now receives the same manifest/DB scope options as
+scheduled crawl. Playwright stealth navigation installs a route guard that
+aborts out-of-prefix HTTP(S) resources before fetch, rejects out-of-prefix final
+browser URLs, closes the browser in denial paths, and the scheduler audits
+runtime browser scope denials as scheduled task scope denials. Verification:
+Ruff and compile passed for stealth/scheduler changes; focused
+stealth/scheduler regression set passed (`6 passed`); full distributed scope
+plus stealth unit suite passed (`16 passed`). Read-only subagent audit
+independently confirmed the original `crawl_stealth` gap and final redirect
+risk before the patch.
+
+Next checkpoint: audit remaining scheduled target-scoped dispatchers for
+downstream scope propagation. Start with `passive`, `auth-bypass`,
+`safe_check`, `weaponize`, and `searxng_passive`; verify they cannot validate
+only the initial target and then follow redirects, provider calls, or
+module-level fetches under broader DB host scope when a manifest URL prefix is
+narrower. Add focused current-code tests only where a reachable gap is proven.
+
+Previous checkpoint: URL-scope host-vs-prefix semantics are complete.
 Host-level gates may treat a URL scope entry as authorizing that host, while
 path-sensitive gates must treat URL prefixes as same-host path constraints
 before fetch/provider execution. Explicit domain/IP scope still authorizes its
@@ -40,13 +59,6 @@ governance/OPSEC selector passed (`171 passed`), covering scheduler
 preflight/recursion, passive xray, Firebase, login-probe, legacy Supabase,
 shared OPSEC URL assertions, OPSEC host authorization, and governance prefix
 enforcement.
-
-Next checkpoint: audit scheduled browser/stealth path-sensitive modules for
-manifest propagation. Scheduled crawl now passes manifest-derived
-`url_prefixes` into the crawler; next verify `crawl_stealth` and any browser
-route/resource loaders cannot use broader DB host scope after a manifest URL
-prefix authorizes only the initial target. Add focused current-code tests only
-where a reachable gap is proven.
 
 Previous checkpoint: scope-json reader audit is complete.
 Remaining engagement `scope_json` readers now use the shared

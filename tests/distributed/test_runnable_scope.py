@@ -195,6 +195,123 @@ def test_scheduled_crawl_engagement_url_scope_denies_same_host_drift(
         )
 
 
+def test_scheduled_crawl_stealth_passes_manifest_url_prefix_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    calls: list[dict[str, object]] = []
+
+    def _fake_stealth(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append({"args": args, "kwargs": kwargs})
+        return {"status": "success"}
+
+    monkeypatch.setattr(runnable, "run_crawl_stealth", _fake_stealth)
+
+    runnable.run_scheduled_task(
+        1001,
+        "crawl_stealth:https://allowed.example/app/",
+        {
+            "task_type": "crawl_stealth",
+            "target": "https://allowed.example/app/",
+            "scope_manifest": json.dumps(
+                {
+                    "roe_id": "ROE-ACME-2026-07",
+                    "domains": ["allowed.example"],
+                    "urls": ["https://allowed.example/app/"],
+                }
+            ),
+            "roe_id": "ROE-ACME-2026-07",
+        },
+        db_path,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["kwargs"]["scope_values"] == ["allowed.example"]
+    assert calls[0]["kwargs"]["url_prefixes"] == ["https://allowed.example/app/"]
+    assert calls[0]["kwargs"]["require_scope"] is True
+
+
+def test_scheduled_crawl_stealth_passes_db_url_prefix_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["https://allowed.example/app/"])
+    calls: list[dict[str, object]] = []
+
+    def _fake_stealth(*args: object, **kwargs: object) -> dict[str, object]:
+        calls.append({"args": args, "kwargs": kwargs})
+        return {"status": "success"}
+
+    monkeypatch.setattr(runnable, "run_crawl_stealth", _fake_stealth)
+
+    runnable.run_scheduled_task(
+        1001,
+        "crawl_stealth:https://allowed.example/app/",
+        {"task_type": "crawl_stealth", "target": "https://allowed.example/app/"},
+        db_path,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["kwargs"]["scope_values"] == ["https://allowed.example/app/"]
+    assert calls[0]["kwargs"]["require_scope"] is True
+
+
+def test_scheduled_crawl_stealth_audits_runtime_scope_denial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from forge.opsec.scope_gate import ScopeViolationError
+
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+
+    def _deny_stealth(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise ScopeViolationError(
+            "https://allowed.example/admin",
+            ["https://allowed.example/app/"],
+        )
+
+    monkeypatch.setattr(runnable, "run_crawl_stealth", _deny_stealth)
+
+    with pytest.raises(RuntimeError, match="scope_manifest_denied"):
+        runnable.run_scheduled_task(
+            1001,
+            "crawl_stealth:https://allowed.example/app/",
+            {
+                "task_type": "crawl_stealth",
+                "target": "https://allowed.example/app/",
+                "scope_manifest": json.dumps(
+                    {
+                        "roe_id": "ROE-ACME-2026-07",
+                        "domains": ["allowed.example"],
+                        "urls": ["https://allowed.example/app/"],
+                    }
+                ),
+                "roe_id": "ROE-ACME-2026-07",
+            },
+            db_path,
+        )
+
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT action, target, result
+            FROM audit_log
+            WHERE engagement_id=1001 AND module='scheduled_task'
+            ORDER BY id DESC
+            """
+        ).fetchone()
+    finally:
+        con.close()
+    assert row[0] == "scheduled_task_scope_denied"
+    assert row[1] == "https://allowed.example/app/"
+    assert "scope_manifest_denied" in row[2]
+
+
 def test_scheduled_sensitive_auth_bypass_requires_roe_before_execution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -91,12 +91,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit scheduled browser/stealth path-sensitive modules
-  for manifest propagation. Scheduled crawl now passes manifest-derived
-  `url_prefixes` into the crawler; next verify `crawl_stealth` and any browser
-  route/resource loaders cannot use broader DB host scope after a manifest URL
-  prefix authorizes only the initial target. Add focused current-code tests only
-  where a reachable gap is proven.
+- [ ] Next checkpoint: audit remaining scheduled target-scoped dispatchers for
+  downstream scope propagation. Start with `passive`, `auth-bypass`,
+  `safe_check`, `weaponize`, and `searxng_passive`; verify they cannot validate
+  only the initial target and then follow redirects, provider calls, or
+  module-level fetches under broader DB host scope when a manifest URL prefix is
+  narrower. Add focused current-code tests only where a reachable gap is proven.
+- [x] Scheduled stealth/browser URL-prefix propagation checkpoint:
+  Scheduled `crawl_stealth` now receives the same manifest/DB scope options as
+  scheduled crawl. Playwright stealth navigation installs a route guard that
+  aborts out-of-prefix HTTP(S) resources before fetch, rejects out-of-prefix
+  final browser URLs, closes the browser in denial paths, and the scheduler
+  audits runtime browser scope denials as scheduled task scope denials.
+  Verification: Ruff and compile passed for stealth/scheduler changes; focused
+  stealth/scheduler regression set passed (`6 passed`); full distributed scope
+  plus stealth unit suite passed (`16 passed`). Read-only subagent audit
+  independently confirmed the original `crawl_stealth` gap and the final
+  redirect risk before the patch.
 - [x] URL-scope host-vs-prefix semantics checkpoint:
   Host-level gates may treat a URL scope entry as authorizing that host, while
   path-sensitive gates must treat URL prefixes as same-host path constraints

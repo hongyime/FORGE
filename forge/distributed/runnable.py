@@ -255,20 +255,24 @@ def _scheduled_network_scope(
     return scope
 
 
-def _scheduled_crawl_scope_options(
+def _scheduled_url_fetch_scope_options(
     engagement_id: int,
+    task_type: str,
     payload: dict[str, object],
     db_path: Path,
 ) -> dict[str, object]:
     scope_manifest = _load_scheduled_scope_manifest(
         engagement_id=engagement_id,
-        task_type="crawl",
+        task_type=task_type,
         target="",
         payload=payload,
         db_path=db_path,
     )
     if scope_manifest is None:
-        return {"require_scope": True}
+        return {
+            "scope_values": _load_engagement_scope(db_path, engagement_id),
+            "require_scope": True,
+        }
     scope_values = [
         str(item)
         for item in [
@@ -341,7 +345,23 @@ def run_scheduled_task(
         j_min = int(payload.get("jitter_min_ms", 1000))
         j_max = int(payload.get("jitter_max_ms", 3000))
         engine = str(payload.get("engine", "playwright"))
-        run_crawl_stealth(target, use_tor, j_min, j_max, engine, db_path)
+        scope_options = _scheduled_url_fetch_scope_options(
+            engagement_id,
+            task_type,
+            payload,
+            db_path,
+        )
+        from forge.opsec.scope_gate import ScopeViolationError  # noqa: PLC0415
+
+        try:
+            run_crawl_stealth(target, use_tor, j_min, j_max, engine, db_path, **scope_options)
+        except ScopeViolationError:
+            reason = (
+                "scope_manifest_denied"
+                if _scope_manifest_ref(payload)
+                else "engagement_scope_denied"
+            )
+            _deny_scheduled_task(engagement_id, task_type, target, reason, db_path)
         return
         
     if task_type == "searxng_passive":
@@ -365,7 +385,12 @@ def run_scheduled_task(
     if task_type == "crawl":
         if not target:
             raise RuntimeError("crawl task requires target.")
-        scope_options = _scheduled_crawl_scope_options(engagement_id, payload, db_path)
+        scope_options = _scheduled_url_fetch_scope_options(
+            engagement_id,
+            task_type,
+            payload,
+            db_path,
+        )
         crawl_target_sync(
             engagement_id=engagement_id,
             target_url=target,
