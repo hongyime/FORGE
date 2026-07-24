@@ -66,11 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit one current-code deterministic kill-chain,
-  passive-recursion, validation, report/export, or dashboard/API review gap not
-  already covered by the artifact inventory and workflow lineage checkpoints.
-  Prefer a compact helper/test over growing large files. Keep live calls mocked
-  unless an explicit ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: fix workflow history API `limit` validation so
+  `GET /workflows/{workflow_id}/history?limit=0` and negative limits return 422
+  instead of falling through to an unbounded state-store history query. Keep this
+  as a compact API bounds patch/test; no kill-chain or live execution behavior
+  changes.
+- [x] Crawler off-scope redirect final-URL gate checkpoint:
+  `_crawl_http()` now validates the final redirected response URL against the
+  same scope filter used for requested URLs before recording crawl output or
+  extracting links. This prevents an in-scope URL that redirects off-scope from
+  persisting an off-scope `final_url` that later passive automation could queue
+  before worker denial. Added a compact fake-client regression in
+  `tests/phase1/test_crawler.py`. No live probing, crawler pacing, retry,
+  provider, proxy, validation, severity, report, or dashboard behavior changed.
+  Verification: compile passed; Ruff passed; focused off-scope redirect test
+  passed (`1 passed`); full crawler unit file passed (`3 passed`); workspace
+  `.forge_data/engagements` contained `0` entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-crawler-redirect-scope-gate.md`.
 - [x] Workflow report API nested Phase 6 lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves Phase 6 report lineage when
   `report_lineage` is nested under

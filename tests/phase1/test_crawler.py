@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import types
+from urllib.parse import urlparse
 
 from forge.phase1 import crawler
 
@@ -88,3 +89,44 @@ def test_crawl_http_retries_rate_limited_response_with_retry_after(monkeypatch) 
     assert calls == ["https://acme.example/", "https://acme.example/"]
     assert sleeps == [0.1, 0.4, 0.1]
     assert result == [("https://acme.example/", "<html><title>Recovered</title></html>", {})]
+
+
+def test_crawl_http_drops_out_of_scope_redirect_final_url(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _RedirectResponse:
+        status_code = 200
+        headers = {}
+        text = '<html><a href="https://evil.example/admin">Admin</a></html>'
+        url = "https://evil.example/"
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> _RedirectResponse:
+            calls.append(url)
+            return _RedirectResponse()
+
+    def _scope_filter(value: str) -> bool:
+        return urlparse(value).hostname == "acme.example"
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    result = crawler.asyncio.run(
+        crawler._crawl_http(
+            "https://acme.example/",
+            depth=1,
+            timeout=1.0,
+            scope_filter=_scope_filter,
+        )
+    )
+
+    assert calls == ["https://acme.example/"]
+    assert result == []

@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: workflow report API nested Phase 6 lineage is complete.
+Latest checkpoint: crawler off-scope redirect final-URL gate is complete.
+`_crawl_http()` now validates the final redirected response URL against the same
+scope filter used for requested URLs before recording crawl output or extracting
+links. This prevents an in-scope URL that redirects off-scope from persisting an
+off-scope `final_url` that later passive automation could queue before worker
+denial. Verification: compile passed; Ruff passed; focused off-scope redirect
+test passed (`1 passed`); full crawler unit file passed (`3 passed`);
+`.forge_data/engagements` contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-crawler-redirect-scope-gate.md`.
+
+Next checkpoint: fix workflow history API `limit` validation so
+`GET /workflows/{workflow_id}/history?limit=0` and negative limits return 422
+instead of falling through to an unbounded state-store history query. Suggested
+focused test:
+`tests/integration/test_history_routes.py::test_history_rejects_non_positive_limit`.
+
+Previous checkpoint: workflow report API nested Phase 6 lineage is complete.
 Legacy `GET /reports/{workflow_id}` now preserves Phase 6 report lineage when
 `report_lineage` is nested under
 `intermediate_results["report"]["report_lineage"]`, matching the companion JSON
@@ -35,12 +51,6 @@ Ruff passed; focused nested plus raw-export route tests passed (`2 passed`);
 full `TestApiReportRoute` class passed (`2 passed`); `.forge_data/engagements`
 contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-workflow-report-nested-lineage.md`.
-
-Next checkpoint: audit one current-code deterministic kill-chain,
-passive-recursion, validation, report/export, or dashboard/API review gap not
-already covered by the artifact inventory and workflow lineage checkpoints.
-Prefer a compact helper/test over growing large files. Keep live calls mocked
-unless an explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: Phase 6 artifact inventory export parity is complete.
 Phase 6 now includes scrubbed `artifact_queue` inventory in companion JSON

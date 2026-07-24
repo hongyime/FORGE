@@ -193,11 +193,15 @@ async def _crawl_http(
                     await asyncio.sleep(retry_delay)
             if resp is None:
                 continue
+            final_url = str(resp.url)
+            if scope_filter is not None and not scope_filter(final_url):
+                seen.add(final_url)
+                continue
             body = resp.text
-            output.append((str(resp.url), body, _detect_stack(resp.headers, body)))
+            output.append((final_url, body, _detect_stack(resp.headers, body)))
             if current_depth >= depth:
                 continue
-            for link in _extract_links(str(resp.url), body):
+            for link in _extract_links(final_url, body):
                 if urlparse(link).netloc != urlparse(seed_url).netloc:
                     continue
                 if scope_filter is not None and not scope_filter(link):
