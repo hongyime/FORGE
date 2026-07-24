@@ -14661,6 +14661,98 @@ def test_artifact_queue_processor_extracts_mobile_configs_and_feedback_seeds(tmp
         con.close()
 
 
+def test_artifact_queue_processor_preserves_source_relative_child_seed_depth(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifacts"
+    artifact_root.mkdir()
+    _bootstrap_engagement(db_path)
+
+    source_url = "https://downloads.acme.example/second-stage/config.env"
+    config_path = artifact_root / "config.env"
+    config_path.write_text(
+        dedent(
+            """
+            CONTACT_EMAIL=artifact-depth-owner@acme.example
+            API_URL=https://depth-api.acme.example/v1
+            FIREBASE_URL=https://depth-firebase.firebaseio.com
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES (1001, ?, 'url', 'cross_reference', 'pending', 2, 0.82, '{}')
+            """,
+            (source_url,),
+        )
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, local_path, artifact_type, discovered_from, status, metadata_json)
+            VALUES (1001, ?, ?, 'config', 'engagement_seed', 'downloaded', '{}')
+            """,
+            (source_url, config_path.resolve().as_posix()),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = ArtifactQueueProcessor(db_path, 1001).process()
+    assert summary.processed == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        depths = {
+            (str(row[0]), str(row[1])): int(row[2])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, depth
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert depths[(source_url, "url")] == 2
+        assert depths[("artifact-depth-owner@acme.example", "email")] == 3
+        assert depths[("https://depth-api.acme.example/v1", "url")] == 3
+
+        relations = {
+            (str(row[0]), str(row[1]), str(row[2]), str(row[3] or ""))
+            for row in con.execute(
+                """
+                SELECT src.seed_value, dst.seed_value, sr.relation_type, sr.evidence_json
+                FROM seed_relations sr
+                JOIN engagement_seeds src ON src.id=sr.source_seed_id
+                JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
+                WHERE sr.engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert any(
+            src == source_url
+            and dst == "artifact-depth-owner@acme.example"
+            and relation == "derived_from"
+            and "artifact_seed_provenance" in evidence
+            for src, dst, relation, evidence in relations
+        )
+        assert any(
+            src == source_url
+            and dst == "https://depth-api.acme.example/v1"
+            and relation == "derived_from"
+            and "artifact_seed_provenance" in evidence
+            for src, dst, relation, evidence in relations
+        )
+    finally:
+        con.close()
+
+
 def test_artifact_queue_processor_does_not_requeue_unchanged_parsed_local_artifact(
     tmp_path: Path,
 ) -> None:
@@ -51324,17 +51416,17 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_persistenc
         _track_delay(f"key:{finding['pattern_name']}")
         return original_key_entry(self, finding)
 
-    def _tracking_cloud_entry(self, cloud_asset):  # noqa: ANN001
+    def _tracking_cloud_entry(self, cloud_asset, *, source_file):  # noqa: ANN001
         _track_delay(f"cloud:{cloud_asset[1]}")
-        return original_cloud_entry(self, cloud_asset)
+        return original_cloud_entry(self, cloud_asset, source_file=source_file)
 
-    def _fake_insert_email(self, con, email, *, source):  # noqa: ANN001
-        del self, con, source
+    def _fake_insert_email(self, con, email, *, source, depth=1):  # noqa: ANN001
+        del self, con, source, depth
         inserted_emails.append(str(email))
         return True
 
-    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence):  # noqa: ANN001
-        del self, con, source, confidence
+    def _fake_insert_seed(self, con, seed_value, seed_type, *, source, confidence, depth=1):  # noqa: ANN001
+        del self, con, source, confidence, depth
         inserted_seeds.append((str(seed_value), str(seed_type)))
         return True
 
@@ -51360,8 +51452,9 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_persistenc
         confidence,
         source_seed_id,
         relation_metadata,
+        depth=1,
     ):
-        del self, con, source, confidence, source_seed_id, relation_metadata
+        del self, con, source, confidence, source_seed_id, depth, relation_metadata
         stored_urls.append(str(url))
         return True
 
@@ -51383,8 +51476,16 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_persistenc
         del source_backend, repo_name, validation_detail
         stored_key_patterns.append(str(pattern_name))
 
-    def _fake_store_cloud_asset_reference(self, con, *, asset_type, identifier, source):  # noqa: ANN001
-        del self, con
+    def _fake_store_cloud_asset_reference(
+        self,
+        con,
+        *,
+        asset_type,
+        identifier,
+        source,
+        metadata=None,
+    ):  # noqa: ANN001
+        del self, con, metadata
         stored_cloud_assets.append((str(asset_type), str(identifier), str(source)))
 
     monkeypatch.setattr(ArtifactQueueProcessor, "_artifact_text_email_persistence_entry", _tracking_email_entry)

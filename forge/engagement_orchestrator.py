@@ -20560,6 +20560,7 @@ class ArtifactQueueProcessor:
     ) -> tuple[int, int]:
         firebase_count = 0
         discovered_seeds = 0
+        child_depth = self._artifact_child_seed_depth(con, source_seed_id)
         project_batches = self._run_ordered_local_batch(
             firebase_projects,
             lambda project: self._firebase_project_persistence_entry(
@@ -20590,6 +20591,7 @@ class ArtifactQueueProcessor:
                 "other",
                 source="artifact",
                 confidence=0.8,
+                depth=child_depth,
             )
             self._link_artifact_source_seed(
                 con,
@@ -20621,6 +20623,7 @@ class ArtifactQueueProcessor:
                     source="artifact",
                     confidence=0.7,
                     source_seed_id=source_seed_id,
+                    depth=child_depth,
                     relation_metadata=self._merge_artifact_relation_context(
                         dict(project_entry["storage_relation_metadata"]),
                         artifact_context,
@@ -20634,6 +20637,7 @@ class ArtifactQueueProcessor:
                     source="artifact",
                     confidence=0.72,
                     source_seed_id=source_seed_id,
+                    depth=child_depth,
                     relation_metadata=self._merge_artifact_relation_context(
                         dict(project_entry["project_relation_metadata"]),
                         artifact_context,
@@ -20662,6 +20666,7 @@ class ArtifactQueueProcessor:
     ) -> tuple[int, int]:
         supabase_count = 0
         discovered_seeds = 0
+        child_depth = self._artifact_child_seed_depth(con, source_seed_id)
         config_batches = self._run_ordered_local_batch(
             supabase_configs,
             lambda config: self._supabase_config_persistence_entry(
@@ -20692,6 +20697,7 @@ class ArtifactQueueProcessor:
                 source="artifact",
                 confidence=0.8,
                 source_seed_id=source_seed_id,
+                depth=child_depth,
                 relation_metadata=self._merge_artifact_relation_context(
                     dict(config_entry["relation_metadata"]),
                     artifact_context,
@@ -20704,6 +20710,7 @@ class ArtifactQueueProcessor:
                 "other",
                 source="artifact",
                 confidence=0.72,
+                depth=child_depth,
             ):
                 discovered_seeds += 1
             self._link_artifact_source_seed(
@@ -21987,6 +21994,7 @@ class ArtifactQueueProcessor:
     ) -> int:
         inserted = 0
         source_file = batch.source_file
+        child_depth = self._artifact_child_seed_depth(con, source_seed_id)
         email_entries = self._run_ordered_local_batch(
             batch.emails,
             lambda email: self._artifact_text_email_persistence_entry(
@@ -21998,7 +22006,12 @@ class ArtifactQueueProcessor:
         for email_entry in email_entries:
             if not isinstance(email_entry, dict):
                 continue
-            if self._insert_email(con, str(email_entry["email"]), source="artifact"):
+            if self._insert_email(
+                con,
+                str(email_entry["email"]),
+                source="artifact",
+                depth=child_depth,
+            ):
                 inserted += 1
             self._link_artifact_source_seed(
                 con,
@@ -22029,6 +22042,7 @@ class ArtifactQueueProcessor:
                 "phone",
                 source="artifact",
                 confidence=0.66,
+                depth=child_depth,
             ):
                 inserted += 1
             self._link_artifact_source_seed(
@@ -22060,6 +22074,7 @@ class ArtifactQueueProcessor:
                 str(ip_entry["ip_seed_type"]),
                 source="artifact",
                 confidence=0.64,
+                depth=child_depth,
             ):
                 inserted += 1
             self._link_artifact_source_seed(
@@ -22092,6 +22107,7 @@ class ArtifactQueueProcessor:
                 str(host_entry["host_seed_type"]),
                 source="artifact",
                 confidence=confidence,
+                depth=child_depth,
             ):
                 inserted += 1
             self._link_artifact_source_seed(
@@ -22123,6 +22139,7 @@ class ArtifactQueueProcessor:
                 source="artifact",
                 confidence=0.68,
                 source_seed_id=source_seed_id,
+                depth=child_depth,
                 relation_metadata=self._merge_artifact_relation_context(
                     dict(url_entry["relation_metadata"]),
                     artifact_context,
@@ -22153,6 +22170,7 @@ class ArtifactQueueProcessor:
                 seed_type,
                 source="artifact",
                 confidence=confidence,
+                depth=child_depth,
             ):
                 inserted += 1
             self._merge_artifact_metadata_into_seed(
@@ -22596,6 +22614,7 @@ class ArtifactQueueProcessor:
         source: str,
         confidence: float,
         source_seed_id: int | None = None,
+        depth: int = 1,
         relation_metadata: dict[str, Any] | None = None,
     ) -> int:
         entry = self._artifact_url_seed_persistence_entry(
@@ -22611,6 +22630,7 @@ class ArtifactQueueProcessor:
             str(entry["seed_type"]),
             source=source,
             confidence=confidence,
+            depth=depth,
         ):
             inserted += 1
         self._link_artifact_source_seed(
@@ -22627,6 +22647,7 @@ class ArtifactQueueProcessor:
             seed_type=str(entry["seed_type"]),
             relation_metadata=dict(entry["relation_metadata"]),
             pivot_entries=list(entry["social_pivot_entries"]),
+            depth=max(1, int(depth or 0) + 1),
         )
         for related_seed_entry in entry["related_seed_entries"]:
             if not isinstance(related_seed_entry, dict):
@@ -22637,6 +22658,7 @@ class ArtifactQueueProcessor:
                 str(related_seed_entry["seed_type"]),
                 source=source,
                 confidence=float(related_seed_entry["confidence"]),
+                depth=depth,
             ):
                 inserted += 1
             self._link_artifact_source_seed(
@@ -22753,6 +22775,7 @@ class ArtifactQueueProcessor:
         seed_type: str,
         relation_metadata: dict[str, Any] | None = None,
         pivot_entries: list[dict[str, Any]] | None = None,
+        depth: int = 1,
     ) -> None:
         url_seed_id = self._lookup_seed_id(con, url, seed_type)
         if url_seed_id is None:
@@ -22781,6 +22804,7 @@ class ArtifactQueueProcessor:
                 seed_type_value,
                 source="artifact",
                 confidence=float(pivot_entry["seed_confidence"]),
+                depth=depth,
             )
             target_seed_id = self._lookup_seed_id(con, seed_value, seed_type_value)
             if target_seed_id is None or target_seed_id == url_seed_id:
@@ -39334,22 +39358,44 @@ class ArtifactQueueProcessor:
         *,
         source: str,
         confidence: float,
+        depth: int = 1,
     ) -> bool:
+        normalized_depth = max(0, int(depth or 0))
         before = con.total_changes
         con.execute(
             """
             INSERT INTO engagement_seeds
                 (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
-            VALUES (?, ?, ?, ?, 'pending', 1, ?, '{}')
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, '{}')
             ON CONFLICT(engagement_id, seed_type, seed_value) DO UPDATE SET
                 source=excluded.source,
                 status='pending',
+                depth=MIN(engagement_seeds.depth, excluded.depth),
                 confidence=MAX(engagement_seeds.confidence, excluded.confidence),
                 updated_at=CURRENT_TIMESTAMP
             """,
-            (self._engagement_id, seed_value, seed_type, source, confidence),
+            (self._engagement_id, seed_value, seed_type, source, normalized_depth, confidence),
         )
         return con.total_changes > before
+
+    def _artifact_child_seed_depth(
+        self,
+        con: sqlite3.Connection,
+        source_seed_id: int | None,
+    ) -> int:
+        if source_seed_id is None:
+            return 1
+        row = con.execute(
+            """
+            SELECT depth
+            FROM engagement_seeds
+            WHERE id=? AND engagement_id=?
+            """,
+            (source_seed_id, self._engagement_id),
+        ).fetchone()
+        if row is None:
+            return 1
+        return max(1, int(row[0] or 0) + 1)
 
     def _lookup_seed_id(
         self,
@@ -39698,6 +39744,7 @@ class ArtifactQueueProcessor:
         email: str,
         *,
         source: str,
+        depth: int = 1,
     ) -> bool:
         normalized = email.strip().lower()
         if "@" not in normalized:
@@ -39721,6 +39768,7 @@ class ArtifactQueueProcessor:
             "email",
             source="artifact",
             confidence=0.74,
+            depth=depth,
         )
         return con.total_changes > before
 

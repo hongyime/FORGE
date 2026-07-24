@@ -66,11 +66,29 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit current-code recursive kill-chain automation for
-  one concrete discovery/deepening gap that can be proven with local fixtures,
-  prioritizing bounded recursive scheduling or seed promotion evidence over UI
-  polish. Keep provider calls mocked unless explicit ROE/scope manifest and
-  target are supplied.
+- [ ] Next checkpoint: implement uniform live authorization policy. Any
+  non-dry-run kill-chain launch must require both ROE ID and scope manifest by
+  default, and live scope callbacks must fail closed with
+  `scope_manifest_required` when no manifest is loaded. Update CLI and WebUI
+  launch paths first, then add focused local/mock tests for CLI live-launch
+  rejection and WebUI route rejection. Do not add proxy/Tor/IP bypass,
+  destructive validation, or scope relaxation.
+- [ ] Follow-up checkpoint: fix URL-surface recursive child depth. D5 and public
+  profile URL-surface children should preserve parent-relative depth instead of
+  resetting to `1`, so depth budgets and scheduling priority cannot be bypassed.
+- [ ] Follow-up checkpoint: constrain email-domain root promotion. Email domains
+  discovered from unrelated third-party addresses must not automatically become
+  root-domain fan-out targets unless scope/corroboration allows them.
+- [x] Artifact-derived child seed depth checkpoint:
+  `ArtifactQueueProcessor` now preserves source-relative recursion depth for
+  artifact-derived emails, phones, IPs, hosts, URLs, social pivots, Firebase
+  project/storage/RTDB seeds, and Supabase project URL/ref seeds. Existing seeds
+  keep the shortest known depth on conflict, and artifact provenance relations
+  remain intact. Verification: compile passed; Ruff passed; focused artifact
+  depth/mobile/persistence tests passed (`3 passed`); slow local kill-chain
+  artifact graph smoke passed with slow filtering disabled (`1 passed`);
+  workspace `.forge_data/engagements` contained `0` non-master engagement DBs
+  after the run.
 - [x] Report-state overview filtering checkpoint:
   Static dashboard overview rows and React overview cards can now be filtered by
   deterministic report state: prior report generations, raw-export fallback,

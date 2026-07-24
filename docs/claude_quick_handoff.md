@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: report-state overview filtering is complete.
+Latest checkpoint: artifact-derived child seed depth is complete.
+`ArtifactQueueProcessor` now preserves source-relative recursion depth for
+artifact-derived emails, phones, IPs, hosts, URLs, social pivots, Firebase
+project/storage/RTDB seeds, and Supabase project URL/ref seeds. Existing seeds
+keep the shortest known depth on conflict, and artifact provenance relations
+remain intact. Verification: compile passed; Ruff passed; focused artifact
+depth/mobile/persistence tests passed (`3 passed`); slow local kill-chain
+artifact graph smoke passed with slow filtering disabled (`1 passed`);
+`.forge_data/engagements` contained `0` non-master engagement DBs after the run.
+
+Next checkpoint: implement uniform live authorization policy. Any non-dry-run
+kill-chain launch should require both ROE ID and scope manifest by default, and
+live scope callbacks should fail closed with `scope_manifest_required` when no
+manifest is loaded. Update CLI and WebUI launch paths first, then add focused
+local/mock tests for CLI live-launch rejection and WebUI route rejection. Do not
+add proxy/Tor/IP bypass, destructive validation, or scope relaxation.
+
+Follow-up checkpoints from subagent audit: fix URL-surface recursive child depth
+so D5/public-profile children do not reset to `1`, and constrain discovered
+third-party email domains so they do not become root fan-out targets without
+scope/corroboration.
+
+Previous checkpoint: report-state overview filtering is complete.
 Static dashboard overview rows and React overview cards can now be filtered by
 deterministic report state: prior report generations, raw-export fallback,
 fallback reason, and write-degraded report families. Static filters persist
@@ -34,12 +56,6 @@ store. Verification: compile passed; Ruff passed; frontend build passed;
 focused report-state filter contracts passed (`4 passed`); full dashboard/API/UI
 contract set passed (`84 passed`); `.forge_data/engagements` contained `0`
 non-master engagement DBs after the run.
-
-Next checkpoint: audit current-code recursive kill-chain automation for one
-concrete discovery/deepening gap that can be proven with local fixtures,
-prioritizing bounded recursive scheduling or seed promotion evidence over UI
-polish. Keep provider calls mocked unless explicit ROE/scope manifest and
-target are supplied.
 
 Previous checkpoint: report-history aggregate review is complete.
 Static dashboard and live API list/detail payloads now include
