@@ -20,7 +20,7 @@ from forge.opsec.rate_limiter import AdaptiveRateLimiter
 from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet, with_internet_retry
 from forge.phase5.approval_gate import ActionClassification, request_approval
 from forge.utils.cloud_exposure_gate import (
-    is_reportable_cloud_validation,
+    latest_cloud_validation_reportability_index,
     normalize_cloud_exposure_asset_type,
 )
 from forge.utils.validation_proof import parse_validated_detail
@@ -54,23 +54,13 @@ def _linked_cloud_validation_is_reportable(
     identifier = str(domain or "").strip().lower()
     if not identifier:
         return False
+    validation_index = latest_cloud_validation_reportability_index(
+        conn,
+        engagement_id,
+        require_stable_proof=True,
+    )
     for asset_type in _validation_asset_types_for_key_service(service):
-        try:
-            rows = conn.execute(
-                """
-                SELECT validation_status, validation_method
-                FROM cloud_validation_results
-                WHERE engagement_id=? AND asset_type=? AND lower(identifier)=?
-                ORDER BY COALESCE(checked_at, '') DESC, id DESC
-                """,
-                (engagement_id, asset_type, identifier),
-            ).fetchall()
-        except sqlite3.Error:
-            continue
-        if any(
-            is_reportable_cloud_validation(asset_type, row[0], row[1])
-            for row in rows
-        ):
+        if validation_index.get((asset_type, identifier)) is True:
             return True
     return False
 

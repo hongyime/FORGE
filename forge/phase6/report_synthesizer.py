@@ -53,6 +53,7 @@ from forge.db.schema import apply_schema
 from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
     is_reportable_cloud_validation,
+    latest_cloud_validation_reportability_index,
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
@@ -594,40 +595,14 @@ class ContextBuilder:
         return ordered
 
     def _cloud_validation_index(self, con: sqlite3.Connection) -> dict[tuple[str, str], str]:
-        columns = self._table_columns(con, "cloud_validation_results")
-        if not {"asset_type", "identifier", "validation_status"}.issubset(columns):
-            return {}
-        order_checked_at_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
-        order_id_expr = "id" if "id" in columns else "0"
-        try:
-            rows = con.execute(
-                f"""
-                SELECT asset_type,
-                       identifier,
-                       validation_status,
-                       {"validation_method" if "validation_method" in columns else "NULL AS validation_method"}
-                FROM cloud_validation_results
-                WHERE engagement_id=?
-                ORDER BY asset_type ASC,
-                         identifier ASC,
-                         {order_checked_at_expr} ASC,
-                         {order_id_expr} ASC
-                """,
-                (self._eid,),
-            ).fetchall()
-        except sqlite3.OperationalError:
-            return {}
-        validation_index: dict[tuple[str, str], str] = {}
-        for row in rows:
-            asset_type = self._normalize_validation_asset_type(str(row["asset_type"] or ""))
-            identifier = str(row["identifier"] or "").strip().lower()
-            if not asset_type or not identifier:
-                continue
-            status = str(row["validation_status"] or "").strip().upper()
-            method = str(row["validation_method"] or "").strip()
-            if is_reportable_cloud_validation(asset_type, status, method):
-                validation_index[(asset_type, identifier)] = status
-        return validation_index
+        return {
+            key: "VALIDATED" if reportable else ""
+            for key, reportable in latest_cloud_validation_reportability_index(
+                con,
+                self._eid,
+                require_stable_proof=True,
+            ).items()
+        }
 
     @staticmethod
     def _normalize_validation_asset_type(value: str) -> str:

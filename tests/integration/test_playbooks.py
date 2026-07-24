@@ -420,7 +420,8 @@ def test_cloud_leak_playbook_allows_active_key_with_linked_reportable_validation
                  validation_method, evidence, notes)
             VALUES
                 (7, 'firebase', 'linked-firebase', 'VALIDATED',
-                 'firebase_database_shallow_read', 'non-empty live data',
+                 'firebase_database_shallow_read',
+                 'Firebase project reference responded with non-empty data.',
                  'deterministic proof method')
             """
         )
@@ -431,6 +432,78 @@ def test_cloud_leak_playbook_allows_active_key_with_linked_reportable_validation
     assert result["validated"] is True
     assert result["resources"] == [{"name": "[dry-run-firebase-bucket]", "type": "storage"}]
     assert result["sensitive_files"] == []
+
+
+def test_cloud_leak_playbook_uses_latest_linked_validation_status(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema(conn)
+        run_migrations(conn)
+        conn.executescript(
+            """
+            DROP TABLE cloud_validation_results;
+            CREATE TABLE cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            );
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (7, 'Acme Example', '["acme.example"]', 'ACTIVE', 'tester')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend,
+                 source_url, key_redacted, key_enc, validation_state,
+                 validation_detail)
+            VALUES
+                (83, 7, 'stale-firebase', 'firebase', 'firebase_api_key',
+                 'artifact', 'app.js', 'AIza...STALE', 'encrypted-key',
+                 'ACTIVE', 'ACTIVE:manual_validated_note:no deterministic proof')
+            """
+        )
+        conn.executemany(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, evidence, notes, checked_at)
+            VALUES
+                (7, 'firebase', 'stale-firebase', ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "VALIDATED",
+                    "firebase_database_shallow_read",
+                    "non-empty live data",
+                    "older deterministic proof",
+                    "2026-07-01T00:00:00Z",
+                ),
+                (
+                    "UNVERIFIED",
+                    "firebase_database_shallow_read",
+                    "latest blocked probe",
+                    "latest proof no longer reportable",
+                    "2026-07-02T00:00:00Z",
+                ),
+            ],
+        )
+        conn.commit()
+
+        result = run_cloud_leak_playbook(7, 83, conn, dry_run=True)
+
+    assert result == {"validated": False, "resources": [], "sensitive_files": []}
 
 
 def test_automation_suggestions_do_not_offer_lateral_movement(tmp_path):

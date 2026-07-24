@@ -271,13 +271,28 @@ historical notes only, not as current instructions.
   Review: sidecar `Hume` independently confirmed the fail-open row and graph
   gates plus API inheritance paths. Handoff:
   `.claude/handoffs/2026-07-24-dashboard-malformed-cloud-finding-gate.md`.
+- [x] Latest validation linked-proof parity checkpoint:
+  Linked key/cloud proof gates now use a shared latest-row cloud validation
+  reportability helper. Older `VALIDATED` rows no longer authorize
+  deterministic key findings, Phase 6 key counts/report context, dashboard/API
+  key counts, or cloud-leak playbook admission after a newer row for the same
+  asset becomes `UNVERIFIED`, `DEAD`, honeypot-suspected, unsupported, or
+  otherwise non-reportable. Direct key-validator proof on the key row still
+  remains valid for that exact key. Verification: compile passed; Ruff passed;
+  cross-surface latest-validation regression passed (`1 passed`); playbook
+  linked-validation slice passed (`3 passed`); full deterministic findings file
+  passed (`17 passed`); Phase 6 cloud/report key selectors passed (`2 passed`);
+  full static dashboard file passed (`21 passed`); full web UI engagement API
+  file passed (`37 passed, 75 warnings`); full playbook integration file passed
+  (`19 passed`). Review: sidecar `Wegener` independently confirmed the stale
+  linked-proof indexes and recommended the shared latest-row policy. Handoff:
+  `.claude/handoffs/2026-07-24-latest-validation-linked-proof-parity.md`.
 - [ ] Next gate:
-  Fix latest-validation proof parity for linked key/cloud confirmations. The
-  next audit target is duplicate validation rows where an older `VALIDATED`
-  proof and later `UNVERIFIED`/non-reportable proof can disagree across
-  deterministic finding synthesis, Phase 6, dashboard/API summaries, and graph
-  filtering. Add regressions that prove latest matching validation evidence
-  wins everywhere before refactoring shared policy.
+  Fix kill-chain dry-run finalization contract. `forge kill-chain --dry-run`
+  should not schedule finalization commands that can perform network-capable
+  vulnerability/exploit correlation without explicit dry-run/scope arguments.
+  Add a regression first, then either pass explicit dry-run/scope flags to
+  finalizers or skip network-capable finalizers in dry-run mode.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

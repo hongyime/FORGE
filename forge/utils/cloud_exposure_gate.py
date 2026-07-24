@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import sqlite3
+
+from forge.utils.validation_proof import parse_validated_detail
 
 CANONICAL_CLOUD_ASSET_TYPES = frozenset(
     {
@@ -99,3 +102,59 @@ def is_reportable_cloud_validation(
         str(validation_status or "").strip().upper() == "VALIDATED"
         and is_reportable_cloud_validation_method(asset_type, validation_method)
     )
+
+
+def _cloud_validation_columns(con: sqlite3.Connection) -> set[str]:
+    try:
+        return {
+            str(row[1])
+            for row in con.execute("PRAGMA table_info(cloud_validation_results)").fetchall()
+        }
+    except sqlite3.Error:
+        return set()
+
+
+def latest_cloud_validation_reportability_index(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    *,
+    require_stable_proof: bool = False,
+) -> dict[tuple[str, str], bool]:
+    """Return reportability for the latest validation row per cloud resource."""
+
+    columns = _cloud_validation_columns(con)
+    if not {"asset_type", "identifier", "validation_status"}.issubset(columns):
+        return {}
+    method_expr = "validation_method" if "validation_method" in columns else "NULL"
+    evidence_expr = "evidence" if "evidence" in columns else "NULL"
+    notes_expr = "notes" if "notes" in columns else "NULL"
+    checked_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
+    id_expr = "id" if "id" in columns else "0"
+    try:
+        rows = con.execute(
+            f"""
+            SELECT asset_type, identifier, validation_status, {method_expr},
+                   {evidence_expr}, {notes_expr}
+            FROM cloud_validation_results
+            WHERE engagement_id=?
+            ORDER BY asset_type ASC, identifier ASC, {checked_expr} ASC, {id_expr} ASC
+            """,
+            (engagement_id,),
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+
+    index: dict[tuple[str, str], bool] = {}
+    for asset_raw, identifier_raw, status_raw, method_raw, evidence_raw, notes_raw in rows:
+        asset_type = normalize_cloud_exposure_asset_type(str(asset_raw or ""))
+        identifier = str(identifier_raw or "").strip().lower()
+        if not asset_type or not identifier:
+            continue
+        method = str(method_raw or "").strip()
+        reportable = is_reportable_cloud_validation(asset_type, str(status_raw or ""), method)
+        if reportable and require_stable_proof:
+            proof = str(evidence_raw or notes_raw or "").strip()
+            parsed = parse_validated_detail(f"VALIDATED:{method}:{proof}")
+            reportable = str(parsed["validation_status"] or "").strip().upper() == "VALIDATED"
+        index[(asset_type, identifier)] = reportable
+    return index

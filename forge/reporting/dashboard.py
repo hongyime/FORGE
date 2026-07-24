@@ -21,7 +21,7 @@ from xml.etree import ElementTree
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
-    is_reportable_cloud_validation,
+    latest_cloud_validation_reportability_index,
     normalize_cloud_exposure_asset_type,
 )
 from forge.utils.validation_proof import parse_validated_detail
@@ -489,34 +489,10 @@ def _reportable_cloud_validation_index(
     con: sqlite3.Connection,
     engagement_id: int,
 ) -> dict[tuple[str, str], bool]:
-    columns = _table_columns(con, "cloud_validation_results")
-    if not {"asset_type", "identifier", "validation_status"}.issubset(columns):
-        return {}
-    method_expr = "validation_method" if "validation_method" in columns else "NULL AS validation_method"
-    checked_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
-    id_expr = "id" if "id" in columns else "0"
-    rows = _fetch_rows(
+    return latest_cloud_validation_reportability_index(
         con,
-        f"""
-        SELECT asset_type, identifier, validation_status, {method_expr}
-        FROM cloud_validation_results
-        WHERE engagement_id=?
-        ORDER BY asset_type ASC, identifier ASC, {checked_expr} ASC, {id_expr} ASC
-        """,
-        (engagement_id,),
+        engagement_id,
     )
-    index: dict[tuple[str, str], bool] = {}
-    for row in rows:
-        asset = normalize_cloud_exposure_asset_type(str(row["asset_type"] or ""))
-        identifier = str(row["identifier"] or "").strip().lower()
-        if not asset or not identifier:
-            continue
-        index[(asset, identifier)] = is_reportable_cloud_validation(
-            asset,
-            str(row["validation_status"] or ""),
-            str(row["validation_method"] or ""),
-        )
-    return index
 
 
 def _validation_asset_types_for_key_service(service: str) -> list[str]:

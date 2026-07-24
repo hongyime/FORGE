@@ -25,37 +25,40 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: dashboard malformed cloud finding gating is complete. Static
-dashboard and live API review now fail closed for malformed
-`DETERMINISTIC_CLOUD_EXPOSURE` rows and imported graph VULN nodes; deterministic
-cloud findings need a normalized asset, identifier, and reportable validation
-index proof before entering finding tables, severity counts, vuln summaries, or
-graph vulnerability nodes.
+Latest checkpoint: latest validation linked-proof parity is complete. Linked
+key/cloud proof gates now use a shared latest-row cloud validation reportability
+helper, so older `VALIDATED` rows no longer authorize deterministic key
+findings, Phase 6 key counts/report context, dashboard/API key counts, or
+cloud-leak playbook admission after a newer row for the same asset becomes
+non-reportable. Direct key-validator proof on the key row still remains valid
+for that exact key.
 
-Verification: compile/Ruff passed; focused malformed dashboard/API regressions
-passed (`2 passed`); full static dashboard file passed (`21 passed`); full web
-UI engagement API file passed (`37 passed, 75 warnings`); Phase 6 cloud selector
-passed (`2 passed, 98 deselected`); pytest engagement cleanup reported
-`removed=4 remaining=0`. Review: sidecar `Hume` confirmed the original row/graph
-fail-open paths and API inheritance. Handoff:
-`.claude/handoffs/2026-07-24-dashboard-malformed-cloud-finding-gate.md`.
+Verification: compile/Ruff passed; cross-surface latest-validation regression
+passed (`1 passed`); playbook linked-validation slice passed (`3 passed`); full
+deterministic findings file passed (`17 passed`); Phase 6 cloud/report key
+selectors passed (`2 passed`); full static dashboard file passed (`21 passed`);
+full web UI engagement API file passed (`37 passed, 75 warnings`); full playbook
+integration file passed (`19 passed`). Review: sidecar `Wegener` confirmed the
+stale linked-proof indexes and recommended the shared latest-row policy.
+Handoff: `.claude/handoffs/2026-07-24-latest-validation-linked-proof-parity.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
 uses ordered bounded candidate normalization; existing focused worker regression
 and persisted recon-output artifact slice both passed.
 
-Previous checkpoint: prerequisite flow adapter extraction is complete. The
-remaining prerequisite display/execution/completion branch now lives in
-`handle_kill_chain_prerequisite_flow()` behind CLI-provided callbacks. `forge
-kill-chain` still owns run finalization, dashboard refresh, audit adapters,
-ROE/scope child-argv hardening, and module dispatch construction.
+Previous checkpoint: dashboard malformed cloud finding gating is complete.
+Static dashboard and live API review now fail closed for malformed
+`DETERMINISTIC_CLOUD_EXPOSURE` rows and imported graph VULN nodes; deterministic
+cloud findings need a normalized asset, identifier, and reportable validation
+index proof before entering reportable review surfaces.
 
-Current next gate: fix latest-validation proof parity for linked key/cloud
-confirmations. Add duplicate-validation regressions where an older `VALIDATED`
-proof and later `UNVERIFIED`/non-reportable proof disagree, then make latest
-matching validation evidence win consistently across deterministic finding
-synthesis, Phase 6, dashboard/API summaries, and graph filtering.
+Current next gate: fix kill-chain dry-run finalization contract. `forge
+kill-chain --dry-run` should not schedule finalization commands that can perform
+network-capable vulnerability/exploit correlation without explicit
+dry-run/scope arguments. Add the regression first, then pass explicit
+dry-run/scope flags to finalizers or skip network-capable finalizers in dry-run
+mode.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use

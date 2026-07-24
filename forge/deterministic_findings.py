@@ -13,6 +13,7 @@ from forge.utils.cloud_exposure_gate import (
     STORAGE_LISTING_VALIDATION_METHODS,
     STORAGE_METADATA_VALIDATION_METHODS,
     is_reportable_cloud_validation_method,
+    latest_cloud_validation_reportability_index,
 )
 from forge.utils.validation_proof import parse_validated_detail
 
@@ -171,14 +172,17 @@ class DeterministicFindingEngine:
             apply_schema(con)
             run_migrations(con)
             columns = _table_columns(con, "vulnerability_findings")
+            validation_columns = _table_columns(con, "cloud_validation_results")
+            checked_expr = "COALESCE(checked_at, '')" if "checked_at" in validation_columns else "''"
+            id_expr = "id" if "id" in validation_columns else "0"
             validation_index = self._validation_index(con)
 
             for row in con.execute(
-                """
+                f"""
                 SELECT asset_type, identifier, validation_status, validation_method, http_status, evidence, notes
                 FROM cloud_validation_results
                 WHERE engagement_id=?
-                ORDER BY id ASC
+                ORDER BY asset_type ASC, identifier ASC, {checked_expr} ASC, {id_expr} ASC
                 """,
                 (self._engagement_id,),
             ).fetchall():
@@ -235,22 +239,12 @@ class DeterministicFindingEngine:
             con.close()
         return summary
 
-    def _validation_index(self, con: sqlite3.Connection) -> dict[tuple[str, str], str]:
-        rows = con.execute(
-            """
-            SELECT asset_type, identifier, validation_status, validation_method, evidence, notes
-            FROM cloud_validation_results
-            WHERE engagement_id=?
-            """,
-            (self._engagement_id,),
-        ).fetchall()
-        return {
-            (_normalize_asset_type(str(row["asset_type"] or "")), str(row["identifier"] or "").strip().lower()): str(
-                row["validation_status"] or ""
-            ).upper()
-            for row in rows
-            if _is_reportable_linked_key_validation(row)
-        }
+    def _validation_index(self, con: sqlite3.Connection) -> dict[tuple[str, str], bool]:
+        return latest_cloud_validation_reportability_index(
+            con,
+            self._engagement_id,
+            require_stable_proof=True,
+        )
 
     @staticmethod
     def _cloud_target_url(asset_type: str, identifier: str) -> str:
@@ -331,7 +325,7 @@ class DeterministicFindingEngine:
     def _build_key_finding(
         self,
         row: sqlite3.Row,
-        validation_index: dict[tuple[str, str], str],
+        validation_index: dict[tuple[str, str], bool],
     ) -> FindingSpec | None:
         service = _normalize_asset_type(str(row["service"] or ""))
         domain = str(row["domain"] or "").strip()
@@ -345,10 +339,10 @@ class DeterministicFindingEngine:
         if validation_state != "ACTIVE" or not service:
             return None
 
-        linked_status = validation_index.get((service, domain.lower()))
+        linked_confirmed = validation_index.get((service, domain.lower())) is True
         parsed_validation = parse_validated_detail(validation_detail)
         validator_confirmed = parsed_validation["validation_status"] == "VALIDATED"
-        confirmed = linked_status == "VALIDATED" or validator_confirmed
+        confirmed = linked_confirmed or validator_confirmed
         if not confirmed:
             return None
         description = (
