@@ -78,6 +78,7 @@ _ARTIFACT_EMITTED_CLOUD_ASSET_TYPES = (
     "flux_kustomization",
     "flux_ocirepository",
     "gcp_appspot",
+    "gcp_cloud_run",
     "gcp_cloudfunctions",
     "gcp_kms",
     "gcp_secretmanager",

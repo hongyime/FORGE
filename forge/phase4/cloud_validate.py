@@ -3395,6 +3395,11 @@ class CloudValidatorRegistry:
                 "cloudfunctions.net",
                 require_qualified_identifier=True,
             ),
+            "gcp_cloud_run": ManagedHostingReachabilityValidator(
+                "gcp_cloud_run",
+                "run.app",
+                require_qualified_identifier=True,
+            ),
             "github_pages": ManagedHostingReachabilityValidator("github_pages", "github.io"),
             "gitlab_pages": ManagedHostingReachabilityValidator("gitlab_pages", "gitlab.io"),
             "cloudflare_pages": ManagedHostingReachabilityValidator("cloudflare_pages", "pages.dev"),

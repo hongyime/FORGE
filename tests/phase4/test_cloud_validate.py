@@ -6701,6 +6701,7 @@ def test_run_cloud_asset_validate_batch_records_managed_alias_reachability_witho
                 "https://acme-edge.netlify.app",
                 "https://main.d3m0amplify.amplifyapp.com",
                 "https://us-central1-acmehub.cloudfunctions.net/ping",
+                "https://api-prod-abc.a.run.app",
                 "https://acme.github.io",
                 "https://security.gitlab.io",
                 "https://acme-pages.pages.dev",
@@ -6730,6 +6731,7 @@ def test_run_cloud_asset_validate_batch_records_managed_alias_reachability_witho
             ("amplify", "main.d3m0amplify.amplifyapp.com"),
             ("gcp_cloudfunctions", "https://us-central1-acmehub.cloudfunctions.net/ping"),
             ("gcp_cloudfunctions", "acmehub"),
+            ("gcp_cloud_run", "api-prod-abc.a.run.app"),
             ("github_pages", "acme.github.io"),
             ("gitlab_pages", "security.gitlab.io"),
             ("cloudflare_pages", "acme-pages"),
@@ -6748,9 +6750,9 @@ def test_run_cloud_asset_validate_batch_records_managed_alias_reachability_witho
     )
 
     assert result["status"] == "success"
-    assert result["attempted"] == 18
+    assert result["attempted"] == 19
     assert result["failed"] == 0
-    assert result["status_counts"]["ACCESSIBLE_BUT_NO_DATA"] == 16
+    assert result["status_counts"]["ACCESSIBLE_BUT_NO_DATA"] == 17
     assert result["status_counts"]["UNSUPPORTED"] == 2
     assert {item["asset_type"] for item in result["results"]} == {
         "amplify",
@@ -6760,6 +6762,7 @@ def test_run_cloud_asset_validate_batch_records_managed_alias_reachability_witho
         "cloudflare_worker",
         "fly",
         "gcp_cloudfunctions",
+        "gcp_cloud_run",
         "gcp_appspot",
         "github_pages",
         "gitlab_pages",
@@ -6796,6 +6799,7 @@ def test_run_cloud_asset_validate_batch_records_managed_alias_reachability_witho
                 "https://us-central1-acmehub.cloudfunctions.net/ping",
                 "ACCESSIBLE_BUT_NO_DATA",
             ),
+            ("gcp_cloud_run", "api-prod-abc.a.run.app", "ACCESSIBLE_BUT_NO_DATA"),
             ("github_pages", "acme.github.io", "ACCESSIBLE_BUT_NO_DATA"),
             ("gitlab_pages", "security.gitlab.io", "ACCESSIBLE_BUT_NO_DATA"),
             ("heroku", "acme-heroku", "ACCESSIBLE_BUT_NO_DATA"),

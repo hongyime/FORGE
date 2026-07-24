@@ -39516,6 +39516,7 @@ def test_artifact_queue_processor_promotes_managed_hosting_urls_as_provider_spec
         https://acme-amplify.amplifyapp.com/
         https://acmeportal.appspot.com/login
         https://us-central1-acmehub.cloudfunctions.net/ping
+        https://api-prod-abc.a.run.app/health
         https://acme.github.io/status
         https://security.gitlab.io/report
         """.strip(),
@@ -39528,7 +39529,7 @@ def test_artifact_queue_processor_promotes_managed_hosting_urls_as_provider_spec
 
     assert queued >= 1
     assert summary.processed >= 1
-    assert summary.discovered_seeds >= 7
+    assert summary.discovered_seeds >= 8
 
     con = sqlite3.connect(db_path)
     try:
@@ -39545,6 +39546,7 @@ def test_artifact_queue_processor_promotes_managed_hosting_urls_as_provider_spec
         assert ("amplify", "acme-amplify") in cloud_assets
         assert ("gcp_appspot", "acmeportal") in cloud_assets
         assert ("gcp_cloudfunctions", "https://us-central1-acmehub.cloudfunctions.net/ping") in cloud_assets
+        assert ("gcp_cloud_run", "api-prod-abc.a.run.app") in cloud_assets
         assert ("github_pages", "acme.github.io") in cloud_assets
         assert ("gitlab_pages", "security.gitlab.io") in cloud_assets
 
@@ -39563,6 +39565,7 @@ def test_artifact_queue_processor_promotes_managed_hosting_urls_as_provider_spec
         assert ("https://acme-amplify.amplifyapp.com/", "url") in seeds
         assert ("https://acmeportal.appspot.com/login", "url") in seeds
         assert ("https://us-central1-acmehub.cloudfunctions.net/ping", "url") in seeds
+        assert ("https://api-prod-abc.a.run.app/health", "url") in seeds
         assert ("https://acme.github.io/status", "url") in seeds
         assert ("https://security.gitlab.io/report", "url") in seeds
         assert ("acme-preview.vercel.app", "subdomain") not in seeds
@@ -39575,6 +39578,8 @@ def test_artifact_queue_processor_promotes_managed_hosting_urls_as_provider_spec
         assert ("appspot.com", "domain") not in seeds
         assert ("us-central1-acmehub.cloudfunctions.net", "subdomain") not in seeds
         assert ("cloudfunctions.net", "domain") not in seeds
+        assert ("api-prod-abc.a.run.app", "subdomain") not in seeds
+        assert ("run.app", "domain") not in seeds
         assert ("acme.github.io", "subdomain") not in seeds
         assert ("github.io", "domain") not in seeds
         assert ("security.gitlab.io", "subdomain") not in seeds

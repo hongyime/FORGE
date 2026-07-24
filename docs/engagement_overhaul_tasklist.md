@@ -91,12 +91,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: implement scout-confirmed passive Cloud Run provider-shape
-  support for qualified `*.run.app` URLs. Add managed-provider/domain handling,
-  `gcp_cloud_run` cloud-asset mapping, and registry validation wiring using the
-  existing managed-hosting reachability contract. Keep it passive/proof-bound:
-  no service probing beyond existing validation contract, no credential use, and
-  no generic `run.app` domain seed promotion.
+- [ ] Next checkpoint: continue the automated artifact discovery chain with one
+  more current-code-audited passive parser/OCR gap, provider-proof hardening
+  gap, or identity/provider-shape gap. Prefer a high-value path with compact
+  focused regression coverage, and keep implementation passive/proof-bound:
+  recursive seeds/cloud refs only unless an explicitly scoped live check is
+  already required by the validation contract.
+- [x] Cloud Run provider-shape checkpoint:
+  Qualified `*.run.app` URLs are now treated as managed provider hosts rather
+  than generic domains/subdomains. Artifact URL extraction maps them to
+  `gcp_cloud_run` cloud assets with the qualified hostname as identifier, and
+  the cloud validation registry wires `gcp_cloud_run` through the existing
+  managed-hosting reachability contract. This does not add new probing logic,
+  credential use, or scope relaxation. Verification: direct Cloud Run mapping
+  check passed, focused managed-hosting/registry tests passed (`3 passed, 132
+  deselected`), adjacent managed-hosting reachability/registry tests passed (`3
+  passed`), py_compile passed for touched files, Ruff passed for touched files,
+  `git diff --check` passed, and no `.forge_data/engagements` leftovers were
+  present.
 - [x] Sanity CMS config artifact checkpoint:
   `sanity.config.*`, `sanity.cli.*`, and `sanity.json` are now first-class static
   config artifacts. Static `projectId` plus `dataset` context is parsed from

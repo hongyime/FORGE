@@ -10361,6 +10361,7 @@ _MANAGED_CLOUD_PROVIDER_DOMAINS = (
     "pages.dev",
     "r2.cloudflarestorage.com",
     "r2.dev",
+    "run.app",
     "up.railway.app",
     "secretmanager.googleapis.com",
     "storage.cloud.google.com",
@@ -22787,6 +22788,10 @@ class ArtifactQueueProcessor:
                     "gcp_cloudfunctions",
                     re.compile(r"^[a-z0-9\-]+-([a-z0-9\-]+)\.cloudfunctions\.net$", re.IGNORECASE),
                 ),
+                (
+                    "gcp_cloud_run",
+                    re.compile(r"^([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9\-]+)*\.run\.app)$", re.IGNORECASE),
+                ),
                 ("netlify", re.compile(r"^([a-z0-9\-]+)\.netlify\.(?:app|com)$", re.IGNORECASE)),
                 ("github_pages", re.compile(r"^[a-z0-9][a-z0-9\-]*\.github\.io$", re.IGNORECASE)),
                 ("gitlab_pages", re.compile(r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.gitlab\.io$", re.IGNORECASE)),
@@ -22814,7 +22819,7 @@ class ArtifactQueueProcessor:
                         path = str(parsed_url.path or "").rstrip("/")
                         endpoint = f"{parsed_url.scheme or 'https'}://{hostname}{path}".strip()
                         return [{"asset_type": asset_type, "identifier": endpoint, "source": source}]
-                    if asset_type == "azure_static_web_app":
+                    if asset_type in {"azure_static_web_app", "gcp_cloud_run"}:
                         return [{"asset_type": asset_type, "identifier": hostname, "source": source}]
                     if asset_type == "amplify" and "." in project_ref:
                         return [{"asset_type": asset_type, "identifier": hostname, "source": source}]
