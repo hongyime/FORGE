@@ -614,7 +614,6 @@ def _key_scanner_inventory_rows(
         row
         for row in _key_scanner_rows(con, engagement_id)
         if _key_row_is_reportable(row, validation_index)
-        or str(row["validation_detail"] or "").strip().upper().startswith("VALIDATED:")
     ]
     return rows[:limit] if limit is not None else rows
 

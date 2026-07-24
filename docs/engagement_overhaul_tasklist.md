@@ -97,6 +97,16 @@ sentences as historical notes only, not as current instructions.
   fidelity for key findings, or bounded recursive execution behavior. Do not
   edit code until the audited gap maps to intake, discovery, recursion,
   artifact analysis, validation, scoring, review, fallback, or testing/cleanup.
+- [x] Dashboard key-scanner stable-proof gate checkpoint:
+  Dashboard/API engagement detail key-scanner findings now use the same
+  `_key_row_is_reportable` proof gate as deterministic report synthesis. Raw
+  or legacy `VALIDATED:` validation-detail prefixes no longer bypass parsed
+  stable-proof requirements, so stale/bare Firebase/Supabase/Sentry-style key
+  rows stay out of the reportable key findings section while validation review
+  inventory remains available elsewhere. Verification: stable-proof surface
+  integration passed (`1 passed`); focused dashboard key/validation slice
+  passed (`13 passed, 16 deselected`); focused report-synthesizer key exclusion
+  tests passed (`2 passed`); Ruff, py_compile, and `git diff --check` passed.
 - [x] Fan-out F GitHub-org keyscan scope checkpoint re-verified:
   Current `main` already routes discovered GitHub orgs as root-attributed
   `osint keyscan --domain <in-scope-root> --org <github_org>` work items using

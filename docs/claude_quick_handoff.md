@@ -25,16 +25,15 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Fan-out F GitHub-org keyscan scope was re-verified. Current
-`main` already routes discovered GitHub orgs as root-attributed
-`osint keyscan --domain <in-scope-root> --org <github_org>` work items using
-composite target keys (`<root>::github_org::<org>`), deterministic dedupe, and
-seed-run metadata containing `origin=keyscan_org`, `query_domain`, and
-`github_org`. The stale unchecked backlog item was verified rather than
-reimplemented. Verification: focused retry/per-root org keyscan tests passed
-(`2 passed`), root child scope-manifest propagation test passed (`1 passed`),
-Ruff passed for `forge/cli.py` plus focused keyscan tests, and py_compile passed
-for the same files.
+Latest checkpoint: dashboard/API key-scanner findings now require the parsed
+stable-proof gate. Raw or legacy `VALIDATED:` validation-detail prefixes no
+longer bypass `_key_row_is_reportable`, so stale/bare
+Firebase/Supabase/Sentry-style key rows stay out of reportable engagement
+detail key findings while validation review inventory remains available
+elsewhere. Verification: stable-proof surface integration passed (`1 passed`);
+focused dashboard key/validation slice passed (`13 passed, 16 deselected`);
+focused report-synthesizer key exclusion tests passed (`2 passed`); Ruff,
+py_compile, and `git diff --check` passed.
 
 Next checkpoint: perform a fresh current-code audit for the next real
 kill-chain correctness gap before adding more provider breadth or UI polish.
@@ -42,6 +41,17 @@ Prioritize validation/report-gate fidelity, dashboard/report source fidelity
 for key findings, or bounded recursive execution behavior. Do not edit code
 until the audited gap maps to intake, discovery, recursion, artifact analysis,
 validation, scoring, review, fallback, or testing/cleanup.
+
+Previous checkpoint: Fan-out F GitHub-org keyscan scope was re-verified.
+Current `main` already routes discovered GitHub orgs as root-attributed
+`osint keyscan --domain <in-scope-root> --org <github_org>` work items using
+composite target keys (`<root>::github_org::<org>`), deterministic dedupe, and
+seed-run metadata containing `origin=keyscan_org`, `query_domain`, and
+`github_org`. The stale unchecked backlog item was verified rather than
+reimplemented. Verification: focused retry/per-root org keyscan tests passed
+(`2 passed`), root child scope-manifest propagation test passed (`1 passed`),
+Ruff passed for `forge/cli.py` plus focused keyscan tests, and py_compile
+passed for the same files.
 
 Previous checkpoint: recursive depth-limit persisted-seed coverage is complete.
 Existing kill-chain code already filters over-depth persisted URL, email,

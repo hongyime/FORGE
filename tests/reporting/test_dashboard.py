@@ -3161,15 +3161,10 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
 
     detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
-    key_row = detail_payload["sections"]["key_scanner_findings"][0]
 
     assert detail_payload["counts"]["key_scanner_findings"] == 0
-    assert key_row["Service"] == "sentry"
-    assert key_row["State"] == "ACTIVE"
-    assert key_row["Validation Status"] == "UNVERIFIED"
-    assert key_row["Validation Method"] == "sentry_list_organizations"
-    assert key_row["Validation Proof"] == ""
-    assert "VALIDATED:sentry_list_organizations" in key_row["Proof"]
+    assert detail_payload["sections"]["key_scanner_findings"] == []
+    assert "VALIDATED:sentry_list_organizations" not in json.dumps(detail_payload)
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 
@@ -3337,11 +3332,10 @@ def test_generate_dashboard_downgrades_bare_legacy_key_validation_proof_rows(
 
     detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
-    key_row = detail_payload["sections"]["key_scanner_findings"][0]
 
-    assert key_row["Validation Status"] == "UNVERIFIED"
-    assert key_row["Validation Method"] == "firebase_database_shallow_read"
-    assert key_row["Validation Proof"] == ""
+    assert detail_payload["counts"]["key_scanner_findings"] == 0
+    assert detail_payload["sections"]["key_scanner_findings"] == []
+    assert "VALIDATED:firebase_database_shallow_read" not in json.dumps(detail_payload)
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 
