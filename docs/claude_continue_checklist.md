@@ -219,6 +219,18 @@ historical notes only, not as current instructions.
   graph/cloud selector slice passed (`5 passed, 32 deselected`); focused Phase
   6 and attack-path slices passed. Handoff:
   `.claude/handoffs/2026-07-24-effective-cloud-validation-status.md`.
+- [x] Downgraded provider validation reviewability checkpoint:
+  Method-tagged key-validation details now parse non-reportable statuses such
+  as `UNVERIFIED:<method>:<detail>` for structured review surfaces without
+  promoting them to reportable proof. Downgraded Datadog validation inventory
+  now exposes `UNVERIFIED` plus `datadog_api_key_validate` in dashboard detail
+  rows and Phase 6 raw-export metadata while keeping `validation_proof` empty
+  and key-finding counts at zero. Verification: compile passed; Ruff passed;
+  full validation-proof parser suite passed (`105 passed`); focused dashboard
+  key-validation proof slice passed (`4 passed, 18 deselected`); focused Phase
+  6 proof/raw-export slice passed (`7 passed, 79 deselected`); focused Phase 4
+  Datadog/newer-provider and attack-path proof slices passed. Handoff:
+  `.claude/handoffs/2026-07-24-downgraded-provider-validation-reviewability.md`.
 - [ ] Next target: audit another concrete passive-to-live validation parity gap,
   preferably provider-specific proof/detail reviewability for long-tail
   validators. Keep live provider calls mocked unless an explicit ROE/scope

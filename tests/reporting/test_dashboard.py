@@ -2486,6 +2486,43 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 
+def test_generate_dashboard_surfaces_unverified_key_validation_method(tmp_path: Path) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    _insert_dashboard_key_scanner_row(
+        db_path,
+        service="datadog",
+        pattern_name="datadog_api_key",
+        key_redacted="0123...cdef",
+        validation_detail=(
+            "UNVERIFIED:datadog_api_key_validate:"
+            "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+        ),
+    )
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    key_row = detail_payload["sections"]["key_scanner_findings"][0]
+
+    assert detail_payload["counts"]["key_scanner_findings"] == 0
+    assert key_row["Service"] == "datadog"
+    assert key_row["State"] == "ACTIVE"
+    assert key_row["Validation Status"] == "UNVERIFIED"
+    assert key_row["Validation Method"] == "datadog_api_key_validate"
+    assert key_row["Validation Proof"] == ""
+    assert "UNVERIFIED:datadog_api_key_validate" in key_row["Proof"]
+    assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
+
+
 def test_generate_dashboard_filters_stale_api_key_graph_snapshot_nodes(
     tmp_path: Path,
 ) -> None:

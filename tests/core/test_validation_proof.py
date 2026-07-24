@@ -48,8 +48,21 @@ def test_parse_validated_detail_rejects_unlabeled_embedded_validated_fragments()
     )
 
     assert proof == {
-        "validation_status": "",
-        "validation_method": "",
+        "validation_status": "UNVERIFIED",
+        "validation_method": "aws_sts_get_caller_identity",
+        "validation_proof": "",
+    }
+
+
+def test_parse_validated_detail_preserves_unverified_method_without_proof() -> None:
+    proof = parse_validated_detail(
+        "UNVERIFIED:datadog_api_key_validate:"
+        "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+    )
+
+    assert proof == {
+        "validation_status": "UNVERIFIED",
+        "validation_method": "datadog_api_key_validate",
         "validation_proof": "",
     }
 

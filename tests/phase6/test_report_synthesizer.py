@@ -1495,6 +1495,65 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     assert "key_enc" not in json.dumps(exported_finding)
 
 
+def test_synthesizer_preserves_unverified_key_validation_method_without_promotion(
+    tmp_eng_db,
+):
+    evidence = (
+        "key=0123...cdef; backend=artifact; "
+        "validation=UNVERIFIED:datadog_api_key_validate:"
+        "Datadog API key valid: site=datadoghq.eu proof=valid_true"
+    )
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN service TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN domain TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validation_detail TEXT")
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, validation_state, service, domain, validation_detail)
+            VALUES (?, 'ACTIVE', 'datadog', 'artifact://observability.env', ?)
+            """,
+            (
+                ENGAGEMENT_ID,
+                "UNVERIFIED:datadog_api_key_validate:"
+                "Datadog API key valid: site=datadoghq.eu proof=valid_true",
+            ),
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, cve_id, title, severity, evidence)
+            VALUES (?, NULL, 'Datadog validation inventory note', 'LOW', ?)
+            """,
+            (ENGAGEMENT_ID, evidence),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+    finding = next(
+        item
+        for item in ctx.exploits.exploited
+        if item.get("title") == "Datadog validation inventory note"
+    )
+
+    assert ctx.osint.key_findings_count == 0
+    assert finding["validation_status"] == "UNVERIFIED"
+    assert finding["validation_method"] == "datadog_api_key_validate"
+    assert finding["validation_notes"] == ""
+
+    raw_row = next(
+        row
+        for row in ReportSynthesizer._raw_export_csv_rows(ctx)
+        if row["title"] == "Datadog validation inventory note"
+    )
+    assert raw_row["validation_status"] == "UNVERIFIED"
+    assert raw_row["validation_method"] == "datadog_api_key_validate"
+    assert raw_row["validation_notes"] == ""
+
+
 def test_synthesizer_does_not_promote_unlabelled_embedded_validated_evidence(
     tmp_eng_db, tmp_path, patch_confirm_approve
 ):

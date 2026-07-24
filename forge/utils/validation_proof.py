@@ -10,9 +10,12 @@ from forge.utils.validation_identifiers import (
     looks_compound_placeholder_identifier as _looks_compound_placeholder_identifier,
 )
 
-_VALIDATED_DETAIL_RE = re.compile(
-    r"(?:^VALIDATED:([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?"
-    r"|(?:^|;\s*)validation=VALIDATED:([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?)",
+_VALIDATION_DETAIL_RE = re.compile(
+    r"(?:(?:^|\A)(VALIDATED|UNVERIFIED|DEAD|UNSUPPORTED|HONEYPOT_SUSPECTED|ACCESSIBLE_BUT_NO_DATA)"
+    r":([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?"
+    r"|(?:^|;\s*)validation="
+    r"(VALIDATED|UNVERIFIED|DEAD|UNSUPPORTED|HONEYPOT_SUSPECTED|ACCESSIBLE_BUT_NO_DATA)"
+    r":([A-Za-z0-9_.-]+)(?::([^;\r\n]+))?)",
     re.IGNORECASE,
 )
 _AWS_ACCOUNT_ID_RE = re.compile(
@@ -860,7 +863,7 @@ def _validated_proof_is_reportable(method: str, proof: str) -> bool:
 
 
 def parse_validated_detail(value: object, *, proof_limit: int = 280) -> dict[str, Any]:
-    """Parse ``VALIDATED:<method>:<proof>`` detail into safe structured fields.
+    """Parse method-tagged validation detail into safe structured fields.
 
     Key scanner rows and deterministic findings historically persisted provider
     proof in free-form detail/evidence strings. Keeping this parser read-only
@@ -869,12 +872,19 @@ def parse_validated_detail(value: object, *, proof_limit: int = 280) -> dict[str
     """
 
     text = str(value or "").strip()
-    match = _VALIDATED_DETAIL_RE.search(text)
+    match = _VALIDATION_DETAIL_RE.search(text)
     if not match:
         return _empty_proof()
 
-    method = str(match.group(1) or match.group(3) or "").strip()
-    proof = str(match.group(2) or match.group(4) or "").strip()[:proof_limit]
+    status = str(match.group(1) or match.group(4) or "").strip().upper()
+    method = str(match.group(2) or match.group(5) or "").strip()
+    proof = str(match.group(3) or match.group(6) or "").strip()[:proof_limit]
+    if status != "VALIDATED":
+        return {
+            "validation_status": status,
+            "validation_method": method,
+            "validation_proof": "",
+        }
     if not _validated_proof_is_reportable(method, proof):
         return {
             "validation_status": "UNVERIFIED",
