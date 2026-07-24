@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: packaged Helm chart values recursion is complete. Passive
+Latest checkpoint: dashboard/API key-section proof gating is complete. Static
+dashboard and live engagement detail API section payloads now reuse the shared
+latest-validation proof gate for key-scanner findings. Stale ACTIVE key rows
+with embedded `VALIDATED` detail no longer leak into
+`sections.key_scanner_findings` when newer cloud validation inventory marks the
+linked resource unreportable. This matches counts, graph nodes, reports, and
+API summaries. Verification: compile/Ruff passed; stable-proof integration
+passed (`1 passed`); adjacent reportability/attack-path slice passed (`29
+passed`); cloud exposure and validation-proof suites passed (`119 passed`);
+report cloud-validation metadata slice passed (`1 passed`); pytest engagement
+cleanup reported `removed=2 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-dashboard-key-section-proof-gate.md`.
+
+Current next gate: implement the verified passive HAR WebSocket message parser
+gap. Extend `_har_entry_lines()` / `_har_entry_family_lines()` to read bounded
+`_webSocketMessages[]` data and add fixture coverage that recursive seeds/cloud
+assets are produced without browser replay, live probing, credential use, scope
+relaxation, proxy/IP rotation, or rate-limit bypass. If that is already done in
+a newer commit, continue concrete backend kill-chain gaps only.
+
+Previous checkpoint: packaged Helm chart values recursion is complete. Passive
 archive extraction now recognizes packaged Helm chart member paths such as
 `acme-portal-1.2.3.tgz/acme-portal/values.yaml` as `helm-values` without
 broadening arbitrary `*/values.yaml` files. Extracted chart values now run
@@ -36,12 +56,6 @@ affected label/orchestration/Helm-index parser files passed (`8 passed`).
 Pytest engagement cleanup reported `removed=0 remaining=0`.
 Handoff:
 `.claude/handoffs/2026-07-24-packaged-helm-values-recursion.md`.
-
-Current next gate: continue concrete backend kill-chain gaps only. Good targets
-are another verified passive parser/container/OCR gap, provider-proof
-hardening, identity/provider normalization where a source shape is missing, or
-bounded-worker migration for a proven pure-local sequential enricher. Do not add
-live target probing without explicit ROE/scope manifest and mocked tests.
 
 Previous checkpoint: storage metadata validation proof-gating is complete.
 Shared

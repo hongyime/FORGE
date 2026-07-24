@@ -91,6 +91,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Dashboard/API key-section proof-gate checkpoint:
+  Static dashboard and live engagement detail API section payloads now reuse the
+  shared latest-validation proof gate for key-scanner findings. Stale ACTIVE key
+  rows with embedded `VALIDATED` detail no longer leak into
+  `sections.key_scanner_findings` when newer cloud validation inventory marks
+  the linked resource unreportable, matching counts, graph nodes, reports, and
+  API summaries. Verification: compile passed; Ruff passed; stable-proof
+  integration passed (`1 passed`); adjacent reportability/attack-path slice
+  passed (`29 passed`); cloud exposure and validation-proof suites passed
+  (`119 passed`); report cloud-validation metadata slice passed (`1 passed`);
+  pytest engagement cleanup reported `removed=2 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-dashboard-key-section-proof-gate.md`.
+- [ ] HAR WebSocket message static-recursion checkpoint:
+  Extend the passive HAR parser to read bounded `_webSocketMessages[]` payloads
+  and feed safe message data through the existing recursive artifact text
+  discovery path. Add a fixture proving WebSocket message data can surface
+  emails, URLs, and cloud references without browser replay, live probing,
+  credential use, or scope relaxation.
 - [x] Packaged Helm chart values recursion checkpoint:
   Passive archive extraction now recognizes packaged Helm chart member paths
   such as `acme-portal-1.2.3.tgz/acme-portal/values.yaml` as `helm-values`

@@ -453,6 +453,7 @@ def _assert_dashboard_filters_stale_rows(data_dir: Path, reports_dir: Path) -> s
     }
     assert detail["severity_summary"]["HIGH"] == 2
     assert detail["counts"]["key_scanner_findings"] == 0
+    assert detail["sections"]["key_scanner_findings"] == []
     _assert_graph_payload_excludes_stale_key_nodes(detail)
     validation_rows = {
         (row["Type"], row["Asset"]): row["Status"]
@@ -490,6 +491,7 @@ def _assert_api_filters_stale_rows(slug: str) -> None:
     }
     assert detail["severity_summary"]["HIGH"] == 2
     assert detail["counts"]["key_scanner_findings"] == 0
+    assert detail["sections"]["key_scanner_findings"] == []
     assert summary["vulnerability_findings"].get("HIGH", 0) == 2
     _assert_graph_payload_excludes_stale_key_nodes(detail)
 

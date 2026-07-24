@@ -550,10 +550,16 @@ def _reportable_key_scanner_rows(
     if not {"engagement_id", "validation_state"}.issubset(columns):
         return []
     select_parts = [
-        "validation_state",
-        "service" if "service" in columns else "NULL AS service",
         "domain" if "domain" in columns else "NULL AS domain",
+        "service" if "service" in columns else "NULL AS service",
+        "pattern_name" if "pattern_name" in columns else "NULL AS pattern_name",
+        "validation_state",
+        "found_at" if "found_at" in columns else "NULL AS found_at",
+        "source_backend" if "source_backend" in columns else "NULL AS source_backend",
+        "source_url" if "source_url" in columns else "NULL AS source_url",
+        "repo_name" if "repo_name" in columns else "NULL AS repo_name",
         "validation_detail" if "validation_detail" in columns else "NULL AS validation_detail",
+        "validated_at" if "validated_at" in columns else "NULL AS validated_at",
     ]
     rows = _fetch_rows(
         con,
@@ -2625,48 +2631,8 @@ def _detail_sections(
         )
     ]
 
-    key_finding_columns = _table_columns(con, "key_scanner_findings")
-    key_validation_detail_expr = (
-        "validation_detail"
-        if "validation_detail" in key_finding_columns
-        else "NULL AS validation_detail"
-    )
-    key_validated_at_expr = (
-        "validated_at" if "validated_at" in key_finding_columns else "NULL AS validated_at"
-    )
-    key_source_backend_expr = (
-        "source_backend"
-        if "source_backend" in key_finding_columns
-        else "NULL AS source_backend"
-    )
-    key_source_url_expr = (
-        "source_url" if "source_url" in key_finding_columns else "NULL AS source_url"
-    )
-    key_repo_name_expr = (
-        "repo_name" if "repo_name" in key_finding_columns else "NULL AS repo_name"
-    )
-    key_rows = _fetch_rows(
-        con,
-        f"""
-        SELECT domain,
-               service,
-               pattern_name,
-               validation_state,
-               found_at,
-               {key_source_backend_expr},
-               {key_source_url_expr},
-               {key_repo_name_expr},
-               {key_validation_detail_expr},
-               {key_validated_at_expr}
-        FROM key_scanner_findings
-        WHERE engagement_id=?
-        ORDER BY id DESC
-        LIMIT ?
-        """,
-        (engagement_id, SECTION_LIMIT),
-    )
     sections["key_scanner_findings"] = []
-    for row in key_rows:
+    for row in _reportable_key_scanner_rows(con, engagement_id, limit=SECTION_LIMIT):
         proof = parse_validated_detail(row["validation_detail"])
         sections["key_scanner_findings"].append(
             {
