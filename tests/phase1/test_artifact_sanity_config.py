@@ -15,6 +15,7 @@ from forge.engagement_orchestrator import (
 from forge.utils.artifact_sanity_config import (
     sanity_config_artifact_label,
     sanity_config_urls,
+    sanity_env_urls,
 )
 
 
@@ -57,6 +58,28 @@ def test_sanity_config_urls_require_project_and_dataset_context() -> None:
         source_hint="sanity.config.ts",
     ) == []
     assert sanity_config_urls(payload, source_hint="notes/config.ts") == []
+
+
+def test_sanity_env_urls_require_public_project_and_dataset_context() -> None:
+    assert sanity_env_urls(
+        {
+            "NEXT_PUBLIC_SANITY_PROJECT_ID": "acmeprod123",
+            "NEXT_PUBLIC_SANITY_DATASET": "production",
+        }
+    ) == ["https://acmeprod123.api.sanity.io"]
+    assert sanity_env_urls(
+        {
+            "VITE_SANITY_PROJECT_ID": "AcmeProd123",
+            "VITE_SANITY_DATASET": "staging",
+        }
+    ) == ["https://acmeprod123.api.sanity.io"]
+    assert sanity_env_urls({"NEXT_PUBLIC_SANITY_PROJECT_ID": "acmeprod123"}) == []
+    assert sanity_env_urls(
+        {
+            "NEXT_PUBLIC_SANITY_PROJECT_ID": "yourprojectid",
+            "NEXT_PUBLIC_SANITY_DATASET": "production",
+        }
+    ) == []
 
 
 def test_artifact_queue_processor_extracts_sanity_config_project_pivot(

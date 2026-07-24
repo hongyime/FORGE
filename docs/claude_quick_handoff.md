@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Cloud Run provider-shape support is complete. Qualified
+Latest checkpoint: Sanity runtime public-env static extraction is complete.
+Public runtime JavaScript config extraction now derives passive Sanity API
+pivots from public env maps containing both a valid Sanity project ID and a
+dataset (`NEXT_PUBLIC_SANITY_*`, `VITE_SANITY_*`, and adjacent public naming
+variants). The derived `https://<project>.api.sanity.io` URL feeds the existing
+recursive seed path, while project-only values are ignored to reduce false
+positives. No Sanity API calls, dataset reads, credential validation, service
+probing, or scope relaxation were added. Verification: focused Sanity/runtime JS
+config tests passed (`9 passed`), broader current artifact regression slice
+passed (`21 passed`), py_compile passed for touched files, Ruff passed for
+touched files, `git diff --check` passed, and no `.forge_data/engagements`
+leftovers were present.
+
+Next checkpoint: implement AndroidManifest attribute-aware static extraction.
+Current generic XML handling strips attribute-only Android manifests, losing
+`package`, `android:scheme`, `android:host`, and path-based deep-link pivots.
+Add a compact `AndroidManifest.xml` parser that inventories valid Android
+packages as mobile assets and emits only safe HTTP(S) BROWSABLE/VIEW deep-link
+URL seeds; reject templated values, localhost/private hosts, wildcard-only
+hosts, custom schemes, and malformed packages. Cover direct files and archive
+members with focused regression tests.
+
+Previous checkpoint: Cloud Run provider-shape support is complete. Qualified
 `*.run.app` URLs are now treated as managed provider hosts rather than generic
 domains/subdomains. Artifact URL extraction maps them to `gcp_cloud_run` cloud
 assets with the qualified hostname as identifier, and the cloud validation
@@ -36,12 +58,6 @@ managed-hosting/registry tests passed (`3 passed, 132 deselected`), adjacent
 managed-hosting reachability/registry tests passed (`3 passed`), py_compile
 passed for touched files, Ruff passed for touched files, `git diff --check`
 passed, and no `.forge_data/engagements` leftovers were present.
-
-Next checkpoint: continue the automated artifact discovery chain with one more
-current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
-identity/provider-shape gap. Prefer compact focused regression coverage and keep
-implementation passive/proof-bound: recursive seeds/cloud refs only unless an
-explicitly scoped live check is already required by the validation contract.
 
 Previous checkpoint: Sanity CMS config static artifact discovery is complete.
 `sanity.config.*`, `sanity.cli.*`, and `sanity.json` are now first-class static

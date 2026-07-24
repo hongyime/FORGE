@@ -66,12 +66,26 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: continue the automated artifact discovery chain with one
-  more current-code-audited passive parser/OCR gap, provider-proof hardening
-  gap, or identity/provider-shape gap. Prefer a high-value path with compact
-  focused regression coverage, and keep implementation passive/proof-bound:
-  recursive seeds/cloud refs only unless an explicitly scoped live check is
-  already required by the validation contract.
+- [ ] Next checkpoint: implement AndroidManifest attribute-aware static
+  extraction. Current generic XML handling strips attribute-only Android
+  manifests, losing `package`, `android:scheme`, `android:host`, and path-based
+  deep-link pivots. Add a compact `AndroidManifest.xml` parser that inventories
+  valid Android packages as mobile assets and emits only safe HTTP(S)
+  BROWSABLE/VIEW deep-link URL seeds; reject templated values, localhost/private
+  hosts, wildcard-only hosts, custom schemes, and malformed packages. Cover
+  direct files and archive members with focused regression tests.
+- [x] Sanity runtime public-env checkpoint:
+  Public runtime JavaScript config extraction now derives passive Sanity API
+  pivots from public env maps containing both a valid Sanity project ID and a
+  dataset (`NEXT_PUBLIC_SANITY_*`, `VITE_SANITY_*`, and adjacent public naming
+  variants). The derived `https://<project>.api.sanity.io` URL feeds the
+  existing recursive seed path, while project-only values are ignored to reduce
+  false positives. This remains static-only: no Sanity API calls, dataset reads,
+  credential validation, service probing, or scope relaxation were added.
+  Verification: focused Sanity/runtime JS config tests passed (`9 passed`),
+  broader current artifact regression slice passed (`21 passed`), py_compile
+  passed for touched files, Ruff passed for touched files, `git diff --check`
+  passed, and no `.forge_data/engagements` leftovers were present.
 - [x] Cloud Run provider-shape checkpoint:
   Qualified `*.run.app` URLs are now treated as managed provider hosts rather
   than generic domains/subdomains. Artifact URL extraction maps them to

@@ -172,6 +172,7 @@ from forge.utils.artifact_redocly_config import (
 from forge.utils.artifact_saml_metadata import saml_metadata_artifact_label, saml_metadata_urls
 from forge.utils.artifact_sanity_config import (
     sanity_config_artifact_label,
+    sanity_env_urls,
     sanity_config_urls,
 )
 from forge.utils.artifact_sst_config import sst_config_artifact_label, sst_config_candidates
@@ -32763,6 +32764,7 @@ class ArtifactQueueProcessor:
                 "managed_hosting",
                 "cloudflare",
                 "amplify_client_config",
+                "sanity",
                 "docker_auth",
                 "restic",
                 "borg",
@@ -33517,6 +33519,8 @@ class ArtifactQueueProcessor:
             return self._yaml_cloudflare_structured_candidates(env_map, normalized, "env")
         if family == "amplify_client_config":
             return amplify_client_config_candidates(env_map, source_hint=source_hint)
+        if family == "sanity":
+            return sanity_env_urls(env_map)
         if family == "docker_auth":
             return self._docker_auth_structured_candidates_from_env_map(env_map)
         if family == "restic":

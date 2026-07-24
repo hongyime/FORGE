@@ -206,6 +206,7 @@ def _env_key_is_recursive_candidate(key: str) -> bool:
             "HOSTNAME",
             "NETLIFY",
             "S3",
+            "SANITY",
             "SUPABASE",
             "URI",
             "URL",

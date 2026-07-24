@@ -13,7 +13,9 @@ window.__ENV__ = {
   API_HOST: "api.runtime.acme.example",
   API_BASE: "runtime-api.acme.example/v1",
   FIREBASE_PROJECT_ID: "runtime-firebase",
-  NEXT_PUBLIC_SUPABASE_PROJECT_REF: "runtimevault"
+  NEXT_PUBLIC_SUPABASE_PROJECT_REF: "runtimevault",
+  NEXT_PUBLIC_SANITY_PROJECT_ID: "runtimecms123",
+  NEXT_PUBLIC_SANITY_DATASET: "production"
 };
 """.strip()
 
@@ -65,6 +67,7 @@ def test_runtime_js_config_extracts_env_hosts_and_cloud_refs(tmp_path: Path) -> 
             "https://runtime-api.acme.example/v1",
             "https://runtime-firebase.firebaseio.com",
             "https://runtimevault.supabase.co",
+            "https://runtimecms123.api.sanity.io",
         ]
     )
     assert (
@@ -183,6 +186,7 @@ def test_runtime_js_config_artifact_recurses_public_endpoints_and_cloud_refs(
 
     assert ("https://api.runtime.acme.example", "url") in seeds
     assert ("https://runtime-api.acme.example/v1", "url") in seeds
+    assert ("https://runtimecms123.api.sanity.io", "url") in seeds
     assert ("firebase", "runtime-firebase", "runtime-firebase") in cloud_assets
     assert ("supabase", "runtimevault", "runtimevault") in cloud_assets
 
