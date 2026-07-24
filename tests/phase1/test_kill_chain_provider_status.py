@@ -112,21 +112,25 @@ def _run_status_case(
     max_iter: int,
     runs: int = 1,
     module_fail_stages: set[str] | None = None,
+    manifest_domains: list[str] | None = None,
+    dry_run: bool = False,
+    use_scope_manifest: bool = True,
 ) -> tuple[Path, list[tuple[str, str]]]:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
     manifest_path = tmp_path / "roe-scope.json"
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "roe_id": "ROE-TEST-2026-07",
-                "domains": [ROOT_DOMAIN],
-                "authorized_seeds": [ROOT_DOMAIN],
-            }
-        ),
-        encoding="utf-8",
-    )
+    if use_scope_manifest:
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "roe_id": "ROE-TEST-2026-07",
+                    "domains": manifest_domains or [ROOT_DOMAIN],
+                    "authorized_seeds": [ROOT_DOMAIN],
+                }
+            ),
+            encoding="utf-8",
+        )
     attempts: list[tuple[str, str]] = []
     _install_status_case_fakes(
         tmp_path,
@@ -144,16 +148,33 @@ def _run_status_case(
             engagement="1001",
             max_iter=max_iter,
             tor=False,
-            dry_run=False,
+            dry_run=dry_run,
             attack_mode=False,
-            roe_id="ROE-TEST-2026-07",
-            scope_manifest=str(manifest_path),
+            roe_id="ROE-TEST-2026-07" if use_scope_manifest else None,
+            scope_manifest=str(manifest_path) if use_scope_manifest else None,
             skip_cloud=True,
             skip_keyscan=True,
             parallel_fanout=1,
             report_provider="template",
         )
     return tmp_path / ".forge_data" / "engagements" / "1001.db", attempts
+
+
+def _audit_actions(db_path: Path, action: str) -> list[tuple[str, str]]:
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT target, result
+            FROM audit_log
+            WHERE engagement_id=1001 AND action=?
+            ORDER BY id
+            """,
+            (action,),
+        ).fetchall()
+    finally:
+        con.close()
+    return [(str(target or ""), str(result or "")) for target, result in rows]
 
 
 def _provider_seed_runs(db_path: Path) -> list[tuple[str, str, str, dict[str, Any]]]:
@@ -329,6 +350,114 @@ def test_root_tool_failure_keeps_same_run_retry_budget_alive(
     assert run_metadata["pending_work_counts"][pending_key] == 1
     assert run_metadata["pending_work_total"] >= 1
     assert run_metadata["last_iteration_stable"] is False
+
+
+def test_synthesized_out_of_scope_root_is_not_dispatched(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.engagement_orchestrator import SynthesisSummary
+
+    def _fake_synthesis_run(_self) -> SynthesisSummary:  # noqa: ANN001
+        return SynthesisSummary(root_domains=[ROOT_DOMAIN, "evil.example"])
+
+    monkeypatch.setattr(
+        "forge.engagement_orchestrator.EngagementSynthesisEngine.run",
+        _fake_synthesis_run,
+    )
+
+    db_path, attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(domain, "completed"),
+        },
+        max_iter=1,
+    )
+
+    assert any(target == ROOT_DOMAIN for _stage, target in attempts)
+    assert all(target != "evil.example" for _stage, target in attempts)
+    metadata = _latest_run_metadata(db_path)
+    assert ROOT_DOMAIN in list(metadata.get("root_domains") or [])
+    assert "evil.example" not in list(metadata.get("root_domains") or [])
+    denied_rows = _audit_actions(db_path, "root_domain_scope_denied")
+    assert denied_rows
+    evil_denials = [
+        result
+        for target, result in denied_rows
+        if target == "evil.example"
+    ]
+    assert len(evil_denials) == 1
+    assert "reason=scope_manifest_denied" in evil_denials[0]
+    assert f"scope_manifest={(tmp_path / 'roe-scope.json').resolve().as_posix()}" in evil_denials[0]
+
+
+def test_authorized_synthesized_root_enters_root_fanouts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.engagement_orchestrator import SynthesisSummary
+
+    def _fake_synthesis_run(_self) -> SynthesisSummary:  # noqa: ANN001
+        return SynthesisSummary(root_domains=[ROOT_DOMAIN, "beta.example"])
+
+    monkeypatch.setattr(
+        "forge.engagement_orchestrator.EngagementSynthesisEngine.run",
+        _fake_synthesis_run,
+    )
+
+    db_path, attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(domain, "completed"),
+        },
+        max_iter=1,
+        manifest_domains=[ROOT_DOMAIN, "beta.example"],
+    )
+
+    for stage in {"A", "B", "B2", "D3", "D4", "G", "H", "I"}:
+        assert attempts.count((stage, "beta.example")) == 1
+    metadata = _latest_run_metadata(db_path)
+    assert "beta.example" in list(metadata.get("root_domains") or [])
+    assert _audit_actions(db_path, "root_domain_scope_denied") == []
+
+
+def test_dry_run_without_manifest_allows_synthesized_preview_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.engagement_orchestrator import SynthesisSummary
+
+    def _fake_synthesis_run(_self) -> SynthesisSummary:  # noqa: ANN001
+        return SynthesisSummary(root_domains=[ROOT_DOMAIN, "preview.example"])
+
+    monkeypatch.setattr(
+        "forge.engagement_orchestrator.EngagementSynthesisEngine.run",
+        _fake_synthesis_run,
+    )
+
+    db_path, _attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(domain, "completed"),
+        },
+        max_iter=1,
+        dry_run=True,
+        use_scope_manifest=False,
+    )
+
+    metadata = _latest_run_metadata(db_path)
+    assert "preview.example" in list(metadata.get("root_domains") or [])
+    assert metadata["live_execution_policy"]["scope_manifest_present"] is False
+    assert _audit_actions(db_path, "root_domain_scope_denied") == []
 
 
 def test_provider_true_no_data_is_terminal(tmp_path: Path, monkeypatch) -> None:

@@ -9303,10 +9303,75 @@ def kill_chain(
     _restore_resume_queue_metrics()
     _publish_run_progress("kill-chain", "run initialized", force=True)
 
+    root_scope_denied_cache: set[str] = set()
+
+    def _root_domain_scope_decision(value: str) -> dict[str, object]:
+        raw_root = str(value or "").strip().lower().strip(".")
+        if not raw_root:
+            return {"allowed": False, "reason": "empty"}
+        root = _normalize_root_domain(raw_root)
+        if not root or "." not in root:
+            return {"allowed": False, "reason": "invalid_root_domain", "root_domain": root}
+        if _excluded_host_for_seed_routing(root):
+            return {"allowed": False, "reason": "excluded_host", "root_domain": root}
+        if root in root_domains:
+            return {"allowed": True, "reason": "already_tracked", "root_domain": root}
+        if not (isinstance(scope_manifest_metadata, dict) and scope_manifest_metadata):
+            if dry_run_all:
+                return {"allowed": True, "reason": "no_scope_manifest", "root_domain": root}
+            return {"allowed": False, "reason": "scope_manifest_required", "root_domain": root}
+        recursive_scope = _validate_scope_manifest_seed_values(
+            scope_manifest_metadata,
+            [{"value": root, "seed_type": "domain"}],
+        )
+        authorized = list(recursive_scope.get("authorized") or [])
+        if authorized:
+            first = authorized[0] if isinstance(authorized[0], dict) else {}
+            return {
+                "allowed": True,
+                "reason": "allowed",
+                "root_domain": root,
+                "matched": str(first.get("matched") or first.get("seed_value") or ""),
+            }
+        return {
+            "allowed": False,
+            "reason": "scope_manifest_denied",
+            "root_domain": root,
+            "scope_manifest_source": str(scope_manifest_metadata.get("source") or ""),
+        }
+
+    def _record_root_domain_scope_denied(root_domain: str, reason: str) -> None:
+        normalized_root = _normalize_root_domain(str(root_domain or "").strip().lower().strip("."))
+        if not normalized_root or normalized_root in root_scope_denied_cache:
+            return
+        root_scope_denied_cache.add(normalized_root)
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "scope_gate",
+            "kill_chain",
+            "root_domain_scope_denied",
+            target=normalized_root,
+            result=(
+                f"root_domain={normalized_root} "
+                f"reason={reason} "
+                f"scope_manifest={str(scope_manifest_metadata.get('source') or '') if isinstance(scope_manifest_metadata, dict) else ''}"
+            )[:500],
+        )
+
     def _refresh_root_domains(new_domains: list[str]) -> None:
         for root in new_domains:
-            if root and root not in root_domains:
-                root_domains.append(root)
+            decision = _root_domain_scope_decision(str(root or ""))
+            normalized_root = str(decision.get("root_domain") or "").strip()
+            if bool(decision.get("allowed")):
+                if normalized_root and normalized_root not in root_domains:
+                    root_domains.append(normalized_root)
+                continue
+            if normalized_root:
+                _record_root_domain_scope_denied(
+                    normalized_root,
+                    str(decision.get("reason") or "scope_manifest_denied"),
+                )
 
     def _remote_artifact_url_scope_decision(value: str) -> dict[str, object]:
         raw_value = str(value or "").strip()

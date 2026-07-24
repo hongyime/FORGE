@@ -66,11 +66,28 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit synthesized root-domain scope gating before
-  A/B/B2/D3/D4/G/H/I scheduling and pending-count retry budgeting. Confirm
-  `_refresh_root_domains()` cannot promote out-of-scope roots into passive
-  provider dispatch or stable-loop pending counts; patch only scope-filtering
-  gaps with focused regressions.
+- [ ] Next checkpoint: audit child command scope-manifest propagation for
+  root-domain provider fan-outs. D3/D4 already pass `--scope-manifest`; confirm
+  and patch A/B/B2 and keyscan root/org dispatches so downstream modules also
+  receive explicit ROE/scope context instead of relying only on parent
+  scheduling.
+- [x] Synthesized root-domain scope-gating checkpoint:
+  `_refresh_root_domains()` now gates every synthesized
+  `synthesis_summary.root_domains` value before appending it to the runtime
+  `root_domains` list used by A/B/B2/D3/D4/G/H/I scheduling and stable-loop
+  pending counts. Live runs reuse the existing scope-manifest validator with
+  `seed_type=domain`; out-of-scope synthesized roots are audited once as
+  `root_domain_scope_denied` and are not dispatched to root fan-outs or shown
+  in run metadata. Authorized synthesized roots still enter normal root
+  fan-outs, and dry-run/no-manifest preview runs can still include synthesized
+  roots without denial audit. Managed provider/social roots remain excluded by
+  the existing seed-routing filter. Verification: focused provider/root suite
+  passed (`11 passed`), root-domain idempotency passed (`1 passed`), recursive
+  retry-state suite passed (`7 passed`), adjacent scope-manifest regressions
+  passed (`4 passed`), adjacent DNS/RDAP/Wayback bounded parse tests passed
+  with explicit ROE/scope env (`2 passed`), Ruff passed for touched files,
+  py_compile passed for touched files, and sidecar audit confirmed no unsafe
+  synthesized-root append path remains.
 - [x] B2/D3/D4 bounded retry scheduling checkpoint:
   B2 LinkedIn, D3 Shodan, and D4 URLScan no longer have first-iteration-only
   dispatch gates. They now partition pending root domains every iteration, rely
