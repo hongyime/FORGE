@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: cloud asset latest-validation review parity is complete.
+Latest checkpoint: Slack validation proof finding-row parity is complete.
+Dashboard/API vulnerability finding rows now expose parsed validation status,
+method, and scrubbed proof from method-tagged deterministic finding evidence.
+This closes the Slack gap where Phase 4/Phase 6 preserved
+`VALIDATED:slack_auth_test:Slack auth ok: actor_id=... team_id=...`, but
+`_detail_sections()` showed only severity/type/title/target/timestamp for the
+finding. Static dashboard and live API regressions use local deterministic
+Slack evidence only; no Slack or other live provider calls are made.
+Verification: Ruff passed; compile passed; focused Slack dashboard test passed
+(`1 passed`); focused Slack API test passed (`1 passed`); combined static
+dashboard validation/proof slice passed (`4 passed, 23 deselected`); combined
+live API validation/proof slice passed (`4 passed, 39 deselected`). Handoff:
+`.claude/handoffs/2026-07-24-slack-validation-proof-finding-row-parity.md`.
+
+Next checkpoint: audit another concrete passive-to-live validation/report/API
+parity gap, preferably imported graph/raw-export shape mismatches for
+validation proof fields or provider-specific proof/detail reviewability for
+remaining long-tail validators. Keep live provider calls mocked unless an
+explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: cloud asset latest-validation review parity is complete.
 Static dashboard and live engagement-detail API cloud asset sections now join
 each asset to only the latest validation row for the same `(engagement_id,
 asset_type, identifier)`, ordered by `checked_at` then row id. This prevents
@@ -36,13 +56,6 @@ passed; focused static dashboard validation-order slice passed (`2 passed, 24
 deselected`); focused live API validation-order slice passed (`2 passed, 40
 deselected`). Handoff:
 `.claude/handoffs/2026-07-24-cloud-asset-latest-validation-parity.md`.
-
-Next checkpoint: surface method-tagged Slack validation proof on dashboard/API
-vulnerability finding rows. Phase 6 already preserves
-`VALIDATED:slack_auth_test:...` proof in report context/raw CSV, but
-`_detail_sections()` currently renders vulnerability rows without validation
-status/method/proof fields. Add mocked/local dashboard and live API regressions;
-do not call Slack or any live provider.
 
 Previous checkpoint: Shodan provider contract and D3/D4 dry-run parity are
 complete. Shodan domain enrichment is now documented and tested as the current

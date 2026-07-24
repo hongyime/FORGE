@@ -1697,6 +1697,56 @@ def test_engagement_detail_api_cloud_assets_use_latest_validation_result(
     assert asset_row["Checked"] == "2026-07-09 10:00:00"
 
 
+def test_engagement_detail_api_surfaces_slack_validation_proof_on_finding_rows(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    proof = "Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4"
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at)
+            VALUES (
+                1001, 'DETERMINISTIC_KEY_EXPOSURE',
+                'artifact://bundle/slack.env', 'slack_bot_token', 'HIGH',
+                'Validated exposed slack credential reference',
+                'Deterministic validation confirmed the Slack credential.',
+                ?, '2026-07-09T10:15:00'
+            )
+            """,
+            (f"validation=VALIDATED:slack_auth_test:{proof}",),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail = detail_resp.json()
+
+    finding_rows = {
+        row["Title"]: row for row in detail["sections"]["vulnerability_findings"]
+    }
+    slack_row = finding_rows["Validated exposed slack credential reference"]
+    assert slack_row["Validation Status"] == "VALIDATED"
+    assert slack_row["Validation Method"] == "slack_auth_test"
+    assert slack_row["Validation Proof"] == proof
+    assert "xoxb-" not in json.dumps(slack_row).lower()
+
+
 def test_engagement_detail_api_surfaces_validated_key_provider_inventory(
     tmp_path: Path,
     monkeypatch,

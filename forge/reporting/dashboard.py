@@ -638,6 +638,20 @@ def _vulnerability_row_is_reportable(
     return True
 
 
+def _vulnerability_finding_section_row(row: sqlite3.Row) -> dict[str, str]:
+    proof = parse_validated_detail(str(row["evidence"] or "") if "evidence" in row.keys() else "")
+    return {
+        "Severity": str(row["severity"] or ""),
+        "Type": str(row["vuln_type"] or ""),
+        "Title": str(row["title"] or ""),
+        "Target": str(row["target_url"] or ""),
+        "Validation Status": str(proof["validation_status"] or ""),
+        "Validation Method": str(proof["validation_method"] or ""),
+        "Validation Proof": _truncate(proof["validation_proof"], 120),
+        "Seen": _format_dt(str(row["found_at"] or "")),
+    }
+
+
 def _reportable_vulnerability_rows(
     con: sqlite3.Connection,
     engagement_id: int,
@@ -2894,13 +2908,7 @@ def _detail_sections(
     ]
 
     sections["vulnerability_findings"] = [
-        {
-            "Severity": str(row["severity"] or ""),
-            "Type": str(row["vuln_type"] or ""),
-            "Title": str(row["title"] or ""),
-            "Target": str(row["target_url"] or ""),
-            "Seen": _format_dt(str(row["found_at"] or "")),
-        }
+        _vulnerability_finding_section_row(row)
         for row in _reportable_vulnerability_rows(
             con,
             engagement_id,

@@ -1905,6 +1905,58 @@ def test_generate_dashboard_cloud_assets_use_latest_validation_result(
     assert asset_row["Checked"] == "2026-07-09 10:00:00"
 
 
+def test_generate_dashboard_surfaces_slack_validation_proof_on_finding_rows(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    proof = "Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4"
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at)
+            VALUES (
+                1001, 'DETERMINISTIC_KEY_EXPOSURE',
+                'artifact://bundle/slack.env', 'slack_bot_token', 'HIGH',
+                'Validated exposed slack credential reference',
+                'Deterministic validation confirmed the Slack credential.',
+                ?, '2026-07-09T10:15:00'
+            )
+            """,
+            (f"validation=VALIDATED:slack_auth_test:{proof}",),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    finding_rows = {
+        row["Title"]: row for row in detail_payload["sections"]["vulnerability_findings"]
+    }
+    slack_row = finding_rows["Validated exposed slack credential reference"]
+
+    assert slack_row["Validation Status"] == "VALIDATED"
+    assert slack_row["Validation Method"] == "slack_auth_test"
+    assert slack_row["Validation Proof"] == proof
+    assert "xoxb-" not in json.dumps(slack_row).lower()
+
+
 def test_generate_dashboard_surfaces_validated_key_provider_inventory(
     tmp_path: Path,
 ) -> None:
