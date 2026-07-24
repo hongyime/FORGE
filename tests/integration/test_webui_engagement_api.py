@@ -1712,6 +1712,85 @@ def test_engagement_detail_api_cloud_assets_use_latest_validation_result(
     assert asset_row["Checked"] == "2026-07-09 10:00:00"
 
 
+def test_engagement_assets_api_surfaces_cloud_artifact_provenance_without_secrets(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    metadata = {
+        "artifact_provenance": True,
+        "artifact_source_seed_id": 42,
+        "source_url": "https://acme.example/mobile/app.apk",
+        "source_file": "app.apk",
+        "extract_rule": "artifact_firebase_config",
+        "format": "apk",
+        "artifact_type": "android-apk",
+        "api_key": "must-not-leak-api-key",
+        "token": "must-not-leak-token",
+        "nested": {"safe": "kept", "client_secret": "must-not-leak-secret"},
+    }
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier,
+                 source, metadata_json, discovered_at)
+            VALUES
+                (1001, 'firebase', 'artifact-firebase-prod', 'ArtifactFirebaseProd',
+                 'artifact_static_extract', ?, '2026-07-09T09:30:00')
+            """,
+            (json.dumps(metadata, sort_keys=True),),
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES
+                (1001, 'firebase', 'artifact-firebase-prod', 'VALIDATED',
+                 'firebase_database_shallow_read', 200,
+                 'Firebase project reference responded with non-empty data.; HTTP 200 real data keys: customers,billing',
+                 'Firebase project reference responded with non-empty data.',
+                 '2026-07-09T10:00:00')
+            """
+        )
+        con.commit()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        resp = client.get("/api/engagements/1001/assets", headers=headers)
+        assert resp.status_code == 200, resp.text
+        payload = resp.json()
+
+    cloud_row = next(
+        row for row in payload["cloud_assets"] if row["identifier"] == "artifact-firebase-prod"
+    )
+    assert cloud_row["provider_identifier"] == "ArtifactFirebaseProd"
+    assert cloud_row["source"] == "artifact_static_extract"
+    assert cloud_row["artifact_provenance"] is True
+    assert cloud_row["artifact_source_seed_id"] == 42
+    assert cloud_row["artifact_source_url"] == "https://acme.example/mobile/app.apk"
+    assert cloud_row["artifact_source_file"] == "app.apk"
+    assert cloud_row["artifact_extract_rule"] == "artifact_firebase_config"
+    assert cloud_row["artifact_format"] == "apk"
+    assert cloud_row["validation_status"] == "VALIDATED"
+    assert cloud_row["validation_reportable"] is True
+    assert cloud_row["metadata"]["nested"] == {"safe": "kept"}
+    assert "source=https://acme.example/mobile/app.apk" in cloud_row["provenance"]
+    serialized = json.dumps(cloud_row, sort_keys=True)
+    assert "must-not-leak" not in serialized
+    assert "api_key" not in serialized
+    assert "client_secret" not in serialized
+    assert "token" not in serialized
+
+
 def test_engagement_detail_api_surfaces_slack_validation_proof_on_finding_rows(
     tmp_path: Path,
     monkeypatch,

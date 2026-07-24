@@ -53,6 +53,7 @@ from forge.utils.automation import AutomationEngine, EXECUTABLE_AUTOMATION_ACTIO
 from forge.utils.kill_chain_options import normalize_kill_chain_max_iter
 from forge.utils.playbooks import PlaybookEngine
 from forge.webui.auth import mint_token, validate_jwt_secret, verify_token
+from forge.webui.cloud_assets import cloud_assets_payload
 from forge.webui.command_center import CommandCenterService
 from forge.webui.state import ProgressEvent, broker
 
@@ -2347,6 +2348,7 @@ def create_app() -> Any:
                 """,
                 (engagement_id,),
             ).fetchall()
+            cloud_assets = cloud_assets_payload(con, engagement_id, limit=200)
         finally:
             con.close()
         return {
@@ -2394,6 +2396,7 @@ def create_app() -> Any:
                 }
                 for row in auth_rows
             ],
+            "cloud_assets": cloud_assets,
         }
 
     @app.get("/api/engagements/{engagement_id}/vuln-summary")

@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: skipped seed-run status cleanup is complete.
+Latest checkpoint: Web API cloud artifact provenance parity is complete.
+`/api/engagements/{id}/assets` now includes `cloud_assets` inventory rows with
+latest deterministic validation status/reportability, artifact source seed ID,
+source URL/file, extract rule, format, bounded provenance text, and scrubbed
+safe metadata. The route uses `forge.webui.cloud_assets` so `app.py` stays
+thin, casts cloud timestamps to text, and strips credential-like metadata keys
+before API serialization. Verification: compile passed; Ruff passed; focused
+cloud asset API provenance/validation selector passed (`2 passed, 43
+deselected`); full engagement API integration file passed (`45 passed`).
+
+Next checkpoint: gate automation/playbook scheduling with the same
+ROE/scope-manifest contract as `kill_chain()`. The subagent audit found that
+dashboard/API automation and playbook helpers can schedule follow-on active
+tasks outside the main kill-chain launch path. Patch only the deterministic
+gate/suppression path first: no proxy/Tor/WAF-evasion expansion, no scope
+relaxation, and no new live execution behavior without explicit ROE/scope
+context.
+
+Previous checkpoint: skipped seed-run status cleanup is complete.
 `SeedRunTracker.finish_run(..., status='skipped')` now clears a parent seed
 stuck in `running` to `ignored`, while preserving completed/failed states. The
 tracker regression proves skipped completion clears running seed status, and
@@ -33,12 +51,6 @@ the dry-run kill-chain regression proves terminal skipped fan-outs leave zero
 `engagement_seeds.status='running'` rows. Verification: compile passed; Ruff
 passed; focused tracker/dry-run tests passed (`2 passed, 765 deselected`);
 adjacent seed-run/resume selector passed (`5 passed, 762 deselected`).
-
-Next checkpoint: perform a fresh current-code deterministic gap audit and pick
-one compact implementation/test task that advances intake, discovery,
-recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
-The skipped seed-run status gap is now closed; do not reopen it unless a
-regression is found.
 
 Previous checkpoint: Phase 6 artifact cloud provenance export parity is complete.
 The fresh deterministic audit found that artifact-derived cloud provenance

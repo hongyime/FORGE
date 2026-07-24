@@ -66,11 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
-  pick one compact implementation/test task that advances intake, discovery,
-  recursion, artifact analysis, validation, scoring, review, fallback, or
-  cleanup. The skipped seed-run status gap is now closed; do not reopen it
-  unless a regression is found.
+- [ ] Next checkpoint: gate automation/playbook scheduling with the same
+  ROE/scope-manifest contract as `kill_chain()`. The subagent audit found that
+  dashboard/API automation and playbook helpers can schedule follow-on active
+  tasks outside the main kill-chain launch path. Patch only the deterministic
+  gate/suppression path first: no proxy/Tor/WAF-evasion expansion, no scope
+  relaxation, and no new live execution behavior without explicit ROE/scope
+  context.
+- [x] Web API cloud artifact provenance parity checkpoint:
+  `/api/engagements/{id}/assets` now includes `cloud_assets` inventory rows
+  with latest deterministic validation status/reportability, artifact source
+  seed ID, source URL/file, extract rule, format, bounded provenance text, and
+  scrubbed safe metadata. The route uses a focused `forge.webui.cloud_assets`
+  serializer so `app.py` stays thin, casts cloud timestamps to text to tolerate
+  ISO pipeline timestamps, and strips credential-like metadata keys before
+  API serialization. Verification: compile passed; Ruff passed; focused cloud
+  asset API provenance/validation selector passed (`2 passed, 43 deselected`);
+  full engagement API integration file passed (`45 passed`).
 - [x] Skipped seed-run status cleanup checkpoint:
   `SeedRunTracker.finish_run(..., status='skipped')` now clears a parent seed
   stuck in `running` to `ignored`, while preserving completed/failed states.
