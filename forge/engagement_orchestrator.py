@@ -4764,7 +4764,9 @@ def _container_orchestration_config_artifact_label(value: str) -> str:
         return "helm-chart"
     if name == "chart.lock":
         return "helm-lock"
-    if name in {"values.yaml", "values.yml"} and segments & {"chart", "charts", "helm"}:
+    if name in {"values.yaml", "values.yml"} and (
+        segments & {"chart", "charts", "helm"} or _looks_like_packaged_helm_values_path(parts)
+    ):
         return "helm-values"
     if name in {"helmfile", "helmfile.yaml", "helmfile.yml"}:
         return "helmfile"
@@ -4810,6 +4812,12 @@ def _container_orchestration_config_artifact_label(value: str) -> str:
     ):
         return "kubernetes-manifest"
     return ""
+
+
+def _looks_like_packaged_helm_values_path(parts: list[str]) -> bool:
+    if len(parts) < 3 or parts[-1] not in {"values.yaml", "values.yml"}:
+        return False
+    return any(part.endswith((".tgz", ".tar.gz")) for part in parts[:-2])
 
 
 _ORCHESTRATION_STRUCTURED_LABELS = {

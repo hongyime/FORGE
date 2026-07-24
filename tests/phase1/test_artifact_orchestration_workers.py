@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import tarfile
 import threading
 import time
+from io import BytesIO
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
 
@@ -91,3 +93,33 @@ def test_orchestration_routing_rules_use_bounded_workers_and_preserve_order(
         "metadata:\n  labels:\n    traefik.http.routers.api.rule: Host(`ignored.acme.example`)",
         source_hint="notes.yaml",
     ) == ""
+
+
+def test_packaged_helm_chart_values_member_feeds_recursive_discovery(tmp_path) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+    chart_path = tmp_path / "acme-portal-1.2.3.tgz"
+    members = {
+        "acme-portal/Chart.yaml": "apiVersion: v2\nname: acme-portal\nversion: 1.2.3\n",
+        "acme-portal/values.yaml": """
+ingress:
+  enabled: true
+  hosts:
+    - host: values-only.acme.example
+""".strip(),
+    }
+
+    with tarfile.open(chart_path, mode="w:gz") as archive:
+        for member_name, text in members.items():
+            data = text.encode("utf-8")
+            info = tarfile.TarInfo(member_name)
+            info.size = len(data)
+            archive.addfile(info, BytesIO(data))
+
+    payloads = processor._extract_text_payloads(chart_path, "archive")
+    values_payload = next(
+        payload for payload in payloads if payload[1] == "acme-portal/values.yaml"
+    )
+    jobs = processor._structured_discovery_jobs_for_payload(values_payload)
+    structured_text = "\n".join(payload for _source_file, payload in jobs)
+
+    assert "http://values-only.acme.example" in structured_text

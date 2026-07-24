@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: storage metadata validation proof-gating is complete. Shared
+Latest checkpoint: packaged Helm chart values recursion is complete. Passive
+archive extraction now recognizes packaged Helm chart member paths such as
+`acme-portal-1.2.3.tgz/acme-portal/values.yaml` as `helm-values` without
+broadening arbitrary `*/values.yaml` files. Extracted chart values now run
+through the existing orchestration structured parser, so host-only ingress
+values feed recursive discovery from chart archives discovered via Helm indexes
+or other static artifact paths. Verification: compile/Ruff passed; full
+affected label/orchestration/Helm-index parser files passed (`8 passed`).
+Pytest engagement cleanup reported `removed=0 remaining=0`.
+Handoff:
+`.claude/handoffs/2026-07-24-packaged-helm-values-recursion.md`.
+
+Current next gate: continue concrete backend kill-chain gaps only. Good targets
+are another verified passive parser/container/OCR gap, provider-proof
+hardening, identity/provider normalization where a source shape is missing, or
+bounded-worker migration for a proven pure-local sequential enricher. Do not add
+live target probing without explicit ROE/scope manifest and mocked tests.
+
+Previous checkpoint: storage metadata validation proof-gating is complete.
+Shared
 cloud exposure reportability now downgrades `VALIDATED` storage metadata probes
 such as `gcs_http_probe` and `s3_head_probe` when evidence/notes contain
 placeholder, honeypot, sample, synthetic, or low-signal markers. Concrete
@@ -37,13 +56,6 @@ passed`); adjacent deterministic findings, stable-proof surface, and
 attack-path validation slices passed (`16 passed`); pytest engagement cleanup
 reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-storage-metadata-proof-gate.md`.
-
-Current next gate: fix the concrete passive parser gap found by the parser
-reviewer: packaged Helm chart archives commonly contain
-`{chart}/Chart.yaml` plus `{chart}/values.yaml`, but the extracted
-`{chart}/values.yaml` member is currently labeled generic YAML instead of
-`helm-values`, so host-only ingress values may not feed recursive discovery.
-Keep the fix passive/static and source-shape-specific.
 
 Previous checkpoint: run launch/control response reviewability is complete.
 Live

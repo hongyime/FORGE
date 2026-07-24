@@ -181,6 +181,8 @@ def test_api_spec_and_client_collection_content_types_map_to_config_artifact_suf
     assert _artifact_format_label("Chart.yaml") == "helm-chart"
     assert _artifact_format_label("Chart.lock") == "helm-lock"
     assert _artifact_format_label("charts/acme/values.yaml") == "helm-values"
+    assert _artifact_format_label("acme-portal-1.2.3.tgz/acme-portal/values.yaml") == "helm-values"
+    assert _artifact_format_label("acme-portal/values.yaml") == "yaml"
     assert _artifact_format_label("k8s/ingress.yaml") == "kubernetes-manifest"
     assert _artifact_format_label("manifests/httproute.yaml") == "kubernetes-manifest"
     assert _artifact_format_label("package.json") == "npm-package-manifest"

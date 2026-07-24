@@ -91,6 +91,17 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Packaged Helm chart values recursion checkpoint:
+  Passive archive extraction now recognizes packaged Helm chart member paths
+  such as `acme-portal-1.2.3.tgz/acme-portal/values.yaml` as `helm-values`
+  without broadening arbitrary `*/values.yaml` files. Extracted chart values
+  now run through the existing orchestration structured parser, so host-only
+  ingress values feed recursive discovery from chart archives discovered via
+  Helm indexes or other static artifact paths. Verification: compile passed;
+  Ruff passed; full affected label/orchestration/Helm-index parser files passed
+  (`8 passed`); pytest engagement cleanup reported `removed=0 remaining=0`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-packaged-helm-values-recursion.md`.
 - [x] Storage metadata validation proof-gate checkpoint:
   Shared cloud exposure reportability now downgrades `VALIDATED` storage
   metadata probes such as `gcs_http_probe` and `s3_head_probe` when their
