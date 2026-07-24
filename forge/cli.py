@@ -11431,6 +11431,38 @@ def kill_chain(
             },
         )
 
+    def _prepare_unsupported_cloud_seed_skip_entry(
+        target: dict[str, object],
+    ) -> dict[str, object] | None:
+        service = str(target.get("service") or "").strip().lower()
+        ref = str(target.get("ref") or "").strip()
+        key = str(target.get("key") or f"{service}:{ref}").strip()
+        if not service or not ref or not key:
+            return None
+        reason = "unsupported_cloud_service"
+        metadata = {
+            "iteration": iteration,
+            "service": service,
+            "ref": ref,
+            "group": str(target.get("group") or ""),
+            "subcommand": str(target.get("subcommand") or ""),
+            "skip_reason": reason,
+            "unsupported_before_scan": True,
+        }
+        return _prepare_one_shot_seed_run_entry(
+            seed_value=key,
+            seed_type="other",
+            loop_name="fanout_j_cloud_scan",
+            source="cross_reference",
+            depth=2,
+            confidence=0.8,
+            start_metadata=metadata,
+            status="skipped",
+            output_count=0,
+            error=reason,
+            finish_metadata=metadata,
+        )
+
     def _apply_cloud_scope_decision_item(
         item: dict[str, object],
         *,
@@ -18098,6 +18130,29 @@ def kill_chain(
                     for target, spec in zip(pending_cloud_targets, prepared_j_specs)
                     if spec is None
                 ]
+                if skipped_cloud_targets:
+                    if len(skipped_cloud_targets) > 1 and parallel_workers > 1:
+                        _log(
+                            f"{iteration}.J cloud unsupported skip prep",
+                            (
+                                f"[dim]parallel parse x"
+                                f"{min(parallel_workers, len(skipped_cloud_targets))}[/dim]"
+                            ),
+                        )
+                    prepared_unsupported_cloud_skips = _run_inprocess_batch(
+                        skipped_cloud_targets,
+                        _prepare_unsupported_cloud_seed_skip_entry,
+                        max_workers=parallel_workers,
+                        progress_label=f"{iteration}.J cloud unsupported skip prep",
+                        progress_callback=_record_batch_progress,
+                    )
+                    _run_ordered_inprocess_apply_batch(
+                        prepared_unsupported_cloud_skips,
+                        _apply_one_shot_seed_run_entry,
+                        progress_label=f"{iteration}.J cloud unsupported skip apply",
+                        progress_callback=_record_batch_progress,
+                        order_note="unsupported cloud skip order preserved",
+                    )
                 if len(j_specs) > 1 and parallel_workers > 1:
                     _log(
                         f"{iteration}.J cloud scans",

@@ -91,11 +91,26 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit recursive non-root fan-out retry semantics.
-  Social handle, phone, IP, name, company, and cloud-ref chains should only be
-  marked processed on completed or intentional skipped outcomes, so failed
-  child fan-outs retry in later iterations without hiding pending work from the
-  stable-loop gate.
+- [ ] Next checkpoint: replace known-host surface fetch first-20 hard cap with
+  deterministic host backlog/cursor or completed-host exclusion. Known-host and
+  host-surface recursion should not permanently starve hosts beyond the first
+  batch; processed/skipped/failed host-surface state must be auditable,
+  resumable, and visible to the stable-loop gate.
+- [x] Recursive non-root fan-out retry semantics checkpoint:
+  Social handle, phone, IP, name, company, and executable cloud-ref child
+  fan-outs now have focused regression proof that failed outcomes are not added
+  to processed sets and remain visible through `pending_work_counts` /
+  `last_iteration_stable` metadata for later retry within `max_iter`. Persisted
+  `seed_runs` assertions now cover failed username/phone, IP/name/company,
+  social-handle, and cloud-scan rows. Unsupported cloud-service refs now emit an
+  explicit skipped `fanout_j_cloud_scan` seed-run receipt with
+  `unsupported_cloud_service` metadata instead of silently disappearing from the
+  audit trail. Verification: recursive retry-state suite passed (`8 passed`),
+  cloud scope-manifest regression passed (`1 passed`), Ruff passed for
+  `forge/cli.py` and the retry-state tests, `py_compile` passed for touched
+  files, and `git diff --check` passed. Built-in read-only sidecar audits
+  independently confirmed the retry semantics and highlighted the unsupported
+  cloud audit-receipt gap before implementation.
 - [x] GitHub org keyscan attribution/scope checkpoint:
   Fan-out F no longer treats discovered GitHub org names as standalone
   `--domain <org>` keyscan targets. Root-domain scans still run as

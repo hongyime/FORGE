@@ -19,6 +19,23 @@ def _write_report_if_requested(module_argv: tuple[str, ...], tmp_path: Path) -> 
     report_path.write_text("# Final report\n", encoding="utf-8")
 
 
+def _latest_run_metadata(db_path: Path) -> dict[str, object]:
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        con.close()
+    return json.loads(str((row or ["{}"])[0] or "{}"))
+
+
 def test_kill_chain_retries_failed_recursive_seed_fanouts_only(
     tmp_path: Path,
     monkeypatch,
@@ -127,6 +144,11 @@ def test_kill_chain_retries_failed_recursive_seed_fanouts_only(
         for runs in failed_by_seed.values()
         for item in runs
     )
+    metadata = _latest_run_metadata(db_path)
+    assert metadata["pending_work_counts"]["username_seeds"] == 1
+    assert metadata["pending_work_counts"]["phone_seeds"] == 1
+    assert metadata["pending_work_total"] >= 2
+    assert metadata["last_iteration_stable"] is False
 
 
 def test_kill_chain_retries_failed_ip_name_company_fanouts_only(
@@ -212,6 +234,50 @@ def test_kill_chain_retries_failed_ip_name_company_fanouts_only(
     assert attempts.count(("name", "Bob Example")) == 1
     assert attempts.count(("company", "Acme Corp")) == 2
     assert attempts.count(("company", "Orbit LLC")) == 1
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    metadata = _latest_run_metadata(db_path)
+    assert metadata["pending_work_counts"]["ip_seeds"] == 1
+    assert metadata["pending_work_counts"]["name_seeds"] == 1
+    assert metadata["pending_work_counts"]["company_seeds"] == 1
+    assert metadata["pending_work_total"] >= 3
+    assert metadata["last_iteration_stable"] is False
+
+    con = sqlite3.connect(db_path)
+    try:
+        failed_runs = con.execute(
+            """
+            SELECT es.seed_value, sr.loop_name, sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.status='failed'
+              AND sr.loop_name IN (
+                  'fanout_o_seed_ip',
+                  'fanout_m_seed_name',
+                  'fanout_n_seed_company'
+              )
+            ORDER BY sr.id
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    failed_by_seed = {
+        str(seed_value): [
+            (str(loop_name), str(error or ""), json.loads(str(metadata_json or "{}")))
+            for row_seed, loop_name, _status, error, metadata_json in failed_runs
+            if str(row_seed) == str(seed_value)
+        ]
+        for seed_value in failing_values
+    }
+    assert len(failed_by_seed["203.0.113.50"]) == 2
+    assert len(failed_by_seed["Alice Example"]) == 2
+    assert len(failed_by_seed["Acme Corp"]) == 2
+    assert all(
+        item[2]["returncode"] == 1 and "simulated recursive fan-out failure" in item[1]
+        for runs in failed_by_seed.values()
+        for item in runs
+    )
 
 
 def test_kill_chain_retries_failed_social_handle_chain_only(
@@ -314,6 +380,43 @@ def test_kill_chain_retries_failed_social_handle_chain_only(
     assert attempts.count(("instagram", "failhandle")) == 2
     assert attempts.count(("sherlock", "okhandle")) == 1
     assert attempts.count(("instagram", "okhandle")) == 1
+    metadata = _latest_run_metadata(db_path)
+    assert metadata["pending_work_counts"]["social_handles"] == 1
+    assert metadata["pending_work_total"] >= 1
+    assert metadata["last_iteration_stable"] is False
+
+    con = sqlite3.connect(db_path)
+    try:
+        failed_rows = con.execute(
+            """
+            SELECT sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_e5_chain'
+              AND es.seed_value='failhandle'
+            ORDER BY sr.id
+            """
+        ).fetchall()
+        completed_rows = con.execute(
+            """
+            SELECT sr.status
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_e5_chain'
+              AND es.seed_value='okhandle'
+            ORDER BY sr.id
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert len(failed_rows) == 2
+    assert all(row[0] == "failed" for row in failed_rows)
+    assert all("social-handle fan-out modules failed" in str(row[1] or "") for row in failed_rows)
+    assert all(1 in json.loads(str(row[2] or "{}"))["returncodes"] for row in failed_rows)
+    assert completed_rows == [("completed",)]
 
 
 def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
@@ -478,8 +581,10 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
     assert all(project_ref != "echo" for _command, project_ref in cloud_attempts)
 
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
-    fail_key = "acme.example::github_org::failorg"
-    ok_key = "acme.example::github_org::okorg"
+    metadata = _latest_run_metadata(db_path)
+    assert metadata["pending_work_counts"]["cloud_refs"] == 1
+    assert metadata["pending_work_total"] >= 1
+    assert metadata["last_iteration_stable"] is False
     con = sqlite3.connect(db_path)
     try:
         failed_rows = con.execute(
@@ -495,7 +600,7 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
         ).fetchall()
         skipped_rows = con.execute(
             """
-            SELECT es.seed_value, sr.status
+            SELECT es.seed_value, sr.status, sr.error, sr.metadata_json
             FROM seed_runs sr
             JOIN engagement_seeds es ON es.id=sr.seed_id
             WHERE sr.engagement_id=1001
@@ -511,7 +616,14 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
     assert all(row[1] == "failed" for row in failed_rows)
     assert all("simulated cloud scan failure" in str(row[2] or "") for row in failed_rows)
     assert all(json.loads(str(row[3] or "{}"))["returncode"] == 1 for row in failed_rows)
-    assert skipped_rows == []
+    assert len(skipped_rows) == 1
+    assert skipped_rows[0][0] == "netlify:echo"
+    assert skipped_rows[0][1] == "skipped"
+    assert skipped_rows[0][2] == "unsupported_cloud_service"
+    skipped_metadata = json.loads(str(skipped_rows[0][3] or "{}"))
+    assert skipped_metadata["unsupported_before_scan"] is True
+    assert skipped_metadata["service"] == "netlify"
+    assert skipped_metadata["ref"] == "echo"
 
 
 def test_kill_chain_retries_failed_email_seed_rows(

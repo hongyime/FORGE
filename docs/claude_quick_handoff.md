@@ -25,8 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: GitHub org keyscan attribution/scope is complete. Fan-out F
-no longer treats discovered GitHub org names as standalone `--domain <org>`
+Latest checkpoint: recursive non-root fan-out retry semantics are verified and
+hardened. Social handle, phone, IP, name, company, and executable cloud-ref
+child fan-outs now have focused regression proof that failed outcomes are not
+added to processed sets and remain visible through `pending_work_counts` /
+`last_iteration_stable` metadata for later retry within `max_iter`. Persisted
+`seed_runs` assertions now cover failed username/phone, IP/name/company,
+social-handle, and cloud-scan rows. Unsupported cloud-service refs now emit an
+explicit skipped `fanout_j_cloud_scan` seed-run receipt with
+`unsupported_cloud_service` metadata instead of silently disappearing from the
+audit trail. Verification: recursive retry-state suite passed (`8 passed`),
+cloud scope-manifest regression passed (`1 passed`), Ruff passed for
+`forge/cli.py` and the retry-state tests, `py_compile` passed for touched
+files, and `git diff --check` passed. Built-in read-only sidecar audits
+independently confirmed the retry semantics and highlighted the unsupported
+cloud audit-receipt gap before implementation.
+
+Next checkpoint: replace known-host surface fetch first-20 hard cap with a
+deterministic host backlog/cursor or completed-host exclusion. Known-host and
+host-surface recursion should not permanently starve hosts beyond the first
+batch; processed/skipped/failed host-surface state must be auditable,
+resumable, and visible to the stable-loop gate.
+
+Previous checkpoint: GitHub org keyscan attribution/scope is complete. Fan-out
+F no longer treats discovered GitHub org names as standalone `--domain <org>`
 keyscan targets. Root-domain scans still run as `--domain <root>` and carry
 `--scope-manifest`; discovered org scans now use composite seed-run keys
 (`<root>::github_org::<org>`) while dispatching `osint keyscan --domain <root>
@@ -43,12 +65,6 @@ org retry/direct/convergence/multi-root tests passed, Ruff passed for touched
 files, and `py_compile` passed for touched files. Built-in read-only sidecar
 audits confirmed the original bug and recommended the composite key shape
 before implementation.
-
-Next checkpoint: audit recursive non-root fan-out retry semantics. Social
-handle, phone, IP, name, company, and cloud-ref chains should only be marked
-processed on completed or intentional skipped outcomes, so failed child
-fan-outs retry in later iterations without hiding pending work from the
-stable-loop gate.
 
 Previous checkpoint: root child scope-manifest propagation is complete. A, B,
 B2, D3, D4, and F child dispatch argv now carries the active
