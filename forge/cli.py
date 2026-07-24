@@ -9129,6 +9129,16 @@ def kill_chain(
     finding_engine = DeterministicFindingEngine(db_path, engagement_id)
     engagement_run_tracker = EngagementRunTracker(db_path, engagement_id)
     seed_run_tracker = SeedRunTracker(db_path, engagement_id)
+    recovered_seed_run_count = (
+        seed_run_tracker.recover_abandoned_running_runs()
+        if resume_enabled
+        else 0
+    )
+    if recovered_seed_run_count:
+        _log(
+            "resume",
+            f"marked {recovered_seed_run_count} abandoned seed run(s) failed before retry",
+        )
     _clear_run_control_markers()
     run_progress_state["phase"] = "starting"
     engagement_run_handle = engagement_run_tracker.start_run(

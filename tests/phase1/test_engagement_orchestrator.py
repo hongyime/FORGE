@@ -65617,6 +65617,111 @@ def test_kill_chain_dry_run_populates_seed_runs_for_seeded_fanouts(
         con.close()
 
 
+def test_kill_chain_resume_marks_stale_running_seed_runs_failed_before_retry(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+
+    tracker = SeedRunTracker(db_path, 1001)
+    stale_run = tracker.start_run(
+        "acme.example",
+        "domain",
+        "fanout_a_subdomains",
+        source="operator",
+        metadata={"iteration": 0, "fixture": "stale"},
+    )
+    completed_run = tracker.start_run(
+        "beta.example",
+        "domain",
+        "fanout_a_subdomains",
+        source="operator",
+        metadata={"iteration": 0, "fixture": "completed"},
+    )
+    tracker.finish_run(
+        completed_run,
+        status="completed",
+        output_count=2,
+        metadata={"iteration": 0, "fixture": "completed"},
+    )
+    skipped_run = tracker.start_run(
+        "gamma.example",
+        "domain",
+        "fanout_a_subdomains",
+        source="operator",
+        metadata={"iteration": 0, "fixture": "skipped"},
+    )
+    tracker.finish_run(
+        skipped_run,
+        status="skipped",
+        metadata={"iteration": 0, "fixture": "skipped"},
+    )
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=["beta.example", "gamma.example"],
+        engagement="1001",
+        resume=True,
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT es.seed_value, sr.id, sr.status, sr.error, sr.completed_at
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_a_subdomains'
+            ORDER BY es.seed_value, sr.id
+            """
+        ).fetchall()
+        grouped: dict[str, list[tuple[int, str, str, str]]] = {}
+        for seed_value, run_id, status, error, completed_at in rows:
+            grouped.setdefault(str(seed_value), []).append(
+                (
+                    int(run_id),
+                    str(status),
+                    str(error or ""),
+                    str(completed_at or ""),
+                )
+            )
+
+        assert [row[1] for row in grouped["acme.example"]] == ["failed", "skipped"]
+        assert grouped["acme.example"][0][0] == stale_run.run_id
+        assert "abandoned before explicit completion" in grouped["acme.example"][0][2]
+        assert grouped["acme.example"][0][3]
+        assert grouped["acme.example"][1][3]
+        assert [row[1] for row in grouped["beta.example"]] == ["completed"]
+        assert [row[1] for row in grouped["gamma.example"]] == ["skipped"]
+
+        running_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM seed_runs
+            WHERE engagement_id=1001 AND status='running'
+            """
+        ).fetchone()[0]
+        assert int(running_count or 0) == 0
+    finally:
+        con.close()
+
+
 def test_kill_chain_dry_run_records_d3_d4_provider_skips_without_dispatch(
     tmp_path: Path,
     monkeypatch,

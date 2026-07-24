@@ -10581,6 +10581,38 @@ class SeedRunTracker:
     def _metadata_json(metadata: dict[str, Any] | None) -> str:
         return json.dumps(metadata or {}, sort_keys=True)
 
+    def recover_abandoned_running_runs(
+        self,
+        *,
+        error: str = "abandoned before explicit completion",
+    ) -> int:
+        completed_at = self._now()
+        con = sqlite3.connect(self._db_path)
+        try:
+            apply_schema(con)
+            run_migrations(con)
+            cur = con.execute(
+                """
+                UPDATE seed_runs
+                SET status='failed',
+                    error=CASE
+                        WHEN error IS NULL OR error='' THEN ?
+                        ELSE error
+                    END,
+                    completed_at=COALESCE(completed_at, ?)
+                WHERE engagement_id=? AND status='running'
+                """,
+                (
+                    error[:512],
+                    completed_at,
+                    self._engagement_id,
+                ),
+            )
+            con.commit()
+            return max(0, int(cur.rowcount or 0))
+        finally:
+            con.close()
+
     def start_run(
         self,
         seed_value: str,

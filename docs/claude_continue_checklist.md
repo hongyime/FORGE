@@ -66,13 +66,7 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: stale running seed-run recovery on resume. Add a compact
-  `SeedRunTracker` recovery path, analogous to engagement-run abandonment, so
-  resumed kill-chain runs mark prior `seed_runs.status='running'` rows as
-  `failed` with `completed_at` and an `abandoned before explicit completion`
-  error before retrying. Regression target:
-  `test_kill_chain_resume_marks_stale_running_seed_runs_failed_before_retry`.
-- [ ] Then checkpoint: raw-export fallback orphan report cleanup. If Phase 6
+- [ ] Next checkpoint: raw-export fallback orphan report cleanup. If Phase 6
   companion export persistence fails after Markdown has been written, remove or
   mark the orphan report-family Markdown so dashboard/API `report_summary`
   selects the authoritative `raw_export` JSON/CSV family. Regression targets:
@@ -83,10 +77,19 @@ historical notes only, not as current instructions.
   with source seed/artifact URL/file/rule/format metadata, while keeping
   unvalidated refs non-reportable. Regression target:
   `test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validation_review`.
-- [ ] After those three subagent-audited gaps are closed, perform a fresh
+- [ ] After those remaining subagent-audited gaps are closed, perform a fresh
   current-code deterministic gap audit and pick one compact task that advances
   intake, discovery, recursion, artifact analysis, validation, scoring, review,
   fallback, or cleanup.
+- [x] Stale running seed-run recovery checkpoint:
+  `SeedRunTracker` now marks abandoned `seed_runs.status='running'` rows as
+  `failed` with `completed_at` and `abandoned before explicit completion`
+  before resumed kill-chain work loads completed/skipped suppression sets. The
+  regression seeds one stale running row plus completed/skipped controls, then
+  proves resume retries only the stale row and leaves no running seed-run rows.
+  Verification: compile passed; Ruff passed; focused recovery test passed
+  (`1 passed`); adjacent seed-run/resume selector passed (`4 passed, 763
+  deselected`).
 - [x] Fan-out J denied cloud seed-run persistence checkpoint:
   Cloud references denied by the scope manifest before Fan-out J validation now
   persist as skipped `fanout_j_cloud_scan` seed runs with service, ref, deny
