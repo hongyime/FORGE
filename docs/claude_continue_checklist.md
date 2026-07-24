@@ -148,7 +148,6 @@ historical notes only, not as current instructions.
   cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-manual-db-audit-artifact-parity.md`. Commit:
   `32ee3bb`.
-- [ ] Next gate:
 - [x] Early remote artifact scope-gate checkpoint:
   Kill-chain startup now installs the remote artifact scope-manifest gate before
   the first `ArtifactQueueProcessor.process()` pass. Pre-existing queued remote
@@ -161,7 +160,6 @@ historical notes only, not as current instructions.
   engagement cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-early-remote-artifact-scope-gate.md`. Commit:
   `ce33ff7`.
-- [ ] Next gate:
 - [x] Auto-run finalization ordering checkpoint:
   Kill-chain completion now happens after prerequisite detection and optional
   `--auto-run-detected` follow-on execution. Final run metadata records detected
@@ -175,7 +173,6 @@ historical notes only, not as current instructions.
   engagement cleanup reported `removed=4 remaining=0 post_scan=0`. Handoff:
   `.claude/handoffs/2026-07-24-auto-run-finalization-ordering.md`. Commit:
   `fa25d99`.
-- [ ] Next gate:
 - [x] Fan-out J direct validation scope callback checkpoint:
   The per-iteration direct `run_cloud_asset_validate_batch()` call now passes the
   shared cloud asset scope checker and denied callback into the lower-level
@@ -308,12 +305,21 @@ historical notes only, not as current instructions.
   (`37 passed, 75 warnings`). Review: sidecar `Carson` reproduced the direct
   deterministic cloud-finding bypass and recommended the stable parser gate.
   Handoff: `.claude/handoffs/2026-07-24-direct-cloud-stable-proof-gate.md`.
-- [ ] Next gate:
-  Implement the runtime frontend config JS recursion gap from sidecar `Gauss`.
-  Source-gated public files such as `runtime-env.js`, `env-config.js`, and
-  `config.js` should promote host-only API values plus Firebase/Supabase project
-  refs into recursive URL/cloud candidates without turning arbitrary JS into env
-  parsing.
+- [x] Runtime frontend config JS recursion checkpoint completed:
+  Source-gated public runtime config files such as `runtime-env.js`,
+  `env-config.js`, `runtime-config.js`, and public/static/build-path
+  `config.js` now get the `runtime-js-config` label. Uppercase env-style
+  endpoint/cloud assignments such as `API_HOST`, `API_BASE`,
+  `FIREBASE_PROJECT_ID`, and `NEXT_PUBLIC_SUPABASE_PROJECT_REF` feed the
+  existing bounded ordered candidate path and persist recursive URL seeds plus
+  Firebase/Supabase cloud assets. Arbitrary `notes.js` and root generic
+  `config.js` remain outside JS-runtime structured parsing.
+  Verification: compile/Ruff passed; focused runtime JS config suite -> `3
+  passed`; adjacent artifact label/runtime worker slice -> `2 passed`; pytest
+  engagement cleanup -> `removed=4 remaining=0`. Review:
+  sidecar `Gauss` identified the gap and sidecar `Volta` supplied the minimal
+  persistence-test pattern. Handoff:
+  `.claude/handoffs/2026-07-24-runtime-js-config-recursion.md`.
 - [x] Report history lineage parity checkpoint:
   Static dashboard and React detail report-history cards now expose historical
   write-degradation details and findings checksums, not only fallback reason and

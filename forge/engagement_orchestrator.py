@@ -114,6 +114,10 @@ from forge.utils.artifact_hashicorp_config import (
 from forge.utils.artifact_helm_index import helm_index_chart_package_urls
 from forge.utils.artifact_host_meta_metadata import host_meta_href_urls
 from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
+from forge.utils.artifact_js_runtime_config import (
+    runtime_js_config_artifact_label,
+    runtime_js_env_assignment_entries,
+)
 from forge.utils.artifact_jwks_metadata import jwks_urls
 from forge.utils.artifact_lambda_config import (
     lambda_config_artifact_label,
@@ -5380,6 +5384,9 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         return ""
     parts = tuple(part for part in normalized.split("/") if part)
     name = Path(normalized).name
+    runtime_config_label = runtime_js_config_artifact_label(normalized)
+    if runtime_config_label:
+        return runtime_config_label
     if name == "_redirects":
         return "static-hosting-redirects"
     if name == "_headers":
@@ -27633,6 +27640,21 @@ class ArtifactQueueProcessor:
                     entries.append((offset + raw_line.find(value), value))
             offset += len(raw_line)
 
+        if source_label == "runtime-js-config":
+            entries.extend(
+                runtime_js_env_assignment_entries(
+                    raw_text,
+                    derived_candidates=lambda env_map: self._run_ordered_local_batch(
+                        self._yaml_structured_candidates_from_env_map(
+                            env_map,
+                            source_hint="runtime-js-config",
+                        ),
+                        lambda candidate: str(candidate or "").strip(),
+                        default_factory=str,
+                    ),
+                )
+            )
+
         if self._js_runtime_source_uses_browser_endpoint_patterns(source_label):
             browser_batches = self._run_ordered_local_batch(
                 [
@@ -27713,6 +27735,7 @@ class ArtifactQueueProcessor:
             "vercel-config",
             "render-config",
             "fly-config",
+            "runtime-js-config",
             "railway-config",
             "azure-static-web-app-config",
             "amplify-config",

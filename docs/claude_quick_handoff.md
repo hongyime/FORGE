@@ -25,19 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: direct cloud validation proof gate is complete. Direct
-`DETERMINISTIC_CLOUD_EXPOSURE` synthesis, dashboard/API reportability, and
-attack graph VULN gating now require stable parser-approved proof for
-proof-bound cloud data/listing methods, not just `VALIDATED` plus an allowlisted
-method. LOW storage reachability findings from metadata-only probe methods are
-preserved.
+Latest checkpoint: runtime frontend config JS recursion is complete. Explicit
+public runtime config files such as `runtime-env.js`, `env-config.js`, and
+`runtime-config.js`, plus public/static/build-path `config.js`, now get the
+`runtime-js-config` label. Uppercase env-style `API_HOST`, `API_BASE`,
+`FIREBASE_PROJECT_ID`, and `NEXT_PUBLIC_SUPABASE_PROJECT_REF` assignments feed
+recursive URL seeds and Firebase/Supabase cloud assets through the existing
+artifact queue path. Arbitrary `notes.js` and root generic `config.js` stay
+outside JS-runtime structured parsing.
 
-Verification: compile passed; Ruff passed; deterministic/Phase 6 proof-gate
-slice passed (`20 passed`); attack graph plus dashboard suites passed
-(`129 passed`); full web UI engagement API file passed (`37 passed,
-75 warnings`). Review: sidecar `Carson` reproduced the direct deterministic
-cloud-finding bypass and recommended the stable parser gate. Handoff:
-`.claude/handoffs/2026-07-24-direct-cloud-stable-proof-gate.md`.
+Verification: compile passed; Ruff passed; focused runtime JS config suite
+passed (`3 passed`); adjacent artifact label/runtime worker slice passed
+(`2 passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
+Review: sidecar `Gauss` identified the original gap, `Volta` supplied the
+persistence-test pattern, and `Descartes` caught the root `config.js`
+false-positive risk before commit. Handoff:
+`.claude/handoffs/2026-07-24-runtime-js-config-recursion.md`.
 
 Recon-output double-check: no code change was needed.
 `_recon_tool_output_structured_payload_text` already preserves family order and
@@ -49,11 +52,10 @@ Previous checkpoint: kill-chain dry-run finalization contract is complete.
 `vuln passive` or `exploit correlate` finalizers, HIBP finalization carries
 `--dry-run`, and skipped labels are audited.
 
-Current next gate: implement the runtime frontend config JS recursion gap from
-sidecar `Gauss`. Source-gated public files such as `runtime-env.js`,
-`env-config.js`, and `config.js` should promote host-only API values plus
-Firebase/Supabase project refs into recursive URL/cloud candidates without
-turning arbitrary JS into env parsing.
+Current next gate: use `docs/engagement_overhaul_tasklist.md` ->
+`## Compact active backlog` and pick the next proven deterministic acceptance
+gap. Prefer a focused audit or mocked regression over broad retesting unless a
+specific failing behavior is known.
 
 This file is intentionally historical and large. Future agents should read only
 the header/current checkpoint sections needed for resume, then use
