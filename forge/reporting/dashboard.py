@@ -1244,6 +1244,150 @@ def _graph_node_is_unreportable_key_finding(
     return not _key_validation_detail_is_reportable(detail)
 
 
+def _graph_node_is_cloud_review_node(node: dict[str, Any]) -> bool:
+    node_type = str(node.get("node_type") or node.get("entity_type") or "").strip().upper()
+    source_table = str(node.get("source_table") or "").strip().lower()
+    return (
+        node_type == "CLOUD"
+        or source_table in {"cloud_assets", "cloud_validation_results"}
+        or str(node.get("node_id") or "").strip().upper().startswith("CLOUD::")
+    )
+
+
+def _canonical_cloud_node_score(
+    node: dict[str, Any],
+    asset: str,
+    identifier: str,
+) -> int:
+    node_id = str(node.get("node_id") or "").strip().lower()
+    if node_id == f"cloud::{asset}::{identifier}":
+        return 3
+    if node_id.startswith(f"cloud::{asset}::"):
+        return 2
+    if asset and asset in node_id:
+        return 1
+    return 0
+
+
+def _merge_cloud_node_metadata(
+    target: dict[str, Any],
+    duplicate: dict[str, Any],
+    *,
+    asset: str,
+) -> None:
+    target_metadata = target.setdefault("metadata", {})
+    duplicate_metadata = duplicate.get("metadata") if isinstance(duplicate.get("metadata"), dict) else {}
+    if not isinstance(target_metadata, dict):
+        target_metadata = {}
+        target["metadata"] = target_metadata
+    aliases = set(
+        str(item or "").strip().lower()
+        for item in target_metadata.get("asset_type_aliases", [])
+        if str(item or "").strip()
+    )
+    for metadata in (target_metadata, duplicate_metadata):
+        for key in ("asset_type_original", "validation_asset_type_original", "service"):
+            candidate = normalize_cloud_exposure_asset_type(str(metadata.get(key) or ""))
+            raw_candidate = str(metadata.get(key) or "").strip().lower()
+            if raw_candidate and raw_candidate != asset and candidate == asset:
+                aliases.add(raw_candidate)
+    for key, value in duplicate_metadata.items():
+        if key not in target_metadata and value not in (None, ""):
+            target_metadata[key] = value
+    target_metadata["service"] = asset
+    if aliases:
+        target_metadata["asset_type_aliases"] = sorted(aliases)
+
+
+def _dedupe_graph_payload_cloud_alias_nodes(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    nodes = payload.get("nodes", []) if isinstance(payload.get("nodes"), list) else []
+    if len(nodes) < 2:
+        return payload
+    choices: dict[tuple[str, str], tuple[int, int]] = {}
+    keys_by_index: dict[int, tuple[str, str]] = {}
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict) or not _graph_node_is_cloud_review_node(node):
+            continue
+        asset, identifier = _graph_node_validation_key(node)
+        if not asset or not identifier:
+            continue
+        key = (asset, identifier)
+        keys_by_index[index] = key
+        score = _canonical_cloud_node_score(node, asset, identifier)
+        if key not in choices or score > choices[key][1]:
+            choices[key] = (index, score)
+    duplicate_keys = {key for key in keys_by_index.values() if sum(value == key for value in keys_by_index.values()) > 1}
+    if not duplicate_keys:
+        return payload
+
+    keep_by_key = {key: index for key, (index, _score) in choices.items()}
+    remap: dict[str, str] = {}
+    merged_nodes: list[dict[str, Any]] = []
+    output_by_index: dict[int, dict[str, Any]] = {}
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            continue
+        key = keys_by_index.get(index)
+        if key not in duplicate_keys:
+            merged_nodes.append(node)
+            output_by_index[index] = node
+            continue
+        keep_index = keep_by_key[key]
+        keep_node = output_by_index.get(keep_index)
+        if keep_node is None:
+            keep_node = dict(nodes[keep_index])
+            output_by_index[keep_index] = keep_node
+            merged_nodes.append(keep_node)
+        if index == keep_index:
+            continue
+        duplicate_id = str(node.get("node_id") or "")
+        keep_id = str(keep_node.get("node_id") or "")
+        if duplicate_id and keep_id:
+            remap[duplicate_id] = keep_id
+        _merge_cloud_node_metadata(keep_node, node, asset=key[0])
+    if not remap:
+        return payload
+
+    filtered_edges: list[dict[str, Any]] = []
+    seen_edges: set[tuple[str, str, str]] = set()
+    for edge in payload.get("edges", []) if isinstance(payload.get("edges"), list) else []:
+        if not isinstance(edge, dict):
+            continue
+        rewired = dict(edge)
+        source = remap.get(str(rewired.get("source_node_id") or ""), str(rewired.get("source_node_id") or ""))
+        target = remap.get(str(rewired.get("target_node_id") or ""), str(rewired.get("target_node_id") or ""))
+        if source == target:
+            continue
+        rewired["source_node_id"] = source
+        rewired["target_node_id"] = target
+        edge_key = (source, target, str(rewired.get("edge_type") or ""))
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
+        filtered_edges.append(rewired)
+
+    filtered = dict(payload)
+    filtered["nodes"] = merged_nodes
+    filtered["edges"] = filtered_edges
+    filtered["node_count"] = len(merged_nodes)
+    filtered["edge_count"] = len(filtered_edges)
+    critical_path_nodes: list[str] = []
+    seen_critical_path_nodes: set[str] = set()
+    for node_id in (
+        payload.get("critical_path_nodes", [])
+        if isinstance(payload.get("critical_path_nodes"), list)
+        else []
+    ):
+        remapped = remap.get(str(node_id), str(node_id))
+        if remapped and remapped not in seen_critical_path_nodes:
+            seen_critical_path_nodes.add(remapped)
+            critical_path_nodes.append(remapped)
+    filtered["critical_path_nodes"] = critical_path_nodes
+    return filtered
+
+
 def _filter_graph_payload_for_validation(
     con: sqlite3.Connection,
     engagement_id: int,
@@ -1252,6 +1396,7 @@ def _filter_graph_payload_for_validation(
     if not _graph_payload_has_structure(payload):
         return payload
     validation_index = _reportable_cloud_validation_index(con, engagement_id)
+    payload = _dedupe_graph_payload_cloud_alias_nodes(payload)
     nodes = payload.get("nodes", []) if isinstance(payload.get("nodes"), list) else []
     removed: set[str] = set()
     filtered_nodes: list[dict[str, Any]] = []

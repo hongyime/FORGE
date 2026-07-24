@@ -194,11 +194,22 @@ historical notes only, not as current instructions.
   (`4 passed, 105 deselected`); registry contract passed (`1 passed`).
   Handoff:
   `.claude/handoffs/2026-07-24-cloud-asset-alias-validation-graph.md`.
+- [x] Dashboard graph alias parity checkpoint:
+  Imported/stale dashboard graph payloads now merge duplicate CLOUD review nodes
+  that share the same canonical cloud asset key, so alias/canonical pairs such
+  as `CLOUD::s3::*` and `CLOUD::aws_s3::*` collapse before detail JSON is
+  exported. Edges and critical-path node IDs are rewired deterministically, and
+  original alias metadata is retained in `asset_type_aliases`. Verification:
+  compile passed; Ruff passed; focused dashboard cloud-alias graph test passed
+  (`1 passed`); adjacent dashboard graph/cloud validation slice passed (`8
+  passed, 13 deselected`); web UI graph/cloud validation slice passed (`5
+  passed, 32 deselected, 6 warnings`). Handoff:
+  `.claude/handoffs/2026-07-24-dashboard-cloud-alias-graph-parity.md`.
 - [ ] Next target: audit another concrete passive-to-live validation parity gap,
   preferably provider-specific proof/detail reviewability for long-tail
-  validators or dashboard/report parity for newly canonicalized aliases. Keep
-  live provider calls mocked unless an explicit ROE/scope manifest and target
-  are supplied.
+  validators or report/raw-export parity for canonicalized aliases. Keep live
+  provider calls mocked unless an explicit ROE/scope manifest and target are
+  supplied.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from

@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: cloud asset alias validation/graph handoff is complete.
+Latest checkpoint: dashboard graph alias parity is complete. Imported/stale
+dashboard graph payloads now merge duplicate CLOUD review nodes sharing the
+same canonical cloud asset key; alias/canonical pairs such as `CLOUD::s3::*`
+and `CLOUD::aws_s3::*` collapse before detail JSON export. Edges and
+critical-path IDs are rewired, and original aliases are retained in
+`asset_type_aliases`. Verification: compile/Ruff passed; focused dashboard
+cloud-alias graph test passed (`1 passed`); adjacent dashboard graph/cloud
+validation slice passed (`8 passed, 13 deselected`); web UI graph/cloud
+validation slice passed (`5 passed, 32 deselected, 6 warnings`). Handoff:
+`.claude/handoffs/2026-07-24-dashboard-cloud-alias-graph-parity.md`.
+
+Current next gate: audit another concrete passive-to-live validation parity
+gap, preferably provider-specific proof/detail reviewability for long-tail
+validators or report/raw-export parity for canonicalized aliases. Keep live
+provider calls mocked unless an explicit ROE/scope manifest and target are
+supplied.
+
+Previous checkpoint: cloud asset alias validation/graph handoff is complete.
 Legacy cloud asset aliases (`s3`, `digitalocean_spaces`,
 `google_cloud_storage`, `azure_blob_storage`) now normalize before pending
 validation claim selection, suppressing repeat alias probes when canonical
@@ -36,11 +53,6 @@ passed`); broader cloud asset validation sweep slice passed (`16 passed, 117
 deselected`); focused attack graph alias/latest-validation slice passed (`4
 passed, 105 deselected`); registry contract passed (`1 passed`). Handoff:
 `.claude/handoffs/2026-07-24-cloud-asset-alias-validation-graph.md`.
-
-Current next gate: audit another concrete passive-to-live validation parity gap,
-preferably provider-specific proof/detail reviewability for long-tail validators
-or dashboard/report parity for newly canonicalized aliases. Keep live provider
-calls mocked unless an explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: HTML data aggregation worker audit is closed with no runtime
 change. `_extract_html_data()` was inspected after the URL-family worker
