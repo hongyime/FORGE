@@ -25,7 +25,33 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: embedded raster image carving is complete. Legacy binary
+Latest checkpoint: current-user provider proof-hash hardening is complete.
+Vercel, Netlify, Notion, and PostHog validation details now include a
+deterministic `profile_hash` derived from already accepted non-secret profile
+proof fields, and report/validation-inventory parsers require that stable hash
+before treating current-user API results as validated proof. Bare
+`user_profile_present=true` current-user details now downgrade to `UNVERIFIED`,
+closing a report-gate false-positive path while preserving private profile
+values out of persisted validation details. Verification: focused
+validation-proof selector passed (`95 passed, 15 deselected`), focused
+current-user validator selector passed (`5 passed, 169 deselected`), adjacent
+proof/secret-finder selector passed (`134 passed, 150 deselected`), cloud
+validation provider-proof slice passed (`53 passed, 80 deselected`), Phase 6
+report synthesizer suite passed (`106 passed`), py_compile passed for touched
+files, and Ruff passed for touched files. Slow Phase 1 long-tail kill-chain
+graph/report regression was attempted with `-m slow` but stopped at the current
+ROE/scope guard before this proof path; the guard was not weakened.
+
+Next checkpoint: scheduled offensive task fail-closed hardening. Sidecar Hume
+found that `forge/distributed/runnable.py::run_scheduled_task()` still has
+lower-level dispatch paths for `spray`, `safe_check`, and `weaponize` even
+though current handlers are stubs. Add explicit scheduler-level denial before
+handler dispatch, with local tests in `tests/distributed/test_runnable_scope.py`
+that prove monkeypatched handlers are not called and audit logging records a
+sanitized denial. No live probes, credential attacks, exploit behavior, or
+scope relaxation.
+
+Previous checkpoint: embedded raster image carving is complete. Legacy binary
 artifacts and OLE stream payloads now carve bounded embedded
 PNG/JPEG/GIF/WebP/TIFF raster candidates and route them through the existing
 image-member OCR/barcode/metadata pipeline. This lets screenshots and QR-like
@@ -38,13 +64,6 @@ persistence. Verification: focused embedded-image carving regressions passed
 passed`), relevant legacy/OLE orchestrator selector passed (`4 passed, 778
 deselected`), adjacent recursive/static artifact slice passed (`23 passed`),
 py_compile passed for touched files, and Ruff passed for touched files.
-
-Next checkpoint: continue the automated artifact discovery chain with one more
-current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
-identity/provider-shape gap. Prefer a high-value path with compact focused
-regression coverage, and keep implementation passive/proof-bound: recursive
-seeds/cloud refs only unless an explicitly scoped live check is already required
-by the validation contract.
 
 Previous checkpoint: Bruno API-client passive recursion is complete. Bruno
 `.bru` request artifacts now resolve static same-file URL-ish variables such as

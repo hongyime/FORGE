@@ -545,6 +545,11 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
         "notion",
         "Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
         "user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "notion",
+        "Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
+        "user_profile_present=true profile_hash=0123456789abcdef",
     ) == "3c90c3cc-0d44-4b50-8888-8dd25736052a"
     assert cloud_validate._validated_identifier_from_detail(
         "huggingface",
@@ -602,15 +607,31 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "vercel",
         "Vercel user ok: user_id=usr_abcdefghijklmnop user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "vercel",
+        "Vercel user ok: user_id=usr_abcdefghijklmnop "
+        "user_profile_present=true profile_hash=0123456789abcdef",
     ) == "usr_abcdefghijklmnop"
     assert cloud_validate._validated_identifier_from_detail(
         "netlify",
         "Netlify user ok: user_id=netlify-user-123 user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "netlify",
+        "Netlify user ok: user_id=netlify-user-123 "
+        "user_profile_present=true profile_hash=0123456789abcdef",
     ) == "netlify-user-123"
     assert cloud_validate._validated_identifier_from_detail(
         "posthog",
         "PostHog users me ok: host=eu.posthog.com "
         "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "posthog",
+        "PostHog users me ok: host=eu.posthog.com "
+        "user_id=018f9b7d-1234-4567-9abc-def012345678 "
+        "user_profile_present=true profile_hash=0123456789abcdef",
     ) == "eu.posthog.com/018f9b7d-1234-4567-9abc-def012345678"
     assert cloud_validate._validated_identifier_from_detail(
         "azure",

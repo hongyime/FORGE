@@ -577,7 +577,10 @@ def test_context_builder_exports_standalone_reportable_key_findings(
         (
             "netlify",
             "netlify_current_user",
-            "Netlify user ok: user_id=netlify-user-123 user_profile_present=true",
+            (
+                "Netlify user ok: user_id=netlify-user-123 "
+                "user_profile_present=true profile_hash=0123456789abcdef"
+            ),
         ),
         (
             "notion",
@@ -585,7 +588,7 @@ def test_context_builder_exports_standalone_reportable_key_findings(
             (
                 "Notion users me ok: "
                 "user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
-                "user_profile_present=true"
+                "user_profile_present=true profile_hash=0123456789abcdef"
             ),
         ),
         (
@@ -594,7 +597,7 @@ def test_context_builder_exports_standalone_reportable_key_findings(
             (
                 "PostHog users me ok: host=eu.posthog.com "
                 "user_id=018f9b7d-1234-4567-9abc-def012345678 "
-                "user_profile_present=true"
+                "user_profile_present=true profile_hash=0123456789abcdef"
             ),
         ),
         (
@@ -635,7 +638,10 @@ def test_context_builder_exports_standalone_reportable_key_findings(
         (
             "vercel",
             "vercel_user_get",
-            "Vercel user ok: user_id=usr_abcdefghijklmnop user_profile_present=true",
+            (
+                "Vercel user ok: user_id=usr_abcdefghijklmnop "
+                "user_profile_present=true profile_hash=0123456789abcdef"
+            ),
         ),
     ],
 )

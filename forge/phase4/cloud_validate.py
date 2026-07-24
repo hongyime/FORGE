@@ -3735,6 +3735,14 @@ def _update_key_validation_state(
     )
 
 
+def _profile_hash_is_stable(text: str) -> bool:
+    hash_match = re.search(r"\bprofile_hash=([a-f0-9]{16,64})\b", text, re.IGNORECASE)
+    return bool(
+        hash_match
+        and not _looks_repeated_compact_identifier(hash_match.group(1))
+    )
+
+
 def _validated_identifier_from_detail(service: str, detail: str | None) -> str | None:
     provider_service = str(service or "").strip().lower()
     normalized_service = _normalize_asset_type(provider_service)
@@ -3797,7 +3805,11 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             text,
             re.IGNORECASE,
         )
-        if match and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE):
+        if (
+            match
+            and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE)
+            and _profile_hash_is_stable(text)
+        ):
             return _stable_uuid_or_32hex(match.group(1)) or None
     if provider_service == "datadog":
         match = re.search(
@@ -3820,11 +3832,19 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
             return None
     if provider_service == "vercel":
         match = re.search(r"vercel user ok:\s*user_id=([a-z0-9_-]{3,128})\b", text, re.IGNORECASE)
-        if match and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE):
+        if (
+            match
+            and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE)
+            and _profile_hash_is_stable(text)
+        ):
             return _stable_provider_identifier(match.group(1))
     if provider_service == "netlify":
         match = re.search(r"netlify user ok:\s*user_id=([a-z0-9_-]{3,128})\b", text, re.IGNORECASE)
-        if match and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE):
+        if (
+            match
+            and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE)
+            and _profile_hash_is_stable(text)
+        ):
             return _stable_provider_identifier(match.group(1))
     if provider_service == "posthog":
         match = re.search(
@@ -3839,6 +3859,7 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
                 host not in _POSTHOG_VALIDATION_HOSTS
                 or not user_id
                 or not re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE)
+                or not _profile_hash_is_stable(text)
             ):
                 return None
             return f"{host}/{user_id}"

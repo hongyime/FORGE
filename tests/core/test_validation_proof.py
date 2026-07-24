@@ -282,22 +282,26 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
         ),
         (
             "VALIDATED:vercel_user_get:Vercel user ok: "
-            "user_id=usr_abcdefghijklmnop user_profile_present=true",
+            "user_id=usr_abcdefghijklmnop user_profile_present=true "
+            "profile_hash=0123456789abcdef",
             "vercel_user_get",
         ),
         (
             "VALIDATED:netlify_current_user:Netlify user ok: "
-            "user_id=netlify-user-123 user_profile_present=true",
+            "user_id=netlify-user-123 user_profile_present=true "
+            "profile_hash=0123456789abcdef",
             "netlify_current_user",
         ),
         (
             "VALIDATED:notion_users_me:Notion users me ok: "
-            "user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a user_profile_present=true",
+            "user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
+            "user_profile_present=true profile_hash=0123456789abcdef",
             "notion_users_me",
         ),
         (
             "VALIDATED:posthog_users_me:PostHog users me ok: host=eu.posthog.com "
-            "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true",
+            "user_id=018f9b7d-1234-4567-9abc-def012345678 "
+            "user_profile_present=true profile_hash=0123456789abcdef",
             "posthog_users_me",
         ),
         (
@@ -394,6 +398,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         ),
         (
             "VALIDATED:vercel_user_get:Vercel user ok: "
+            "user_id=usr_abcdefghijklmnop user_profile_present=true",
+            "vercel_user_get",
+        ),
+        (
+            "VALIDATED:vercel_user_get:Vercel user ok: "
             "user_id=usr_0000000000000000 user_profile_present=true",
             "vercel_user_get",
         ),
@@ -418,6 +427,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "vercel_user_get",
         ),
         (
+            "VALIDATED:netlify_current_user:Netlify user ok: "
+            "user_id=netlify-user-123 user_profile_present=true",
+            "netlify_current_user",
+        ),
+        (
             "VALIDATED:netlify_current_user:Netlify user ok: user_id=netlify-user-123",
             "netlify_current_user",
         ),
@@ -433,6 +447,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
         ),
         (
             "VALIDATED:notion_users_me:Notion users me ok: "
+            "user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a user_profile_present=true",
+            "notion_users_me",
+        ),
+        (
+            "VALIDATED:notion_users_me:Notion users me ok: "
             "user_id=00000000-0000-0000-0000-000000000000 user_profile_present=true",
             "notion_users_me",
         ),
@@ -440,6 +459,11 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "VALIDATED:notion_users_me:Notion users me ok: "
             "user_id=12345678-9012-3456-7890-123456789012 user_profile_present=true",
             "notion_users_me",
+        ),
+        (
+            "VALIDATED:posthog_users_me:PostHog users me ok: host=eu.posthog.com "
+            "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true",
+            "posthog_users_me",
         ),
         (
             "VALIDATED:posthog_users_me:PostHog users me ok: host=preview.example.com "

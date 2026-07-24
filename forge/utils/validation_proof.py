@@ -521,6 +521,14 @@ def _stable_currency_summary(value: object) -> str:
     return ",".join(stable_tokens) if stable_tokens else ""
 
 
+def _profile_hash_is_stable(proof: str) -> bool:
+    hash_match = re.search(r"\bprofile_hash=([a-f0-9]{16,64})\b", proof, re.IGNORECASE)
+    return bool(
+        hash_match
+        and not _looks_repeated_compact_identifier(hash_match.group(1))
+    )
+
+
 def _stable_slack_identifier(value: object, prefixes: tuple[str, ...]) -> str:
     candidate = re.sub(r"[^A-Za-z0-9]+", "", str(value or "").strip())
     lowered = candidate.lower()
@@ -738,8 +746,8 @@ def _profile_user_proof_is_stable(
     if not match or not re.search(r"\buser_profile_present=true\b", proof, re.IGNORECASE):
         return False
     if uuid:
-        return bool(_stable_uuid_or_32hex(match.group(1)))
-    return bool(_stable_provider_identifier(match.group(1)))
+        return bool(_stable_uuid_or_32hex(match.group(1)) and _profile_hash_is_stable(proof))
+    return bool(_stable_provider_identifier(match.group(1)) and _profile_hash_is_stable(proof))
 
 
 def _posthog_user_proof_is_stable(proof: str) -> bool:
@@ -751,7 +759,11 @@ def _posthog_user_proof_is_stable(proof: str) -> bool:
     if not match or not re.search(r"\buser_profile_present=true\b", proof, re.IGNORECASE):
         return False
     host = match.group(1).lower()
-    return host in _POSTHOG_VALIDATION_HOSTS and bool(_stable_provider_identifier(match.group(2)))
+    return (
+        host in _POSTHOG_VALIDATION_HOSTS
+        and bool(_stable_provider_identifier(match.group(2)))
+        and _profile_hash_is_stable(proof)
+    )
 
 
 def _sentry_org_proof_is_stable(proof: str) -> bool:

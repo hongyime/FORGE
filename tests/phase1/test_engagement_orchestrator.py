@@ -77961,7 +77961,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             state=ValidationState.ACTIVE,
             detail=(
                 "Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
-                "user_profile_present=true"
+                "user_profile_present=true profile_hash=0123456789abcdef"
             ),
         ),
     )
@@ -77986,7 +77986,10 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="Vercel user ok: user_id=usr_abcdefghijklmnop user_profile_present=true",
+            detail=(
+                "Vercel user ok: user_id=usr_abcdefghijklmnop "
+                "user_profile_present=true profile_hash=0123456789abcdef"
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -77994,7 +77997,10 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="Netlify user ok: user_id=netlify-user-123 user_profile_present=true",
+            detail=(
+                "Netlify user ok: user_id=netlify-user-123 "
+                "user_profile_present=true profile_hash=0123456789abcdef"
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -78004,7 +78010,8 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             state=ValidationState.ACTIVE,
             detail=(
                 "PostHog users me ok: host=eu.posthog.com "
-                "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true"
+                "user_id=018f9b7d-1234-4567-9abc-def012345678 "
+                "user_profile_present=true profile_hash=0123456789abcdef"
             ),
         ),
     )
@@ -78296,7 +78303,8 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
     )
     assert key_metadata_by_service["posthog"]["validation_detail"].endswith(
         "PostHog users me ok: host=eu.posthog.com "
-        "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true"
+        "user_id=018f9b7d-1234-4567-9abc-def012345678 "
+        "user_profile_present=true profile_hash=0123456789abcdef"
     )
 
     graphml_text = graphml_path.read_text(encoding="utf-8")

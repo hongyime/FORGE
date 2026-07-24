@@ -97,6 +97,23 @@ sentences as historical notes only, not as current instructions.
   focused regression coverage, and keep implementation passive/proof-bound:
   recursive seeds/cloud refs only unless an explicitly scoped live check is
   already required by the validation contract.
+- [x] Current-user provider proof-hash checkpoint:
+  Vercel, Netlify, Notion, and PostHog validation details now include a
+  deterministic `profile_hash` derived from already accepted non-secret profile
+  proof fields, and report/validation-inventory parsers require that stable
+  hash before treating current-user API results as validated proof. Bare
+  `user_profile_present=true` current-user details now downgrade to
+  `UNVERIFIED`, closing a report-gate false-positive path while preserving
+  private profile values out of persisted validation details. Verification:
+  focused validation-proof selector passed (`95 passed, 15 deselected`),
+  focused current-user validator selector passed (`5 passed, 169 deselected`),
+  adjacent proof/secret-finder selector passed (`134 passed, 150 deselected`),
+  cloud validation provider-proof slice passed (`53 passed, 80 deselected`),
+  Phase 6 report synthesizer suite passed (`106 passed`), py_compile passed for
+  touched files, and Ruff passed for touched files. Slow Phase 1 long-tail
+  kill-chain graph/report regression was attempted with `-m slow` but stopped
+  at the current ROE/scope guard before this proof path; the guard was not
+  weakened.
 - [x] Embedded raster image carving checkpoint:
   Legacy binary artifacts and OLE stream payloads now carve bounded embedded
   PNG/JPEG/GIF/WebP/TIFF raster candidates and route them through the existing

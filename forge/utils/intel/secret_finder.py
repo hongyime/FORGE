@@ -467,16 +467,17 @@ def _profile_proof_text_is_low_signal(value: str) -> bool:
     return bool(tokens) and all(token in _PROFILE_PROOF_PLACEHOLDER_TOKENS for token in tokens)
 
 
-def _has_profile_presence_proof(payload: object, fields: tuple[str, ...]) -> bool:
+def _profile_presence_proof_fields(payload: object, fields: tuple[str, ...]) -> dict[str, str]:
     if not isinstance(payload, dict):
-        return False
+        return {}
+    proof_fields: dict[str, str] = {}
     for field in fields:
         raw = str(payload.get(field) or "").strip()
         if not raw:
             continue
         if field == "email" and re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", raw):
             if not _profile_proof_email_is_low_signal(raw):
-                return True
+                proof_fields[field] = raw[:256]
             continue
         if _profile_proof_url_is_low_signal(raw):
             continue
@@ -488,8 +489,25 @@ def _has_profile_presence_proof(payload: object, fields: tuple[str, ...]) -> boo
             and compact not in _PROFILE_PROOF_PLACEHOLDER_TOKENS
             and not _looks_repeated_compact_identifier(compact)
         ):
-            return True
-    return False
+            proof_fields[field] = raw[:256]
+    return proof_fields
+
+
+def _has_profile_presence_proof(payload: object, fields: tuple[str, ...]) -> bool:
+    return bool(_profile_presence_proof_fields(payload, fields))
+
+
+def _profile_presence_proof_hash(payload: object, fields: tuple[str, ...]) -> str:
+    proof_fields = _profile_presence_proof_fields(payload, fields)
+    if not proof_fields:
+        return ""
+    proof_material = json.dumps(
+        proof_fields,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(proof_material.encode("utf-8")).hexdigest()[:16]
 
 
 def _stable_twilio_account_sid(value: object) -> str:
@@ -1889,9 +1907,13 @@ class NotionTokenValidator(BaseKeyValidator):
                         state=ValidationState.UNCONFIRMED,
                         detail="Notion users/me response missing user proof",
                     )
+                profile_hash = _profile_presence_proof_hash(payload, ("name", "avatar_url"))
                 return ValidationResult(
                     state=ValidationState.ACTIVE,
-                    detail=f"Notion users me ok: user_id={user_id} user_profile_present=true",
+                    detail=(
+                        f"Notion users me ok: user_id={user_id} "
+                        f"user_profile_present=true profile_hash={profile_hash}"
+                    ),
                 )
             lowered = detail.lower()
             if resp.status_code in (401, 403) or "unauthorized" in lowered:
@@ -2177,9 +2199,16 @@ class VercelTokenValidator(BaseKeyValidator):
                         state=ValidationState.UNCONFIRMED,
                         detail="Vercel user response missing user proof",
                     )
+                profile_hash = _profile_presence_proof_hash(
+                    self._user_payload(payload),
+                    ("username", "email", "name", "slug"),
+                )
                 return ValidationResult(
                     state=ValidationState.ACTIVE,
-                    detail=f"Vercel user ok: user_id={user_id} user_profile_present=true",
+                    detail=(
+                        f"Vercel user ok: user_id={user_id} "
+                        f"user_profile_present=true profile_hash={profile_hash}"
+                    ),
                 )
             lowered = detail.lower()
             if resp.status_code in (401, 403) or "unauthorized" in lowered:
@@ -2258,9 +2287,16 @@ class NetlifyTokenValidator(BaseKeyValidator):
                         state=ValidationState.UNCONFIRMED,
                         detail="Netlify user response missing user proof",
                     )
+                profile_hash = _profile_presence_proof_hash(
+                    payload,
+                    ("slug", "email", "full_name", "name", "login"),
+                )
                 return ValidationResult(
                     state=ValidationState.ACTIVE,
-                    detail=f"Netlify user ok: user_id={user_id} user_profile_present=true",
+                    detail=(
+                        f"Netlify user ok: user_id={user_id} "
+                        f"user_profile_present=true profile_hash={profile_hash}"
+                    ),
                 )
             lowered = detail.lower()
             if resp.status_code in (401, 403) or "unauthorized" in lowered:
@@ -2358,11 +2394,15 @@ class PostHogPersonalApiKeyValidator(BaseKeyValidator):
                                 f"{host}: PostHog users/@me response missing user proof"
                             )
                             continue
+                        profile_hash = _profile_presence_proof_hash(
+                            payload,
+                            ("email", "name", "first_name", "last_name", "username"),
+                        )
                         return ValidationResult(
                             state=ValidationState.ACTIVE,
                             detail=(
                                 f"PostHog users me ok: host={host} user_id={user_id} "
-                                "user_profile_present=true"
+                                f"user_profile_present=true profile_hash={profile_hash}"
                             ),
                         )
                     if resp.status_code == 401:

@@ -3224,9 +3224,11 @@ def test_notion_token_validator_active_uses_users_me_without_private_detail(monk
     result = NotionTokenValidator().validate("ntn_" + "N" * 40)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == (
-        "Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
-        "user_profile_present=true"
+    assert re.fullmatch(
+        r"Notion users me ok: "
+        r"user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
+        r"user_profile_present=true profile_hash=[a-f0-9]{16}",
+        result.detail or "",
     )
     assert "Sensitive" not in (result.detail or "")
     assert "private@acme.io" not in (result.detail or "")
@@ -3679,7 +3681,11 @@ def test_vercel_token_validator_active_uses_current_user_without_private_detail(
     result = VercelTokenValidator().validate("V" * 40)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == "Vercel user ok: user_id=usr_abcdefghijklmnop user_profile_present=true"
+    assert re.fullmatch(
+        r"Vercel user ok: user_id=usr_abcdefghijklmnop "
+        r"user_profile_present=true profile_hash=[a-f0-9]{16}",
+        result.detail or "",
+    )
     assert "private@acme.io" not in (result.detail or "")
     assert "Sensitive" not in (result.detail or "")
 
@@ -3872,7 +3878,11 @@ def test_netlify_token_validator_active_uses_current_user_without_private_detail
     result = NetlifyTokenValidator().validate("N" * 40)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == "Netlify user ok: user_id=netlify-user-123 user_profile_present=true"
+    assert re.fullmatch(
+        r"Netlify user ok: user_id=netlify-user-123 "
+        r"user_profile_present=true profile_hash=[a-f0-9]{16}",
+        result.detail or "",
+    )
     assert "private@acme.io" not in (result.detail or "")
     assert "Sensitive" not in (result.detail or "")
 
@@ -4013,9 +4023,11 @@ def test_posthog_personal_api_key_validator_active_checks_documented_hosts(monke
     result = PostHogPersonalApiKeyValidator().validate("phx_" + "P" * 40)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == (
-        "PostHog users me ok: host=eu.posthog.com "
-        "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true"
+    assert re.fullmatch(
+        r"PostHog users me ok: host=eu.posthog.com "
+        r"user_id=018f9b7d-1234-4567-9abc-def012345678 "
+        r"user_profile_present=true profile_hash=[a-f0-9]{16}",
+        result.detail or "",
     )
     assert "private@acme.io" not in (result.detail or "")
     assert seen_urls == [
@@ -4055,9 +4067,11 @@ def test_posthog_personal_api_key_validator_continues_after_low_signal_success(m
     result = PostHogPersonalApiKeyValidator().validate("phx_" + "P" * 40)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == (
-        "PostHog users me ok: host=eu.posthog.com "
-        "user_id=018f9b7d-1234-4567-9abc-def012345678 user_profile_present=true"
+    assert re.fullmatch(
+        r"PostHog users me ok: host=eu.posthog.com "
+        r"user_id=018f9b7d-1234-4567-9abc-def012345678 "
+        r"user_profile_present=true profile_hash=[a-f0-9]{16}",
+        result.detail or "",
     )
     assert "private@acme.io" not in (result.detail or "")
     assert seen_urls == [
