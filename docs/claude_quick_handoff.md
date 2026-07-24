@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Web API cloud artifact provenance parity is complete.
+Latest checkpoint: automation/playbook ROE gating is complete.
+`PlaybookEngine` now refuses to schedule playbooks unless the payload carries
+both non-empty `roe_id` and `scope_manifest`; automation event handlers suppress
+chained, WAF-evasion, RCE-hunter, and zero-to-DA follow-ups without inherited
+ROE/scope context; `/api/automation/execute` and `/api/automation/playbook`
+reject scheduling before queue insertion unless that context is present. This
+only gates/suppresses scheduling and does not add proxy/Tor/WAF-evasion
+expansion, scope relaxation, or new live execution behavior. Verification:
+compile passed; Ruff passed; focused playbook/API selectors passed (`5 passed,
+15 deselected`; `9 passed, 39 deselected`); full playbook integration file
+passed (`21 passed`); full engagement API integration file passed (`48
+passed`).
+
+Next checkpoint: perform a fresh current-code deterministic gap audit and pick
+one compact implementation/test task that advances intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
+The automation/playbook ROE gate is now closed; do not reopen it unless a
+regression is found.
+
+Previous checkpoint: Web API cloud artifact provenance parity is complete.
 `/api/engagements/{id}/assets` now includes `cloud_assets` inventory rows with
 latest deterministic validation status/reportability, artifact source seed ID,
 source URL/file, extract rule, format, bounded provenance text, and scrubbed
@@ -34,14 +53,6 @@ thin, casts cloud timestamps to text, and strips credential-like metadata keys
 before API serialization. Verification: compile passed; Ruff passed; focused
 cloud asset API provenance/validation selector passed (`2 passed, 43
 deselected`); full engagement API integration file passed (`45 passed`).
-
-Next checkpoint: gate automation/playbook scheduling with the same
-ROE/scope-manifest contract as `kill_chain()`. The subagent audit found that
-dashboard/API automation and playbook helpers can schedule follow-on active
-tasks outside the main kill-chain launch path. Patch only the deterministic
-gate/suppression path first: no proxy/Tor/WAF-evasion expansion, no scope
-relaxation, and no new live execution behavior without explicit ROE/scope
-context.
 
 Previous checkpoint: skipped seed-run status cleanup is complete.
 `SeedRunTracker.finish_run(..., status='skipped')` now clears a parent seed

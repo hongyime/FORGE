@@ -91,13 +91,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: gate automation/playbook scheduling with the same
-  ROE/scope-manifest contract as `kill_chain()`. The subagent audit found that
-  dashboard/API automation and playbook helpers can schedule follow-on active
-  tasks outside the main kill-chain launch path. Patch only the deterministic
-  gate/suppression path first: no proxy/Tor/WAF-evasion expansion, no scope
-  relaxation, and no new live execution behavior without explicit ROE/scope
-  context.
+- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
+  pick one compact implementation/test task that advances intake, discovery,
+  recursion, artifact analysis, validation, scoring, review, fallback, or
+  cleanup. The automation/playbook ROE gate is now closed; do not reopen it
+  unless a regression is found.
+- [x] Automation/playbook ROE gate checkpoint:
+  `PlaybookEngine` now refuses to schedule playbooks unless the payload carries
+  both non-empty `roe_id` and `scope_manifest`; automation event handlers
+  suppress chained, WAF-evasion, RCE-hunter, and zero-to-DA follow-ups without
+  inherited ROE/scope context; `/api/automation/execute` and
+  `/api/automation/playbook` reject scheduling before queue insertion unless
+  that context is present. The patch only gates/suppresses scheduling and does
+  not add proxy/Tor/WAF-evasion expansion, scope relaxation, or new live
+  execution behavior. Verification: compile passed; Ruff passed; focused
+  playbook/API selectors passed (`5 passed, 15 deselected`; `9 passed, 39
+  deselected`); full playbook integration file passed (`21 passed`); full
+  engagement API integration file passed (`48 passed`).
 - [x] Web API cloud artifact provenance parity checkpoint:
   `/api/engagements/{id}/assets` now includes `cloud_assets` inventory rows
   with latest deterministic validation status/reportability, artifact source

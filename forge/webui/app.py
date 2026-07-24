@@ -51,7 +51,13 @@ from forge.reporting.dashboard import (
 )
 from forge.utils.automation import AutomationEngine, EXECUTABLE_AUTOMATION_ACTIONS
 from forge.utils.kill_chain_options import normalize_kill_chain_max_iter
-from forge.utils.playbooks import PlaybookEngine
+from forge.utils.playbooks import (
+    PlaybookAuthorizationError,
+    PlaybookEngine,
+    ROE_SCOPE_CONTEXT_KEYS,
+    inherit_roe_scope_context,
+    require_roe_scope_context,
+)
 from forge.webui.auth import mint_token, validate_jwt_secret, verify_token
 from forge.webui.cloud_assets import cloud_assets_payload
 from forge.webui.command_center import CommandCenterService
@@ -1178,12 +1184,17 @@ def create_app() -> Any:
         )
 
         task_key = f"{task_type}:{target}"
+        payload = inherit_roe_scope_context(body, {"task_type": task_type, **params})
+        try:
+            require_roe_scope_context(payload)
+        except PlaybookAuthorizationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         scheduler.schedule(
             ScheduledTask(
                 engagement_id=engagement_id,
                 task_key=task_key,
-                payload={"task_type": task_type, **params},
+                payload=payload,
             )
         )
 
@@ -1209,13 +1220,21 @@ def create_app() -> Any:
             event_publisher=_publish_progress_sync,
         )
         engine = PlaybookEngine(scheduler)
+        context = body.get("context") if isinstance(body.get("context"), dict) else {}
+        context = inherit_roe_scope_context(
+            body,
+            {key: context[key] for key in ROE_SCOPE_CONTEXT_KEYS if key in context},
+        )
 
-        if playbook == "recon_full":
-            engine.run_recon_full(engagement_id, target)
-        elif playbook == "vuln_discovery":
-            engine.run_vuln_discovery(engagement_id, target)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown playbook: {playbook}")
+        try:
+            if playbook == "recon_full":
+                engine.run_recon_full(engagement_id, target, context=context)
+            elif playbook == "vuln_discovery":
+                engine.run_vuln_discovery(engagement_id, target, context=context)
+            else:
+                raise HTTPException(status_code=400, detail=f"Unknown playbook: {playbook}")
+        except PlaybookAuthorizationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         return {"status": "playbook_started"}
 

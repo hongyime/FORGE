@@ -15,6 +15,31 @@ ROE_SCOPE_CONTEXT_KEYS = (
 )
 
 
+class PlaybookAuthorizationError(RuntimeError):
+    """Raised when a playbook would schedule live work without ROE/scope context."""
+
+
+def _context_value_present(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, Mapping):
+        return bool(value)
+    return value is not None
+
+
+def has_required_roe_scope_context(metadata: Mapping[str, Any]) -> bool:
+    return _context_value_present(metadata.get("roe_id")) and _context_value_present(
+        metadata.get("scope_manifest")
+    )
+
+
+def require_roe_scope_context(metadata: Mapping[str, Any]) -> None:
+    if not has_required_roe_scope_context(metadata):
+        raise PlaybookAuthorizationError(
+            "automation playbook scheduling requires roe_id and scope_manifest"
+        )
+
+
 def inherit_roe_scope_context(
     parent_metadata: Mapping[str, Any],
     child_metadata: Mapping[str, Any],
@@ -146,6 +171,7 @@ class PlaybookEngine:
             context or {},
             {"task_type": task_type, **first_step.params},
         )
+        require_roe_scope_context(payload)
         remaining_steps = [
             {
                 "action": s.action,

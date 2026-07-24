@@ -3490,7 +3490,7 @@ def test_automation_execute_rejects_unsupported_or_sensitive_actions(
     assert queued == 0
 
 
-def test_automation_execute_allows_supported_passive_recon_action(
+def test_automation_execute_rejects_supported_action_without_roe_scope_context(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -3514,6 +3514,46 @@ def test_automation_execute_allows_supported_passive_recon_action(
             headers=headers,
         )
 
+    assert response.status_code == 400, response.text
+    assert "requires roe_id and scope_manifest" in response.text
+    with sqlite3.connect(db_path) as con:
+        queued = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM distributed_tasks
+            WHERE engagement_id=1001
+            """
+        ).fetchone()[0]
+    assert queued == 0
+
+
+def test_automation_execute_allows_supported_passive_recon_action_with_roe_scope(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    scope_manifest = {"roe_id": "ROE-WEB-2026-07", "domains": ["acme.example"]}
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/automation/execute",
+            json={
+                "engagement_id": 1001,
+                "action": "recon:crawl",
+                "roe_id": "ROE-WEB-2026-07",
+                "scope_manifest": scope_manifest,
+                "params": {"target": "https://app.acme.example"},
+            },
+            headers=headers,
+        )
+
     assert response.status_code == 200, response.text
     assert response.json()["task_key"] == "crawl:https://app.acme.example"
     with sqlite3.connect(db_path) as con:
@@ -3527,4 +3567,90 @@ def test_automation_execute_allows_supported_passive_recon_action(
     assert row is not None
     assert row[0] == "crawl:https://app.acme.example"
     assert row[1] == "queued"
-    assert json.loads(row[2])["task_type"] == "crawl"
+    payload = json.loads(row[2])
+    assert payload["task_type"] == "crawl"
+    assert payload["roe_id"] == "ROE-WEB-2026-07"
+    assert payload["scope_manifest"] == scope_manifest
+
+
+def test_automation_playbook_route_requires_roe_scope_context(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/automation/playbook",
+            json={"engagement_id": 1001, "playbook": "recon_full", "target": "acme.example"},
+            headers=headers,
+        )
+
+    assert response.status_code == 400, response.text
+    assert "requires roe_id and scope_manifest" in response.text
+    with sqlite3.connect(db_path) as con:
+        queued = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM distributed_tasks
+            WHERE engagement_id=1001
+            """
+        ).fetchone()[0]
+    assert queued == 0
+
+
+def test_automation_playbook_route_preserves_roe_scope_context(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+    scope_manifest = {"roe_id": "ROE-WEB-2026-07", "domains": ["acme.example"]}
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
+        response = client.post(
+            "/api/automation/playbook",
+            json={
+                "engagement_id": 1001,
+                "playbook": "recon_full",
+                "target": "acme.example",
+                "roe_id": "ROE-WEB-2026-07",
+                "scope_manifest": scope_manifest,
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "playbook_started"
+    with sqlite3.connect(db_path) as con:
+        row = con.execute(
+            """
+            SELECT task_key, payload
+            FROM distributed_tasks
+            WHERE engagement_id=1001
+            """
+        ).fetchone()
+    assert row is not None
+    assert str(row[0]).startswith("subdomains:acme.example:")
+    payload = json.loads(row[1])
+    assert payload["task_type"] == "subdomains"
+    assert payload["roe_id"] == "ROE-WEB-2026-07"
+    assert payload["scope_manifest"] == scope_manifest
+    assert all(
+        step["params"]["roe_id"] == "ROE-WEB-2026-07"
+        and step["params"]["scope_manifest"] == scope_manifest
+        for step in payload["_next_steps"]
+    )

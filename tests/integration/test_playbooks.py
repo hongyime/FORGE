@@ -11,7 +11,7 @@ from forge.phase4.cloud_validate import run_cloud_validate
 from forge.phase4.rce_hunter import run_safe_check, run_weaponize
 from forge.phase4.spray import run_spray
 from forge.utils.automation import AutomationEngine, EXECUTABLE_AUTOMATION_ACTIONS
-from forge.utils.playbooks import PlaybookEngine, PlaybookStep
+from forge.utils.playbooks import PlaybookAuthorizationError, PlaybookEngine, PlaybookStep
 from forge.utils.playbooks.cloud_leak import run_cloud_leak_playbook
 
 
@@ -21,6 +21,17 @@ class RecordingScheduler:
 
     def schedule(self, task):
         self.tasks.append(task)
+
+
+def test_playbook_engine_rejects_steps_without_roe_scope_context():
+    scheduler = RecordingScheduler()
+    playbooks = PlaybookEngine(scheduler)
+
+    with pytest.raises(PlaybookAuthorizationError, match="requires roe_id and scope_manifest"):
+        playbooks.run_recon_full(7, "example.com")
+
+    assert scheduler.tasks == []
+
 
 def test_playbook_1_spray_logic(tmp_path):
     # run_spray raises NotImplementedError — real auth adapters must be wired before use
@@ -52,7 +63,7 @@ def test_playbook_2_cloud_validate(tmp_path):
     assert result["status"] in ("success", "failed")
 
 def test_playbook_3_state_transition(tmp_path):
-    # Test AutomationEngine WAF evasion transition
+    # Test AutomationEngine WAF evasion transition is suppressed without ROE/scope.
     db_path = tmp_path / "engagement.db"
     
     # Setup DB schema manually for the test
@@ -76,9 +87,9 @@ def test_playbook_3_state_transition(tmp_path):
     # Simulate 403 failure
     engine._handle_task_failed(1, "recon:crawl:http://example.com", "HTTP 403 Forbidden - WAF Blocked")
     
-    assert engine.playbooks.waf_evasion_called is True
-    assert engine.playbooks.target == "http://example.com"
-    assert engine.playbooks.context == {}
+    assert engine.playbooks.waf_evasion_called is False
+    assert engine.playbooks.target is None
+    assert engine.playbooks.context is None
 
 def test_playbook_3_searxng_connectivity(tmp_path):
     # This just tests the mock fallback since we don't have a real SearxNG container running in tests
@@ -227,6 +238,29 @@ def test_automation_triggered_playbook_preserves_roe_scope_context(tmp_path):
     assert payload["scope_manifest"] == context["scope_manifest"]
     assert payload["require_roe"] is True
     assert payload["require_scope_manifest"] is True
+
+
+def test_automation_triggered_playbook_suppresses_without_roe_scope_context(tmp_path):
+    db_path = tmp_path / "engagement.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE distributed_tasks (engagement_id INTEGER, task_key TEXT, payload TEXT)"
+        )
+        conn.execute("CREATE TABLE credentials (id INTEGER PRIMARY KEY)")
+        conn.execute("INSERT INTO credentials (id) VALUES (42)")
+        conn.execute(
+            "INSERT INTO distributed_tasks (engagement_id, task_key, payload) VALUES (?, ?, ?)",
+            (7, "osint:breach_check:one", json.dumps({"task_type": "breach_check"})),
+        )
+
+    scheduler = RecordingScheduler()
+    automation = AutomationEngine(engagement_id=7)
+    automation.db_path = db_path
+    automation.scheduler = scheduler
+    automation.playbooks = PlaybookEngine(scheduler)
+    automation._handle_task_done(7, "osint:breach_check:one")
+
+    assert scheduler.tasks == []
 
 
 def test_failed_task_playbook_preserves_roe_scope_context(tmp_path):

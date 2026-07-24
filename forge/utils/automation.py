@@ -15,6 +15,7 @@ from forge.reporting.dashboard import _reportable_vulnerability_rows
 from forge.utils.playbooks import (
     PlaybookEngine,
     ROE_SCOPE_CONTEXT_KEYS,
+    has_required_roe_scope_context,
     inherit_roe_scope_context,
 )
 
@@ -98,6 +99,8 @@ class AutomationEngine:
                             payload_dict,
                             {"task_type": n_task_type, **n_params},
                         )
+                        if not has_required_roe_scope_context(n_payload):
+                            return
                         if remaining:
                             n_payload["_next_steps"] = [
                                 {
@@ -123,6 +126,8 @@ class AutomationEngine:
 
         # Trigger Playbook 1 (Zero-to-DA) if a new credential is breached or cracked
         if task_key.startswith("osint:breach_check") or task_key.startswith("exploit:crack"):
+            if not has_required_roe_scope_context(parent_context):
+                return
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 # Just get the latest credential id as a simplification for trigger
@@ -145,6 +150,8 @@ class AutomationEngine:
 
         # Trigger Playbook 4 (RCE Hunter) if passive vuln scan finishes
         if task_key.startswith("vuln:passive") or task_key.startswith("recon:ports"):
+            if not has_required_roe_scope_context(parent_context):
+                return
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 for row in _reportable_vulnerability_rows(conn, engagement_id):
@@ -173,10 +180,13 @@ class AutomationEngine:
         if "403" in error or "WAF" in error or "429" in error:
             if task_key.startswith("recon:crawl:") or task_key.startswith("recon:ports:"):
                 target = task_key.split(":", 2)[-1]
+                context = self._load_task_roe_scope_context(engagement_id, task_key)
+                if not has_required_roe_scope_context(context):
+                    return
                 self.playbooks.run_waf_evasion_recon(
                     engagement_id,
                     target,
-                    context=self._load_task_roe_scope_context(engagement_id, task_key),
+                    context=context,
                 )
 
     def _load_task_roe_scope_context(
