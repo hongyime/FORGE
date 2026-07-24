@@ -66,11 +66,28 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: run a compact mocked end-to-end kill-chain/report/dashboard
-  smoke that proves recursive discovery output, validation inventory, graph
-  review, deterministic template/raw fallback, and test-engagement cleanup still
-  compose after the latest proof-reviewability changes. Keep live provider calls
-  mocked unless an explicit ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: audit one current-code deterministic review/export or
+  passive-recursion gap that is not already covered by the compact smoke below.
+  Prefer a small modular test/helper over adding to the large Phase 1 fixture.
+  Keep live provider calls mocked unless an explicit ROE/scope manifest and
+  target are supplied.
+- [x] Compact mocked kill-chain/report/dashboard smoke checkpoint:
+  Added `tests/phase1/test_kill_chain_dashboard_smoke.py`, a focused mocked
+  `kill_chain()` run that proves homepage HTML can discover a remote APK,
+  static artifact parsing can feed Firebase/Supabase/AWS/Slack/Mailchimp/Azure
+  validation inventory, recursive email/URL seeds reach the engagement detail
+  surface, graph payload metadata keeps validation status/method, `provider=auto`
+  falls back to the deterministic template on LLM failure, and the generated
+  dashboard detail JSON exposes report lineage plus validation inventory without
+  leaking raw secrets. Mailchimp ping remains `UNVERIFIED` inventory only. No
+  live provider calls, endpoint behavior, proxy/rate-limit behavior, scope
+  behavior, report gate, or severity rule changed. Verification: compile passed;
+  Ruff passed; focused smoke passed (`1 passed in 27.46s` with `-m "slow or not
+  slow"`); dashboard validation selector passed (`5 passed, 22 deselected`);
+  Phase 6 fallback/proof/raw-export selector passed (`20 passed, 84
+  deselected`); workspace `.forge_data/engagements` contained `0` entries after
+  the run. Handoff:
+  `.claude/handoffs/2026-07-24-compact-kill-chain-dashboard-smoke.md`.
 - [x] Long-tail and non-promoted validator proof reviewability checkpoint:
   Phase 6 standalone reportable key-scanner proof exports now have a
   parameterized regression covering Cloudflare, Discord, GitLab, HuggingFace,

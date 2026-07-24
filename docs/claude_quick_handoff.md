@@ -3764,6 +3764,17 @@ stop and pick a smaller verified kill-chain or determinism gap.
 - [x] Phase 4 deterministic cloud-exposure graph gate is complete: stale `DETERMINISTIC_CLOUD_EXPOSURE` rows no longer create VULN graph nodes unless the latest matching cloud validation status is `VALIDATED`; underlying CLOUD nodes remain visible with latest validation metadata for analyst review. Verification: compile/Ruff and combined graph/report suites (`182 passed`). 
 - [x] Cloud validation auditability is stronger: Phase 4 CLOUD nodes and Phase 6 JSON/CSV exports now carry scrubbed latest validation notes/evidence summaries, and Phase 6 emits non-finding `cloud_validation` inventory rows so unsupported/dead/suspect assets remain reviewable without entering findings. Verification: compile/Ruff, focused inventory slice (`3 passed, 105 deselected`), and combined graph/report suites (`182 passed`).
 - [x] Shared cloud-exposure gate and validation sanitizer are in place: Phase 4 graph and Phase 6 report paths use one deterministic cloud-exposure helper, and validation notes/evidence summaries use one stronger sanitizer for credential assignments, presigned URL params, cookies, authorization headers, JWTs, AWS key IDs, and long token-shaped strings. Verification: compile/Ruff and helper/graph/report suites (`192 passed`).
+- [x] Compact mocked kill-chain/report/dashboard smoke is now covered in
+  `tests/phase1/test_kill_chain_dashboard_smoke.py`: one mocked `kill_chain()`
+  run proves homepage HTML -> remote APK -> static Firebase/Supabase/key
+  extraction -> recursive email/URL seeds -> Firebase/Supabase/AWS/Slack/Azure
+  validated inventory plus Mailchimp `UNVERIFIED` inventory -> graph metadata ->
+  `provider=auto` deterministic template fallback -> dashboard detail JSON
+  review surface. Verification: compile/Ruff, focused smoke (`1 passed in
+  27.46s` with `-m "slow or not slow"`), dashboard validation selector (`5
+  passed, 22 deselected`), Phase 6 fallback/proof/raw-export selector (`20
+  passed, 84 deselected`), and workspace `.forge_data/engagements` count `0`.
+  Handoff: `.claude/handoffs/2026-07-24-compact-kill-chain-dashboard-smoke.md`.
 
 ## Still partial
 
