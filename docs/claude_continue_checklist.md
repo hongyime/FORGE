@@ -66,11 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: extend the automated artifact discovery chain with one
-  current-code-audited passive parser gap. Start by identifying a high-value
-  unsupported or weakly supported artifact/container/OCR fallback path, then add
-  a focused regression and compact implementation that feeds safe recursive
-  seeds/cloud refs without executing the artifact or widening live probing.
+- [ ] Next checkpoint: continue the automated artifact discovery chain with one
+  more current-code-audited passive parser/OCR gap. Prefer a high-value
+  unsupported or weakly supported artifact/container/OCR fallback path with a
+  compact focused regression, and keep the implementation passive: recursive
+  seeds/cloud refs only, no artifact execution or live probing expansion.
+- [x] Bruno API-client passive-recursion checkpoint:
+  Bruno `.bru` request artifacts now resolve static same-file URL-ish variables
+  such as `{{baseUrl}}/v1/users` before the existing URL safety normalization.
+  Resolved Bruno request URLs and their base URLs feed the API-client structured
+  discovery path as recursive URL seeds, while unresolved templates continue to
+  be rejected by the shared template guard. Verification: focused API-client
+  family regression passed (`7 passed`), adjacent API-client/document/format
+  slice passed (`19 passed`), py_compile passed for touched files, and Ruff
+  passed for touched files.
 - [x] Pause/cancel dashboard-review refresh checkpoint:
   Interrupted kill-chain exits now refresh the same static dashboard/detail
   review surface as normal completion. `_maybe_interrupt_run()` finishes

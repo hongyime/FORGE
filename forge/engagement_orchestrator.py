@@ -29419,6 +29419,8 @@ class ArtifactQueueProcessor:
             raw_values = self._api_client_pactum_candidate_values(document, parse_text)
         elif source_label == "pact-contract":
             raw_values = self._api_client_pact_contract_candidate_values(document, parse_text)
+        elif source_label == "bruno":
+            raw_values = self._api_client_bruno_candidate_values(document, parse_text)
         else:
             raw_values = self._api_client_document_candidate_values(document)
         text_families = ["jmeter"]
@@ -29898,6 +29900,93 @@ class ArtifactQueueProcessor:
             fallback_values=self._api_client_text_fallback_candidate_values,
             is_urlish_key=self._api_client_variable_name_is_urlish,
         )
+
+    def _api_client_bruno_candidate_values(self, document: Any, text: str) -> list[str]:
+        values = self._api_client_document_candidate_values(document)
+        values.extend(self._api_client_bruno_text_candidate_values(text))
+        return values[:512]
+
+    def _api_client_bruno_text_candidate_values(self, text: str) -> list[str]:
+        parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
+        if "{{" not in parse_text and "url:" not in parse_text.lower():
+            return []
+        field_pattern = re.compile(
+            r"""
+            ^\s*(?P<key>[A-Za-z][A-Za-z0-9_.-]{0,80})\s*:\s*
+            (?P<value>[^\s#;,]+)
+            """,
+            re.IGNORECASE | re.VERBOSE,
+        )
+        variables: dict[str, str] = {}
+        raw_entries: list[tuple[int, str]] = []
+        offset = 0
+        for line in parse_text.splitlines()[:4096]:
+            match = field_pattern.match(line)
+            if match:
+                key = str(match.group("key") or "").strip()
+                value = self._api_client_bruno_clean_value(match.group("value"))
+                if value:
+                    if self._api_client_variable_name_is_urlish(key) and "{{" not in value:
+                        variables[key.lower()] = value
+                    if self._api_client_bruno_field_is_endpoint(key):
+                        raw_entries.append((offset + match.start("value"), value))
+            offset += len(line) + 1
+        resolved_entries = self._run_ordered_local_batch(
+            [(position, value, variables) for position, value in raw_entries],
+            self._api_client_bruno_resolved_candidate_entry,
+            default_factory=lambda: (-1, ""),
+        )
+        return [
+            value
+            for _position, value in resolved_entries
+            if value
+        ][:512]
+
+    @staticmethod
+    def _api_client_bruno_clean_value(value: Any) -> str:
+        return str(value or "").strip().strip("\"'`,")
+
+    @staticmethod
+    def _api_client_bruno_field_is_endpoint(value: str) -> bool:
+        fingerprint = ArtifactQueueProcessor._yaml_key_fingerprint(value)
+        return fingerprint in {
+            "url",
+            "rawurl",
+            "baseurl",
+            "baseuri",
+            "endpoint",
+            "host",
+            "hostname",
+            "target",
+        }
+
+    def _api_client_bruno_resolved_candidate_entry(
+        self,
+        item: tuple[int, str, dict[str, str]],
+    ) -> tuple[int, str]:
+        position, raw_value, variables = item
+        value = self._api_client_bruno_resolve_variables(raw_value, variables)
+        return (position, value)
+
+    @staticmethod
+    def _api_client_bruno_resolve_variables(
+        raw_value: str,
+        variables: dict[str, str],
+    ) -> str:
+        value = ArtifactQueueProcessor._api_client_bruno_clean_value(raw_value)
+        if "{{" not in value:
+            return value
+
+        def _replace(match: re.Match[str]) -> str:
+            variable_name = str(match.group(1) or "").strip().lower()
+            replacement = variables.get(variable_name)
+            if not replacement:
+                return match.group(0)
+            if replacement.endswith("/") and match.end() < len(value) and value[match.end()] == "/":
+                return replacement.rstrip("/")
+            return replacement
+
+        return re.sub(r"\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}", _replace, value)
 
     def _api_client_text_candidate_family_batches(
         self,

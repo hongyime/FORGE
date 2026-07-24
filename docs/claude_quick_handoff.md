@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: pause/cancel dashboard-review refresh is complete.
+Latest checkpoint: Bruno API-client passive recursion is complete. Bruno `.bru`
+request artifacts now resolve static same-file URL-ish variables such as
+`{{baseUrl}}/v1/users` before the existing URL safety normalization. Resolved
+Bruno request URLs and their base URLs feed the API-client structured discovery
+path as recursive URL seeds, while unresolved templates continue to be rejected
+by the shared template guard. Verification: focused API-client family regression
+passed (`7 passed`), adjacent API-client/document/format slice passed (`19
+passed`), py_compile passed for touched files, and Ruff passed for touched
+files.
+
+Next checkpoint: continue the automated artifact discovery chain with one more
+current-code-audited passive parser/OCR gap. Prefer a high-value unsupported or
+weakly supported artifact/container/OCR fallback path with a compact focused
+regression, and keep the implementation passive: recursive seeds/cloud refs
+only, no artifact execution or live probing expansion.
+
+Previous checkpoint: pause/cancel dashboard-review refresh is complete.
 Interrupted kill-chain exits now refresh the same static dashboard/detail review
 surface as normal completion. `_maybe_interrupt_run()` finishes cancelled and
 paused runs with terminal metadata, clears run-control markers, emits a
@@ -36,12 +52,6 @@ refresh helper. Verification: pause/cancel lifecycle regressions passed (`2
 passed`), adjacent paused-dashboard and report-finalization regressions passed
 (`3 passed`), py_compile passed for touched files, and Ruff passed for touched
 files.
-
-Next checkpoint: extend the automated artifact discovery chain with one
-current-code-audited passive parser gap. Start by identifying a high-value
-unsupported or weakly supported artifact/container/OCR fallback path, then add a
-focused regression and compact implementation that feeds safe recursive
-seeds/cloud refs without executing the artifact or widening live probing.
 
 Previous checkpoint: over-depth recursive seed resume is complete. Persisted
 `engagement_seeds` rows deeper than `synthesis_depth_limit` stay in inventory

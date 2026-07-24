@@ -152,6 +152,31 @@ from forge.engagement_orchestrator import ArtifactQueueProcessor
                 "https://karate-live.acme.example/events",
             ],
         ),
+        (
+            "users.bru",
+            """
+            meta {
+              name: List users
+              type: http
+            }
+            get {
+              url: {{baseUrl}}/v1/users
+              body: none
+            }
+            vars:pre-request {
+              baseUrl: https://bruno-api.acme.example/root
+            }
+            """,
+            [["jmeter"]],
+            [
+                "https://bruno-api.acme.example/root/v1/users",
+                "https://bruno-api.acme.example/root",
+            ],
+            [
+                "https://bruno-api.acme.example/root/v1/users",
+                "https://bruno-api.acme.example/root",
+            ],
+        ),
     ],
 )
 def test_api_client_text_candidate_families_use_bounded_workers_and_preserve_order(
