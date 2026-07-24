@@ -10097,7 +10097,6 @@ def kill_chain(
                     FROM engagement_seeds
                     WHERE engagement_id=?
                       AND seed_type='email'
-                      AND COALESCE(status, 'pending') != 'failed'
                     """,
                     (engagement_id,),
                 ).fetchall()
@@ -10360,14 +10359,15 @@ def kill_chain(
         item: dict[str, object],
         *,
         processed_emails_out: set[str],
-    ) -> str:
+    ) -> str | None:
         email = str(item.get("email") or "")
         chain_status = str(item.get("chain_status") or "failed")
         _apply_one_shot_seed_run_entry(
             cast(dict[str, object] | None, item.get("seed_run_entry"))
         )
-        if chain_status in {"completed", "skipped"}:
-            processed_emails_out.add(email)
+        if not email or chain_status not in {"completed", "skipped"}:
+            return None
+        processed_emails_out.add(email)
         return email
 
     def _prepare_cloud_ref_batch_item(
@@ -10626,9 +10626,10 @@ def kill_chain(
         ]
         if dry_run_keyscan_value:
             keyscan_args.append("--dry-run")
+        target_key = _resume_normalize(target)
         return {
             "target": target,
-            "already_processed": target in processed_targets,
+            "already_processed": target_key in processed_targets,
             "seed_type": "domain" if "." in target else "other",
             "cmd_argv": keyscan_args,
         }
@@ -14706,6 +14707,15 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="email dispatch result order preserved",
             )
+            successful_email_localpart_handles = set(inferred_handles) if dry_run_all else set()
+            for spec, email, returncode in zip(e_specs, e_spec_emails, e_returncodes):
+                if (
+                    spec.loop_name == "fanout_e_sherlock_localpart"
+                    and int(returncode) == 0
+                ):
+                    successful_email_localpart_handles.update(
+                        inferred_by_email.get(email, [])
+                    )
             if identity_lookup_specs:
                 if len(identity_lookup_specs) > 1:
                     if identity_lookup_workers <= 1:
@@ -14796,7 +14806,7 @@ def kill_chain(
                 progress_label=f"{iteration}.E email finalize",
                 progress_callback=_record_batch_progress,
             )
-            inferred_username_inputs = sorted(inferred_handles)
+            inferred_username_inputs = sorted(successful_email_localpart_handles)
             if len(inferred_username_inputs) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.E inferred username processed-set prep",
@@ -15123,39 +15133,6 @@ def kill_chain(
                 progress_label=f"{iteration}.F keyscan org target merge",
                 progress_callback=_record_batch_progress,
             )
-            if len(keyscan_org_batch) > 1 and parallel_workers > 1:
-                _log(
-                    f"{iteration}.F keyscan org processed-set prep",
-                    (
-                        f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(keyscan_org_batch))}[/dim]"
-                    ),
-                )
-            prepared_keyscan_org_updates = _run_inprocess_batch(
-                keyscan_org_batch,
-                lambda item: _prepare_processed_set_item(
-                    item,
-                    normalizer=lambda value: value,
-                ),
-                max_workers=parallel_workers,
-                progress_label=f"{iteration}.F keyscan org processed-set prep",
-                progress_callback=_record_batch_progress,
-            )
-            if len(prepared_keyscan_org_updates) > 1:
-                _log(
-                    f"{iteration}.F keyscan org processed-set update",
-                    "[dim]sequential dispatch x1[/dim]  [dim]processed-org order preserved[/dim]",
-                )
-            _run_inprocess_batch(
-                prepared_keyscan_org_updates,
-                lambda item: _apply_processed_set_item(
-                    item,
-                    processed_set=processed_github_orgs,
-                ),
-                max_workers=1,
-                progress_label=f"{iteration}.F keyscan org processed-set update",
-                progress_callback=_record_batch_progress,
-            )
             if keyscan_targets and len(keyscan_targets) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.F keyscan target prep",
@@ -15326,29 +15303,42 @@ def kill_chain(
                 progress_label=f"{iteration}.F keyscan schedule merge",
                 progress_callback=_record_batch_progress,
             )
+            completed_keyscan_targets = [
+                str(item.get("target") or "").strip()
+                for item in unique_prepared_keyscan_targets
+                if bool(item.get("already_processed")) and str(item.get("target") or "").strip()
+            ]
             if len(keyscan_specs) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.F keyscan",
                     f"[dim]parallel dispatch x{min(parallel_workers, len(keyscan_specs))}[/dim]",
                 )
+            keyscan_returncodes: list[int] = []
             if keyscan_specs:
-                _run_module_batch(
+                keyscan_returncodes = _run_module_batch(
                     keyscan_specs,
                     _run_module,
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.F keyscan",
                     progress_callback=_record_batch_progress,
                 )
-                if len(scheduled_keyscan_targets) > 1 and parallel_workers > 1:
+                completed_keyscan_targets.extend(
+                    _successful_dispatch_items(
+                        scheduled_keyscan_targets,
+                        keyscan_returncodes,
+                    )
+                )
+            if completed_keyscan_targets:
+                if len(completed_keyscan_targets) > 1 and parallel_workers > 1:
                     _log(
                         f"{iteration}.F keyscan processed-target prep",
                         (
                             f"[dim]parallel parse x"
-                            f"{min(parallel_workers, len(scheduled_keyscan_targets))}[/dim]"
+                            f"{min(parallel_workers, len(completed_keyscan_targets))}[/dim]"
                         ),
                     )
                 prepared_keyscan_processed_target_updates = _run_inprocess_batch(
-                    scheduled_keyscan_targets,
+                    completed_keyscan_targets,
                     lambda item: _prepare_processed_set_item(
                         item,
                         normalizer=_resume_normalize,
@@ -15370,6 +15360,58 @@ def kill_chain(
                     ),
                     max_workers=1,
                     progress_label=f"{iteration}.F keyscan processed-target update",
+                    progress_callback=_record_batch_progress,
+                )
+                completed_keyscan_target_keys = {
+                    normalized
+                    for normalized in _run_inprocess_batch(
+                        completed_keyscan_targets,
+                        lambda item: _prepare_processed_set_item(
+                            item,
+                            normalizer=_resume_normalize,
+                        ),
+                        max_workers=parallel_workers,
+                        progress_label=f"{iteration}.F keyscan org completed-target prep",
+                        progress_callback=_record_batch_progress,
+                    )
+                    if normalized
+                }
+                completed_keyscan_orgs = [
+                    org
+                    for org in keyscan_org_batch
+                    if _resume_normalize(org) in completed_keyscan_target_keys
+                ]
+                if len(completed_keyscan_orgs) > 1 and parallel_workers > 1:
+                    _log(
+                        f"{iteration}.F keyscan org processed-set prep",
+                        (
+                            f"[dim]parallel parse x"
+                            f"{min(parallel_workers, len(completed_keyscan_orgs))}[/dim]"
+                        ),
+                    )
+                prepared_keyscan_org_updates = _run_inprocess_batch(
+                    completed_keyscan_orgs,
+                    lambda item: _prepare_processed_set_item(
+                        item,
+                        normalizer=lambda value: value,
+                    ),
+                    max_workers=parallel_workers,
+                    progress_label=f"{iteration}.F keyscan org processed-set prep",
+                    progress_callback=_record_batch_progress,
+                )
+                if len(prepared_keyscan_org_updates) > 1:
+                    _log(
+                        f"{iteration}.F keyscan org processed-set update",
+                        "[dim]sequential dispatch x1[/dim]  [dim]processed-org order preserved[/dim]",
+                    )
+                _run_inprocess_batch(
+                    prepared_keyscan_org_updates,
+                    lambda item: _apply_processed_set_item(
+                        item,
+                        processed_set=processed_github_orgs,
+                    ),
+                    max_workers=1,
+                    progress_label=f"{iteration}.F keyscan org processed-set update",
                     progress_callback=_record_batch_progress,
                 )
         else:

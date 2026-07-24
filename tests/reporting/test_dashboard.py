@@ -490,7 +490,8 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
                 (engagement_id, task_key, status, priority, payload, worker_id, error, created_at, updated_at)
             VALUES
                 (1001, 'validate:key:42:20260709T094414', 'queued', 80, ?, 'worker-a',
-                 NULL, '2026-07-09T09:44:14', '2026-07-09T09:44:15')
+                 'failed scope_manifest=DO-NOT-LEAK-SCOPE-SENTINEL url=https://app.acme.example/admin',
+                 '2026-07-09T09:44:14', '2026-07-09T09:44:15')
             """,
             (scoped_task_payload,),
         )
@@ -889,11 +890,13 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "Scope Manifest": "yes",
         "Created": "2026-07-09 09:44:14",
         "Updated": "2026-07-09 09:44:15",
-        "Error": "",
+        "Error": "failed scope_manifest=[redacted] url=[redacted-url]",
     }
     task_row_json = json.dumps(task_row, sort_keys=True)
     assert "domains" not in task_row_json
     assert "ROE-ACME-2026-07" not in task_row_json
+    assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in task_row_json
+    assert "https://app.acme.example/admin" not in task_row_json
     assert detail_payload["sections"]["engagement_seeds"][0]["Band"] in {"confirmed", "medium"}
     assert detail_payload["sections"]["engagement_seeds"][0]["Relations"] in {"0", "2"}
     assert detail_payload["sections"]["seed_relations"][0]["Relation"] == "related_asset"

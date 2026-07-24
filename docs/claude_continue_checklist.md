@@ -1,6 +1,6 @@
 # Claude Continue Checklist
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 ## End Goal Quick Answer
 
@@ -66,10 +66,24 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit remaining processed-set families outside the
-  recursive social/phone/IP/name/company/cloud-ref slice (email, URL,
-  keyscan/org targets, root-domain resume sets) and patch only real
-  failure-suppression bugs that can permanently hide retryable work.
+- [ ] Next checkpoint: audit D5 URL-seed fetch/finalization semantics and
+  root-domain resume/idempotency sets. Patch only confirmed retry suppression
+  or same-run rerun bugs; keep empty/denied URL fetch handling deterministic and
+  do not convert intentional terminal states into infinite retries.
+- [x] Email/keyscan retry-state checkpoint:
+  Failed `email` engagement seed rows are reloadable by the E-chain, failed
+  `fanout_e_chain` runs no longer enter `processed_emails`, and email-localpart
+  username processed-state now follows successful/skipped Sherlock localpart
+  dispatches instead of unrelated email-provider results. Keyscan targets and
+  discovered GitHub orgs now enter processed sets only after an existing
+  completed target or a zero-returncode keyscan dispatch, so failed org/target
+  keyscans remain retryable across recursive iterations. Dashboard distributed
+  task errors are redacted before detail rendering so task review does not leak
+  scope manifests, URLs, or secret-like assignments. Verification: focused
+  retry-state suite passed (`6 passed`), dashboard detail contract passed (`1
+  passed`), adjacent resume/module/cloud checks passed (`3 passed`), adjacent
+  email batching path passed with explicit ROE/scope env (`1 passed`), Ruff
+  passed, py_compile passed, and `git diff --check` was whitespace-clean.
 - [x] Recursive processed-state retry checkpoint:
   Recursive E5 social-handle chains, username, phone, IP, name, company, and
   executable cloud scan refs now enter processed sets only after completed or

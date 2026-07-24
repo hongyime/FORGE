@@ -116,6 +116,23 @@ def _truncate(value: Any, limit: int = 140) -> str:
     return f"{text[:limit - 3]}..."
 
 
+_DASHBOARD_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(api[_-]?key|access[_-]?token|client[_-]?secret|key_enc|password|"
+    r"private[_-]?key|raw[_-]?(?:secret|token)|refresh[_-]?token|secret|"
+    r"scope_manifest(?:_json|_payload)?|token)\b\s*[:=]\s*[^,\s;]+"
+)
+_DASHBOARD_URL_RE = re.compile(r"https?://[^\s,;]+", re.IGNORECASE)
+
+
+def _redact_dashboard_error(value: Any, limit: int = 140) -> str:
+    text = _truncate(value, limit)
+    text = _DASHBOARD_SECRET_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group(1)}=[redacted]",
+        text,
+    )
+    return _DASHBOARD_URL_RE.sub("[redacted-url]", text)
+
+
 def _safe_json_loads(value: str) -> Any:
     try:
         return json.loads(value)
@@ -2678,7 +2695,7 @@ def _distributed_task_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Scope Manifest": "yes" if _distributed_task_payload_has_scope_manifest(payload) else "no",
         "Created": _format_dt(str(row["created_at"] or "")),
         "Updated": _format_dt(str(row["updated_at"] or "")),
-        "Error": _truncate(row["error"], 120),
+        "Error": _redact_dashboard_error(row["error"], 120),
     }
 
 

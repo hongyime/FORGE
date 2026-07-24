@@ -510,3 +510,253 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
     assert all("simulated cloud scan failure" in str(row[2] or "") for row in failed_rows)
     assert all(json.loads(str(row[3] or "{}"))["returncode"] == 1 for row in failed_rows)
     assert skipped_rows == []
+
+
+def test_kill_chain_retries_failed_email_seed_rows(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "authorized_seeds": ["@operator", "retry@acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (1001, "retry@acme.example", "email", "discovered", "failed", 1, 0.9, "{}"),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    email_attempts: list[tuple[str, str]] = []
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        if module_argv[:2] in {
+            ("osint", "xposed"),
+            ("osint", "accounts"),
+            ("osint", "social"),
+            ("osint", "gravatar"),
+            ("osint", "google"),
+            ("osint", "emailrep"),
+        } and "--emails" in module_argv:
+            email = module_argv[module_argv.index("--emails") + 1]
+            email_attempts.append((module_argv[1], email))
+            if email == "retry@acme.example":
+                return subprocess.CompletedProcess(
+                    ["forge", *module_argv],
+                    1,
+                    stdout="",
+                    stderr="simulated email fan-out failure",
+                )
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="@operator",
+        engagement="1001",
+        max_iter=2,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    assert email_attempts.count(("xposed", "retry@acme.example")) == 2
+    assert email_attempts.count(("emailrep", "retry@acme.example")) == 2
+
+    con = sqlite3.connect(db_path)
+    try:
+        failed_runs = con.execute(
+            """
+            SELECT sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_e_chain'
+              AND es.seed_value='retry@acme.example'
+            ORDER BY sr.id
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert len(failed_runs) == 2
+    assert all(row[0] == "failed" for row in failed_runs)
+    assert all("email fan-out modules failed" in str(row[1] or "") for row in failed_runs)
+    assert all(1 in json.loads(str(row[2] or "{}"))["returncodes"] for row in failed_runs)
+
+
+def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    keyscan_attempts: list[str] = []
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        if module_argv[:2] == ("osint", "keyscan") and "--domain" in module_argv:
+            target = module_argv[module_argv.index("--domain") + 1]
+            keyscan_attempts.append(target)
+            if target == "failorg":
+                return subprocess.CompletedProcess(
+                    ["forge", *module_argv],
+                    1,
+                    stdout="",
+                    stderr="simulated keyscan failure",
+                )
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        if str(progress_label or "").endswith(".D cloud+HTML fetch"):
+            return [
+                (
+                    "<html>"
+                    '<a href="https://github.com/failorg/repo">fail</a>'
+                    '<a href="https://github.com/okorg/repo">ok</a>'
+                    "</html>"
+                )
+                for _ in specs
+            ]
+        if str(progress_label or "").endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=2,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=False,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    assert keyscan_attempts.count("acme.example") == 1
+    assert keyscan_attempts.count("okorg") == 1
+    assert keyscan_attempts.count("failorg") == 2
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        failed_rows = con.execute(
+            """
+            SELECT es.seed_value, sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_f_keyscan'
+              AND es.seed_value='failorg'
+            ORDER BY sr.id
+            """
+        ).fetchall()
+        completed_rows = con.execute(
+            """
+            SELECT es.seed_value, sr.status
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_f_keyscan'
+              AND es.seed_value='okorg'
+            ORDER BY sr.id
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert len(failed_rows) == 2
+    assert all(row[1] == "failed" for row in failed_rows)
+    assert all("simulated keyscan failure" in str(row[2] or "") for row in failed_rows)
+    assert all(json.loads(str(row[3] or "{}"))["returncode"] == 1 for row in failed_rows)
+    assert completed_rows == [("okorg", "completed")]

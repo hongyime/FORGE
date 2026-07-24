@@ -1,6 +1,6 @@
 # Claude Quick Handoff
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 End goal quick answer: FORGE must be one deterministic authorized engagement
 pipeline from scoped multi-seed intake through bounded recursive discovery,
@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: recursive processed-state retry gating is complete.
+Latest checkpoint: email/keyscan retry-state gating plus dashboard task-error
+redaction is complete. Failed `email` engagement seed rows are reloadable by
+the E-chain, failed `fanout_e_chain` rows do not enter `processed_emails`, and
+email-localpart username processed-state follows successful/skipped Sherlock
+localpart dispatches. Keyscan targets and discovered GitHub orgs now enter
+processed sets only after an existing completed target or a zero-returncode
+keyscan dispatch, so failed org/target keyscans remain retryable across
+recursive iterations. Dashboard distributed task errors are redacted before
+detail rendering. Verification: focused retry-state suite passed (`6 passed`),
+dashboard detail contract passed (`1 passed`), adjacent resume/module/cloud
+checks passed (`3 passed`), adjacent email batching path passed with explicit
+ROE/scope env (`1 passed`), Ruff passed, py_compile passed, and
+`git diff --check` was whitespace-clean.
+
+Next checkpoint: audit D5 URL-seed fetch/finalization semantics and root-domain
+resume/idempotency sets. Patch only confirmed retry suppression or same-run
+rerun bugs; keep empty/denied URL fetch handling deterministic and do not
+convert intentional terminal states into infinite retries.
+
+Previous checkpoint: recursive processed-state retry gating is complete.
 Recursive E5 social-handle chains, username, phone, IP, name, company, and
 executable cloud scan refs now enter processed sets only after completed or
 intentional skipped outcomes. Failed subprocesses remain pending for later
@@ -34,11 +53,6 @@ still persist as skipped, and no-executable cloud refs are intentional skips to
 avoid infinite loops. Verification: focused retry regressions passed (`4
 passed`), adjacent cloud/seed fan-out slice passed (`8 passed`), Ruff passed,
 py_compile passed, and `git diff --check` was whitespace-clean.
-
-Next checkpoint: audit remaining processed-set families outside the recursive
-social/phone/IP/name/company/cloud-ref slice (email, URL, keyscan/org targets,
-root-domain resume sets) and patch only real failure-suppression bugs that can
-permanently hide retryable work.
 
 Previous checkpoint: final report finalization fallback is complete. Kill-chain
 finalization now verifies the report family after subprocess-backed
