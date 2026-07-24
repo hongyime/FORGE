@@ -25,21 +25,33 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: report artifact/API isolation is complete. Static dashboard
-and live web API report/audit discovery now require ID-delimited artifact stems,
-so engagement `1001` no longer sees or downloads `engagement_10010_*` report
-artifacts. Live `/api/engagements/{id}/vuln-summary` now excludes passive false
-positives the same way dashboard severity summaries do. Verification:
-compile/Ruff passed; focused dashboard/API report prefix-collision,
-report-history, and vuln-summary tests passed (`5 passed`); pytest engagement
-cleanup reported `removed=3 remaining=0`. Handoff:
-`.claude/handoffs/2026-07-24-report-artifact-api-isolation.md`.
+Latest checkpoint: canonical graph artifact isolation is complete. Static
+dashboard and live web API graph artifact discovery now only accept
+manifest-defined graph filenames for each engagement:
+`{id}_attack_graph.json`, `.graphml`, `.mtgx`, `_nodes.csv`, and `_edges.csv`.
+Noncanonical names such as `1001_attack_graph-extra.json` no longer appear in
+engagement artifacts, cannot win graph payload selection, and cannot be
+downloaded through the live artifact endpoint. Verification: compile/Ruff
+passed; focused dashboard/API graph/report prefix collision slice passed (`5
+passed`); pytest engagement cleanup reported `removed=2 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-canonical-graph-artifact-isolation.md`.
 
-Current next gate: audit another concrete passive-to-live validation/report/API
-parity gap, preferably provider-specific proof/detail reviewability for
-long-tail validators or imported graph/raw-export shape mismatches. Keep live
-provider calls mocked unless an explicit ROE/scope manifest and target are
-supplied.
+Current next gate: fix live API audit-manifest verification parity. A subagent
+found that static dashboard verifies latest run manifests by default, while
+live `/api/engagements` and default `/api/engagements/{ref}/runs` currently
+return `verification_status: not_checked`. Prefer explicit default parity with
+static dashboard unless a documented performance reason requires an opt-out.
+
+Previous checkpoint: report artifact/API isolation is complete. Static
+dashboard and live web API report/audit discovery now require ID-delimited
+artifact stems, so engagement `1001` no longer sees or downloads
+`engagement_10010_*` report artifacts. Live
+`/api/engagements/{id}/vuln-summary` now excludes passive false positives the
+same way dashboard severity summaries do. Verification: compile/Ruff passed;
+focused dashboard/API report prefix-collision, report-history, and vuln-summary
+tests passed (`5 passed`); pytest engagement cleanup reported
+`removed=3 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-report-artifact-api-isolation.md`.
 
 Previous checkpoint: validation inventory/raw-export parity is complete. Phase
 6 raw CSV finding rows preserve structured validation notes/evidence/check

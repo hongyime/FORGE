@@ -846,6 +846,72 @@ def test_engagement_detail_api_excludes_report_prefix_collisions(
     assert all(not name.startswith("engagement_10010") for name in history_names)
 
 
+def test_engagement_detail_api_excludes_noncanonical_graph_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
+        con.commit()
+    finally:
+        con.close()
+
+    reports_dir = tmp_path / "reports"
+    (reports_dir / "1001_attack_graph.json").write_text(
+        json.dumps(
+            {
+                "nodes": [{"node_id": "canonical", "label": "canonical graph", "entity_type": "HOST"}],
+                "edges": [],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / "1001_attack_graph-extra.json").write_text(
+        json.dumps(
+            {
+                "nodes": [{"node_id": "extra", "label": "wrong graph", "entity_type": "HOST"}],
+                "edges": [],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail = detail_resp.json()
+
+        extra_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/artifacts/1001_attack_graph-extra.json",
+            headers=headers,
+        )
+        canonical_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/artifacts/1001_attack_graph.json",
+            headers=headers,
+        )
+        assert extra_resp.status_code == 404
+        assert canonical_resp.status_code == 200, canonical_resp.text
+
+    artifact_names = {artifact["name"] for artifact in detail["artifacts"]}
+    assert "1001_attack_graph.json" in artifact_names
+    assert "1001_attack_graph-extra.json" not in artifact_names
+    assert detail["graph_summary"]["source"] == "1001_attack_graph.json"
+    assert detail["graph_payload"]["source"] == "1001_attack_graph.json"
+    assert detail["graph_payload"]["nodes"][0]["label"] == "canonical graph"
+
+
 def test_engagement_api_unions_seed_only_hosts_and_emails(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))

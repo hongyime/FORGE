@@ -855,6 +855,60 @@ def test_generate_dashboard_excludes_report_prefix_collisions(tmp_path: Path) ->
     assert all(not name.startswith("engagement_10010") for name in history_names)
 
 
+def test_generate_dashboard_excludes_noncanonical_graph_artifacts(tmp_path: Path) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
+        con.commit()
+    finally:
+        con.close()
+
+    (reports_dir / "1001_attack_graph.json").write_text(
+        json.dumps(
+            {
+                "nodes": [{"node_id": "canonical", "label": "canonical graph", "entity_type": "HOST"}],
+                "edges": [],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / "1001_attack_graph-extra.json").write_text(
+        json.dumps(
+            {
+                "nodes": [{"node_id": "extra", "label": "wrong graph", "entity_type": "HOST"}],
+                "edges": [],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    artifact_names = {artifact["name"] for artifact in detail_payload["artifacts"]}
+
+    assert "1001_attack_graph.json" in artifact_names
+    assert "1001_attack_graph-extra.json" not in artifact_names
+    assert detail_payload["graph_summary"]["source"] == "1001_attack_graph.json"
+    assert detail_payload["graph_payload"]["source"] == "1001_attack_graph.json"
+    assert detail_payload["graph_payload"]["nodes"][0]["label"] == "canonical graph"
+
+
 def test_generate_dashboard_surfaces_compiled_artifact_review_metadata(
     tmp_path: Path,
 ) -> None:

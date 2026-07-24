@@ -91,6 +91,17 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Canonical graph artifact isolation checkpoint:
+  Static dashboard and live web API graph artifact discovery now only accept
+  manifest-defined graph filenames for each engagement:
+  `{id}_attack_graph.json`, `.graphml`, `.mtgx`, `_nodes.csv`, and
+  `_edges.csv`. Noncanonical names such as
+  `1001_attack_graph-extra.json` no longer appear in engagement artifacts,
+  cannot win graph payload selection, and cannot be downloaded through the live
+  artifact endpoint. Verification: compile passed; Ruff passed; focused
+  dashboard/API graph/report prefix collision slice passed (`5 passed`);
+  pytest engagement cleanup reported `removed=2 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-canonical-graph-artifact-isolation.md`.
 - [x] Service-worker/precache static recursion checkpoint:
   Public service-worker-style artifacts now use the source-gated
   `service-worker-js` label for `service-worker*.js`, `workbox*.js`,

@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
-from forge.audit.manifest import summarize_run_audit_manifest
+from forge.audit.manifest import _graph_artifact_names, summarize_run_audit_manifest
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
@@ -810,7 +810,8 @@ def _materialize_audit_manifest_artifacts(
 
 
 def _graph_files(eng_id: str, reports_dir: Path) -> list[Path]:
-    return sorted(reports_dir.glob(f"{eng_id}_attack_graph*"), key=lambda path: path.name.lower())
+    names = set(_graph_artifact_names(int(eng_id)))
+    return sorted((reports_dir / name for name in names if (reports_dir / name).exists()), key=lambda path: path.name.lower())
 
 
 def _graph_root_from_artifact(path: Path) -> ElementTree.Element | None:
