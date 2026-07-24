@@ -66,10 +66,25 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit D5 URL-seed fetch/finalization semantics and
-  root-domain resume/idempotency sets. Patch only confirmed retry suppression
-  or same-run rerun bugs; keep empty/denied URL fetch handling deterministic and
-  do not convert intentional terminal states into infinite retries.
+- [ ] Next checkpoint: audit DNS/RDAP/Wayback callable provider-result
+  semantics. Patch only confirmed transient provider/network failures that are
+  currently finalized as `completed` or intentional `skipped`; keep true
+  no-data outcomes terminal and deterministic.
+- [x] D5 URL/root-domain same-run retry checkpoint:
+  D5 URL seed fetches with empty/failed payloads now finalize as failed with
+  `empty_url_fetch` and `fetch_status=empty`, so those URL seeds remain
+  retryable across recursive iterations and resume. D5 dry-run and
+  scope-denied URLs remain intentional terminal skips, and successful URL
+  payloads still enter `processed_url_seeds`. Root-domain fan-outs A/B/B2/D3/D4
+  now update completed-domain sets from zero-returncode module dispatches, and
+  G/H/I update completed-domain sets from completed/skipped finalization
+  statuses, preventing same-run reruns while preserving retries for failures.
+  Verification: focused retry-state suite passed (`7 passed`), new D5 empty
+  fetch retry test passed, focused root-domain same-run idempotency test passed
+  (`1 passed`),
+  adjacent dry-run resume/root-domain/D5 canonicalization checks passed, slow
+  D5 provider provenance check passed with explicit ROE/scope env, Ruff passed,
+  py_compile passed, and `git diff --check` was whitespace-clean.
 - [x] Email/keyscan retry-state checkpoint:
   Failed `email` engagement seed rows are reloadable by the E-chain, failed
   `fanout_e_chain` runs no longer enter `processed_emails`, and email-localpart

@@ -10524,16 +10524,22 @@ def kill_chain(
         if url_handle is None:
             return None
         metadata_counts = cast(dict[str, int], prepared_url_surface_entry["metadata_counts"])
-        return _prepare_module_seed_run_finalization_entry(
+        has_payload = bool(prepared_url_surface_entry.get("has_payload"))
+        output_count = int(prepared_url_surface_entry["output_count_base"]) + int(url_item_cloud_refs)
+        status = "completed" if has_payload else "failed"
+        error = None if has_payload else "empty_url_fetch"
+        finalization_entry = _prepare_module_seed_run_finalization_entry(
             (
                 url_handle,
                 {"metadata": {"iteration": iteration}},
             ),
             base_metadata_value={},
-            status="completed",
-            output_count=int(prepared_url_surface_entry["output_count_base"]) + int(url_item_cloud_refs),
+            status=status,
+            output_count=output_count if has_payload else 0,
+            error=error,
             extra_metadata={
                 "iteration": iteration,
+                "fetch_status": "payload" if has_payload else "empty",
                 "cloud_refs_added": int(url_item_cloud_refs),
                 "emails": int(metadata_counts["emails"]),
                 "phones": int(metadata_counts["phones"]),
@@ -10544,11 +10550,22 @@ def kill_chain(
                 "github_orgs": int(metadata_counts["github_orgs"]),
             },
         )
+        if finalization_entry is not None:
+            finalization_entry["source_url"] = str(
+                prepared_url_surface_entry.get("source_url") or ""
+            ).strip()
+        return finalization_entry
 
     def _apply_url_surface_finalize_entry(
         item: dict[str, object] | None,
     ) -> str | None:
-        return _apply_module_seed_run_finalization_entry(item)
+        if item is None:
+            return None
+        source_url = str(item.get("source_url") or "").strip()
+        status = _apply_module_seed_run_finalization_entry(item)
+        if status in {"completed", "skipped"} and source_url:
+            return source_url
+        return None
 
     def _extract_wayback_hostname(url_value: str) -> str | None:
         match = _re.match(
@@ -11032,6 +11049,45 @@ def kill_chain(
             for item, returncode in zip(items, returncodes)
             if int(returncode) == 0
         ]
+
+    def _successful_dispatch_seed_values(
+        specs: Sequence[ModuleDispatchSpec],
+        returncodes: Sequence[int],
+        *,
+        loop_name: str,
+        seed_type: str = "domain",
+    ) -> list[str]:
+        values: list[str] = []
+        for spec, returncode in zip(specs, returncodes):
+            if int(returncode) != 0 or spec.loop_name != loop_name:
+                continue
+            for seed_context in spec.seed_contexts or []:
+                if str(seed_context.get("seed_type") or "") != seed_type:
+                    continue
+                seed_value = str(seed_context.get("seed_value") or "").strip()
+                if seed_value:
+                    values.append(seed_value)
+                break
+        return values
+
+    def _record_completed_values(
+        values: Sequence[str],
+        *,
+        completed_set: set[str],
+        normalizer: Callable[[str], str] = _resume_normalize,
+        progress_label: str | None = None,
+    ) -> None:
+        if not values:
+            return
+        completed_set.update(
+            _collect_normalized_value_set(
+                [str(value or "").strip() for value in values if str(value or "").strip()],
+                normalizer=normalizer,
+                max_workers=parallel_workers,
+                progress_label=progress_label,
+                progress_callback=_record_batch_progress,
+            )
+        )
 
     def _apply_processed_set_item(
         item: str | None,
@@ -12564,12 +12620,21 @@ def kill_chain(
                 f"{progress_label_prefix} dry-run finalize",
                 "[dim]sequential dispatch x1[/dim]  [dim]dry-run skip order preserved[/dim]",
             )
-        _run_inprocess_batch(
-            prepared_dry_run_entries,
-            _apply_domain_dry_run_skip_entry,
-            max_workers=1,
-            progress_label=f"{progress_label_prefix} dry-run finalize",
-            progress_callback=_record_batch_progress,
+        applied_dry_run_domains = [
+            root_domain
+            for root_domain in _run_inprocess_batch(
+                prepared_dry_run_entries,
+                _apply_domain_dry_run_skip_entry,
+                max_workers=1,
+                progress_label=f"{progress_label_prefix} dry-run finalize",
+                progress_callback=_record_batch_progress,
+            )
+            if root_domain
+        ]
+        _record_completed_values(
+            applied_dry_run_domains,
+            completed_set=completed_domains,
+            progress_label=f"{progress_label_prefix} dry-run completed-set prep",
         )
 
     def _prepare_url_dry_run_skip_entry(
@@ -13299,12 +13364,21 @@ def kill_chain(
                         f"{iteration}.A subdomain enum",
                         f"[dim]parallel dispatch x{min(parallel_workers, len(a_specs))}[/dim]",
                     )
-                _run_module_batch(
+                a_returncodes = _run_module_batch(
                     a_specs,
                     _run_module,
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.A subdomain enum",
                     progress_callback=_record_batch_progress,
+                )
+                _record_completed_values(
+                    _successful_dispatch_seed_values(
+                        a_specs,
+                        a_returncodes,
+                        loop_name="fanout_a_subdomains",
+                    ),
+                    completed_set=completed_a_domains,
+                    progress_label=f"{iteration}.A completed-domain prep",
                 )
         else:
             _emit_no_domain_skip_log(
@@ -13491,12 +13565,30 @@ def kill_chain(
                         f"{iteration}.B passive batch",
                         f"[dim]parallel dispatch x{min(parallel_workers, len(b_specs))}[/dim]",
                     )
-                _run_module_batch(
+                b_returncodes = _run_module_batch(
                     b_specs,
                     _run_module,
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.B passive batch",
                     progress_callback=_record_batch_progress,
+                )
+                _record_completed_values(
+                    _successful_dispatch_seed_values(
+                        b_specs,
+                        b_returncodes,
+                        loop_name="fanout_b_harvest",
+                    ),
+                    completed_set=completed_b_domains,
+                    progress_label=f"{iteration}.B completed-domain prep",
+                )
+                _record_completed_values(
+                    _successful_dispatch_seed_values(
+                        b_specs,
+                        b_returncodes,
+                        loop_name="fanout_b2_linkedin",
+                    ),
+                    completed_set=completed_b2_domains,
+                    progress_label=f"{iteration}.B2 completed-domain prep",
                 )
         else:
             _emit_no_domain_skip_log(
@@ -13941,12 +14033,30 @@ def kill_chain(
                             f"{iteration}.D passive enrichers",
                             f"[dim]provider-bounded dispatch x{min(d_provider_workers, len(d_specs))}[/dim]",
                         )
-                    _run_module_batch(
+                    d_returncodes = _run_module_batch(
                         d_specs,
                         _run_module,
                         max_workers=parallel_workers,
                         progress_label=f"{iteration}.D passive enrichers",
                         progress_callback=_record_batch_progress,
+                    )
+                    _record_completed_values(
+                        _successful_dispatch_seed_values(
+                            d_specs,
+                            d_returncodes,
+                            loop_name="fanout_d3_shodan",
+                        ),
+                        completed_set=completed_d3_domains,
+                        progress_label=f"{iteration}.D3 completed-domain prep",
+                    )
+                    _record_completed_values(
+                        _successful_dispatch_seed_values(
+                            d_specs,
+                            d_returncodes,
+                            loop_name="fanout_d4_urlscan",
+                        ),
+                        completed_set=completed_d4_domains,
+                        progress_label=f"{iteration}.D4 completed-domain prep",
                     )
         elif dry_run_all:
             _emit_prepared_notice_log(
@@ -14130,6 +14240,7 @@ def kill_chain(
             url_seed_batch = shallow_url_batch + deeper_url_batch[
                 : max(0, 20 - len(shallow_url_batch))
             ]
+            completed_url_seed_values: list[str] = []
             if dry_run_all:
                 _emit_prepared_notice_log(
                     f"{iteration}.D5 URL surface mining",
@@ -14161,13 +14272,17 @@ def kill_chain(
                         f"{iteration}.D5 URL dry-run finalize",
                         "[dim]sequential dispatch x1[/dim]  [dim]seed-run finalization order preserved[/dim]",
                     )
-                _run_inprocess_batch(
-                    prepared_url_seed_dry_run_entries,
-                    _apply_url_dry_run_skip_entry,
-                    max_workers=1,
-                    progress_label=f"{iteration}.D5 URL dry-run finalize",
-                    progress_callback=_record_batch_progress,
-                )
+                completed_url_seed_values = [
+                    url_seed
+                    for url_seed in _run_inprocess_batch(
+                        prepared_url_seed_dry_run_entries,
+                        _apply_url_dry_run_skip_entry,
+                        max_workers=1,
+                        progress_label=f"{iteration}.D5 URL dry-run finalize",
+                        progress_callback=_record_batch_progress,
+                    )
+                    if url_seed
+                ]
             else:
                 url_seed_handles = _start_seed_run_handles_from_contexts(
                     [
@@ -14437,13 +14552,17 @@ def kill_chain(
                         f"{iteration}.D5 URL surface finalize",
                         "[dim]sequential dispatch x1[/dim]  [dim]seed-run finalization order preserved[/dim]",
                     )
-                _run_inprocess_batch(
-                    prepared_url_surface_finalize_entries,
-                    _apply_url_surface_finalize_entry,
-                    max_workers=1,
-                    progress_label=f"{iteration}.D5 URL surface finalize",
-                    progress_callback=_record_batch_progress,
-                )
+                completed_url_seed_values = [
+                    url_seed
+                    for url_seed in _run_inprocess_batch(
+                        prepared_url_surface_finalize_entries,
+                        _apply_url_surface_finalize_entry,
+                        max_workers=1,
+                        progress_label=f"{iteration}.D5 URL surface finalize",
+                        progress_callback=_record_batch_progress,
+                    )
+                    if url_seed
+                ]
                 cloud_summary = (
                     f"cloud={url_cloud_refs_added}"
                     if not skip_cloud
@@ -14459,18 +14578,18 @@ def kill_chain(
                         f"gh_orgs={url_github_org_hits}"
                     ),
                 )
-            if len(url_seed_batch) > 1 and parallel_workers > 1:
+            if len(completed_url_seed_values) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.D5 URL processed-seed prep",
                     (
                         f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(url_seed_batch))}[/dim]"
+                        f"{min(parallel_workers, len(completed_url_seed_values))}[/dim]"
                     ),
                 )
             prepared_url_seed_updates = _run_inprocess_batch(
-                url_seed_batch,
+                completed_url_seed_values,
                 lambda item: _prepare_processed_set_item(
-                    item[0],
+                    item,
                     normalizer=_normalize_url_seed_value,
                 ),
                 max_workers=parallel_workers,
@@ -16256,12 +16375,21 @@ def kill_chain(
                     f"{iteration}.G dry-run finalize",
                     "[dim]sequential dispatch x1[/dim]  [dim]dry-run skip order preserved[/dim]",
                 )
-            _run_inprocess_batch(
-                prepared_dns_dry_run_entries,
-                _apply_domain_dry_run_skip_entry,
-                max_workers=1,
-                progress_label=f"{iteration}.G dry-run finalize",
-                progress_callback=_record_batch_progress,
+            applied_dns_dry_run_domains = [
+                root_domain
+                for root_domain in _run_inprocess_batch(
+                    prepared_dns_dry_run_entries,
+                    _apply_domain_dry_run_skip_entry,
+                    max_workers=1,
+                    progress_label=f"{iteration}.G dry-run finalize",
+                    progress_callback=_record_batch_progress,
+                )
+                if root_domain
+            ]
+            _record_completed_values(
+                applied_dns_dry_run_domains,
+                completed_set=completed_dns_domains,
+                progress_label=f"{iteration}.G dry-run completed-domain prep",
             )
         else:
             pending_dns_domains, skipped_dns_domains = _partition_root_domains(
@@ -16534,12 +16662,24 @@ def kill_chain(
                         progress_label=f"{iteration}.G DNS finalize prep",
                         progress_callback=_record_batch_progress,
                     )
-                    _run_inprocess_batch(
+                    dns_finalize_statuses = _run_inprocess_batch(
                         prepared_dns_finalize_entries,
                         _apply_module_seed_run_finalization_entry,
                         max_workers=1,
                         progress_label=f"{iteration}.G DNS finalize apply",
                         progress_callback=_record_batch_progress,
+                    )
+                    _record_completed_values(
+                        [
+                            str(item.get("root_domain") or "")
+                            for item, status in zip(
+                                applied_dns_domain_results,
+                                dns_finalize_statuses,
+                            )
+                            if status in {"completed", "skipped"}
+                        ],
+                        completed_set=completed_dns_domains,
+                        progress_label=f"{iteration}.G completed-domain prep",
                     )
                     if len(applied_dns_domain_results) > 1 and parallel_workers > 1:
                         _log(
@@ -16674,12 +16814,21 @@ def kill_chain(
                     f"{iteration}.H dry-run finalize",
                     "[dim]sequential dispatch x1[/dim]  [dim]dry-run skip order preserved[/dim]",
                 )
-            _run_inprocess_batch(
-                prepared_rdap_dry_run_entries,
-                _apply_domain_dry_run_skip_entry,
-                max_workers=1,
-                progress_label=f"{iteration}.H dry-run finalize",
-                progress_callback=_record_batch_progress,
+            applied_rdap_dry_run_domains = [
+                root_domain
+                for root_domain in _run_inprocess_batch(
+                    prepared_rdap_dry_run_entries,
+                    _apply_domain_dry_run_skip_entry,
+                    max_workers=1,
+                    progress_label=f"{iteration}.H dry-run finalize",
+                    progress_callback=_record_batch_progress,
+                )
+                if root_domain
+            ]
+            _record_completed_values(
+                applied_rdap_dry_run_domains,
+                completed_set=completed_rdap_domains,
+                progress_label=f"{iteration}.H dry-run completed-domain prep",
             )
         else:
             pending_rdap_domains, skipped_rdap_domains = _partition_root_domains(
@@ -16835,12 +16984,24 @@ def kill_chain(
                     progress_label=f"{iteration}.H RDAP finalize prep",
                     progress_callback=_record_batch_progress,
                 )
-                _run_inprocess_batch(
+                rdap_finalize_statuses = _run_inprocess_batch(
                     prepared_rdap_finalize_entries,
                     _apply_module_seed_run_finalization_entry,
                     max_workers=1,
                     progress_label=f"{iteration}.H RDAP finalize apply",
                     progress_callback=_record_batch_progress,
+                )
+                _record_completed_values(
+                    [
+                        str(item.get("root_domain") or "")
+                        for item, status in zip(
+                            applied_rdap_domain_results,
+                            rdap_finalize_statuses,
+                        )
+                        if status in {"completed", "skipped"}
+                    ],
+                    completed_set=completed_rdap_domains,
+                    progress_label=f"{iteration}.H completed-domain prep",
                 )
 
         # ─── Fan-out I: Wayback Machine URL history ───────────────────
@@ -16921,12 +17082,21 @@ def kill_chain(
                     f"{iteration}.I dry-run finalize",
                     "[dim]sequential dispatch x1[/dim]  [dim]dry-run skip order preserved[/dim]",
                 )
-            _run_inprocess_batch(
-                prepared_wayback_dry_run_entries,
-                _apply_domain_dry_run_skip_entry,
-                max_workers=1,
-                progress_label=f"{iteration}.I dry-run finalize",
-                progress_callback=_record_batch_progress,
+            applied_wayback_dry_run_domains = [
+                root_domain
+                for root_domain in _run_inprocess_batch(
+                    prepared_wayback_dry_run_entries,
+                    _apply_domain_dry_run_skip_entry,
+                    max_workers=1,
+                    progress_label=f"{iteration}.I dry-run finalize",
+                    progress_callback=_record_batch_progress,
+                )
+                if root_domain
+            ]
+            _record_completed_values(
+                applied_wayback_dry_run_domains,
+                completed_set=completed_wayback_domains,
+                progress_label=f"{iteration}.I dry-run completed-domain prep",
             )
         else:
             wb_limit = 0 if wayback_full else 500
@@ -17186,12 +17356,24 @@ def kill_chain(
                     progress_label=f"{iteration}.I Wayback finalize prep",
                     progress_callback=_record_batch_progress,
                 )
-                _run_inprocess_batch(
+                wayback_finalize_statuses = _run_inprocess_batch(
                     prepared_wayback_finalize_entries,
                     _apply_module_seed_run_finalization_entry,
                     max_workers=1,
                     progress_label=f"{iteration}.I Wayback finalize apply",
                     progress_callback=_record_batch_progress,
+                )
+                _record_completed_values(
+                    [
+                        str(item.get("root_domain") or "")
+                        for item, status in zip(
+                            applied_wayback_domain_results,
+                            wayback_finalize_statuses,
+                        )
+                        if status in {"completed", "skipped"}
+                    ],
+                    completed_set=completed_wayback_domains,
+                    progress_label=f"{iteration}.I completed-domain prep",
                 )
 
         # ─── Fan-out J: Cloud auto-scan for newly-discovered refs ─────

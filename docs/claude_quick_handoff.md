@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: email/keyscan retry-state gating plus dashboard task-error
+Latest checkpoint: D5 URL/root-domain same-run retry gating is complete. D5 URL
+seed fetches with empty/failed payloads now finalize as failed with
+`empty_url_fetch` and `fetch_status=empty`, so those URL seeds remain retryable
+across recursive iterations and resume. D5 dry-run and scope-denied URLs remain
+intentional terminal skips, and successful URL payloads still enter
+`processed_url_seeds`. Root-domain fan-outs A/B/B2/D3/D4 now update
+completed-domain sets from zero-returncode module dispatches, and G/H/I update
+completed-domain sets from completed/skipped finalization statuses, preventing
+same-run reruns while preserving retries for failures. Verification: focused
+retry-state suite passed (`7 passed`), focused root-domain idempotency test
+passed (`1 passed`), adjacent dry-run resume/root-domain/D5 canonicalization
+checks passed, slow D5 provider provenance check passed with
+explicit ROE/scope env, Ruff passed, py_compile passed, and `git diff --check`
+was whitespace-clean.
+
+Next checkpoint: audit DNS/RDAP/Wayback callable provider-result semantics.
+Patch only confirmed transient provider/network failures that are currently
+finalized as `completed` or intentional `skipped`; keep true no-data outcomes
+terminal and deterministic.
+
+Previous checkpoint: email/keyscan retry-state gating plus dashboard task-error
 redaction is complete. Failed `email` engagement seed rows are reloadable by
 the E-chain, failed `fanout_e_chain` rows do not enter `processed_emails`, and
 email-localpart username processed-state follows successful/skipped Sherlock
@@ -38,11 +58,6 @@ dashboard detail contract passed (`1 passed`), adjacent resume/module/cloud
 checks passed (`3 passed`), adjacent email batching path passed with explicit
 ROE/scope env (`1 passed`), Ruff passed, py_compile passed, and
 `git diff --check` was whitespace-clean.
-
-Next checkpoint: audit D5 URL-seed fetch/finalization semantics and root-domain
-resume/idempotency sets. Patch only confirmed retry suppression or same-run
-rerun bugs; keep empty/denied URL fetch handling deterministic and do not
-convert intentional terminal states into infinite retries.
 
 Previous checkpoint: recursive processed-state retry gating is complete.
 Recursive E5 social-handle chains, username, phone, IP, name, company, and
