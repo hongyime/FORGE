@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 
 import httpx
 
@@ -123,6 +123,28 @@ def _extract_links(base_url: str, html: str) -> list[str]:
     return collector.links
 
 
+def _canonical_crawl_url(value: str) -> str | None:
+    try:
+        parsed = urlsplit(str(value or "").strip())
+    except ValueError:
+        return None
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"}:
+        return None
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    host_part = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
+    netloc = f"{host_part}:{port}" if port is not None and not default_port else host_part
+    path = parsed.path or "/"
+    return urlunsplit((scheme, netloc, path, parsed.query, ""))
+
+
 def _extract_title(html: str) -> str:
     lower = html.lower()
     start = lower.find("<title>")
@@ -164,8 +186,13 @@ async def _crawl_http(
     request_delay: float | None = None,
     scope_filter: Callable[[str], bool] | None = None,
 ) -> list[tuple[str, str, dict[str, str]]]:
-    seen: set[str] = set()
-    queue: list[tuple[str, int]] = [(seed_url, 0)]
+    seed_canonical = _canonical_crawl_url(seed_url)
+    if seed_canonical is None:
+        return []
+    seed_host = urlsplit(seed_canonical).netloc
+    queued: set[str] = {seed_canonical}
+    processed: set[str] = set()
+    queue: list[tuple[str, int]] = [(seed_canonical, 0)]
     output: list[tuple[str, str, dict[str, str]]] = []
     delay_seconds = _crawl_request_delay_seconds() if request_delay is None else max(0.0, request_delay)
     rate_limit_retries = _crawl_rate_limit_retries()
@@ -173,12 +200,12 @@ async def _crawl_http(
     async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
         while queue:
             current_url, current_depth = queue.pop(0)
-            if current_url in seen:
+            if current_url in processed:
                 continue
             if scope_filter is not None and not scope_filter(current_url):
-                seen.add(current_url)
+                processed.add(current_url)
                 continue
-            seen.add(current_url)
+            processed.add(current_url)
             resp = None
             for attempt in range(rate_limit_retries + 1):
                 try:
@@ -199,20 +226,31 @@ async def _crawl_http(
                     await asyncio.sleep(retry_delay)
             if resp is None:
                 continue
-            final_url = str(resp.url)
-            if scope_filter is not None and not scope_filter(final_url):
-                seen.add(final_url)
+            final_url = _canonical_crawl_url(str(resp.url))
+            if final_url is None:
                 continue
+            if scope_filter is not None and not scope_filter(final_url):
+                queued.add(final_url)
+                continue
+            if final_url != current_url:
+                queued.add(final_url)
+                if final_url in processed:
+                    continue
+                processed.add(final_url)
             body = resp.text
             output.append((final_url, body, _detect_stack(resp.headers, body)))
             if current_depth >= depth:
                 continue
-            for link in _extract_links(final_url, body):
-                if urlparse(link).netloc != urlparse(seed_url).netloc:
+            for raw_link in _extract_links(final_url, body):
+                link = _canonical_crawl_url(raw_link)
+                if link is None:
+                    continue
+                if urlsplit(link).netloc != seed_host:
                     continue
                 if scope_filter is not None and not scope_filter(link):
                     continue
-                if link not in seen:
+                if link not in queued and link not in processed:
+                    queued.add(link)
                     queue.append((link, current_depth + 1))
     return output
 

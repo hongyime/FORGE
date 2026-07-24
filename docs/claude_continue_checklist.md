@@ -66,13 +66,29 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: canonicalize crawler URLs before recursive enqueue/fetch
-  so href parser expansion does not create duplicate deterministic crawl rows
-  for fragment-only variants like `/app`, `/app#top`, and `/app#pricing`. Drop
-  fragments, normalize scheme/host casing, reject non-HTTP(S), and mark
-  canonical links as seen when enqueuing. Add a focused crawler regression.
-  Keep live calls mocked unless an explicit ROE/scope manifest and target are
-  supplied.
+- [ ] Next checkpoint: canonicalize recursive discovered URL seeds before
+  persistence. `_prepare_discovered_seed_url()` in `forge/cli.py` still strips
+  raw strings only, so recursive discovery can store variants such as
+  `HTTPS://acme.example:443/app#x` after the crawler path already normalized
+  them. Add a CLI-local canonical URL helper, use it before dedupe/insert, keep
+  `robots.txt`/`sitemap.xml` exclusions, preserve scope checks after
+  canonicalization, and add a focused orchestrator regression. Keep live calls
+  mocked unless an explicit ROE/scope manifest and target are supplied.
+- [x] Crawler URL canonicalization recursion checkpoint:
+  `_crawl_http()` now canonicalizes seed, fetched final, and extracted URLs
+  before recursive queue/fetch decisions. It drops fragments, lowercases
+  scheme/host, removes default `:80`/`:443` ports, rejects non-HTTP(S) URLs,
+  and marks canonical links as queued before enqueueing so fragment variants do
+  not create duplicate crawl work or dashboard rows. Reviewer audit found a
+  default-port origin-equivalence blocker; that is fixed and covered for both
+  HTTPS `:443` seeds and HTTP `:80` extracted links. No live probing, pacing,
+  retry, provider, proxy, validation, severity, report, dashboard, or API
+  behavior changed. Verification: compile passed; Ruff passed; focused
+  canonicalization selector passed (`3 passed, 5 deselected`); focused href
+  selector passed (`1 passed, 5 deselected`); full crawler unit file passed (`8
+  passed`); workspace `.forge_data/engagements` contained `0` entries after the
+  run. Handoff:
+  `.claude/handoffs/2026-07-24-crawler-url-canonicalization.md`.
 - [x] Dashboard cloud asset validation alias checkpoint:
   Static engagement detail cloud-asset rows now normalize both sides of the
   latest-validation join, so assets stored as aliases such as `s3` pick up

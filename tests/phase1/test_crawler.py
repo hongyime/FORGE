@@ -133,6 +133,121 @@ def test_crawl_http_follows_single_quoted_href_links(monkeypatch) -> None:
     assert [row[0] for row in result] == ["https://acme.example/", "https://acme.example/next"]
 
 
+def test_crawl_http_canonicalizes_fragment_variants_before_queueing(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> object:
+            calls.append(url)
+            if url == "https://acme.example/app":
+                return types.SimpleNamespace(
+                    status_code=200,
+                    headers={},
+                    text="<html><title>App</title></html>",
+                    url="https://ACME.EXAMPLE/app#top",
+                )
+            return types.SimpleNamespace(
+                status_code=200,
+                headers={},
+                text=(
+                    "<html><a href='/app#top'>Top</a>"
+                    "<a HREF='HTTPS://ACME.EXAMPLE/app#pricing'>Pricing</a>"
+                    "<a href='mailto:security@acme.example'>Email</a></html>"
+                ),
+                url=url,
+            )
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    result = crawler.asyncio.run(crawler._crawl_http("HTTPS://ACME.EXAMPLE/#root", depth=1, timeout=1.0))
+
+    assert calls == ["https://acme.example/", "https://acme.example/app"]
+    assert [row[0] for row in result] == ["https://acme.example/", "https://acme.example/app"]
+
+
+def test_crawl_http_canonicalizes_default_ports_before_origin_check(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> object:
+            calls.append(url)
+            if url == "https://acme.example/app":
+                return types.SimpleNamespace(
+                    status_code=200,
+                    headers={},
+                    text="<html><title>App</title></html>",
+                    url=url,
+                )
+            return types.SimpleNamespace(
+                status_code=200,
+                headers={},
+                text="<html><a href='https://acme.example/app'>App</a></html>",
+                url=url,
+            )
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    result = crawler.asyncio.run(crawler._crawl_http("https://acme.example:443/", depth=1, timeout=1.0))
+
+    assert calls == ["https://acme.example/", "https://acme.example/app"]
+    assert [row[0] for row in result] == ["https://acme.example/", "https://acme.example/app"]
+
+
+def test_crawl_http_canonicalizes_http_default_port_links(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> object:
+            calls.append(url)
+            if url == "http://acme.example/app":
+                return types.SimpleNamespace(
+                    status_code=200,
+                    headers={},
+                    text="<html><title>App</title></html>",
+                    url=url,
+                )
+            return types.SimpleNamespace(
+                status_code=200,
+                headers={},
+                text="<html><a href='http://acme.example:80/app#top'>App</a></html>",
+                url=url,
+            )
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    result = crawler.asyncio.run(crawler._crawl_http("http://acme.example/", depth=1, timeout=1.0))
+
+    assert calls == ["http://acme.example/", "http://acme.example/app"]
+    assert [row[0] for row in result] == ["http://acme.example/", "http://acme.example/app"]
+
+
 def test_crawl_http_drops_out_of_scope_redirect_final_url(monkeypatch) -> None:
     calls: list[str] = []
 
