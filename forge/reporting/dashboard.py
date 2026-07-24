@@ -3908,6 +3908,33 @@ def _report_payload_value(
     return ""
 
 
+def _report_inventory_items(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    context = _report_payload_mapping(payload.get("context"))
+    value = context.get(key)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _report_validation_inventory_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    validation_items = _report_inventory_items(payload, "cloud_validation_inventory")
+    asset_items = _report_inventory_items(payload, "cloud_asset_inventory")
+    reportable_count = 0
+    status_summary: dict[str, int] = {}
+    for item in validation_items:
+        status = str(item.get("validation_status") or "UNKNOWN").strip().upper() or "UNKNOWN"
+        status_summary[status] = status_summary.get(status, 0) + 1
+        if item.get("validation_reportable") is True:
+            reportable_count += 1
+    return {
+        "cloud_validation_inventory_count": len(validation_items),
+        "cloud_asset_inventory_count": len(asset_items),
+        "reportable_validation_count": reportable_count,
+        "unreportable_validation_count": len(validation_items) - reportable_count,
+        "validation_status_summary": dict(sorted(status_summary.items())),
+    }
+
+
 def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
     history: list[dict[str, Any]] = []
     for family_stem, family_files in _report_family_groups(report_files):
@@ -3951,6 +3978,7 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
             _report_export_descriptor(path, raw_export=raw_export)
             for path in family_files
         ]
+        validation_summary = _report_validation_inventory_summary(payload)
         history.append(
             {
                 "family_stem": family_stem,
@@ -3968,6 +3996,7 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
                 "raw_export": raw_export,
                 "export_count": len(available_exports),
                 "available_exports": available_exports,
+                **validation_summary,
             }
         )
     return history
@@ -4059,6 +4088,26 @@ def _render_report_backend_summary(summary: dict[str, Any] | None) -> str:
         _render_meta_block("Format", str(summary.get("format") or "-")),
         _render_meta_block("Generated", str(summary.get("generated_at") or "-")),
     ]
+    if summary.get("cloud_validation_inventory_count"):
+        meta_blocks.extend(
+            [
+                _render_meta_block(
+                    "Validations",
+                    str(summary.get("cloud_validation_inventory_count") or 0),
+                ),
+                _render_meta_block(
+                    "Reportable",
+                    str(summary.get("reportable_validation_count") or 0),
+                ),
+            ]
+        )
+    if summary.get("cloud_asset_inventory_count"):
+        meta_blocks.append(
+            _render_meta_block(
+                "Cloud assets",
+                str(summary.get("cloud_asset_inventory_count") or 0),
+            )
+        )
     if summary.get("artifact_name"):
         meta_blocks.append(_render_meta_block("Artifact", str(summary.get("artifact_name") or "-"), mono=True))
     lines = [f"<div class='meta-list'>{''.join(meta_blocks)}</div>"]

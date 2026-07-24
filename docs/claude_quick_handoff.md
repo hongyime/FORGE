@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: generic scheduler and Command Center ROE/scope preflight is
+Latest checkpoint: report-summary validation inventory parity is complete.
+`report_summary` and every `report_history` item now include compact validation
+review fields derived from the generated report JSON context: cloud validation
+inventory count, cloud asset inventory count, reportable/unreportable
+validation counts, and validation status summary. Static dashboard HTML and the
+React report panel display the same compact validation inventory signal so
+operators can verify report validation context without opening the report JSON
+artifact. Verification: compile passed; Ruff passed; frontend build passed;
+exact changed tests passed (`3 passed`); full static dashboard plus web
+engagement API suites passed (`79 passed`).
+
+Next checkpoint: perform a fresh current-code deterministic gap audit and pick
+one compact implementation/test task that advances intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
+The report-summary validation inventory parity checkpoint is now closed; do not
+reopen it unless a regression is found.
+
+Previous checkpoint: generic scheduler and Command Center ROE/scope preflight is
 complete. `/api/tasks/enqueue` now requires `roe_id` and `scope_manifest`,
 validates submitted targets before queue insertion, preserves authorized
 context in `distributed_tasks.payload`, and writes `scheduled_task_scope_denied`
@@ -36,14 +53,6 @@ without it, validates action targets before scheduling, records
 closed with a timeline event rather than silently queuing. Verification:
 compile passed; Ruff passed; dedicated preflight file passed (`6 passed`); full
 adjacent web/scheduler scope suite passed (`86 passed`).
-
-Next checkpoint: add compact validation-inventory/reportability summary fields
-to `report_summary` so dashboard/API review can prove whether the generated
-report carried validation review context without opening the report JSON
-artifact. Suggested fields: cloud validation inventory count, cloud asset
-inventory count, reportable/unreportable validation counts, and compact
-validation status summary. Do not reopen scheduler/automation scope gates unless
-a regression is found.
 
 Previous checkpoint: automation API scope preflight is complete.
 `/api/automation/execute` and `/api/automation/playbook` now validate the

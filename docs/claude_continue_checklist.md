@@ -66,13 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add compact validation-inventory/reportability summary
-  fields to `report_summary` so dashboard/API review can prove whether the
-  generated report carried validation review context without opening the report
-  JSON artifact. Suggested fields: cloud validation inventory count, cloud
-  asset inventory count, reportable/unreportable validation counts, and compact
-  validation status summary. Do not reopen scheduler/automation scope gates
-  unless a regression is found.
+- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
+  pick one compact implementation/test task that advances intake, discovery,
+  recursion, artifact analysis, validation, scoring, review, fallback, or
+  cleanup. The report-summary validation inventory parity checkpoint is now
+  closed; do not reopen it unless a regression is found.
+- [x] Report-summary validation inventory parity checkpoint:
+  `report_summary` and every `report_history` item now include compact
+  validation review fields derived from the generated report JSON context:
+  cloud validation inventory count, cloud asset inventory count,
+  reportable/unreportable validation counts, and validation status summary.
+  Static dashboard HTML and the React report panel display the same compact
+  validation inventory signal so operators can verify report validation context
+  without opening the report JSON artifact. Verification: compile passed; Ruff
+  passed; frontend build passed; exact changed tests passed (`3 passed`); full
+  static dashboard plus web engagement API suites passed (`79 passed`).
 - [x] Generic scheduler and Command Center ROE/scope preflight checkpoint:
   `/api/tasks/enqueue` now requires `roe_id` and `scope_manifest`, validates a
   submitted target against the manifest before queue insertion, preserves

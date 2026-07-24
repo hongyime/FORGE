@@ -612,6 +612,24 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
                 "generated_at": "2026-07-09T09:44:12+00:00",
                 "fallback_reason": "quota exceeded",
                 "findings_checksum": "sha256:test-checksum-1001",
+                "context": {
+                    "cloud_validation_inventory": [
+                        {
+                            "identifier": "acme-firebase-prod",
+                            "validation_status": "VALIDATED",
+                            "validation_reportable": True,
+                        },
+                        {
+                            "identifier": "acme-decoy",
+                            "validation_status": "UNVERIFIED",
+                            "validation_reportable": False,
+                        },
+                    ],
+                    "cloud_asset_inventory": [
+                        {"identifier": "acme-firebase-prod"},
+                        {"identifier": "acme-decoy"},
+                    ],
+                },
             }
         ),
         encoding="utf-8",
@@ -728,6 +746,14 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["report_summary"]["render_backend"] == "template"
     assert detail_payload["report_summary"]["fallback_reason"] == "quota exceeded"
     assert detail_payload["report_summary"]["export_count"] == 4
+    assert detail_payload["report_summary"]["cloud_validation_inventory_count"] == 2
+    assert detail_payload["report_summary"]["cloud_asset_inventory_count"] == 2
+    assert detail_payload["report_summary"]["reportable_validation_count"] == 1
+    assert detail_payload["report_summary"]["unreportable_validation_count"] == 1
+    assert detail_payload["report_summary"]["validation_status_summary"] == {
+        "UNVERIFIED": 1,
+        "VALIDATED": 1,
+    }
     assert [item["label"] for item in detail_payload["report_summary"]["available_exports"]] == [
         "Markdown",
         "PDF",
@@ -821,6 +847,8 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "Email Intelligence" in detail_html
     assert "Fallback reason: quota exceeded" in detail_html
     assert "Report JSON" in detail_html
+    assert "Validations" in detail_html
+    assert "Reportable" in detail_html
     assert manifest_hash[:12] in detail_html
 
 

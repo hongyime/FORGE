@@ -51,6 +51,11 @@ type ReportSummary = {
   raw_export?: boolean
   export_count?: number
   available_exports?: ReportExportArtifact[]
+  cloud_validation_inventory_count?: number
+  cloud_asset_inventory_count?: number
+  reportable_validation_count?: number
+  unreportable_validation_count?: number
+  validation_status_summary?: Record<string, number>
 }
 
 type SectionRow = Record<string, string>
@@ -359,6 +364,11 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       findings_checksum: 'sha256:6fd4f11248c3f2d0b62bf951a8a9753cc7c8b5d07b3f4c489db82f6f9df54bf0',
       raw_export: false,
       export_count: 4,
+      cloud_validation_inventory_count: 2,
+      cloud_asset_inventory_count: 2,
+      reportable_validation_count: 1,
+      unreportable_validation_count: 1,
+      validation_status_summary: { VALIDATED: 1, UNVERIFIED: 1 },
       available_exports: [
         { artifact_name: 'engagement_1001_report_20260709T014412.md', format: 'markdown', label: 'Markdown' },
         { artifact_name: 'engagement_1001_report_20260709T014412.pdf', format: 'pdf', label: 'PDF' },
@@ -531,6 +541,11 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       findings_checksum: 'sha256:1ea5d82cc4157b90960159c54f6320a99c55435d44a4b0e6d143dddc0a4af661',
       raw_export: false,
       export_count: 3,
+      cloud_validation_inventory_count: 1,
+      cloud_asset_inventory_count: 1,
+      reportable_validation_count: 0,
+      unreportable_validation_count: 1,
+      validation_status_summary: { UNVERIFIED: 1 },
       available_exports: [
         { artifact_name: 'engagement_1013_report_20260709T014328.md', format: 'markdown', label: 'Markdown' },
         { artifact_name: 'engagement_1013_report_20260709T014328.json', format: 'report_json', label: 'Report JSON' },
@@ -2306,6 +2321,11 @@ function DetailPage({
   const auditArtifacts = detail.artifacts.filter((artifact) => artifact.kind === 'audit')
   const jsonExportHref = detail.detail_api ?? detail.detail_data
   const reportSummary = detail.report_summary
+  const validationStatusSummary = reportSummary?.validation_status_summary
+    ? Object.entries(reportSummary.validation_status_summary)
+        .map(([status, count]) => `${status.toLowerCase()}: ${count}`)
+        .join(', ')
+    : ''
   const reportHistory = detail.report_history ?? (reportSummary ? [reportSummary] : [])
   const priorReportHistory = reportHistory.slice(1)
   const reportArtifactByName = new Map(reportArtifacts.map((artifact) => [artifact.name, artifact] as const))
@@ -3074,6 +3094,28 @@ function DetailPage({
                     <span>Exports</span>
                     <span>{reportSummary.export_count ?? reportSummary.available_exports?.length ?? 0}</span>
                   </div>
+                  <div className="mini-table-row">
+                    <span>Validation inventory</span>
+                    <span>{reportSummary.cloud_validation_inventory_count ?? 0}</span>
+                  </div>
+                  <div className="mini-table-row">
+                    <span>Reportable validations</span>
+                    <span>
+                      {reportSummary.reportable_validation_count ?? 0}
+                      {' / '}
+                      {reportSummary.unreportable_validation_count ?? 0} held
+                    </span>
+                  </div>
+                  <div className="mini-table-row">
+                    <span>Cloud assets</span>
+                    <span>{reportSummary.cloud_asset_inventory_count ?? 0}</span>
+                  </div>
+                  {validationStatusSummary ? (
+                    <div className="mini-table-row">
+                      <span>Validation status</span>
+                      <span>{validationStatusSummary}</span>
+                    </div>
+                  ) : null}
                 </div>
                 {reportSummary.available_exports?.length ? (
                   <div className="token-wrap">

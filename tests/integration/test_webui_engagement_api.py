@@ -240,6 +240,24 @@ def _build_engagement(tmp_path: Path) -> Path:
                 "generated_at": "2026-07-09T09:44:12+00:00",
                 "fallback_reason": "quota exceeded",
                 "findings_checksum": "sha256:test-checksum-1001",
+                "context": {
+                    "cloud_validation_inventory": [
+                        {
+                            "identifier": "acme-firebase-prod",
+                            "validation_status": "VALIDATED",
+                            "validation_reportable": True,
+                        },
+                        {
+                            "identifier": "acme-decoy",
+                            "validation_status": "UNVERIFIED",
+                            "validation_reportable": False,
+                        },
+                    ],
+                    "cloud_asset_inventory": [
+                        {"identifier": "acme-firebase-prod"},
+                        {"identifier": "acme-decoy"},
+                    ],
+                },
             }
         ),
         encoding="utf-8",
@@ -344,6 +362,14 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert detail["report_summary"]["render_backend"] == "template"
         assert detail["report_summary"]["fallback_reason"] == "quota exceeded"
         assert detail["report_summary"]["export_count"] == 4
+        assert detail["report_summary"]["cloud_validation_inventory_count"] == 2
+        assert detail["report_summary"]["cloud_asset_inventory_count"] == 2
+        assert detail["report_summary"]["reportable_validation_count"] == 1
+        assert detail["report_summary"]["unreportable_validation_count"] == 1
+        assert detail["report_summary"]["validation_status_summary"] == {
+            "UNVERIFIED": 1,
+            "VALIDATED": 1,
+        }
         assert [item["label"] for item in detail["report_summary"]["available_exports"]] == [
             "Markdown",
             "PDF",
@@ -586,6 +612,15 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
     assert report_payload["requested_provider"] == "template"
     assert lineage["rendered_provider"] == "template"
     assert lineage["findings_checksum"] == report_payload["findings_checksum"]
+    validation_inventory = report_payload["context"]["cloud_validation_inventory"]
+    asset_inventory = report_payload["context"]["cloud_asset_inventory"]
+    reportable_count = sum(
+        1 for item in validation_inventory if item.get("validation_reportable") is True
+    )
+    status_summary: dict[str, int] = {}
+    for item in validation_inventory:
+        status = str(item.get("validation_status") or "UNKNOWN").upper()
+        status_summary[status] = status_summary.get(status, 0) + 1
 
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=reports_dir / "dashboard.html")
     detail_json = (
@@ -603,6 +638,13 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
     assert dashboard_summary["render_backend"] == lineage["rendered_provider"]
     assert dashboard_summary["rendered_provider"] == lineage["rendered_provider"]
     assert dashboard_summary["findings_checksum"] == report_payload["findings_checksum"]
+    assert dashboard_summary["cloud_validation_inventory_count"] == len(validation_inventory)
+    assert dashboard_summary["cloud_asset_inventory_count"] == len(asset_inventory)
+    assert dashboard_summary["reportable_validation_count"] == reportable_count
+    assert dashboard_summary["unreportable_validation_count"] == (
+        len(validation_inventory) - reportable_count
+    )
+    assert dashboard_summary["validation_status_summary"] == status_summary
     assert {item["label"] for item in dashboard_summary["available_exports"]} == {
         "Markdown",
         "PDF",
@@ -622,6 +664,21 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         assert api_summary["render_backend"] == dashboard_summary["render_backend"]
         assert api_summary["rendered_provider"] == dashboard_summary["rendered_provider"]
         assert api_summary["findings_checksum"] == dashboard_summary["findings_checksum"]
+        assert api_summary["cloud_validation_inventory_count"] == dashboard_summary[
+            "cloud_validation_inventory_count"
+        ]
+        assert api_summary["cloud_asset_inventory_count"] == dashboard_summary[
+            "cloud_asset_inventory_count"
+        ]
+        assert api_summary["reportable_validation_count"] == dashboard_summary[
+            "reportable_validation_count"
+        ]
+        assert api_summary["unreportable_validation_count"] == dashboard_summary[
+            "unreportable_validation_count"
+        ]
+        assert api_summary["validation_status_summary"] == dashboard_summary[
+            "validation_status_summary"
+        ]
 
         json_resp = client.get(
             f"/api/engagements/engagement-1001-acme-example/artifacts/{report_json_path.name}",
@@ -631,6 +688,12 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         downloaded_json = json_resp.json()
         assert downloaded_json["findings_checksum"] == api_summary["findings_checksum"]
         assert downloaded_json["report_lineage"]["rendered_provider"] == api_summary["rendered_provider"]
+        assert len(downloaded_json["context"]["cloud_validation_inventory"]) == api_summary[
+            "cloud_validation_inventory_count"
+        ]
+        assert len(downloaded_json["context"]["cloud_asset_inventory"]) == api_summary[
+            "cloud_asset_inventory_count"
+        ]
 
         csv_resp = client.get(
             f"/api/engagements/engagement-1001-acme-example/artifacts/{report_csv_path.name}",
