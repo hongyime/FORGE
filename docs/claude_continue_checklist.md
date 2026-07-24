@@ -66,16 +66,33 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: broaden inventory-only AWS ARN cloud-reference parsing
-  in generic artifact text for allowlisted service families beyond S3/KMS. Do
-  not resolve or read resources; persist passive cloud inventory with
-  provenance only.
-- [ ] Then add conservative calendar/vCard identity enrichment from explicit
+- [ ] Next checkpoint: add conservative calendar/vCard identity enrichment from explicit
   contact fields (`FN`, `N`, `ORG`, `TITLE`) with provenance, keeping email/
   phone/URL pivots unchanged and avoiding inferred identities from free text.
 - [ ] Then add graph/report/dashboard parity checks for newly recursive
   artifact-derived pivots so RN/source-map/cloud refs appear in review/export
   surfaces with lineage and deterministic report gates.
+- [x] Generic artifact-text AWS ARN inventory checkpoint:
+  Generic artifact text cloud-reference parsing now inventories allowlisted AWS
+  ARNs beyond S3/KMS without resolving, reading, or validating resources.
+  Supported inventory-only families are IAM role/user/policy, Lambda function/
+  layer, SQS queue, SNS topic, ECR repository, CloudFront distribution, and
+  Execute API/API Gateway route ARNs. Unsupported services, malformed account
+  IDs, and unknown resource subtypes are skipped instead of stored as generic
+  AWS rows. Persistence lowercases deterministic identifiers while preserving
+  first-seen exact ARN casing in `provider_identifier`, and this checkpoint
+  creates no `cloud_validation_results` rows. Verification: focused TDD failed
+  first with only existing KMS rows; compile passed; Ruff passed; focused AWS
+  ARN inventory test passed (`1 passed`); adjacent cloud/artifact static suite
+  passed (`12 passed`); adjacent AWS artifact parser suite passed (`16
+  passed`); selected artifact queue/route orchestrator slice passed (`20
+  passed, 742 deselected`); cleanup inventory found only `.forge_data/
+  engagements` `1`, `5010`, and `master.db`. Residual: the broad
+  `test_engagement_orchestrator.py -k "cloud_assets ..."` selector reached a
+  managed-hosting live reachability-sensitive test unrelated to ARN parsing and
+  failed once because `vercel` classified `DEAD` instead of
+  `ACCESSIBLE_BUT_NO_DATA`. Handoff:
+  `.claude/handoffs/2026-07-24-generic-aws-arn-inventory.md`.
 - [x] Artifact text discovered-artifact queue checkpoint:
   Artifact text URL persistence now immediately queues artifact-like HTTP(S)
   URLs using the existing passive remote artifact classifier, without fetching

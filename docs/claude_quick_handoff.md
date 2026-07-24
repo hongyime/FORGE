@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: artifact text discovered-artifact queueing is complete.
+Latest checkpoint: generic artifact-text AWS ARN inventory is complete.
+Generic artifact text cloud-reference parsing now inventories allowlisted AWS
+ARNs beyond S3/KMS without resolving, reading, or validating resources.
+Supported inventory-only families are IAM role/user/policy, Lambda function/
+layer, SQS queue, SNS topic, ECR repository, CloudFront distribution, and
+Execute API/API Gateway route ARNs. Unsupported services, malformed account
+IDs, and unknown resource subtypes are skipped instead of stored as generic AWS
+rows. Persistence lowercases deterministic identifiers while preserving
+first-seen exact ARN casing in `provider_identifier`, and this checkpoint
+creates no `cloud_validation_results` rows. Verification: focused TDD failed
+first with only existing KMS rows; compile/Ruff passed; focused AWS ARN
+inventory test passed (`1 passed`); adjacent cloud/artifact static suite passed
+(`12 passed`); adjacent AWS artifact parser suite passed (`16 passed`);
+selected artifact queue/route orchestrator slice passed (`20 passed, 742
+deselected`); cleanup inventory found only `.forge_data/engagements` `1`,
+`5010`, and `master.db`. Residual: the broad
+`test_engagement_orchestrator.py -k "cloud_assets ..."` selector reached a
+managed-hosting live reachability-sensitive test unrelated to ARN parsing and
+failed once because `vercel` classified `DEAD` instead of
+`ACCESSIBLE_BUT_NO_DATA`. Handoff:
+`.claude/handoffs/2026-07-24-generic-aws-arn-inventory.md`.
+
+Previous checkpoint: artifact text discovered-artifact queueing is complete.
 Artifact text URL persistence now immediately queues artifact-like HTTP(S) URLs
 using the existing passive remote artifact classifier, without fetching those
 URLs in the same processing pass. Source maps, static manifests, and nested
@@ -153,15 +175,14 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: broaden inventory-only allowlisted AWS ARN cloud-reference
-parsing in generic artifact text beyond S3/KMS. Target
-`_artifact_text_cloud_asset_family_candidates` and generic cloud-asset family
-dispatch in `forge/engagement_orchestrator.py`; add mocked/local tests proving
-Lambda/IAM/SQS/SNS/ECR/CloudFront/API Gateway-style ARNs persist as passive
-cloud inventory with provenance and no resolve/read calls. Next after that:
-conservative calendar/vCard identity enrichment, then graph/report/dashboard
-parity checks for recursive artifact-derived pivots. Do not add live target
-probing without explicit ROE/scope manifest and mocked tests.
+Current next gate: add conservative calendar/vCard identity enrichment from
+explicit contact fields (`FN`, `N`, `ORG`, `TITLE`) with provenance. Target
+`_extract_calendar_contact_bytes_payloads`, `_calendar_contact_summary_lines`,
+and generic discovery/persistence around `_collect_generic_text_discoveries`.
+Do not infer identities from free text; preserve existing email/phone/URL
+pivots. Next after that: graph/report/dashboard parity checks for recursive
+artifact-derived pivots. Do not add live target probing without explicit
+ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

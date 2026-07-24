@@ -2845,6 +2845,78 @@ _AWS_KMS_ARN_RE = re.compile(
     r"(?=$|[/\s\"'`<>,;)\]}])",
     re.IGNORECASE,
 )
+_AWS_GENERIC_ARN_RE = re.compile(
+    r"\barn:(?P<partition>aws|aws-cn|aws-us-gov):"
+    r"(?P<service>[a-z0-9-]+):"
+    r"(?P<region>[a-z0-9-]*):"
+    r"(?P<account>\d{12}):"
+    r"(?P<resource>[A-Za-z0-9/_+=,.@:-]{1,512})"
+    r"(?=$|[\s\"'`<>,;)\]}])",
+    re.IGNORECASE,
+)
+_AWS_GENERIC_ARN_ALLOWED_SERVICES = {
+    "cloudfront",
+    "ecr",
+    "execute-api",
+    "iam",
+    "lambda",
+    "sns",
+    "sqs",
+}
+
+
+def _aws_generic_arn_asset_type(service: str, resource: str) -> str:
+    normalized_service = str(service or "").strip().lower()
+    normalized_resource = str(resource or "").strip().lower()
+    if normalized_service == "iam":
+        if normalized_resource.startswith("role/"):
+            return "aws_iam_role"
+        if normalized_resource.startswith("user/"):
+            return "aws_iam_user"
+        if normalized_resource.startswith("policy/"):
+            return "aws_iam_policy"
+        return ""
+    if normalized_service == "lambda":
+        if normalized_resource.startswith("function:"):
+            return "aws_lambda_function"
+        if normalized_resource.startswith("layer:"):
+            return "aws_lambda_layer"
+        return ""
+    if normalized_service == "sqs":
+        return "aws_sqs_queue"
+    if normalized_service == "sns":
+        return "aws_sns_topic"
+    if normalized_service == "ecr":
+        return "aws_ecr_repository" if normalized_resource.startswith("repository/") else ""
+    if normalized_service == "cloudfront":
+        return "aws_cloudfront_distribution" if normalized_resource.startswith("distribution/") else ""
+    if normalized_service == "execute-api":
+        return "aws_apigateway"
+    return ""
+
+
+def _aws_generic_arn_cloud_asset_candidates(text: str) -> list[tuple[str, str, str]]:
+    candidates: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for match in _AWS_GENERIC_ARN_RE.finditer(text):
+        service = str(match.group("service") or "").lower()
+        if service not in _AWS_GENERIC_ARN_ALLOWED_SERVICES:
+            continue
+        resource = str(match.group("resource") or "").rstrip(".,")
+        asset_type = _aws_generic_arn_asset_type(service, resource)
+        if not asset_type or not resource:
+            continue
+        arn = (
+            f"arn:{match.group('partition')}:{service}:"
+            f"{match.group('region')}:{match.group('account')}:{resource}"
+        )
+        source = f"artifact_aws_{service.replace('-', '_')}_arn"
+        candidate = (asset_type, arn, source)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        candidates.append(candidate)
+    return candidates
 _CLOUDFLARE_STRUCTURED_ASSET_URI_RE = re.compile(
     r"cloudflare-(r2|d1|kv|worker|pages)://([a-z0-9][a-z0-9._\-]{1,127})(?:/|(?=\s|$))",
     re.IGNORECASE,
@@ -20855,6 +20927,7 @@ class ArtifactQueueProcessor:
                 (
                     "aws_s3",
                     "aws_kms",
+                    "aws_arns",
                     "gcs",
                     "gcp_kms",
                     "azure_blob",
@@ -21093,6 +21166,8 @@ class ArtifactQueueProcessor:
                 seen.add(candidate)
                 candidates.append(candidate)
             return candidates
+        if family == "aws_arns":
+            return _aws_generic_arn_cloud_asset_candidates(text)
         if family == "gcs":
             candidates: list[tuple[str, str, str]] = []
             seen: set[tuple[str, str, str]] = set()
