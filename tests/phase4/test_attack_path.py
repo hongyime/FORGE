@@ -963,6 +963,86 @@ class TestLoadCloudAssets:
         )
         assert all(source != nodes_by_service["gcs"].node_id for source in cloud_source_by_vuln.values())
 
+    def test_cloud_asset_alias_rows_merge_with_canonical_validation_nodes(self, tmp_path: Path):
+        db = _make_db(tmp_path, "cloud-alias-graph.db")
+        con = sqlite3.connect(db)
+        try:
+            con.executescript(
+                """
+                ALTER TABLE cloud_assets ADD COLUMN provider_identifier TEXT;
+                ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT;
+                ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT;
+
+                CREATE TABLE cloud_validation_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    engagement_id INTEGER NOT NULL,
+                    asset_type TEXT NOT NULL,
+                    identifier TEXT NOT NULL,
+                    provider_identifier TEXT,
+                    validation_status TEXT NOT NULL,
+                    validation_method TEXT,
+                    http_status INTEGER,
+                    evidence TEXT,
+                    notes TEXT,
+                    checked_at TIMESTAMP
+                );
+
+                INSERT INTO cloud_assets
+                    (engagement_id, asset_type, identifier, provider_identifier, source)
+                VALUES
+                    (1, 's3', 'legacy-assets', 'LegacyAssetsExact', 'legacy_import'),
+                    (1, 'aws_s3', 'legacy-assets', 'LegacyAssetsExact', 'cloud_validate');
+
+                INSERT INTO cloud_validation_results
+                    (engagement_id, asset_type, identifier, provider_identifier,
+                     validation_status, validation_method, http_status, evidence, notes, checked_at)
+                VALUES
+                    (1, 'aws_s3', 'legacy-assets', 'LegacyAssetsExact',
+                     'VALIDATED', 's3_list_bucket', 200,
+                     '<ListBucketResult><Contents><Key>reports/customer-records.csv</Key></Contents></ListBucketResult>',
+                     'Public object metadata observed', '2026-07-15T09:30:00+00:00');
+
+                INSERT INTO vulnerability_findings
+                    (engagement_id, vuln_type, target_url, parameter, severity, title,
+                     cloud_provider, resource_id)
+                VALUES
+                    (1, 'DETERMINISTIC_CLOUD_EXPOSURE', 's3://legacy-assets', 'aws_s3',
+                     'HIGH', 'Validated legacy S3 alias exposure', 'aws', 'legacy-assets');
+                """
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        graph = AttackGraphBuilder(engagement_id=1, db_path=db).build()
+        cloud_nodes = [node for node in graph.nodes if node.node_type == NodeType.CLOUD]
+        cloud_node_ids = {node.node_id for node in cloud_nodes}
+
+        assert "CLOUD::s3::legacy-assets" not in cloud_node_ids
+        assert "CLOUD::aws_s3::legacy-assets" in cloud_node_ids
+        alias_node = next(
+            node
+            for node in cloud_nodes
+            if node.node_id == "CLOUD::aws_s3::legacy-assets"
+        )
+        assert alias_node.metadata["service"] == "aws_s3"
+        assert alias_node.metadata["provider_identifier"] == "LegacyAssetsExact"
+        assert alias_node.metadata["validation_status"] == "VALIDATED"
+        assert alias_node.metadata["asset_type_aliases"] == ["s3"]
+
+        vuln_node = next(
+            node
+            for node in graph.nodes
+            if node.node_type == NodeType.VULN
+            and node.label == "Validated legacy S3 alias exposure"
+        )
+        assert any(
+            edge.source_node_id == alias_node.node_id
+            and edge.target_node_id == vuln_node.node_id
+            and edge.edge_type == "cloud_misconfig"
+            for edge in graph.edges
+        )
+
     def test_deterministic_cloud_exposure_uses_latest_validation_status(self, tmp_path: Path):
         db = _make_db(tmp_path, "cloud-latest-validation-gating.db")
         con = sqlite3.connect(db)

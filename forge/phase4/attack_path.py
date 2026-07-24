@@ -412,7 +412,8 @@ class AttackGraphBuilder:
         return node_id
 
     def _node_for_cloud(self, service: str, identifier: str | None = None) -> str:
-        svc = (service or "cloud").strip().lower()
+        raw_svc = (service or "cloud").strip().lower()
+        svc = normalize_cloud_exposure_asset_type(raw_svc)
         ident = (identifier or svc).strip().lower()
         cloud_key = (svc, ident)
         explicit_identifier = bool(identifier and ident and ident != svc)
@@ -431,6 +432,7 @@ class AttackGraphBuilder:
             metadata={
                 "service": svc,
                 "identifier": ident,
+                **({"asset_type_original": raw_svc} if raw_svc and raw_svc != svc else {}),
                 **self._cloud_validation_by_key.get((svc, ident), {}),
             },
         )
@@ -488,11 +490,13 @@ class AttackGraphBuilder:
             notes,
             evidence,
         ) in rows:
-            svc = str(asset_type or "cloud").strip().lower()
+            raw_svc = str(asset_type or "cloud").strip().lower()
+            svc = normalize_cloud_exposure_asset_type(raw_svc)
             ident = str(identifier or svc).strip().lower()
             metadata: dict[str, Any] = {
                 "provider_identifier": str(provider_identifier or identifier or ""),
                 "validation_asset_type": svc,
+                **({"validation_asset_type_original": raw_svc} if raw_svc and raw_svc != svc else {}),
                 "validation_status": str(status or ""),
                 "validation_method": str(method or ""),
                 "validation_reportable": is_reportable_cloud_validation(
@@ -595,11 +599,42 @@ class AttackGraphBuilder:
             (self.engagement_id,),
         ).fetchall()
         for asset_id, asset_type, identifier, provider_identifier, source in rows:
-            svc = str(asset_type or "cloud").strip().lower()
+            raw_svc = str(asset_type or "cloud").strip().lower()
+            svc = normalize_cloud_exposure_asset_type(raw_svc)
             ident = str(identifier or svc).strip().lower()
             cloud_key = (svc, ident)
             display_identifier = str(provider_identifier or identifier or ident)
             node_id = f"CLOUD::{svc}::{ident}"
+            metadata = {
+                "service": svc,
+                "identifier": ident,
+                "provider_identifier": display_identifier,
+                "source": str(source or ""),
+                **({"asset_type_original": raw_svc} if raw_svc and raw_svc != svc else {}),
+                **self._cloud_validation_by_key.get((svc, ident), {}),
+            }
+            existing_node = self._g.nodes.get(node_id, {}).get("data")
+            if isinstance(existing_node, AttackNode):
+                original_types = set(existing_node.metadata.get("asset_type_aliases") or [])
+                for candidate_type in (
+                    existing_node.metadata.get("asset_type_original"),
+                    raw_svc,
+                ):
+                    candidate = str(candidate_type or "").strip().lower()
+                    if candidate and candidate != svc:
+                        original_types.add(candidate)
+                existing_node.metadata.update(
+                    {
+                        key: value
+                        for key, value in metadata.items()
+                        if value not in (None, "")
+                    }
+                )
+                if original_types:
+                    existing_node.metadata["asset_type_aliases"] = sorted(original_types)
+                self._cloud_by_key[cloud_key] = node_id
+                self._cloud_by_service[svc] = node_id
+                continue
             node = AttackNode(
                 node_id=node_id,
                 node_type=NodeType.CLOUD,
@@ -607,13 +642,7 @@ class AttackGraphBuilder:
                 source_table="cloud_assets",
                 source_id=int(asset_id),
                 engagement_id=self.engagement_id,
-                metadata={
-                    "service": svc,
-                    "identifier": ident,
-                    "provider_identifier": display_identifier,
-                    "source": str(source or ""),
-                    **self._cloud_validation_by_key.get((svc, ident), {}),
-                },
+                metadata=metadata,
             )
             self._add_node(node)
             self._cloud_by_key[cloud_key] = node_id

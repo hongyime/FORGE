@@ -205,12 +205,25 @@ sentences as historical notes only, not as current instructions.
   Local checks from the prior code checkpoint remain the verification baseline.
   Handoff:
   `.claude/handoffs/2026-07-24-html-data-aggregation-worker-audit.md`.
-- [ ] Next target: resume real kill-chain correctness work by auditing
-  passive-to-live validator handoff coverage with mocked read-only proof
-  endpoints and provider-specific proof details. Prioritize deterministic
-  validation/report/graph/dashboard parity over more micro-optimization. Do not
-  add live target probing without explicit ROE/scope manifest and local/mocked
-  regression coverage.
+- [x] Cloud asset alias validation/graph handoff checkpoint:
+  Legacy cloud asset aliases (`s3`, `digitalocean_spaces`,
+  `google_cloud_storage`, `azure_blob_storage`) now normalize before pending
+  validation claims are selected, so already-validated canonical rows suppress
+  repeated alias probes and alias/canonical duplicates are de-duped in a single
+  sweep. Attack graph cloud nodes now use canonical cloud asset keys while
+  preserving original alias metadata for review, preventing duplicate
+  `CLOUD::s3::*` plus `CLOUD::aws_s3::*` nodes for the same resource.
+  Verification: compile passed; Ruff passed; focused claim alias file passed
+  (`2 passed`); broader cloud asset validation sweep slice passed (`16 passed,
+  117 deselected`); focused attack graph alias/latest-validation slice passed
+  (`4 passed, 105 deselected`); registry contract passed (`1 passed`).
+  Handoff:
+  `.claude/handoffs/2026-07-24-cloud-asset-alias-validation-graph.md`.
+- [ ] Next target: audit another concrete passive-to-live validation parity gap,
+  preferably provider-specific proof/detail reviewability for long-tail
+  validators or dashboard/report parity for newly canonicalized aliases. Keep
+  live provider calls mocked unless an explicit ROE/scope manifest and target
+  are supplied.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from

@@ -10,6 +10,29 @@ from typing import Any
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 
+_ASSET_TYPE_ALIASES = {
+    "azure_blob_storage": "azure_blob",
+    "digitalocean_spaces": "do_spaces",
+    "google_cloud_storage": "gcs",
+    "s3": "aws_s3",
+}
+
+
+def _normalize_cloud_asset_type(value: object) -> str:
+    normalized = str(value or "").strip().lower()
+    return _ASSET_TYPE_ALIASES.get(normalized, normalized)
+
+
+def _normalized_cloud_asset_type_sql(column: str) -> str:
+    return (
+        f"CASE LOWER({column}) "
+        "WHEN 'azure_blob_storage' THEN 'azure_blob' "
+        "WHEN 'digitalocean_spaces' THEN 'do_spaces' "
+        "WHEN 'google_cloud_storage' THEN 'gcs' "
+        "WHEN 's3' THEN 'aws_s3' "
+        f"ELSE LOWER({column}) END"
+    )
+
 
 def _int_env(name: str, default: int, *, minimum: int, maximum: int) -> int:
     raw_value = os.environ.get(name, "").strip()
@@ -137,16 +160,18 @@ def claim_pending_cloud_asset_rows(
         run_migrations(con)
         con.execute("BEGIN IMMEDIATE")
         _purge_stale(con, "asset")
+        ca_type_expr = _normalized_cloud_asset_type_sql("ca.asset_type")
+        cvr_type_expr = _normalized_cloud_asset_type_sql("cvr.asset_type")
         rows = con.execute(
-            """
+            f"""
             SELECT ca.asset_type,
                    ca.identifier,
                    COALESCE(NULLIF(ca.provider_identifier, ''), ca.identifier) AS provider_identifier
             FROM cloud_assets ca
             LEFT JOIN cloud_validation_results cvr
               ON cvr.engagement_id = ca.engagement_id
-             AND cvr.asset_type = ca.asset_type
-             AND cvr.identifier = ca.identifier
+             AND {cvr_type_expr} = {ca_type_expr}
+             AND LOWER(cvr.identifier) = LOWER(ca.identifier)
             LEFT JOIN validation_claims vc
               ON vc.engagement_id = ca.engagement_id
              AND vc.claim_type = 'asset'
@@ -160,11 +185,19 @@ def claim_pending_cloud_asset_rows(
             """,
             (engagement_id, max(0, int(limit))),
         ).fetchall()
+        claimed_keys: set[tuple[str, str]] = set()
         for row in rows:
             asset_type = str(row["asset_type"] or "")
             identifier = str(row["identifier"] or "")
             if not asset_type.strip() or not identifier.strip():
                 continue
+            normalized_key = (
+                _normalize_cloud_asset_type(asset_type),
+                identifier.strip().lower(),
+            )
+            if normalized_key in claimed_keys:
+                continue
+            claimed_keys.add(normalized_key)
             cursor = con.execute(
                 """
                 INSERT OR IGNORE INTO validation_claims

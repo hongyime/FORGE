@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: HTML data aggregation worker audit is closed with no runtime
+Latest checkpoint: cloud asset alias validation/graph handoff is complete.
+Legacy cloud asset aliases (`s3`, `digitalocean_spaces`,
+`google_cloud_storage`, `azure_blob_storage`) now normalize before pending
+validation claim selection, suppressing repeat alias probes when canonical
+validation rows already exist. Attack graph cloud nodes now key by canonical
+cloud asset type while preserving original alias metadata for review.
+Verification: compile/Ruff passed; focused claim alias file passed (`2
+passed`); broader cloud asset validation sweep slice passed (`16 passed, 117
+deselected`); focused attack graph alias/latest-validation slice passed (`4
+passed, 105 deselected`); registry contract passed (`1 passed`). Handoff:
+`.claude/handoffs/2026-07-24-cloud-asset-alias-validation-graph.md`.
+
+Current next gate: audit another concrete passive-to-live validation parity gap,
+preferably provider-specific proof/detail reviewability for long-tail validators
+or dashboard/report parity for newly canonicalized aliases. Keep live provider
+calls mocked unless an explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: HTML data aggregation worker audit is closed with no runtime
 change. `_extract_html_data()` was inspected after the URL-family worker
 migration; the remaining extraction is low-cost local aggregation and the only
 clearly heavy subpath is already `_extract_html_surface_urls()`. Do not split
@@ -33,13 +50,6 @@ DB apply/merge/write/finalization barriers or add nested worker pools here.
 Subagent attempts were made: Claude failed because OAuth is expired, and Codex
 read-only sandbox could not spawn PowerShell. Handoff:
 `.claude/handoffs/2026-07-24-html-data-aggregation-worker-audit.md`.
-
-Current next gate: resume real kill-chain correctness work by auditing
-passive-to-live validator handoff coverage with mocked read-only proof
-endpoints and provider-specific proof details. Prioritize deterministic
-validation/report/graph/dashboard parity over more micro-optimization. Do not
-add live target probing without explicit ROE/scope manifest and local/mocked
-regression coverage.
 
 Previous checkpoint: HTML surface URL-family worker migration is complete.
 `_extract_html_surface_urls()` now splits passive HTML URL extraction into
