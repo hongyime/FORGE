@@ -3415,6 +3415,7 @@ _DUMP_BINARY_STRING_SUFFIXES = {
     ".pprof",
     ".prof",
     ".rdb",
+    ".realm",
     ".sst",
 }
 _WINDOWS_EVENT_BINARY_STRING_SUFFIXES = {
@@ -6551,6 +6552,9 @@ def _suffix_from_content_type(content_type: str) -> str:
         "application/x-leveldb": ".ldb",
         "application/x-rocksdb": ".sst",
         "application/x-lmdb": ".mdb",
+        "application/realm": ".realm",
+        "application/vnd.realm": ".realm",
+        "application/x-realm": ".realm",
         "application/x-java-hprof": ".hprof",
         "application/jfr": ".jfr",
         "application/x-jfr": ".jfr",

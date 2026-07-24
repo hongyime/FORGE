@@ -66,6 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Realm mobile DB artifact recursion checkpoint:
+  Passive `.realm` mobile database artifacts now classify as document/static
+  dump artifacts for both local discovery and remote artifact MIME/suffix
+  inference, then route through the existing bounded binary-string extraction
+  path. A local fixture proves discovered Realm files can feed recursive
+  email/URL/subdomain/Firebase/Supabase/S3/GCS pivots without executing the
+  database or adding provider calls. Verification: focused TDD failed first on
+  local ingestion returning `0` and missing Realm MIME mappings; compile
+  passed; Ruff passed; focused Realm/classification tests passed (`3 passed`);
+  adjacent Realm/classification/Parquet tests passed (`19 passed`); selected
+  orchestrator binary/columnar slice passed (`18 passed, 744 deselected`);
+  adjacent HAR/OCI/classification slice passed (`24 passed`); cleanup inventory
+  found no new pytest/test-like engagement DBs. Handoff:
+  `.claude/handoffs/2026-07-24-realm-mobile-db-artifact-recursion.md`.
 - [x] Parquet columnar artifact parser checkpoint:
   Passive `.parquet` artifacts now run through a bounded pyarrow-backed parser
   before generic binary string carving. The parser emits a `#parquet-table`

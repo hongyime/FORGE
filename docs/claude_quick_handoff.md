@@ -25,7 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Parquet columnar artifact parsing is complete. Passive
+Latest checkpoint: Realm mobile DB artifact recursion is complete. Passive
+`.realm` mobile database artifacts now classify as document/static dump
+artifacts for local discovery and remote artifact MIME/suffix inference, then
+route through the existing bounded binary-string extraction path. A local
+fixture proves discovered Realm files can feed recursive email/URL/subdomain/
+Firebase/Supabase/S3/GCS pivots without executing the database or adding
+provider calls. Verification: focused TDD failed first on local ingestion
+returning `0` and missing Realm MIME mappings; compile/Ruff passed; focused
+Realm/classification tests passed (`3 passed`); adjacent
+Realm/classification/Parquet tests passed (`19 passed`); selected orchestrator
+binary/columnar slice passed (`18 passed, 744 deselected`); adjacent
+HAR/OCI/classification slice passed (`24 passed`); cleanup inventory found no
+new pytest/test-like engagement DBs. Handoff:
+`.claude/handoffs/2026-07-24-realm-mobile-db-artifact-recursion.md`.
+
+Previous checkpoint: Parquet columnar artifact parsing is complete. Passive
 `.parquet` artifacts now run through a bounded pyarrow-backed parser before
 generic binary string carving. The parser emits a `#parquet-table` payload with
 schema metadata and bounded string cell values from the first row groups, so
@@ -74,10 +89,11 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: implement the read-only subagent finding that Realm mobile
-DB artifacts (`.realm`) are not classified and can be safely routed through the
-existing bounded binary-string extraction path. Do not add live target probing
-without explicit ROE/scope manifest and mocked tests.
+Current next gate: collect read-only subagent `Pauli`'s next backend gap audit,
+then implement one compact safe static/passive recursion, provider
+normalization, validation-proof, or bounded-worker dispatch gap with mocked or
+local tests. Do not add live target probing without explicit ROE/scope manifest
+and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared
