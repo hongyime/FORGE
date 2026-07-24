@@ -2129,6 +2129,41 @@ def _artifact_payload(root_page: Path, artifact: Path, *, kind: str) -> dict[str
     }
 
 
+def _annotate_audit_manifest_bundle(
+    run_summary: dict[str, Any] | None,
+    artifacts: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not isinstance(run_summary, dict):
+        return run_summary
+    manifest = run_summary.get("audit_manifest")
+    if not isinstance(manifest, dict):
+        return run_summary
+    audit_artifacts = [
+        artifact
+        for artifact in artifacts
+        if isinstance(artifact, dict) and str(artifact.get("kind") or "") == "audit"
+    ]
+    annotated_manifest = dict(manifest)
+    annotated_manifest["artifact_count"] = len(audit_artifacts)
+    annotated_manifest["artifact_available"] = False
+    short_hash = str(annotated_manifest.get("short_hash") or "").strip()
+    artifact = next(
+        (
+            item
+            for item in audit_artifacts
+            if short_hash and short_hash in str(item.get("name") or "")
+        ),
+        audit_artifacts[0] if audit_artifacts else None,
+    )
+    if artifact is not None:
+        annotated_manifest["artifact_available"] = True
+        annotated_manifest["artifact_name"] = str(artifact.get("name") or "")
+        annotated_manifest["artifact_href"] = str(artifact.get("href") or "")
+    annotated_summary = dict(run_summary)
+    annotated_summary["audit_manifest"] = annotated_manifest
+    return annotated_summary
+
+
 def _report_preview_payload(root_page: Path, artifact: Path) -> dict[str, str]:
     try:
         preview = artifact.read_text(encoding="utf-8", errors="replace")[:7000]
@@ -4424,6 +4459,10 @@ def _engagement_detail_payload(engagement: dict[str, Any], root_page: Path) -> d
         "artifacts": artifacts,
         "report_previews": report_previews,
     }
+    payload["run_summary"] = _annotate_audit_manifest_bundle(
+        payload.get("run_summary"),
+        artifacts,
+    )
     report_summary = engagement.get("report_summary")
     if report_summary is not None:
         payload["report_summary"] = report_summary
@@ -4487,6 +4526,13 @@ def generate_dashboard(
         item["graph_payload"] = graph_payload
         item["graph_snapshot_at"] = graph_snapshot_at
         item["report_summary"] = _report_summary_payload(item["report_files"])
+        item["run_summary"] = _annotate_audit_manifest_bundle(
+            item.get("run_summary"),
+            [
+                {"name": path.name, "kind": "audit", "href": path.as_posix()}
+                for path in item.get("audit_files", [])
+            ],
+        )
         item["detail_route"] = f"engagements/{item['slug']}/"
         item["detail_data"] = f"data/engagements/{item['slug']}.json"
         item["detail_page"] = engagement_dir / item["slug"] / "index.html"

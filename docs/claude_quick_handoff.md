@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: API auxiliary-route validation/reportability parity is
+Latest checkpoint: audit manifest bundle availability is complete.
+Dashboard/API run summaries now annotate audit manifests with explicit
+`artifact_count`, `artifact_available`, `artifact_name`, and `artifact_href`
+fields when materialized manifest artifacts exist. Overview JSON, detail JSON,
+and web API detail/list payloads now make chain-of-custody artifact
+availability directly visible instead of requiring consumers to infer it from
+the artifacts list. Verification: compile passed; Ruff passed; focused manifest
+bundle tests passed (`2 passed`); full web UI engagement API file passed (`44
+passed`); full static dashboard suite passed (`29 passed`);
+`.forge_data/engagements` contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-audit-manifest-bundle-availability.md`.
+
+Next checkpoint: add compact end-to-end cleanup assertions around API-created
+engagements. API create/run/delete-like test flows should prove no test-owned
+DB debris remains and `master.db` monotonic sequence is preserved.
+
+Previous checkpoint: API auxiliary-route validation/reportability parity is
 complete. `/api/engagements/{id}/assets` now filters false-positive passive
 vulnerabilities the same way host context and vulnerability summary routes
 already do. The integration regression proves stale/unreportable deterministic
@@ -36,11 +52,6 @@ compile passed; Ruff passed; focused route parity tests passed (`2 passed`);
 full web UI engagement API file passed (`44 passed`); `.forge_data/engagements`
 contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-api-aux-route-reportability-parity.md`.
-
-Next checkpoint: expose run audit manifest bundle availability in dashboard/API
-review surfaces. Manifest generation/export exists; detail/API surfaces should
-clearly report the latest manifest hash/status/artifact availability so
-operators can verify chain-of-custody from the engagement page.
 
 Previous checkpoint: Fan-out J cloud validation target prep worker migration is
 complete. `kill_chain()` now prepares `(service, ref)` validation target tuples

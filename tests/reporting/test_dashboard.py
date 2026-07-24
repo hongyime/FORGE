@@ -697,6 +697,11 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["verification_status"] == "verified"
     assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["verified"] is True
     assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["short_hash"] == manifest_hash[:12]
+    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["artifact_available"] is True
+    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["artifact_count"] >= 1
+    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["artifact_name"].endswith(
+        f"{manifest_hash[:12]}.json"
+    )
     assert overview_payload["items"][0]["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
     assert overview_payload["items"][0]["run_summary"]["roe_present"] is True
     assert overview_payload["items"][0]["run_summary"]["roe_missing"] is False
@@ -783,6 +788,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["run_summary"]["current_iteration"] == 2
     assert detail_payload["run_summary"]["metadata"]["phase"] == "completed"
     assert detail_payload["run_summary"]["audit_manifest"]["verification_status"] == "verified"
+    assert detail_payload["run_summary"]["audit_manifest"]["artifact_available"] is True
     assert detail_payload["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
     assert detail_payload["run_summary"]["scope_gate"] == "engagement_scope_json_root_domains"
     assert detail_payload["run_summary"]["live_probing_allowed"] is True
@@ -800,6 +806,8 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     )
     assert audit_artifact["kind"] == "audit"
     assert audit_artifact["name"].endswith(f"{manifest_hash[:12]}.json")
+    assert detail_payload["run_summary"]["audit_manifest"]["artifact_name"] == audit_artifact["name"]
+    assert detail_payload["run_summary"]["audit_manifest"]["artifact_href"] == audit_artifact["href"]
     audit_artifact_payload = json.loads((reports_dir / audit_artifact["name"]).read_text(encoding="utf-8"))
     assert audit_artifact_payload["manifest_hash"] == manifest_hash
     assert audit_artifact_payload["verification_status"] == "verified"

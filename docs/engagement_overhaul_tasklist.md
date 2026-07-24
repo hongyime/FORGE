@@ -91,12 +91,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: expose run audit manifest bundle availability in
-  dashboard/API review surfaces. Manifest generation/export exists; detail/API
-  surfaces should clearly report the latest manifest hash/status/artifact
-  availability so operators can verify chain-of-custody from the engagement
-  page. Minimal files: `forge/reporting/dashboard.py`,
-  `forge/webui/app.py`, and dashboard/API tests.
+- [ ] Next checkpoint: add compact end-to-end cleanup assertions around
+  API-created engagements. API create/run/delete-like test flows should prove
+  no test-owned DB debris remains and `master.db` monotonic sequence is
+  preserved. Minimal files: `tests/integration/test_webui_engagement_api.py`
+  and `forge/engagement_ids.py` only if a real sequence bug is found.
+- [x] Audit manifest bundle availability checkpoint:
+  Dashboard/API run summaries now annotate audit manifests with explicit
+  `artifact_count`, `artifact_available`, `artifact_name`, and `artifact_href`
+  fields when materialized manifest artifacts exist. Overview JSON, detail JSON,
+  and web API detail/list payloads now make chain-of-custody artifact
+  availability directly visible instead of requiring consumers to infer it from
+  the artifacts list. Verification: compile passed; Ruff passed; focused
+  manifest bundle tests passed (`2 passed`); full web UI engagement API file
+  passed (`44 passed`); full static dashboard suite passed (`29 passed`);
+  workspace `.forge_data/engagements` contained `0` entries after the run.
+  Handoff:
+  `.claude/handoffs/2026-07-24-audit-manifest-bundle-availability.md`.
 - [x] API auxiliary-route validation/reportability parity checkpoint:
   `/api/engagements/{id}/assets` now filters false-positive passive
   vulnerabilities the same way host context and vulnerability summary routes

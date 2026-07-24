@@ -321,6 +321,10 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert list_manifest["verification_status"] == "verified"
         assert list_manifest["verified"] is True
         assert list_manifest["short_hash"] == list_manifest["manifest_hash"][:12]
+        assert list_manifest["artifact_available"] is True
+        assert list_manifest["artifact_count"] >= 1
+        assert list_manifest["artifact_name"].endswith(f"{list_manifest['short_hash']}.json")
+        assert list_manifest["artifact_href"].endswith(list_manifest["artifact_name"])
         assert items[0]["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
         assert items[0]["run_summary"]["live_probing_allowed"] is True
         assert items[0]["run_summary"]["tool_execution_allowed"] is True
@@ -394,6 +398,9 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert detail["run_summary"]["audit_manifest"]["verification_status"] == "verified"
         assert detail["run_summary"]["audit_manifest"]["verified"] is True
         assert detail["run_summary"]["audit_manifest"]["short_hash"] == list_manifest["short_hash"]
+        assert detail["run_summary"]["audit_manifest"]["artifact_available"] is True
+        assert detail["run_summary"]["audit_manifest"]["artifact_name"] == audit_artifact["name"]
+        assert detail["run_summary"]["audit_manifest"]["artifact_href"] == audit_artifact["href"]
         assert detail["run_summary"]["roe_id"] == "ROE-ACME-2026-07"
         assert detail["run_summary"]["scope_gate"] == "engagement_scope_json_root_domains"
         assert detail["seed_graph_summary"]["relations"] == 1

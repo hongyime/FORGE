@@ -23,6 +23,7 @@ from forge.distributed.scheduler import ScheduledTask, TaskScheduler
 from forge.engagement_ids import allocate_engagement_id, engagement_db_root, numeric_engagement_db_files
 from forge.models.pydantic_models import CommandEvent
 from forge.reporting.dashboard import (
+    _annotate_audit_manifest_bundle,
     _engagement_metadata,
     _engagement_tags,
     _detail_sections,
@@ -925,6 +926,14 @@ def create_app() -> Any:
             graph_files,
         )
         tags = _engagement_tags(con, engagement_id)
+        run_summary = _annotate_audit_manifest_bundle(
+            _latest_engagement_run(
+                con,
+                engagement_id,
+                db_path=db_file,
+            ),
+            [_artifact_payload(slug, path, "audit") for path in audit_files],
+        )
         return {
             "db": db_file.name,
             "id": engagement_id,
@@ -942,11 +951,7 @@ def create_app() -> Any:
             "severity_summary": severity_summary,
             "highest_severity": _highest_severity(severity_summary),
             "graph_summary": graph_summary,
-            "run_summary": _latest_engagement_run(
-                con,
-                engagement_id,
-                db_path=db_file,
-            ),
+            "run_summary": run_summary,
             "seed_graph_summary": _seed_graph_summary(con, engagement_id),
             "report_count": len(report_files),
             "audit_count": len(audit_files),
@@ -988,7 +993,10 @@ def create_app() -> Any:
             "size_bytes": int(db_file.stat().st_size),
             "size_label": _format_size(int(db_file.stat().st_size)),
             "scope": scope_list,
-            "run_summary": _latest_engagement_run(con, engagement_id, db_path=db_file),
+            "run_summary": _annotate_audit_manifest_bundle(
+                _latest_engagement_run(con, engagement_id, db_path=db_file),
+                [artifact for artifact in artifacts if artifact["kind"] == "audit"],
+            ),
             "sections": _detail_sections(con, engagement_id, db_path=db_file),
             "artifacts": artifacts,
             "report_previews": [_report_preview_payload(path) for path in preview_files],
