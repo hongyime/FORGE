@@ -25,29 +25,31 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: broader validation/reportability regression gate is
+Latest checkpoint: social-profile pivot worker migration is complete.
+Identity/social-profile recursive pivot construction now routes handle, email,
+phone, Matrix homeserver, federated-host, and domain pivot-entry shaping through
+the existing bounded ordered local worker helper while preserving deterministic
+family order and serial persistence. Verification: compile/Ruff passed; focused
+social-profile worker slice passed (`5 passed, 757 deselected`); broader
+social-profile synthesis cluster passed (`81 passed, 681 deselected`).
+Handoff: `.claude/handoffs/2026-07-24-social-profile-pivot-worker.md`.
+
+Current next gate: move `_extract_html_surface_urls` URL-family parsing in
+`forge/cli.py` under an ordered in-process worker helper for the single-payload
+D1/D2/D5 parse path, preserving first-seen URL order and avoiding nested
+worker-pool multiplication when an outer parse batch is already parallel. Add
+or update `tests/phase1/test_cli_parallel_dispatch.py` coverage. Passive
+parsing only; no live target assumptions, rate-limit bypass, proxy rotation,
+provider calls, or scope relaxation.
+
+Previous checkpoint: broader validation/reportability regression gate is
 complete. Latest linked cloud validation now wins for deterministic
 key-exposure rows across deterministic synthesis, Phase 6 key/report context,
 attack graph VULN nodes, dashboard/API finding tables, key-scanner counts, and
-imported graph payload filtering. Stale `VALIDATED` proof text can no longer
-override weak, placeholder, unverified, or honeypot latest inventory for the
-same cloud asset/identifier. The stable-proof fixture now includes stale
-Firebase/Supabase key exposures and stale snapshot VULN nodes. Node:
-`tests/integration/test_cloud_validation_stable_proof_surfaces.py::test_stable_proof_gate_filters_validated_looking_cloud_rows_across_surfaces`.
-
-Verification: compile/Ruff passed; expanded stable-proof surface fixture passed
-(`1 passed, 9 warnings`); broader local reportability slice passed (`129
-passed, 19 warnings`); deterministic finding suite passed (`18 passed`);
-pytest engagement cleanup reported `removed=4 remaining=0`.
-Handoff:
+imported graph payload filtering. Handoff:
 `.claude/handoffs/2026-07-24-key-exposure-latest-validation-gates.md`.
 
-Current next gate: resume recursive discovery worker-pool backlog. Continue
-moving remaining safe sequential enrichers under the bounded worker-pool path
-one source-gated passive/static family at a time, with local/mocked fixtures,
-no live target assumptions, and no rate-limit bypass/proxy rotation.
-
-Previous checkpoint: stable-proof validator surface gates are complete. Phase 6
+Earlier checkpoint: stable-proof validator surface gates are complete. Phase 6
 deterministic-cloud report filtering now requires stable proof for proof-bound
 cloud methods, matching deterministic findings, graph, dashboard, and API
 gates. Phase 6 raw CSV finding rows include non-sensitive target identity

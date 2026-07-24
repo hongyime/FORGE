@@ -141,10 +141,24 @@ historical notes only, not as current instructions.
   warnings`); deterministic finding suite passed (`18 passed`); pytest
   engagement cleanup reported `removed=4 remaining=0`. Handoff:
   `.claude/handoffs/2026-07-24-key-exposure-latest-validation-gates.md`.
-- [ ] Next target: resume recursive discovery worker-pool backlog. Continue
-  moving remaining safe sequential enrichers under the bounded worker-pool path
-  one source-gated passive/static family at a time, with local/mocked fixtures,
-  no live target assumptions, and no rate-limit bypass/proxy rotation.
+- [x] Social-profile pivot worker checkpoint:
+  Identity/social-profile recursive pivot construction now routes handle,
+  email, phone, Matrix homeserver, federated-host, and domain pivot-entry
+  shaping through the existing bounded ordered local worker helper while
+  preserving deterministic family order and serial persistence. This keeps
+  social-profile-derived usernames, emails, phones, URLs, and hosts feeding
+  recursive discovery without adding provider calls or live probing.
+  Verification: compile passed; Ruff passed; focused social-profile worker
+  slice passed (`5 passed, 757 deselected`); broader social-profile synthesis
+  cluster passed (`81 passed, 681 deselected`). Handoff:
+  `.claude/handoffs/2026-07-24-social-profile-pivot-worker.md`.
+- [ ] Next target: move `_extract_html_surface_urls` URL-family parsing in
+  `forge/cli.py` under an ordered in-process worker helper for the single-payload
+  D1/D2/D5 parse path, preserving first-seen URL order and avoiding nested
+  worker-pool multiplication when an outer parse batch is already parallel.
+  Add/update `tests/phase1/test_cli_parallel_dispatch.py` coverage. This is
+  passive parsing only; no live target assumptions, rate-limit bypass, proxy
+  rotation, provider calls, or scope relaxation.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from

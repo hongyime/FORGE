@@ -13007,6 +13007,41 @@ class EngagementSynthesisEngine:
             {"rule": "social_profile_host", "platform": platform, "source": source_label},
         )
 
+    @staticmethod
+    def _social_profile_seed_pivot_entry(
+        entry: tuple[str, str, str, float, str, str, str],
+    ) -> tuple[str, str, str, float, dict[str, Any]] | None:
+        seed_value, seed_type, relation_type, confidence, rule, platform, source_label = entry
+        if not seed_value or not seed_type:
+            return None
+        return (
+            seed_value,
+            seed_type,
+            relation_type,
+            confidence,
+            {"rule": rule, "platform": platform, "source": source_label},
+        )
+
+    @staticmethod
+    def _social_profile_handle_pivot_entry(
+        entry: tuple[str, str, float, str],
+    ) -> tuple[str, str, str, float, dict[str, Any]] | None:
+        handle, platform, base_confidence, source_label = entry
+        if len(handle) < 3:
+            return None
+        if not EngagementSynthesisEngine._social_profile_handle_allowed_for_platform(
+            platform,
+            handle,
+        ):
+            return None
+        return (
+            handle,
+            "username",
+            "same_entity",
+            min(0.9, base_confidence + 0.02),
+            {"rule": "social_profile_handle", "platform": platform, "source": source_label},
+        )
+
     def _social_profile_pivot_family(
         self,
         family: str,
@@ -13021,21 +13056,15 @@ class EngagementSynthesisEngine:
         if family == "handles":
             if company_profile:
                 return []
-            for handle in self._social_profile_handles(profile, platform=platform):
-                if len(handle) < 3:
-                    continue
-                if not self._social_profile_handle_allowed_for_platform(platform, handle):
-                    continue
-                pivots.append(
-                    (
-                        handle,
-                        "username",
-                        "same_entity",
-                        min(0.9, base_confidence + 0.02),
-                        {"rule": "social_profile_handle", "platform": platform, "source": source_label},
-                    )
-                )
-            return pivots
+            pivot_entries = self._run_ordered_local_batch(
+                [
+                    (handle, platform, base_confidence, source_label)
+                    for handle in self._social_profile_handles(profile, platform=platform)
+                ],
+                self._social_profile_handle_pivot_entry,
+                default_factory=lambda: None,
+            )
+            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
         if family == "company":
             company_name = self._social_profile_company_name(
                 profile,
@@ -13067,29 +13096,41 @@ class EngagementSynthesisEngine:
                 ]
             return []
         if family == "emails":
-            for email in self._social_profile_emails(profile):
-                pivots.append(
+            pivot_entries = self._run_ordered_local_batch(
+                [
                     (
                         email,
                         "email",
                         "same_entity",
                         min(0.9, base_confidence + 0.03),
-                        {"rule": "social_profile_email", "platform": platform, "source": source_label},
+                        "social_profile_email",
+                        platform,
+                        source_label,
                     )
-                )
-            return pivots
+                    for email in self._social_profile_emails(profile)
+                ],
+                self._social_profile_seed_pivot_entry,
+                default_factory=lambda: None,
+            )
+            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
         if family == "phones":
-            for phone in self._social_profile_phones(profile):
-                pivots.append(
+            pivot_entries = self._run_ordered_local_batch(
+                [
                     (
                         phone,
                         "phone",
                         "same_entity",
                         min(0.9, base_confidence + 0.02),
-                        {"rule": "social_profile_phone", "platform": platform, "source": source_label},
+                        "social_profile_phone",
+                        platform,
+                        source_label,
                     )
-                )
-            return pivots
+                    for phone in self._social_profile_phones(profile)
+                ],
+                self._social_profile_seed_pivot_entry,
+                default_factory=lambda: None,
+            )
+            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
         if family == "urls":
             pivot_entries = self._run_ordered_local_batch(
                 [
@@ -13124,42 +13165,64 @@ class EngagementSynthesisEngine:
         if family == "matrix_hosts":
             if str(platform or "").strip().lower() != "matrix":
                 return []
-            for host_value, host_type in self._social_profile_matrix_homeserver_hosts(profile):
-                pivots.append(
+            pivot_entries = self._run_ordered_local_batch(
+                [
                     (
                         host_value,
                         host_type,
                         "related_asset",
                         max(0.7, base_confidence - 0.01),
-                        {"rule": "social_profile_matrix_homeserver", "platform": platform, "source": source_label},
+                        "social_profile_matrix_homeserver",
+                        platform,
+                        source_label,
                     )
-                )
-            return pivots
+                    for host_value, host_type in self._social_profile_matrix_homeserver_hosts(profile)
+                ],
+                self._social_profile_seed_pivot_entry,
+                default_factory=lambda: None,
+            )
+            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
         if family == "federated_hosts":
             if not self._social_profile_platform_is_federated(platform):
                 return []
-            for host_value, host_type in self._social_profile_federated_instance_hosts(profile, platform=platform):
-                pivots.append(
+            pivot_entries = self._run_ordered_local_batch(
+                [
                     (
                         host_value,
                         host_type,
                         "related_asset",
                         max(0.7, base_confidence - 0.01),
-                        {"rule": "social_profile_federated_instance", "platform": platform, "source": source_label},
+                        "social_profile_federated_instance",
+                        platform,
+                        source_label,
                     )
-                )
-            return pivots
+                    for host_value, host_type in self._social_profile_federated_instance_hosts(
+                        profile,
+                        platform=platform,
+                    )
+                ],
+                self._social_profile_seed_pivot_entry,
+                default_factory=lambda: None,
+            )
+            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
         if family == "domain":
-            for domain_value, domain_type in self._social_profile_domain_hosts(profile):
-                pivots.append(
+            pivot_entries = self._run_ordered_local_batch(
+                [
                     (
                         domain_value,
                         domain_type,
                         "related_asset",
                         max(0.7, base_confidence - 0.01),
-                        {"rule": "social_profile_domain", "platform": platform, "source": source_label},
+                        "social_profile_domain",
+                        platform,
+                        source_label,
                     )
-                )
+                    for domain_value, domain_type in self._social_profile_domain_hosts(profile)
+                ],
+                self._social_profile_seed_pivot_entry,
+                default_factory=lambda: None,
+            )
+            pivots.extend(pivot for pivot in pivot_entries if isinstance(pivot, tuple))
             if platform == "bluesky":
                 for handle in self._social_profile_handles(profile, platform=platform):
                     domain_handle = handle.lower()

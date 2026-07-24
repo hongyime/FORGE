@@ -4587,6 +4587,88 @@ def test_synthesis_engine_parallelizes_social_profile_pivot_families_and_preserv
     ]
 
 
+def test_synthesis_engine_parallelizes_social_profile_seed_pivot_entries_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    engine = EngagementSynthesisEngine(db_path, 1001)
+    active = 0
+    peak = 0
+    entered = 0
+    lock = threading.Lock()
+    gate = threading.Event()
+    delays = {
+        "one@acme.example": 0.05,
+        "two@acme.example": 0.01,
+        "three@acme.example": 0.03,
+        "four@acme.example": 0.02,
+        "five@acme.example": 0.04,
+    }
+    original_entry = EngagementSynthesisEngine._social_profile_seed_pivot_entry
+
+    def _tracking_entry(entry):  # noqa: ANN001
+        nonlocal active, peak, entered
+        seed_value = entry[0]
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            entered += 1
+            current_entered = entered
+            if entered >= 4:
+                gate.set()
+        try:
+            if current_entered <= 4:
+                assert gate.wait(timeout=1.0)
+            time.sleep(delays[seed_value])
+            return original_entry(entry)
+        finally:
+            with lock:
+                active -= 1
+
+    def _fake_social_profile_emails(
+        cls,
+        profile: dict[str, Any],
+    ) -> list[str]:
+        del cls, profile
+        return [
+            "one@acme.example",
+            "two@acme.example",
+            "three@acme.example",
+            "four@acme.example",
+            "five@acme.example",
+        ]
+
+    monkeypatch.setattr(
+        EngagementSynthesisEngine,
+        "_social_profile_seed_pivot_entry",
+        staticmethod(_tracking_entry),
+    )
+    monkeypatch.setattr(
+        EngagementSynthesisEngine,
+        "_social_profile_emails",
+        classmethod(_fake_social_profile_emails),
+    )
+
+    pivots = engine._social_profile_pivot_family(
+        "emails",
+        profile={},
+        source_label="epieos",
+        platform="twitter",
+        base_confidence=0.74,
+        company_profile=False,
+    )
+
+    assert peak == 4
+    assert [pivot[:3] for pivot in pivots] == [
+        ("one@acme.example", "email", "same_entity"),
+        ("two@acme.example", "email", "same_entity"),
+        ("three@acme.example", "email", "same_entity"),
+        ("four@acme.example", "email", "same_entity"),
+        ("five@acme.example", "email", "same_entity"),
+    ]
+
+
 def test_synthesis_engine_parallelizes_social_profile_pivot_batch_entries_and_preserves_order(
     tmp_path: Path,
     monkeypatch,
