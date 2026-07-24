@@ -2716,6 +2716,7 @@ _ARTIFACT_RELATIVE_ROUTE_SKIP_PREFIXES = (
 )
 _ARTIFACT_RELATIVE_ROUTE_FILE_SUFFIXES = {
     ".aab",
+    ".aar",
     ".aof",
     ".apk",
     ".apkm",
@@ -6499,6 +6500,8 @@ def _suffix_from_content_type(content_type: str) -> str:
     normalized = str(content_type or "").split(";", 1)[0].strip().lower()
     return {
         "application/vnd.android.package-archive": ".apk",
+        "application/vnd.android.aar": ".aar",
+        "application/x-aar": ".aar",
         "application/vnd.android.dex": ".dex",
         "application/x-android-dex": ".dex",
         "application/x-dex": ".dex",

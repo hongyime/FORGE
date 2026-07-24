@@ -14,6 +14,16 @@ def test_classify_remote_artifact_url_recognizes_debian_package_archives() -> No
     assert _classify_remote_artifact_url("https://downloads.acme.example/acme-router.ipk?token=abc") == "archive"
     assert _classify_remote_artifact_url("https://downloads.acme.example/initramfs.cpio?download=1") == "archive"
     assert _classify_remote_artifact_url("https://downloads.acme.example/acme-agent-1.0.0.x86_64.rpm") == "document"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/libs/mobile-sdk.aar") == "archive"
+
+
+def test_android_aar_content_types_and_routes_map_to_static_artifacts() -> None:
+    assert _suffix_from_content_type("application/x-aar") == ".aar"
+    assert _suffix_from_content_type("application/vnd.android.aar") == ".aar"
+    assert _extract_artifact_relative_route_urls(
+        'const sdk = "/libs/mobile-sdk.aar";',
+        base_url="https://app.acme.example/app.js",
+    ) == ["https://app.acme.example/libs/mobile-sdk.aar"]
 
 
 def test_classify_remote_artifact_candidate_uses_safe_download_metadata() -> None:

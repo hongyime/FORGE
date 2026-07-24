@@ -25,7 +25,20 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: static ML model binary artifact recursion is complete.
+Latest checkpoint: remote Android AAR route discovery is complete. Passive
+web/JS route mining now recognizes linked Android `.aar` library archives, and
+safe AAR MIME types infer `.aar` remote artifact filenames. Existing
+local/archive AAR parsing can therefore run when a page or bundle links
+`/libs/mobile-sdk.aar`, preserving recursive email/URL/cloud pivots from
+Android library resources. Verification: focused TDD failed first on missing
+AAR MIME mapping; compile/Ruff passed; focused AAR route/MIME/classification
+tests passed (`2 passed`); adjacent remote classification/model/Realm tests
+passed (`20 passed`); selected route/mobile-bundle orchestrator slice passed
+(`18 passed, 744 deselected`); adjacent HAR/Parquet/OCI slice passed (`10
+passed`); cleanup inventory found no new pytest/test-like engagement DBs.
+Handoff: `.claude/handoffs/2026-07-24-android-aar-route-discovery.md`.
+
+Previous checkpoint: static ML model binary artifact recursion is complete.
 Passive TensorFlow Lite/CoreML/protobuf model artifacts (`.tflite`,
 `.mlmodel`, `.mlmodelc`, `.pb`, `.pbtxt`) now classify as document/static
 binary artifacts, route-discovered model URLs can enter artifact queueing, and

@@ -91,6 +91,19 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Remote Android AAR route discovery checkpoint:
+  Passive web/JS route mining now recognizes linked Android `.aar` library
+  archives, and safe AAR MIME types infer `.aar` remote artifact filenames.
+  Existing local/archive AAR parsing can therefore run when a page or bundle
+  links `/libs/mobile-sdk.aar`, preserving recursive email/URL/cloud pivots
+  from Android library resources. Verification: focused TDD failed first on
+  missing AAR MIME mapping; compile passed; Ruff passed; focused AAR
+  route/MIME/classification tests passed (`2 passed`); adjacent remote
+  classification/model/Realm tests passed (`20 passed`); selected
+  route/mobile-bundle orchestrator slice passed (`18 passed, 744 deselected`);
+  adjacent HAR/Parquet/OCI slice passed (`10 passed`); cleanup inventory found
+  no new pytest/test-like engagement DBs. Handoff:
+  `.claude/handoffs/2026-07-24-android-aar-route-discovery.md`.
 - [x] Static ML model binary artifact recursion checkpoint:
   Passive TensorFlow Lite/CoreML/protobuf model artifacts (`.tflite`,
   `.mlmodel`, `.mlmodelc`, `.pb`, `.pbtxt`) now classify as document/static
