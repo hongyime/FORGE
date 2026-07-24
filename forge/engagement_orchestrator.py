@@ -18600,7 +18600,7 @@ class EngagementSynthesisEngine:
         email_domain_roots = self._email_domain_promotion_roots(con)
         rows = con.execute(
             """
-            SELECT DISTINCT seed_type, seed_value
+            SELECT DISTINCT seed_type, seed_value, source, metadata_json
             FROM engagement_seeds
             WHERE engagement_id=?
               AND seed_type IN ('domain','subdomain','email')
@@ -18610,7 +18610,10 @@ class EngagementSynthesisEngine:
         ).fetchall()
         domain_batches = self._run_ordered_local_batch(
             rows,
-            lambda row: self._root_domain_from_seed_row_with_policy(row, email_domain_roots),
+            lambda row: self._root_domain_from_seed_row_with_policy(
+                row,
+                email_domain_roots,
+            ),
             default_factory=str,
         )
         domains: list[str] = []
@@ -18630,7 +18633,19 @@ class EngagementSynthesisEngine:
             email_domain = seed_value.split("@", 1)[1].lower()
             if not self._email_domain_is_promotable(email_domain, eligible_email_domain_roots):
                 return ""
+        elif seed_type in {"domain", "subdomain"} and not self._root_domain_seed_allows_fanout(row):
+            return ""
         return self._root_domain_from_seed_row(row)
+
+    @staticmethod
+    def _root_domain_seed_allows_fanout(row: Any) -> bool:
+        source = str(row["source"] or "").strip().lower()
+        if source in {"scope", "operator"}:
+            return True
+        metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
+        metadata_dict = metadata if isinstance(metadata, dict) else {}
+        synthesis = metadata_dict.get("synthesis")
+        return isinstance(synthesis, dict) and bool(synthesis.get("corroborated"))
 
     @staticmethod
     def _root_domain_from_seed_row(row: Any) -> str:

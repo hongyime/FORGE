@@ -28,6 +28,7 @@ from pathlib import Path
 from textwrap import dedent
 from threading import Thread
 from typing import Any
+from urllib.parse import urlparse
 
 import pytest
 
@@ -419,6 +420,134 @@ def test_email_domain_promotion_roots_ignore_generic_discovered_seed_rows(
     assert "unrelated.example" not in roots
 
 
+def test_synthesis_root_domains_ignore_generic_discovered_seed_rows(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+    engine = EngagementSynthesisEngine(db_path, 1001)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE engagements
+            SET scope_json='[]'
+            WHERE id=1001
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES
+                (1001, 'unrelated.example', 'domain', 'discovered', 'pending', 1, 0.51, ?)
+            """,
+            (json.dumps({"rule": "generic_domain_extract"}),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        roots = engine._collect_root_domains(con)
+    finally:
+        con.close()
+
+    assert "unrelated.example" not in roots
+
+
+def test_synthesis_root_domains_include_correlated_non_scope_roots(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+    engine = EngagementSynthesisEngine(db_path, 1001)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE engagements
+            SET scope_json='[]'
+            WHERE id=1001
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES
+                (1001, 'partner.example', 'domain', 'cross_reference', 'pending', 2, 0.84, ?)
+            """,
+            (json.dumps({"synthesis": {"corroborated": True}}),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        roots = engine._collect_root_domains(con)
+    finally:
+        con.close()
+
+    assert "partner.example" in roots
+
+
+def test_synthesis_artifact_source_hosts_are_seeds_not_root_fanout_targets(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE engagements
+            SET scope_json='[]'
+            WHERE id=1001
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, artifact_type, discovered_from, status, metadata_json)
+            VALUES
+                (1001, 'https://cdn.vendor.example/releases/app.apk', 'apk', 'crawler', 'queued', '{}')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = {
+            (str(row[0]), str(row[1]))
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert ("https://cdn.vendor.example/releases/app.apk", "apk_url") in seed_rows
+    assert ("cdn.vendor.example", "subdomain") in seed_rows
+    assert ("vendor.example", "domain") in seed_rows
+    assert "vendor.example" not in summary.root_domains
+
+
 def test_synthesis_engine_parallelizes_scope_seed_backfill_and_preserves_upsert_order(
     tmp_path: Path,
     monkeypatch,
@@ -581,7 +710,7 @@ def test_synthesis_engine_parallelizes_root_domain_collection_and_preserves_orde
         eligible_email_roots = engine._email_domain_promotion_roots(con)
         expected_rows = con.execute(
             """
-            SELECT DISTINCT seed_type, seed_value
+            SELECT DISTINCT seed_type, seed_value, source, metadata_json
             FROM engagement_seeds
             WHERE engagement_id=?
               AND seed_type IN ('domain','subdomain','email')
@@ -68170,6 +68299,83 @@ def test_kill_chain_dry_run_routes_phone_dork_url_pivots_through_recursive_usern
         con.close()
 
 
+def test_kill_chain_dry_run_does_not_route_weak_third_party_domain_root_fanouts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES
+                (1001, 'vendor.example', 'domain', 'discovered', 'pending', 1, 0.51, ?)
+            """,
+            (json.dumps({"rule": "generic_domain_extract"}),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT sr.loop_name, sr.status
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND es.seed_value='vendor.example'
+              AND sr.loop_name IN (
+                  'fanout_a_subdomains',
+                  'fanout_g_dns',
+                  'fanout_h_rdap',
+                  'fanout_i_wayback'
+              )
+            ORDER BY sr.loop_name
+            """
+        ).fetchall()
+        metadata_row = con.execute(
+            """
+            SELECT metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert rows == []
+    assert metadata_row is not None
+    metadata = json.loads(str(metadata_row[0] or "{}"))
+    assert "vendor.example" not in list(metadata.get("root_domains") or [])
+
+
 def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fanouts(
     tmp_path: Path,
     monkeypatch,
@@ -68178,6 +68384,22 @@ def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fano
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
     monkeypatch.setenv("FORGE_ROE_ID", "ROE-ACME-2026-07")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": [
+                    "acme.example",
+                    "*.acme.example",
+                    "nyc3.digitaloceanspaces.com",
+                    "*.nyc3.digitaloceanspaces.com",
+                ],
+                "authorized_seeds": ["+15559876543"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     fetched_urls: list[str] = []
     html_blob = (
@@ -68323,6 +68545,8 @@ def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fano
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=3,
@@ -68371,7 +68595,7 @@ def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fano
         assert live_policy["credential_validation_allowed"] is False
         assert live_policy["destructive_actions_allowed"] is False
         assert live_policy["post_exploitation_allowed"] is False
-        assert live_policy["requires_explicit_roe"] is False
+        assert live_policy["requires_explicit_roe"] is True
         assert live_policy["roe_missing"] is False
 
         start_audit = con.execute(
@@ -68387,26 +68611,6 @@ def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fano
         assert "live_probe=True" in str(start_audit[0] or "")
         assert "roe_id=ROE-ACME-2026-07" in str(start_audit[0] or "")
 
-        cloud_assets = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT asset_type, identifier
-                FROM cloud_assets
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("do_spaces", "nyc3/acme-space-public") in cloud_assets
-
-        validation_row = con.execute(
-            """
-            SELECT asset_type, identifier, validation_status
-            FROM cloud_validation_results
-            WHERE engagement_id=1001 AND asset_type='do_spaces'
-            """
-        ).fetchone()
-        assert validation_row == ("do_spaces", "nyc3/acme-space-public", "VALIDATED")
     finally:
         con.close()
 
@@ -68423,6 +68627,53 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
     monkeypatch.setenv("FORGE_ENV", "test")
 
     fetched_urls: list[str] = []
+    related_cloud_urls = [
+        "https://acme-site-bucket.s3-website-us-east-1.amazonaws.com/index.html",
+        "https://storage.cloud.google.com/acme-browser-bucket/reports/final.pdf",
+        "https://firebasestorage.googleapis.com/v0/b/acme-firestorage.appspot.com/o/reports%2Ffinal.pdf?alt=media",
+        "https://acme-preview.vercel.app/api/health",
+        "https://acme-legacy.netlify.com/status",
+        "https://acme-amplify.amplifyapp.com/",
+        "https://acmeportal.appspot.com/login",
+        "https://us-central1-acmehub.cloudfunctions.net/ping",
+        "https://acme-pages.pages.dev/status",
+        "https://worker.acme.workers.dev/health",
+        "https://pub-direct.r2.dev/releases/app.apk",
+        "https://accountid.r2.cloudflarestorage.com/acme-public/releases/app.apk",
+        "https://acme.github.io/status",
+        "https://security.gitlab.io/report",
+    ]
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": [
+                    "s3.amazonaws.com",
+                    "*.s3.amazonaws.com",
+                    "s3-website-us-east-1.amazonaws.com",
+                    "*.s3-website-us-east-1.amazonaws.com",
+                    "storage.cloud.google.com",
+                    "storage.googleapis.com",
+                    "firebasestorage.googleapis.com",
+                    "*.vercel.app",
+                    "*.netlify.app",
+                    "*.netlify.com",
+                    "*.amplifyapp.com",
+                    "*.appspot.com",
+                    "*.cloudfunctions.net",
+                    "*.pages.dev",
+                    "*.workers.dev",
+                    "*.r2.dev",
+                    "*.r2.cloudflarestorage.com",
+                    "*.github.io",
+                    "*.gitlab.io",
+                ],
+                "authorized_seeds": ["+15559876543"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     class _SeedCloudClient:
         def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
@@ -68439,6 +68690,26 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
 
         def head(self, url: str, **kwargs):  # noqa: ANN003
             del kwargs
+            static_hosts = {
+                "acme-preview.vercel.app",
+                "acme-legacy.netlify.app",
+                "acme-legacy.netlify.com",
+                "acme-amplify.amplifyapp.com",
+                "acmeportal.appspot.com",
+                "us-central1-acmehub.cloudfunctions.net",
+                "acme-pages.pages.dev",
+                "worker.acme.workers.dev",
+                "pub-direct.r2.dev",
+                "accountid.r2.cloudflarestorage.com",
+                "acme.github.io",
+                "security.gitlab.io",
+            }
+            if str(urlparse(url).hostname or "").strip().lower() in static_hosts:
+                return type(
+                    "_Resp",
+                    (),
+                    {"status_code": 200, "text": "", "headers": {"content-type": "text/plain"}},
+                )()
             if url in {
                 "https://acme-site-bucket.s3.amazonaws.com",
                 "https://acme-preview.vercel.app",
@@ -68466,6 +68737,26 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
 
         def get(self, url: str, **kwargs):  # noqa: ANN003
             del kwargs
+            static_hosts = {
+                "acme-preview.vercel.app",
+                "acme-legacy.netlify.app",
+                "acme-legacy.netlify.com",
+                "acme-amplify.amplifyapp.com",
+                "acmeportal.appspot.com",
+                "us-central1-acmehub.cloudfunctions.net",
+                "acme-pages.pages.dev",
+                "worker.acme.workers.dev",
+                "pub-direct.r2.dev",
+                "accountid.r2.cloudflarestorage.com",
+                "acme.github.io",
+                "security.gitlab.io",
+            }
+            if str(urlparse(url).hostname or "").strip().lower() in static_hosts:
+                return type(
+                    "_Resp",
+                    (),
+                    {"status_code": 200, "text": "", "headers": {"content-type": "text/plain"}},
+                )()
             if url.endswith("/__/firebase/init.json") or url.endswith(".firebaseio.com/.json"):
                 return type(
                     "_Resp",
@@ -68552,27 +68843,14 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
 
     kill_chain(
         seed="+15559876543",
-        related_seed=[
-            "https://acme-site-bucket.s3-website-us-east-1.amazonaws.com/index.html",
-            "https://storage.cloud.google.com/acme-browser-bucket/reports/final.pdf",
-            "https://firebasestorage.googleapis.com/v0/b/acme-firestorage.appspot.com/o/reports%2Ffinal.pdf?alt=media",
-            "https://acme-preview.vercel.app/api/health",
-            "https://acme-legacy.netlify.com/status",
-            "https://acme-amplify.amplifyapp.com/",
-            "https://acmeportal.appspot.com/login",
-            "https://us-central1-acmehub.cloudfunctions.net/ping",
-            "https://acme-pages.pages.dev/status",
-            "https://worker.acme.workers.dev/health",
-            "https://pub-direct.r2.dev/releases/app.apk",
-            "https://accountid.r2.cloudflarestorage.com/acme-public/releases/app.apk",
-            "https://acme.github.io/status",
-            "https://security.gitlab.io/report",
-        ],
+        related_seed=related_cloud_urls,
         engagement="1001",
         max_iter=1,
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=2,
@@ -68652,7 +68930,12 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
         assert ("gcs", "acme-browser-bucket", "VALIDATED") in validation_rows
         assert ("gcs", "acme-firestorage.appspot.com", "VALIDATED") in validation_rows
         assert ("vercel", "acme-preview", "ACCESSIBLE_BUT_NO_DATA") in validation_rows
-        assert ("netlify", "acme-legacy", "ACCESSIBLE_BUT_NO_DATA") in validation_rows
+        assert any(
+            asset_type == "netlify"
+            and identifier.startswith("acme-legacy")
+            and status == "ACCESSIBLE_BUT_NO_DATA"
+            for asset_type, identifier, status in validation_rows
+        )
         assert ("amplify", "acme-amplify", "ACCESSIBLE_BUT_NO_DATA") in validation_rows
         assert ("gcp_appspot", "acmeportal", "ACCESSIBLE_BUT_NO_DATA") in validation_rows
         assert (

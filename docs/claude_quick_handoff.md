@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: email-domain root promotion is complete.
+Latest checkpoint: non-email root promotion is complete.
+Generic discovered third-party `domain`/`subdomain` seeds from weak
+URL/artifact/social pivots no longer become A/G/H/I root-domain fan-out targets
+solely because they exist. Root fan-out now allows non-email domain rows only
+when they are explicit scope/operator seeds or are marked corroborated by
+synthesis. URL/artifact-derived hosts remain graph seeds but do not expand into
+root-domain fan-out without that proof. Verification: compile passed; Ruff
+passed; focused weak-root synthesis and CLI dry-run routing regressions passed;
+adjacent live URL/cloud fixtures passed; affected selector passed (`16 passed,
+760 deselected`); `.forge_data/engagements` contained `0` non-master engagement
+DBs after the run.
+
+Next checkpoint: support dict-shaped engagement `scope_json` during scope seed
+backfill. `_backfill_scope_seeds()` must accept the same manifest object shape
+used by live scope manifests (`domains`, `domain_allowlist`, `urls`,
+`authorized_seeds`, etc.), not only legacy list scopes.
+
+Previous checkpoint: email-domain root promotion is complete.
 Email domains discovered from unrelated third-party addresses no longer
 automatically become promoted domain seeds or root-domain fan-out targets.
 Promotion now requires explicit scope/operator roots, dict/list scope manifest
@@ -35,11 +52,6 @@ seed rows are not promotion proof. Verification: compile passed; Ruff passed;
 focused email-domain/wildcard/generic-seed/root policy tests passed (`4
 passed`); broader synthesis candidate/root selector passed (`11 passed, 761
 deselected`).
-
-Next checkpoint from subagent audit: constrain non-email root promotion. Generic
-discovered third-party `domain`/`subdomain` seeds from weak URL/artifact/social
-pivots must not become A/G/H/I root-domain fan-out targets unless scope,
-operator intent, or independent corroboration allows them.
 
 Previous checkpoint: URL-surface recursive child depth is complete.
 D5 crawl URL children and public-profile URL children now preserve

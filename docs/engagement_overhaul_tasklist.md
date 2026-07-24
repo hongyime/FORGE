@@ -91,10 +91,21 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: constrain non-email root promotion. Generic discovered
-  third-party `domain`/`subdomain` seeds from weak URL/artifact/social pivots
-  must not become A/G/H/I root-domain fan-out targets unless scope,
-  operator intent, or independent corroboration allows them.
+- [ ] Next checkpoint: support dict-shaped engagement `scope_json` during
+  scope seed backfill. `_backfill_scope_seeds()` must accept the same manifest
+  object shape used by live scope manifests (`domains`, `domain_allowlist`,
+  `urls`, `authorized_seeds`, etc.), not only legacy list scopes.
+- [x] Non-email root promotion checkpoint:
+  Generic discovered third-party `domain`/`subdomain` seeds from weak
+  URL/artifact/social pivots no longer become A/G/H/I root-domain fan-out
+  targets solely because they exist. Root fan-out now allows non-email domain
+  rows only when they are explicit scope/operator seeds or are marked
+  corroborated by synthesis. URL/artifact-derived hosts remain graph seeds but
+  do not expand into root-domain fan-out without that proof. Verification:
+  compile passed; Ruff passed; focused weak-root synthesis and CLI dry-run
+  routing regressions passed; adjacent live URL/cloud fixtures passed; affected
+  selector passed (`16 passed, 760 deselected`); workspace
+  `.forge_data/engagements` contained `0` non-master engagement DBs after the run.
 - [x] Email-domain root promotion checkpoint:
   Email domains discovered from unrelated third-party addresses no longer
   automatically become promoted domain seeds or root-domain fan-out targets.
