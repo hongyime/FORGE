@@ -26,6 +26,24 @@ def test_android_aar_content_types_and_routes_map_to_static_artifacts() -> None:
     ) == ["https://app.acme.example/libs/mobile-sdk.aar"]
 
 
+def test_react_native_bundle_routes_map_to_static_artifacts() -> None:
+    assert _classify_remote_artifact_url("https://mobile.acme.example/assets/main.jsbundle") == "config"
+    assert _classify_remote_artifact_url("https://mobile.acme.example/assets/index.android.bundle") == "config"
+    assert _classify_remote_artifact_url("https://mobile.acme.example/assets/index.android.bundle.hbc") == "document"
+    assert _suffix_from_content_type("application/javascript-bundle") == ".jsbundle"
+    assert _suffix_from_content_type("application/x-hermes-bytecode") == ".hbc"
+    assert _extract_artifact_relative_route_urls(
+        """
+        //# sourceMappingURL=main.jsbundle
+        const bytecode = "/assets/index.android.bundle.hbc";
+        """,
+        base_url="https://mobile.acme.example/assets/app.js",
+    ) == [
+        "https://mobile.acme.example/assets/main.jsbundle",
+        "https://mobile.acme.example/assets/index.android.bundle.hbc",
+    ]
+
+
 def test_classify_remote_artifact_candidate_uses_safe_download_metadata() -> None:
     extensionless_url = "https://downloads.acme.example/download?artifact=agent"
     assert _classify_remote_artifact_url(extensionless_url) is None

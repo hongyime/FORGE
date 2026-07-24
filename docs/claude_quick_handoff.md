@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: remote Android AAR route discovery is complete. Passive
+Latest checkpoint: React Native bundle member recursion is complete. Passive
+archive/member and remote route discovery now recognize React Native
+JavaScript bundles (`.jsbundle`, `index.android.bundle`, `index.ios.bundle`)
+plus Hermes bytecode bundles (`.hbc`). JS bundles route through existing text
+extraction; Hermes bundles route through bounded binary-string extraction, so
+embedded emails, URLs, Firebase/Supabase/S3/GCS references, and follow-on
+static artifact URLs can feed recursive discovery without executing mobile
+code. Verification: focused TDD failed first on missing `.jsbundle` remote
+classification and missing Hermes member string extraction; compile/Ruff
+passed; focused React Native route/member tests passed (`2 passed`); adjacent
+remote classification/model/Realm/React Native tests passed (`22 passed`);
+selected route/mobile-bundle/binary-string orchestrator slice passed (`33
+passed, 729 deselected`); adjacent HAR/Parquet/OCI slice passed (`10 passed`);
+cleanup inventory found only `.forge_data/engagements` `1`, `5010`, and
+`master.db`.
+Handoff:
+`.claude/handoffs/2026-07-24-react-native-bundle-member-recursion.md`.
+
+Previous checkpoint: remote Android AAR route discovery is complete. Passive
 web/JS route mining now recognizes linked Android `.aar` library archives, and
 safe AAR MIME types infer `.aar` remote artifact filenames. Existing
 local/archive AAR parsing can therefore run when a page or bundle links
@@ -117,11 +135,16 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: run or collect a fresh bounded backend gap audit, then
-implement one compact safe static/passive recursion, provider normalization,
-validation-proof, or bounded-worker dispatch gap with mocked or local tests. Do
-not add live target probing without explicit ROE/scope manifest and mocked
-tests.
+Current next gate: implement immediate passive queueing for artifact-like URLs
+discovered inside artifacts. Target `_persist_generic_text_discovery_batch` and
+`_store_artifact_url_seed` in `forge/engagement_orchestrator.py`; prove with a
+mocked/local regression that a discovered source map, manifest, or nested
+static artifact URL moves into `artifact_queue` without waiting for a later
+outer CLI pass. Next after that: broaden inventory-only allowlisted AWS ARN
+cloud-reference parsing, then add conservative calendar/vCard identity
+enrichment, then add graph/report/dashboard parity checks for recursive
+artifact-derived pivots. Do not add live target probing without explicit
+ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

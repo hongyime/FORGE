@@ -66,6 +66,38 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [ ] Next checkpoint: immediately enqueue artifact-like URLs discovered inside
+  artifacts using existing passive classification only. Target
+  `forge/engagement_orchestrator.py` `_persist_generic_text_discovery_batch`
+  and `_store_artifact_url_seed`; add a mocked/local regression proving a
+  discovered source map, manifest, or nested static artifact URL moves from
+  generic artifact text discovery into `artifact_queue` without requiring a
+  later outer CLI pass.
+- [ ] Then broaden inventory-only AWS ARN cloud-reference parsing in generic
+  artifact text for allowlisted service families beyond S3/KMS. Do not resolve
+  or read resources; persist passive cloud inventory with provenance only.
+- [ ] Then add conservative calendar/vCard identity enrichment from explicit
+  contact fields (`FN`, `N`, `ORG`, `TITLE`) with provenance, keeping email/
+  phone/URL pivots unchanged and avoiding inferred identities from free text.
+- [ ] Then add graph/report/dashboard parity checks for newly recursive
+  artifact-derived pivots so RN/source-map/cloud refs appear in review/export
+  surfaces with lineage and deterministic report gates.
+- [x] React Native bundle member recursion checkpoint:
+  Passive archive/member and remote route discovery now recognize React Native
+  JavaScript bundles (`.jsbundle`, `index.android.bundle`, `index.ios.bundle`)
+  plus Hermes bytecode bundles (`.hbc`). JS bundles route through existing text
+  extraction; Hermes bundles route through bounded binary-string extraction, so
+  embedded emails, URLs, Firebase/Supabase/S3/GCS references, and follow-on
+  static artifact URLs can feed recursive discovery without executing mobile
+  code. Verification: focused TDD failed first on missing `.jsbundle` remote
+  classification and missing Hermes member string extraction; compile passed;
+  Ruff passed; focused React Native route/member tests passed (`2 passed`);
+  adjacent remote classification/model/Realm/React Native tests passed (`22
+  passed`); selected route/mobile-bundle/binary-string orchestrator slice
+  passed (`33 passed, 729 deselected`); adjacent HAR/Parquet/OCI slice passed
+  (`10 passed`); cleanup inventory found only `.forge_data/engagements` `1`,
+  `5010`, and `master.db`. Handoff:
+  `.claude/handoffs/2026-07-24-react-native-bundle-member-recursion.md`.
 - [x] Remote Android AAR route discovery checkpoint:
   Passive web/JS route mining now recognizes linked Android `.aar` library
   archives, and safe AAR MIME types infer `.aar` remote artifact filenames.

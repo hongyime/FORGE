@@ -1663,6 +1663,8 @@ def _artifact_route_path_is_useful(
         return True
     if _looks_like_electron_update_metadata_name(path_name):
         return True
+    if _looks_like_react_native_bundle_artifact_name(path_name):
+        return True
     suffix = Path(unquote(lowered_path)).suffix.lower()
     if suffix in _ARTIFACT_RELATIVE_ROUTE_FILE_SUFFIXES:
         return True
@@ -2740,6 +2742,7 @@ _ARTIFACT_RELATIVE_ROUTE_FILE_SUFFIXES = {
     ".heapsnapshot",
     ".htm",
     ".html",
+    ".hbc",
     ".hprof",
     ".ipa",
     ".jfr",
@@ -2747,6 +2750,7 @@ _ARTIFACT_RELATIVE_ROUTE_FILE_SUFFIXES = {
     ".jpeg",
     ".jpg",
     ".js",
+    ".jsbundle",
     ".jks",
     ".json",
     ".keystore",
@@ -3435,6 +3439,7 @@ _WINDOWS_ACTIVITY_BINARY_STRING_SUFFIXES = {
     ".pf",
 }
 _PACKAGE_BINARY_STRING_SUFFIXES = {
+    ".hbc",
     ".lockb",
 }
 _PARQUET_COLUMNAR_SUFFIXES = {".parquet"}
@@ -3508,6 +3513,7 @@ _TEXT_CONFIG_SUFFIXES = {
     ".webmanifest",
     ".cpuprofile",
     ".heapsnapshot",
+    ".jsbundle",
     ".map",
     ".warc",
     ".har",
@@ -5959,6 +5965,32 @@ def _looks_like_browser_binary_string_artifact_name(value: str) -> bool:
     return re.fullmatch(r"webcachev\d+\.dat", lowered) is not None
 
 
+def _react_native_artifact_basename(value: str | Path) -> str:
+    return str(value or "").strip().replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
+def _looks_like_react_native_js_bundle_name(value: str | Path) -> bool:
+    lowered = _react_native_artifact_basename(value)
+    if not lowered:
+        return False
+    return (
+        lowered.endswith(".jsbundle")
+        or lowered.endswith(".android.bundle")
+        or lowered.endswith(".ios.bundle")
+    )
+
+
+def _looks_like_hermes_bytecode_bundle_name(value: str | Path) -> bool:
+    lowered = _react_native_artifact_basename(value)
+    return bool(lowered) and lowered.endswith(".hbc")
+
+
+def _looks_like_react_native_bundle_artifact_name(value: str | Path) -> bool:
+    return _looks_like_react_native_js_bundle_name(
+        value
+    ) or _looks_like_hermes_bytecode_bundle_name(value)
+
+
 def _looks_like_ssh_text_artifact_name(value: str) -> bool:
     lowered = Path(str(value or "").strip().replace("\\", "/")).name.lower()
     if not lowered:
@@ -6165,6 +6197,8 @@ def _looks_text_config_name(value: str) -> bool:
         return False
     if _looks_like_terraform_state_name(lowered):
         return True
+    if _looks_like_react_native_js_bundle_name(lowered):
+        return True
     suffix = Path(lowered).suffix
     if suffix in _TEXT_CONFIG_SUFFIXES:
         return True
@@ -6198,6 +6232,10 @@ def _looks_text_config_name(value: str) -> bool:
 
 
 def _artifact_format_label(value: str | Path) -> str:
+    if _looks_like_react_native_js_bundle_name(value):
+        return "react-native-bundle"
+    if _looks_like_hermes_bytecode_bundle_name(value):
+        return "hermes-bytecode"
     route_label = _special_text_config_route_label(str(value or ""))
     if route_label:
         return route_label
@@ -6505,6 +6543,11 @@ def _suffix_from_content_type(content_type: str) -> str:
         "application/vnd.android.dex": ".dex",
         "application/x-android-dex": ".dex",
         "application/x-dex": ".dex",
+        "application/javascript-bundle": ".jsbundle",
+        "application/x-javascript-bundle": ".jsbundle",
+        "application/x-metro-bundle": ".jsbundle",
+        "application/x-hermes-bytecode": ".hbc",
+        "application/vnd.facebook.hermes-bytecode": ".hbc",
         "application/zip": ".zip",
         "application/x-zip-compressed": ".zip",
         "application/x-saz": ".saz",
@@ -33291,6 +33334,15 @@ class ArtifactQueueProcessor:
     ) -> list[tuple[str, str, str]]:
         lowered = member_name.lower()
         suffix = Path(lowered).suffix
+        if _looks_like_react_native_js_bundle_name(member_name):
+            return self._member_payloads(source_file, member_name, data)
+        if _looks_like_hermes_bytecode_bundle_name(member_name):
+            return self._extract_legacy_binary_payloads(
+                data[:_MAX_ARTIFACT_MEMBER_BYTES],
+                source_file,
+                member_name,
+                depth=depth,
+            )
         if _looks_like_browser_binary_string_artifact_name(member_name):
             return self._extract_legacy_binary_payloads(
                 data[:_MAX_ARTIFACT_MEMBER_BYTES],
