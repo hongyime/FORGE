@@ -1574,13 +1574,13 @@ def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(
         ],
         "edges": [
             {
-                "source_node_id": "HOST::app",
-                "target_node_id": "VULN::firebase",
+                "source": "HOST::app",
+                "target": "VULN::firebase",
                 "edge_type": "vuln_found",
             },
             {
-                "source_node_id": "HOST::app",
-                "target_node_id": "VULN::malformed-cloud",
+                "source": "HOST::app",
+                "target": "VULN::malformed-cloud",
                 "edge_type": "vuln_found",
             },
         ],
@@ -1648,7 +1648,12 @@ def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(
     assert "VULN::malformed-cloud" not in detail["graph_payload"]["critical_path_nodes"]
     assert all(
         "VULN::malformed-cloud"
-        not in {edge["source_node_id"], edge["target_node_id"]}
+        not in {
+            edge.get("source_node_id"),
+            edge.get("target_node_id"),
+            edge.get("source"),
+            edge.get("target"),
+        }
         for edge in detail["graph_payload"]["edges"]
     )
 

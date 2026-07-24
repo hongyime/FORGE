@@ -1832,13 +1832,13 @@ def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
         ],
         "edges": [
             {
-                "source_node_id": "HOST::app",
-                "target_node_id": "VULN::manual-note",
+                "source": "HOST::app",
+                "target": "VULN::manual-note",
                 "edge_type": "vuln_found",
             },
             {
-                "source_node_id": "VULN::manual-note",
-                "target_node_id": "CLOUD::manual-note",
+                "source": "VULN::manual-note",
+                "target": "CLOUD::manual-note",
                 "edge_type": "cloud_misconfig",
             },
         ],
@@ -1911,7 +1911,12 @@ def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
     assert "VULN::manual-note" not in graph_payload["critical_path_nodes"]
     assert all(
         "VULN::manual-note"
-        not in {edge["source_node_id"], edge["target_node_id"]}
+        not in {
+            edge.get("source_node_id"),
+            edge.get("target_node_id"),
+            edge.get("source"),
+            edge.get("target"),
+        }
         for edge in graph_payload["edges"]
     )
 

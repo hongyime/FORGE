@@ -1157,6 +1157,22 @@ def _graph_payload_with_defaults(
     return enriched
 
 
+def _graph_edge_endpoints(edge: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(edge.get("source_node_id") or edge.get("source") or "").strip(),
+        str(edge.get("target_node_id") or edge.get("target") or "").strip(),
+    )
+
+
+def _set_graph_edge_endpoints(edge: dict[str, Any], source: str, target: str) -> None:
+    if "source" in edge and "source_node_id" not in edge:
+        edge["source"] = source
+    if "target" in edge and "target_node_id" not in edge:
+        edge["target"] = target
+    edge["source_node_id"] = source
+    edge["target_node_id"] = target
+
+
 def _graph_node_validation_key(node: dict[str, Any]) -> tuple[str, str]:
     metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
     asset = ""
@@ -1358,12 +1374,12 @@ def _dedupe_graph_payload_cloud_alias_nodes(
         if not isinstance(edge, dict):
             continue
         rewired = dict(edge)
-        source = remap.get(str(rewired.get("source_node_id") or ""), str(rewired.get("source_node_id") or ""))
-        target = remap.get(str(rewired.get("target_node_id") or ""), str(rewired.get("target_node_id") or ""))
+        source_raw, target_raw = _graph_edge_endpoints(rewired)
+        source = remap.get(source_raw, source_raw)
+        target = remap.get(target_raw, target_raw)
         if source == target:
             continue
-        rewired["source_node_id"] = source
-        rewired["target_node_id"] = target
+        _set_graph_edge_endpoints(rewired, source, target)
         edge_key = (source, target, str(rewired.get("edge_type") or ""))
         if edge_key in seen_edges:
             continue
@@ -1420,9 +1436,7 @@ def _filter_graph_payload_for_validation(
     filtered_edges = [
         edge
         for edge in edges
-        if isinstance(edge, dict)
-        and str(edge.get("source_node_id") or "") not in removed
-        and str(edge.get("target_node_id") or "") not in removed
+        if isinstance(edge, dict) and not any(endpoint in removed for endpoint in _graph_edge_endpoints(edge))
     ]
     filtered = dict(payload)
     filtered["nodes"] = filtered_nodes

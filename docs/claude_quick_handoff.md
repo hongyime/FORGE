@@ -25,23 +25,32 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: downgraded provider validation reviewability is complete.
+Latest checkpoint: imported graph legacy edge-shape filtering is complete.
+Imported dashboard/API graph payload filtering now understands both canonical
+`source_node_id` / `target_node_id` edges and legacy `source` / `target` edges.
+Validation filtering and cloud-alias dedupe share the endpoint helper, so
+removed or merged deterministic cloud/key nodes cannot leave dangling stale
+graph edges in engagement review payloads. Verification: compile/Ruff passed;
+focused dashboard graph validation regressions passed (`3 passed`); focused
+cloud-alias graph test passed (`1 passed`); focused live engagement API
+malformed-cloud graph regression passed (`1 passed`); pytest engagement cleanup
+reported `removed=4 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-imported-graph-legacy-edge-filtering.md`.
+
+Current next gate: audit another concrete passive-to-live validation/report/API
+parity gap, preferably provider-specific proof/detail reviewability for
+long-tail validators or imported graph/raw-export shape mismatches. Keep live
+provider calls mocked unless an explicit ROE/scope manifest and target are
+supplied.
+
+Previous checkpoint: downgraded provider validation reviewability is complete.
 Method-tagged key-validation details now parse non-reportable statuses such as
 `UNVERIFIED:<method>:<detail>` for structured review surfaces without promoting
 them to reportable proof. Downgraded Datadog validation inventory now exposes
 `UNVERIFIED` plus `datadog_api_key_validate` in dashboard detail rows and Phase
 6 raw-export metadata while keeping `validation_proof` empty and key-finding
-counts at zero. Verification: compile/Ruff passed; full validation-proof parser
-suite passed (`105 passed`); focused dashboard key-validation proof slice
-passed (`4 passed, 18 deselected`); focused Phase 6 proof/raw-export slice
-passed (`7 passed, 79 deselected`); focused Phase 4 Datadog/newer-provider and
-attack-path proof slices passed. Handoff:
+counts at zero. Handoff:
 `.claude/handoffs/2026-07-24-downgraded-provider-validation-reviewability.md`.
-
-Current next gate: audit another concrete passive-to-live validation parity
-gap, preferably provider-specific proof/detail reviewability for long-tail
-validators. Keep live provider calls mocked unless an explicit ROE/scope
-manifest and target are supplied.
 
 Previous checkpoint: effective cloud validation status projection is complete.
 Canonicalized cloud-validation alias ordering now uses canonical asset type,

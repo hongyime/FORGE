@@ -256,10 +256,22 @@ sentences as historical notes only, not as current instructions.
   6 proof/raw-export slice passed (`7 passed, 79 deselected`); focused Phase 4
   Datadog/newer-provider and attack-path proof slices passed. Handoff:
   `.claude/handoffs/2026-07-24-downgraded-provider-validation-reviewability.md`.
-- [ ] Next target: audit another concrete passive-to-live validation parity gap,
-  preferably provider-specific proof/detail reviewability for long-tail
-  validators. Keep live provider calls mocked unless an explicit ROE/scope
-  manifest and target are supplied.
+- [x] Imported graph legacy edge-shape filtering checkpoint:
+  Imported dashboard/API graph payload filtering now understands both canonical
+  `source_node_id` / `target_node_id` edges and legacy `source` / `target`
+  edges. Validation filtering and cloud-alias dedupe share the endpoint helper,
+  so removed or merged deterministic cloud/key nodes cannot leave dangling stale
+  graph edges in engagement review payloads. Verification: compile passed; Ruff
+  passed; focused dashboard graph validation regressions passed (`3 passed`);
+  focused cloud-alias graph test passed (`1 passed`); focused live engagement
+  API malformed-cloud graph regression passed (`1 passed`); pytest engagement
+  cleanup reported `removed=4 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-imported-graph-legacy-edge-filtering.md`.
+- [ ] Next target: audit another concrete passive-to-live validation/report/API
+  parity gap, preferably provider-specific proof/detail reviewability for
+  long-tail validators or imported graph/raw-export shape mismatches. Keep live
+  provider calls mocked unless an explicit ROE/scope manifest and target are
+  supplied.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from
