@@ -66,11 +66,24 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix the workflow report API lineage gap where
-  `/reports/{workflow_id}` reads top-level `report_lineage` but can miss Phase 6
-  lineage nested under `intermediate_results["report"]["report_lineage"]`.
-  Keep this as a focused API parity patch/test; no live provider calls or kill
-  chain behavior changes.
+- [ ] Next checkpoint: audit one current-code deterministic kill-chain,
+  passive-recursion, validation, report/export, or dashboard/API review gap not
+  already covered by the artifact inventory and workflow lineage checkpoints.
+  Prefer a compact helper/test over growing large files. Keep live calls mocked
+  unless an explicit ROE/scope manifest and target are supplied.
+- [x] Workflow report API nested Phase 6 lineage checkpoint:
+  Legacy `GET /reports/{workflow_id}` now preserves Phase 6 report lineage when
+  `report_lineage` is nested under
+  `intermediate_results["report"]["report_lineage"]`, matching the shape written
+  by Phase 6 companion JSON exports. Top-level workflow metadata still wins
+  because nested lineage is merged only for missing keys. Added a focused
+  regression beside the existing raw-export lineage route test. No live
+  provider call, report rendering, fallback, severity, validation, scope, or
+  kill-chain behavior changed. Verification: compile passed; Ruff passed;
+  focused nested plus raw-export route tests passed (`2 passed`); full
+  `TestApiReportRoute` class passed (`2 passed`); workspace
+  `.forge_data/engagements` contained `0` entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-workflow-report-nested-lineage.md`.
 - [x] Phase 6 artifact inventory export parity checkpoint:
   Added a compact `forge.phase6.artifact_inventory` helper and a focused
   regression proving parsed `artifact_queue` rows are included in Phase 6

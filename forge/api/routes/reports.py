@@ -61,6 +61,8 @@ def _report_text_and_metadata(results: Mapping[str, object]) -> tuple[str | None
             or report_map.get("content")
         )
         metadata.update(report_map)
+        for key, item in _string_map(report_map.get("report_lineage")).items():
+            metadata.setdefault(key, item)
     else:
         text = report
     metadata.update(_string_map(results.get("report_metadata")))

@@ -547,3 +547,62 @@ class TestApiReportRoute:
         assert payload["report_lineage"]["render_backend"] == "raw_export"
         assert payload["report_lineage"]["rendered_provider"] == "raw_export"
         assert payload["report_lineage"]["findings_checksum"] == "sha256:workflow-raw-export"
+
+    def test_report_route_surfaces_nested_phase6_report_lineage(self) -> None:
+        workflow_id = "workflow-phase6-nested-lineage"
+
+        class _Engine:
+            async def get_status(self, requested_id: str) -> dict[str, object] | None:
+                assert requested_id == workflow_id
+                return {"is_complete": True}
+
+        class _Store:
+            async def load_workflow(self, requested_id: str) -> object | None:
+                assert requested_id == workflow_id
+                return SimpleNamespace(
+                    intermediate_results=json.dumps(
+                        {
+                            "report": {
+                                "report_markdown": "# Template report\n",
+                                "provider": "template",
+                                "requested_provider": "auto",
+                                "format": "markdown",
+                                "report_lineage": {
+                                    "rendered_provider": "template",
+                                    "generated_at": "2026-07-24T06:30:00+00:00",
+                                    "fallback_reason": "ProviderUnavailableError: quota",
+                                    "findings_checksum": "sha256:phase6-nested",
+                                },
+                            },
+                        },
+                        sort_keys=True,
+                    ),
+                    is_complete=True,
+                )
+
+        reset_dependencies()
+        app = create_app()
+        app.dependency_overrides[get_workflow_engine] = lambda: _Engine()
+        app.dependency_overrides[get_state_store] = lambda: _Store()
+        try:
+            with TestClient(app) as client:
+                response = client.get(f"/reports/{workflow_id}")
+        finally:
+            app.dependency_overrides.clear()
+            reset_dependencies()
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["workflow_id"] == workflow_id
+        assert payload["report"] == "# Template report\n"
+        assert payload["format"] == "markdown"
+        assert payload["provider"] == "template"
+        assert payload["requested_provider"] == "auto"
+        assert payload["render_backend"] == "template"
+        assert payload["rendered_provider"] == "template"
+        assert payload["fallback_reason"] == "ProviderUnavailableError: quota"
+        assert payload["findings_checksum"] == "sha256:phase6-nested"
+        assert payload["generated_at"] == "2026-07-24T06:30:00+00:00"
+        assert payload["report_lineage"]["render_backend"] == "template"
+        assert payload["report_lineage"]["rendered_provider"] == "template"
+        assert payload["report_lineage"]["findings_checksum"] == "sha256:phase6-nested"

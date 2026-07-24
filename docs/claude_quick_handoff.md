@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Phase 6 artifact inventory export parity is complete.
+Latest checkpoint: workflow report API nested Phase 6 lineage is complete.
+Legacy `GET /reports/{workflow_id}` now preserves Phase 6 report lineage when
+`report_lineage` is nested under
+`intermediate_results["report"]["report_lineage"]`, matching the companion JSON
+shape written by Phase 6 exports. Top-level workflow metadata still wins because
+nested lineage is merged only for missing keys. Verification: compile passed;
+Ruff passed; focused nested plus raw-export route tests passed (`2 passed`);
+full `TestApiReportRoute` class passed (`2 passed`); `.forge_data/engagements`
+contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-workflow-report-nested-lineage.md`.
+
+Next checkpoint: audit one current-code deterministic kill-chain,
+passive-recursion, validation, report/export, or dashboard/API review gap not
+already covered by the artifact inventory and workflow lineage checkpoints.
+Prefer a compact helper/test over growing large files. Keep live calls mocked
+unless an explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: Phase 6 artifact inventory export parity is complete.
 Phase 6 now includes scrubbed `artifact_queue` inventory in companion JSON
 context and raw CSV exports as `record_type=artifact`. The new helper is
 `forge.phase6.artifact_inventory` and the focused regression is
@@ -37,12 +54,6 @@ behavior changed. Verification: compile passed; Ruff passed; focused artifact
 export test passed (`1 passed`); adjacent artifact seed-relation/archive
 provenance selector passed (`3 passed, 102 deselected`). Handoff:
 `.claude/handoffs/2026-07-24-phase6-artifact-inventory-export.md`.
-
-Next checkpoint: fix the workflow report API lineage gap where
-`/reports/{workflow_id}` reads top-level `report_lineage` but can miss Phase 6
-lineage nested under `intermediate_results["report"]["report_lineage"]`.
-Suggested focused test:
-`tests/integration/test_mvp_workflow.py::TestApiReportRoute::test_report_route_surfaces_nested_phase6_report_lineage`.
 
 Previous checkpoint: compact mocked kill-chain/report/dashboard smoke is
 complete.
