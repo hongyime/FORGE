@@ -66527,14 +66527,14 @@ def test_kill_chain_dry_run_records_recent_run_telemetry_metadata(
         assert live_policy["post_exploitation_allowed"] is False
         assert live_policy["requires_explicit_roe"] is False
         assert live_policy["roe_missing"] is False
-        assert metadata["last_step"] == "report generate"
-        assert "forge report generate" in metadata["last_message"]
+        assert metadata["last_step"] == "report fallback"
+        assert "forcing deterministic template fallback" in metadata["last_message"]
         assert float(metadata["last_step_elapsed_seconds"]) >= 0.0
         assert metadata["last_step_at"]
         recent_steps = metadata["recent_steps"]
         assert isinstance(recent_steps, list)
         assert recent_steps
-        assert recent_steps[-1]["step"] == "report generate"
+        assert recent_steps[-1]["step"] == "report fallback"
         assert all("phase" in item and "message" in item for item in recent_steps)
         counts = metadata["counts"]
         assert isinstance(counts, dict)
@@ -66552,10 +66552,309 @@ def test_kill_chain_dry_run_records_recent_run_telemetry_metadata(
         assert int(finalization_batch["pending"]) == 0
         assert metadata["active_finalization_stage_label"] == "report generate"
         assert float(metadata["active_finalization_eta_seconds"]) >= 0.0
+        assert metadata["report_artifact_verified"] is True
+        assert metadata["report_finalization_status"] == "template_fallback"
+        assert metadata["report_fallback_provider"] == "template"
         last_iteration_delta = metadata["last_iteration_delta"]
         assert isinstance(last_iteration_delta, dict)
         assert int(last_iteration_delta["engagement_seeds"]) == 0
         assert metadata["last_iteration_stable"] is True
+    finally:
+        con.close()
+
+
+def test_kill_chain_forces_template_report_fallback_when_report_subprocess_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": ["acme.example", "*.acme.example"],
+                "authorized_seeds": ["acme.example", "security@acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        argv = ["forge", *[str(item) for item in cmd_argv]]
+        if [str(item) for item in cmd_argv[:2]] == ["report", "generate"]:
+            return subprocess.CompletedProcess(
+                argv,
+                1,
+                stdout="",
+                stderr="simulated report subprocess failure",
+            )
+        return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=["security@acme.example"],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        report_provider="template",
+        report_max_loops=0,
+    )
+
+    reports_dir = tmp_path / "reports"
+    report_files = sorted(reports_dir.glob("engagement_1001_kill_chain_*.md"))
+    assert report_files
+    report_path = report_files[-1]
+    assert report_path.with_suffix(".json").is_file()
+    assert report_path.with_suffix(".csv").is_file()
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT status, error, metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "completed"
+        assert row[1] is None
+        metadata = json.loads(str(row[2] or "{}"))
+        assert metadata["report_artifact_verified"] is True
+        assert metadata["report_finalization_status"] == "template_fallback"
+        assert metadata["report_generate_returncode"] == 1
+        assert metadata["report_fallback_provider"] == "template"
+        assert "report generate exited 1" in metadata["report_fallback_reason"]
+        assert Path(str(metadata["report_path"])).resolve() == report_path.resolve()
+        assert metadata["planned_report_path"].endswith(".md")
+        assert int(metadata["finalization_failed"]) >= 1
+
+        fallback_actions = {
+            str(item[0])
+            for item in con.execute(
+                """
+                SELECT action
+                FROM audit_log
+                WHERE engagement_id=1001
+                  AND action LIKE 'report_template_fallback_%'
+                """
+            ).fetchall()
+        }
+        assert "report_template_fallback_start" in fallback_actions
+        assert "report_template_fallback_complete" in fallback_actions
+    finally:
+        con.close()
+
+
+def test_kill_chain_marks_failed_when_report_and_template_fallback_fail(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": ["acme.example", "*.acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    partial_report_paths: list[Path] = []
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        argv = ["forge", *[str(item) for item in cmd_argv]]
+        if [str(item) for item in cmd_argv[:2]] == ["report", "generate"]:
+            output_path = Path(cmd_argv[cmd_argv.index("--output") + 1])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text("# partial failed report\n", encoding="utf-8")
+            partial_report_paths.append(output_path)
+            return subprocess.CompletedProcess(
+                argv,
+                1,
+                stdout="",
+                stderr="simulated report subprocess failure",
+            )
+        return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    def _fallback_boom(*args, **kwargs):  # noqa: ANN002, ANN003
+        del args, kwargs
+        raise RuntimeError("simulated template fallback failure")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr("forge.phase6.report_synthesizer.synthesise", _fallback_boom)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        report_provider="template",
+        report_max_loops=0,
+    )
+
+    assert partial_report_paths and partial_report_paths[-1].is_file()
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT status, error, metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "failed"
+        assert "final report generation failed" in str(row[1])
+        metadata = json.loads(str(row[2] or "{}"))
+        assert metadata["phase"] == "failed"
+        assert metadata["report_artifact_verified"] is False
+        assert metadata["report_finalization_status"] == "failed"
+        assert metadata["report_generate_returncode"] == 1
+        assert "report generate exited 1" in metadata["report_fallback_reason"]
+        assert "simulated template fallback failure" in metadata["report_fallback_error"]
+
+        fallback_actions = {
+            str(item[0])
+            for item in con.execute(
+                """
+                SELECT action
+                FROM audit_log
+                WHERE engagement_id=1001
+                  AND action LIKE 'report_template_fallback_%'
+                """
+            ).fetchall()
+        }
+        assert "report_template_fallback_start" in fallback_actions
+        assert "report_template_fallback_failed" in fallback_actions
+        assert "report_template_fallback_complete" not in fallback_actions
+    finally:
+        con.close()
+
+
+def test_kill_chain_marks_failed_when_template_fallback_returns_empty_artifact(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": ["acme.example", "*.acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        argv = ["forge", *[str(item) for item in cmd_argv]]
+        if [str(item) for item in cmd_argv[:2]] == ["report", "generate"]:
+            return subprocess.CompletedProcess(
+                argv,
+                1,
+                stdout="",
+                stderr="simulated report subprocess failure",
+            )
+        return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    def _empty_fallback(*, output_path: str | None = None, **kwargs):  # noqa: ANN003
+        del kwargs
+        assert output_path
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+        return path
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr("forge.phase6.report_synthesizer.synthesise", _empty_fallback)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        report_provider="template",
+        report_max_loops=0,
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT status, error, metadata_json
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "failed"
+        assert "final report generation failed" in str(row[1])
+        metadata = json.loads(str(row[2] or "{}"))
+        assert metadata["report_artifact_verified"] is False
+        assert metadata["report_finalization_status"] == "failed"
+        assert metadata["report_generate_returncode"] == 1
+        assert metadata["report_fallback_error"] == (
+            "template fallback returned without a report artifact"
+        )
     finally:
         con.close()
 
@@ -82886,6 +83185,26 @@ def test_kill_chain_raw_export_fallback_preserves_validated_finding_gate(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": [
+                    "acme.example",
+                    "*.acme.example",
+                    "raw-export-firebase-prod.firebaseapp.com",
+                    "raw-export-firebase-prod.web.app",
+                    "raw-export-firebase-prod.firebaseio.com",
+                    "raw-export-decoy-lab.firebaseapp.com",
+                    "raw-export-decoy-lab.web.app",
+                    "raw-export-decoy-lab.firebaseio.com",
+                ],
+                "authorized_seeds": ["+15550111222"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     artifact_root = tmp_path / "data" / "artifacts"
     artifact_root.mkdir(parents=True, exist_ok=True)
@@ -83033,6 +83352,8 @@ def test_kill_chain_raw_export_fallback_preserves_validated_finding_gate(
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-ACME-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=2,

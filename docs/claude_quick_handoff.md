@@ -25,21 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: combined scheduled URL-bound workflow fixture is complete.
-Added a mocked/local distributed scheduler fixture that runs scheduled crawl,
-crawl_stealth, passive, auth-bypass, and searxng_passive under one narrow URL
-manifest. The fixture proves crawl redirect denial does not fetch `/admin`,
-stealth/passive/auth receive explicit manifest URL-prefix scope, and an
-untrusted SearXNG provider URL is denied before provider dispatch.
-Verification: Ruff passed for the combined fixture; focused combined fixture
-passed (`1 passed`); full distributed scheduler scope suite passed
-(`19 passed`).
+Latest checkpoint: final report finalization fallback is complete. Kill-chain
+finalization now verifies the report family after subprocess-backed
+`report generate`; failed or artifact-less report subprocesses force direct
+`provider="template"` synthesis, raw JSON/CSV fallback artifacts are accepted,
+fallback audit/run metadata is recorded, and no-artifact terminal runs finish as
+`failed` rather than plain `completed`. Verification: focused report
+fallback/telemetry/raw-export tests passed (`5 passed`), including
+fallback-failure and empty-artifact negative regressions; Ruff touched files,
+py_compile touched files, and `git diff --check`.
 
-Next checkpoint: verify dashboard/API/audit review visibility for scheduled
-scope-denial events. Confirm `scheduled_task_scope_denied` rows for redirect,
-browser final-URL, provider URL, and downstream manifest denials are visible in
-static dashboard, live detail API, and audit-log review without leaking full
-scope manifests or sensitive task payloads.
+Next checkpoint: only mark recursive social/phone/IP/name/company/cloud-ref
+chains processed on completed or intentional skipped outcomes, so failed chains
+retry in later iterations instead of being permanently suppressed.
+
+Previous checkpoint: scheduled scope-denial reviewability is complete. Static
+dashboard detail JSON/HTML and the live engagement detail API expose old
+`scheduled_task_scope_denied` rows through a dedicated `scope_denials` review
+section even when the row is outside the recent audit timeline. React labels the
+section, and regressions prove visible denial reasons do not leak raw task
+`scope_manifest` payloads or sentinels.
 
 Previous checkpoint: remaining scheduled dispatcher scope propagation is complete.
 Scheduled `passive` and `auth-bypass` now receive manifest/DB URL-fetch scope

@@ -17780,12 +17780,135 @@ def kill_chain(
             "finalization postgraph",
             "[dim]sequential dispatch x1[/dim]  [dim]graph/report order preserved[/dim]",
         )
-    _run_inprocess_batch(
+    sequential_results = _run_inprocess_batch(
         sequential_post_validation_specs,
         lambda item: _run_finalization_module(list(item[0]), str(item[1])),
         max_workers=1,
         progress_label="finalization postgraph",
     )
+
+    report_returncode: int | None = None
+    for (_cmd_argv, label), result in zip(sequential_post_validation_specs, sequential_results):
+        if label == "report generate":
+            report_returncode = int(result)
+            break
+
+    def _is_nonempty_report_artifact(path: Path) -> bool:
+        try:
+            return path.is_file() and path.stat().st_size > 0
+        except OSError:
+            return False
+
+    def _preferred_report_artifact() -> Path | None:
+        planned = Path(_report_path)
+        candidates = (
+            planned,
+            planned.with_suffix(".json"),
+            planned.with_suffix(".csv"),
+            planned.with_suffix(".pdf"),
+        )
+        for candidate in candidates:
+            if _is_nonempty_report_artifact(candidate):
+                return candidate
+        return None
+
+    def _ensure_report_artifact() -> tuple[Path | None, dict[str, object]]:
+        artifact = _preferred_report_artifact()
+        if artifact is not None and (report_returncode in (None, 0)):
+            return artifact, {
+                "report_artifact_verified": True,
+                "report_finalization_status": "completed",
+                "report_generate_returncode": report_returncode,
+            }
+
+        if report_returncode not in (None, 0):
+            reason = f"report generate exited {report_returncode}"
+        else:
+            reason = "report generate completed without a report artifact"
+        _log("report fallback", f"[yellow]{reason}; forcing deterministic template fallback[/yellow]")
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "report_template_fallback_start",
+            target=_report_path,
+            result=reason,
+        )
+        try:
+            from forge.phase6.report_synthesizer import synthesise  # noqa: PLC0415
+
+            fallback_path = synthesise(
+                engagement_id=engagement,
+                output_path=_report_path,
+                assume_yes=True,
+                provider="template",
+                max_correction_loops=0,
+            )
+        except Exception as exc:  # noqa: BLE001
+            fallback_error = f"{type(exc).__name__}: {str(exc)[:180]}"
+            _cli_audit(
+                db_path,
+                engagement_id,
+                "orchestrator",
+                "kill_chain",
+                "report_template_fallback_failed",
+                target=_report_path,
+                result=fallback_error,
+            )
+            return None, {
+                "report_artifact_verified": False,
+                "report_finalization_status": "failed",
+                "report_generate_returncode": report_returncode,
+                "report_fallback_provider": "template",
+                "report_fallback_reason": reason,
+                "report_fallback_error": fallback_error,
+            }
+
+        artifact = _preferred_report_artifact()
+        fallback_artifact = Path(fallback_path)
+        if artifact is None and _is_nonempty_report_artifact(fallback_artifact):
+            artifact = fallback_artifact
+        if artifact is None:
+            error = "template fallback returned without a report artifact"
+            _cli_audit(
+                db_path,
+                engagement_id,
+                "orchestrator",
+                "kill_chain",
+                "report_template_fallback_failed",
+                target=_report_path,
+                result=error,
+            )
+            return None, {
+                "report_artifact_verified": False,
+                "report_finalization_status": "failed",
+                "report_generate_returncode": report_returncode,
+                "report_fallback_provider": "template",
+                "report_fallback_reason": reason,
+                "report_fallback_error": error,
+            }
+
+        status = "template_fallback" if artifact.suffix.lower() == ".md" else "raw_export_fallback"
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "report_template_fallback_complete",
+            target=str(artifact),
+            result=f"status={status} reason={reason}",
+        )
+        return artifact, {
+            "report_artifact_verified": True,
+            "report_finalization_status": status,
+            "report_generate_returncode": report_returncode,
+            "report_fallback_provider": "template",
+            "report_fallback_reason": reason,
+            "report_fallback_path": str(artifact),
+        }
+
+    report_artifact_path, report_finalization_metadata = _ensure_report_artifact()
 
     total = _time.time() - step_start
     _cli_audit(
@@ -17793,8 +17916,14 @@ def kill_chain(
         "kill_chain_complete", target=domain,
         result=f"elapsed_s={total:.1f} emails_chained={len(emails) if emails else 0}",
     )
-    console.print(f"\n[bold green]Kill-chain complete[/bold green] in {total:.1f}s")
-    console.print(f"[dim]Report:[/dim] {_report_path}")
+    if report_artifact_path is None:
+        console.print(
+            f"\n[bold red]Kill-chain finalization failed[/bold red] in {total:.1f}s "
+            "[dim](no report artifact persisted)[/dim]"
+        )
+    else:
+        console.print(f"\n[bold green]Kill-chain complete[/bold green] in {total:.1f}s")
+    console.print(f"[dim]Report:[/dim] {report_artifact_path or _report_path}")
     console.print(f"[dim]Evidence:[/dim] .forge_data/engagements/{engagement}.db")
     _mtgx = f"reports/{engagement}_attack_graph.mtgx"
     _mg = f"reports/{engagement}_attack_graph.graphml"
@@ -17820,12 +17949,18 @@ def kill_chain(
             return
         _refresh_pending_work_state()
         _set_progress_counts()
+        report_ready = report_artifact_path is not None
+        run_status = "completed" if report_ready else "failed"
+        run_phase = "completed" if report_ready else "failed"
         final_metadata: dict[str, object] = {
-            **_engagement_run_metadata(phase="completed"),
+            **_engagement_run_metadata(phase=run_phase),
             "elapsed_seconds": round(total, 3),
-            "report_path": _report_path,
+            "planned_report_path": _report_path,
+            "report_path": str(report_artifact_path or _report_path),
             "report_provider": report_provider or "default",
             "report_max_loops": report_max_loops,
+            "finalization_failed": finalization_failed,
+            **report_finalization_metadata,
         }
         if prereq_metadata:
             final_metadata.update(prereq_metadata)
@@ -17840,8 +17975,9 @@ def kill_chain(
         )
         engagement_run_tracker.finish_run(
             engagement_run_handle,
-            status="completed",
+            status=run_status,
             current_iteration=last_iteration,
+            error=None if report_ready else "final report generation failed and no fallback artifact exists",
             metadata=final_metadata,
         )
         _clear_run_control_markers()

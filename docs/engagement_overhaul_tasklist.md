@@ -91,11 +91,20 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: verify dashboard/API/audit review visibility for
-  scheduled scope-denial events. Confirm `scheduled_task_scope_denied` rows for
-  redirect, browser final-URL, provider URL, and downstream manifest denials are
-  visible in static dashboard, live detail API, and audit-log review without
-  leaking full scope manifests or sensitive task payloads.
+- [ ] Next checkpoint: only mark recursive social/phone/IP/name/company/cloud-ref
+  chains processed on completed or intentional skipped outcomes, so failed
+  chains retry in later iterations instead of being permanently suppressed.
+- [x] Final report finalization fallback checkpoint:
+  Kill-chain finalization now verifies the report family after the
+  subprocess-backed `report generate` step. If that step fails or creates no
+  artifact, the orchestrator forces an in-process deterministic template
+  fallback, accepts raw JSON/CSV fallback artifacts, records fallback audit and
+  run metadata, and marks the run `failed` instead of `completed` if no report
+  artifact can be persisted. Negative regressions cover fallback failure after a
+  partial planned artifact and fallback returning an empty artifact.
+  Verification: focused reporting/fallback tests passed (`5 passed`), Ruff
+  passed for touched files, py_compile passed, and `git diff --check` was
+  whitespace-clean.
 - [x] Combined scheduled URL-bound workflow fixture checkpoint:
   Added a mocked/local distributed scheduler fixture that runs scheduled crawl,
   crawl_stealth, passive, auth-bypass, and searxng_passive under one narrow URL
@@ -12172,6 +12181,20 @@ from earlier workspace states unless restated in `## Compact active backlog`.
   Files: `forge/distributed/worker.py`, `forge/distributed/runnable.py`, `forge/cli.py`, `tests/distributed/test_worker_timeouts.py`, `docs/engagement_overhaul_tasklist.md`, `docs/claude_continue_checklist.md`.
   Verified: `python -m py_compile forge\distributed\worker.py forge\distributed\runnable.py forge\cli.py tests\distributed\test_worker_timeouts.py`; `python -m ruff check forge/distributed/worker.py forge/distributed/runnable.py forge/cli.py tests/distributed/test_worker_timeouts.py` -> `All checks passed!`; `python -m pytest tests/distributed/test_worker_timeouts.py` -> `2 passed`; `python -m pytest tests/distributed tests/phase1/test_multi_seed_schema.py` -> `34 passed`.
   Safety note: worker lifecycle isolation only. No live probing expansion, provider call expansion, credential use, scope relaxation, rate-limit bypass, proxy/IP rotation, destructive validation, or report-gate behavior was added.
-- [ ] Next sidecar gap 1: if final `report generate` fails, force template/raw fallback or mark the run `completed_degraded` instead of plain `completed`.
+- [x] Final report finalization fallback checkpoint completed: after the ordered
+  graph/report finalization tail, `forge kill-chain` verifies that Markdown or
+  companion JSON/CSV/PDF report artifacts exist. Failed or artifact-less report
+  subprocesses trigger direct `provider="template"` synthesis, raw-export
+  fallback artifacts are accepted, fallback audit rows/metadata are recorded,
+  and no-artifact terminal runs finish as `failed` rather than plain
+  `completed`.
+  Files: `forge/cli.py`, `tests/phase1/test_engagement_orchestrator.py`,
+  `docs/engagement_overhaul_tasklist.md`,
+  `docs/claude_continue_checklist.md`, `docs/claude_quick_handoff.md`.
+  Verified: `python -m pytest tests/phase1/test_engagement_orchestrator.py::test_kill_chain_dry_run_records_recent_run_telemetry_metadata tests/phase1/test_engagement_orchestrator.py::test_kill_chain_forces_template_report_fallback_when_report_subprocess_fails tests/phase1/test_engagement_orchestrator.py::test_kill_chain_marks_failed_when_report_and_template_fallback_fail tests/phase1/test_engagement_orchestrator.py::test_kill_chain_marks_failed_when_template_fallback_returns_empty_artifact tests/phase1/test_engagement_orchestrator.py::test_kill_chain_raw_export_fallback_preserves_validated_finding_gate -q` -> `5 passed`; `python -m ruff check forge/cli.py tests/phase1/test_engagement_orchestrator.py`; `python -m py_compile forge/cli.py tests/phase1/test_engagement_orchestrator.py`; `git diff --check`.
+  Safety note: report finalization hardening only. No live probing expansion,
+  provider call expansion, credential use, scope relaxation, rate-limit bypass,
+  proxy/IP rotation, destructive validation, or post-exploitation behavior was
+  added.
 - [ ] Next sidecar gap 2: only mark recursive social/phone/IP/name/company/cloud-ref chains processed on completed or intentional skipped outcomes, so failed chains retry in later iterations.
 - [ ] Next sidecar gap 3: replace known-host surface fetch first-20 hard cap with a deterministic host backlog/cursor or completed-host exclusion.

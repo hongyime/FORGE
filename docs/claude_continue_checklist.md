@@ -66,11 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: verify dashboard/API/audit review visibility for
-  scheduled scope-denial events. Confirm `scheduled_task_scope_denied` rows for
-  redirect, browser final-URL, provider URL, and downstream manifest denials are
-  visible in static dashboard, live detail API, and audit-log review without
-  leaking full scope manifests or sensitive task payloads.
+- [ ] Next checkpoint: only mark recursive social/phone/IP/name/company/cloud-ref
+  chains processed on completed or intentional skipped outcomes, so failed
+  chains retry in later iterations instead of being permanently suppressed.
+- [x] Final report finalization fallback checkpoint:
+  Kill-chain finalization now verifies the report family after the
+  subprocess-backed `report generate` step. If that step fails or creates no
+  artifact, the orchestrator forces an in-process deterministic template
+  fallback, accepts raw JSON/CSV fallback artifacts, records fallback audit and
+  run metadata, and marks the run `failed` instead of `completed` if no report
+  artifact can be persisted. Negative regressions cover fallback failure after a
+  partial planned artifact and fallback returning an empty artifact.
+  Verification: focused reporting/fallback tests passed (`5 passed`), Ruff
+  passed for touched files, py_compile passed, and `git diff --check` was
+  whitespace-clean.
 - [x] Combined scheduled URL-bound workflow fixture checkpoint:
   Added a mocked/local distributed scheduler fixture that runs scheduled crawl,
   crawl_stealth, passive, auth-bypass, and searxng_passive under one narrow URL
@@ -9027,7 +9036,19 @@ above.
   Verification: `python -m py_compile forge\distributed\runnable.py tests\distributed\test_runnable_scope.py`; `python -m ruff check forge/distributed/runnable.py tests/distributed/test_runnable_scope.py`; `python -m pytest tests/distributed/test_runnable_scope.py` -> `19 passed`.
 - [x] Distributed stale-task retry budget is now bounded and review-fixed: `distributed_tasks` has `attempt_count`/`max_attempts`, migrations upgrade existing DBs and count already-running v23 rows as one active claim, scheduler claims increment attempts, stale running tasks requeue only while attempts remain, exhausted stale/queued tasks become terminal `failed`, queue metrics/events are emitted for stale terminal transitions, and exhausted queued rows no longer starve later eligible tasks. Verification: compile/Ruff for scheduler/schema/migration/test files, worker-claiming suite (`5 passed`), full distributed suite plus schema migration suite (`34 passed`).
 - [x] Distributed worker timeout termination is process-backed for real scheduled workers: `Worker` now supports `handler_execution_mode="process"`, CLI `worker-once`/`worker-loop` use a picklable `ScheduledTaskRunner`, and process-mode timeout terminates late handler side effects instead of leaving daemon threads running. Generic in-process test/custom handlers can still use default thread mode. Verification: compile/Ruff for worker/runnable/CLI/timeout tests; timeout suite (`2 passed`); full distributed suite plus schema migration suite (`34 passed`).
-- [ ] Next sidecar gap 1: if final `report generate` fails, force template/raw fallback or mark the run `completed_degraded` instead of plain `completed`; start at `forge/cli.py` finalization and a focused monkeypatched failure regression.
+- [x] Final report finalization fallback is complete: after the ordered
+  graph/report finalization tail, `forge kill-chain` verifies that Markdown or
+  companion JSON/CSV/PDF report artifacts exist. Failed or artifact-less report
+  subprocesses trigger direct `provider="template"` synthesis, raw-export
+  fallback artifacts are accepted, fallback audit rows/metadata are recorded,
+  and no-artifact terminal runs finish as `failed` rather than plain
+  `completed`.
+  Files: `forge/cli.py`, `tests/phase1/test_engagement_orchestrator.py`,
+  `docs/engagement_overhaul_tasklist.md`,
+  `docs/claude_continue_checklist.md`, `docs/claude_quick_handoff.md`.
+  Verified: focused report fallback/telemetry/raw-export tests (`5 passed`),
+  including fallback-failure and empty-artifact negative regressions; Ruff
+  touched files, py_compile touched files, and `git diff --check`.
 - [ ] Next sidecar gap 2: only mark recursive social/phone/IP/name/company/cloud-ref chains processed on completed or intentional skipped outcomes, so failed chains retry in later iterations.
 - [ ] Next sidecar gap 3: replace known-host surface fetch first-20 hard cap with a deterministic host backlog/cursor or completed-host exclusion.
 - [ ] Next sidecar gap 4: prevent high-depth persisted/resumed seeds from executing beyond `synthesis_depth_limit` while still preserving them as inventory.
