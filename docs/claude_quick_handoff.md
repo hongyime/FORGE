@@ -25,7 +25,17 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: artifact review surface parity is complete. Newly recursive
+Latest checkpoint: remote artifact parallel attribution is complete. The
+parallel remote-artifact downloader now stores `(result_index, request)` in its
+future map so exception handling uses the exact allowed request object after
+scope-denied rows are skipped. Inspection showed the prior index was already the
+original result slot, but the explicit mapping prevents future compact-list
+mistakes. Verification: compile/Ruff passed; focused parallel scope attribution
+test passed (`1 passed`); existing kill-chain scope-denied remote artifact E2E
+passed (`1 passed`). Handoff:
+`.claude/handoffs/2026-07-24-remote-artifact-parallel-attribution.md`.
+
+Previous checkpoint: artifact review surface parity is complete. Newly recursive
 artifact pivots are now visible across review/export surfaces. Static dashboard
 detail payloads include a `cloud_assets` inventory section, summary count, and
 fallback graph `CLOUD` nodes even when no attack-graph snapshot exists.
@@ -211,12 +221,11 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: fix/test remote artifact download result attribution when
-some queued remote artifacts are scope-skipped before the bounded downloader
-runs. Then add second-pass artifact queue convergence coverage, then add
-audit-lineage assertions for artifact-derived queued URLs/cloud inventory. Do
-not add live target probing without explicit ROE/scope manifest and mocked
-tests.
+Current next gate: add second-pass artifact queue convergence coverage proving
+an artifact URL discovered during artifact text parsing is parsed on the next
+`process()` pass and feeds cloud/seed discovery onward. Then add audit-lineage
+assertions for artifact-derived queued URLs/cloud inventory. Do not add live
+target probing without explicit ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

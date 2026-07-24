@@ -66,16 +66,22 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix and test remote artifact download result attribution
-  when some queued remote artifacts are scope-skipped before the bounded
-  downloader runs. The parallel exception path must map failures back to the
-  compact allowed-request list, not the original request list.
-- [ ] Then: add recursive second-pass artifact queue convergence coverage proving
+- [ ] Next checkpoint: add recursive second-pass artifact queue convergence coverage proving
   an artifact URL discovered during artifact text parsing is parsed on the next
   `process()` pass and feeds cloud/seed discovery onward.
 - [ ] Then: add audit-lineage assertions for artifact-derived queued URLs and
   cloud inventory so operators can trace discovered text -> queued artifact ->
   parsed seed/cloud asset.
+- [x] Remote artifact parallel attribution checkpoint:
+  The parallel remote-artifact downloader now stores `(result_index, request)`
+  in its future map so exception handling uses the exact allowed request object
+  after scope-denied rows are skipped. This is a clarity hardening plus
+  regression guard; inspection showed the prior index was already the original
+  result slot, but the explicit mapping prevents future compact-list mistakes.
+  Verification: compile passed; Ruff passed; focused parallel scope attribution
+  test passed (`1 passed`); existing kill-chain scope-denied remote artifact
+  E2E passed (`1 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-remote-artifact-parallel-attribution.md`.
 - [x] Artifact review surface parity checkpoint:
   Newly recursive artifact pivots are now visible across review/export surfaces.
   Static dashboard detail payloads include a `cloud_assets` inventory section,

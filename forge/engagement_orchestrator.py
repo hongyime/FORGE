@@ -19066,12 +19066,11 @@ class ArtifactQueueProcessor:
         completed = 0
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
             future_map = {
-                executor.submit(self._download_remote_artifact_request, request): result_index
+                executor.submit(self._download_remote_artifact_request, request): (result_index, request)
                 for result_index, request in allowed_requests
             }
             for future in as_completed(future_map):
-                index = future_map[future]
-                request = requests[index]
+                index, request = future_map[future]
                 try:
                     download_results[index] = future.result()
                 except Exception as exc:  # noqa: BLE001
