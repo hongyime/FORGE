@@ -116,10 +116,14 @@ sentences as historical notes only, not as current instructions.
   (`7 passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
   Handoff:
   `.claude/handoffs/2026-07-24-service-worker-precache-e2e.md`.
-- [ ] Next target: add graph edge assertions for the service-worker recursion
-  chain (`manifest -> service-worker -> precache -> chunk`) or implement missing
-  relation edges if the graph export lacks them. Keep the fixture mocked/local
-  and preserve current report gates.
+- [x] Service-worker/precache graph-edge checkpoint:
+  The E2E now asserts exported attack-graph `derived_from` edges for
+  `manifest -> service-worker -> precache -> chunk`; no production graph code
+  change was needed because `AttackGraphBuilder` already loads
+  `seed_relations` into graph edges. Verification: compile passed; Ruff passed;
+  focused service-worker/precache E2E passed (`1 passed`); pytest engagement
+  cleanup reported `removed=2 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-service-worker-precache-e2e.md`.
 - [ ] Next target: audit the terminal-stability/K2 artifact queue edge observed
   by the service-worker fixture. Iteration 4 can queue cloud URL artifact rows
   after no new snapshot counts and then exit stable with those rows

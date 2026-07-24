@@ -488,6 +488,29 @@ def _assert_report_exports(report_path: Path, report_text: str, report_payload: 
 
 
 def _assert_graph_outputs(graph: dict[str, Any]) -> None:
+    nodes_by_id = {node.get("node_id"): node for node in graph["nodes"]}
+    edge_pairs = {
+        (
+            (nodes_by_id.get(edge.get("source_node_id")) or {}).get("label"),
+            (nodes_by_id.get(edge.get("target_node_id")) or {}).get("label"),
+            edge.get("edge_type"),
+        ): edge
+        for edge in graph["edges"]
+    }
+
+    assert (
+        MANIFEST_URL,
+        SERVICE_WORKER_URL,
+        "derived_from",
+    ) in edge_pairs
+    service_worker_edge = edge_pairs[(SERVICE_WORKER_URL, PRECACHE_URL, "derived_from")]
+    assert service_worker_edge["metadata"]["format"] == "service-worker-js"
+    assert service_worker_edge["metadata"]["download_filename"] == "service-worker.js"
+    precache_report_edge = edge_pairs[(PRECACHE_URL, REPORT_CHUNK_URL, "derived_from")]
+    precache_dashboard_edge = edge_pairs[(PRECACHE_URL, DASHBOARD_CHUNK_URL, "derived_from")]
+    assert precache_report_edge["metadata"]["format"] == "service-worker-js"
+    assert precache_dashboard_edge["metadata"]["format"] == "service-worker-js"
+
     assert any(
         node.get("source_table") == "cloud_assets"
         and (node.get("metadata") or {}).get("identifier") == "swreportvault"
