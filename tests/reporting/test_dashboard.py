@@ -725,6 +725,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert 'id="status-filter"' in site_html
     assert 'id="severity-filter"' in site_html
     assert 'id="tag-filter"' in site_html
+    assert 'id="report-state-filter"' in site_html
     assert 'id="updated-after-filter"' in site_html
     assert 'id="updated-before-filter"' in site_html
     assert 'id="recency-filter"' in site_html
@@ -733,6 +734,10 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "data-tags='external|priority-high'" in site_html
     assert "data-updated-ms='" in site_html
     assert "data-finding-count='" in site_html
+    assert "data-report-raw='0'" in site_html
+    assert "data-report-fallback='1'" in site_html
+    assert "data-report-degraded='0'" in site_html
+    assert "data-report-prior='0'" in site_html
     assert "template · 4 exports · fallback" in site_html
 
     overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
@@ -1236,6 +1241,9 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
 
     site_html = (site_root / "index.html").read_text(encoding="utf-8")
     assert "raw_export · 2 exports · backend template · 2 families · raw · fallback" in site_html
+    assert "data-report-raw='1'" in site_html
+    assert "data-report-fallback='1'" in site_html
+    assert "data-report-prior='1'" in site_html
 
 
 def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(tmp_path: Path) -> None:
@@ -1332,7 +1340,9 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
     assert "Report History" in detail_html
     assert '<span class="k">Report generations</span><span class="v">2</span>' in detail_html
     assert f'<span class="k">Latest family</span><span class="v mono">{newer_stem}</span>' in detail_html
-    assert "template · 4 exports · 2 families" in (site_root / "index.html").read_text(encoding="utf-8")
+    multi_site_html = (site_root / "index.html").read_text(encoding="utf-8")
+    assert "template · 4 exports · 2 families" in multi_site_html
+    assert "data-report-prior='1'" in multi_site_html
     assert f"{older_stem}.json" in detail_html
     assert "Write degradation: older disk warning" in detail_html
     assert f"Checksum sha256:{older_stem}" in detail_html

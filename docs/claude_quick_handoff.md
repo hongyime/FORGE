@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: report-history aggregate review is complete.
+Latest checkpoint: report-state overview filtering is complete.
+Static dashboard overview rows and React overview cards can now be filtered by
+deterministic report state: prior report generations, raw-export fallback,
+fallback reason, and write-degraded report families. Static filters persist
+through `forge.overviewFilters`; React uses the same persisted overview filter
+store. Verification: compile passed; Ruff passed; frontend build passed;
+focused report-state filter contracts passed (`4 passed`); full dashboard/API/UI
+contract set passed (`84 passed`); `.forge_data/engagements` contained `0`
+non-master engagement DBs after the run.
+
+Next checkpoint: audit current-code recursive kill-chain automation for one
+concrete discovery/deepening gap that can be proven with local fixtures,
+prioritizing bounded recursive scheduling or seed promotion evidence over UI
+polish. Keep provider calls mocked unless explicit ROE/scope manifest and
+target are supplied.
+
+Previous checkpoint: report-history aggregate review is complete.
 Static dashboard and live API list/detail payloads now include
 `report_family_count`, `latest_report_family`,
 `latest_report_export_count`, and `has_prior_report_generations`. Static
@@ -36,11 +52,6 @@ passed; Ruff passed; frontend build passed; focused report-history aggregate
 contracts passed (`5 passed`); full dashboard/API/UI contract set passed (`84
 passed`); `.forge_data/engagements` contained `0` non-master engagement DBs
 after the run.
-
-Next checkpoint: add overview filtering/review affordances for report state
-using existing deterministic fields: prior report generations, raw-export
-fallback, and fallback/degraded render status. Keep provider calls mocked unless
-explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: report overview render/export parity is complete.
 Static dashboard overview JSON, static overview HTML, live `/api/engagements`

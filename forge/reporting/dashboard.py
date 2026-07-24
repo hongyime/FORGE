@@ -3675,13 +3675,21 @@ def _render_overview_page(
             report_note = f"{report_note} · raw"
         if report_summary.get("fallback_reason"):
             report_note = f"{report_note} · fallback"
+        report_raw_export = "1" if report_summary.get("raw_export") else "0"
+        report_fallback = "1" if report_summary.get("fallback_reason") else "0"
+        report_degraded = "1" if report_summary.get("report_write_error") else "0"
+        report_prior = "1" if item.get("has_prior_report_generations") else "0"
         rows.append(
             "<tr class='eng-row'"
             f" data-status='{html.escape(str(status))}'"
             f" data-severity='{html.escape(str(item['highest_severity']))}'"
             f" data-tags='{html.escape(tag_keys)}'"
             f" data-updated-ms='{updated_ms}'"
-            f" data-finding-count='{finding_count}'>"
+            f" data-finding-count='{finding_count}'"
+            f" data-report-raw='{report_raw_export}'"
+            f" data-report-fallback='{report_fallback}'"
+            f" data-report-degraded='{report_degraded}'"
+            f" data-report-prior='{report_prior}'>"
             f"<td><a class='eng-link' href='{html.escape(detail_href)}'>{html.escape(item['id'])}</a></td>"
             f"<td><strong>{html.escape(item['name'])}</strong><div class='tiny muted'>{html.escape(row_meta)}</div></td>"
             f"<td><span class='mono tiny'>{html.escape(seed_text)}</span></td>"
@@ -3754,6 +3762,13 @@ def _render_overview_page(
             <option value="ALL">All tags</option>
             {''.join(f"<option value='{html.escape(tag.casefold())}'>{html.escape(tag)}</option>" for tag in tag_options)}
           </select>
+          <select id="report-state-filter" class="search" onchange="filterRows()">
+            <option value="ALL">All report states</option>
+            <option value="PRIOR">Has prior reports</option>
+            <option value="RAW_EXPORT">Raw export fallback</option>
+            <option value="FALLBACK">Fallback reason</option>
+            <option value="DEGRADED">Write degraded</option>
+          </select>
           <input id="updated-after-filter" class="search" type="date" onchange="filterRows()" oninput="filterRows()" title="Updated on or after">
           <input id="updated-before-filter" class="search" type="date" onchange="filterRows()" oninput="filterRows()" title="Updated on or before">
           <select id="recency-filter" class="search" onchange="filterRows()">
@@ -3811,6 +3826,7 @@ def _render_overview_page(
           (state.statusFilter || 'ALL') === 'ALL' &&
           (state.severityFilter || 'ALL') === 'ALL' &&
           (state.tagFilter || 'ALL') === 'ALL' &&
+          (state.reportStateFilter || 'ALL') === 'ALL' &&
           !state.updatedAfterValue &&
           !state.updatedBeforeValue &&
           (state.recencyFilter || 'ALL') === 'ALL';
@@ -3829,6 +3845,7 @@ def _render_overview_page(
       const statusFilter = document.getElementById('status-filter');
       const severityFilter = document.getElementById('severity-filter');
       const tagFilter = document.getElementById('tag-filter');
+      const reportStateFilter = document.getElementById('report-state-filter');
       const updatedAfterFilter = document.getElementById('updated-after-filter');
       const updatedBeforeFilter = document.getElementById('updated-before-filter');
       const recencyFilter = document.getElementById('recency-filter');
@@ -3836,6 +3853,7 @@ def _render_overview_page(
       if (typeof saved.statusFilter === 'string') statusFilter.value = saved.statusFilter;
       if (typeof saved.severityFilter === 'string') severityFilter.value = saved.severityFilter;
       if (typeof saved.tagFilter === 'string') tagFilter.value = saved.tagFilter;
+      if (typeof saved.reportStateFilter === 'string') reportStateFilter.value = saved.reportStateFilter;
       if (typeof saved.updatedAfterValue === 'string') updatedAfterFilter.value = saved.updatedAfterValue;
       if (typeof saved.updatedBeforeValue === 'string') updatedBeforeFilter.value = saved.updatedBeforeValue;
       if (typeof saved.recencyFilter === 'string') recencyFilter.value = saved.recencyFilter;
@@ -3845,6 +3863,7 @@ def _render_overview_page(
       const statusFilter = document.getElementById('status-filter').value;
       const severityFilter = document.getElementById('severity-filter').value;
       const tagFilter = document.getElementById('tag-filter').value;
+      const reportStateFilter = document.getElementById('report-state-filter').value;
       const updatedAfterValue = document.getElementById('updated-after-filter').value;
       const updatedBeforeValue = document.getElementById('updated-before-filter').value;
       const recencyFilter = document.getElementById('recency-filter').value;
@@ -3867,6 +3886,12 @@ def _render_overview_page(
           (severityFilter === 'MEDIUM_PLUS' && ['CRITICAL', 'HIGH', 'MEDIUM'].includes(highestSeverity)) ||
           (severityFilter === 'FINDINGS' && findingCount > 0);
         const tagMatch = tagFilter === 'ALL' || rowTags.includes(tagFilter);
+        const reportStateMatch =
+          reportStateFilter === 'ALL' ||
+          (reportStateFilter === 'PRIOR' && row.dataset.reportPrior === '1') ||
+          (reportStateFilter === 'RAW_EXPORT' && row.dataset.reportRaw === '1') ||
+          (reportStateFilter === 'FALLBACK' && row.dataset.reportFallback === '1') ||
+          (reportStateFilter === 'DEGRADED' && row.dataset.reportDegraded === '1');
         const dateRangeMatch =
           (!updatedAfterValue || (updatedMs > 0 && !Number.isNaN(updatedAfterMs) && updatedMs >= updatedAfterMs)) &&
           (!updatedBeforeValue || (updatedMs > 0 && !Number.isNaN(updatedBeforeMs) && updatedMs <= updatedBeforeMs));
@@ -3878,7 +3903,7 @@ def _render_overview_page(
           (recencyFilter === 'STALE_30D' && (!updatedMs || now - updatedMs > 30 * 24 * 60 * 60 * 1000));
         const searchableText = `${{row.textContent}} ${{row.dataset.tags || ''}}`.toLowerCase();
         const queryMatch = !q || searchableText.includes(q);
-        const match = statusMatch && severityMatch && tagMatch && dateRangeMatch && recencyMatch && queryMatch;
+        const match = statusMatch && severityMatch && tagMatch && reportStateMatch && dateRangeMatch && recencyMatch && queryMatch;
         row.classList.toggle('hide', !match);
         if (match) visible += 1;
       }});
@@ -3887,6 +3912,7 @@ def _render_overview_page(
         statusFilter,
         severityFilter,
         tagFilter,
+        reportStateFilter,
         updatedAfterValue,
         updatedBeforeValue,
         recencyFilter,

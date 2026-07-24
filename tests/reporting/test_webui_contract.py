@@ -45,6 +45,10 @@ def test_webui_prior_report_history_surfaces_degraded_lineage() -> None:
     assert "report_family_count?: number" in source
     assert "Report generations" in source
     assert "item.report_family_count" in source
+    assert "reportStateFilter?: string" in source
+    assert "matchesReportState(item, reportStateFilter)" in source
+    assert "<span>Report state</span>" in source
+    assert "Raw export fallback" in source
 
 
 def test_webui_separates_reportable_findings_from_validation_inventory() -> None:

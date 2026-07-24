@@ -66,10 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add overview filtering/review affordances for report
-  state using existing deterministic fields: prior report generations,
-  raw-export fallback, and fallback/degraded render status. Keep provider calls
-  mocked unless explicit ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: audit current-code recursive kill-chain automation for
+  one concrete discovery/deepening gap that can be proven with local fixtures,
+  prioritizing bounded recursive scheduling or seed promotion evidence over UI
+  polish. Keep provider calls mocked unless explicit ROE/scope manifest and
+  target are supplied.
+- [x] Report-state overview filtering checkpoint:
+  Static dashboard overview rows and React overview cards can now be filtered by
+  deterministic report state: prior report generations, raw-export fallback,
+  fallback reason, and write-degraded report families. Static filters persist
+  through `forge.overviewFilters`; React uses the same persisted overview
+  filter store. Verification: compile passed; Ruff passed; frontend build
+  passed; focused report-state filter contracts passed (`4 passed`); full
+  dashboard/API/UI contract set passed (`84 passed`); workspace
+  `.forge_data/engagements` contained `0` non-master engagement DBs after the
+  run.
 - [x] Report-history aggregate review checkpoint:
   Static dashboard and live API list/detail payloads now include
   `report_family_count`, `latest_report_family`,

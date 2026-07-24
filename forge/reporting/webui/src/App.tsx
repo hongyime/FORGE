@@ -868,6 +868,25 @@ function matchesTagFilter(tags: string[], filter: string): boolean {
   return tags.some((tag) => tag.trim().toLowerCase() === normalizedFilter)
 }
 
+function matchesReportState(item: EngagementSummary, filter: string): boolean {
+  if (filter === 'ALL') {
+    return true
+  }
+  if (filter === 'PRIOR') {
+    return Boolean(item.has_prior_report_generations)
+  }
+  if (filter === 'RAW_EXPORT') {
+    return item.report_summary?.raw_export === true
+  }
+  if (filter === 'FALLBACK') {
+    return Boolean(item.report_summary?.fallback_reason)
+  }
+  if (filter === 'DEGRADED') {
+    return Boolean(item.report_summary?.report_write_error)
+  }
+  return true
+}
+
 function matchesDateRange(value: string, fromDate: string, toDate: string): boolean {
   if (!fromDate && !toDate) {
     return true
@@ -907,6 +926,7 @@ type OverviewFilterState = {
   statusFilter?: string
   severityFilter?: string
   tagFilter?: string
+  reportStateFilter?: string
   updatedAfter?: string
   updatedBefore?: string
   recencyFilter?: string
@@ -938,6 +958,7 @@ function writeOverviewFilters(state: OverviewFilterState): void {
     (state.statusFilter ?? 'ALL') === 'ALL' &&
     (state.severityFilter ?? 'ALL') === 'ALL' &&
     (state.tagFilter ?? 'ALL') === 'ALL' &&
+    (state.reportStateFilter ?? 'ALL') === 'ALL' &&
     !state.updatedAfter &&
     !state.updatedBefore &&
     (state.recencyFilter ?? 'ALL') === 'ALL' &&
@@ -1380,6 +1401,7 @@ function OverviewPage({
   const [statusFilter, setStatusFilter] = useState(() => readOverviewFilters().statusFilter ?? 'ALL')
   const [severityFilter, setSeverityFilter] = useState(() => readOverviewFilters().severityFilter ?? 'ALL')
   const [tagFilter, setTagFilter] = useState(() => readOverviewFilters().tagFilter ?? 'ALL')
+  const [reportStateFilter, setReportStateFilter] = useState(() => readOverviewFilters().reportStateFilter ?? 'ALL')
   const [updatedAfter, setUpdatedAfter] = useState(() => readOverviewFilters().updatedAfter ?? '')
   const [updatedBefore, setUpdatedBefore] = useState(() => readOverviewFilters().updatedBefore ?? '')
   const [recencyFilter, setRecencyFilter] = useState(() => readOverviewFilters().recencyFilter ?? 'ALL')
@@ -1425,6 +1447,9 @@ function OverviewPage({
         return false
       }
       if (!matchesTagFilter(item.tags ?? [], tagFilter)) {
+        return false
+      }
+      if (!matchesReportState(item, reportStateFilter)) {
         return false
       }
       if (!matchesDateRange(engagementActivityTimestamp(item), updatedAfter, updatedBefore)) {
@@ -1492,12 +1517,13 @@ function OverviewPage({
       statusFilter,
       severityFilter,
       tagFilter,
+      reportStateFilter,
       updatedAfter,
       updatedBefore,
       recencyFilter,
       sortBy,
     })
-  }, [search, statusFilter, severityFilter, tagFilter, updatedAfter, updatedBefore, recencyFilter, sortBy])
+  }, [search, statusFilter, severityFilter, tagFilter, reportStateFilter, updatedAfter, updatedBefore, recencyFilter, sortBy])
 
   async function handleCreateEngagement(): Promise<void> {
     if (!liveToken) {
@@ -1618,6 +1644,16 @@ function OverviewPage({
                     {tag}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="filter-shell">
+              <span>Report state</span>
+              <select value={reportStateFilter} onChange={(event) => setReportStateFilter(event.target.value)}>
+                <option value="ALL">All report states</option>
+                <option value="PRIOR">Has prior reports</option>
+                <option value="RAW_EXPORT">Raw export fallback</option>
+                <option value="FALLBACK">Fallback reason</option>
+                <option value="DEGRADED">Write degraded</option>
               </select>
             </label>
             <label className="filter-shell">
