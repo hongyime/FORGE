@@ -42,6 +42,9 @@ def test_webui_prior_report_history_surfaces_degraded_lineage() -> None:
     assert "Write degradation: {historyEntry.report_write_error}" in source
     assert "historyEntry.findings_checksum" in source
     assert "<span className=\"mono-tag\">{historyEntry.findings_checksum}</span>" in source
+    assert "report_family_count?: number" in source
+    assert "Report generations" in source
+    assert "item.report_family_count" in source
 
 
 def test_webui_separates_reportable_findings_from_validation_inventory() -> None:

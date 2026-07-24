@@ -91,12 +91,21 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add report-history aggregate review state to overview
-  and detail payloads/UI, starting with report family count and latest export
-  family visibility, so operators can identify engagements with multiple report
-  generations from the dashboard without opening every detail route. Keep
-  provider calls mocked unless explicit ROE/scope manifest and target are
-  supplied.
+- [ ] Next checkpoint: add overview filtering/review affordances for report
+  state using existing deterministic fields: prior report generations,
+  raw-export fallback, and fallback/degraded render status. Keep provider calls
+  mocked unless explicit ROE/scope manifest and target are supplied.
+- [x] Report-history aggregate review checkpoint:
+  Static dashboard and live API list/detail payloads now include
+  `report_family_count`, `latest_report_family`,
+  `latest_report_export_count`, and `has_prior_report_generations`. Static
+  overview HTML, static detail HTML, and React overview/detail surfaces render
+  report-generation counts so operators can identify engagements with multiple
+  report families without opening every report artifact. Verification: compile
+  passed; Ruff passed; frontend build passed; focused report-history aggregate
+  contracts passed (`5 passed`); full dashboard/API/UI contract set passed
+  (`84 passed`); workspace `.forge_data/engagements` contained `0` non-master
+  engagement DBs after the run.
 - [x] Report overview render/export parity checkpoint:
   Static dashboard overview JSON, static overview HTML, live `/api/engagements`
   list payloads, and React overview cards now surface the latest `report_summary`

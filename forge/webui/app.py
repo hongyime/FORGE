@@ -37,8 +37,8 @@ from forge.reporting.dashboard import (
     _materialize_audit_manifest_artifacts,
     _normalize_engagement_tags,
     _report_history_payload,
+    _report_review_counts,
     _reportable_vulnerability_rows,
-    _report_summary_payload,
     _run_policy_summary,
     _safe_json_loads,
     _seed_list,
@@ -949,6 +949,7 @@ def create_app() -> Any:
             ),
             [_artifact_payload(slug, path, "audit") for path in audit_files],
         )
+        report_history = _report_history_payload(report_files)
         payload = {
             "db": db_file.name,
             "id": engagement_id,
@@ -973,8 +974,9 @@ def create_app() -> Any:
             "graph_count": len(graph_files),
             "detail_route": f"/engagements/{slug}",
             "detail_api": f"/api/engagements/{slug}",
+            **_report_review_counts(report_history),
         }
-        report_summary = _report_summary_payload(report_files)
+        report_summary = report_history[0] if report_history else None
         if report_summary is not None:
             payload["report_summary"] = report_summary
         return payload
@@ -1023,7 +1025,7 @@ def create_app() -> Any:
             "audit_count": len(audit_files),
             "graph_count": len(graph_files),
         }
-        report_summary = _report_summary_payload(report_files)
+        report_summary = report_history[0] if report_history else None
         if report_summary is not None:
             payload["report_summary"] = report_summary
         if report_history:

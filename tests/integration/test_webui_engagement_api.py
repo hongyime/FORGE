@@ -898,10 +898,18 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
         assert list_resp.status_code == 200, list_resp.text
         items = list_resp.json()["items"]
         assert items[0]["report_count"] == 8
+        assert items[0]["report_family_count"] == 2
+        assert items[0]["latest_report_family"] == "engagement_1001_report_20260709T014412"
+        assert items[0]["latest_report_export_count"] == 4
+        assert items[0]["has_prior_report_generations"] is True
 
         detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
         assert detail_resp.status_code == 200, detail_resp.text
         detail = detail_resp.json()
+        assert detail["report_family_count"] == 2
+        assert detail["latest_report_family"] == "engagement_1001_report_20260709T014412"
+        assert detail["latest_report_export_count"] == 4
+        assert detail["has_prior_report_generations"] is True
         assert detail["report_summary"]["artifact_name"] == "engagement_1001_report_20260709T014412.json"
         assert detail["report_previews"][0]["name"] == "engagement_1001_report_20260709T014412.md"
         assert detail["report_history"][0]["artifact_name"] == "engagement_1001_report_20260709T014412.json"

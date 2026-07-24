@@ -3669,6 +3669,8 @@ def _render_overview_page(
         )
         if report_backend and report_backend != report_rendered:
             report_note = f"{report_note} · backend {report_backend}"
+        if int(item.get("report_family_count", 0) or 0) > 1:
+            report_note = f"{report_note} · {int(item.get('report_family_count', 0) or 0)} families"
         if report_summary.get("raw_export"):
             report_note = f"{report_note} · raw"
         if report_summary.get("fallback_reason"):
@@ -4130,6 +4132,20 @@ def _report_summary_payload(report_files: list[Path]) -> dict[str, Any] | None:
     return history[0] if history else None
 
 
+def _report_review_counts(report_history: list[dict[str, Any]]) -> dict[str, Any]:
+    latest = report_history[0] if report_history else {}
+    return {
+        "report_family_count": len(report_history),
+        "latest_report_family": str(latest.get("family_stem") or ""),
+        "latest_report_export_count": int(
+            latest.get("export_count")
+            or len(latest.get("available_exports") or [])
+            or 0
+        ),
+        "has_prior_report_generations": len(report_history) > 1,
+    }
+
+
 def _latest_report_family_files(report_files: list[Path]) -> list[Path]:
     groups = _report_family_groups(report_files)
     if not groups:
@@ -4229,6 +4245,21 @@ def _render_report_backend_summary(summary: dict[str, Any] | None) -> str:
         _render_meta_block("Format", str(summary.get("format") or "-")),
         _render_meta_block("Generated", str(summary.get("generated_at") or "-")),
     ]
+    if summary.get("report_family_count"):
+        meta_blocks.append(
+            _render_meta_block(
+                "Report generations",
+                str(summary.get("report_family_count") or 0),
+            )
+        )
+    if summary.get("latest_report_family"):
+        meta_blocks.append(
+            _render_meta_block(
+                "Latest family",
+                str(summary.get("latest_report_family") or "-"),
+                mono=True,
+            )
+        )
     if summary.get("cloud_validation_inventory_count"):
         meta_blocks.extend(
             [
@@ -4447,6 +4478,13 @@ def _render_engagement_page(
         )
     report_payloads = [_report_preview_payload(page_path, path) for path in preview_files]
     report_summary = engagement.get("report_summary")
+    if report_summary is not None:
+        report_summary = {
+            **report_summary,
+            "report_family_count": int(engagement.get("report_family_count", 0) or 0),
+            "latest_report_family": str(engagement.get("latest_report_family") or ""),
+            "latest_report_export_count": int(engagement.get("latest_report_export_count", 0) or 0),
+        }
 
     section_titles = {
         "hosts": "Recent Hosts",
@@ -4638,6 +4676,10 @@ def _engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
         "report_count": len(engagement["report_files"]),
         "graph_count": len(engagement["graph_files"]),
         "audit_count": len(engagement.get("audit_files", [])),
+        "report_family_count": int(engagement.get("report_family_count", 0) or 0),
+        "latest_report_family": str(engagement.get("latest_report_family") or ""),
+        "latest_report_export_count": int(engagement.get("latest_report_export_count", 0) or 0),
+        "has_prior_report_generations": bool(engagement.get("has_prior_report_generations")),
         "detail_route": engagement["detail_route"],
         "detail_data": engagement["detail_data"],
     }
@@ -4648,7 +4690,7 @@ def _engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
 
 
 def _engagement_detail_payload(engagement: dict[str, Any], root_page: Path) -> dict[str, Any]:
-    report_history = _report_history_payload(engagement["report_files"])
+    report_history = engagement.get("report_history") or _report_history_payload(engagement["report_files"])
     latest_report_files = _latest_report_family_files(engagement["report_files"])
     preview_files = [path for path in latest_report_files if path.suffix.lower() == ".md"]
     report_previews = [_report_preview_payload(root_page, path) for path in preview_files]
@@ -4738,7 +4780,9 @@ def generate_dashboard(
         item["graph_summary"] = graph_summary
         item["graph_payload"] = graph_payload
         item["graph_snapshot_at"] = graph_snapshot_at
-        item["report_summary"] = _report_summary_payload(item["report_files"])
+        item["report_history"] = _report_history_payload(item["report_files"])
+        item["report_summary"] = item["report_history"][0] if item["report_history"] else None
+        item.update(_report_review_counts(item["report_history"]))
         item["run_summary"] = _annotate_audit_manifest_bundle(
             item.get("run_summary"),
             [

@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: report overview render/export parity is complete.
+Latest checkpoint: report-history aggregate review is complete.
+Static dashboard and live API list/detail payloads now include
+`report_family_count`, `latest_report_family`,
+`latest_report_export_count`, and `has_prior_report_generations`. Static
+overview HTML, static detail HTML, and React overview/detail surfaces render
+report-generation counts so operators can identify engagements with multiple
+report families without opening every report artifact. Verification: compile
+passed; Ruff passed; frontend build passed; focused report-history aggregate
+contracts passed (`5 passed`); full dashboard/API/UI contract set passed (`84
+passed`); `.forge_data/engagements` contained `0` non-master engagement DBs
+after the run.
+
+Next checkpoint: add overview filtering/review affordances for report state
+using existing deterministic fields: prior report generations, raw-export
+fallback, and fallback/degraded render status. Keep provider calls mocked unless
+explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: report overview render/export parity is complete.
 Static dashboard overview JSON, static overview HTML, live `/api/engagements`
 list payloads, and React overview cards now surface the latest `report_summary`
 render/export state instead of only `report_count`. Raw-export UI labels now
@@ -36,12 +53,6 @@ Ruff passed; frontend build passed; focused dashboard/API report-route
 contracts passed (`4 passed`); full static dashboard plus web engagement API
 suites passed (`79 passed`); `.forge_data/engagements` contained `0`
 non-master engagement DBs after the run.
-
-Next checkpoint: add report-history aggregate review state to overview and
-detail payloads/UI, starting with report family count and latest export family
-visibility, so operators can identify engagements with multiple report
-generations from the dashboard without opening every detail route. Keep provider
-calls mocked unless explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: distributed task dashboard/API review is complete.
 Engagement detail counts/sections for static dashboard JSON, static dashboard

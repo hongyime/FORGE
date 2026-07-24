@@ -158,6 +158,10 @@ type EngagementSummary = {
   report_count: number
   graph_count: number
   audit_count?: number
+  report_family_count?: number
+  latest_report_family?: string
+  latest_report_export_count?: number
+  has_prior_report_generations?: boolean
   detail_route: string
   detail_data: string
   detail_api?: string
@@ -619,6 +623,10 @@ const SAMPLE_INDEX: EngagementIndex = {
     report_count: item.report_count,
     graph_count: item.graph_count,
     audit_count: item.audit_count,
+    report_family_count: item.report_family_count,
+    latest_report_family: item.latest_report_family,
+    latest_report_export_count: item.latest_report_export_count,
+    has_prior_report_generations: item.has_prior_report_generations,
     detail_route: item.detail_route,
     detail_data: item.detail_data,
   })),
@@ -1759,6 +1767,9 @@ function OverviewPage({
                     )}{' '}
                     exports
                   </span>
+                  {item.report_family_count && item.report_family_count > 1 ? (
+                    <span>{formatCount(item.report_family_count)} families</span>
+                  ) : null}
                   {item.report_summary.raw_export ? <span>raw export</span> : null}
                   {item.report_summary.fallback_reason ? <span>fallback</span> : null}
                 </div>
@@ -3126,6 +3137,16 @@ function DetailPage({
                     <span>Exports</span>
                     <span>{reportSummary.export_count ?? reportSummary.available_exports?.length ?? 0}</span>
                   </div>
+                  <div className="mini-table-row">
+                    <span>Report generations</span>
+                    <span>{detail.report_family_count ?? reportHistory.length}</span>
+                  </div>
+                  {detail.latest_report_family ? (
+                    <div className="mini-table-row">
+                      <span>Latest family</span>
+                      <span>{detail.latest_report_family}</span>
+                    </div>
+                  ) : null}
                   <div className="mini-table-row">
                     <span>Validation inventory</span>
                     <span>{reportSummary.cloud_validation_inventory_count ?? 0}</span>

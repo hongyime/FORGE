@@ -1235,7 +1235,7 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
     assert '<span class="k">Backend</span><span class="v">template</span>' in detail_html
 
     site_html = (site_root / "index.html").read_text(encoding="utf-8")
-    assert "raw_export · 2 exports · backend template · raw · fallback" in site_html
+    assert "raw_export · 2 exports · backend template · 2 families · raw · fallback" in site_html
 
 
 def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(tmp_path: Path) -> None:
@@ -1300,9 +1300,21 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
     site_root = reports_dir / "dashboard"
     detail_page = site_root / "engagements" / "engagement-1001-acme-example" / "index.html"
     detail_json = site_root / "data" / "engagements" / "engagement-1001-acme-example.json"
+    index_json = site_root / "data" / "engagements.json"
+    overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
+    overview_item = overview_payload["items"][0]
+    assert overview_item["report_family_count"] == 2
+    assert overview_item["latest_report_family"] == newer_stem
+    assert overview_item["latest_report_export_count"] == 4
+    assert overview_item["has_prior_report_generations"] is True
+
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["report_count"] == 8
+    assert detail_payload["report_family_count"] == 2
+    assert detail_payload["latest_report_family"] == newer_stem
+    assert detail_payload["latest_report_export_count"] == 4
+    assert detail_payload["has_prior_report_generations"] is True
     assert detail_payload["report_summary"]["artifact_name"] == f"{newer_stem}.json"
     assert detail_payload["report_previews"][0]["name"] == f"{newer_stem}.md"
     assert detail_payload["report_history"][0]["artifact_name"] == f"{newer_stem}.json"
@@ -1318,6 +1330,9 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
 
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Report History" in detail_html
+    assert '<span class="k">Report generations</span><span class="v">2</span>' in detail_html
+    assert f'<span class="k">Latest family</span><span class="v mono">{newer_stem}</span>' in detail_html
+    assert "template · 4 exports · 2 families" in (site_root / "index.html").read_text(encoding="utf-8")
     assert f"{older_stem}.json" in detail_html
     assert "Write degradation: older disk warning" in detail_html
     assert f"Checksum sha256:{older_stem}" in detail_html
