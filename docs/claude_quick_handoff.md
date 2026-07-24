@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: crawler off-scope redirect final-URL gate is complete.
+Latest checkpoint: workflow history limit validation is complete.
+`GET /workflows/{workflow_id}/history` now validates optional `limit` with
+FastAPI `Query(ge=1)`, so `limit=0` and negative limits return 422 instead of
+falling through to an unbounded state-store history query. Verification:
+compile passed; Ruff passed; focused non-positive limit test passed (`2
+passed`); full history route suite passed (`9 passed`); `.forge_data/engagements`
+contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-workflow-history-limit-bounds.md`.
+
+Next checkpoint: audit one current-code deterministic kill-chain,
+passive-recursion, validation, report/export, or dashboard/API review gap not
+already covered by the workflow history bounds, crawler redirect scope,
+artifact inventory, or workflow lineage checkpoints. Prefer compact helpers and
+focused tests over growing large files. Keep live calls mocked unless an
+explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: crawler off-scope redirect final-URL gate is complete.
 `_crawl_http()` now validates the final redirected response URL against the same
 scope filter used for requested URLs before recording crawl output or extracting
 links. This prevents an in-scope URL that redirects off-scope from persisting an
@@ -34,12 +50,6 @@ denial. Verification: compile passed; Ruff passed; focused off-scope redirect
 test passed (`1 passed`); full crawler unit file passed (`3 passed`);
 `.forge_data/engagements` contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-crawler-redirect-scope-gate.md`.
-
-Next checkpoint: fix workflow history API `limit` validation so
-`GET /workflows/{workflow_id}/history?limit=0` and negative limits return 422
-instead of falling through to an unbounded state-store history query. Suggested
-focused test:
-`tests/integration/test_history_routes.py::test_history_rejects_non_positive_limit`.
 
 Previous checkpoint: workflow report API nested Phase 6 lineage is complete.
 Legacy `GET /reports/{workflow_id}` now preserves Phase 6 report lineage when

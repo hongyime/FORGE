@@ -22,7 +22,7 @@ from typing import cast
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from forge.api.deps import get_state_store, get_workflow_engine
@@ -187,7 +187,7 @@ async def fail_workflow_stage(
 )
 async def get_workflow_history(
     workflow_id: str,
-    limit: int | None = None,
+    limit: int | None = Query(default=None, ge=1),
     since: float | None = None,
     state_store: StateStore = Depends(get_state_store),
 ) -> dict[str, object]:

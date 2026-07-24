@@ -71,6 +71,13 @@ def test_history_limit_caps_row_count(client: TestClient) -> None:
     assert len(body["history"]) == 2
 
 
+@pytest.mark.parametrize("limit", ["0", "-1"])
+def test_history_rejects_non_positive_limit(client: TestClient, limit: str) -> None:
+    wid = _start_and_advance_three_stages(client)
+    resp = client.get(f"/workflows/{wid}/history?limit={limit}")
+    assert resp.status_code == 422
+
+
 def test_history_since_filter(client: TestClient) -> None:
     wid = _start_and_advance_three_stages(client)
     full = client.get(f"/workflows/{wid}/history").json()

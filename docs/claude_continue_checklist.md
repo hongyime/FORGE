@@ -66,11 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix workflow history API `limit` validation so
-  `GET /workflows/{workflow_id}/history?limit=0` and negative limits return 422
-  instead of falling through to an unbounded state-store history query. Keep this
-  as a compact API bounds patch/test; no kill-chain or live execution behavior
-  changes.
+- [ ] Next checkpoint: audit one current-code deterministic kill-chain,
+  passive-recursion, validation, report/export, or dashboard/API review gap not
+  already covered by the workflow history bounds, crawler redirect scope,
+  artifact inventory, or workflow lineage checkpoints. Prefer compact helpers
+  and focused tests over growing large files. Keep live calls mocked unless an
+  explicit ROE/scope manifest and target are supplied.
+- [x] Workflow history limit validation checkpoint:
+  `GET /workflows/{workflow_id}/history` now validates optional `limit` with
+  FastAPI `Query(ge=1)`, so `limit=0` and negative limits return 422 instead of
+  falling through to an unbounded state-store history query. Added a focused
+  parameterized integration regression in `tests/integration/test_history_routes.py`.
+  No kill-chain, live execution, report, validation, severity, scope, or
+  dashboard behavior changed. Verification: compile passed; Ruff passed;
+  focused non-positive limit test passed (`2 passed`); full history route suite
+  passed (`9 passed`); workspace `.forge_data/engagements` contained `0`
+  entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-workflow-history-limit-bounds.md`.
 - [x] Crawler off-scope redirect final-URL gate checkpoint:
   `_crawl_http()` now validates the final redirected response URL against the
   same scope filter used for requested URLs before recording crawl output or
