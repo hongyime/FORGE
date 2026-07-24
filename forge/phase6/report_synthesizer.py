@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import html as html_lib
 import json
 import logging
 import os
@@ -2568,10 +2569,23 @@ class ReportSynthesizer:
         write_error: str | None = None,
     ) -> dict[str, Any]:
         rendered_provider = str(provider or self._render_backend or self._provider_name or "").strip()
+        render_backend = str(self._render_backend or rendered_provider or self._provider_name or "").strip()
+        render_path_parts = [
+            str(self._requested_provider or "").strip(),
+            render_backend,
+            rendered_provider,
+        ]
+        render_path = " -> ".join(
+            part
+            for index, part in enumerate(render_path_parts)
+            if part and (index == 0 or part != render_path_parts[index - 1])
+        )
         fallback_reason = str(self._fallback_reason or "").strip()
         payload: dict[str, Any] = {
             "requested_provider": self._requested_provider,
             "rendered_provider": rendered_provider,
+            "render_backend": render_backend,
+            "render_path": render_path,
             "format": format_name,
             "findings_checksum": f"sha256:{self._findings_checksum(ctx)}",
             "fallback_reason": fallback_reason or None,
@@ -2591,6 +2605,8 @@ class ReportSynthesizer:
                 "",
                 f"- **Requested provider:** {lineage['requested_provider']}",
                 f"- **Rendered provider:** {lineage['rendered_provider'] or '<unknown>'}",
+                f"- **Render backend:** {lineage['render_backend'] or '<unknown>'}",
+                f"- **Render path:** {lineage['render_path'] or '<unknown>'}",
                 f"- **Fallback reason:** {fallback_reason}",
                 f"- **Structured-data checksum:** `{lineage['findings_checksum']}`",
             ]
@@ -2640,6 +2656,8 @@ class ReportSynthesizer:
             "operator": ctx.operator,
             "provider": self._render_backend,
             "requested_provider": self._requested_provider,
+            "render_backend": lineage["render_backend"],
+            "render_path": lineage["render_path"],
             "generated_at": generated_at,
             "dry_run": dry_run,
             "overall_risk": ctx.overall_risk,
@@ -2746,6 +2764,30 @@ class ReportSynthesizer:
         )
         path.write_bytes(bytes(pdf))
 
+    @staticmethod
+    def _write_html_report(path: Path, *, title: str, markdown_text: str) -> None:
+        escaped_title = html_lib.escape(title, quote=True)
+        escaped_body = html_lib.escape(markdown_text)
+        html_text = (
+            "<!doctype html>\n"
+            "<html lang=\"en\">\n"
+            "<head>\n"
+            "  <meta charset=\"utf-8\">\n"
+            f"  <title>{escaped_title}</title>\n"
+            "  <style>"
+            "body{font-family:ui-sans-serif,system-ui,sans-serif;margin:2rem;line-height:1.55;color:#18212f;}"
+            "pre{white-space:pre-wrap;word-break:break-word;background:#f7f8fb;border:1px solid #d8dee9;"
+            "border-radius:12px;padding:1rem;}"
+            "</style>\n"
+            "</head>\n"
+            "<body>\n"
+            f"<h1>{escaped_title}</h1>\n"
+            f"<pre>{escaped_body}</pre>\n"
+            "</body>\n"
+            "</html>\n"
+        )
+        path.write_text(html_text, encoding="utf-8")
+
     def _write_companion_exports(
         self,
         ctx: ReportContext,
@@ -2758,6 +2800,7 @@ class ReportSynthesizer:
         json_path = markdown_path.with_suffix(".json")
         pdf_path = markdown_path.with_suffix(".pdf")
         csv_path = markdown_path.with_suffix(".csv")
+        html_path = markdown_path.with_suffix(".html")
         payload = self._report_export_payload(
             ctx,
             markdown_text,
@@ -2771,16 +2814,22 @@ class ReportSynthesizer:
             text=markdown_text,
         )
         self._write_raw_export_csv_file(ctx, csv_path, report_metadata=payload["report_lineage"])
+        self._write_html_report(
+            html_path,
+            title=f"FORGE Engagement Report {ctx.engagement_id}",
+            markdown_text=markdown_text,
+        )
         return {
             "markdown": markdown_path,
             "json": json_path,
             "pdf": pdf_path,
             "csv": csv_path,
+            "html": html_path,
         }
 
     @staticmethod
     def _remove_report_family_artifacts(markdown_path: Path) -> None:
-        for suffix in (".md", ".json", ".pdf", ".csv"):
+        for suffix in (".md", ".json", ".pdf", ".csv", ".html"):
             artifact = markdown_path.with_suffix(suffix)
             try:
                 artifact.unlink(missing_ok=True)
@@ -2794,6 +2843,8 @@ class ReportSynthesizer:
             "findings_checksum": str(metadata.get("findings_checksum") or ""),
             "report_requested_provider": str(metadata.get("requested_provider") or ""),
             "report_rendered_provider": str(metadata.get("rendered_provider") or ""),
+            "report_render_backend": str(metadata.get("render_backend") or ""),
+            "report_render_path": str(metadata.get("render_path") or ""),
             "report_format": str(metadata.get("format") or ""),
             "report_generated_at": str(metadata.get("generated_at") or ""),
             "fallback_reason": str(metadata.get("fallback_reason") or ""),
@@ -3313,6 +3364,8 @@ class ReportSynthesizer:
             "provider": "raw_export",
             "requested_provider": self._requested_provider,
             "upstream_provider": self._render_backend or self._provider_name,
+            "render_backend": lineage["render_backend"],
+            "render_path": lineage["render_path"],
             "generated_at": generated_at,
             "dry_run": dry_run,
             "overall_risk": ctx.overall_risk,
@@ -4305,7 +4358,7 @@ def synthesise(
     )
     generated = synthesizer.generate(engagement_id=eid)
 
-    if output_target and output_target.suffix.lower() in {".md", ".json", ".pdf"}:
+    if output_target and output_target.suffix.lower() in {".md", ".json", ".pdf", ".html"}:
         output_target.parent.mkdir(parents=True, exist_ok=True)
         generated_family: dict[str, Path] = {}
         if generated.suffix.lower() == ".md":
@@ -4314,6 +4367,7 @@ def synthesise(
                 ".json": generated.with_suffix(".json"),
                 ".pdf": generated.with_suffix(".pdf"),
                 ".csv": generated.with_suffix(".csv"),
+                ".html": generated.with_suffix(".html"),
             }
         else:
             generated_family[generated.suffix.lower()] = generated

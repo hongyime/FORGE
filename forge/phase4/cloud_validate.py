@@ -4782,6 +4782,23 @@ def _probe_cloud_asset_result(
     return result
 
 
+def _cloud_validator_exception_result(
+    asset_type: str,
+    identifier: str,
+    exc: Exception,
+) -> CloudValidationResult:
+    provider_identifier = str(identifier or "").strip()
+    return CloudValidationResult(
+        asset_type=_normalize_asset_type(asset_type),
+        identifier=provider_identifier.lower(),
+        validation_status="UNVERIFIED",
+        validation_method="validator_exception",
+        evidence="validator exception converted to non-reportable validation receipt",
+        notes=f"validator_exception:{type(exc).__name__}",
+        provider_identifier=provider_identifier,
+    )
+
+
 def run_cloud_asset_validate(
     engagement_id: int,
     asset_type: str,
@@ -4941,27 +4958,30 @@ def run_cloud_asset_validate_batch(
         ]
     elif bounded_workers == 1:
         results: list[CloudValidationResult] = []
+        failed = 0
         for index, asset in enumerate(normalized_assets, start=1):
             try:
                 results.append(_worker(asset))
-            except Exception:
+            except Exception as exc:  # noqa: BLE001
+                failed += 1
+                results.append(_cloud_validator_exception_result(asset[0], asset[1], exc))
                 _emit_validation_progress(
                     progress_label=progress_label,
                     progress_callback=progress_callback,
                     total=len(normalized_assets),
                     workers=bounded_workers,
                     completed=index,
-                    failed=1,
+                    failed=failed,
                     started_at=started_at,
                 )
-                raise
+                continue
             _emit_validation_progress(
                 progress_label=progress_label,
                 progress_callback=progress_callback,
                 total=len(normalized_assets),
                 workers=bounded_workers,
                 completed=index,
-                failed=0,
+                failed=failed,
                 started_at=started_at,
                 )
     else:
@@ -4985,7 +5005,9 @@ def run_cloud_asset_validate_batch(
                 index = future_map[future]
                 try:
                     results[index] = future.result()
-                except Exception:
+                except Exception as exc:  # noqa: BLE001
+                    asset = normalized_assets[index]
+                    results[index] = _cloud_validator_exception_result(asset[0], asset[1], exc)
                     completed += 1
                     failed += 1
                     _emit_validation_progress(
@@ -4997,7 +5019,7 @@ def run_cloud_asset_validate_batch(
                         failed=failed,
                         started_at=started_at,
                     )
-                    raise
+                    continue
                 completed += 1
                 _emit_validation_progress(
                     progress_label=progress_label,
@@ -5037,12 +5059,17 @@ def run_cloud_asset_validate_batch(
         payload = result.to_api_dict()
         payload["engagement_id"] = engagement_id
         payload_results.append(payload)
+    failed_count = sum(
+        1
+        for result in results
+        if str(result.validation_method or "").strip().lower() == "validator_exception"
+    )
     return {
         "status": "success",
         "engagement_id": engagement_id,
         "attempted": original_count,
-        "succeeded": len(results),
-        "failed": 0,
+        "succeeded": max(0, len(results) - failed_count),
+        "failed": failed_count,
         "status_counts": status_counts,
         "results": payload_results,
     }

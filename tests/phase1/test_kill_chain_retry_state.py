@@ -1019,6 +1019,110 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
     assert skipped_metadata["ref"] == "echo"
 
 
+def test_kill_chain_cloud_asset_pending_count_is_alias_aware(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier, source)
+            VALUES (1001, 's3', 'AliasBucket', 'AliasBucket', 'fixture')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, provider_identifier,
+                 validation_status, validation_method, evidence, notes)
+            VALUES (1001, 'aws_s3', 'aliasbucket', 'AliasBucket',
+                    'UNVERIFIED', 'fixture', 'alias receipt', 'canonical alias')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        del progress_label
+        return ["" for _ in specs]
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        label = str(progress_label or "")
+        if label.endswith(".G DNS enrichment"):
+            return [{"root_domain": str(item), "queried_hosts": [], "cname_targets": [], "signals": []} for item in items]
+        if label.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if label.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        return []
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=False,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    metadata = _latest_run_metadata(db_path)
+    assert "cloud_asset_validations" not in metadata.get("pending_work_counts", {})
+
+
 def test_kill_chain_retries_failed_email_seed_rows(
     tmp_path: Path,
     monkeypatch,

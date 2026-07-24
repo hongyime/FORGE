@@ -72,6 +72,39 @@ historical notes only, not as current instructions.
   fidelity for key findings, or bounded recursive execution behavior. Do not
   edit code until the audited gap maps to intake, discovery, recursion,
   artifact analysis, validation, scoring, review, fallback, or testing/cleanup.
+- [x] Report HTML/render-path and cloud validation receipt checkpoint:
+  Phase 6 now emits a deterministic `.html` companion artifact rendered from
+  the exact decorated Markdown report, includes explicit `render_backend` and
+  `render_path` lineage in JSON/CSV/raw-export metadata, and accepts `.html`
+  report-family output targets. Cloud asset validation batches now convert
+  per-asset validator exceptions into persisted non-reportable
+  `UNVERIFIED / validator_exception` receipts without aborting other batch
+  assets or leaking raw exception text. Kill-chain pending metadata now counts
+  cloud asset validation work with the same alias-normalized asset-type join
+  used by validation claims, so legacy `s3` assets with canonical `aws_s3`
+  receipts do not keep runs falsely unstable. Verification: Phase 6 fallback
+  HTML/lineage slice passed (`6 passed`); Phase 4 exception/mixed batch slice
+  passed (`3 passed`); Phase 1 cloud retry/alias metadata slice passed
+  (`2 passed`); engagement-pipeline fallback slice passed (`3 passed`);
+  dashboard/API raw-export lineage slice passed (`3 passed`); Ruff,
+  py_compile, and `git diff --check` passed; `.forge_data/engagements` was
+  empty after tests.
+- [x] Reporting fallback contract re-verified:
+  Current Phase 6 and integration coverage proves prompt token-budget overflow,
+  runtime provider failure, explicit provider misconfiguration, local LLM
+  runtime/malformed/timeout failures, raw-export fallback cleanup, dashboard
+  report-family lineage, API download lineage, and auto-provider template
+  fallback keep deterministic output available without weakening rule-engine
+  severity or checksum metadata. Verification: focused Phase 6 fallback slice
+  passed (`10 passed`); engagement-pipeline fallback slice passed (`2 passed`);
+  dashboard/API raw-export lineage slice passed (`3 passed`).
+- [x] Fan-out J unsupported-cloud retry/skip receipt checkpoint re-verified:
+  Current kill-chain code already writes skipped `fanout_j_cloud_scan`
+  `seed_runs` receipts with `unsupported_cloud_service` for unsupported cloud
+  refs while failed executable cloud scans remain retryable and keep pending
+  work nonzero. No code change was needed. Verification:
+  `tests/phase1/test_kill_chain_retry_state.py::test_kill_chain_retries_failed_executable_cloud_scan_refs_only`
+  passed (`1 passed`).
 - [x] Dashboard key-scanner stable-proof gate checkpoint:
   Dashboard/API engagement detail key-scanner findings now use the same
   `_key_row_is_reportable` proof gate as deterministic report synthesis. Raw

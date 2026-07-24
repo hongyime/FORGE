@@ -1227,17 +1227,25 @@ def test_synthesizer_prompt_overflow_falls_back_to_template_with_lineage(
     out = synth.generate(ENGAGEMENT_ID)
     content = out.read_text(encoding="utf-8")
     payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    html_text = out.with_suffix(".html").read_text(encoding="utf-8")
     with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
         csv_rows = list(csv.DictReader(handle))
 
     assert "LLM fallback engaged: estimated prompt tokens" in content
+    assert "LLM fallback engaged: estimated prompt tokens" in html_text
     assert payload["provider"] == "template"
     assert payload["requested_provider"] == "auto"
+    assert payload["render_backend"] == "template"
+    assert payload["render_path"] == "auto -> template"
     assert "estimated prompt tokens" in str(payload["fallback_reason"] or "")
     assert payload["report_lineage"]["rendered_provider"] == "template"
+    assert payload["report_lineage"]["render_backend"] == "template"
+    assert payload["report_lineage"]["render_path"] == "auto -> template"
     assert csv_rows
     assert {row["report_requested_provider"] for row in csv_rows} == {"auto"}
     assert {row["report_rendered_provider"] for row in csv_rows} == {"template"}
+    assert {row["report_render_backend"] for row in csv_rows} == {"template"}
+    assert {row["report_render_path"] for row in csv_rows} == {"auto -> template"}
 
 
 # ── 4–12. Validator rules V-01 through V-09 ───────────────────────────────────
@@ -2136,21 +2144,30 @@ def test_synthesizer_writes_markdown_json_and_pdf_exports(
     out = synth.generate(ENGAGEMENT_ID)
     json_out = out.with_suffix(".json")
     pdf_out = out.with_suffix(".pdf")
+    html_out = out.with_suffix(".html")
 
     assert out.exists()
     assert json_out.exists()
     assert pdf_out.exists()
+    assert html_out.exists()
     assert pdf_out.read_bytes().startswith(b"%PDF-1.4")
+    html_text = html_out.read_text(encoding="utf-8")
+    assert "<!doctype html>" in html_text
+    assert "Data integrity checksum" in html_text
 
     payload = json.loads(json_out.read_text(encoding="utf-8"))
     assert payload["engagement_id"] == ENGAGEMENT_ID
     assert payload["provider"] == "template"
     assert payload["requested_provider"] == "template"
+    assert payload["render_backend"] == "template"
+    assert payload["render_path"] == "template"
     assert payload["fallback_reason"] is None
     assert payload["format"] == "markdown"
     assert payload["findings_checksum"].startswith("sha256:")
     assert payload["report_lineage"]["requested_provider"] == "template"
     assert payload["report_lineage"]["rendered_provider"] == "template"
+    assert payload["report_lineage"]["render_backend"] == "template"
+    assert payload["report_lineage"]["render_path"] == "template"
     assert payload["report_lineage"]["format"] == "markdown"
     assert payload["report_lineage"]["findings_checksum"] == payload["findings_checksum"]
     assert "## Report Generation Lineage" in payload["report_markdown"]
@@ -2216,16 +2233,21 @@ def test_synthesizer_raw_export_fallback_removes_orphan_report_markdown(
     assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.json"))
     assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.pdf"))
     assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.csv"))
+    assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.html"))
 
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["provider"] == "raw_export"
     assert payload["requested_provider"] == "template"
     assert payload["upstream_provider"] == "template"
+    assert payload["render_backend"] == "template"
+    assert payload["render_path"] == "template -> raw_export"
     assert payload["format"] == "raw_export"
     assert "disk full" in str(payload["fallback_reason"] or "")
     assert "disk full" in payload["report_write_error"]
     assert payload["report_lineage"]["requested_provider"] == "template"
     assert payload["report_lineage"]["rendered_provider"] == "raw_export"
+    assert payload["report_lineage"]["render_backend"] == "template"
+    assert payload["report_lineage"]["render_path"] == "template -> raw_export"
     assert payload["report_lineage"]["format"] == "raw_export"
     assert "disk full" in str(payload["report_lineage"]["fallback_reason"] or "")
     assert "disk full" in str(payload["report_lineage"]["write_error"])
@@ -2244,6 +2266,14 @@ def test_synthesizer_raw_export_fallback_removes_orphan_report_markdown(
         row["report_rendered_provider"]
         for row in csv_rows
     } == {"raw_export"}
+    assert {
+        row["report_render_backend"]
+        for row in csv_rows
+    } == {"template"}
+    assert {
+        row["report_render_path"]
+        for row in csv_rows
+    } == {"template -> raw_export"}
     assert {
         row["report_format"]
         for row in csv_rows
@@ -2273,6 +2303,32 @@ def test_synthesise_output_path_pdf_mirrors_report_family(
     assert target.read_bytes().startswith(b"%PDF-1.4")
     assert target.with_suffix(".md").exists()
     assert target.with_suffix(".json").exists()
+    assert target.with_suffix(".csv").exists()
+    assert target.with_suffix(".html").exists()
+
+
+def test_synthesise_output_path_html_mirrors_report_family(
+    tmp_eng_db, tmp_path, patch_confirm_approve, monkeypatch
+):
+    data_dir = tmp_path / ".forge_data" / "engagements"
+    data_dir.mkdir(parents=True)
+    (data_dir / f"{ENGAGEMENT_ID}.db").write_bytes(tmp_eng_db.read_bytes())
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    target = tmp_path / "exports" / "final_report.html"
+    out = synthesise(
+        engagement_id=ENGAGEMENT_ID,
+        output_path=str(target),
+        assume_yes=True,
+        provider="template",
+    )
+
+    assert out == target
+    assert target.exists()
+    assert "<!doctype html>" in target.read_text(encoding="utf-8")
+    assert target.with_suffix(".md").exists()
+    assert target.with_suffix(".json").exists()
+    assert target.with_suffix(".pdf").exists()
     assert target.with_suffix(".csv").exists()
 
 
@@ -2335,9 +2391,16 @@ def test_synthesizer_runtime_provider_failure_falls_back_to_template(
     assert payload["provider"] == "template"
     assert payload["requested_provider"] == "auto"
     assert payload["fallback_reason"] == "quota exceeded"
+    assert payload["render_backend"] == "template"
+    assert payload["render_path"] == "auto -> template"
     assert payload["report_lineage"]["requested_provider"] == "auto"
     assert payload["report_lineage"]["rendered_provider"] == "template"
+    assert payload["report_lineage"]["render_backend"] == "template"
+    assert payload["report_lineage"]["render_path"] == "auto -> template"
     assert payload["report_lineage"]["fallback_reason"] == "quota exceeded"
+    html_text = out.with_suffix(".html").read_text(encoding="utf-8")
+    assert "CRITICAL" in html_text
+    assert payload["findings_checksum"] in html_text
     with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
         csv_rows = list(csv.DictReader(handle))
     assert csv_rows
@@ -2353,6 +2416,14 @@ def test_synthesizer_runtime_provider_failure_falls_back_to_template(
         row["report_rendered_provider"]
         for row in csv_rows
     } == {"template"}
+    assert {
+        row["report_render_backend"]
+        for row in csv_rows
+    } == {"template"}
+    assert {
+        row["report_render_path"]
+        for row in csv_rows
+    } == {"auto -> template"}
     assert all(row["fallback_reason"] == "quota exceeded" for row in csv_rows)
 
 

@@ -10128,6 +10128,93 @@ def test_run_cloud_asset_validate_batch_persists_mixed_results(
         con.close()
 
 
+@pytest.mark.parametrize("max_workers", [1, 2])
+def test_run_cloud_asset_validate_batch_persists_validator_exception_receipts(
+    tmp_path: Path,
+    monkeypatch,
+    max_workers: int,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    def _fake_probe(
+        asset_type: str,
+        identifier: str,
+        *,
+        secret: str | None = None,
+    ) -> cloud_validate.CloudValidationResult:
+        assert secret is None
+        if identifier == "broken-project":
+            raise RuntimeError("raw secret should not persist")
+        return cloud_validate.CloudValidationResult(
+            asset_type=asset_type,
+            identifier=identifier,
+            validation_status="ACCESSIBLE_BUT_NO_DATA",
+            validation_method="stub_reachability",
+            evidence="safe stub proof",
+            provider_identifier=identifier,
+        )
+
+    monkeypatch.setattr(cloud_validate, "_probe_cloud_asset_result", _fake_probe)
+
+    result = cloud_validate.run_cloud_asset_validate_batch(
+        1001,
+        [
+            ("firebase", "broken-project"),
+            ("supabase", "working-project"),
+        ],
+        db_path,
+        max_workers=max_workers,
+    )
+
+    assert result["status"] == "success"
+    assert result["attempted"] == 2
+    assert result["succeeded"] == 1
+    assert result["failed"] == 1
+    assert result["status_counts"] == {
+        "ACCESSIBLE_BUT_NO_DATA": 1,
+        "UNVERIFIED": 1,
+    }
+    assert [row["identifier"] for row in result["results"]] == [
+        "broken-project",
+        "working-project",
+    ]
+    failed = result["results"][0]
+    assert failed["validation_status"] == "UNVERIFIED"
+    assert failed["validation_method"] == "validator_exception"
+    assert failed["notes"] == "validator_exception:RuntimeError"
+    assert "raw secret" not in json.dumps(result)
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT asset_type, identifier, validation_status, validation_method, notes
+            FROM cloud_validation_results
+            WHERE engagement_id=1001
+            ORDER BY identifier
+            """
+        ).fetchall()
+        assert rows == [
+            (
+                "firebase",
+                "broken-project",
+                "UNVERIFIED",
+                "validator_exception",
+                "validator_exception:RuntimeError",
+            ),
+            (
+                "supabase",
+                "working-project",
+                "ACCESSIBLE_BUT_NO_DATA",
+                "stub_reachability",
+                "",
+            ),
+        ]
+    finally:
+        con.close()
+
+
 def test_run_cloud_asset_validate_batch_defaults_to_sequential_validation_workers(
     tmp_path: Path,
     monkeypatch,

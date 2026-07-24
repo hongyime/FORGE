@@ -4785,7 +4785,7 @@ def report_generate(
         "--output",
         "-o",
         help=(
-            "Output path for the report family. Accepts .md, .json, .pdf, or a directory. "
+            "Output path for the report family. Accepts .md, .json, .pdf, .html, or a directory. "
             "Last-resort raw structured fallback exports emit JSON/CSV if standard report "
             "persistence fails."
         ),
@@ -9205,6 +9205,7 @@ def kill_chain(
         sweep_pending_cloud_asset_validations,
         sweep_pending_cloud_validations,
     )
+    from forge.phase4.validation_claims import _normalized_cloud_asset_type_sql  # noqa: PLC0415
 
     control_dir = cfg.data_dir / "run_control"
     control_dir.mkdir(parents=True, exist_ok=True)
@@ -14094,13 +14095,14 @@ def kill_chain(
             "cloud_asset_validations": 0
             if skip_cloud or dry_run_all
             else _pending_sql_count(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM cloud_assets ca
                 LEFT JOIN cloud_validation_results cvr
                   ON cvr.engagement_id = ca.engagement_id
-                 AND cvr.asset_type = ca.asset_type
-                 AND cvr.identifier = ca.identifier
+                 AND {_normalized_cloud_asset_type_sql("cvr.asset_type")} =
+                     {_normalized_cloud_asset_type_sql("ca.asset_type")}
+                 AND LOWER(cvr.identifier) = LOWER(ca.identifier)
                 WHERE ca.engagement_id=?
                   AND cvr.id IS NULL
                 """,

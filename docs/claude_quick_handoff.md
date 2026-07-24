@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: dashboard/API key-scanner findings now require the parsed
+Latest checkpoint: Phase 6 now emits a deterministic `.html` report-family
+artifact from the exact decorated Markdown, and report JSON/CSV/raw-export
+lineage carries explicit `render_backend` plus `render_path`. Cloud asset
+validation batches now persist non-reportable
+`UNVERIFIED / validator_exception` receipts for per-asset validator exceptions
+instead of aborting the batch, and kill-chain cloud validation pending counts
+use the same alias-normalized asset-type join as validation claims. Verification:
+Phase 6 fallback HTML/lineage slice passed (`6 passed`); Phase 4
+exception/mixed batch slice passed (`3 passed`); Phase 1 cloud retry/alias
+metadata slice passed (`2 passed`); engagement-pipeline fallback slice passed
+(`3 passed`); dashboard/API raw-export lineage slice passed (`3 passed`);
+Ruff, py_compile, and `git diff --check` passed; `.forge_data/engagements` was
+empty after tests.
+
+Current verification: reporting fallback and Fan-out J unsupported-cloud
+receipt behavior are re-verified on current `main`. Phase 6 fallback slice
+passed (`10 passed`), engagement-pipeline fallback slice passed (`2 passed`),
+dashboard/API raw-export lineage slice passed (`3 passed`), and
+`test_kill_chain_retries_failed_executable_cloud_scan_refs_only` passed
+(`1 passed`). No code changes were needed for these two verification items.
+
+Previous checkpoint: dashboard/API key-scanner findings now require the parsed
 stable-proof gate. Raw or legacy `VALIDATED:` validation-detail prefixes no
 longer bypass `_key_row_is_reportable`, so stale/bare
 Firebase/Supabase/Sentry-style key rows stay out of reportable engagement
