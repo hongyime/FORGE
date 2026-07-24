@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: non-email root promotion is complete.
+Latest checkpoint: dict-shaped scope seed backfill is complete.
+`_backfill_scope_seeds()` now accepts the same manifest object shape used by
+live scope manifests (`domains`, `domain_allowlist`, `urls`, `url_prefixes`,
+`authorized_seeds`, `allowed_seeds`, `targets`, etc.) while preserving legacy
+list scopes. Scope-domain promotion remains narrower: only `domains` and
+`domain_allowlist` contribute root-domain evidence, so URL-only scope entries
+backfill exact URL seeds without widening into root fan-out. Verification:
+compile passed; Ruff passed; focused dict/list scope and URL-only narrowing
+tests passed (`4 passed`); combined scope/root/email selector passed (`10
+passed, 768 deselected`); `.forge_data/engagements` contained `0` non-master
+engagement DBs after the run.
+
+Next checkpoint: audit remaining engagement `scope_json` readers for list-only
+assumptions. Any reader used for scheduling, scope gates, dashboards, or reports
+must either support dict/list shapes or explicitly document why it only accepts
+legacy list scope.
+
+Previous checkpoint: non-email root promotion is complete.
 Generic discovered third-party `domain`/`subdomain` seeds from weak
 URL/artifact/social pivots no longer become A/G/H/I root-domain fan-out targets
 solely because they exist. Root fan-out now allows non-email domain rows only
@@ -36,11 +53,6 @@ passed; focused weak-root synthesis and CLI dry-run routing regressions passed;
 adjacent live URL/cloud fixtures passed; affected selector passed (`16 passed,
 760 deselected`); `.forge_data/engagements` contained `0` non-master engagement
 DBs after the run.
-
-Next checkpoint: support dict-shaped engagement `scope_json` during scope seed
-backfill. `_backfill_scope_seeds()` must accept the same manifest object shape
-used by live scope manifests (`domains`, `domain_allowlist`, `urls`,
-`authorized_seeds`, etc.), not only legacy list scopes.
 
 Previous checkpoint: email-domain root promotion is complete.
 Email domains discovered from unrelated third-party addresses no longer

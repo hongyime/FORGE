@@ -273,6 +273,99 @@ def test_synthesis_engine_backfills_scope_and_promotes_discovered_seeds(tmp_path
         con.close()
 
 
+def test_synthesis_engine_backfills_dict_shaped_scope_json(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE engagements
+            SET scope_json=?
+            WHERE id=1001
+            """,
+            (
+                json.dumps(
+                    {
+                        "domains": ["*.acme.example"],
+                        "domain_allowlist": ["portal.acme.example"],
+                        "urls": ["https://downloads.acme.example/app.apk"],
+                        "authorized_seeds": ["+15551234567", "security@acme.example"],
+                        "allowed_seeds": ["@acmeops"],
+                    }
+                ),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = {
+            (str(row[0]), str(row[1]), str(row[2]))
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, source
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert ("acme.example", "domain", "scope") in seed_rows
+    assert ("portal.acme.example", "domain", "scope") in seed_rows
+    assert ("https://downloads.acme.example/app.apk", "apk_url", "scope") in seed_rows
+    assert ("+15551234567", "phone", "scope") in seed_rows
+    assert ("security@acme.example", "email", "scope") in seed_rows
+    assert ("@acmeops", "username", "scope") in seed_rows
+    assert "acme.example" in summary.root_domains
+
+
+def test_scope_domain_roots_ignore_url_only_manifest_entries(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE engagements
+            SET scope_json=?
+            WHERE id=1001
+            """,
+            (json.dumps({"urls": ["https://cdn.vendor.example/app.apk"]}),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = {
+            (str(row[0]), str(row[1]), str(row[2]))
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, source
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert ("https://cdn.vendor.example/app.apk", "apk_url", "scope") in seed_rows
+    assert "vendor.example" not in summary.root_domains
+
+
 def test_synthesis_engine_does_not_promote_unrelated_email_domains(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path)

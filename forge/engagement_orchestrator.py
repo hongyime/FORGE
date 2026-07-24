@@ -12079,9 +12079,9 @@ class EngagementSynthesisEngine:
             "SELECT scope_json FROM engagements WHERE id=?",
             (self._engagement_id,),
         ).fetchone()
-        scope_entries = []
+        scope_entries: list[object] = []
         if row is not None and row[0]:
-            scope_entries = _safe_json_loads(str(row[0])) or []
+            scope_entries = self._scope_seed_entries(_safe_json_loads(str(row[0])) or [])
         scope_candidate_batches = self._run_ordered_local_batch(
             scope_entries,
             self._scope_seed_candidate,
@@ -12359,6 +12359,20 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _scope_domainish_entries(payload: object) -> list[object]:
+        if isinstance(payload, list):
+            return list(payload)
+        if not isinstance(payload, dict):
+            return []
+        entries: list[object] = []
+        for key in ("domains", "domain_allowlist"):
+            value = payload.get(key)
+            if value is None:
+                continue
+            entries.extend(value if isinstance(value, list) else [value])
+        return entries
+
+    @staticmethod
+    def _scope_seed_entries(payload: object) -> list[object]:
         if isinstance(payload, list):
             return list(payload)
         if not isinstance(payload, dict):
