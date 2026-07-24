@@ -2078,6 +2078,9 @@ def test_launch_engagement_kill_chain_route(tmp_path: Path, monkeypatch) -> None
         assert payload["primary_seed"] == "acme.example"
         assert payload["related_seeds"] == ["+15551234567", "security@acme.example"]
         assert Path(payload["log_path"]).exists()
+        assert payload["max_iter"] == 2
+        assert payload["skip_cloud"] is True
+        assert payload["skip_keyscan"] is True
 
         command = launched["command"]
         assert command[1:5] == ["-m", "forge.cli", "--no-tor", "kill-chain"]
@@ -2422,6 +2425,9 @@ def test_restart_engagement_kill_chain_route_publishes_progress_event(tmp_path: 
         assert payload["status"] == "restarted"
         assert payload["pid"] == 62626
         assert payload["resume_enabled"] is False
+        assert payload["max_iter"] == 4
+        assert payload["skip_cloud"] is True
+        assert payload["skip_keyscan"] is True
 
         command = launched["command"]
         assert command[1:5] == ["-m", "forge.cli", "--no-tor", "kill-chain"]
@@ -2995,6 +3001,9 @@ def test_engagement_pause_and_resume_routes(tmp_path: Path, monkeypatch) -> None
         assert resume_payload["status"] == "resumed"
         assert resume_payload["pid"] == 51515
         assert resume_payload["resume_enabled"] is True
+        assert resume_payload["max_iter"] == 4
+        assert resume_payload["skip_cloud"] is True
+        assert resume_payload["skip_keyscan"] is True
         command = launched["command"]
         assert command[1:5] == ["-m", "forge.cli", "--no-tor", "kill-chain"]
         assert "--no-resume" not in command

@@ -91,6 +91,16 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Run launch/control response reviewability checkpoint:
+  Live launch/resume/restart route responses now echo normalized execution
+  switches as structured fields: `max_iter`, `skip_cloud`, and `skip_keyscan`.
+  This matches the progress-event metadata and keeps operators/dashboard
+  clients from parsing `command_preview` to review the requested kill-chain
+  shape. Verification: compile passed; Ruff passed; focused launch/restart/
+  resume integration slice passed (`9 passed`). Claude review could not run
+  because OAuth was expired; Codex CLI fallback rejected `gpt-5.2` for this
+  account, so the fix was locally audited and tested. Handoff:
+  `.claude/handoffs/2026-07-24-run-launch-response-reviewability.md`.
 - [x] Live API audit-manifest verification parity checkpoint:
   Live `/api/engagements` summaries now use the same verified latest-run audit
   manifest default as static dashboard/detail payloads, and

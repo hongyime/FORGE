@@ -1811,6 +1811,9 @@ def create_app() -> Any:
             "auto_run_detected": auto_run_detected,
             "roe_id": roe_id,
             "scope_manifest": scope_manifest,
+            "skip_cloud": skip_cloud,
+            "skip_keyscan": skip_keyscan,
+            "max_iter": max_iter,
             "report_provider": report_provider or "default",
             "report_max_loops": report_max_loops,
         }

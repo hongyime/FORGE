@@ -25,7 +25,18 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: live API audit-manifest verification parity is complete.
+Latest checkpoint: run launch/control response reviewability is complete. Live
+launch/resume/restart route responses now echo normalized execution switches as
+structured fields: `max_iter`, `skip_cloud`, and `skip_keyscan`. This matches
+the progress-event metadata and keeps operators/dashboard clients from parsing
+`command_preview` to review the requested kill-chain shape. Verification:
+compile/Ruff passed; focused launch/restart/resume integration slice passed (`9
+passed`). Claude review could not run because OAuth was expired; Codex CLI
+fallback rejected `gpt-5.2` for this account, so the fix was locally audited
+and tested. Handoff:
+`.claude/handoffs/2026-07-24-run-launch-response-reviewability.md`.
+
+Previous checkpoint: live API audit-manifest verification parity is complete.
 Live `/api/engagements` summaries now use the same verified latest-run audit
 manifest default as static dashboard/detail payloads, and
 `/api/engagements/{ref}/runs` verifies manifests by default. Operators can
