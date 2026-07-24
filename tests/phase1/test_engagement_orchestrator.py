@@ -87913,6 +87913,29 @@ def test_kill_chain_parallel_batches_cloud_target_prep(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": [
+                    "acme.example",
+                    "alpha.supabase.co",
+                    "bravo.firebaseio.com",
+                    "charlie.vercel.app",
+                    "delta.netlify.app",
+                ],
+                "urls": [
+                    "https://alpha.supabase.co",
+                    "https://bravo.firebaseio.com",
+                    "https://charlie.vercel.app",
+                    "https://delta.netlify.app",
+                ],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
@@ -88050,6 +88073,8 @@ def test_kill_chain_parallel_batches_cloud_target_prep(
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=2,
@@ -88125,6 +88150,41 @@ def test_kill_chain_parallel_batches_cloud_ref_prep(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": [
+                    "acme.example",
+                    "portal.acme.example",
+                    "docs.acme.example",
+                    "alpha.supabase.co",
+                    "bravo.firebaseio.com",
+                    "charlie.vercel.app",
+                    "acmestatic.z22.web.core.windows.net",
+                    "delta.supabase.co",
+                    "echo.netlify.app",
+                    "foxtrot.firebaseio.com",
+                    "bucket.s3.amazonaws.com",
+                ],
+                "urls": [
+                    "https://portal.acme.example/app",
+                    "https://docs.acme.example/api",
+                    "https://alpha.supabase.co",
+                    "https://bravo.firebaseio.com",
+                    "https://charlie.vercel.app",
+                    "https://acmestatic.z22.web.core.windows.net/index.html",
+                    "https://delta.supabase.co",
+                    "https://echo.netlify.app",
+                    "https://foxtrot.firebaseio.com",
+                    "https://bucket.s3.amazonaws.com",
+                ],
+                "authorized_seeds": ["acme.example", "acmestatic/$web"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     parse_batch_calls: list[tuple[str, int, int]] = []
     cloud_validation_items: list[tuple[str, str]] = []
@@ -88278,6 +88338,8 @@ def test_kill_chain_parallel_batches_cloud_ref_prep(
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=2,
@@ -89684,6 +89746,16 @@ def test_kill_chain_parallel_batches_module_seed_run_success_failure_finalize(
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     _bootstrap_engagement(db_path)
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "authorized_seeds": ["@alicehandle", "+15550000001"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
@@ -89712,6 +89784,8 @@ def test_kill_chain_parallel_batches_module_seed_run_success_failure_finalize(
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=True,
         skip_keyscan=True,
         parallel_fanout=2,

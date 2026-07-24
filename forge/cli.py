@@ -11022,6 +11022,16 @@ def kill_chain(
         normalized_value = str(normalizer(str(item or "")) or "").strip()
         return normalized_value or None
 
+    def _successful_dispatch_items(
+        items: Sequence[Any],
+        returncodes: Sequence[int],
+    ) -> list[Any]:
+        return [
+            item
+            for item, returncode in zip(items, returncodes)
+            if int(returncode) == 0
+        ]
+
     def _apply_processed_set_item(
         item: str | None,
         *,
@@ -12947,11 +12957,14 @@ def kill_chain(
         item: dict[str, object],
         *,
         processed_social_handles_out: set[str],
-    ) -> str:
+    ) -> str | None:
         handle = str(item.get("handle") or "")
+        chain_status = str(item.get("chain_status") or "")
         _apply_one_shot_seed_run_entry(
             cast(dict[str, object] | None, item.get("seed_run_entry"))
         )
+        if not handle or chain_status not in {"completed", "skipped"}:
+            return None
         processed_social_handles_out.add(handle)
         return handle
 
@@ -12976,7 +12989,6 @@ def kill_chain(
                     FROM engagement_seeds
                     WHERE engagement_id=?
                       AND seed_type=?
-                      AND COALESCE(status, 'pending') != 'failed'
                     """,
                     (engagement_id, seed_type),
                 ).fetchall()
@@ -13048,7 +13060,6 @@ def kill_chain(
                     FROM engagement_seeds
                     WHERE engagement_id=?
                       AND seed_type=?
-                      AND COALESCE(status, 'pending') != 'failed'
                     ORDER BY
                       COALESCE(depth, 0) ASC,
                       CASE LOWER(COALESCE(source, ''))
@@ -15017,26 +15028,30 @@ def kill_chain(
                     f"{iteration}.E5 social-handle finalize",
                     "[dim]sequential dispatch x1[/dim]  [dim]seed-run finalization order preserved[/dim]",
                 )
-            _run_inprocess_batch(
-                prepared_social_handle_results,
-                lambda item: _apply_social_handle_chain_result(
-                    item,
-                    processed_social_handles_out=processed_social_handles,
-                ),
-                max_workers=1,
-                progress_label=f"{iteration}.E5 social-handle finalize",
-                progress_callback=_record_batch_progress,
-            )
-            if len(social_handle_batch) > 1 and parallel_workers > 1:
+            handled_social_handles = [
+                handle
+                for handle in _run_inprocess_batch(
+                    prepared_social_handle_results,
+                    lambda item: _apply_social_handle_chain_result(
+                        item,
+                        processed_social_handles_out=processed_social_handles,
+                    ),
+                    max_workers=1,
+                    progress_label=f"{iteration}.E5 social-handle finalize",
+                    progress_callback=_record_batch_progress,
+                )
+                if handle
+            ]
+            if len(handled_social_handles) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.E5 handled username processed-set prep",
                     (
                         f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(social_handle_batch))}[/dim]"
+                        f"{min(parallel_workers, len(handled_social_handles))}[/dim]"
                     ),
                 )
             prepared_social_handle_username_updates = _run_inprocess_batch(
-                social_handle_batch,
+                handled_social_handles,
                 lambda item: _prepare_processed_set_item(
                     item,
                     normalizer=_normalize_username_value,
@@ -15475,23 +15490,27 @@ def kill_chain(
                     f"{iteration}.K username fan-out",
                     f"[dim]parallel dispatch x{min(parallel_workers, len(username_specs))}[/dim]",
                 )
-            _run_module_batch(
+            username_returncodes = _run_module_batch(
                 username_specs,
                 _run_module,
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.K username fan-out",
                 progress_callback=_record_batch_progress,
             )
-            if len(username_batch) > 1 and parallel_workers > 1:
+            successful_username_batch = _successful_dispatch_items(
+                username_batch,
+                username_returncodes,
+            )
+            if len(successful_username_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.K username processed-seed prep",
                     (
                         f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(username_batch))}[/dim]"
+                        f"{min(parallel_workers, len(successful_username_batch))}[/dim]"
                     ),
                 )
             prepared_username_updates = _run_inprocess_batch(
-                username_batch,
+                successful_username_batch,
                 lambda item: _prepare_processed_set_item(
                     item,
                     normalizer=_normalize_username_value,
@@ -15609,23 +15628,27 @@ def kill_chain(
                     f"{iteration}.L phone fan-out",
                     f"[dim]parallel dispatch x{min(parallel_workers, len(phone_specs))}[/dim]",
                 )
-            _run_module_batch(
+            phone_returncodes = _run_module_batch(
                 phone_specs,
                 _run_module,
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.L phone fan-out",
                 progress_callback=_record_batch_progress,
             )
-            if len(phone_batch) > 1 and parallel_workers > 1:
+            successful_phone_batch = _successful_dispatch_items(
+                phone_batch,
+                phone_returncodes,
+            )
+            if len(successful_phone_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.L phone processed-seed prep",
                     (
                         f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(phone_batch))}[/dim]"
+                        f"{min(parallel_workers, len(successful_phone_batch))}[/dim]"
                     ),
                 )
             prepared_phone_updates = _run_inprocess_batch(
-                phone_batch,
+                successful_phone_batch,
                 lambda item: _prepare_processed_set_item(
                     item,
                     normalizer=_resume_normalize,
@@ -15783,23 +15806,27 @@ def kill_chain(
                         f"{min(_provider_limited_worker_count(ip_specs, parallel_workers), len(ip_specs))}[/dim]"
                     ),
                 )
-            _run_module_batch(
+            ip_returncodes = _run_module_batch(
                 ip_specs,
                 _run_module,
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.O ip fan-out",
                 progress_callback=_record_batch_progress,
             )
-            if len(ip_batch) > 1 and parallel_workers > 1:
+            successful_ip_batch = _successful_dispatch_items(
+                ip_batch,
+                ip_returncodes,
+            )
+            if len(successful_ip_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.O ip processed-seed prep",
                     (
                         f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(ip_batch))}[/dim]"
+                        f"{min(parallel_workers, len(successful_ip_batch))}[/dim]"
                     ),
                 )
             prepared_ip_updates = _run_inprocess_batch(
-                ip_batch,
+                successful_ip_batch,
                 lambda item: _prepare_processed_set_item(
                     item[0],
                     normalizer=_resume_normalize,
@@ -15917,23 +15944,27 @@ def kill_chain(
                     f"{iteration}.M name fan-out",
                     f"[dim]parallel dispatch x{min(parallel_workers, len(name_specs))}[/dim]",
                 )
-            _run_module_batch(
+            name_returncodes = _run_module_batch(
                 name_specs,
                 _run_module,
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.M name fan-out",
                 progress_callback=_record_batch_progress,
             )
-            if len(name_batch) > 1 and parallel_workers > 1:
+            successful_name_batch = _successful_dispatch_items(
+                name_batch,
+                name_returncodes,
+            )
+            if len(successful_name_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.M name processed-seed prep",
                     (
                         f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(name_batch))}[/dim]"
+                        f"{min(parallel_workers, len(successful_name_batch))}[/dim]"
                     ),
                 )
             prepared_name_updates = _run_inprocess_batch(
-                name_batch,
+                successful_name_batch,
                 lambda item: _prepare_processed_set_item(
                     item,
                     normalizer=_resume_normalize,
@@ -16051,23 +16082,27 @@ def kill_chain(
                     f"{iteration}.N company fan-out",
                     f"[dim]parallel dispatch x{min(parallel_workers, len(company_specs))}[/dim]",
                 )
-            _run_module_batch(
+            company_returncodes = _run_module_batch(
                 company_specs,
                 _run_module,
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.N company fan-out",
                 progress_callback=_record_batch_progress,
             )
-            if len(company_batch) > 1 and parallel_workers > 1:
+            successful_company_batch = _successful_dispatch_items(
+                company_batch,
+                company_returncodes,
+            )
+            if len(successful_company_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.N company processed-seed prep",
                     (
                         f"[dim]parallel parse x"
-                        f"{min(parallel_workers, len(company_batch))}[/dim]"
+                        f"{min(parallel_workers, len(successful_company_batch))}[/dim]"
                     ),
                 )
             prepared_company_updates = _run_inprocess_batch(
-                company_batch,
+                successful_company_batch,
                 lambda item: _prepare_processed_set_item(
                     item,
                     normalizer=_resume_normalize,
@@ -17331,13 +17366,24 @@ def kill_chain(
                     progress_callback=_record_batch_progress,
                     order_note="cloud-spec order preserved",
                 )
+                cloud_dispatch_pairs = [
+                    (target, spec)
+                    for target, spec in zip(pending_cloud_targets, prepared_j_specs)
+                    if spec is not None
+                ]
+                skipped_cloud_targets = [
+                    target
+                    for target, spec in zip(pending_cloud_targets, prepared_j_specs)
+                    if spec is None
+                ]
                 if len(j_specs) > 1 and parallel_workers > 1:
                     _log(
                         f"{iteration}.J cloud scans",
                         f"[dim]parallel dispatch x{min(parallel_workers, len(j_specs))}[/dim]",
                     )
+                cloud_scan_returncodes: list[int] = []
                 if j_specs:
-                    _run_module_batch(
+                    cloud_scan_returncodes = _run_module_batch(
                         j_specs,
                         _run_module,
                         max_workers=parallel_workers,
@@ -17399,7 +17445,7 @@ def kill_chain(
                         _log(
                             f"{iteration}.J cloud validation result log",
                             "[dim]sequential dispatch x1[/dim]  [dim]validation log order preserved[/dim]",
-                        )
+                    )
                     _run_inprocess_batch(
                         prepared_validation_logs,
                         _apply_prepared_log_entry,
@@ -17407,16 +17453,23 @@ def kill_chain(
                         progress_label=f"{iteration}.J cloud validation result log",
                         progress_callback=_record_batch_progress,
                     )
-                if len(pending_cloud_targets) > 1 and parallel_workers > 1:
+                processed_cloud_targets = [
+                    *skipped_cloud_targets,
+                    *_successful_dispatch_items(
+                        [target for target, _spec in cloud_dispatch_pairs],
+                        cloud_scan_returncodes,
+                    ),
+                ]
+                if len(processed_cloud_targets) > 1 and parallel_workers > 1:
                     _log(
                         f"{iteration}.J cloud processed-ref prep",
                         (
                             f"[dim]parallel parse x"
-                            f"{min(parallel_workers, len(pending_cloud_targets))}[/dim]"
+                            f"{min(parallel_workers, len(processed_cloud_targets))}[/dim]"
                         ),
                     )
                 prepared_cloud_processed_ref_updates = _run_inprocess_batch(
-                    pending_cloud_targets,
+                    processed_cloud_targets,
                     lambda item: _prepare_processed_set_item(
                         str(item["key"]),
                         normalizer=lambda value: value,

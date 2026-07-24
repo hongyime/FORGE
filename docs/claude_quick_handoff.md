@@ -25,7 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: final report finalization fallback is complete. Kill-chain
+Latest checkpoint: recursive processed-state retry gating is complete.
+Recursive E5 social-handle chains, username, phone, IP, name, company, and
+executable cloud scan refs now enter processed sets only after completed or
+intentional skipped outcomes. Failed subprocesses remain pending for later
+iterations, failed engagement seed rows are reloadable, scope-denied cloud refs
+still persist as skipped, and no-executable cloud refs are intentional skips to
+avoid infinite loops. Verification: focused retry regressions passed (`4
+passed`), adjacent cloud/seed fan-out slice passed (`8 passed`), Ruff passed,
+py_compile passed, and `git diff --check` was whitespace-clean.
+
+Next checkpoint: audit remaining processed-set families outside the recursive
+social/phone/IP/name/company/cloud-ref slice (email, URL, keyscan/org targets,
+root-domain resume sets) and patch only real failure-suppression bugs that can
+permanently hide retryable work.
+
+Previous checkpoint: final report finalization fallback is complete. Kill-chain
 finalization now verifies the report family after subprocess-backed
 `report generate`; failed or artifact-less report subprocesses force direct
 `provider="template"` synthesis, raw JSON/CSV fallback artifacts are accepted,
@@ -34,10 +49,6 @@ fallback audit/run metadata is recorded, and no-artifact terminal runs finish as
 fallback/telemetry/raw-export tests passed (`5 passed`), including
 fallback-failure and empty-artifact negative regressions; Ruff touched files,
 py_compile touched files, and `git diff --check`.
-
-Next checkpoint: only mark recursive social/phone/IP/name/company/cloud-ref
-chains processed on completed or intentional skipped outcomes, so failed chains
-retry in later iterations instead of being permanently suppressed.
 
 Previous checkpoint: scheduled scope-denial reviewability is complete. Static
 dashboard detail JSON/HTML and the live engagement detail API expose old

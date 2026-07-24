@@ -66,9 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: only mark recursive social/phone/IP/name/company/cloud-ref
-  chains processed on completed or intentional skipped outcomes, so failed
-  chains retry in later iterations instead of being permanently suppressed.
+- [ ] Next checkpoint: audit remaining processed-set families outside the
+  recursive social/phone/IP/name/company/cloud-ref slice (email, URL,
+  keyscan/org targets, root-domain resume sets) and patch only real
+  failure-suppression bugs that can permanently hide retryable work.
+- [x] Recursive processed-state retry checkpoint:
+  Recursive E5 social-handle chains, username, phone, IP, name, company, and
+  executable cloud scan refs now enter processed sets only after completed or
+  intentional skipped outcomes. Failed subprocesses remain pending for later
+  iterations, failed engagement seed rows are reloadable, scope-denied cloud
+  refs still persist as skipped, and no-executable cloud refs are treated as
+  intentional skips to avoid infinite loops. Verification: focused retry
+  regressions passed (`4 passed`), adjacent cloud/seed fan-out slice passed
+  (`8 passed`), Ruff passed, py_compile passed, and `git diff --check` was
+  whitespace-clean.
 - [x] Final report finalization fallback checkpoint:
   Kill-chain finalization now verifies the report family after the
   subprocess-backed `report generate` step. If that step fails or creates no
