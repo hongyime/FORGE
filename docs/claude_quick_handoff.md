@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: automation/playbook ROE gating is complete.
+Latest checkpoint: scheduled validation ROE/scope gating is complete.
+Distributed `validate` tasks now require non-empty `roe_id` and
+`scope_manifest` before `run_cloud_validate()` can execute. Missing ROE,
+missing manifest, and ROE/manifest mismatch all fail before provider
+validation, while existing scope-manifest key-row allow/deny behavior remains
+intact once both controls are present. Verification: compile passed; Ruff
+passed; full distributed runnable scope file passed (`9 passed`); focused
+scheduled key-validation selector passed (`2 passed, 3 deselected`); full
+key-validation runtime file passed (`5 passed`).
+
+Next checkpoint: perform a fresh current-code deterministic gap audit and pick
+one compact implementation/test task that advances intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
+The scheduled validation ROE/scope gate is now closed; do not reopen it unless
+a regression is found.
+
+Previous checkpoint: automation/playbook ROE gating is complete.
 `PlaybookEngine` now refuses to schedule playbooks unless the payload carries
 both non-empty `roe_id` and `scope_manifest`; automation event handlers suppress
 chained, WAF-evasion, RCE-hunter, and zero-to-DA follow-ups without inherited
@@ -37,12 +53,6 @@ compile passed; Ruff passed; focused playbook/API selectors passed (`5 passed,
 15 deselected`; `9 passed, 39 deselected`); full playbook integration file
 passed (`21 passed`); full engagement API integration file passed (`48
 passed`).
-
-Next checkpoint: perform a fresh current-code deterministic gap audit and pick
-one compact implementation/test task that advances intake, discovery,
-recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
-The automation/playbook ROE gate is now closed; do not reopen it unless a
-regression is found.
 
 Previous checkpoint: Web API cloud artifact provenance parity is complete.
 `/api/engagements/{id}/assets` now includes `cloud_assets` inventory rows with

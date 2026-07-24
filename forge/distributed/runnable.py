@@ -22,7 +22,13 @@ from forge.phase4.cloud_validate import (
 from forge.phase4.rce_hunter import run_safe_check, run_weaponize
 
 
-_SENSITIVE_SCHEDULED_TASK_TYPES = {"auth-bypass", "safe_check", "weaponize", "spray"}
+_SENSITIVE_SCHEDULED_TASK_TYPES = {
+    "auth-bypass",
+    "safe_check",
+    "spray",
+    "validate",
+    "weaponize",
+}
 _TARGET_SCOPED_TASK_TYPES = {
     "auth-bypass",
     "crawl",
@@ -114,8 +120,10 @@ def _load_scheduled_scope_manifest(
     db_path: Path,
 ) -> dict[str, Any] | None:
     manifest_ref = _scope_manifest_ref(payload)
-    require_scope_manifest = _payload_bool(payload.get("require_scope_manifest")) or (
-        str(os.environ.get("FORGE_REQUIRE_SCOPE_MANIFEST", "")).strip().lower()
+    require_scope_manifest = (
+        task_type == "validate"
+        or _payload_bool(payload.get("require_scope_manifest"))
+        or str(os.environ.get("FORGE_REQUIRE_SCOPE_MANIFEST", "")).strip().lower()
         in {"1", "true", "yes", "on"}
     )
     if not manifest_ref:

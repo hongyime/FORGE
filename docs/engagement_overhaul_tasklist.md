@@ -94,8 +94,17 @@ sentences as historical notes only, not as current instructions.
 - [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
   pick one compact implementation/test task that advances intake, discovery,
   recursion, artifact analysis, validation, scoring, review, fallback, or
-  cleanup. The automation/playbook ROE gate is now closed; do not reopen it
-  unless a regression is found.
+  cleanup. The scheduled validation ROE/scope gate is now closed; do not reopen
+  it unless a regression is found.
+- [x] Scheduled validation ROE/scope gate checkpoint:
+  Distributed `validate` tasks now require non-empty `roe_id` and
+  `scope_manifest` before `run_cloud_validate()` can execute. Missing ROE,
+  missing manifest, and ROE/manifest mismatch all fail before provider
+  validation, while existing scope-manifest key-row allow/deny behavior remains
+  intact once both controls are present. Verification: compile passed; Ruff
+  passed; full distributed runnable scope file passed (`9 passed`); focused
+  scheduled key-validation selector passed (`2 passed, 3 deselected`); full
+  key-validation runtime file passed (`5 passed`).
 - [x] Automation/playbook ROE gate checkpoint:
   `PlaybookEngine` now refuses to schedule playbooks unless the payload carries
   both non-empty `roe_id` and `scope_manifest`; automation event handlers

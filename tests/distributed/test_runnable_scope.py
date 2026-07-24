@@ -189,6 +189,76 @@ def test_scheduled_ports_requires_scope_and_passes_scope_override(
         )
 
 
+def test_scheduled_validate_requires_roe_before_provider_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+
+    def _fail_validate(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("scheduled validation without ROE must not reach provider validation")
+
+    monkeypatch.setattr(runnable, "run_cloud_validate", _fail_validate)
+
+    with pytest.raises(RuntimeError, match="roe_id_required"):
+        runnable.run_scheduled_task(
+            1001,
+            "validate:81",
+            {"task_type": "validate", "key_id": 81},
+            db_path,
+        )
+
+
+def test_scheduled_validate_requires_scope_manifest_before_provider_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+
+    def _fail_validate(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("scheduled validation without manifest must not reach provider validation")
+
+    monkeypatch.setattr(runnable, "run_cloud_validate", _fail_validate)
+
+    with pytest.raises(RuntimeError, match="scope_manifest_required"):
+        runnable.run_scheduled_task(
+            1001,
+            "validate:81",
+            {"task_type": "validate", "key_id": 81, "roe_id": "ROE-ACME-2026-07"},
+            db_path,
+        )
+
+
+def test_scheduled_validate_rejects_mismatched_scope_manifest_before_provider_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+
+    def _fail_validate(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("mismatched scheduled validation must not reach provider validation")
+
+    monkeypatch.setattr(runnable, "run_cloud_validate", _fail_validate)
+
+    with pytest.raises(RuntimeError, match="roe_id_scope_manifest_mismatch"):
+        runnable.run_scheduled_task(
+            1001,
+            "validate:81",
+            {
+                "task_type": "validate",
+                "key_id": 81,
+                "roe_id": "ROE-ACME-2026-07",
+                "scope_manifest": json.dumps(
+                    {"roe_id": "ROE-OTHER-2026-07", "domains": ["allowed.example"]}
+                ),
+            },
+            db_path,
+        )
+
+
 def test_enhanced_port_scan_scope_override_skips_drifted_host(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
