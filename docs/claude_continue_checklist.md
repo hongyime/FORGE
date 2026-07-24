@@ -66,11 +66,22 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
-  pick one compact implementation/test task that advances intake, discovery,
-  recursion, artifact analysis, validation, scoring, review, fallback, or
-  cleanup. The report-summary validation inventory parity checkpoint is now
-  closed; do not reopen it unless a regression is found.
+- [ ] Next checkpoint: add `distributed_tasks` to engagement detail
+  counts/sections for static dashboard JSON and web API detail review. Surface
+  safe scheduling state only: task key, status, priority, worker ID, error,
+  timestamps, task type, and boolean ROE/scope-manifest presence. Do not expose
+  full task payloads or scope manifest contents.
+- [x] Explicit cloud-leak validation scheduling checkpoint:
+  `PlaybookEngine.run_cloud_leak_loop()` now fails closed without ROE/scope
+  context and, when explicitly invoked with an authorized key finding ID, queues
+  the existing distributed `validate` worker task with `require_roe` and
+  `require_scope_manifest` set. This replaces a silent skip in the direct
+  playbook method without enabling cloud resource enumeration, sensitive-file
+  extraction, event-loop cloud-secret triggers, breach-credential escalation,
+  provider-call expansion, scope relaxation, or destructive behavior.
+  Verification: compile passed; Ruff passed; focused cloud-leak playbook
+  selector passed (`6 passed, 17 deselected`); full playbook plus distributed
+  runnable scope suites passed (`32 passed`).
 - [x] Report-summary validation inventory parity checkpoint:
   `report_summary` and every `report_history` item now include compact
   validation review fields derived from the generated report JSON context:

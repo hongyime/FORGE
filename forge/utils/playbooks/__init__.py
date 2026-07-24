@@ -104,12 +104,28 @@ class PlaybookEngine:
         ]
         self._execute_steps(engagement_id, steps, context=context)
 
-    def run_cloud_leak_loop(self, engagement_id: int, key_id: int):
-        import logging
-        logging.getLogger(__name__).warning(
-            "Cloud Leak playbook (key_id=%d) is not supported in this cycle: "
-            "cloud-secret model not yet implemented.  Skipping.",
-            key_id,
+    def run_cloud_leak_loop(
+        self,
+        engagement_id: int,
+        key_id: int,
+        context: Mapping[str, Any] | None = None,
+    ):
+        payload = inherit_roe_scope_context(
+            context or {},
+            {
+                "task_type": "validate",
+                "key_id": int(key_id),
+                "require_roe": True,
+                "require_scope_manifest": True,
+            },
+        )
+        require_roe_scope_context(payload)
+        self.scheduler.schedule(
+            ScheduledTask(
+                engagement_id=engagement_id,
+                task_key=f"validate:key:{int(key_id)}:{int(time.time()*1000)}",
+                payload=payload,
+            )
         )
 
     def run_waf_evasion_recon(

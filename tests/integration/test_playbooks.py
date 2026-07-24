@@ -202,6 +202,42 @@ def test_playbook_steps_propagate_roe_scope_context(tmp_path):
     assert remaining_params["require_scope_manifest"] is False
 
 
+def test_cloud_leak_loop_requires_roe_scope_context():
+    scheduler = RecordingScheduler()
+    playbooks = PlaybookEngine(scheduler)
+
+    with pytest.raises(PlaybookAuthorizationError, match="requires roe_id and scope_manifest"):
+        playbooks.run_cloud_leak_loop(7, 82)
+
+    assert scheduler.tasks == []
+
+
+def test_cloud_leak_loop_schedules_key_validation_with_roe_scope_context():
+    scheduler = RecordingScheduler()
+    playbooks = PlaybookEngine(scheduler)
+    scope_manifest = {"roe_id": "roe-parent", "domains": ["linked-firebase"]}
+
+    playbooks.run_cloud_leak_loop(
+        7,
+        82,
+        context={
+            "roe_id": "roe-parent",
+            "scope_manifest": scope_manifest,
+        },
+    )
+
+    assert len(scheduler.tasks) == 1
+    task = scheduler.tasks[0]
+    assert task.engagement_id == 7
+    assert task.task_key.startswith("validate:key:82:")
+    assert task.payload["task_type"] == "validate"
+    assert task.payload["key_id"] == 82
+    assert task.payload["roe_id"] == "roe-parent"
+    assert task.payload["scope_manifest"] == scope_manifest
+    assert task.payload["require_roe"] is True
+    assert task.payload["require_scope_manifest"] is True
+
+
 def test_automation_triggered_playbook_preserves_roe_scope_context(tmp_path):
     db_path = tmp_path / "engagement.db"
     context = {
