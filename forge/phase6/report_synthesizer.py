@@ -230,6 +230,7 @@ class ReportContext:
     osint:               OsintContext
     exploits:            ExploitContext
     post_exploitation:   PostExploitContext
+    cloud_asset_inventory: list[dict[str, Any]] = field(default_factory=list)
     cloud_validation_inventory: list[dict[str, Any]] = field(default_factory=list)
     seed_summary:        SeedSummaryContext = field(default_factory=SeedSummaryContext)
     ongoing_intelligence: OngoingIntelligenceContext = field(
@@ -294,6 +295,7 @@ class ContextBuilder:
                 osint               = self._load_osint(con),
                 exploits            = self._load_exploits(con),
                 post_exploitation   = self._load_post_exploit(con),
+                cloud_asset_inventory=self._cloud_asset_inventory(con),
                 cloud_validation_inventory=self._cloud_validation_inventory(con),
                 seed_summary        = self._load_seed_summary(con),
                 ongoing_intelligence= self._load_ongoing_intel(con),
@@ -724,6 +726,64 @@ class ContextBuilder:
             }
             for (asset_type, identifier), item in metadata.items()
         ]
+        inventory.sort(key=lambda item: (str(item["asset_type"]), str(item["identifier"])))
+        return inventory
+
+    def _cloud_asset_inventory(self, con: sqlite3.Connection) -> list[dict[str, Any]]:
+        columns = self._table_columns(con, "cloud_assets")
+        if not {"asset_type", "identifier"}.issubset(columns):
+            return []
+        provider_expr = (
+            "COALESCE(NULLIF(provider_identifier, ''), identifier) AS provider_identifier"
+            if "provider_identifier" in columns
+            else "identifier AS provider_identifier"
+        )
+        source_expr = "source" if "source" in columns else "NULL AS source"
+        discovered_expr = "discovered_at" if "discovered_at" in columns else "NULL AS discovered_at"
+        try:
+            rows = con.execute(
+                f"""
+                SELECT asset_type,
+                       identifier,
+                       {provider_expr},
+                       {source_expr},
+                       {discovered_expr}
+                FROM cloud_assets
+                WHERE engagement_id=?
+                """,
+                (self._eid,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+
+        validation_metadata = self._cloud_validation_metadata_index(con)
+        inventory: list[dict[str, Any]] = []
+        for row in rows:
+            stored_type = str(row["asset_type"] or "").strip().lower()
+            asset_type = self._normalize_validation_asset_type(stored_type)
+            identifier = str(row["identifier"] or "").strip().lower()
+            if not asset_type or not identifier:
+                continue
+            validation = validation_metadata.get((asset_type, identifier), {})
+            inventory.append(
+                {
+                    "asset_type": asset_type,
+                    "stored_asset_type": stored_type,
+                    "identifier": identifier,
+                    "provider_identifier": str(row["provider_identifier"] or row["identifier"] or "").strip(),
+                    "source": str(row["source"] or "").strip(),
+                    "discovered_at": str(row["discovered_at"] or "").strip(),
+                    "validation_status": str(validation.get("validation_status") or "UNVALIDATED"),
+                    "stored_validation_status": str(
+                        validation.get("stored_validation_status") or "UNVALIDATED"
+                    ),
+                    "validation_reportable": validation.get("validation_reportable") is True,
+                    "method": str(validation.get("validation_method") or ""),
+                    "checked_at": str(validation.get("validation_checked_at") or ""),
+                    "notes": str(validation.get("validation_notes") or ""),
+                    "evidence_summary": str(validation.get("validation_evidence_summary") or ""),
+                }
+            )
         inventory.sort(key=lambda item: (str(item["asset_type"]), str(item["identifier"])))
         return inventory
 
@@ -2685,6 +2745,40 @@ class ReportSynthesizer:
                     "key_findings_count": ctx.osint.key_findings_count,
                 }
             )
+        for asset in ctx.cloud_asset_inventory:
+            rows.append(
+                {
+                    "record_type": "cloud_asset",
+                    "engagement_id": ctx.engagement_id,
+                    "engagement_name": ctx.engagement_name,
+                    "overall_risk": ctx.overall_risk,
+                    "validation_status": str(asset.get("validation_status") or "UNVALIDATED"),
+                    "stored_validation_status": str(
+                        asset.get("stored_validation_status") or "UNVALIDATED"
+                    ),
+                    "validation_reportable": str(
+                        asset.get("validation_reportable") is True
+                    ),
+                    "validation_method": str(asset.get("method") or ""),
+                    "cloud_asset_type": str(asset.get("asset_type") or ""),
+                    "cloud_identifier": str(asset.get("identifier") or ""),
+                    "cloud_provider_identifier": str(
+                        asset.get("provider_identifier") or ""
+                    ),
+                    "cloud_source": str(asset.get("source") or ""),
+                    "cloud_discovered_at": str(asset.get("discovered_at") or ""),
+                    "validation_checked_at": str(asset.get("checked_at") or ""),
+                    "validation_notes": str(asset.get("notes") or ""),
+                    "validation_evidence_summary": str(
+                        asset.get("evidence_summary") or ""
+                    ),
+                    "emails_found": ctx.osint.emails_found,
+                    "hosts_found": len(ctx.recon.hosts),
+                    "subdomains_found": len(ctx.recon.subdomains),
+                    "open_ports_found": len(ctx.recon.open_ports),
+                    "key_findings_count": ctx.osint.key_findings_count,
+                }
+            )
         for seed in ctx.seed_summary.seeds:
             rows.append(
                 {
@@ -2797,6 +2891,8 @@ class ReportSynthesizer:
             "validation_evidence_summary": "",
             "stored_validation_status": "",
             "validation_reportable": "",
+            "cloud_source": "",
+            "cloud_discovered_at": "",
         }
         report_defaults = ReportSynthesizer._csv_report_metadata(report_metadata)
         for row in rows:
@@ -2861,6 +2957,8 @@ class ReportSynthesizer:
                 "cloud_asset_type": "",
                 "cloud_identifier": "",
                 "cloud_provider_identifier": "",
+                "cloud_source": "",
+                "cloud_discovered_at": "",
                 "validation_checked_at": "",
                 "validation_notes": "",
                 "validation_evidence_summary": "",
@@ -3461,6 +3559,28 @@ class ReportSynthesizer:
             if archive_rows
             else "_No archive URL provenance was recorded in this reporting window._"
         )
+        cloud_asset_rows = []
+        for asset in ctx.cloud_asset_inventory[:25]:
+            cloud_asset_rows.append(
+                "| "
+                + " | ".join(
+                    [
+                        _md_cell(asset.get("asset_type")),
+                        f"`{_md_cell(asset.get('provider_identifier') or asset.get('identifier'))}`",
+                        _md_cell(asset.get("source")),
+                        _md_cell(asset.get("validation_status")),
+                        "yes" if asset.get("validation_reportable") is True else "no",
+                    ]
+                )
+                + " |"
+            )
+        cloud_asset_table = (
+            "| Type | Identifier | Source | Validation | Reportable |\n"
+            "|---|---|---|---|---|\n"
+            + "\n".join(cloud_asset_rows)
+            if cloud_asset_rows
+            else "_No cloud asset inventory was recorded in this reporting window._"
+        )
 
         # Deterministic fallback should enumerate every validated finding so
         # the last-resort report does not silently drop confirmed exposures.
@@ -3657,6 +3777,10 @@ class ReportSynthesizer:
             f"**Medium:** {ctx.exploits.medium_count}  \n"
             f"**Validated findings:** {ctx.exploits.finding_count}  \n"
             f"**Distinct CVE references:** {ctx.exploits.cve_count}",
+            "",
+            "### 5.0 Cloud Asset Inventory (Not Findings)",
+            "",
+            cloud_asset_table,
             "",
             "### 5.1 Validated findings",
             "",

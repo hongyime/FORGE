@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: calendar/vCard explicit identity enrichment is complete.
+Latest checkpoint: artifact review surface parity is complete. Newly recursive
+artifact pivots are now visible across review/export surfaces. Static dashboard
+detail payloads include a `cloud_assets` inventory section, summary count, and
+fallback graph `CLOUD` nodes even when no attack-graph snapshot exists.
+Deterministic reports now carry `cloud_asset_inventory`, render a "Cloud Asset
+Inventory (Not Findings)" template table, and export `record_type=cloud_asset`
+rows in raw CSV without promoting unvalidated ARN inventory into findings or
+risk scoring. Focused fixture covers React Native bundle email pivots,
+source-map artifact queueing, AWS Lambda ARN inventory, and vCard contact
+identity seeds across `AttackGraphBuilder`, `ContextBuilder`, template
+Markdown, raw CSV, dashboard sections, and fallback graph payload.
+Verification: compile/Ruff passed; focused parity test passed (`1 passed`);
+artifact provenance/recursive/RN/contact/cloud/parity suite passed (`11
+passed`); report synthesizer adjacent slice passed (`3 passed, 83
+deselected`); artifact cloud plus parity slice passed (`2 passed`). Known
+unrelated residual: dashboard selector `tests/reporting/test_dashboard.py -k
+"cloud or graph or detail"` has one stale stable-proof fixture expecting
+`VALIDATED`; current strict gate renders `UNVERIFIED`. Handoff:
+`.claude/handoffs/2026-07-24-artifact-review-surface-parity.md`.
+
+Previous checkpoint: calendar/vCard explicit identity enrichment is complete.
 Calendar and vCard artifact parsing now promotes only explicit contact identity
 fields into the existing seed graph: `FN`/`N` become `name` seeds and `ORG`
 becomes `company` seeds. `TITLE` is preserved as `contact_title` provenance
@@ -191,11 +211,12 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: add graph/report/dashboard parity checks for newly recursive
-artifact-derived pivots. Prove recent React Native/source-map/cloud ARN/contact
-identity pivots appear in review/export surfaces with lineage and deterministic
-report gates. Do not add live target probing without explicit ROE/scope
-manifest and mocked tests.
+Current next gate: fix/test remote artifact download result attribution when
+some queued remote artifacts are scope-skipped before the bounded downloader
+runs. Then add second-pass artifact queue convergence coverage, then add
+audit-lineage assertions for artifact-derived queued URLs/cloud inventory. Do
+not add live target probing without explicit ROE/scope manifest and mocked
+tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

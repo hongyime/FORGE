@@ -1537,6 +1537,41 @@ def _cloud_validation_section_row(row: sqlite3.Row) -> dict[str, str]:
     }
 
 
+def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
+    stored_type = str(row["asset_type"] or "").strip().lower()
+    asset_type = normalize_cloud_exposure_asset_type(stored_type)
+    stored_status = str(row["validation_status"] or "").strip().upper()
+    method = str(row["validation_method"] or "").strip()
+    reportable = False
+    if stored_status:
+        reportable = is_reportable_cloud_validation(
+            asset_type,
+            stored_status,
+            method,
+            evidence=row["evidence"],
+            notes=row["notes"],
+            require_stable_proof=True,
+        )
+    return {
+        "Asset": str(row["display_identifier"] or row["identifier"] or ""),
+        "Type": asset_type,
+        "Stored Type": stored_type,
+        "Source": str(row["source"] or ""),
+        "Validation": effective_validation_status(
+            asset_type,
+            stored_status or "UNVALIDATED",
+            method,
+            evidence=row["evidence"],
+            notes=row["notes"],
+            require_stable_proof=True,
+        ),
+        "Reportable": "yes" if reportable else "no",
+        "Method": method,
+        "Discovered": _format_dt(str(row["discovered_at"] or "")),
+        "Checked": _format_dt(str(row["checked_at"] or "")),
+    }
+
+
 def _parse_graph_payload(raw: str) -> dict[str, Any] | None:
     try:
         payload = json.loads(raw)
@@ -1631,7 +1666,9 @@ def _seed_graph_payload_for_engagement(
     con: sqlite3.Connection,
     engagement_id: int,
 ) -> tuple[dict[str, Any] | None, str]:
-    if not _table_exists(con, "engagement_seeds"):
+    has_seed_table = _table_exists(con, "engagement_seeds")
+    has_cloud_asset_table = _table_exists(con, "cloud_assets")
+    if not has_seed_table and not has_cloud_asset_table:
         return None, ""
 
     engagement_row = con.execute(
@@ -1644,18 +1681,42 @@ def _seed_graph_payload_for_engagement(
         else ""
     ) or f"Engagement {engagement_id}"
 
-    seed_rows = _fetch_rows(
-        con,
-        """
-        SELECT id, seed_value, seed_type, source, status, depth, confidence, parent_seed_id, metadata_json, discovered_at, updated_at
-        FROM engagement_seeds
-        WHERE engagement_id=?
-          AND COALESCE(status, 'pending') != 'failed'
-        ORDER BY depth ASC, id ASC
-        """,
-        (engagement_id,),
-    )
-    if not seed_rows:
+    seed_rows: list[sqlite3.Row] = []
+    if has_seed_table:
+        seed_rows = _fetch_rows(
+            con,
+            """
+            SELECT id, seed_value, seed_type, source, status, depth, confidence, parent_seed_id, metadata_json, discovered_at, updated_at
+            FROM engagement_seeds
+            WHERE engagement_id=?
+              AND COALESCE(status, 'pending') != 'failed'
+            ORDER BY depth ASC, id ASC
+            """,
+            (engagement_id,),
+        )
+    cloud_rows: list[sqlite3.Row] = []
+    if has_cloud_asset_table:
+        cloud_columns = _table_columns(con, "cloud_assets")
+        provider_expr = (
+            "COALESCE(NULLIF(provider_identifier, ''), identifier) AS display_identifier"
+            if "provider_identifier" in cloud_columns
+            else "identifier AS display_identifier"
+        )
+        discovered_expr = (
+            "discovered_at" if "discovered_at" in cloud_columns else "NULL AS discovered_at"
+        )
+        cloud_rows = _fetch_rows(
+            con,
+            f"""
+            SELECT id, asset_type, identifier, {provider_expr}, source, {discovered_expr}
+            FROM cloud_assets
+            WHERE engagement_id=?
+            ORDER BY asset_type ASC, identifier ASC
+            LIMIT 250
+            """,
+            (engagement_id,),
+        )
+    if not seed_rows and not cloud_rows:
         return None, ""
 
     nodes: list[dict[str, Any]] = [
@@ -1742,6 +1803,51 @@ def _seed_graph_payload_for_engagement(
                         "weight": max(1.0, float(row["confidence"] or 0.0) * 40.0),
                     }
                 )
+
+    for row in cloud_rows:
+        stored_type = str(row["asset_type"] or "").strip().lower()
+        asset_type = normalize_cloud_exposure_asset_type(stored_type)
+        identifier = str(row["identifier"] or "").strip().lower()
+        display_identifier = str(row["display_identifier"] or row["identifier"] or "").strip()
+        if not asset_type or not identifier:
+            continue
+        node_id = f"CLOUD::{asset_type}::{identifier}"
+        nodes.append(
+            {
+                "node_id": node_id,
+                "label": f"{asset_type}:{display_identifier or identifier}",
+                "node_type": "CLOUD",
+                "severity": "INFO",
+                "source_table": "cloud_assets",
+                "source_id": int(row["id"] or 0),
+                "metadata": {
+                    "service": asset_type,
+                    "identifier": identifier,
+                    "provider_identifier": display_identifier,
+                    "source": str(row["source"] or ""),
+                    **(
+                        {"asset_type_original": stored_type}
+                        if stored_type and stored_type != asset_type
+                        else {}
+                    ),
+                },
+            }
+        )
+        edge_key = (f"ENGAGEMENT::{engagement_id}", node_id, "cloud_reference")
+        if edge_key not in edge_seen:
+            edge_seen.add(edge_key)
+            edges.append(
+                {
+                    "source_node_id": f"ENGAGEMENT::{engagement_id}",
+                    "target_node_id": node_id,
+                    "edge_type": "cloud_reference",
+                    "label": "cloud_reference",
+                    "weight": 15.0,
+                }
+            )
+        timestamp = str(row["discovered_at"] or "").strip()
+        if timestamp:
+            latest_timestamps.append(timestamp)
 
     if _table_exists(con, "seed_relations"):
         relation_rows = _fetch_rows(
@@ -1997,6 +2103,7 @@ def _summary_counts(con: sqlite3.Connection, engagement_id: int) -> dict[str, in
         "crawl_results": 0,
         "social_profiles": 0,
         "key_scanner_findings": 0,
+        "cloud_assets": 0,
         "cloud_validation_results": 0,
         "audit_log": 0,
         "port_scan_results": 0,
@@ -2037,6 +2144,7 @@ def _summary_counts(con: sqlite3.Connection, engagement_id: int) -> dict[str, in
         "email_intelligence",
         "account_existence",
         "key_scanner_findings",
+        "cloud_assets",
         "cloud_validation_results",
         "audit_log",
         "port_scan_results",
@@ -2819,6 +2927,69 @@ def _detail_sections(
             (engagement_id, SECTION_LIMIT),
         )
     ]
+
+    sections["cloud_assets"] = []
+    if _table_exists(con, "cloud_assets"):
+        cloud_columns = _table_columns(con, "cloud_assets")
+        provider_expr = (
+            "COALESCE(NULLIF(ca.provider_identifier, ''), ca.identifier) AS display_identifier"
+            if "provider_identifier" in cloud_columns
+            else "ca.identifier AS display_identifier"
+        )
+        source_expr = "ca.source" if "source" in cloud_columns else "NULL AS source"
+        discovered_expr = (
+            "ca.discovered_at" if "discovered_at" in cloud_columns else "NULL AS discovered_at"
+        )
+        order_expr = (
+            "COALESCE(ca.discovered_at, '') DESC, ca.id DESC"
+            if "discovered_at" in cloud_columns
+            else "ca.id DESC"
+        )
+        if _table_exists(con, "cloud_validation_results"):
+            validation_select = """
+                   cvr.validation_status,
+                   cvr.validation_method,
+                   cvr.http_status,
+                   cvr.evidence,
+                   cvr.notes,
+                   cvr.checked_at
+            """
+            validation_join = """
+            LEFT JOIN cloud_validation_results cvr
+              ON cvr.engagement_id=ca.engagement_id
+             AND cvr.asset_type=ca.asset_type
+             AND cvr.identifier=ca.identifier
+            """
+        else:
+            validation_select = """
+                   NULL AS validation_status,
+                   NULL AS validation_method,
+                   NULL AS http_status,
+                   NULL AS evidence,
+                   NULL AS notes,
+                   NULL AS checked_at
+            """
+            validation_join = ""
+        sections["cloud_assets"] = [
+            _cloud_asset_section_row(row)
+            for row in _fetch_rows(
+                con,
+                f"""
+                SELECT ca.asset_type,
+                       ca.identifier,
+                       {provider_expr},
+                       {source_expr},
+                       {discovered_expr},
+                       {validation_select}
+                FROM cloud_assets ca
+                {validation_join}
+                WHERE ca.engagement_id=?
+                ORDER BY {order_expr}
+                LIMIT ?
+                """,
+                (engagement_id, SECTION_LIMIT),
+            )
+        ]
 
     validation_columns = _table_columns(con, "cloud_validation_results")
     validation_asset_expr = (
@@ -3918,6 +4089,7 @@ def _render_engagement_page(
         "engagement_runs": "Recent Engagement Runs",
         "services": "Recent Services",
         "key_scanner_findings": "Recent Key Findings",
+        "cloud_assets": "Cloud Asset Inventory",
         "artifact_queue": "Queued Artifacts",
         "crawl_results": "Recent Web Crawl Results",
         "social_profiles": "Recent Social Profiles",

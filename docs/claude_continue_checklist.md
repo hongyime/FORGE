@@ -66,9 +66,35 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add graph/report/dashboard parity checks for newly recursive
-  artifact-derived pivots so RN/source-map/cloud refs appear in review/export
-  surfaces with lineage and deterministic report gates.
+- [ ] Next checkpoint: fix and test remote artifact download result attribution
+  when some queued remote artifacts are scope-skipped before the bounded
+  downloader runs. The parallel exception path must map failures back to the
+  compact allowed-request list, not the original request list.
+- [ ] Then: add recursive second-pass artifact queue convergence coverage proving
+  an artifact URL discovered during artifact text parsing is parsed on the next
+  `process()` pass and feeds cloud/seed discovery onward.
+- [ ] Then: add audit-lineage assertions for artifact-derived queued URLs and
+  cloud inventory so operators can trace discovered text -> queued artifact ->
+  parsed seed/cloud asset.
+- [x] Artifact review surface parity checkpoint:
+  Newly recursive artifact pivots are now visible across review/export surfaces.
+  Static dashboard detail payloads include a `cloud_assets` inventory section,
+  summary count, and fallback graph `CLOUD` nodes even when no attack-graph
+  snapshot exists. Deterministic reports now carry `cloud_asset_inventory`,
+  render a "Cloud Asset Inventory (Not Findings)" template table, and export
+  `record_type=cloud_asset` rows in raw CSV without promoting unvalidated ARN
+  inventory into findings or risk scoring. Focused fixture covers React Native
+  bundle email pivots, source-map artifact queueing, AWS Lambda ARN inventory,
+  and vCard contact identity seeds across `AttackGraphBuilder`,
+  `ContextBuilder`, template Markdown, raw CSV, dashboard sections, and fallback
+  graph payload. Verification: compile passed; Ruff passed; focused parity test
+  passed (`1 passed`); artifact provenance/recursive/RN/contact/cloud/parity
+  suite passed (`11 passed`); report synthesizer adjacent slice passed (`3
+  passed, 83 deselected`); artifact cloud plus parity slice passed (`2
+  passed`). Known unrelated residual: dashboard selector
+  `tests/reporting/test_dashboard.py -k "cloud or graph or detail"` has one
+  stale stable-proof fixture expecting `VALIDATED`; current strict gate renders
+  `UNVERIFIED`.
 - [x] Calendar/vCard explicit identity enrichment checkpoint:
   Calendar and vCard artifact parsing now promotes only explicit contact
   identity fields into the existing seed graph: `FN`/`N` become `name` seeds and
