@@ -91,12 +91,18 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add recursive second-pass artifact queue convergence coverage proving
-  an artifact URL discovered during artifact text parsing is parsed on the next
-  `process()` pass and feeds cloud/seed discovery onward.
-- [ ] Then: add audit-lineage assertions for artifact-derived queued URLs and
+- [ ] Next checkpoint: add audit-lineage assertions for artifact-derived queued URLs and
   cloud inventory so operators can trace discovered text -> queued artifact ->
   parsed seed/cloud asset.
+- [x] Recursive artifact queue second-pass convergence checkpoint:
+  Added focused coverage proving artifact-text-discovered artifact URLs are not
+  fetched in the same `ArtifactQueueProcessor.process()` call, remain queued,
+  and converge on the next `process()` pass by downloading/parsing the queued
+  artifact and feeding discovered email, URL, and Firebase cloud pivots onward.
+  Verification: focused recursive queue tests passed (`3 passed`); adjacent
+  recursive/RN/remote-classification artifact suite passed (`23 passed`);
+  adjacent cloud/parity slice passed (`2 passed`); Ruff passed. Handoff:
+  `.claude/handoffs/2026-07-24-artifact-queue-second-pass-convergence.md`.
 - [x] Remote artifact parallel attribution checkpoint:
   The parallel remote-artifact downloader now stores `(result_index, request)`
   in its future map so exception handling uses the exact allowed request object

@@ -25,7 +25,17 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: remote artifact parallel attribution is complete. The
+Latest checkpoint: recursive artifact queue second-pass convergence is complete.
+Focused coverage now proves artifact-text-discovered artifact URLs are not
+fetched in the same `ArtifactQueueProcessor.process()` call, remain queued, and
+converge on the next `process()` pass by downloading/parsing the queued artifact
+and feeding discovered email, URL, and Firebase cloud pivots onward.
+Verification: focused recursive queue tests passed (`3 passed`); adjacent
+recursive/RN/remote-classification artifact suite passed (`23 passed`);
+adjacent cloud/parity slice passed (`2 passed`); Ruff passed. Handoff:
+`.claude/handoffs/2026-07-24-artifact-queue-second-pass-convergence.md`.
+
+Previous checkpoint: remote artifact parallel attribution is complete. The
 parallel remote-artifact downloader now stores `(result_index, request)` in its
 future map so exception handling uses the exact allowed request object after
 scope-denied rows are skipped. Inspection showed the prior index was already the
@@ -221,11 +231,10 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: add second-pass artifact queue convergence coverage proving
-an artifact URL discovered during artifact text parsing is parsed on the next
-`process()` pass and feeds cloud/seed discovery onward. Then add audit-lineage
-assertions for artifact-derived queued URLs/cloud inventory. Do not add live
-target probing without explicit ROE/scope manifest and mocked tests.
+Current next gate: add audit-lineage assertions for artifact-derived queued
+URLs/cloud inventory so operators can trace discovered text -> queued artifact
+-> parsed seed/cloud asset. Do not add live target probing without explicit
+ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

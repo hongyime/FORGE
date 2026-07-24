@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from forge.engagement_orchestrator import ArtifactDownloadRequest, ArtifactQueueProcessor
+from forge.engagement_orchestrator import (
+    ArtifactDownloadRequest,
+    ArtifactDownloadResult,
+    ArtifactQueueProcessor,
+)
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
@@ -167,3 +171,134 @@ def test_artifact_text_queue_preserves_existing_remote_artifact_rows(
         ("parsed", str(local_path), "engagement_seed", json.dumps({"existing": True}, sort_keys=True))
     ]
     assert seed_row == ("url",)
+
+
+def test_artifact_text_queued_artifact_converges_on_second_process_pass(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_recursive_queue_second_pass"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path, name="Artifact Recursive Queue Second Pass Test")
+
+    nested_url = "https://cdn.acme.example/assets/nested-config.json"
+    manifest_path = artifact_root / "mobile-update.json"
+    manifest_path.write_text(
+        json.dumps({"remote_config": nested_url}),
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    assert processor.ingest_local_artifacts([artifact_root]) == 1
+
+    def _fail_same_pass_download(
+        self: ArtifactQueueProcessor,
+        request: ArtifactDownloadRequest,
+    ) -> ArtifactDownloadResult:
+        del self
+        raise AssertionError(f"unexpected same-pass remote fetch: {request.source_url}")
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_download_remote_artifact_request",
+        _fail_same_pass_download,
+    )
+    first_summary = processor.process()
+
+    con = sqlite3.connect(db_path)
+    try:
+        first_row = con.execute(
+            """
+            SELECT status, local_path
+            FROM artifact_queue
+            WHERE engagement_id=1001 AND source_url=?
+            """,
+            (nested_url,),
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert first_summary.processed == 1
+    assert first_row == ("queued", None)
+
+    downloaded_urls: list[str] = []
+
+    def _download_second_pass(
+        self: ArtifactQueueProcessor,
+        request: ArtifactDownloadRequest,
+    ) -> ArtifactDownloadResult:
+        del self
+        downloaded_urls.append(request.source_url)
+        assert request.source_url == nested_url
+        downloaded_path = tmp_path / "nested-config.json"
+        downloaded_path.write_text(
+            json.dumps(
+                {
+                    "owner": "second-pass-owner@acme.example",
+                    "firebase": "https://second-pass-firebase.firebaseio.com",
+                    "portal": "https://second-pass.acme.example/dashboard",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return ArtifactDownloadResult(
+            artifact_id=request.artifact_id,
+            source_url=request.source_url,
+            artifact_type=request.artifact_type,
+            path=downloaded_path,
+            metadata_extra={"download_filename": downloaded_path.name},
+        )
+
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_download_remote_artifact_request",
+        _download_second_pass,
+    )
+    second_summary = processor.process()
+
+    con = sqlite3.connect(db_path)
+    try:
+        second_row = con.execute(
+            """
+            SELECT status, local_path
+            FROM artifact_queue
+            WHERE engagement_id=1001 AND source_url=?
+            """,
+            (nested_url,),
+        ).fetchone()
+        seed_rows = {
+            (row[0], row[1], row[2])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, source
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        cloud_rows = {
+            (row[0], row[1], row[2])
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier, source
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert downloaded_urls == [nested_url]
+    assert second_summary.processed == 1
+    assert second_summary.firebase_projects == 1
+    assert second_summary.discovered_seeds >= 3
+    assert second_row == ("parsed", (tmp_path / "nested-config.json").as_posix())
+    assert ("second-pass-owner@acme.example", "email", "artifact") in seed_rows
+    assert ("https://second-pass.acme.example/dashboard", "url", "artifact") in seed_rows
+    assert (
+        "firebase",
+        "second-pass-firebase",
+        "artifact_url_extract",
+    ) in cloud_rows
