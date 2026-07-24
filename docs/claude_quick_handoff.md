@@ -31,15 +31,16 @@ through `_run_inprocess_batch()` before calling
 `run_cloud_asset_validate_batch()`. The validator call, scope checker,
 validation execution, persistence, and final log/result ordering remain
 unchanged and bounded. Verification: compile passed; Ruff passed; focused cloud
-target batching regression passed (`1 passed`). Claude sidecar review was
-attempted but unavailable because the local Claude CLI OAuth session was
-expired. Handoff:
-`.claude/handoffs/2026-07-24-fanout-j-validation-target-worker.md`.
+target batching regression passed (`1 passed`); adjacent cloud batching
+selector passed (`2 passed, 764 deselected`); `.forge_data/engagements`
+contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-cloud-validation-target-worker-prep.md`.
 
-Next checkpoint: continue moving remaining safe sequential prep/reduction
-enrichers under the bounded worker-pool path beyond the already-covered
-D1/D2/D5 parse paths. Keep DB writes/final ordering serial and add focused
-tests for deterministic order.
+Next checkpoint: add API auxiliary-route validation/reportability parity
+outside the main engagement detail route. Direct routes such as assets,
+vulnerability summary, and asset tree should prove stale, unvalidated, or
+non-reportable cloud/key evidence cannot inflate reportable counts or review
+surfaces.
 
 Previous checkpoint: D5 denied recursive URL seed-run persistence is complete.
 D5 URL seed scope decisions now persist deterministic denied-before-fetch URLs
