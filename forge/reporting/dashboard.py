@@ -848,7 +848,7 @@ def _artifact_files(eng_id: str, reports_dir: Path) -> list[Path]:
         reports_dir,
         prefix="engagement",
         engagement_id=eng_id,
-        suffixes=(".md", ".pdf", ".json", ".csv"),
+        suffixes=(".md", ".pdf", ".json", ".csv", ".html"),
     )
 
 
@@ -4045,9 +4045,10 @@ def _render_artifact_card(page_path: Path, artifact: Path, kind: str) -> str:
 def _report_export_sort_key(path: Path) -> tuple[int, str]:
     order = {
         ".md": 0,
-        ".pdf": 1,
-        ".json": 2,
-        ".csv": 3,
+        ".html": 1,
+        ".pdf": 2,
+        ".json": 3,
+        ".csv": 4,
     }
     return (order.get(path.suffix.lower(), 99), path.name.lower())
 
@@ -4057,6 +4058,9 @@ def _report_export_descriptor(path: Path, *, raw_export: bool) -> dict[str, str]
     if suffix == ".md":
         label = "Markdown"
         format_name = "markdown"
+    elif suffix == ".html":
+        label = "HTML"
+        format_name = "html"
     elif suffix == ".pdf":
         label = "PDF"
         format_name = "pdf"

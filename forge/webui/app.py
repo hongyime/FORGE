@@ -914,7 +914,7 @@ def create_app() -> Any:
         return _engagement_prefixed_artifact_files(
             prefix="engagement",
             engagement_id=engagement_id,
-            suffixes=(".md", ".pdf", ".json", ".csv"),
+            suffixes=(".md", ".pdf", ".json", ".csv", ".html"),
         )
 
     def _audit_files(engagement_id: int) -> list[Path]:

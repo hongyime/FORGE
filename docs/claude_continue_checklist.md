@@ -72,6 +72,13 @@ historical notes only, not as current instructions.
   fidelity for key findings, or bounded recursive execution behavior. Do not
   edit code until the audited gap maps to intake, discovery, recursion,
   artifact analysis, validation, scoring, review, fallback, or testing/cleanup.
+- [x] Dashboard/API HTML report-family visibility checkpoint:
+  Static dashboard and live web API report-family discovery now include
+  deterministic `.html` Phase 6 report companions alongside Markdown, PDF,
+  JSON, and CSV exports. Report history/export descriptors label HTML
+  explicitly, and engagement detail artifacts expose the HTML download link.
+  Verification: focused static dashboard/API report-family tests passed
+  (`3 passed`); Ruff, py_compile, and `git diff --check` passed.
 - [x] Report HTML/render-path and cloud validation receipt checkpoint:
   Phase 6 now emits a deterministic `.html` companion artifact rendered from
   the exact decorated Markdown report, includes explicit `render_backend` and

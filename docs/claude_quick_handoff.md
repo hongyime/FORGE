@@ -25,7 +25,14 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Phase 6 now emits a deterministic `.html` report-family
+Latest checkpoint: static dashboard and live web API report-family discovery now
+include deterministic `.html` Phase 6 report companions alongside Markdown,
+PDF, JSON, and CSV. Report history/export descriptors label HTML explicitly,
+and engagement detail artifacts expose the HTML download link. Verification:
+focused static dashboard/API report-family tests passed (`3 passed`); Ruff,
+py_compile, and `git diff --check` passed.
+
+Previous checkpoint: Phase 6 now emits a deterministic `.html` report-family
 artifact from the exact decorated Markdown, and report JSON/CSV/raw-export
 lineage carries explicit `render_backend` plus `render_path`. Cloud asset
 validation batches now persist non-reportable

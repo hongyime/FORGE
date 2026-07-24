@@ -294,6 +294,10 @@ def _build_engagement(tmp_path: Path, *, include_distributed_task: bool = False)
         "record_type,engagement_id\nsummary,1001\n",
         encoding="utf-8",
     )
+    (reports_dir / "engagement_1001_report_20260709T014412.html").write_text(
+        "<!doctype html><title>FORGE report</title>",
+        encoding="utf-8",
+    )
     (reports_dir / "audit_1001_manifest_20260709T014413.json").write_text(
         json.dumps(
             {
@@ -389,15 +393,16 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert len(items) == 1
         assert items[0]["slug"] == "engagement-1001-acme-example"
         assert items[0]["detail_route"] == "/engagements/engagement-1001-acme-example"
-        assert items[0]["report_count"] == 4
+        assert items[0]["report_count"] == 5
         list_report = items[0]["report_summary"]
         assert list_report["provider"] == "template"
         assert list_report["requested_provider"] == "auto"
         assert list_report["render_backend"] == "template"
         assert list_report["fallback_reason"] == "quota exceeded"
-        assert list_report["export_count"] == 4
+        assert list_report["export_count"] == 5
         assert [item["label"] for item in list_report["available_exports"]] == [
             "Markdown",
+            "HTML",
             "PDF",
             "Report JSON",
             "CSV",
@@ -409,7 +414,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["counts"]["seed_runs"] == 1
         assert items[0]["counts"]["engagement_runs"] == 1
         assert items[0]["counts"]["distributed_tasks"] == 1
-        assert items[0]["report_count"] == 4
+        assert items[0]["report_count"] == 5
         assert items[0]["audit_count"] == 2
         assert items[0]["counts"]["email_intelligence"] == 2
         assert items[0]["run_summary"]["status"] == "completed"
@@ -444,7 +449,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert detail["report_summary"]["requested_provider"] == "auto"
         assert detail["report_summary"]["render_backend"] == "template"
         assert detail["report_summary"]["fallback_reason"] == "quota exceeded"
-        assert detail["report_summary"]["export_count"] == 4
+        assert detail["report_summary"]["export_count"] == 5
         assert detail["report_summary"]["cloud_validation_inventory_count"] == 2
         assert detail["report_summary"]["cloud_asset_inventory_count"] == 2
         assert detail["report_summary"]["reportable_validation_count"] == 1
@@ -455,12 +460,14 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         }
         assert [item["label"] for item in detail["report_summary"]["available_exports"]] == [
             "Markdown",
+            "HTML",
             "PDF",
             "Report JSON",
             "CSV",
         ]
         assert {artifact["name"] for artifact in detail["artifacts"]} >= {
             "engagement_1001_report_20260709T014412.md",
+            "engagement_1001_report_20260709T014412.html",
             "engagement_1001_report_20260709T014412.json",
             "engagement_1001_report_20260709T014412.pdf",
             "engagement_1001_report_20260709T014412.csv",
@@ -476,6 +483,10 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert (
             "/api/engagements/engagement-1001-acme-example/artifacts/"
             "engagement_1001_report_20260709T014412.json"
+        ) in {artifact["href"] for artifact in detail["artifacts"]}
+        assert (
+            "/api/engagements/engagement-1001-acme-example/artifacts/"
+            "engagement_1001_report_20260709T014412.html"
         ) in {artifact["href"] for artifact in detail["artifacts"]}
         assert (
             "/api/engagements/engagement-1001-acme-example/artifacts/"
@@ -746,6 +757,7 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
     ).generate(engagement_id=1001)
     report_json_path = report_path.with_suffix(".json")
     report_csv_path = report_path.with_suffix(".csv")
+    report_html_path = report_path.with_suffix(".html")
     report_payload = json.loads(report_json_path.read_text(encoding="utf-8"))
     lineage = report_payload["report_lineage"]
 
@@ -788,6 +800,7 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
     assert dashboard_summary["validation_status_summary"] == status_summary
     assert {item["label"] for item in dashboard_summary["available_exports"]} == {
         "Markdown",
+        "HTML",
         "PDF",
         "Report JSON",
         "CSV",
@@ -835,6 +848,12 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         assert len(downloaded_json["context"]["cloud_asset_inventory"]) == api_summary[
             "cloud_asset_inventory_count"
         ]
+        html_resp = client.get(
+            f"/api/engagements/engagement-1001-acme-example/artifacts/{report_html_path.name}",
+            headers=headers,
+        )
+        assert html_resp.status_code == 200, html_resp.text
+        assert "Data integrity checksum" in html_resp.text
 
         csv_resp = client.get(
             f"/api/engagements/engagement-1001-acme-example/artifacts/{report_csv_path.name}",

@@ -700,6 +700,10 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "record_type,engagement_id\nsummary,1001\n",
         encoding="utf-8",
     )
+    (reports_dir / "engagement_1001_report_20260709T014412.html").write_text(
+        "<!doctype html><title>FORGE report</title>",
+        encoding="utf-8",
+    )
     (reports_dir / "audit_1001_manifest_20260709T014413.json").write_text(
         json.dumps(
             {
@@ -761,7 +765,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "data-report-fallback='1'" in site_html
     assert "data-report-degraded='0'" in site_html
     assert "data-report-prior='0'" in site_html
-    assert "template · 4 exports · fallback" in site_html
+    assert "template · 5 exports · fallback" in site_html
 
     overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
     overview_payload_json = json.dumps(overview_payload, sort_keys=True)
@@ -772,15 +776,16 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["tags"] == ["external", "priority-high"]
     assert overview_payload["items"][0]["highest_severity"] == "HIGH"
     assert overview_payload["items"][0]["severity_summary"]["HIGH"] == 1
-    assert overview_payload["items"][0]["report_count"] == 4
+    assert overview_payload["items"][0]["report_count"] == 5
     overview_report = overview_payload["items"][0]["report_summary"]
     assert overview_report["provider"] == "template"
     assert overview_report["requested_provider"] == "auto"
     assert overview_report["render_backend"] == "template"
     assert overview_report["fallback_reason"] == "quota exceeded"
-    assert overview_report["export_count"] == 4
+    assert overview_report["export_count"] == 5
     assert [item["label"] for item in overview_report["available_exports"]] == [
         "Markdown",
+        "HTML",
         "PDF",
         "Report JSON",
         "CSV",
@@ -830,7 +835,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["report_summary"]["requested_provider"] == "auto"
     assert detail_payload["report_summary"]["render_backend"] == "template"
     assert detail_payload["report_summary"]["fallback_reason"] == "quota exceeded"
-    assert detail_payload["report_summary"]["export_count"] == 4
+    assert detail_payload["report_summary"]["export_count"] == 5
     assert detail_payload["report_summary"]["cloud_validation_inventory_count"] == 2
     assert detail_payload["report_summary"]["cloud_asset_inventory_count"] == 2
     assert detail_payload["report_summary"]["reportable_validation_count"] == 1
@@ -841,6 +846,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     }
     assert [item["label"] for item in detail_payload["report_summary"]["available_exports"]] == [
         "Markdown",
+        "HTML",
         "PDF",
         "Report JSON",
         "CSV",
@@ -934,6 +940,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["run_summary"]["tool_execution_allowed"] is True
     assert {artifact["name"] for artifact in detail_payload["artifacts"]} >= {
         "engagement_1001_report_20260709T014412.md",
+        "engagement_1001_report_20260709T014412.html",
         "engagement_1001_report_20260709T014412.json",
         "engagement_1001_report_20260709T014412.pdf",
         "audit_1001_manifest_20260709T014413.json",
@@ -959,6 +966,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert 'artifact-kind">audit</span>' in detail_html
     assert "Email Intelligence" in detail_html
     assert "Fallback reason: quota exceeded" in detail_html
+    assert "HTML" in detail_html
     assert "Report JSON" in detail_html
     assert "Validations" in detail_html
     assert "Reportable" in detail_html
