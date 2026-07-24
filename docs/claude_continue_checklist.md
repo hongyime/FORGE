@@ -67,10 +67,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 historical notes only, not as current instructions.
 
 - [ ] Next checkpoint: audit another concrete deterministic review/export
-  parity gap, preferably raw CSV proof/detail parity for provider-specific
-  validators or remaining long-tail validator proof reviewability. Keep live
-  provider calls mocked unless an explicit ROE/scope manifest and target are
-  supplied.
+  parity gap, preferably remaining long-tail validator proof reviewability or
+  a compact cleanup/regression sweep proving no test engagement debris remains.
+  Keep live provider calls mocked unless an explicit ROE/scope manifest and
+  target are supplied.
+- [x] Phase 6 raw export validation-proof parity checkpoint:
+  Phase 6 now exposes explicit `validation_proof` fields alongside the existing
+  backward-compatible `validation_notes` fields for findings, cloud validation
+  inventory, cloud asset inventory, companion JSON context, raw JSON fallback,
+  and raw CSV exports. Standalone reportable `key_scanner_findings` now also
+  appear as non-finding review/export inventory (`record_type=key_finding`) with
+  method/proof/detail when no duplicate `vulnerability_findings` row exists.
+  This removes ambiguity where proof was preserved only as notes while
+  dashboard/graph surfaces used `validation_proof`. Verification: Ruff passed;
+  compile passed; focused standalone key/proof/cloud export tests passed (`3
+  passed`); broader Phase 6 validation/export selector passed (`8 passed, 83
+  deselected`); cloud-gating/alias suite passed (`2 passed`). Handoff:
+  `.claude/handoffs/2026-07-24-phase6-validation-proof-export-parity.md`.
 - [x] Graph snapshot latest cloud validation metadata checkpoint:
   Static dashboard and live API graph payload filtering now refresh retained
   CLOUD node validation metadata from the latest matching

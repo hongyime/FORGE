@@ -94,6 +94,21 @@ RISK_THRESHOLDS = {
     "MEDIUM":   3,   # ≥3 MEDIUMs with no HIGH/CRITICAL → HIGH overall
 }
 
+
+def _stable_validation_proof_summary(method: object, *values: object) -> str:
+    validation_method = str(method or "").strip()
+    if not validation_method:
+        return ""
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        proof = parse_validated_detail(f"VALIDATED:{validation_method}:{text}")
+        if str(proof["validation_status"] or "").strip().upper() == "VALIDATED":
+            return _safe_validation_summary(proof["validation_proof"])
+    return ""
+
+
 MANDATORY_SECTIONS = [
     "## 1. Executive Summary",
     "## 2. Engagement Scope & Methodology",
@@ -233,6 +248,7 @@ class ReportContext:
     post_exploitation:   PostExploitContext
     cloud_asset_inventory: list[dict[str, Any]] = field(default_factory=list)
     cloud_validation_inventory: list[dict[str, Any]] = field(default_factory=list)
+    key_findings:        list[dict[str, Any]] = field(default_factory=list)
     seed_summary:        SeedSummaryContext = field(default_factory=SeedSummaryContext)
     ongoing_intelligence: OngoingIntelligenceContext = field(
         default_factory=OngoingIntelligenceContext
@@ -298,6 +314,7 @@ class ContextBuilder:
                 post_exploitation   = self._load_post_exploit(con),
                 cloud_asset_inventory=self._cloud_asset_inventory(con),
                 cloud_validation_inventory=self._cloud_validation_inventory(con),
+                key_findings        = self._load_key_findings(con),
                 seed_summary        = self._load_seed_summary(con),
                 ongoing_intelligence= self._load_ongoing_intel(con),
             )
@@ -703,6 +720,11 @@ class ContextBuilder:
                 "validation_reportable": validation_reportable,
                 "validation_method": validation_method,
                 "validation_http_status": row["http_status"],
+                "validation_proof": _stable_validation_proof_summary(
+                    validation_method,
+                    row["notes"],
+                    row["evidence"],
+                ),
                 "validation_notes": _safe_validation_summary(row["notes"]),
                 "validation_evidence_summary": _safe_validation_summary(row["evidence"]),
                 "validation_checked_at": str(row["checked_at"] or "").strip(),
@@ -722,6 +744,8 @@ class ContextBuilder:
                 "method": str(item.get("validation_method") or ""),
                 "http_status": item.get("validation_http_status"),
                 "checked_at": str(item.get("validation_checked_at") or ""),
+                "validation_proof": str(item.get("validation_proof") or ""),
+                "proof": str(item.get("validation_proof") or ""),
                 "notes": str(item.get("validation_notes") or ""),
                 "evidence_summary": str(item.get("validation_evidence_summary") or ""),
             }
@@ -781,6 +805,8 @@ class ContextBuilder:
                     "validation_reportable": validation.get("validation_reportable") is True,
                     "method": str(validation.get("validation_method") or ""),
                     "checked_at": str(validation.get("validation_checked_at") or ""),
+                    "validation_proof": str(validation.get("validation_proof") or ""),
+                    "proof": str(validation.get("validation_proof") or ""),
                     "notes": str(validation.get("validation_notes") or ""),
                     "evidence_summary": str(validation.get("validation_evidence_summary") or ""),
                 }
@@ -847,6 +873,7 @@ class ContextBuilder:
             "validation_status": "",
             "validation_method": "",
             "validation_http_status": None,
+            "validation_proof": "",
             "validation_notes": "",
             "validation_evidence_summary": "",
             "validation_checked_at": "",
@@ -865,6 +892,7 @@ class ContextBuilder:
                 "validation_status": "",
                 "validation_method": "",
                 "validation_http_status": None,
+                "validation_proof": "",
                 "validation_notes": "",
                 "validation_evidence_summary": "",
                 "validation_checked_at": "",
@@ -873,6 +901,7 @@ class ContextBuilder:
             "validation_status": proof["validation_status"],
             "validation_method": proof["validation_method"],
             "validation_http_status": None,
+            "validation_proof": proof["validation_proof"],
             "validation_notes": proof["validation_proof"],
             "validation_evidence_summary": "",
             "validation_checked_at": "",
@@ -1274,25 +1303,62 @@ class ContextBuilder:
         )
 
     def _reportable_key_findings_count(self, con: sqlite3.Connection) -> int:
+        return len(self._load_key_findings(con))
+
+    def _load_key_findings(self, con: sqlite3.Connection) -> list[dict[str, Any]]:
         columns = self._table_columns(con, "key_scanner_findings")
         if not {"engagement_id", "validation_state"}.issubset(columns):
-            return 0
+            return []
         select_parts = [
+            "id" if "id" in columns else "rowid AS id",
             "validation_state",
             "service" if "service" in columns else "NULL AS service",
+            "pattern_name" if "pattern_name" in columns else "NULL AS pattern_name",
             "domain" if "domain" in columns else "NULL AS domain",
+            "source_backend" if "source_backend" in columns else "NULL AS source_backend",
+            "source_url" if "source_url" in columns else "NULL AS source_url",
+            "repo_name" if "repo_name" in columns else "NULL AS repo_name",
+            "key_redacted" if "key_redacted" in columns else "NULL AS key_redacted",
             "validation_detail" if "validation_detail" in columns else "NULL AS validation_detail",
+            "validated_at" if "validated_at" in columns else "NULL AS validated_at",
         ]
         rows = con.execute(
             f"""
             SELECT {', '.join(select_parts)}
             FROM key_scanner_findings
             WHERE engagement_id=? AND validation_state='ACTIVE'
+            ORDER BY id DESC
             """,
             (self._eid,),
         ).fetchall()
         validation_index = self._cloud_validation_index(con)
-        return sum(1 for row in rows if self._key_row_allowed_in_report(row, validation_index))
+        findings: list[dict[str, Any]] = []
+        for row in rows:
+            if not self._key_row_allowed_in_report(row, validation_index):
+                continue
+            proof = parse_validated_detail(row["validation_detail"])
+            findings.append(
+                {
+                    "id": int(row["id"] or 0),
+                    "service": str(row["service"] or ""),
+                    "pattern_name": str(row["pattern_name"] or ""),
+                    "domain": str(row["domain"] or ""),
+                    "source_backend": str(row["source_backend"] or ""),
+                    "source_url": str(row["source_url"] or ""),
+                    "repo_name": str(row["repo_name"] or ""),
+                    "key_redacted": str(row["key_redacted"] or ""),
+                    "validation_state": str(row["validation_state"] or ""),
+                    "validation_detail": _safe_validation_summary(
+                        row["validation_detail"],
+                        max_length=512,
+                    ),
+                    "validation_status": str(proof["validation_status"] or ""),
+                    "validation_method": str(proof["validation_method"] or ""),
+                    "validation_proof": _safe_validation_summary(proof["validation_proof"]),
+                    "validated_at": str(row["validated_at"] or ""),
+                }
+            )
+        return findings
 
     def _key_row_allowed_in_report(
         self,
@@ -2725,6 +2791,7 @@ class ReportSynthesizer:
                     "validation_status": str(finding.get("validation_status") or ""),
                     "validation_method": str(finding.get("validation_method") or ""),
                     "validation_http_status": str(finding.get("validation_http_status") or ""),
+                    "validation_proof": str(finding.get("validation_proof") or ""),
                     "validation_notes": str(finding.get("validation_notes") or ""),
                     "validation_evidence_summary": str(
                         finding.get("validation_evidence_summary") or ""
@@ -2763,6 +2830,9 @@ class ReportSynthesizer:
                     ),
                     "validation_method": str(validation.get("method") or ""),
                     "validation_http_status": str(validation.get("http_status") or ""),
+                    "validation_proof": str(
+                        validation.get("validation_proof") or validation.get("proof") or ""
+                    ),
                     "cloud_asset_type": str(validation.get("asset_type") or ""),
                     "cloud_identifier": str(validation.get("identifier") or ""),
                     "cloud_provider_identifier": str(
@@ -2795,6 +2865,9 @@ class ReportSynthesizer:
                         asset.get("validation_reportable") is True
                     ),
                     "validation_method": str(asset.get("method") or ""),
+                    "validation_proof": str(
+                        asset.get("validation_proof") or asset.get("proof") or ""
+                    ),
                     "cloud_asset_type": str(asset.get("asset_type") or ""),
                     "cloud_identifier": str(asset.get("identifier") or ""),
                     "cloud_provider_identifier": str(
@@ -2807,6 +2880,32 @@ class ReportSynthesizer:
                     "validation_evidence_summary": str(
                         asset.get("evidence_summary") or ""
                     ),
+                    "emails_found": ctx.osint.emails_found,
+                    "hosts_found": len(ctx.recon.hosts),
+                    "subdomains_found": len(ctx.recon.subdomains),
+                    "open_ports_found": len(ctx.recon.open_ports),
+                    "key_findings_count": ctx.osint.key_findings_count,
+                }
+            )
+        for key_finding in ctx.key_findings:
+            rows.append(
+                {
+                    "record_type": "key_finding",
+                    "engagement_id": ctx.engagement_id,
+                    "engagement_name": ctx.engagement_name,
+                    "overall_risk": ctx.overall_risk,
+                    "key_service": str(key_finding.get("service") or ""),
+                    "key_pattern_name": str(key_finding.get("pattern_name") or ""),
+                    "key_domain": str(key_finding.get("domain") or ""),
+                    "key_source_backend": str(key_finding.get("source_backend") or ""),
+                    "key_source_url": str(key_finding.get("source_url") or ""),
+                    "key_repo_name": str(key_finding.get("repo_name") or ""),
+                    "key_redacted": str(key_finding.get("key_redacted") or ""),
+                    "validation_status": str(key_finding.get("validation_status") or ""),
+                    "validation_method": str(key_finding.get("validation_method") or ""),
+                    "validation_proof": str(key_finding.get("validation_proof") or ""),
+                    "validation_detail": str(key_finding.get("validation_detail") or ""),
+                    "validation_checked_at": str(key_finding.get("validated_at") or ""),
                     "emails_found": ctx.osint.emails_found,
                     "hosts_found": len(ctx.recon.hosts),
                     "subdomains_found": len(ctx.recon.subdomains),
@@ -2828,6 +2927,7 @@ class ReportSynthesizer:
                     "validation_status": "",
                     "validation_method": "",
                     "validation_http_status": "",
+                    "validation_proof": "",
                     "seed_type": str(seed.get("type") or ""),
                     "seed_value": str(seed.get("value") or ""),
                     "seed_source": str(seed.get("source") or ""),
@@ -2859,6 +2959,7 @@ class ReportSynthesizer:
                     "validation_status": "",
                     "validation_method": "",
                     "validation_http_status": "",
+                    "validation_proof": "",
                     "seed_type": "",
                     "seed_value": "",
                     "seed_source": "",
@@ -2922,12 +3023,21 @@ class ReportSynthesizer:
             "cloud_identifier": "",
             "cloud_provider_identifier": "",
             "validation_checked_at": "",
+            "validation_proof": "",
             "validation_notes": "",
             "validation_evidence_summary": "",
             "stored_validation_status": "",
             "validation_reportable": "",
             "cloud_source": "",
             "cloud_discovered_at": "",
+            "key_service": "",
+            "key_pattern_name": "",
+            "key_domain": "",
+            "key_source_backend": "",
+            "key_source_url": "",
+            "key_repo_name": "",
+            "key_redacted": "",
+            "validation_detail": "",
         }
         report_defaults = ReportSynthesizer._csv_report_metadata(report_metadata)
         for row in rows:
@@ -2948,6 +3058,8 @@ class ReportSynthesizer:
                 "validation_status",
                 "validation_method",
                 "validation_http_status",
+                "validation_proof",
+                "validation_detail",
                 "seed_type",
                 "seed_value",
                 "seed_source",
@@ -2975,6 +3087,7 @@ class ReportSynthesizer:
                 "validation_status": "",
                 "validation_method": "",
                 "validation_http_status": "",
+                "validation_proof": "",
                 "seed_type": "",
                 "seed_value": "",
                 "seed_source": "",
@@ -2995,10 +3108,19 @@ class ReportSynthesizer:
                 "cloud_source": "",
                 "cloud_discovered_at": "",
                 "validation_checked_at": "",
+                "validation_proof": "",
                 "validation_notes": "",
                 "validation_evidence_summary": "",
                 "stored_validation_status": "",
                 "validation_reportable": "",
+                "key_service": "",
+                "key_pattern_name": "",
+                "key_domain": "",
+                "key_source_backend": "",
+                "key_source_url": "",
+                "key_repo_name": "",
+                "key_redacted": "",
+                "validation_detail": "",
                 **report_defaults,
                 "emails_found": ctx.osint.emails_found,
                 "hosts_found": len(ctx.recon.hosts),

@@ -429,7 +429,10 @@ def test_context_builder_loads_osint_counts(tmp_eng_db):
     assert ctx.osint.key_findings_count == 0
 
 
-def test_context_builder_counts_only_reportable_key_findings(tmp_eng_db):
+def test_context_builder_exports_standalone_reportable_key_findings(
+    tmp_eng_db,
+    tmp_path,
+):
     con = sqlite3.connect(tmp_eng_db)
     try:
         con.execute("ALTER TABLE key_scanner_findings ADD COLUMN service TEXT")
@@ -472,6 +475,35 @@ def test_context_builder_counts_only_reportable_key_findings(tmp_eng_db):
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
 
     assert ctx.osint.key_findings_count == 1
+    assert len(ctx.key_findings) == 1
+    key_finding = ctx.key_findings[0]
+    assert key_finding["service"] == "github"
+    assert key_finding["validation_status"] == "VALIDATED"
+    assert key_finding["validation_method"] == "github_user_api"
+    assert key_finding["validation_proof"] == (
+        "github user ok: user_id=928374 login=acmebot "
+        "user_profile_present=true profile_url_matches_login=true"
+    )
+
+    raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
+    key_rows = [row for row in raw_rows if row["record_type"] == "key_finding"]
+    assert len(key_rows) == 1
+    assert key_rows[0]["key_service"] == "github"
+    assert key_rows[0]["validation_method"] == "github_user_api"
+    assert key_rows[0]["validation_proof"] == key_finding["validation_proof"]
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        output_dir=tmp_path,
+        provider="template",
+        assume_yes=True,
+    )
+    report_path = synth.generate(ENGAGEMENT_ID)
+    payload = json.loads(report_path.with_suffix(".json").read_text(encoding="utf-8"))
+    exported_keys = payload["context"]["key_findings"]
+    assert len(exported_keys) == 1
+    assert exported_keys[0]["validation_method"] == "github_user_api"
+    assert exported_keys[0]["validation_proof"] == key_finding["validation_proof"]
 
 
 def test_context_builder_unions_seed_only_hosts_and_emails(tmp_eng_db):
@@ -1542,6 +1574,7 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     assert "VALIDATED:aws_sts_get_caller_identity" in str(finding.get("evidence") or "")
     assert finding["validation_status"] == "VALIDATED"
     assert finding["validation_method"] == "aws_sts_get_caller_identity"
+    assert finding["validation_proof"] == "AccountId=742931608514"
     assert finding["validation_notes"] == "AccountId=742931608514"
 
     raw_row = next(
@@ -1552,6 +1585,7 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     assert "VALIDATED:aws_sts_get_caller_identity" in str(raw_row["evidence"])
     assert "backend=github" in str(raw_row["evidence"])
     assert raw_row["validation_notes"] == "AccountId=742931608514"
+    assert raw_row["validation_proof"] == "AccountId=742931608514"
     assert "key_enc" not in str(raw_row["evidence"])
 
     synth = ReportSynthesizer(
@@ -1578,6 +1612,7 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     )
     assert "VALIDATED:aws_sts_get_caller_identity" in str(exported_finding.get("evidence") or "")
     assert exported_finding["validation_method"] == "aws_sts_get_caller_identity"
+    assert exported_finding["validation_proof"] == "AccountId=742931608514"
     assert "key_enc" not in json.dumps(exported_finding)
 
 

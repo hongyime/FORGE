@@ -230,6 +230,9 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"][
         "evidence_summary"
     ]
+    assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"][
+        "proof"
+    ]
     assert inventory_by_identifier["manual-note-bucket"]["validation_status"] == "UNVERIFIED"
     assert inventory_by_identifier["manual-note-bucket"]["stored_validation_status"] == "VALIDATED"
     assert inventory_by_identifier["manual-note-bucket"]["validation_reportable"] is False
@@ -246,6 +249,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert "prod/customer-records.csv" in validated_finding[
         "validation_evidence_summary"
     ]
+    assert "prod/customer-records.csv" in validated_finding["validation_proof"]
 
     csv_titles = {
         str(row["title"])
@@ -290,6 +294,11 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         for item in payload["context"]["cloud_validation_inventory"]
         if item["identifier"] == "acct-unsupported"
     } == {"UNSUPPORTED"}
+    assert any(
+        item["identifier"] == "validated-bucket"
+        and "prod/customer-records.csv" in item["proof"]
+        for item in payload["context"]["cloud_validation_inventory"]
+    )
 
     raw_synth = ReportSynthesizer(
         db_path=db_path,
@@ -334,6 +343,11 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         and row["validation_status"] == "UNVERIFIED"
         and row["stored_validation_status"] == "VALIDATED"
         and row["validation_reportable"] == "False"
+        for row in raw_validation_rows
+    )
+    assert any(
+        row["cloud_identifier"] == "validated-bucket"
+        and "prod/customer-records.csv" in row["validation_proof"]
         for row in raw_validation_rows
     )
     assert any(
