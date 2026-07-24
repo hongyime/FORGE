@@ -66,13 +66,22 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix Fan-out F discovered GitHub-org keyscan dispatch
-  semantics under ROE/scope manifests. Sidecar audits found discovered org
-  slugs can still be queued as bare `forge osint keyscan --domain <org>`,
-  which fails scope validation unless the org slug is separately authorized.
-  Keep root-domain scans unchanged, but route discovered org scans as
-  root-attributed `--domain <in-scope-root> --org <github_org>` work items with
-  deterministic dedupe/seed-run metadata and parser-level regression coverage.
+- [ ] Next checkpoint: perform a fresh current-code audit for the next
+  real kill-chain correctness gap before adding more provider breadth or UI
+  polish. Prioritize validation/report-gate fidelity, dashboard/report source
+  fidelity for key findings, or bounded recursive execution behavior. Do not
+  edit code until the audited gap maps to intake, discovery, recursion,
+  artifact analysis, validation, scoring, review, fallback, or testing/cleanup.
+- [x] Fan-out F GitHub-org keyscan scope checkpoint re-verified:
+  Current `main` already routes discovered GitHub orgs as root-attributed
+  `osint keyscan --domain <in-scope-root> --org <github_org>` work items using
+  composite target keys (`<root>::github_org::<org>`), deterministic dedupe,
+  and seed-run metadata containing `origin=keyscan_org`, `query_domain`, and
+  `github_org`. The stale unchecked backlog item above was verified rather
+  than reimplemented. Verification: focused retry/per-root org keyscan tests
+  passed (`2 passed`), root child scope-manifest propagation test passed
+  (`1 passed`), Ruff passed for `forge/cli.py` plus focused keyscan tests, and
+  py_compile passed for the same files.
 - [x] Recursive depth-limit persisted-seed coverage checkpoint:
   Existing kill-chain code already filters over-depth persisted URL, email,
   username, phone, IP, name, and company seeds before executable dispatch and
