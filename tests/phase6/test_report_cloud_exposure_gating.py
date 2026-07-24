@@ -172,10 +172,10 @@ def _create_cloud_exposure_db(path: Path) -> None:
             (
                 "gcs",
                 "metadata-bucket",
-                "ACCESSIBLE_BUT_NO_DATA",
+                "VALIDATED",
                 "gcs_http_probe",
                 200,
-                "reachable but no data",
+                "placeholder sample metadata only",
                 "2026-07-02T00:00:00Z",
             ),
             (
@@ -234,6 +234,10 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert inventory_by_identifier["manual-note-bucket"]["stored_validation_status"] == "VALIDATED"
     assert inventory_by_identifier["manual-note-bucket"]["validation_reportable"] is False
     assert inventory_by_identifier["manual-note-bucket"]["method"] == "manual_validated_note"
+    assert inventory_by_identifier["metadata-bucket"]["validation_status"] == "UNVERIFIED"
+    assert inventory_by_identifier["metadata-bucket"]["stored_validation_status"] == "VALIDATED"
+    assert inventory_by_identifier["metadata-bucket"]["validation_reportable"] is False
+    assert inventory_by_identifier["metadata-bucket"]["method"] == "gcs_http_probe"
     validated_finding = next(
         item
         for item in ctx.exploits.exploited

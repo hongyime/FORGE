@@ -79,3 +79,47 @@ def test_key_provider_validation_status_does_not_become_cloud_reportable() -> No
         evidence=evidence,
         require_stable_proof=True,
     )
+
+
+@pytest.mark.parametrize(
+    ("evidence", "notes"),
+    [
+        ("placeholder sample metadata only", ""),
+        ("{'server':'AmazonS3'}", "low-signal storage metadata"),
+        ("<ok />", "honeypot metadata fixture"),
+        ("demo metadata response", "synthetic probe"),
+    ],
+)
+def test_storage_metadata_probe_gate_rejects_low_signal_validated_evidence(
+    evidence: str,
+    notes: str,
+) -> None:
+    assert not is_reportable_cloud_validation(
+        "gcs",
+        "VALIDATED",
+        "gcs_http_probe",
+        evidence=evidence,
+        notes=notes,
+        require_stable_proof=True,
+    )
+    assert (
+        effective_validation_status(
+            "gcs",
+            "VALIDATED",
+            "gcs_http_probe",
+            evidence=evidence,
+            notes=notes,
+        )
+        == "UNVERIFIED"
+    )
+
+
+def test_storage_metadata_probe_gate_keeps_concrete_low_severity_metadata_reviewable() -> None:
+    assert is_reportable_cloud_validation(
+        "aws_s3",
+        "VALIDATED",
+        "s3_head_probe",
+        evidence="{'server': 'AmazonS3', 'x-amz-bucket-region': 'us-east-1'}",
+        notes="Bucket responded to a bounded HEAD request.",
+        require_stable_proof=True,
+    )

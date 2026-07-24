@@ -91,6 +91,19 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Storage metadata validation proof-gate checkpoint:
+  Shared cloud exposure reportability now downgrades `VALIDATED` storage
+  metadata probes such as `gcs_http_probe` and `s3_head_probe` when their
+  evidence/notes contain placeholder, honeypot, sample, synthetic, or
+  low-signal markers. Concrete bounded metadata probes can still remain
+  LOW/reviewable, but placeholder metadata stays validation inventory only and
+  projects as `UNVERIFIED` under report/dashboard stable-proof gates.
+  Verification: compile passed; Ruff passed; focused cloud exposure gate and
+  Phase 6 report gating tests passed (`15 passed`); adjacent deterministic
+  findings, stable-proof surface, and attack-path validation slices passed
+  (`16 passed`); pytest engagement cleanup reported `removed=3 remaining=0`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-storage-metadata-proof-gate.md`.
 - [x] Run launch/control response reviewability checkpoint:
   Live launch/resume/restart route responses now echo normalized execution
   switches as structured fields: `max_iter`, `skip_cloud`, and `skip_keyscan`.

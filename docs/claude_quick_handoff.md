@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: run launch/control response reviewability is complete. Live
+Latest checkpoint: storage metadata validation proof-gating is complete. Shared
+cloud exposure reportability now downgrades `VALIDATED` storage metadata probes
+such as `gcs_http_probe` and `s3_head_probe` when evidence/notes contain
+placeholder, honeypot, sample, synthetic, or low-signal markers. Concrete
+bounded metadata probes can still remain LOW/reviewable, but placeholder
+metadata stays validation inventory only and projects as `UNVERIFIED` under
+report/dashboard stable-proof gates. Verification: compile/Ruff passed;
+focused cloud exposure gate and Phase 6 report gating tests passed (`15
+passed`); adjacent deterministic findings, stable-proof surface, and
+attack-path validation slices passed (`16 passed`); pytest engagement cleanup
+reported `removed=3 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-storage-metadata-proof-gate.md`.
+
+Current next gate: fix the concrete passive parser gap found by the parser
+reviewer: packaged Helm chart archives commonly contain
+`{chart}/Chart.yaml` plus `{chart}/values.yaml`, but the extracted
+`{chart}/values.yaml` member is currently labeled generic YAML instead of
+`helm-values`, so host-only ingress values may not feed recursive discovery.
+Keep the fix passive/static and source-shape-specific.
+
+Previous checkpoint: run launch/control response reviewability is complete.
+Live
 launch/resume/restart route responses now echo normalized execution switches as
 structured fields: `max_iter`, `skip_cloud`, and `skip_keyscan`. This matches
 the progress-event metadata and keeps operators/dashboard clients from parsing
@@ -47,10 +68,6 @@ compile/Ruff passed; focused web API route contract passed (`1 passed`);
 adjacent static slug/detail dashboard contract passed (`1 passed`); pytest
 engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-live-api-audit-manifest-parity.md`.
-
-Current next gate: audit another concrete dashboard/API/report artifact or
-validation-review parity gap. Prefer mocked route-contract regressions over
-broad feature work unless a deterministic kill-chain acceptance gate is failing.
 
 Previous checkpoint: canonical graph artifact isolation is complete. Static
 dashboard and live web API graph artifact discovery now only accept

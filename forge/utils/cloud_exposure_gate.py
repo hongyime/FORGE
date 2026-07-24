@@ -55,6 +55,19 @@ _TITLE_SUFFIXES = (
     " metadata observed",
     " detected",
 )
+_LOW_SIGNAL_STORAGE_METADATA_MARKERS = (
+    "demo",
+    "dummy",
+    "fake",
+    "honeypot",
+    "low signal",
+    "low-signal",
+    "mock",
+    "placeholder",
+    "sample",
+    "synthetic",
+    "test data",
+)
 
 
 def normalize_cloud_exposure_asset_type(value: str) -> str:
@@ -116,6 +129,14 @@ def _has_stable_validation_proof(validation_method: str, *proof_values: object) 
     return False
 
 
+def _has_concrete_storage_metadata_probe_evidence(*proof_values: object) -> bool:
+    text = " ".join(str(value or "").strip() for value in proof_values if str(value or "").strip())
+    if not text:
+        return False
+    lowered = text.lower()
+    return not any(marker in lowered for marker in _LOW_SIGNAL_STORAGE_METADATA_MARKERS)
+
+
 def is_reportable_cloud_validation(
     asset_type: str,
     validation_status: str,
@@ -131,6 +152,14 @@ def is_reportable_cloud_validation(
     )
     if not reportable:
         return False
+    asset = normalize_cloud_exposure_asset_type(asset_type)
+    method = str(validation_method or "").strip().lower()
+    if (
+        require_stable_proof
+        and asset in STORAGE_CLOUD_ASSET_TYPES
+        and method in STORAGE_METADATA_VALIDATION_METHODS
+    ):
+        return _has_concrete_storage_metadata_probe_evidence(evidence, notes)
     if require_stable_proof and cloud_validation_requires_stable_proof(
         asset_type,
         validation_method,
