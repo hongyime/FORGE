@@ -301,13 +301,30 @@ async def crawl_target(
                 browser = await p.chromium.launch(headless=True)
                 page = await browser.new_page()
                 try:
+                    if scope_filter is not None:
+                        async def _guard_route(route: object) -> None:
+                            request = getattr(route, "request", None)
+                            request_url = str(getattr(request, "url", "") or "")
+                            parsed = urlparse(request_url)
+                            if parsed.scheme in {"http", "https"} and not scope_filter(request_url):
+                                await route.abort()
+                                return
+                            await route.continue_()
+
+                        await page.route("**/*", _guard_route)
                     if delay_seconds > 0:
                         await asyncio.sleep(delay_seconds)
-                    await page.goto(target_url, timeout=int(timeout * 1000))
-                    file_name = "root.png"
-                    output_path = screenshot_dir / file_name
-                    await page.screenshot(path=str(output_path), full_page=True)
-                    snapshots[target_url] = str(output_path)
+                    response = await page.goto(target_url, timeout=int(timeout * 1000))
+                    browser_final_url = str(
+                        getattr(page, "url", "")
+                        or getattr(response, "url", "")
+                        or target_url
+                    )
+                    if scope_filter is None or scope_filter(browser_final_url):
+                        file_name = "root.png"
+                        output_path = screenshot_dir / file_name
+                        await page.screenshot(path=str(output_path), full_page=True)
+                        snapshots[target_url] = str(output_path)
                 finally:
                     await browser.close()
     crawled = await _crawl_http(

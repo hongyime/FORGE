@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: workflow history limit validation is complete.
+Latest checkpoint: Playwright screenshot scope gate is complete.
+`crawl_target(..., screenshot=True)` now installs a Playwright route guard
+before navigation and aborts off-scope HTTP(S) requests using the same
+`scope_filter` as the crawler. It also checks the browser final URL before
+writing `root.png`, so an in-scope URL that redirects off-scope cannot capture
+or associate an off-scope screenshot. Verification: compile passed; Ruff
+passed; focused screenshot scope test passed (`1 passed`); full crawler unit
+file passed (`4 passed`); `.forge_data/engagements` contained `0` entries after
+the run. Handoff:
+`.claude/handoffs/2026-07-24-playwright-screenshot-scope-gate.md`.
+
+Next checkpoint: fix `GET /workflows/{workflow_id}/status` unknown-workflow
+handling. `WorkflowEngine.get_status()` raises `KeyError` for missing workflows,
+so the route's dead `result is None` 404 branch should be replaced or guarded
+with deterministic 404 handling. Suggested focused test:
+`tests/integration/test_history_routes.py::test_status_unknown_workflow_returns_404`.
+
+Previous checkpoint: workflow history limit validation is complete.
 `GET /workflows/{workflow_id}/history` now validates optional `limit` with
 FastAPI `Query(ge=1)`, so `limit=0` and negative limits return 422 instead of
 falling through to an unbounded state-store history query. Verification:
@@ -33,13 +50,6 @@ compile passed; Ruff passed; focused non-positive limit test passed (`2
 passed`); full history route suite passed (`9 passed`); `.forge_data/engagements`
 contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-workflow-history-limit-bounds.md`.
-
-Next checkpoint: audit one current-code deterministic kill-chain,
-passive-recursion, validation, report/export, or dashboard/API review gap not
-already covered by the workflow history bounds, crawler redirect scope,
-artifact inventory, or workflow lineage checkpoints. Prefer compact helpers and
-focused tests over growing large files. Keep live calls mocked unless an
-explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: crawler off-scope redirect final-URL gate is complete.
 `_crawl_http()` now validates the final redirected response URL against the same

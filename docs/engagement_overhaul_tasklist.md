@@ -93,10 +93,23 @@ sentences as historical notes only, not as current instructions.
 
 - [ ] Next checkpoint: audit one current-code deterministic kill-chain,
   passive-recursion, validation, report/export, or dashboard/API review gap not
-  already covered by the workflow history bounds, crawler redirect scope,
-  artifact inventory, or workflow lineage checkpoints. Prefer compact helpers
-  and focused tests over growing large files. Keep live calls mocked unless an
-  explicit ROE/scope manifest and target are supplied.
+  already covered by the Playwright screenshot scope, workflow history bounds,
+  crawler redirect scope, artifact inventory, or workflow lineage checkpoints.
+  Prefer compact helpers and focused tests over growing large files. Keep live
+  calls mocked unless an explicit ROE/scope manifest and target are supplied.
+- [x] Playwright screenshot scope gate checkpoint:
+  `crawl_target(..., screenshot=True)` now installs a Playwright route guard
+  before navigation and aborts off-scope HTTP(S) requests using the same
+  `scope_filter` as the crawler. It also checks the browser final URL before
+  writing `root.png`, so an in-scope URL that redirects off-scope cannot capture
+  or associate an off-scope screenshot. Added a compact fake-Playwright
+  regression in `tests/phase1/test_crawler.py`. No live probing expansion,
+  crawler pacing, retry, provider, proxy, validation, severity, report,
+  dashboard, or API behavior changed. Verification: compile passed; Ruff
+  passed; focused screenshot scope test passed (`1 passed`); full crawler unit
+  file passed (`4 passed`); workspace `.forge_data/engagements` contained `0`
+  entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-playwright-screenshot-scope-gate.md`.
 - [x] Workflow history limit validation checkpoint:
   `GET /workflows/{workflow_id}/history` now validates optional `limit` with
   FastAPI `Query(ge=1)`, so `limit=0` and negative limits return 422 instead of

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import types
 from urllib.parse import urlparse
 
@@ -130,3 +131,95 @@ def test_crawl_http_drops_out_of_scope_redirect_final_url(monkeypatch) -> None:
 
     assert calls == ["https://acme.example/"]
     assert result == []
+
+
+def test_crawl_target_screenshot_aborts_out_of_scope_browser_redirect(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "crawl.db"
+    con = crawler.get_engagement_db(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (1001, 'Crawler Scope', '[]', 'ACTIVE', 'analyst')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    continued: list[str] = []
+    aborted: list[str] = []
+    screenshots: list[str] = []
+
+    class _Route:
+        def __init__(self, url: str) -> None:
+            self.request = types.SimpleNamespace(url=url)
+
+        async def abort(self) -> None:
+            aborted.append(self.request.url)
+
+        async def continue_(self) -> None:
+            continued.append(self.request.url)
+
+    class _Page:
+        url = "https://evil.example/"
+
+        async def route(self, _pattern: str, handler: object) -> None:
+            self._handler = handler
+
+        async def goto(self, _url: str, **_kwargs: object) -> object:
+            await self._handler(_Route("https://acme.example/static.js"))
+            await self._handler(_Route("https://evil.example/tracker.js"))
+            return types.SimpleNamespace(url=self.url)
+
+        async def screenshot(self, *, path: str, **_kwargs: object) -> None:
+            screenshots.append(path)
+
+    class _Browser:
+        async def new_page(self) -> _Page:
+            return _Page()
+
+        async def close(self) -> None:
+            return None
+
+    class _Chromium:
+        async def launch(self, **_kwargs: object) -> _Browser:
+            return _Browser()
+
+    class _PlaywrightContext:
+        async def __aenter__(self) -> object:
+            return types.SimpleNamespace(chromium=_Chromium())
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    async def _fake_crawl_http(*_args: object, **_kwargs: object) -> list[tuple[str, str, dict[str, str]]]:
+        return [("https://acme.example/", "<html><title>Root</title></html>", {})]
+
+    playwright_pkg = types.ModuleType("playwright")
+    async_api = types.ModuleType("playwright.async_api")
+    async_api.async_playwright = lambda: _PlaywrightContext()
+    monkeypatch.setitem(sys.modules, "playwright", playwright_pkg)
+    monkeypatch.setitem(sys.modules, "playwright.async_api", async_api)
+    monkeypatch.setattr(crawler, "_crawl_http", _fake_crawl_http)
+
+    result = crawler.asyncio.run(
+        crawler.crawl_target(
+            engagement_id=1001,
+            target_url="https://acme.example/",
+            db_path=db_path,
+            depth=0,
+            timeout=1.0,
+            screenshot=True,
+            screenshot_dir=tmp_path / "screens",
+            scope_values=["acme.example"],
+        )
+    )
+
+    assert continued == ["https://acme.example/static.js"]
+    assert aborted == ["https://evil.example/tracker.js"]
+    assert screenshots == []
+    assert result[0].screenshot_path is None
