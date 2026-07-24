@@ -591,6 +591,97 @@ def test_scheduled_sensitive_auth_bypass_requires_roe_before_execution(
     assert calls == ["https://allowed.example/login"]
 
 
+@pytest.mark.parametrize(
+    ("task_type", "handler_name", "payload"),
+    [
+        (
+            "spray",
+            "run_spray",
+            {
+                "task_type": "spray",
+                "target": "https://allowed.example/login",
+                "credential_id": 88,
+                "wordlist": "secret-password-list.txt",
+                "usernames": "alice,bob",
+            },
+        ),
+        (
+            "safe_check",
+            "run_safe_check",
+            {
+                "task_type": "safe_check",
+                "target": "https://allowed.example/login",
+                "vuln_id": "RCE-SECRET-123",
+                "validation_method": "time_based_sleep",
+            },
+        ),
+        (
+            "weaponize",
+            "run_weaponize",
+            {
+                "task_type": "weaponize",
+                "target": "https://allowed.example/login",
+                "vuln_id": "RCE-SECRET-456",
+                "requires_approval": True,
+            },
+        ),
+    ],
+)
+def test_scheduled_offensive_tasks_are_denied_before_handler_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+    handler_name: str,
+    payload: dict[str, object],
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    scoped_payload = {
+        **payload,
+        "roe_id": "ROE-ACME-2026-07",
+        "scope_manifest": json.dumps(
+            {"roe_id": "ROE-ACME-2026-07", "domains": ["allowed.example"]}
+        ),
+    }
+
+    def _fail_handler(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError(f"scheduled {task_type} must not reach {handler_name}")
+
+    monkeypatch.setattr(runnable, handler_name, _fail_handler, raising=False)
+
+    with pytest.raises(RuntimeError, match="unsupported_scheduled_task"):
+        runnable.run_scheduled_task(
+            1001,
+            f"{task_type}:blocked",
+            scoped_payload,
+            db_path,
+        )
+
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT action, target, result
+            FROM audit_log
+            WHERE engagement_id=1001 AND module='scheduled_task'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert row[0] == "scheduled_task_denied"
+    assert row[1] == scoped_payload["target"]
+    assert f"task_type={task_type}" in row[2]
+    assert "unsupported_scheduled_task" in row[2]
+    assert "ROE-ACME-2026-07" not in row[2]
+    assert "secret-password-list.txt" not in row[2]
+    assert "alice,bob" not in row[2]
+    assert "RCE-SECRET" not in row[2]
+    assert "allowed.example" not in row[2]
+
+
 def test_scheduled_ports_requires_scope_and_passes_scope_override(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

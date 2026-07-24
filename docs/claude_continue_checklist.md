@@ -66,12 +66,30 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: continue the automated artifact discovery chain with one
-  more current-code-audited passive parser/OCR gap, provider-proof hardening
-  gap, or identity/provider-shape gap. Prefer a high-value path with compact
-  focused regression coverage, and keep implementation passive/proof-bound:
-  recursive seeds/cloud refs only unless an explicitly scoped live check is
-  already required by the validation contract.
+- [ ] Next checkpoint: block offensive playbook/API queue sources before
+  scheduler insertion. `run_zero_to_da()` and `run_rce_hunter()` must not queue
+  `spray`, `safe_check`, or `weaponize` as `_next_steps` or event-driven tasks,
+  and `/api/tasks/enqueue` should reject those denied task types before
+  `TaskScheduler.schedule()`. Prefer a shared fail-closed policy helper so
+  playbook scheduling, web/API enqueue, and `run_scheduled_task()` cannot drift.
+  Focus files/tests: `forge/utils/playbooks/__init__.py`,
+  `forge/utils/automation.py`, `forge/webui/app.py`,
+  `forge/webui/automation_scope.py`, `tests/integration/test_playbooks.py`,
+  `tests/integration/test_webui_scope_preflight.py`, and the relevant
+  engagement API enqueue selectors. Keep this backend-only and do not weaken
+  ROE/scope checks.
+- [x] Scheduled offensive task fail-closed checkpoint:
+  `run_scheduled_task()` now explicitly denies scheduled `spray`, `safe_check`,
+  and `weaponize` tasks before ROE/scope checks or handler dispatch. The legacy
+  scheduler imports and dispatch branches for those offensive stubs were
+  removed, unsupported attempts write sanitized `scheduled_task_denied` audit
+  rows, and regression coverage proves monkeypatched handlers are not called
+  even when the payload carries valid-looking ROE and scope context. This does
+  not add live probes, credential attacks, exploitation behavior, scope
+  relaxation, or provider concurrency changes. Verification: focused
+  distributed scheduler scope suite passed (`22 passed`), full distributed
+  suite passed (`32 passed`), py_compile passed for touched files, Ruff passed
+  for touched files, and `git diff --check` passed.
 - [x] Current-user provider proof-hash checkpoint:
   Vercel, Netlify, Notion, and PostHog validation details now include a
   deterministic `profile_hash` derived from already accepted non-secret profile

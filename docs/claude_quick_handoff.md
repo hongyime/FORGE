@@ -25,7 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: current-user provider proof-hash hardening is complete.
+Latest checkpoint: scheduled offensive task fail-closed hardening is complete.
+`run_scheduled_task()` now explicitly denies scheduled `spray`, `safe_check`,
+and `weaponize` tasks before ROE/scope checks or handler dispatch. The legacy
+scheduler imports and dispatch branches for those offensive stubs were removed,
+unsupported attempts write sanitized `scheduled_task_denied` audit rows, and
+regression coverage proves monkeypatched handlers are not called even when the
+payload carries valid-looking ROE and scope context. Verification: focused
+distributed scheduler scope suite passed (`22 passed`), full distributed suite
+passed (`32 passed`), py_compile passed for touched files, Ruff passed for
+touched files, and `git diff --check` passed.
+
+Next checkpoint: block offensive playbook/API queue sources before scheduler
+insertion. `run_zero_to_da()` and `run_rce_hunter()` must not queue `spray`,
+`safe_check`, or `weaponize` as `_next_steps` or event-driven tasks, and
+`/api/tasks/enqueue` should reject those denied task types before
+`TaskScheduler.schedule()`. Prefer a shared fail-closed policy helper so
+playbook scheduling, web/API enqueue, and `run_scheduled_task()` cannot drift.
+Focus files/tests: `forge/utils/playbooks/__init__.py`,
+`forge/utils/automation.py`, `forge/webui/app.py`,
+`forge/webui/automation_scope.py`, `tests/integration/test_playbooks.py`, and
+`tests/integration/test_webui_scope_preflight.py`. Keep this backend-only and
+do not weaken ROE/scope checks.
+
+Previous checkpoint: current-user provider proof-hash hardening is complete.
 Vercel, Netlify, Notion, and PostHog validation details now include a
 deterministic `profile_hash` derived from already accepted non-secret profile
 proof fields, and report/validation-inventory parsers require that stable hash
@@ -41,15 +64,6 @@ report synthesizer suite passed (`106 passed`), py_compile passed for touched
 files, and Ruff passed for touched files. Slow Phase 1 long-tail kill-chain
 graph/report regression was attempted with `-m slow` but stopped at the current
 ROE/scope guard before this proof path; the guard was not weakened.
-
-Next checkpoint: scheduled offensive task fail-closed hardening. Sidecar Hume
-found that `forge/distributed/runnable.py::run_scheduled_task()` still has
-lower-level dispatch paths for `spray`, `safe_check`, and `weaponize` even
-though current handlers are stubs. Add explicit scheduler-level denial before
-handler dispatch, with local tests in `tests/distributed/test_runnable_scope.py`
-that prove monkeypatched handlers are not called and audit logging records a
-sanitized denial. No live probes, credential attacks, exploit behavior, or
-scope relaxation.
 
 Previous checkpoint: embedded raster image carving is complete. Legacy binary
 artifacts and OLE stream payloads now carve bounded embedded

@@ -13,32 +13,26 @@ from forge.phase1.port_scanner import scan_engagement_enhanced
 from forge.phase1.stealth_recon import run_crawl_stealth, run_searxng_passive
 from forge.phase2.xray_runner import run_passive_http_collection
 from forge.phase4.auth_bypass import run_bypass_assessment
-from forge.phase4.spray import run_spray
 from forge.phase4.cloud_validate import (
     key_validation_scope_decision,
     load_cloud_validation_scope_manifest,
     run_cloud_validate,
     validate_scope_manifest_entries,
 )
-from forge.phase4.rce_hunter import run_safe_check, run_weaponize
 
 
+_UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES = {"safe_check", "spray", "weaponize"}
 _SENSITIVE_SCHEDULED_TASK_TYPES = {
     "auth-bypass",
     "ports",
-    "safe_check",
-    "spray",
     "validate",
-    "weaponize",
 }
 _TARGET_SCOPED_TASK_TYPES = {
     "auth-bypass",
     "crawl",
     "crawl_stealth",
     "passive",
-    "safe_check",
     "searxng_passive",
-    "weaponize",
 }
 _DEFAULT_SCHEDULED_SEARXNG_URLS = {
     "http://searxng:8080",
@@ -134,6 +128,8 @@ def _audit_scheduled_scope_denied(
     target: str,
     reason: str,
     db_path: Path,
+    *,
+    action: str = "scheduled_task_scope_denied",
 ) -> None:
     try:
         con = get_engagement_db(db_path)
@@ -141,10 +137,11 @@ def _audit_scheduled_scope_denied(
             con.execute(
                 """
                 INSERT INTO audit_log (engagement_id, phase, module, action, target, result, operator)
-                VALUES (?, 'distributed', 'scheduled_task', 'scheduled_task_scope_denied', ?, ?, 'scheduler')
+                VALUES (?, 'distributed', 'scheduled_task', ?, ?, ?, 'scheduler')
                 """,
                 (
                     engagement_id,
+                    action,
                     target,
                     f"task_type={task_type} reason={reason}"[:500],
                 ),
@@ -162,8 +159,17 @@ def _deny_scheduled_task(
     target: str,
     reason: str,
     db_path: Path,
+    *,
+    action: str = "scheduled_task_scope_denied",
 ) -> None:
-    _audit_scheduled_scope_denied(engagement_id, task_type, target, reason, db_path)
+    _audit_scheduled_scope_denied(
+        engagement_id,
+        task_type,
+        target,
+        reason,
+        db_path,
+        action=action,
+    )
     raise RuntimeError(f"scheduled {task_type} task denied: {reason}")
 
 
@@ -360,16 +366,19 @@ def run_scheduled_task(
     task_type = str(task_type_raw or "").strip().lower()
     target = str(target_raw or "").strip()
 
+    if task_type in _UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES:
+        _deny_scheduled_task(
+            engagement_id,
+            task_type,
+            target,
+            "unsupported_scheduled_task",
+            db_path,
+            action="scheduled_task_denied",
+        )
+
     _assert_scheduled_roe(engagement_id, task_type, target, payload, db_path)
     if task_type in _TARGET_SCOPED_TASK_TYPES:
         _assert_scheduled_target_scope(engagement_id, task_type, target, payload, db_path)
-    
-    if task_type == "spray":
-        credential_id = int(payload.get("credential_id", 0))
-        wordlist = str(payload.get("wordlist", ""))
-        usernames = str(payload.get("usernames", ""))
-        run_spray(credential_id, wordlist, usernames, db_path)
-        return
         
     if task_type == "validate":
         key_id = int(payload.get("key_id", 0))
@@ -425,18 +434,6 @@ def run_scheduled_task(
         use_tor = bool(payload.get("use_tor", False))
         _assert_scheduled_searxng_url(engagement_id, task_type, searxng_url, db_path)
         run_searxng_passive(target, searxng_url, use_tor, db_path)
-        return
-        
-    if task_type == "safe_check":
-        vuln_id = str(payload.get("vuln_id", ""))
-        method = str(payload.get("validation_method", "time_based_sleep"))
-        run_safe_check(vuln_id, target, method, db_path)
-        return
-        
-    if task_type == "weaponize":
-        vuln_id = str(payload.get("vuln_id", ""))
-        req_app = bool(payload.get("requires_approval", True))
-        run_weaponize(vuln_id, target, req_app, db_path)
         return
 
     if task_type == "crawl":
