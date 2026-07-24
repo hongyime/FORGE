@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: LLM validation non-convergence fallback is complete.
+Latest checkpoint: LLM/provider adapter fallback hardening is complete.
+Phase 6 local llama inference now normalizes backend exceptions, malformed
+response shapes, and per-call timeouts into `ProviderUnavailableError`, so the
+existing report pipeline deterministically falls back to template/raw export
+instead of crashing or hanging. Real OpenAI-compatible provider cascade tests
+now prove 401, 403, 429, and HTTP timeout failures fail over through
+`FallbackChainProvider`. Verification: local adapter focused slice passed (`6
+passed, 85 deselected`); full Phase 6 synthesizer suite passed (`91 passed`);
+combined Phase 6/provider adapter suite passed (`157 passed`);
+provider/fallback/property slice passed (`82 passed`); LLM validation plus
+cloud report-gating slice passed (`16 passed`); Ruff/compile passed for touched
+files. Handoff:
+`.claude/handoffs/2026-07-24-llm-provider-adapter-fallback-hardening.md`.
+
+Next checkpoint: propagate explicit `scope_manifest` and `roe_id` into live
+child dispatch specs for `recon ports`, `osint shodan`, and `osint urlscan`,
+with a regression where DB scope is broader than the manifest and children
+still obey the narrower manifest. Current child commands support
+`--scope-manifest`; do not add `--roe-id` to those child argv lists unless the
+child command signatures are expanded first.
+
+Previous checkpoint: LLM validation non-convergence fallback is complete.
 Phase 6 now treats failed LLM validation/correction convergence as a hard
 report gate. If the LLM repeatedly introduces unsupported findings such as a
 hallucinated CVE and final approval remains false after the configured
@@ -40,11 +61,6 @@ passed (`88 passed`); provider/fallback/property slice passed (`78 passed`);
 LLM validation plus cloud report-gating slice passed (`16 passed`);
 Ruff/compile passed for touched files. Handoff:
 `.claude/handoffs/2026-07-24-llm-validation-nonconvergence-fallback.md`.
-
-Next checkpoint: finish explicit LLM/provider adapter fallback regressions for
-quota/rate-limit/auth/timeout failures, including local llama
-exception/malformed-response handling and provider-cascade 429/401/403 timeout
-coverage.
 
 Previous checkpoint: scope-gate unification is complete.
 `forge/opsec/scope_gate.py` now matches the governance gate: missing or empty

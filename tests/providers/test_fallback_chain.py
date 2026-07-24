@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import asyncio
 
+import httpx
 import pytest
 
 from forge.core.errors import ProviderUnavailableError
 from forge.providers.base import CompletionRequest, CompletionResponse
 from forge.providers.fallback import FallbackChainProvider
+from forge.providers.openai_compatible import OpenAICompatibleProvider
 
 
 class _OkProvider:
@@ -70,6 +72,30 @@ class _CrashProvider(_OkProvider):
         raise RuntimeError(f"{self.name} programming error")
 
 
+def _openai_provider(
+    transport: httpx.MockTransport,
+    *,
+    backend_name: str,
+) -> OpenAICompatibleProvider:
+    return OpenAICompatibleProvider(
+        endpoint=f"https://{backend_name}.example/v1",
+        model="report-model",
+        api_key="test-key",
+        timeout=0.2,
+        backend_name=backend_name,
+        http_client=httpx.AsyncClient(transport=transport, timeout=0.2),
+    )
+
+
+def _openai_chat_response(text: str) -> dict[str, object]:
+    return {
+        "id": "chatcmpl-test",
+        "model": "report-model",
+        "choices": [{"message": {"role": "assistant", "content": text}}],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+    }
+
+
 @pytest.mark.asyncio
 async def test_empty_backends_rejected() -> None:
     with pytest.raises(ValueError):
@@ -115,6 +141,82 @@ async def test_failover_on_timeout() -> None:
     resp = await chain.complete(CompletionRequest(prompt="x"))
     assert resp.model_id == "secondary"
     assert secondary.complete_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [401, 403, 429])
+async def test_openai_compatible_chain_fails_over_on_auth_and_rate_limit_status(
+    status_code: int,
+) -> None:
+    calls: list[str] = []
+
+    def primary_handler(request: httpx.Request) -> httpx.Response:
+        calls.append("primary")
+        return httpx.Response(
+            status_code,
+            json={"error": {"message": f"simulated {status_code}"}},
+        )
+
+    def secondary_handler(request: httpx.Request) -> httpx.Response:
+        calls.append("secondary")
+        return httpx.Response(200, json=_openai_chat_response("secondary-ok"))
+
+    primary = _openai_provider(
+        httpx.MockTransport(primary_handler),
+        backend_name="primary",
+    )
+    secondary = _openai_provider(
+        httpx.MockTransport(secondary_handler),
+        backend_name="secondary",
+    )
+    chain = FallbackChainProvider(
+        [("primary", primary), ("secondary", secondary)],
+        per_call_timeout=0.5,
+        cooldown_seconds=0.0,
+    )
+
+    response = await chain.complete(CompletionRequest(prompt="x"))
+
+    assert response.text == "secondary-ok"
+    assert calls == ["primary", "secondary"]
+
+    await primary.aclose()
+    await secondary.aclose()
+
+
+@pytest.mark.asyncio
+async def test_openai_compatible_chain_fails_over_on_http_timeout() -> None:
+    calls: list[str] = []
+
+    def primary_handler(request: httpx.Request) -> httpx.Response:
+        calls.append("primary")
+        raise httpx.ReadTimeout("simulated timeout")
+
+    def secondary_handler(request: httpx.Request) -> httpx.Response:
+        calls.append("secondary")
+        return httpx.Response(200, json=_openai_chat_response("secondary-ok"))
+
+    primary = _openai_provider(
+        httpx.MockTransport(primary_handler),
+        backend_name="primary",
+    )
+    secondary = _openai_provider(
+        httpx.MockTransport(secondary_handler),
+        backend_name="secondary",
+    )
+    chain = FallbackChainProvider(
+        [("primary", primary), ("secondary", secondary)],
+        per_call_timeout=0.5,
+        cooldown_seconds=0.0,
+    )
+
+    response = await chain.complete(CompletionRequest(prompt="x"))
+
+    assert response.text == "secondary-ok"
+    assert calls == ["primary", "secondary"]
+
+    await primary.aclose()
+    await secondary.aclose()
 
 
 @pytest.mark.asyncio

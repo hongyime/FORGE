@@ -31,6 +31,7 @@ import re
 import sqlite3
 import textwrap
 import csv
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -2248,6 +2249,95 @@ def test_synthesizer_auto_local_validation_fallback_preserves_provider_reason(
         payload["fallback_reason"] or ""
     )
     assert payload["report_lineage"]["fallback_reason"] == payload["fallback_reason"]
+
+
+def test_synthesizer_local_llama_runtime_error_falls_back_to_template(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+):
+    class _FailingLlama:
+        def create_chat_completion(self, **kwargs):  # noqa: ANN003
+            del kwargs
+            raise RuntimeError("backend kaput")
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "fake.gguf",
+        output_dir=tmp_path,
+        provider="llama_cpp",
+    )
+    synth._llm = _FailingLlama()
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert "template mode, no LLM" in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "llama_cpp"
+    assert "backend kaput" in str(payload["fallback_reason"] or "")
+
+
+def test_synthesizer_local_llama_malformed_response_falls_back_to_template(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+):
+    class _MalformedLlama:
+        def create_chat_completion(self, **kwargs):  # noqa: ANN003
+            del kwargs
+            return {"choices": []}
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "fake.gguf",
+        output_dir=tmp_path,
+        provider="llama_cpp",
+    )
+    synth._llm = _MalformedLlama()
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert "template mode, no LLM" in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "llama_cpp"
+    assert "malformed local llama_cpp response" in str(payload["fallback_reason"] or "")
+
+
+def test_synthesizer_local_llama_timeout_falls_back_to_template(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+    monkeypatch,
+):
+    class _SlowLlama:
+        def create_chat_completion(self, **kwargs):  # noqa: ANN003
+            del kwargs
+            time.sleep(0.15)
+            return {
+                "choices": [{"message": {"content": _build_valid_report("CRITICAL")}}],
+            }
+
+    monkeypatch.setenv("FORGE_REPORT_LOCAL_LLM_TIMEOUT", "0.01")
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "fake.gguf",
+        output_dir=tmp_path,
+        provider="llama_cpp",
+    )
+    synth._llm = _SlowLlama()
+
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert "template mode, no LLM" in content
+    assert payload["provider"] == "template"
+    assert payload["requested_provider"] == "llama_cpp"
+    assert "timeout" in str(payload["fallback_reason"] or "").lower()
 
 
 def test_synthesizer_dry_run_skips_llm(tmp_eng_db, tmp_path, patch_confirm_approve):

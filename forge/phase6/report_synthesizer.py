@@ -27,6 +27,7 @@ OPSEC invariants:
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import json
 import logging
 import os
@@ -1842,10 +1843,27 @@ class ReportSynthesizer:
         self._requested_provider = (provider or "llama_cpp").lower()
         self._provider_name = self._requested_provider
         self._max_loops   = max_correction_loops if max_correction_loops is not None else MAX_CORRECTION_LOOPS
+        self._local_llama_timeout = self._configured_local_llama_timeout()
         self._llm         = None         # loaded lazily (llama_cpp path)
         self._llm_provider = None        # loaded lazily (registry path)
         self._render_backend = self._provider_name
         self._fallback_reason = ""
+
+    @staticmethod
+    def _configured_local_llama_timeout() -> float:
+        raw = (
+            os.environ.get("FORGE_REPORT_LOCAL_LLM_TIMEOUT")
+            or os.environ.get("FORGE_PROVIDER_TIMEOUT")
+            or ""
+        ).strip()
+        if raw:
+            try:
+                value = float(raw)
+            except ValueError:
+                value = 0.0
+            if value > 0:
+                return value
+        return 300.0
 
     def _set_render_backend(self, backend: str, *, fallback_reason: str = "") -> None:
         self._render_backend = str(backend or "").strip().lower() or self._provider_name
@@ -3446,17 +3464,45 @@ class ReportSynthesizer:
             "Write in formal British English."
         )
 
-        output = self._llm.create_chat_completion(
-            messages=[
+        kwargs = {
+            "messages": [
                 {"role": "system", "content": SYSTEM_DIRECTIVE},
                 {"role": "user",   "content": prompt},
             ],
-            max_tokens  = MAX_COMPLETION_TOK,
-            temperature = self._temperature,
-            top_p       = 0.9,
-            repeat_penalty = 1.1,
-        )
-        return output["choices"][0]["message"]["content"]
+            "max_tokens": MAX_COMPLETION_TOK,
+            "temperature": self._temperature,
+            "top_p": 0.9,
+            "repeat_penalty": 1.1,
+        }
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="forge-report-llama")
+        future = executor.submit(self._llm.create_chat_completion, **kwargs)
+        try:
+            output = future.result(timeout=self._local_llama_timeout)
+        except FutureTimeoutError as exc:
+            future.cancel()
+            raise ProviderUnavailableError(
+                f"local llama_cpp call exceeded {self._local_llama_timeout:.1f}s timeout"
+            ) from exc
+        except ProviderUnavailableError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise ProviderUnavailableError(f"local llama_cpp backend failure: {exc}") from exc
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        try:
+            choices = output["choices"]
+            message = choices[0]["message"]
+            content = message["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ProviderUnavailableError(
+                "malformed local llama_cpp response: missing choices[0].message.content"
+            ) from exc
+        if not isinstance(content, str):
+            raise ProviderUnavailableError(
+                "malformed local llama_cpp response: content is not text"
+            )
+        return content
 
     def _render_skeleton(self, ctx: ReportContext) -> str:
         """Deterministic factual template report — no LLM required.

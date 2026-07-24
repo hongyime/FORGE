@@ -66,10 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: finish explicit LLM/provider adapter fallback
-  regressions for quota/rate-limit/auth/timeout failures, including local
-  llama exception/malformed-response handling and provider-cascade 429/401/403
-  timeout coverage.
+- [ ] Next checkpoint: propagate explicit `scope_manifest` and `roe_id` into
+  live child dispatch specs for `recon ports`, `osint shodan`, and
+  `osint urlscan`, with a regression where DB scope is broader than the
+  manifest and children still obey the narrower manifest.
+- [x] LLM/provider adapter fallback hardening checkpoint:
+  Phase 6 local llama inference now normalizes backend exceptions, malformed
+  response shapes, and per-call timeouts into `ProviderUnavailableError`, so
+  the existing report pipeline deterministically falls back to template/raw
+  export instead of crashing or hanging. Real OpenAI-compatible provider cascade
+  tests now prove 401, 403, 429, and HTTP timeout failures fail over through
+  `FallbackChainProvider`. Verification: local adapter focused slice passed
+  (`6 passed, 85 deselected`); full Phase 6 synthesizer suite passed (`91
+  passed`); combined Phase 6/provider adapter suite passed (`157 passed`);
+  provider/fallback/property slice passed (`82 passed`); LLM validation plus
+  cloud report-gating slice passed (`16 passed`); Ruff/compile passed for
+  touched files. Handoff:
+  `.claude/handoffs/2026-07-24-llm-provider-adapter-fallback-hardening.md`.
 - [x] LLM validation non-convergence fallback checkpoint:
   Phase 6 now treats failed LLM validation/correction convergence as a hard
   report gate. If the LLM repeatedly introduces unsupported findings such as a
