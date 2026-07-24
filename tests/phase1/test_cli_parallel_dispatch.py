@@ -939,3 +939,64 @@ def test_extract_html_surface_urls_resolves_relative_links_and_dedupes_literals(
         "https://acme.example/events",
         "https://acme.example/api/users",
     ]
+
+
+def test_extract_html_surface_urls_batches_url_families_and_preserves_order(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[list[str], int]] = []
+
+    def _fake_run_inprocess_batch(
+        items,  # noqa: ANN001
+        worker,  # noqa: ANN001
+        *,
+        max_workers: int,
+        progress_label=None,  # noqa: ANN001
+        progress_callback=None,  # noqa: ANN001
+    ) -> list[object]:
+        del progress_label, progress_callback
+        calls.append((list(items), max_workers))
+        return [worker(item) for item in items]
+
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _fake_run_inprocess_batch)
+    payload = """
+    https://literal.acme.example/landing
+    <a href="/first">First</a>
+    <meta http-equiv="refresh" content="0; URL=/refresh">
+    <img srcset="/small.png 1x, /large.png 2x">
+    <style>@import "/site.css"; .hero { background: url('/hero.png'); }</style>
+    <script>fetch('/api/status'); new Worker('/worker.js');</script>
+    <a href="/first">Duplicate</a>
+    """
+
+    extracted = _extract_html_surface_urls(
+        payload,
+        base_url="https://acme.example/root",
+        max_workers=3,
+    )
+
+    assert calls == [
+        (
+            [
+                "literal",
+                "attribute",
+                "meta_refresh",
+                "srcset",
+                "css_url",
+                "css_import",
+                "js",
+            ],
+            3,
+        )
+    ]
+    assert extracted == [
+        "https://literal.acme.example/landing",
+        "https://acme.example/first",
+        "https://acme.example/refresh",
+        "https://acme.example/small.png",
+        "https://acme.example/large.png",
+        "https://acme.example/hero.png",
+        "https://acme.example/site.css",
+        "https://acme.example/api/status",
+        "https://acme.example/worker.js",
+    ]

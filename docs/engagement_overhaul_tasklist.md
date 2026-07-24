@@ -177,13 +177,26 @@ sentences as historical notes only, not as current instructions.
   slice passed (`5 passed, 757 deselected`); broader social-profile synthesis
   cluster passed (`81 passed, 681 deselected`). Handoff:
   `.claude/handoffs/2026-07-24-social-profile-pivot-worker.md`.
-- [ ] Next target: move `_extract_html_surface_urls` URL-family parsing in
-  `forge/cli.py` under an ordered in-process worker helper for the single-payload
-  D1/D2/D5 parse path, preserving first-seen URL order and avoiding nested
-  worker-pool multiplication when an outer parse batch is already parallel.
-  Add/update `tests/phase1/test_cli_parallel_dispatch.py` coverage. This is
-  passive parsing only; no live target assumptions, rate-limit bypass, proxy
-  rotation, provider calls, or scope relaxation.
+- [x] HTML surface URL-family worker checkpoint:
+  `_extract_html_surface_urls()` now splits passive HTML URL extraction into
+  ordered families (`literal`, `attribute`, `meta_refresh`, `srcset`,
+  `css_url`, `css_import`, `js`) and can dispatch them through
+  `_run_inprocess_batch()` for the single-payload D1/D2/D5 parse path. Final
+  first-seen URL dedupe remains serial and deterministic. Outer D1/D2/D5 parse
+  batches keep inner URL workers at one when multiple payloads are already
+  parsed in parallel, avoiding nested worker-pool multiplication. Verification:
+  compile passed; Ruff passed; focused passive/HTML URL extraction tests passed
+  (`3 passed, 28 deselected`); full CLI parallel dispatch suite passed (`31
+  passed`); D1/D2/D5 worker scheduling slice passed (`3 passed`); compact
+  HTML-mining plus service-worker/precache kill-chain smoke passed (`2
+  passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-html-surface-url-family-worker.md`.
+- [ ] Next target: inspect the higher-risk `_extract_html_data()` aggregation
+  path for a concrete safe in-process worker split, or stop the worker-pool
+  migration if no source-gated passive/static family remains. Do not move
+  serial DB apply/merge/write/finalization barriers. Keep tests local/mocked and
+  preserve scope gates, pacing, and deterministic persistence order.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from

@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: social-profile pivot worker migration is complete.
+Latest checkpoint: HTML surface URL-family worker migration is complete.
+`_extract_html_surface_urls()` now splits passive HTML URL extraction into
+ordered families (`literal`, `attribute`, `meta_refresh`, `srcset`, `css_url`,
+`css_import`, `js`) and can dispatch them through `_run_inprocess_batch()` for
+the single-payload D1/D2/D5 parse path. Final first-seen URL dedupe remains
+serial. Outer D1/D2/D5 parse batches keep inner URL workers at one when multiple
+payloads are already parallel. Verification: compile/Ruff passed; focused
+passive/HTML URL extraction tests passed (`3 passed, 28 deselected`); full CLI
+parallel dispatch suite passed (`31 passed`); D1/D2/D5 scheduling slice passed
+(`3 passed`); compact HTML-mining plus service-worker/precache smoke passed
+(`2 passed`); cleanup reported `removed=4 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-html-surface-url-family-worker.md`.
+
+Current next gate: inspect the higher-risk `_extract_html_data()` aggregation
+path for a concrete safe in-process worker split, or stop the worker-pool
+migration if no source-gated passive/static family remains. Do not move serial
+DB apply/merge/write/finalization barriers. Keep tests local/mocked and
+preserve scope gates, pacing, and deterministic persistence order.
+
+Previous checkpoint: social-profile pivot worker migration is complete.
 Identity/social-profile recursive pivot construction now routes handle, email,
 phone, Matrix homeserver, federated-host, and domain pivot-entry shaping through
 the existing bounded ordered local worker helper while preserving deterministic
@@ -33,14 +52,6 @@ family order and serial persistence. Verification: compile/Ruff passed; focused
 social-profile worker slice passed (`5 passed, 757 deselected`); broader
 social-profile synthesis cluster passed (`81 passed, 681 deselected`).
 Handoff: `.claude/handoffs/2026-07-24-social-profile-pivot-worker.md`.
-
-Current next gate: move `_extract_html_surface_urls` URL-family parsing in
-`forge/cli.py` under an ordered in-process worker helper for the single-payload
-D1/D2/D5 parse path, preserving first-seen URL order and avoiding nested
-worker-pool multiplication when an outer parse batch is already parallel. Add
-or update `tests/phase1/test_cli_parallel_dispatch.py` coverage. Passive
-parsing only; no live target assumptions, rate-limit bypass, proxy rotation,
-provider calls, or scope relaxation.
 
 Previous checkpoint: broader validation/reportability regression gate is
 complete. Latest linked cloud validation now wins for deterministic

@@ -973,7 +973,12 @@ def _extract_passive_text_urls(text: str, *, base_url: str = "") -> list[str]:
     return ordered_urls
 
 
-def _extract_html_surface_urls(html: str, *, base_url: str = "") -> list[str]:
+def _extract_html_surface_urls(
+    html: str,
+    *,
+    base_url: str = "",
+    max_workers: int = 1,
+) -> list[str]:
     """Extract absolute and relative HTML-linked URLs from a rendered surface."""
 
     ordered_urls: list[str] = []
@@ -987,8 +992,6 @@ def _extract_html_surface_urls(html: str, *, base_url: str = "") -> list[str]:
         ordered_urls.append(normalized)
 
     raw_html = str(html or "")
-    for match in _PASSIVE_TEXT_URL_RE.finditer(raw_html):
-        _append(match.group(0))
 
     def _resolve_surface_candidate(raw_value: str) -> str:
         value = html_lib.unescape(str(raw_value or "").strip())
@@ -997,70 +1000,111 @@ def _extract_html_surface_urls(html: str, *, base_url: str = "") -> list[str]:
         return urljoin(base_url, value)
 
     parsed_base = urlparse(str(base_url or "").strip())
-    if parsed_base.scheme in {"http", "https"} and parsed_base.netloc:
-        for match in _HTML_ATTRIBUTE_URL_RE.finditer(raw_html):
-            resolved = _resolve_surface_candidate(str(match.group(1) or ""))
-            if not resolved:
-                continue
-            _append(resolved)
-        for meta_match in _HTML_META_TAG_RE.finditer(raw_html):
-            attrs: dict[str, str] = {}
-            for attr_match in _HTML_TAG_ATTRIBUTE_RE.finditer(meta_match.group(0)):
-                attr_name = str(attr_match.group(1) or "").strip().lower()
-                attr_value = next(
-                    (
-                        str(group or "")
-                        for group in attr_match.groups()[1:]
-                        if group is not None
-                    ),
-                    "",
-                )
-                attrs[attr_name] = html_lib.unescape(attr_value.strip())
-            if attrs.get("http-equiv", "").strip().lower() != "refresh":
-                continue
-            refresh_match = _HTML_META_REFRESH_URL_RE.search(attrs.get("content", ""))
-            if not refresh_match:
-                continue
-            raw_value = html_lib.unescape(
-                str(refresh_match.group(1) or "").strip().strip("'\"")
-            )
-            resolved = _resolve_surface_candidate(raw_value)
-            if not resolved:
-                continue
-            _append(resolved)
-        for match in _HTML_SRCSET_ATTRIBUTE_RE.finditer(raw_html):
-            srcset_value = html_lib.unescape(str(match.group(1) or ""))
-            skip_data_payload = False
-            for candidate in srcset_value.split(","):
-                raw_value = candidate.strip().split(maxsplit=1)[0] if candidate.strip() else ""
-                if skip_data_payload:
-                    skip_data_payload = False
-                    continue
-                if not raw_value or raw_value.lower().startswith(_HTML_IGNORED_URL_PREFIXES):
-                    if raw_value.lower().startswith("data:"):
-                        skip_data_payload = True
-                    continue
-                _append(urljoin(base_url, raw_value))
-        for match in _HTML_CSS_URL_RE.finditer(raw_html):
-            resolved = _resolve_surface_candidate(str(match.group(1) or ""))
-            if not resolved:
-                continue
-            _append(resolved)
-        for match in _HTML_CSS_IMPORT_RE.finditer(raw_html):
-            resolved = _resolve_surface_candidate(str(match.group(1) or ""))
-            if not resolved:
-                continue
-            _append(resolved)
-        for pattern in (
-            _HTML_JS_CALL_URL_RE,
-            _HTML_JS_CONSTRUCTOR_URL_RE,
-            _HTML_JS_METHOD_CALL_URL_RE,
-        ):
-            for match in pattern.finditer(raw_html):
+    has_base = parsed_base.scheme in {"http", "https"} and bool(parsed_base.netloc)
+    families = ["literal"]
+    if has_base:
+        families.extend(
+            [
+                "attribute",
+                "meta_refresh",
+                "srcset",
+                "css_url",
+                "css_import",
+                "js",
+            ]
+        )
+
+    def _family_candidates(family: str) -> list[str]:
+        candidates: list[str] = []
+        if family == "literal":
+            return [match.group(0) for match in _PASSIVE_TEXT_URL_RE.finditer(raw_html)]
+        if family == "attribute":
+            for match in _HTML_ATTRIBUTE_URL_RE.finditer(raw_html):
                 resolved = _resolve_surface_candidate(str(match.group(1) or ""))
-                if not resolved:
+                if resolved:
+                    candidates.append(resolved)
+            return candidates
+        if family == "meta_refresh":
+            for meta_match in _HTML_META_TAG_RE.finditer(raw_html):
+                attrs: dict[str, str] = {}
+                for attr_match in _HTML_TAG_ATTRIBUTE_RE.finditer(meta_match.group(0)):
+                    attr_name = str(attr_match.group(1) or "").strip().lower()
+                    attr_value = next(
+                        (
+                            str(group or "")
+                            for group in attr_match.groups()[1:]
+                            if group is not None
+                        ),
+                        "",
+                    )
+                    attrs[attr_name] = html_lib.unescape(attr_value.strip())
+                if attrs.get("http-equiv", "").strip().lower() != "refresh":
                     continue
-                _append(resolved)
+                refresh_match = _HTML_META_REFRESH_URL_RE.search(attrs.get("content", ""))
+                if not refresh_match:
+                    continue
+                raw_value = html_lib.unescape(
+                    str(refresh_match.group(1) or "").strip().strip("'\"")
+                )
+                resolved = _resolve_surface_candidate(raw_value)
+                if resolved:
+                    candidates.append(resolved)
+            return candidates
+        if family == "srcset":
+            for match in _HTML_SRCSET_ATTRIBUTE_RE.finditer(raw_html):
+                srcset_value = html_lib.unescape(str(match.group(1) or ""))
+                skip_data_payload = False
+                for candidate in srcset_value.split(","):
+                    raw_value = (
+                        candidate.strip().split(maxsplit=1)[0]
+                        if candidate.strip()
+                        else ""
+                    )
+                    if skip_data_payload:
+                        skip_data_payload = False
+                        continue
+                    if not raw_value or raw_value.lower().startswith(_HTML_IGNORED_URL_PREFIXES):
+                        if raw_value.lower().startswith("data:"):
+                            skip_data_payload = True
+                        continue
+                    candidates.append(urljoin(base_url, raw_value))
+            return candidates
+        if family == "css_url":
+            for match in _HTML_CSS_URL_RE.finditer(raw_html):
+                resolved = _resolve_surface_candidate(str(match.group(1) or ""))
+                if resolved:
+                    candidates.append(resolved)
+            return candidates
+        if family == "css_import":
+            for match in _HTML_CSS_IMPORT_RE.finditer(raw_html):
+                resolved = _resolve_surface_candidate(str(match.group(1) or ""))
+                if resolved:
+                    candidates.append(resolved)
+            return candidates
+        if family == "js":
+            for pattern in (
+                _HTML_JS_CALL_URL_RE,
+                _HTML_JS_CONSTRUCTOR_URL_RE,
+                _HTML_JS_METHOD_CALL_URL_RE,
+            ):
+                for match in pattern.finditer(raw_html):
+                    resolved = _resolve_surface_candidate(str(match.group(1) or ""))
+                    if resolved:
+                        candidates.append(resolved)
+            return candidates
+        return candidates
+
+    if len(families) > 1 and int(max_workers or 1) > 1:
+        family_batches = _run_inprocess_batch(
+            families,
+            _family_candidates,
+            max_workers=max_workers,
+        )
+    else:
+        family_batches = [_family_candidates(family) for family in families]
+    for family_batch in family_batches:
+        for candidate in family_batch:
+            _append(candidate)
 
     return ordered_urls
 
@@ -7059,7 +7103,12 @@ def kill_chain(
             _append_source(url_value, "commoncrawl")
         return metadata_by_url
 
-    def _extract_html_data(html: str, *, base_url: str = "") -> dict[str, set[str]]:
+    def _extract_html_data(
+        html: str,
+        *,
+        base_url: str = "",
+        surface_url_workers: int = 1,
+    ) -> dict[str, set[str]]:
         """Pull auxiliary intelligence out of rendered HTML/JS content.
 
         Beyond cloud refs (in _extract_cloud_refs), we also want:
@@ -7126,7 +7175,11 @@ def kill_chain(
             if normalized_phone:
                 phones.add(normalized_phone)
 
-        for candidate in _extract_html_surface_urls(html, base_url=base_url):
+        for candidate in _extract_html_surface_urls(
+            html,
+            base_url=base_url,
+            max_workers=surface_url_workers,
+        ):
             crawl_urls.add(candidate)
             parsed_candidate = urlparse(candidate)
             host = str(parsed_candidate.hostname or "").strip().lower()
@@ -13281,7 +13334,13 @@ def kill_chain(
                 html_surface_results = _run_inprocess_batch(
                     html_parse_items,
                     lambda item: {
-                        "mined": _extract_html_data(item[1], base_url=item[0]),
+                        "mined": _extract_html_data(
+                            item[1],
+                            base_url=item[0],
+                            surface_url_workers=parallel_workers
+                            if len(html_parse_items) == 1
+                            else 1,
+                        ),
                         "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
                     },
                     max_workers=parallel_workers,
@@ -13328,7 +13387,13 @@ def kill_chain(
                         passive_text_parse_items,
                         lambda item: {
                             "passive_urls": _extract_passive_text_urls(item[1], base_url=item[0]),
-                            "mined": _extract_html_data(item[1], base_url=item[0]),
+                            "mined": _extract_html_data(
+                                item[1],
+                                base_url=item[0],
+                                surface_url_workers=parallel_workers
+                                if len(passive_text_parse_items) == 1
+                                else 1,
+                            ),
                             "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
                         },
                         max_workers=parallel_workers,
@@ -13849,7 +13914,13 @@ def kill_chain(
                 url_surface_mining_results = _run_inprocess_batch(
                     url_surface_parse_items,
                     lambda item: {
-                        "mined": _extract_html_data(item[1], base_url=item[0]),
+                        "mined": _extract_html_data(
+                            item[1],
+                            base_url=item[0],
+                            surface_url_workers=parallel_workers
+                            if len(url_surface_parse_items) == 1
+                            else 1,
+                        ),
                         "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
                     },
                     max_workers=parallel_workers,
