@@ -25,7 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: API-created engagement cleanup and monotonic sequence
+Latest checkpoint: Fan-out J denied cloud seed-run persistence is complete.
+Cloud references denied by the scope manifest before Fan-out J validation now
+persist as skipped `fanout_j_cloud_scan` seed runs with service, ref, deny
+reason, scope gate/source, candidate count, iteration, and
+`denied_before_scan=true` metadata. Existing `cloud_validation_scope_denied`
+audit evidence and unverified validation inventory remain intact, and resume
+treats the skipped J run as terminal so reruns do not duplicate validation.
+Verification: compile passed; Ruff passed; focused cloud scope-manifest
+denial/resume test passed (`1 passed`); adjacent cloud scheduling selector
+passed (`4 passed, 762 deselected`). Handoff:
+`.claude/handoffs/2026-07-24-j-denied-cloud-seed-runs.md`.
+
+Next checkpoint: stale running seed-run recovery on resume. Add a compact
+`SeedRunTracker` recovery path, analogous to engagement-run abandonment, so
+resumed kill-chain runs mark prior `seed_runs.status='running'` rows as
+`failed` with `completed_at` and an `abandoned before explicit completion`
+error before retrying. Regression target:
+`test_kill_chain_resume_marks_stale_running_seed_runs_failed_before_retry`.
+
+Queued after that: raw-export fallback orphan report cleanup, then
+artifact-derived cloud asset provenance. Both are listed in
+`docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`.
+
+Previous checkpoint: API-created engagement cleanup and monotonic sequence
 coverage is complete. The API create sequence regression now proves deleting a
 test-owned engagement DB leaves no numeric DB debris while preserving the
 `master.db` monotonic sequence. It verifies `1002.db` deletion does not allow ID
@@ -35,12 +58,6 @@ passed; Ruff passed; focused cleanup/sequence test passed (`1 passed`); full
 web UI engagement API file passed (`44 passed`); `.forge_data/engagements`
 contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-api-create-cleanup-sequence.md`.
-
-Next checkpoint: perform a fresh current-code deterministic gap audit and pick
-one compact implementation/test task that advances intake, discovery,
-recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
-The previous five sidecar-prioritized gaps are now closed; do not reopen them
-unless a regression is found.
 
 Previous checkpoint: audit manifest bundle availability is complete.
 Dashboard/API run summaries now annotate audit manifests with explicit

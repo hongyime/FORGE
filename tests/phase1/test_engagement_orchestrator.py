@@ -66795,6 +66795,23 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_cloud_validation_pivot(
         seed="acme.example",
         related_seed=[],
         engagement="1001",
+        resume=True,
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        scope_manifest=str(manifest_path),
+        skip_cloud=False,
+        skip_keyscan=True,
+        parallel_fanout=2,
+        report_provider="template",
+    )
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        resume=True,
         max_iter=1,
         tor=False,
         dry_run=False,
@@ -66841,6 +66858,42 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_cloud_validation_pivot(
         assert any(str(row[3]) == "firebase:denied" for row in audit_rows)
         assert any("reason=scope_manifest_denied" in str(row[4]) for row in audit_rows)
         assert any(manifest_path.resolve().as_posix() in str(row[4]) for row in audit_rows)
+
+        seed_runs = con.execute(
+            """
+            SELECT es.seed_value, sr.loop_name, sr.status, sr.output_count, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_j_cloud_scan'
+            ORDER BY es.seed_value, sr.id
+            """
+        ).fetchall()
+        grouped = {
+            (str(seed_value), str(loop_name)): (
+                str(status),
+                int(output_count or 0),
+                str(error or ""),
+                json.loads(str(metadata_json or "{}")),
+            )
+            for seed_value, loop_name, status, output_count, error, metadata_json in seed_runs
+        }
+        assert set(grouped) == {
+            ("firebase:denied", "fanout_j_cloud_scan"),
+            ("supabase:allowed", "fanout_j_cloud_scan"),
+        }
+        denied_status, denied_output_count, denied_error, denied_metadata = grouped[
+            ("firebase:denied", "fanout_j_cloud_scan")
+        ]
+        assert denied_status == "skipped"
+        assert denied_output_count == 0
+        assert denied_error == "scope_manifest_denied"
+        assert denied_metadata["denied_before_scan"] is True
+        assert denied_metadata["service"] == "firebase"
+        assert denied_metadata["ref"] == "denied"
+        assert denied_metadata["deny_reason"] == "scope_manifest_denied"
+        assert denied_metadata["scope_manifest_source"] == manifest_path.resolve().as_posix()
+        assert grouped[("supabase:allowed", "fanout_j_cloud_scan")][0] == "completed"
     finally:
         con.close()
 

@@ -11020,6 +11020,73 @@ def kill_chain(
         specs_out.append(item)
         return str(item.label)
 
+    def _prepare_denied_cloud_seed_skip_entry(
+        item: dict[str, object],
+    ) -> dict[str, object] | None:
+        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        decision = item.get("decision") if isinstance(item.get("decision"), dict) else {}
+        service = str(target.get("service") or decision.get("service") or "").strip().lower()
+        ref = str(target.get("ref") or decision.get("ref") or "").strip()
+        key = str(target.get("key") or f"{service}:{ref}").strip()
+        if not service or not ref or not key:
+            return None
+        reason = str(decision.get("reason") or "scope_denied").strip()
+        return _prepare_one_shot_seed_run_entry(
+            seed_value=key,
+            seed_type="other",
+            loop_name="fanout_j_cloud_scan",
+            source="cross_reference",
+            depth=2,
+            confidence=0.8,
+            start_metadata={
+                "iteration": iteration,
+                "scope_gate": "cloud_asset_scope_decision",
+                "scope_manifest_source": str(decision.get("scope_manifest_source") or ""),
+                "service": service,
+                "ref": ref,
+                "deny_reason": reason,
+                "candidate_count": int(decision.get("candidate_count") or 0),
+            },
+            status="skipped",
+            output_count=0,
+            error=reason,
+            finish_metadata={
+                "iteration": iteration,
+                "denied_before_scan": True,
+                "scope_gate": "cloud_asset_scope_decision",
+                "scope_manifest_source": str(decision.get("scope_manifest_source") or ""),
+                "service": service,
+                "ref": ref,
+                "deny_reason": reason,
+                "candidate_count": int(decision.get("candidate_count") or 0),
+            },
+        )
+
+    def _apply_cloud_scope_decision_item(
+        item: dict[str, object],
+        *,
+        pending_targets_out: list[dict[str, Any]],
+        processed_refs_out: set[str],
+    ) -> str | None:
+        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        decision = item.get("decision") if isinstance(item.get("decision"), dict) else {}
+        key = str(target.get("key") or "").strip()
+        if bool(decision.get("allowed")):
+            pending_targets_out.append(cast(dict[str, Any], target))
+            return key or None
+        _record_cloud_asset_scope_denied(
+            str(target.get("service") or ""),
+            str(target.get("ref") or ""),
+            str(decision.get("reason") or "scope_manifest_denied"),
+        )
+        skipped_key = _apply_one_shot_seed_run_entry(
+            _prepare_denied_cloud_seed_skip_entry(item)
+        )
+        processed_key = str(skipped_key or key or "").strip()
+        if processed_key:
+            processed_refs_out.add(processed_key)
+        return processed_key or None
+
     def _prepare_simple_schedule_reduction_entry(
         item: Any,
     ) -> str | None:
@@ -17129,17 +17196,10 @@ def kill_chain(
                 )
                 _run_ordered_inprocess_apply_batch(
                     scope_items,
-                    lambda item: (
-                        scoped_pending_cloud_targets.append(item["target"])
-                        if bool(item.get("decision", {}).get("allowed"))
-                        else (
-                            _record_cloud_asset_scope_denied(
-                                str(item.get("target", {}).get("service") or ""),
-                                str(item.get("target", {}).get("ref") or ""),
-                                str(item.get("decision", {}).get("reason") or "scope_manifest_denied"),
-                            ),
-                            processed_cloud_refs.add(str(item.get("target", {}).get("key") or "")),
-                        )
+                    lambda item: _apply_cloud_scope_decision_item(
+                        item,
+                        pending_targets_out=scoped_pending_cloud_targets,
+                        processed_refs_out=processed_cloud_refs,
                     ),
                     progress_label=f"{iteration}.J cloud scope apply",
                     progress_callback=_record_batch_progress,

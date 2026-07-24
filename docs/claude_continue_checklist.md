@@ -66,11 +66,38 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
-  pick one compact implementation/test task that advances intake, discovery,
-  recursion, artifact analysis, validation, scoring, review, fallback, or
-  cleanup. The previous five sidecar-prioritized gaps are now closed; do not
-  reopen them unless a regression is found.
+- [ ] Next checkpoint: stale running seed-run recovery on resume. Add a compact
+  `SeedRunTracker` recovery path, analogous to engagement-run abandonment, so
+  resumed kill-chain runs mark prior `seed_runs.status='running'` rows as
+  `failed` with `completed_at` and an `abandoned before explicit completion`
+  error before retrying. Regression target:
+  `test_kill_chain_resume_marks_stale_running_seed_runs_failed_before_retry`.
+- [ ] Then checkpoint: raw-export fallback orphan report cleanup. If Phase 6
+  companion export persistence fails after Markdown has been written, remove or
+  mark the orphan report-family Markdown so dashboard/API `report_summary`
+  selects the authoritative `raw_export` JSON/CSV family. Regression targets:
+  `test_synthesizer_raw_export_fallback_removes_orphan_report_markdown` plus a
+  dashboard latest-family selection regression.
+- [ ] Then checkpoint: artifact-derived cloud asset provenance. Preserve a
+  durable non-secret relation from parsed artifacts to cloud validation targets
+  with source seed/artifact URL/file/rule/format metadata, while keeping
+  unvalidated refs non-reportable. Regression target:
+  `test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validation_review`.
+- [ ] After those three subagent-audited gaps are closed, perform a fresh
+  current-code deterministic gap audit and pick one compact task that advances
+  intake, discovery, recursion, artifact analysis, validation, scoring, review,
+  fallback, or cleanup.
+- [x] Fan-out J denied cloud seed-run persistence checkpoint:
+  Cloud references denied by the scope manifest before Fan-out J validation now
+  persist as skipped `fanout_j_cloud_scan` seed runs with service, ref, deny
+  reason, scope gate/source, candidate count, iteration, and
+  `denied_before_scan=true` metadata. Existing
+  `cloud_validation_scope_denied` audit evidence and unverified validation
+  inventory remain intact, and resume treats the skipped J run as terminal so
+  reruns do not duplicate validation. Verification: compile passed; Ruff
+  passed; focused cloud scope-manifest denial/resume test passed (`1 passed`);
+  adjacent cloud scheduling selector passed (`4 passed, 762 deselected`).
+  Handoff: `.claude/handoffs/2026-07-24-j-denied-cloud-seed-runs.md`.
 - [x] API-created engagement cleanup and monotonic sequence checkpoint:
   The API create sequence regression now proves deleting a test-owned
   engagement DB leaves no numeric DB debris while preserving the `master.db`
