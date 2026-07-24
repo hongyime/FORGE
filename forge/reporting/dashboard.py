@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 from forge.audit.manifest import _graph_artifact_names, summarize_run_audit_manifest
+from forge.reporting.graph_validation_metadata import latest_cloud_validation_metadata_index
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
@@ -1357,6 +1358,24 @@ def _graph_node_is_cloud_review_node(node: dict[str, Any]) -> bool:
     )
 
 
+def _refresh_graph_cloud_node_validation_metadata(
+    node: dict[str, Any],
+    validation_metadata_index: dict[tuple[str, str], dict[str, Any]],
+) -> bool:
+    if not _graph_node_is_cloud_review_node(node):
+        return False
+    asset, identifier = _graph_node_validation_key(node)
+    metadata = validation_metadata_index.get((asset, identifier))
+    if not metadata:
+        return False
+    node_metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    refreshed_metadata = {**node_metadata, **metadata}
+    if refreshed_metadata == node_metadata:
+        return False
+    node["metadata"] = refreshed_metadata
+    return True
+
+
 def _canonical_cloud_node_score(
     node: dict[str, Any],
     asset: str,
@@ -1499,23 +1518,31 @@ def _filter_graph_payload_for_validation(
     if not _graph_payload_has_structure(payload):
         return payload
     validation_index = _reportable_cloud_validation_index(con, engagement_id)
+    validation_metadata_index = latest_cloud_validation_metadata_index(con, engagement_id)
     payload = _dedupe_graph_payload_cloud_alias_nodes(payload)
     nodes = payload.get("nodes", []) if isinstance(payload.get("nodes"), list) else []
     removed: set[str] = set()
+    changed = False
     filtered_nodes: list[dict[str, Any]] = []
     for node in nodes:
         if not isinstance(node, dict):
             continue
+        candidate = dict(node)
         node_id = str(node.get("node_id") or "")
         if _graph_node_is_unreportable_cloud_finding(
-            node,
+            candidate,
             validation_index,
-        ) or _graph_node_is_unreportable_key_finding(node, validation_index):
+        ) or _graph_node_is_unreportable_key_finding(candidate, validation_index):
             if node_id:
                 removed.add(node_id)
             continue
-        filtered_nodes.append(node)
-    if not removed:
+        if _refresh_graph_cloud_node_validation_metadata(
+            candidate,
+            validation_metadata_index,
+        ):
+            changed = True
+        filtered_nodes.append(candidate)
+    if not removed and not changed:
         return payload
     edges = payload.get("edges", []) if isinstance(payload.get("edges"), list) else []
     filtered_edges = [
@@ -1530,9 +1557,9 @@ def _filter_graph_payload_for_validation(
     ]
     filtered = dict(payload)
     filtered["nodes"] = filtered_nodes
-    filtered["edges"] = filtered_edges
+    filtered["edges"] = filtered_edges if removed else edges
     filtered["node_count"] = len(filtered_nodes)
-    filtered["edge_count"] = len(filtered_edges)
+    filtered["edge_count"] = len(filtered_edges) if removed else len(edges)
     filtered["critical_path_nodes"] = [
         node_id
         for node_id in (
@@ -1540,7 +1567,7 @@ def _filter_graph_payload_for_validation(
             if isinstance(payload.get("critical_path_nodes"), list)
             else []
         )
-        if str(node_id) not in removed
+        if not removed or str(node_id) not in removed
     ]
     return filtered
 

@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: imported graph validation-proof parity is complete.
+Latest checkpoint: graph snapshot latest cloud validation metadata is complete.
+Static dashboard and live API graph payload filtering now refresh retained
+CLOUD node validation metadata from the latest matching
+`cloud_validation_results` row. Stale graph snapshots can still keep CLOUD
+nodes for analyst traceability, but their metadata now shows latest effective
+validation status, stored status, method, reportability, checked timestamp, and
+scrubbed evidence/notes summaries instead of old artifact metadata.
+Verification: Ruff passed; compile passed; focused static/API stale cloud node
+tests passed (`2 passed`); adjacent static graph-validation slice passed (`3
+passed`); adjacent live API graph-validation slice passed (`3 passed`).
+Handoff:
+`.claude/handoffs/2026-07-24-graph-cloud-latest-validation-metadata.md`.
+
+Next checkpoint: audit another concrete deterministic review/export parity gap,
+preferably raw CSV proof/detail parity for provider-specific validators or
+remaining long-tail validator proof reviewability. Keep live provider calls
+mocked unless an explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: imported graph validation-proof parity is complete.
 Imported GraphML/MTGX payloads now normalize `validation_detail` into
 `validation_status`, `validation_method`, and scrubbed `validation_proof`
 metadata for returned graph nodes/edges. This aligns imported analyst graph
@@ -35,12 +53,6 @@ strings. Static dashboard and live API regressions use local MTGX fixtures only;
 no live provider calls are made. Verification: Ruff passed; compile passed;
 focused static/API MTGX graph parity tests passed (`2 passed`). Handoff:
 `.claude/handoffs/2026-07-24-imported-graph-validation-proof-parity.md`.
-
-Next checkpoint: audit another concrete deterministic review/export parity gap,
-preferably graph snapshot stale cloud metadata refresh, raw CSV proof/detail
-parity for provider-specific validators, or remaining long-tail validator proof
-reviewability. Keep live provider calls mocked unless an explicit ROE/scope
-manifest and target are supplied.
 
 Previous checkpoint: Slack validation proof finding-row parity is complete.
 Dashboard/API vulnerability finding rows now expose parsed validation status,

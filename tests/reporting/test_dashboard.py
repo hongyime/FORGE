@@ -2238,6 +2238,13 @@ def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
 
     assert "VULN::manual-note" not in node_ids
     assert "CLOUD::manual-note" in node_ids
+    cloud_nodes = {node["node_id"]: node for node in graph_payload["nodes"]}
+    cloud_metadata = cloud_nodes["CLOUD::manual-note"]["metadata"]
+    assert cloud_metadata["validation_status"] == "UNVERIFIED"
+    assert cloud_metadata["stored_validation_status"] == "VALIDATED"
+    assert cloud_metadata["validation_reportable"] is False
+    assert cloud_metadata["validation_method"] == "manual_validated_note"
+    assert cloud_metadata["validation_notes"] == "no deterministic proof method"
     assert graph_payload["node_count"] == 2
     assert graph_payload["edge_count"] == 0
     assert "VULN::manual-note" not in graph_payload["critical_path_nodes"]

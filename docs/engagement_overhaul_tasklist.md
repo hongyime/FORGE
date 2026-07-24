@@ -92,10 +92,22 @@ repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
 - [ ] Next checkpoint: audit another concrete deterministic review/export
-  parity gap, preferably graph snapshot stale cloud metadata refresh, raw CSV
-  proof/detail parity for provider-specific validators, or remaining
-  long-tail validator proof reviewability. Keep live provider calls mocked
-  unless an explicit ROE/scope manifest and target are supplied.
+  parity gap, preferably raw CSV proof/detail parity for provider-specific
+  validators or remaining long-tail validator proof reviewability. Keep live
+  provider calls mocked unless an explicit ROE/scope manifest and target are
+  supplied.
+- [x] Graph snapshot latest cloud validation metadata checkpoint:
+  Static dashboard and live API graph payload filtering now refresh retained
+  CLOUD node validation metadata from the latest matching
+  `cloud_validation_results` row. Stale graph snapshots can still keep CLOUD
+  nodes for analyst traceability, but their metadata now shows latest effective
+  validation status, stored status, method, reportability, checked timestamp,
+  and scrubbed evidence/notes summaries instead of old artifact metadata.
+  Verification: Ruff passed; compile passed; focused static/API stale cloud
+  node tests passed (`2 passed`); adjacent static graph-validation slice passed
+  (`3 passed`); adjacent live API graph-validation slice passed (`3 passed`).
+  Handoff:
+  `.claude/handoffs/2026-07-24-graph-cloud-latest-validation-metadata.md`.
 - [x] Imported graph validation-proof parity checkpoint:
   Imported GraphML/MTGX payloads now normalize `validation_detail` into
   `validation_status`, `validation_method`, and scrubbed `validation_proof`

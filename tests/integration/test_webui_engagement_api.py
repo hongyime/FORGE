@@ -1853,6 +1853,13 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
 
     assert summary["vulnerability_findings"].get("HIGH", 0) == 0
     assert summary["passive_vulns"].get("CRITICAL", 0) == 0
+    graph_nodes = {node["node_id"]: node for node in detail["graph_payload"]["nodes"]}
+    cloud_metadata = graph_nodes["CLOUD::bucket"]["metadata"]
+    assert cloud_metadata["validation_status"] == "UNVERIFIED"
+    assert cloud_metadata["stored_validation_status"] == "VALIDATED"
+    assert cloud_metadata["validation_reportable"] is False
+    assert cloud_metadata["validation_method"] == "manual_validated_note"
+    assert cloud_metadata["validation_notes"] == "not a deterministic proof method"
 
 
 def test_asset_context_api_excludes_false_positive_passive_findings(
