@@ -4450,6 +4450,7 @@ _MAX_ARTIFACT_MEMBER_BYTES = 1_048_576
 _MAX_ASAR_HEADER_BYTES = _MAX_ARTIFACT_MEMBER_BYTES
 _MAX_ASAR_MEMBERS = 4096
 _MAX_OCR_IMAGE_BYTES = 8 * 1024 * 1024
+_EMBEDDED_IMAGE_MAX_CANDIDATES = 8
 _MAX_HAR_BYTES = 16 * 1024 * 1024
 _REMOTE_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024
 _OCR_TIMEOUT_SECONDS = 20
@@ -38333,12 +38334,16 @@ class ArtifactQueueProcessor:
     ) -> list[tuple[str, str, str]]:
         if depth >= 2:
             return []
-        return self._extract_embedded_archive_payloads(
+        payloads = self._extract_embedded_archive_payloads(
             data,
             source_file,
             member_name,
             depth=depth,
         )
+        payloads.extend(
+            self._extract_embedded_image_payloads(data, source_file, member_name)
+        )
+        return payloads
 
     def _extract_legacy_binary_ole_payloads(
         self,
@@ -38574,12 +38579,21 @@ class ArtifactQueueProcessor:
     ) -> list[tuple[str, str, str]]:
         if job.depth >= 2:
             return []
-        return self._extract_embedded_archive_payloads(
+        member_name = f"{job.member_name}/{job.stream_name}"
+        payloads = self._extract_embedded_archive_payloads(
             job.stream_data,
             job.source_file,
-            f"{job.member_name}/{job.stream_name}",
+            member_name,
             depth=job.depth,
         )
+        payloads.extend(
+            self._extract_embedded_image_payloads(
+                job.stream_data,
+                job.source_file,
+                member_name,
+            )
+        )
+        return payloads
 
     @staticmethod
     def _rtf_to_text(data: bytes) -> str:
@@ -38950,6 +38964,41 @@ class ArtifactQueueProcessor:
             payloads.extend(batch)
         return payloads
 
+    def _extract_embedded_image_payloads(
+        self,
+        data: bytes,
+        source_file: str,
+        member_name: str,
+    ) -> list[tuple[str, str, str]]:
+        image_entries = self._embedded_image_entries(data)
+        if not image_entries:
+            return []
+        payload_batches = self._run_ordered_local_batch(
+            list(enumerate(image_entries)),
+            lambda entry: self._embedded_image_payload_batch(
+                entry,
+                source_file=source_file,
+                member_name=member_name,
+            ),
+            default_factory=list,
+        )
+        payloads: list[tuple[str, str, str]] = []
+        for payload_batch in payload_batches:
+            payloads.extend(payload_batch)
+        return payloads
+
+    def _embedded_image_payload_batch(
+        self,
+        indexed_entry: tuple[int, tuple[str, str, int, bytes]],
+        *,
+        source_file: str,
+        member_name: str,
+    ) -> list[tuple[str, str, str]]:
+        image_index, image_entry = indexed_entry
+        _kind, suffix, _offset, image_data = image_entry
+        image_member_name = f"{member_name}#embedded-image-{image_index}{suffix}"
+        return self._extract_image_member_payloads(source_file, image_member_name, image_data)
+
     def _extract_image_payload_family(
         self,
         family: str,
@@ -39064,6 +39113,121 @@ class ArtifactQueueProcessor:
         if len(data) > 262 and data[257:262] == b"ustar":
             return True
         return False
+
+    def _embedded_image_entries(self, data: bytes) -> list[tuple[str, str, int, bytes]]:
+        if len(data) < 10:
+            return []
+        max_scan = min(len(data), _MAX_ARTIFACT_MEMBER_BYTES)
+        signatures = (
+            ("png", ".png", b"\x89PNG\r\n\x1a\n"),
+            ("jpeg", ".jpg", b"\xff\xd8\xff"),
+            ("gif", ".gif", b"GIF87a"),
+            ("gif", ".gif", b"GIF89a"),
+            ("webp", ".webp", b"RIFF"),
+            ("tiff", ".tif", b"II*\x00"),
+            ("tiff", ".tif", b"MM\x00*"),
+        )
+        match_batches = self._run_ordered_local_batch(
+            signatures,
+            lambda signature_job: self._embedded_image_signature_matches(
+                signature_job,
+                data=data,
+                max_scan=max_scan,
+            ),
+            default_factory=list,
+        )
+        raw_matches = [
+            match
+            for match_batch in match_batches
+            for match in match_batch
+        ]
+        matches: list[tuple[str, str, int]] = []
+        seen_offsets: set[int] = set()
+        for kind, suffix, offset in sorted(raw_matches, key=lambda item: item[2]):
+            if offset in seen_offsets:
+                continue
+            seen_offsets.add(offset)
+            matches.append((kind, suffix, offset))
+        entries: list[tuple[str, str, int, bytes]] = []
+        covered_until = -1
+        for index, (kind, suffix, offset) in enumerate(matches):
+            if offset < covered_until:
+                continue
+            next_offset = next(
+                (
+                    candidate_offset
+                    for _next_kind, _next_suffix, candidate_offset in matches[index + 1 :]
+                    if candidate_offset > offset
+                ),
+                0,
+            )
+            image_data = self._embedded_image_bytes(
+                kind,
+                data,
+                offset,
+                next_offset=next_offset,
+            )
+            if not image_data:
+                continue
+            covered_until = max(covered_until, offset + len(image_data))
+            entries.append((kind, suffix, offset, image_data))
+            if len(entries) >= _EMBEDDED_IMAGE_MAX_CANDIDATES:
+                break
+        return entries
+
+    @staticmethod
+    def _embedded_image_signature_matches(
+        signature_job: tuple[str, str, bytes],
+        *,
+        data: bytes,
+        max_scan: int,
+    ) -> list[tuple[str, str, int]]:
+        image_kind, suffix, signature = signature_job
+        matches: list[tuple[str, str, int]] = []
+        start = 0
+        while start < max_scan:
+            offset = data.find(signature, start, max_scan)
+            if offset < 0:
+                break
+            if image_kind != "webp" or data[offset + 8 : offset + 12] == b"WEBP":
+                matches.append((image_kind, suffix, offset))
+            start = offset + 1
+        return matches
+
+    @staticmethod
+    def _embedded_image_bytes(
+        image_kind: str,
+        data: bytes,
+        offset: int,
+        *,
+        next_offset: int = 0,
+    ) -> bytes:
+        if offset < 0 or offset >= len(data):
+            return b""
+        max_end = min(len(data), offset + _MAX_OCR_IMAGE_BYTES)
+        if image_kind == "png":
+            marker = data.find(b"IEND", offset + 8, max_end)
+            end = marker + 8 if marker >= 0 else 0
+        elif image_kind == "jpeg":
+            marker = data.find(b"\xff\xd9", offset + 2, max_end)
+            end = marker + 2 if marker >= 0 else 0
+        elif image_kind == "gif":
+            marker = data.find(b"\x3b", offset + 6, max_end)
+            end = marker + 1 if marker >= 0 else 0
+        elif image_kind == "webp":
+            if offset + 12 > len(data) or data[offset : offset + 4] != b"RIFF":
+                return b""
+            if data[offset + 8 : offset + 12] != b"WEBP":
+                return b""
+            payload_size = int.from_bytes(data[offset + 4 : offset + 8], "little")
+            end = offset + 8 + payload_size
+        elif image_kind == "tiff":
+            end = next_offset if next_offset > offset else max_end
+        else:
+            return b""
+        if end <= offset or end > max_end:
+            return b""
+        return data[offset:end]
 
     def _embedded_archive_offsets(self, data: bytes) -> list[tuple[str, int]]:
         if len(data) < 8:

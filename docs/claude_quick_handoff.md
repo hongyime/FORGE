@@ -25,8 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Bruno API-client passive recursion is complete. Bruno `.bru`
-request artifacts now resolve static same-file URL-ish variables such as
+Latest checkpoint: embedded raster image carving is complete. Legacy binary
+artifacts and OLE stream payloads now carve bounded embedded
+PNG/JPEG/GIF/WebP/TIFF raster candidates and route them through the existing
+image-member OCR/barcode/metadata pipeline. This lets screenshots and QR-like
+evidence buried inside dumped binary or legacy Office/OLE streams feed recursive
+email/URL/cloud pivots without executing artifacts, mounting images,
+authenticating, or adding live probes. Candidate discovery is capped,
+offset-ordered, and reuses existing barcode URL sanitization before seed
+persistence. Verification: focused embedded-image carving regressions passed
+(`3 passed`), adjacent embedded-image/barcode/columnar slice passed (`12
+passed`), relevant legacy/OLE orchestrator selector passed (`4 passed, 778
+deselected`), adjacent recursive/static artifact slice passed (`23 passed`),
+py_compile passed for touched files, and Ruff passed for touched files.
+
+Next checkpoint: continue the automated artifact discovery chain with one more
+current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
+identity/provider-shape gap. Prefer a high-value path with compact focused
+regression coverage, and keep implementation passive/proof-bound: recursive
+seeds/cloud refs only unless an explicitly scoped live check is already required
+by the validation contract.
+
+Previous checkpoint: Bruno API-client passive recursion is complete. Bruno
+`.bru` request artifacts now resolve static same-file URL-ish variables such as
 `{{baseUrl}}/v1/users` before the existing URL safety normalization. Resolved
 Bruno request URLs and their base URLs feed the API-client structured discovery
 path as recursive URL seeds, while unresolved templates continue to be rejected
@@ -34,12 +55,6 @@ by the shared template guard. Verification: focused API-client family regression
 passed (`7 passed`), adjacent API-client/document/format slice passed (`19
 passed`), py_compile passed for touched files, and Ruff passed for touched
 files.
-
-Next checkpoint: continue the automated artifact discovery chain with one more
-current-code-audited passive parser/OCR gap. Prefer a high-value unsupported or
-weakly supported artifact/container/OCR fallback path with a compact focused
-regression, and keep the implementation passive: recursive seeds/cloud refs
-only, no artifact execution or live probing expansion.
 
 Previous checkpoint: pause/cancel dashboard-review refresh is complete.
 Interrupted kill-chain exits now refresh the same static dashboard/detail review
