@@ -66,12 +66,26 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: prevent high-depth persisted/resumed seeds from
-  executing beyond `synthesis_depth_limit` while still preserving them as
-  inventory. Recursive loaders should filter or skip over-depth seed rows before
-  fan-out dispatch, persist deterministic skipped receipts where appropriate,
-  and keep pending-work counts from treating over-depth inventory as executable
-  work.
+- [ ] Next checkpoint: refresh dashboard/report-review data on pause/cancel
+  lifecycle exits, not only normal completion. Pause/cancel/interrupted
+  kill-chain runs should persist enough final metadata, dashboard artifacts, and
+  audit state for the engagement detail page to review what happened before
+  exit without pretending the run completed successfully.
+- [x] Over-depth recursive seed resume checkpoint:
+  Persisted `engagement_seeds` rows deeper than `synthesis_depth_limit` now stay
+  in inventory but no longer execute recursive fan-outs after resume. URL D5,
+  email E, username K, phone L, IP O, name M, and company N all apply a shared
+  depth gate before dispatch, emit deterministic skipped seed-run receipts with
+  `synthesis_depth_limit_exceeded` metadata, and update in-run processed sets so
+  stable-loop `pending_work_counts` does not treat over-depth inventory as
+  executable work. Phone/IP/name/company now use the prioritized depth-carrying
+  seed loader instead of the removed depthless loader. Verification: py_compile
+  passed for touched files; Ruff passed for touched files; focused over-depth
+  regression passed (`1 passed`); full recursive retry-state suite passed
+  (`10 passed`); relevant orchestrator recursive route slice passed (`5 passed,
+  1 deselected`). Read-only sidecar audit confirmed the original over-depth
+  execution/pending-count gap. Claude CLI reviewer could not run because the
+  local OAuth session was expired.
 - [x] Known-host surface backlog checkpoint:
   Fan-out D no longer re-fetches the same first 20 known hosts every iteration.
   Known-host D/D2 surface mining now selects a deterministic normalized host
@@ -9229,7 +9243,7 @@ above.
   touched files, py_compile touched files, and `git diff --check`.
 - [ ] Next sidecar gap 2: only mark recursive social/phone/IP/name/company/cloud-ref chains processed on completed or intentional skipped outcomes, so failed chains retry in later iterations.
 - [x] Sidecar gap 3 completed: known-host surface fetch first-20 hard cap replaced with deterministic `fanout_d_host_surface` seed-run backlog/exclusion state.
-- [ ] Next sidecar gap 4: prevent high-depth persisted/resumed seeds from executing beyond `synthesis_depth_limit` while still preserving them as inventory.
+- [x] Sidecar gap 4 completed: high-depth persisted/resumed seeds are preserved as inventory but skipped before recursive fan-out dispatch when they exceed `synthesis_depth_limit`; skipped receipts and pending-count filtering are covered.
 - [ ] Next sidecar gap 5: refresh dashboard data on pause/cancel lifecycle exits, not only normal completion.
 
 ## Intentionally gated

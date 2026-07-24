@@ -10382,7 +10382,7 @@ def kill_chain(
             try:
                 seed_rows = con.execute(
                     """
-                    SELECT DISTINCT seed_value
+                    SELECT DISTINCT seed_value, COALESCE(depth, 0)
                     FROM engagement_seeds
                     WHERE engagement_id=?
                       AND seed_type='email'
@@ -10393,8 +10393,14 @@ def kill_chain(
                 seed_rows = []
         finally:
             con.close()
+        seed_email_rows = _filter_depth_limited_seed_rows(
+            [
+                (str(row[0] or "").strip(), int(row[1] or 0))
+                for row in seed_rows
+            ]
+        )
         raw_email_values = _collect_text_row_values(
-            [*email_rows, *seed_rows],
+            [*email_rows, *[(email_value,) for email_value, _depth in seed_email_rows]],
             max_workers=max_workers,
             progress_label=_derive_child_progress_label(progress_label, "row prep"),
             progress_callback=progress_callback,
@@ -11910,18 +11916,6 @@ def kill_chain(
         if "@" not in normalized_email or normalized_email in already:
             return None
         return normalized_email
-
-    def _prepare_seed_load_reduction_item(
-        prepared_seed_value: tuple[str, str] | None,
-        *,
-        already: set[str],
-    ) -> str | None:
-        if prepared_seed_value is None:
-            return None
-        seed_value, normalized = prepared_seed_value
-        if not seed_value or normalized in already:
-            return None
-        return seed_value
 
     def _prepare_prioritized_seed_load_reduction_item(
         prepared_prioritized_row: tuple[str, int, str] | None,
@@ -13614,73 +13608,6 @@ def kill_chain(
         processed_social_handles_out.add(handle)
         return handle
 
-    def _load_new_seed_values(
-        seed_type: str,
-        already: set[str],
-        *,
-        normalizer: Optional[Callable[[str], str]] = None,
-        max_workers: int = 1,
-        progress_label: str | None = None,
-        progress_callback: Callable[[str, dict[str, object]], None] | None = None,
-    ) -> set[str]:
-        """Return persisted engagement seed values of a given type that have
-        not yet been routed through their specialised fan-out."""
-        normalize = normalizer or _resume_normalize
-        con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-        try:
-            try:
-                rows = con.execute(
-                    """
-                    SELECT DISTINCT seed_value
-                    FROM engagement_seeds
-                    WHERE engagement_id=?
-                      AND seed_type=?
-                    """,
-                    (engagement_id, seed_type),
-                ).fetchall()
-            except _sq.OperationalError:
-                return set()
-        finally:
-            con.close()
-        raw_seed_values = _collect_text_row_values(
-            rows,
-            max_workers=max_workers,
-            progress_label=_derive_child_progress_label(progress_label, "row prep"),
-            progress_callback=progress_callback,
-        )
-        prepared_seed_values = _run_inprocess_batch(
-            raw_seed_values,
-            lambda seed_value: _prepare_pending_seed_value(seed_value, normalize=normalize),
-            max_workers=max_workers,
-            progress_label=progress_label,
-            progress_callback=progress_callback,
-        )
-        reduction_progress_label = _derive_reduction_progress_label(progress_label)
-        if reduction_progress_label and len(prepared_seed_values) > 1 and max_workers > 1:
-            _log(
-                reduction_progress_label,
-                f"[dim]parallel parse x{min(max_workers, len(prepared_seed_values))}[/dim]",
-            )
-        reduced_seed_values = _run_inprocess_batch(
-            prepared_seed_values,
-            lambda item: _prepare_seed_load_reduction_item(item, already=already),
-            max_workers=max_workers,
-            progress_label=reduction_progress_label,
-            progress_callback=progress_callback,
-        )
-        loaded_seed_values: set[str] = set()
-        _run_ordered_inprocess_apply_batch(
-            reduced_seed_values,
-            lambda item: _apply_loaded_seed_value_item(
-                item,
-                loaded_values_out=loaded_seed_values,
-            ),
-            progress_label=_derive_apply_progress_label(progress_label),
-            progress_callback=progress_callback,
-            order_note="loaded-seed merge order preserved",
-        )
-        return loaded_seed_values
-
     def _load_prioritized_seed_rows(
         seed_type: str,
         already: set[str],
@@ -13768,6 +13695,146 @@ def kill_chain(
         )
         return prioritized
 
+    def _seed_row_depth(row: tuple[str, int]) -> int:
+        return max(0, int(row[1] or 0))
+
+    def _filter_depth_limited_seed_rows(
+        rows: Sequence[tuple[str, int]],
+    ) -> list[tuple[str, int]]:
+        return [
+            (str(seed_value or "").strip(), _seed_row_depth((str(seed_value), seed_depth)))
+            for seed_value, seed_depth in rows
+            if str(seed_value or "").strip()
+            and _seed_row_depth((str(seed_value), seed_depth)) <= synthesis_depth_limit
+        ]
+
+    def _over_depth_seed_rows(
+        rows: Sequence[tuple[str, int]],
+    ) -> list[tuple[str, int]]:
+        return [
+            (str(seed_value or "").strip(), _seed_row_depth((str(seed_value), seed_depth)))
+            for seed_value, seed_depth in rows
+            if str(seed_value or "").strip()
+            and _seed_row_depth((str(seed_value), seed_depth)) > synthesis_depth_limit
+        ]
+
+    def _prepare_depth_limit_seed_skip_entry(
+        item: tuple[str, int, str, str],
+    ) -> dict[str, object] | None:
+        seed_value, seed_depth, seed_type_value, loop_name = item
+        return _prepare_one_shot_seed_run_entry(
+            seed_value=str(seed_value or "").strip(),
+            seed_type=str(seed_type_value or "").strip(),
+            loop_name=str(loop_name or "").strip(),
+            source="discovered",
+            depth=max(0, int(seed_depth or 0)),
+            confidence=0.8,
+            start_metadata={
+                "iteration": iteration,
+                "depth_gate": "synthesis_depth_limit",
+                "seed_depth": int(seed_depth or 0),
+                "synthesis_depth_limit": synthesis_depth_limit,
+            },
+            status="skipped",
+            output_count=0,
+            error="synthesis_depth_limit_exceeded",
+            finish_metadata={
+                "iteration": iteration,
+                "skipped_before_dispatch": True,
+                "skip_reason": "synthesis_depth_limit_exceeded",
+                "seed_depth": int(seed_depth or 0),
+                "synthesis_depth_limit": synthesis_depth_limit,
+            },
+        )
+
+    def _record_over_depth_seed_skips(
+        rows: Sequence[tuple[str, int]],
+        *,
+        seed_type: str,
+        loop_name: str,
+        processed_set: set[str],
+        normalizer: Callable[[str], str],
+        progress_label: str,
+        progress_callback: Callable[[str, dict[str, object]], None] | None,
+    ) -> None:
+        over_depth_rows = _over_depth_seed_rows(rows)
+        if not over_depth_rows:
+            return
+        _log(
+            progress_label,
+            (
+                f"[yellow]skipped={len(over_depth_rows)} persisted {seed_type} seed(s) "
+                f"over synthesis_depth_limit={synthesis_depth_limit}[/yellow]"
+            ),
+        )
+        skip_inputs = [
+            (seed_value, seed_depth, seed_type, loop_name)
+            for seed_value, seed_depth in over_depth_rows
+        ]
+        if len(skip_inputs) > 1 and parallel_workers > 1:
+            _log(
+                f"{progress_label} prep",
+                f"[dim]parallel parse x{min(parallel_workers, len(skip_inputs))}[/dim]",
+            )
+        prepared_skips = _run_inprocess_batch(
+            skip_inputs,
+            _prepare_depth_limit_seed_skip_entry,
+            max_workers=parallel_workers,
+            progress_label=f"{progress_label} prep",
+            progress_callback=progress_callback,
+        )
+        if len(prepared_skips) > 1:
+            _log(
+                f"{progress_label} finalize",
+                "[dim]sequential dispatch x1[/dim]  [dim]depth-limit skip order preserved[/dim]",
+            )
+        skipped_values = [
+            skipped_value
+            for skipped_value in _run_inprocess_batch(
+                prepared_skips,
+                _apply_one_shot_seed_run_entry,
+                max_workers=1,
+                progress_label=f"{progress_label} finalize",
+                progress_callback=progress_callback,
+            )
+            if skipped_value
+        ]
+        prepared_processed_updates = _run_inprocess_batch(
+            skipped_values,
+            lambda item: _prepare_processed_set_item(item, normalizer=normalizer),
+            max_workers=parallel_workers,
+            progress_label=f"{progress_label} processed-set prep",
+            progress_callback=progress_callback,
+        )
+        _run_inprocess_batch(
+            prepared_processed_updates,
+            lambda item: _apply_processed_set_item(item, processed_set=processed_set),
+            max_workers=1,
+            progress_label=f"{progress_label} processed-set update",
+            progress_callback=progress_callback,
+        )
+
+    def _activate_depth_limited_seed_rows(
+        rows: Sequence[tuple[str, int]],
+        *,
+        seed_type: str,
+        loop_name: str,
+        processed_set: set[str],
+        normalizer: Callable[[str], str],
+        progress_label: str,
+        progress_callback: Callable[[str, dict[str, object]], None] | None,
+    ) -> list[tuple[str, int]]:
+        _record_over_depth_seed_skips(
+            rows,
+            seed_type=seed_type,
+            loop_name=loop_name,
+            processed_set=processed_set,
+            normalizer=normalizer,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
+        return _filter_depth_limited_seed_rows(rows)
+
     def _pending_sql_count(sql: str, params: tuple[object, ...] = ()) -> int:
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
@@ -13803,7 +13870,11 @@ def kill_chain(
             normalizer=_normalize_url_seed_value,
             max_workers=parallel_workers,
         )
-        return sum(1 for seed_value, _depth in pending_rows if _url_seed_is_in_scope(seed_value))
+        return sum(
+            1
+            for seed_value, _depth in _filter_depth_limited_seed_rows(pending_rows)
+            if _url_seed_is_in_scope(seed_value)
+        )
 
     def _pending_host_surface_values(
         *,
@@ -13890,25 +13961,57 @@ def kill_chain(
             "github_orgs": _pending_github_org_count(),
             "cloud_refs": _pending_cloud_ref_count(),
             "username_seeds": len(
-                _load_prioritized_seed_rows(
-                    "username",
-                    processed_username_seeds,
-                    normalizer=_normalize_username_value,
-                    max_workers=parallel_workers,
+                _filter_depth_limited_seed_rows(
+                    _load_prioritized_seed_rows(
+                        "username",
+                        processed_username_seeds,
+                        normalizer=_normalize_username_value,
+                        max_workers=parallel_workers,
+                    )
                 )
             ),
             "phone_seeds": len(
-                _load_new_seed_values("phone", processed_phone_seeds, max_workers=parallel_workers)
+                _filter_depth_limited_seed_rows(
+                    _load_prioritized_seed_rows(
+                        "phone",
+                        processed_phone_seeds,
+                        max_workers=parallel_workers,
+                    )
+                )
             ),
             "ip_seeds": len(
-                _load_new_seed_values("ipv4", processed_ip_seeds, max_workers=parallel_workers)
-                | _load_new_seed_values("ipv6", processed_ip_seeds, max_workers=parallel_workers)
+                _filter_depth_limited_seed_rows(
+                    _load_prioritized_seed_rows(
+                        "ipv4",
+                        processed_ip_seeds,
+                        max_workers=parallel_workers,
+                    )
+                )
+                + _filter_depth_limited_seed_rows(
+                    _load_prioritized_seed_rows(
+                        "ipv6",
+                        processed_ip_seeds,
+                        max_workers=parallel_workers,
+                    )
+                )
             ),
             "name_seeds": len(
-                _load_new_seed_values("name", processed_name_seeds, max_workers=parallel_workers)
+                _filter_depth_limited_seed_rows(
+                    _load_prioritized_seed_rows(
+                        "name",
+                        processed_name_seeds,
+                        max_workers=parallel_workers,
+                    )
+                )
             ),
             "company_seeds": len(
-                _load_new_seed_values("company", processed_company_seeds, max_workers=parallel_workers)
+                _filter_depth_limited_seed_rows(
+                    _load_prioritized_seed_rows(
+                        "company",
+                        processed_company_seeds,
+                        max_workers=parallel_workers,
+                    )
+                )
             ),
             "artifact_queue": _pending_sql_count(
                 """
@@ -14843,6 +14946,15 @@ def kill_chain(
             progress_label=f"{iteration}.D5 URL seed load prep",
             progress_callback=_record_batch_progress,
         )
+        prioritized_url_seed_rows = _activate_depth_limited_seed_rows(
+            prioritized_url_seed_rows,
+            seed_type="url",
+            loop_name="fanout_d5_url_seed_html",
+            processed_set=processed_url_seeds,
+            normalizer=_normalize_url_seed_value,
+            progress_label=f"{iteration}.D5 URL depth-limit",
+            progress_callback=_record_batch_progress,
+        )
         if prioritized_url_seed_rows and len(prioritized_url_seed_rows) > 1 and parallel_workers > 1:
             _log(
                 f"{iteration}.D5 URL seed scope prep",
@@ -15365,6 +15477,23 @@ def kill_chain(
         # Any emails discovered THIS iteration (from harvest + HTML mining)
         # get processed immediately so downstream discoveries feed the
         # next iteration. Deduped against already-processed set.
+        email_seed_rows = _load_prioritized_seed_rows(
+            "email",
+            processed_emails,
+            normalizer=_normalize_email_seed_value,
+            max_workers=parallel_workers,
+            progress_label=f"{iteration}.E email seed depth prep",
+            progress_callback=_record_batch_progress,
+        )
+        _record_over_depth_seed_skips(
+            email_seed_rows,
+            seed_type="email",
+            loop_name="fanout_e_chain",
+            processed_set=processed_emails,
+            normalizer=_normalize_email_seed_value,
+            progress_label=f"{iteration}.E email depth-limit",
+            progress_callback=_record_batch_progress,
+        )
         iter_emails = _load_new_emails(
             processed_emails,
             max_workers=parallel_workers,
@@ -16331,6 +16460,15 @@ def kill_chain(
             progress_label=f"{iteration}.K username seed load prep",
             progress_callback=_record_batch_progress,
         )
+        prioritized_username_rows = _activate_depth_limited_seed_rows(
+            prioritized_username_rows,
+            seed_type="username",
+            loop_name="fanout_k_seed_username",
+            processed_set=processed_username_seeds,
+            normalizer=_normalize_username_value,
+            progress_label=f"{iteration}.K username depth-limit",
+            progress_callback=_record_batch_progress,
+        )
         if prioritized_username_rows:
             if len(prioritized_username_rows) > 1 and parallel_workers > 1:
                 _log(
@@ -16482,15 +16620,25 @@ def kill_chain(
         # ─── Fan-out L: phone-seed recursive invocation ───────────────
         # Runs on operator-provided phone seeds and any newly-synthesised
         # phone pivots discovered later in the loop.
-        pending_phone_seeds = _load_new_seed_values(
+        pending_phone_seed_rows = _load_prioritized_seed_rows(
             "phone",
             processed_phone_seeds,
             max_workers=parallel_workers,
             progress_label=f"{iteration}.L phone seed load prep",
             progress_callback=_record_batch_progress,
         )
+        pending_phone_seed_rows = _activate_depth_limited_seed_rows(
+            pending_phone_seed_rows,
+            seed_type="phone",
+            loop_name="fanout_l_seed_phone",
+            processed_set=processed_phone_seeds,
+            normalizer=_resume_normalize,
+            progress_label=f"{iteration}.L phone depth-limit",
+            progress_callback=_record_batch_progress,
+        )
+        pending_phone_seeds = [seed_value for seed_value, _depth in pending_phone_seed_rows]
         if pending_phone_seeds:
-            phone_schedule_inputs = sorted(pending_phone_seeds)
+            phone_schedule_inputs = list(pending_phone_seeds)
             if len(phone_schedule_inputs) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.L phone schedule prep",
@@ -16621,21 +16769,42 @@ def kill_chain(
         # Runs on operator-provided IPv4/IPv6 seeds and newly promoted
         # host IP pivots so host-detail enrichment participates in the
         # same recursive model as the other specialised seed types.
-        pending_ipv4_seeds = _load_new_seed_values(
+        pending_ipv4_rows = _load_prioritized_seed_rows(
             "ipv4",
             processed_ip_seeds,
             max_workers=parallel_workers,
             progress_label=f"{iteration}.O ipv4 seed load prep",
             progress_callback=_record_batch_progress,
         )
-        pending_ipv6_seeds = _load_new_seed_values(
+        pending_ipv4_rows = _activate_depth_limited_seed_rows(
+            pending_ipv4_rows,
+            seed_type="ipv4",
+            loop_name="fanout_o_seed_ip",
+            processed_set=processed_ip_seeds,
+            normalizer=_resume_normalize,
+            progress_label=f"{iteration}.O ipv4 depth-limit",
+            progress_callback=_record_batch_progress,
+        )
+        pending_ipv6_rows = _load_prioritized_seed_rows(
             "ipv6",
             processed_ip_seeds,
             max_workers=parallel_workers,
             progress_label=f"{iteration}.O ipv6 seed load prep",
             progress_callback=_record_batch_progress,
         )
-        ip_seed_candidates = [*sorted(pending_ipv4_seeds), *sorted(pending_ipv6_seeds)]
+        pending_ipv6_rows = _activate_depth_limited_seed_rows(
+            pending_ipv6_rows,
+            seed_type="ipv6",
+            loop_name="fanout_o_seed_ip",
+            processed_set=processed_ip_seeds,
+            normalizer=_resume_normalize,
+            progress_label=f"{iteration}.O ipv6 depth-limit",
+            progress_callback=_record_batch_progress,
+        )
+        ip_seed_candidates = [
+            *[seed_value for seed_value, _depth in pending_ipv4_rows],
+            *[seed_value for seed_value, _depth in pending_ipv6_rows],
+        ]
         if ip_seed_candidates and len(ip_seed_candidates) > 1 and parallel_workers > 1:
             _log(
                 f"{iteration}.O ip seed classify",
@@ -16798,15 +16967,25 @@ def kill_chain(
         # ─── Fan-out M: name-seed recursive invocation ────────────────
         # Runs on operator-provided names and cross-referenced names that
         # surfaced from social/profile enrichment.
-        pending_name_seeds = _load_new_seed_values(
+        pending_name_seed_rows = _load_prioritized_seed_rows(
             "name",
             processed_name_seeds,
             max_workers=parallel_workers,
             progress_label=f"{iteration}.M name seed load prep",
             progress_callback=_record_batch_progress,
         )
+        pending_name_seed_rows = _activate_depth_limited_seed_rows(
+            pending_name_seed_rows,
+            seed_type="name",
+            loop_name="fanout_m_seed_name",
+            processed_set=processed_name_seeds,
+            normalizer=_resume_normalize,
+            progress_label=f"{iteration}.M name depth-limit",
+            progress_callback=_record_batch_progress,
+        )
+        pending_name_seeds = [seed_value for seed_value, _depth in pending_name_seed_rows]
         if pending_name_seeds:
-            name_schedule_inputs = sorted(pending_name_seeds)
+            name_schedule_inputs = list(pending_name_seeds)
             if len(name_schedule_inputs) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.M name schedule prep",
@@ -16936,15 +17115,25 @@ def kill_chain(
         # ─── Fan-out N: company-seed recursive invocation ─────────────
         # Reuses the public entity-search path so organisation names can
         # participate in the same recursive deepening model as people.
-        pending_company_seeds = _load_new_seed_values(
+        pending_company_seed_rows = _load_prioritized_seed_rows(
             "company",
             processed_company_seeds,
             max_workers=parallel_workers,
             progress_label=f"{iteration}.N company seed load prep",
             progress_callback=_record_batch_progress,
         )
+        pending_company_seed_rows = _activate_depth_limited_seed_rows(
+            pending_company_seed_rows,
+            seed_type="company",
+            loop_name="fanout_n_seed_company",
+            processed_set=processed_company_seeds,
+            normalizer=_resume_normalize,
+            progress_label=f"{iteration}.N company depth-limit",
+            progress_callback=_record_batch_progress,
+        )
+        pending_company_seeds = [seed_value for seed_value, _depth in pending_company_seed_rows]
         if pending_company_seeds:
-            company_schedule_inputs = sorted(pending_company_seeds)
+            company_schedule_inputs = list(pending_company_seeds)
             if len(company_schedule_inputs) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.N company schedule prep",

@@ -25,28 +25,44 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: known-host surface backlog is complete. Fan-out D no longer
-re-fetches the same first 20 known hosts every iteration. Known-host D/D2
-surface mining now selects a deterministic normalized host backlog, excludes
-completed/skipped `fanout_d_host_surface` seed-run targets, prioritizes
-never-attempted hosts before retryable attempted hosts, and records one
-host-surface seed-run receipt per selected hostname. Empty but completed fetch
-attempts are recorded with `fetch_status=empty`, while payload-bearing hosts
-record payload counts. `pending_work_counts` now includes `host_surfaces`, so
-resumable known-host inventory is visible to the stable-loop gate.
-Verification: recursive retry-state suite passed (`9 passed`), focused
-known-host backlog regression passed, adjacent D/D2 HTML batching test passed
-(`1 passed` with explicit test ROE/scope env), root child scope propagation
-plus root retry-state tests passed (`2 passed`), Ruff passed, `py_compile`
-passed, and `git diff --check` passed. Read-only sidecar audit confirmed the
-original starvation risk and recommended the durable seed-run state model before
-implementation.
+Latest checkpoint: over-depth recursive seed resume is complete. Persisted
+`engagement_seeds` rows deeper than `synthesis_depth_limit` stay in inventory
+but no longer execute recursive fan-outs after resume. URL D5, email E,
+username K, phone L, IP O, name M, and company N all apply a shared depth gate
+before dispatch, emit deterministic skipped seed-run receipts with
+`synthesis_depth_limit_exceeded` metadata, and update in-run processed sets so
+stable-loop `pending_work_counts` does not treat over-depth inventory as
+executable work. Phone/IP/name/company now use the prioritized depth-carrying
+seed loader instead of the removed depthless loader. Verification: py_compile
+passed for touched files; Ruff passed for touched files; focused over-depth
+regression passed (`1 passed`); full recursive retry-state suite passed (`10
+passed`); relevant orchestrator recursive route slice passed (`5 passed, 1
+deselected`). Read-only sidecar audit confirmed the original over-depth
+execution/pending-count gap. Claude CLI reviewer could not run because the
+local OAuth session was expired.
 
-Next checkpoint: prevent high-depth persisted/resumed seeds from executing
-beyond `synthesis_depth_limit` while still preserving them as inventory.
-Recursive loaders should filter or skip over-depth seed rows before fan-out
-dispatch, persist deterministic skipped receipts where appropriate, and keep
-pending-work counts from treating over-depth inventory as executable work.
+Next checkpoint: refresh dashboard/report-review data on pause/cancel
+lifecycle exits, not only normal completion. Pause/cancel/interrupted
+kill-chain runs should persist enough final metadata, dashboard artifacts, and
+audit state for the engagement detail page to review what happened before exit
+without pretending the run completed successfully.
+
+Previous checkpoint: known-host surface backlog is complete. Fan-out D no
+longer re-fetches the same first 20 known hosts every iteration. Known-host
+D/D2 surface mining now selects a deterministic normalized host backlog,
+excludes completed/skipped `fanout_d_host_surface` seed-run targets,
+prioritizes never-attempted hosts before retryable attempted hosts, and records
+one host-surface seed-run receipt per selected hostname. Empty but completed
+fetch attempts are recorded with `fetch_status=empty`, while payload-bearing
+hosts record payload counts. `pending_work_counts` now includes
+`host_surfaces`, so resumable known-host inventory is visible to the stable-loop
+gate. Verification: recursive retry-state suite passed (`9 passed`), focused
+known-host backlog regression passed, adjacent D/D2 HTML batching test passed
+(`1 passed` with explicit test ROE/scope env), root child scope propagation plus
+root retry-state tests passed (`2 passed`), Ruff passed, `py_compile` passed,
+and `git diff --check` passed. Read-only sidecar audit confirmed the original
+starvation risk and recommended the durable seed-run state model before
+implementation.
 
 Previous checkpoint: recursive non-root fan-out retry semantics are verified
 and hardened. Social handle, phone, IP, name, company, and executable cloud-ref

@@ -211,6 +211,224 @@ def test_kill_chain_known_host_surface_backlog_advances_beyond_first_batch(
     )
 
 
+def test_kill_chain_skips_over_depth_persisted_recursive_seeds(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH", "1")
+    manifest_path = tmp_path / "roe-scope.json"
+    over_depth_values = {
+        "deep@acme.example",
+        "@deepuser",
+        "+15550000009",
+        "203.0.113.55",
+        "2001:db8::55",
+        "Alice Example",
+        "Acme Deep Corp",
+        "https://portal.acme.example/deep",
+    }
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example"],
+                "urls": ["https://portal.acme.example/deep"],
+                "ip_ranges": ["203.0.113.0/24", "2001:db8::/32"],
+                "authorized_seeds": ["acme.example", *sorted(over_depth_values)],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _bootstrap_engagement(db_path)
+    over_depth_rows = [
+        ("deep@acme.example", "email"),
+        ("@deepuser", "username"),
+        ("+15550000009", "phone"),
+        ("203.0.113.55", "ipv4"),
+        ("2001:db8::55", "ipv6"),
+        ("Alice Example", "name"),
+        ("Acme Deep Corp", "company"),
+        ("https://portal.acme.example/deep", "url"),
+    ]
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO engagement_seeds (
+                engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json
+            )
+            VALUES (1001, ?, ?, 'cross_reference', 'pending', 2, 0.9, '{}')
+            """,
+            over_depth_rows,
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    module_attempts: list[tuple[str, ...]] = []
+    d5_fetches: list[str] = []
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        module_attempts.append(module_argv)
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        if str(progress_label or "").endswith(".D5 URL surface fetch"):
+            d5_fetches.extend(str(spec.url) for spec in specs)
+        return ["" for _ in specs]
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del lookup_func, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(ips),
+                    "workers": min(1, len(ips)) if ips else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(ips),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        return [(str(ip), "") for ip in ips]
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+    monkeypatch.setattr("forge.cli._run_ptr_lookup_batch", _fake_ptr_lookup_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    attempted_text = "\n".join(" ".join(attempt) for attempt in module_attempts)
+    assert "deep@acme.example" not in attempted_text
+    assert "deepuser" not in attempted_text
+    assert "+15550000009" not in attempted_text
+    assert "203.0.113.55" not in attempted_text
+    assert "2001:db8::55" not in attempted_text
+    assert "Alice Example" not in attempted_text
+    assert "Acme Deep Corp" not in attempted_text
+    assert "https://portal.acme.example/deep" not in d5_fetches
+
+    con = sqlite3.connect(db_path)
+    try:
+        seed_rows = con.execute(
+            """
+            SELECT seed_value, seed_type, depth
+            FROM engagement_seeds
+            WHERE engagement_id=1001
+              AND depth=2
+            """
+        ).fetchall()
+        receipt_rows = con.execute(
+            """
+            SELECT es.seed_value, es.seed_type, sr.loop_name, sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.error='synthesis_depth_limit_exceeded'
+            ORDER BY es.seed_type, es.seed_value
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert {(value, seed_type) for value, seed_type, _depth in seed_rows} == set(over_depth_rows)
+    expected_receipts = {
+        ("deep@acme.example", "email", "fanout_e_chain"),
+        ("@deepuser", "username", "fanout_k_seed_username"),
+        ("+15550000009", "phone", "fanout_l_seed_phone"),
+        ("203.0.113.55", "ipv4", "fanout_o_seed_ip"),
+        ("2001:db8::55", "ipv6", "fanout_o_seed_ip"),
+        ("Alice Example", "name", "fanout_m_seed_name"),
+        ("Acme Deep Corp", "company", "fanout_n_seed_company"),
+        ("https://portal.acme.example/deep", "url", "fanout_d5_url_seed_html"),
+    }
+    assert {
+        (seed_value, seed_type, loop_name)
+        for seed_value, seed_type, loop_name, status, _error, _metadata_json in receipt_rows
+        if status == "skipped"
+    } == expected_receipts
+    for _seed_value, _seed_type, _loop_name, _status, _error, metadata_json in receipt_rows:
+        metadata = json.loads(str(metadata_json or "{}"))
+        assert metadata["skip_reason"] == "synthesis_depth_limit_exceeded"
+        assert metadata["skipped_before_dispatch"] is True
+        assert metadata["seed_depth"] == 2
+        assert metadata["synthesis_depth_limit"] == 1
+
+    pending_counts = _latest_run_metadata(db_path).get("pending_work_counts", {})
+    for key in (
+        "emails",
+        "url_seeds",
+        "username_seeds",
+        "phone_seeds",
+        "ip_seeds",
+        "name_seeds",
+        "company_seeds",
+    ):
+        assert key not in pending_counts
+
+
 def test_kill_chain_retries_failed_recursive_seed_fanouts_only(
     tmp_path: Path,
     monkeypatch,

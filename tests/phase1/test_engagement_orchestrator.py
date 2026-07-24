@@ -87729,14 +87729,6 @@ def test_kill_chain_parallel_batches_recursive_seed_load_prep(
         for label, item_count, max_workers in parse_batch_calls
     )
     assert any(
-        label == "1.L phone seed load row prep" and max_workers == 2 and item_count >= 2
-        for label, item_count, max_workers in parse_batch_calls
-    )
-    assert any(
-        label == "1.L phone seed load row apply" and max_workers == 1 and item_count >= 2
-        for label, item_count, max_workers in parse_batch_calls
-    )
-    assert any(
         label == "1.L phone seed load reduction" and max_workers == 2 and item_count >= 2
         for label, item_count, max_workers in parse_batch_calls
     )
@@ -87774,14 +87766,6 @@ def test_kill_chain_parallel_batches_recursive_seed_load_prep(
     )
     assert any(
         label == "1.O ipv4 seed load prep" and max_workers == 2 and item_count >= 2
-        for label, item_count, max_workers in parse_batch_calls
-    )
-    assert any(
-        label == "1.O ipv4 seed load row prep" and max_workers == 2 and item_count >= 2
-        for label, item_count, max_workers in parse_batch_calls
-    )
-    assert any(
-        label == "1.O ipv4 seed load row apply" and max_workers == 1 and item_count >= 2
         for label, item_count, max_workers in parse_batch_calls
     )
     assert any(
