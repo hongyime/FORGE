@@ -1693,6 +1693,17 @@ def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
     }
 
 
+def _audit_section_row(row: sqlite3.Row) -> dict[str, str]:
+    return {
+        "When": _format_dt(str(row["logged_at"] or "")),
+        "Phase": str(row["phase"] or ""),
+        "Module": str(row["module"] or ""),
+        "Action": str(row["action"] or ""),
+        "Target": _truncate(row["target"], 96),
+        "Result": _truncate(row["result"], 96),
+    }
+
+
 def _parse_graph_payload(raw: str) -> dict[str, Any] | None:
     try:
         payload = json.loads(raw)
@@ -3298,14 +3309,7 @@ def _detail_sections(
     ]
 
     sections["audit_log"] = [
-        {
-            "When": _format_dt(str(row["logged_at"] or "")),
-            "Phase": str(row["phase"] or ""),
-            "Module": str(row["module"] or ""),
-            "Action": str(row["action"] or ""),
-            "Target": _truncate(row["target"], 96),
-            "Result": _truncate(row["result"], 96),
-        }
+        _audit_section_row(row)
         for row in _fetch_rows(
             con,
             """
@@ -3316,6 +3320,20 @@ def _detail_sections(
             LIMIT ?
             """,
             (engagement_id, max(SECTION_LIMIT * 2, 20)),
+        )
+    ]
+    sections["scope_denials"] = [
+        _audit_section_row(row)
+        for row in _fetch_rows(
+            con,
+            """
+            SELECT logged_at, phase, module, action, target, result
+            FROM audit_log
+            WHERE engagement_id=? AND action='scheduled_task_scope_denied'
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (engagement_id, SECTION_LIMIT),
         )
     ]
 
@@ -4533,6 +4551,7 @@ def _render_engagement_page(
         "vulnerability_findings": "Recent Vulnerability Findings",
         "auth_test_results": "Recent Auth Test Results",
         "cloud_validation_results": "Cloud Validation Results",
+        "scope_denials": "Scheduled Scope Denials",
         "audit_log": "Recent Audit Log",
     }
     evidence_sections = "".join(

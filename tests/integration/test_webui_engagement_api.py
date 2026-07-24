@@ -329,6 +329,45 @@ def _build_engagement(tmp_path: Path, *, include_distributed_task: bool = False)
     return db_path
 
 
+def _insert_scope_denial_review_rows(db_path: Path) -> None:
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO audit_log
+                (engagement_id, phase, module, action, target, result, operator, logged_at)
+            VALUES
+                (1001, 'distributed', 'scheduled_task', 'scheduled_task_scope_denied',
+                 'https://app.acme.example/admin',
+                 'task_type=crawl reason=scope_manifest_denied',
+                 'scheduler', '2026-07-09T09:05:00')
+            """
+        )
+        con.executemany(
+            """
+            INSERT INTO audit_log
+                (engagement_id, phase, module, action, target, result, operator, logged_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    1001,
+                    "phase0",
+                    "noise",
+                    f"noise_event_{index:02d}",
+                    "acme.example",
+                    "ok",
+                    "scheduler",
+                    f"2026-07-09T09:{10 + index:02d}:00",
+                )
+                for index in range(25)
+            ],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
 def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
@@ -552,6 +591,39 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         )
         assert create_mobile_seed.status_code == 200, create_mobile_seed.text
         assert create_mobile_seed.json()["seed"]["seed_type"] == "apk_url"
+
+
+def test_engagement_detail_surfaces_old_scope_denials_without_scope_payload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path, include_distributed_task=True)
+    _insert_scope_denial_review_rows(db_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('scope-reviewer')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+
+    assert detail_resp.status_code == 200, detail_resp.text
+    detail = detail_resp.json()
+    detail_payload_json = json.dumps(detail, sort_keys=True)
+    assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_payload_json
+    assert '"scope_manifest":' not in detail_payload_json
+    assert not any(
+        row["Action"] == "scheduled_task_scope_denied"
+        for row in detail["sections"]["audit_log"]
+    )
+    denial_row = detail["sections"]["scope_denials"][0]
+    assert denial_row["Action"] == "scheduled_task_scope_denied"
+    assert denial_row["Module"] == "scheduled_task"
+    assert denial_row["Target"] == "https://app.acme.example/admin"
+    assert denial_row["Result"] == "task_type=crawl reason=scope_manifest_denied"
 
 
 def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, monkeypatch) -> None:

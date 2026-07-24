@@ -260,31 +260,53 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
             )
             """
         )
+        audit_rows = [
+            (
+                1001,
+                "scheduled_task_scope_denied",
+                "https://app.acme.example/admin",
+                "2026-07-09T09:05:00",
+                "distributed",
+                "scheduled_task",
+                "task_type=crawl reason=scope_manifest_denied",
+            ),
+            *(
+                (
+                    1001,
+                    f"noise_event_{index:02d}",
+                    "acme.example",
+                    f"2026-07-09T09:{10 + index:02d}:00",
+                    "phase0",
+                    "noise",
+                    "ok",
+                )
+                for index in range(25)
+            ),
+            (
+                1001,
+                "kill_chain_start",
+                "acme.example",
+                "2026-07-09T09:00:00",
+                "phase0",
+                "orchestrator",
+                "started",
+            ),
+            (
+                1001,
+                "graph_build",
+                "1001_attack_graph.graphml",
+                "2026-07-09T09:40:01",
+                "phase4",
+                "graph",
+                "18 nodes / 26 edges",
+            ),
+        ]
         con.executemany(
             """
             INSERT INTO audit_log (engagement_id, action, target, logged_at, phase, module, result)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            [
-                (
-                    1001,
-                    "kill_chain_start",
-                    "acme.example",
-                    "2026-07-09T09:00:00",
-                    "phase0",
-                    "orchestrator",
-                    "started",
-                ),
-                (
-                    1001,
-                    "graph_build",
-                    "1001_attack_graph.graphml",
-                    "2026-07-09T09:40:01",
-                    "phase4",
-                    "graph",
-                    "18 nodes / 26 edges",
-                ),
-            ],
+            audit_rows,
         )
         con.execute(
             """
@@ -763,6 +785,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "CSV",
     ]
     assert overview_payload["items"][0]["audit_count"] == 2
+    assert overview_payload["items"][0]["counts"]["audit_log"] == 28
     assert overview_payload["items"][0]["counts"]["seed_runs"] == 1
     assert overview_payload["items"][0]["counts"]["engagement_runs"] == 1
     assert overview_payload["items"][0]["counts"]["distributed_tasks"] == 1
@@ -799,7 +822,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     detail_payload_json = json.dumps(detail_payload, sort_keys=True)
     assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_payload_json
-    assert "scope_manifest" not in detail_payload_json
+    assert '"scope_manifest":' not in detail_payload_json
     assert detail_payload["tags"] == ["external", "priority-high"]
     assert detail_payload["report_previews"][0]["name"] == "engagement_1001_report_20260709T014412.md"
     assert detail_payload["report_summary"]["provider"] == "template"
@@ -845,6 +868,15 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     )
     assert detail_payload["sections"]["engagement_runs"][0]["Destructive"] == "no"
     assert detail_payload["sections"]["engagement_runs"][0]["Post-Ex"] == "no"
+    assert not any(
+        row["Action"] == "scheduled_task_scope_denied"
+        for row in detail_payload["sections"]["audit_log"]
+    )
+    denial_row = detail_payload["sections"]["scope_denials"][0]
+    assert denial_row["Action"] == "scheduled_task_scope_denied"
+    assert denial_row["Module"] == "scheduled_task"
+    assert denial_row["Target"] == "https://app.acme.example/admin"
+    assert denial_row["Result"] == "task_type=crawl reason=scope_manifest_denied"
     assert detail_payload["counts"]["distributed_tasks"] == 1
     task_row = detail_payload["sections"]["distributed_tasks"][0]
     assert task_row == {
@@ -928,9 +960,12 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "Validations" in detail_html
     assert "Reportable" in detail_html
     assert "Distributed Task Queue" in detail_html
+    assert "Scheduled Scope Denials" in detail_html
+    assert "scheduled_task_scope_denied" in detail_html
+    assert "task_type=crawl reason=scope_manifest_denied" in detail_html
     assert "validate:key:42:20260709T094414" in detail_html
     assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_html
-    assert "scope_manifest" not in detail_html
+    assert '"scope_manifest":' not in detail_html
     assert manifest_hash[:12] in detail_html
 
 

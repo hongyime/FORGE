@@ -9021,6 +9021,9 @@ above.
 - [ ] Keep improving non-cloud validator evidence quality too: AWS/Twilio/GitHub/Slack/SendGrid/Stripe/Mailchimp now persist better identifiers, but any remaining validator-backed providers still merit the same analyst-facing cleanup where safe.
 - [x] Add the missing slow multi-seed recursive kill-chain regression using mocked providers to prove domain/email/URL-or-artifact seeds jointly drive web, Fan-out E, artifact queue, cloud validation, graph export, and report fallback.
 - [x] Audit the native MTGX/GraphML artifact quality against the intended analyst workflow and tighten entity typing or layout fidelity if the workspace still feels too lossy. Reconciled on 2026-07-18 against the recorded native workspace, manifest/readme, deterministic layout, Maltego entity typing, and GraphML/MTGX fallback-test checkpoints.
+- [x] Scheduled scope-denial reviewability is now covered: static dashboard detail JSON/HTML and the live engagement detail API expose old `scheduled_task_scope_denied` rows through `sections.scope_denials`, even when the event is outside the recent audit timeline. The React evidence board has a title for that section, and regressions prove the visible denial reason does not leak raw distributed-task `scope_manifest` payloads or sentinels. Verification: Python ruff touched files, focused static/API tests (`2 passed`), frontend lint exit 0 with existing hook warnings, frontend build success, and `git diff --check`.
+  Handoff: `.claude/handoffs/2026-07-24-scheduled-scope-denial-review.md`.
+- [ ] Next: integrate the broad kill-chain gap audit from the active sidecar agent, then pick one smallest safe code gap that improves recursive discovery or deterministic validation without widening live-service scope.
 
 ## Intentionally gated
 

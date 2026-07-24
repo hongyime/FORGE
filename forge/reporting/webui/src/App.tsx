@@ -650,6 +650,7 @@ const SECTION_TITLES: Record<string, string> = {
   social_profiles: 'Identity mapping',
   artifact_queue: 'Artifact queue',
   auth_test_results: 'Auth validation',
+  scope_denials: 'Scheduled scope denials',
 }
 
 const BASE_PATH = import.meta.env.BASE_URL

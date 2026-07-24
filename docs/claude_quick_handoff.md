@@ -4338,6 +4338,13 @@ stop and pick a smaller verified kill-chain or determinism gap.
   passed, 22 deselected`), Phase 6 fallback/proof/raw-export selector (`20
   passed, 84 deselected`), and workspace `.forge_data/engagements` count `0`.
   Handoff: `.claude/handoffs/2026-07-24-compact-kill-chain-dashboard-smoke.md`.
+- [x] Scheduled scope-denial reviewability is now covered in dashboard/API:
+  `sections.scope_denials` keeps old `scheduled_task_scope_denied` rows visible
+  even after they fall out of the recent audit timeline, without exposing raw
+  distributed-task `scope_manifest` payloads. Verification: focused static/API
+  tests (`2 passed`), Python ruff, frontend lint/build, and `git diff --check`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-scheduled-scope-denial-review.md`.
 
 ## Still partial
 
