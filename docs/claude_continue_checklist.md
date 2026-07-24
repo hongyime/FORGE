@@ -66,12 +66,25 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: persist D5 recursive URL seeds denied before fetch as
-  terminal `seed_runs` rows. Keep the existing no-fetch and `audit_log`
-  `recursive_seed_scope_denied` behavior, add one skipped
-  `fanout_d5_url_seed_html` run record with `denied_before_fetch=true`, and
-  prove resume does not duplicate it. Minimal files: `forge/cli.py` and
-  `tests/phase1/test_engagement_orchestrator.py`.
+- [ ] Next checkpoint: continue moving remaining safe sequential prep/reduction
+  enrichers under the bounded worker-pool path beyond the already-covered
+  D1/D2/D5 parse paths. Keep DB writes/final ordering serial and add focused
+  tests for deterministic order. Prefer compact helpers in `forge/cli.py` and
+  focused regressions in `tests/phase1/test_engagement_orchestrator.py`.
+- [x] D5 denied recursive URL seed-run persistence checkpoint:
+  D5 URL seed scope decisions now persist deterministic denied-before-fetch URLs
+  as skipped `fanout_d5_url_seed_html` seed runs, including deny reason,
+  hostname, scope gate/source, iteration, and `denied_before_fetch=true`
+  metadata. Existing no-fetch behavior and `audit_log`
+  `recursive_seed_scope_denied` review evidence are preserved. The in-memory
+  processed URL set is updated after the skipped run is written, and resume
+  treats the skipped D5 run as terminal so reruns do not duplicate it.
+  Verification: compile passed; Ruff passed; focused scope-manifest
+  denial/resume test passed (`1 passed`); adjacent D5 URL selector passed (`5
+  passed, 761 deselected`); related remote artifact scope-manifest denial test
+  passed (`1 passed`); workspace `.forge_data/engagements` contained `0`
+  entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-d5-denied-url-seed-runs.md`.
 - [x] Web/API seed URL canonicalization and fallback graph validation parity
   checkpoint:
   Live web/API engagement create/add/update seed routes now canonicalize `url`

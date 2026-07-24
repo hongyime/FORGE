@@ -11045,12 +11045,16 @@ def kill_chain(
         item: tuple[str, int],
     ) -> dict[str, object]:
         seed_value = str(item[0] or "")
+        seed_depth = int(item[1] or 0)
         decision = _url_seed_scope_decision(seed_value)
+        allowed = bool(decision.get("allowed"))
         return {
-            "pending_row": item if bool(decision.get("allowed")) else None,
-            "denied_url": seed_value if decision.get("reason") == "scope_manifest_denied" else "",
+            "pending_row": item if allowed else None,
+            "denied_url": "" if allowed else seed_value,
+            "seed_depth": seed_depth,
             "deny_reason": str(decision.get("reason") or ""),
             "deny_hostname": str(decision.get("hostname") or ""),
+            "scope_manifest_source": str(decision.get("scope_manifest_source") or ""),
         }
 
     def _prepare_url_seed_scope_reduction(
@@ -12453,6 +12457,49 @@ def kill_chain(
     ) -> str | None:
         return _apply_one_shot_seed_run_entry(item)
 
+    def _prepare_denied_url_seed_skip_entry(
+        item: dict[str, object],
+    ) -> dict[str, object] | None:
+        denied_url = str(item.get("denied_url") or "").strip()
+        if not denied_url:
+            return None
+        reason = str(item.get("deny_reason") or "scope_denied").strip()
+        scope_source = str(
+            item.get("scope_manifest_source")
+            or (
+                scope_manifest_metadata.get("source")
+                if isinstance(scope_manifest_metadata, dict)
+                else ""
+            )
+            or ""
+        )
+        return _prepare_one_shot_seed_run_entry(
+            seed_value=denied_url,
+            seed_type="url",
+            loop_name="fanout_d5_url_seed_html",
+            source="discovered",
+            depth=max(1, int(item.get("seed_depth") or 0)),
+            confidence=0.8,
+            start_metadata={
+                "iteration": iteration,
+                "scope_gate": "url_seed_scope_decision",
+                "scope_manifest_source": scope_source,
+                "deny_hostname": str(item.get("deny_hostname") or ""),
+                "deny_reason": reason,
+            },
+            status="skipped",
+            output_count=0,
+            error=reason,
+            finish_metadata={
+                "iteration": iteration,
+                "denied_before_fetch": True,
+                "scope_gate": "url_seed_scope_decision",
+                "scope_manifest_source": scope_source,
+                "deny_hostname": str(item.get("deny_hostname") or ""),
+                "deny_reason": reason,
+            },
+        )
+
     def _apply_rdap_domain_result_entry(
         item: dict[str, object],
         *,
@@ -13825,12 +13872,21 @@ def kill_chain(
         if denied_recursive_url_seeds:
             _log(
                 f"{iteration}.D5 URL seed scope",
-                f"[yellow]denied={len(denied_recursive_url_seeds)} recursive URL seed(s) outside scope manifest[/yellow]",
+                f"[yellow]denied={len(denied_recursive_url_seeds)} recursive URL seed(s) before fetch[/yellow]",
             )
             for denied_item in denied_recursive_url_seeds:
                 denied_url = str(denied_item.get("denied_url") or "").strip()
                 if not denied_url:
                     continue
+                denied_scope_source = str(
+                    denied_item.get("scope_manifest_source")
+                    or (
+                        scope_manifest_metadata.get("source")
+                        if isinstance(scope_manifest_metadata, dict)
+                        else ""
+                    )
+                    or ""
+                )
                 _cli_audit(
                     db_path,
                     engagement_id,
@@ -13842,9 +13898,20 @@ def kill_chain(
                         "seed_type=url "
                         f"reason={str(denied_item.get('deny_reason') or 'scope_manifest_denied')} "
                         f"host={str(denied_item.get('deny_hostname') or '')} "
-                        f"scope_manifest={str(scope_manifest_metadata.get('source') or '')}"
+                        f"scope_manifest={denied_scope_source}"
                     )[:500],
                 )
+                skipped_url = _apply_one_shot_seed_run_entry(
+                    _prepare_denied_url_seed_skip_entry(denied_item)
+                )
+                if skipped_url:
+                    _apply_processed_set_item(
+                        _prepare_processed_set_item(
+                            skipped_url,
+                            normalizer=_normalize_url_seed_value,
+                        ),
+                        processed_set=processed_url_seeds,
+                    )
         pending_url_seed_rows = url_seed_scope_decisions
         if len(pending_url_seed_rows) > 1 and parallel_workers > 1:
             _log(

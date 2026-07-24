@@ -66387,6 +66387,23 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_recursive_url_without_fet
         seed="acme.example",
         related_seed=[],
         engagement="1001",
+        resume=True,
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        parallel_fanout=2,
+        report_provider="template",
+    )
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        resume=True,
         max_iter=1,
         tor=False,
         dry_run=False,
@@ -66422,17 +66439,27 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_recursive_url_without_fet
         assert ("https://acme.example/app/dashboard", "url") in seeds
         assert ("https://acme.example/admin", "url") in seeds
 
-        denied_seed_run = con.execute(
+        denied_seed_runs = con.execute(
             """
-            SELECT sr.status
+            SELECT sr.status, sr.output_count, sr.error, sr.metadata_json
             FROM seed_runs sr
             JOIN engagement_seeds es ON es.id=sr.seed_id
             WHERE sr.engagement_id=1001
               AND es.seed_value='https://acme.example/admin'
               AND sr.loop_name='fanout_d5_url_seed_html'
+            ORDER BY sr.id
             """
-        ).fetchone()
-        assert denied_seed_run is None
+        ).fetchall()
+        assert len(denied_seed_runs) == 1
+        denied_status, denied_output_count, denied_error, denied_metadata_json = denied_seed_runs[0]
+        denied_metadata = json.loads(str(denied_metadata_json or "{}"))
+        assert denied_status == "skipped"
+        assert int(denied_output_count or 0) == 0
+        assert denied_error == "scope_manifest_denied"
+        assert denied_metadata["denied_before_fetch"] is True
+        assert denied_metadata["deny_hostname"] == "acme.example"
+        assert denied_metadata["deny_reason"] == "scope_manifest_denied"
+        assert denied_metadata["scope_manifest_source"] == manifest_path.resolve().as_posix()
 
         audit_rows = con.execute(
             """

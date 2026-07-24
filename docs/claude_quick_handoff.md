@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: web/API seed URL canonicalization and fallback graph
+Latest checkpoint: D5 denied recursive URL seed-run persistence is complete.
+D5 URL seed scope decisions now persist deterministic denied-before-fetch URLs
+as skipped `fanout_d5_url_seed_html` seed runs, including deny reason,
+hostname, scope gate/source, iteration, and `denied_before_fetch=true`
+metadata. Existing no-fetch behavior and `audit_log`
+`recursive_seed_scope_denied` review evidence are preserved. The in-memory
+processed URL set is updated after the skipped run is written, and resume treats
+the skipped D5 run as terminal so reruns do not duplicate it. Verification:
+compile passed; Ruff passed; focused scope-manifest denial/resume test passed
+(`1 passed`); adjacent D5 URL selector passed (`5 passed, 761 deselected`);
+related remote artifact scope-manifest denial test passed (`1 passed`);
+`.forge_data/engagements` contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-d5-denied-url-seed-runs.md`.
+
+Next checkpoint: continue moving remaining safe sequential prep/reduction
+enrichers under the bounded worker-pool path beyond the already-covered
+D1/D2/D5 parse paths. Keep DB writes/final ordering serial and add focused
+tests for deterministic order.
+
+Previous checkpoint: web/API seed URL canonicalization and fallback graph
 validation parity are complete.
 Live web/API engagement create/add/update seed routes now canonicalize `url` and
 `apk_url` seed values before dedupe, scope updates, upserts, and patch
@@ -39,12 +58,6 @@ passed; focused graph/API tests passed (`2 passed`); full web UI engagement API
 file passed (`44 passed`); focused dashboard provider/fallback selector passed
 (`3 passed`). Handoff:
 `.claude/handoffs/2026-07-24-web-api-seed-dashboard-graph-parity.md`.
-
-Next checkpoint: persist D5 recursive URL seeds denied before fetch as terminal
-`seed_runs` rows. Keep the existing no-fetch and `audit_log`
-`recursive_seed_scope_denied` behavior, add one skipped
-`fanout_d5_url_seed_html` run record with `denied_before_fetch=true`, and prove
-resume does not duplicate it.
 
 Previous checkpoint: legacy ReportingAgent fallback lineage is complete.
 Legacy `ReportingAgent` deterministic fallback output now includes payload-only
