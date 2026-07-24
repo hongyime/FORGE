@@ -91,14 +91,30 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix HTML/passive-text cloud-reference inventory
-  consistency exposed by the mocked recursive kill-chain E2E. The E2E now
-  reaches live-run ROE/scope gates when supplied test `roe_id` and scope
-  manifest, but HTML-derived Firebase refs such as
-  `https://web-firebase-prod.firebaseio.com` are validated/scheduled without a
-  matching `cloud_assets` inventory row. Keep the ROE/scope requirement intact;
-  ensure scoped HTML/passive text cloud refs persist as cloud assets before
-  validation/reporting, then rerun the long mocked E2E.
+- [ ] Next checkpoint: enforce the configured recursive depth limit across
+  persisted seed inventory loaders and pending-work counts. A completed
+  sidecar audit found that persisted `engagement_seeds` rows above
+  `synthesis_depth_limit` can still be dispatched for URL, email, username,
+  phone, IP, name, and company fan-outs because several loaders order by depth
+  but do not filter by it. Keep rows stored for audit/review, but suppress
+  over-limit dispatch and pending-work accounting; add focused regression tests
+  proving over-limit persisted seeds remain in the DB without creating
+  follow-on `seed_runs`.
+- [x] Scoped cloud-reference inventory and deterministic finding finalization
+  checkpoint: HTML/passive-text cloud refs that pass scope now persist into
+  `cloud_assets` before Fan-out J validation, and a final deterministic finding
+  synthesis pass runs after the final cloud validation stage before graph/report
+  generation. The recursive E2E validation stub now mirrors production by
+  updating evidence/notes on validation-result conflict and by writing stable
+  proof strings for validated Firebase/Supabase results. Dashboard detail pages
+  now select representative vulnerability finding titles before filling the
+  section limit, so duplicate recent rows do not hide another validated finding
+  class from review. Verification: Ruff, py_compile, and `git diff --check`
+  passed for touched files; focused dashboard tests passed; artifact/static
+  adjacent tests passed (`13 passed`); cloud validation focused slice passed
+  (`5 passed, 128 deselected`); the mocked recursive kill-chain E2E passed
+  (`1 passed in 280.80s`); no workspace `.forge_data/engagements` leftovers
+  were listed.
 - [x] AndroidManifest attribute-aware static extraction checkpoint:
   `AndroidManifest.xml` is now a first-class static artifact label. Direct XML
   manifests and archive members preserve raw XML attributes instead of being

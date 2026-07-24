@@ -68,6 +68,21 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
 
     openid_url = OPENID_URL
     jwks_url = JWKS_URL
+    scope_manifest = json.dumps(
+        {
+            "roe_id": "test-roe",
+            "domains": ["acme.test", "static.acme.test"],
+            "urls": [openid_url, jwks_url],
+            "authorized_seeds": [
+                "ops@acme.test",
+                openid_url,
+                jwks_url,
+                "https://web-firebase-prod.firebaseio.com",
+                "https://dead-firebase-prod.firebaseio.com",
+                "https://acmebase.supabase.co",
+            ],
+        }
+    )
     install_remote_metadata_download_mock(monkeypatch, tmp_path)
 
     monkeypatch.setattr(socket, "create_connection", blocked)
@@ -205,7 +220,17 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             else methods[kind]
         )
         http_status = None if status == "UNSUPPORTED" else 200
-        evidence = "unsupported passive inventory" if status == "UNSUPPORTED" else '{"records":1}'
+        stable_evidence = {
+            "firebase": "project reference responded with non-empty data",
+            "supabase": "supabase rest endpoint returned live data",
+        }
+        evidence = (
+            "unsupported passive inventory"
+            if status == "UNSUPPORTED"
+            else stable_evidence.get(kind, "live records observed")
+            if status == "VALIDATED"
+            else '{"records":0}'
+        )
         notes = (
             "No deterministic validator available for this passive asset."
             if status == "UNSUPPORTED"
@@ -226,6 +251,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ON CONFLICT(engagement_id, asset_type, identifier) DO UPDATE SET
                 validation_status=excluded.validation_status,
                 validation_method=excluded.validation_method,
+                http_status=excluded.http_status,
+                evidence=excluded.evidence,
+                notes=excluded.notes,
                 checked_at=CURRENT_TIMESTAMP
             """,
             (EID, kind, ref, ref, status, method, http_status, evidence, notes),
@@ -277,6 +305,8 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         skip_keyscan=True,
         report_provider="auto",
         report_max_loops=0,
+        roe_id="test-roe",
+        scope_manifest=scope_manifest,
     )
 
     reports = sorted((tmp_path / "reports").glob(f"engagement_{EID}_kill_chain_*.md"))
@@ -803,7 +833,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         }
         for node in graph["nodes"]
     )
-    finding_report = report_text.split("## 5. Vulnerability", 1)[1].split("## 6. Post-Exploitation", 1)[0]
+    finding_report = report_text.split("### 5.1 Validated findings", 1)[1].split(
+        "## 6. Validation Boundaries",
+        1,
+    )[0]
     assert "Validated Firebase data exposure" in finding_report
     assert "Validated Supabase data exposure" in finding_report
     assert "supabase://manifestvault" in finding_report

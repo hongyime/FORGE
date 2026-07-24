@@ -25,7 +25,31 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: AndroidManifest attribute-aware static extraction is
+Latest checkpoint: scoped cloud-reference inventory and deterministic finding
+finalization are complete. HTML/passive-text cloud refs that pass scope now
+persist into `cloud_assets` before Fan-out J validation, and a final
+deterministic finding synthesis pass runs after final cloud validation before
+graph/report generation. The mocked recursive E2E validation stub mirrors
+production conflict updates by replacing evidence/notes and writing stable
+proof strings for validated Firebase/Supabase rows. Dashboard detail pages now
+pick representative vulnerability finding titles before filling the section
+limit, so duplicate recent rows do not hide another validated finding class
+from review. Verification: Ruff, py_compile, and `git diff --check` passed for
+touched files; focused dashboard tests passed; artifact/static adjacent tests
+passed (`13 passed`); cloud validation focused slice passed (`5 passed, 128
+deselected`); the mocked recursive kill-chain E2E passed (`1 passed in
+280.80s`); no workspace `.forge_data/engagements` leftovers were listed.
+
+Next checkpoint: enforce the configured recursive depth limit across persisted
+seed inventory loaders and pending-work counts. A completed sidecar audit found
+that persisted `engagement_seeds` rows above `synthesis_depth_limit` can still
+be dispatched for URL, email, username, phone, IP, name, and company fan-outs
+because several loaders order by depth but do not filter by it. Keep over-limit
+rows stored for audit/review, but suppress over-limit dispatch and pending-work
+accounting; add focused regression tests proving over-limit persisted seeds do
+not create follow-on `seed_runs`.
+
+Previous checkpoint: AndroidManifest attribute-aware static extraction is
 complete. `AndroidManifest.xml` is now a first-class static artifact label.
 Direct XML manifests and archive members preserve raw XML attributes instead of
 being stripped through generic `itertext()` extraction. The parser inventories
@@ -38,15 +62,6 @@ AndroidManifest tests passed (`3 passed`), adjacent Android/mobile metadata
 tests passed (`6 passed`), py_compile passed for touched files, Ruff passed for
 touched files, `git diff --check` passed, and no `.forge_data/engagements`
 leftovers were present.
-
-Next checkpoint: fix HTML/passive-text cloud-reference inventory consistency
-exposed by the mocked recursive kill-chain E2E. The E2E now reaches live-run
-ROE/scope gates when supplied test `roe_id` and scope manifest, but
-HTML-derived Firebase refs such as `https://web-firebase-prod.firebaseio.com`
-are validated/scheduled without a matching `cloud_assets` inventory row. Keep
-the ROE/scope requirement intact; ensure scoped HTML/passive text cloud refs
-persist as cloud assets before validation/reporting, then rerun the long mocked
-E2E.
 
 Previous checkpoint: Sanity runtime public-env static extraction is complete.
 Public runtime JavaScript config extraction now derives passive Sanity API

@@ -741,6 +741,38 @@ def _reportable_vulnerability_rows(
     return reportable[:limit] if limit is not None else reportable
 
 
+def _representative_vulnerability_rows(
+    rows: list[sqlite3.Row],
+    limit: int,
+) -> list[sqlite3.Row]:
+    if len(rows) <= limit:
+        return rows
+    selected: list[sqlite3.Row] = []
+    selected_ids: set[str] = set()
+    seen_titles: set[str] = set()
+
+    def _row_key(row: sqlite3.Row) -> str:
+        return str(row["id"] or f"{row['title']}|{row['target_url']}")
+
+    for row in rows:
+        title = str(row["title"] or "").strip().lower()
+        if not title or title in seen_titles:
+            continue
+        selected.append(row)
+        selected_ids.add(_row_key(row))
+        seen_titles.add(title)
+        if len(selected) >= limit:
+            return selected
+    for row in rows:
+        key = _row_key(row)
+        if key in selected_ids:
+            continue
+        selected.append(row)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
 def _severity_summary(con: sqlite3.Connection, engagement_id: int) -> dict[str, int]:
     counts = {severity: 0 for severity in SEVERITY_ORDER}
     for row in _reportable_vulnerability_rows(con, engagement_id):
@@ -3193,13 +3225,12 @@ def _detail_sections(
         )
     ]
 
+    vulnerability_rows = _representative_vulnerability_rows(
+        _reportable_vulnerability_rows(con, engagement_id),
+        SECTION_LIMIT,
+    )
     sections["vulnerability_findings"] = [
-        _vulnerability_finding_section_row(row)
-        for row in _reportable_vulnerability_rows(
-            con,
-            engagement_id,
-            limit=SECTION_LIMIT,
-        )
+        _vulnerability_finding_section_row(row) for row in vulnerability_rows
     ]
 
     sections["auth_test_results"] = [

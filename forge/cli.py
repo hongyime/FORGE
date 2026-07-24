@@ -5591,6 +5591,27 @@ def kill_chain(
             except Exception:  # noqa: BLE001
                 pass
 
+    def _promote_pending_cloud_targets(con: Any, targets: Iterable[dict[str, Any]]) -> int:
+        inserted = 0
+        for target in targets:
+            asset_type = str(target.get("service") or "").strip().lower()
+            identifier = str(target.get("ref") or "").strip()
+            if not asset_type or not identifier:
+                continue
+            try:
+                cursor = con.execute(
+                    """
+                    INSERT OR IGNORE INTO cloud_assets
+                        (engagement_id, asset_type, identifier, provider_identifier, source)
+                    VALUES (?, ?, ?, ?, 'kill_chain_cloud_ref')
+                    """,
+                    (engagement_id, asset_type, identifier, identifier),
+                )
+                inserted += int(getattr(cursor, "rowcount", 0) or 0)
+            except Exception:  # noqa: BLE001
+                continue
+        return inserted
+
     def _lookup_engagement_seed_id(con: Any, seed_value: str, seed_type: str) -> int | None:
         try:
             row = con.execute(
@@ -9314,6 +9335,21 @@ def kill_chain(
         max_workers=parallel_workers,
     )
     finding_engine = DeterministicFindingEngine(db_path, engagement_id)
+
+    def _run_finding_synthesis(pass_label: str) -> Any:
+        summary = finding_engine.run()
+        if summary.inserted or summary.updated or summary.removed:
+            _log(
+                pass_label,
+                (
+                    f"inserted={summary.inserted} "
+                    f"updated={summary.updated} "
+                    f"removed={summary.removed} "
+                    f"active={summary.active_findings}"
+                ),
+            )
+        return summary
+
     engagement_run_tracker = EngagementRunTracker(db_path, engagement_id)
     seed_run_tracker = SeedRunTracker(db_path, engagement_id)
     recovered_seed_run_count = (
@@ -9498,17 +9534,7 @@ def kill_chain(
                 f"corroborated={synthesis_summary.corroborated_count}"
             ),
         )
-    finding_summary = finding_engine.run()
-    if finding_summary.inserted or finding_summary.updated or finding_summary.removed:
-        _log(
-            "finding synthesis",
-            (
-                f"inserted={finding_summary.inserted} "
-                f"updated={finding_summary.updated} "
-                f"removed={finding_summary.removed} "
-                f"active={finding_summary.active_findings}"
-            ),
-        )
+    _run_finding_synthesis("finding synthesis")
 
     def _cloud_asset_scope_entries(service: str, ref: str) -> list[dict[str, str]]:
         service_name = str(service or "").strip().lower()
@@ -11620,6 +11646,12 @@ def kill_chain(
         decision = item.get("decision") if isinstance(item.get("decision"), dict) else {}
         key = str(target.get("key") or "").strip()
         if bool(decision.get("allowed")):
+            try:
+                with sqlite3.connect(db_path) as con:
+                    _promote_pending_cloud_targets(con, [cast(dict[str, Any], target)])
+                    con.commit()
+            except Exception:  # noqa: BLE001
+                pass
             pending_targets_out.append(cast(dict[str, Any], target))
             return key or None
         _record_cloud_asset_scope_denied(
@@ -18508,6 +18540,12 @@ def kill_chain(
                 _log(f"{iteration}.J cloud scans",
                      "[dim]no new cloud refs to scan[/dim]")
             else:
+                try:
+                    with sqlite3.connect(db_path) as con:
+                        _promote_pending_cloud_targets(con, pending_cloud_targets)
+                        con.commit()
+                except Exception:  # noqa: BLE001
+                    pass
                 if len(pending_cloud_targets) > 1 and parallel_workers > 1:
                     _log(
                         f"{iteration}.J cloud scan spec prep",
@@ -18754,17 +18792,7 @@ def kill_chain(
                     f"roots={len(synthesis_summary.root_domains)}"
                 ),
             )
-        finding_summary = finding_engine.run()
-        if finding_summary.inserted or finding_summary.updated or finding_summary.removed:
-            _log(
-                f"{iteration}.K5 findings",
-                (
-                    f"inserted={finding_summary.inserted} "
-                    f"updated={finding_summary.updated} "
-                    f"removed={finding_summary.removed} "
-                    f"active={finding_summary.active_findings}"
-                ),
-            )
+        _run_finding_synthesis(f"{iteration}.K5 findings")
         _run_pending_cloud_key_validation(f"{iteration}.K6 cloud key validation")
         if _maybe_interrupt_run(f"iteration_{iteration}_postfanout"):
             return
@@ -18990,6 +19018,7 @@ def kill_chain(
     # Cloud scan summary (actual scans ran per-iteration in fan-out J)
     if not skip_cloud:
         _run_pending_cloud_key_validation("final cloud key validation")
+        _run_finding_synthesis("final finding synthesis")
         _cli_audit(
             db_path, engagement_id, "orchestrator", "kill_chain",
             "cloud_scan_summary", target=domain,
