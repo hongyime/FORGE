@@ -66,12 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add API auxiliary-route validation/reportability parity
-  outside the main engagement detail route. Direct routes such as assets,
-  vulnerability summary, and asset tree should prove stale, unvalidated, or
-  non-reportable cloud/key evidence cannot inflate reportable counts or review
-  surfaces. Minimal files: `forge/webui/app.py` and
-  `tests/integration/test_webui_engagement_api.py`.
+- [ ] Next checkpoint: expose run audit manifest bundle availability in
+  dashboard/API review surfaces. Manifest generation/export exists; detail/API
+  surfaces should clearly report the latest manifest hash/status/artifact
+  availability so operators can verify chain-of-custody from the engagement
+  page. Minimal files: `forge/reporting/dashboard.py`,
+  `forge/webui/app.py`, and dashboard/API tests.
+- [x] API auxiliary-route validation/reportability parity checkpoint:
+  `/api/engagements/{id}/assets` now filters false-positive passive
+  vulnerabilities the same way host context and vulnerability summary routes
+  already do. The integration regression proves stale/unreportable deterministic
+  cloud findings do not inflate `vuln-summary`, false-positive passive critical
+  rows do not surface through assets, and `asset-tree` remains a neutral
+  asset-only review surface without finding/severity rollups. Verification:
+  compile passed; Ruff passed; focused route parity tests passed (`2 passed`);
+  full web UI engagement API file passed (`44 passed`); workspace
+  `.forge_data/engagements` contained `0` entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-api-aux-route-reportability-parity.md`.
 - [x] Fan-out J cloud validation target prep worker checkpoint:
   `kill_chain()` now prepares `(service, ref)` validation target tuples through
   `_run_inprocess_batch()` before calling `run_cloud_asset_validate_batch()`.

@@ -1850,9 +1850,17 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
         summary_resp = client.get("/api/engagements/1001/vuln-summary", headers=headers)
         assert summary_resp.status_code == 200, summary_resp.text
         summary = summary_resp.json()
+        assets_resp = client.get("/api/engagements/1001/assets", headers=headers)
+        assert assets_resp.status_code == 200, assets_resp.text
+        assets = assets_resp.json()
+        tree_resp = client.get("/api/engagements/1001/asset-tree", headers=headers)
+        assert tree_resp.status_code == 200, tree_resp.text
+        asset_tree_payload = tree_resp.json()
 
     assert summary["vulnerability_findings"].get("HIGH", 0) == 0
     assert summary["passive_vulns"].get("CRITICAL", 0) == 0
+    assert assets["passive_vulns"] == []
+    assert all("findings" not in item and "severity" not in item for item in asset_tree_payload["items"])
     graph_nodes = {node["node_id"]: node for node in detail["graph_payload"]["nodes"]}
     cloud_metadata = graph_nodes["CLOUD::bucket"]["metadata"]
     assert cloud_metadata["validation_status"] == "UNVERIFIED"

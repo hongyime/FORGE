@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Fan-out J cloud validation target prep worker migration is
+Latest checkpoint: API auxiliary-route validation/reportability parity is
+complete. `/api/engagements/{id}/assets` now filters false-positive passive
+vulnerabilities the same way host context and vulnerability summary routes
+already do. The integration regression proves stale/unreportable deterministic
+cloud findings do not inflate `vuln-summary`, false-positive passive critical
+rows do not surface through assets, and `asset-tree` remains a neutral
+asset-only review surface without finding/severity rollups. Verification:
+compile passed; Ruff passed; focused route parity tests passed (`2 passed`);
+full web UI engagement API file passed (`44 passed`); `.forge_data/engagements`
+contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-api-aux-route-reportability-parity.md`.
+
+Next checkpoint: expose run audit manifest bundle availability in dashboard/API
+review surfaces. Manifest generation/export exists; detail/API surfaces should
+clearly report the latest manifest hash/status/artifact availability so
+operators can verify chain-of-custody from the engagement page.
+
+Previous checkpoint: Fan-out J cloud validation target prep worker migration is
 complete. `kill_chain()` now prepares `(service, ref)` validation target tuples
 through `_run_inprocess_batch()` before calling
 `run_cloud_asset_validate_batch()`. The validator call, scope checker,
@@ -35,12 +52,6 @@ target batching regression passed (`1 passed`); adjacent cloud batching
 selector passed (`2 passed, 764 deselected`); `.forge_data/engagements`
 contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-cloud-validation-target-worker-prep.md`.
-
-Next checkpoint: add API auxiliary-route validation/reportability parity
-outside the main engagement detail route. Direct routes such as assets,
-vulnerability summary, and asset tree should prove stale, unvalidated, or
-non-reportable cloud/key evidence cannot inflate reportable counts or review
-surfaces.
 
 Previous checkpoint: D5 denied recursive URL seed-run persistence is complete.
 D5 URL seed scope decisions now persist deterministic denied-before-fetch URLs

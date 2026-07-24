@@ -2323,6 +2323,7 @@ def create_app() -> Any:
                 SELECT vuln_id, plugin, url, severity, verified, false_positive, discovered_at
                 FROM passive_vulns
                 WHERE engagement_id=?
+                  AND COALESCE(false_positive, 0)=0
                 ORDER BY discovered_at DESC
                 LIMIT 200
                 """,
