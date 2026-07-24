@@ -2606,9 +2606,9 @@ def osint_shodan(
 ) -> None:
     """Shodan enrichment (Module 2-T).
 
-    Uses FORGE_SHODAN_API_KEY from env. For domains: enumerates
-    subdomains + DNS records via the free /dns/domain endpoint. For
-    IPs: pulls port/service banners + known CVEs. Persists all
+    Uses FORGE_SHODAN_API_KEY from env. For domains: resolves root
+    A/AAAA records, then caps host-detail enrichment from those IPs.
+    For IPs: pulls port/service banners + known CVEs. Persists all
     discoveries to hosts/services/audit_log so kill-chain fan-outs pick
     them up next iteration.
     """
@@ -12338,6 +12338,77 @@ def kill_chain(
     ) -> str | None:
         return _apply_one_shot_seed_run_entry(item)
 
+    def _record_domain_provider_dry_run_skips(
+        *,
+        stage_label: str,
+        loop_name: str,
+        completed_domains: set[str],
+        progress_label_prefix: str,
+    ) -> None:
+        pending_domains, skipped_domains = _partition_root_domains(
+            root_domains,
+            completed_domains=completed_domains,
+            max_workers=parallel_workers,
+            progress_label=f"{progress_label_prefix} root-domain prep",
+            progress_callback=_record_batch_progress,
+        )
+        resume_skip_inputs = [
+            (stage_label, root_domain)
+            for root_domain in skipped_domains
+        ]
+        if len(resume_skip_inputs) > 1 and parallel_workers > 1:
+            _log(
+                f"{progress_label_prefix} skip-log prep",
+                f"[dim]parallel parse x{min(parallel_workers, len(resume_skip_inputs))}[/dim]",
+            )
+        prepared_resume_skips = _run_inprocess_batch(
+            resume_skip_inputs,
+            _prepare_resume_skip_log_entry,
+            max_workers=parallel_workers,
+            progress_label=f"{progress_label_prefix} skip-log prep",
+            progress_callback=_record_batch_progress,
+        )
+        if len(prepared_resume_skips) > 1:
+            _log(
+                f"{progress_label_prefix} skip-log merge",
+                "[dim]sequential dispatch x1[/dim]  [dim]resume-skip log order preserved[/dim]",
+            )
+        _run_inprocess_batch(
+            prepared_resume_skips,
+            _apply_prepared_log_entry,
+            max_workers=1,
+            progress_label=f"{progress_label_prefix} skip-log merge",
+            progress_callback=_record_batch_progress,
+        )
+        dry_run_entries = [
+            (root_domain, loop_name)
+            for root_domain in pending_domains
+        ]
+        if len(dry_run_entries) > 1 and parallel_workers > 1:
+            _log(
+                f"{progress_label_prefix} dry-run finalize prep",
+                f"[dim]parallel parse x{min(parallel_workers, len(dry_run_entries))}[/dim]",
+            )
+        prepared_dry_run_entries = _run_inprocess_batch(
+            dry_run_entries,
+            _prepare_domain_dry_run_skip_entry,
+            max_workers=parallel_workers,
+            progress_label=f"{progress_label_prefix} dry-run finalize prep",
+            progress_callback=_record_batch_progress,
+        )
+        if len(prepared_dry_run_entries) > 1:
+            _log(
+                f"{progress_label_prefix} dry-run finalize",
+                "[dim]sequential dispatch x1[/dim]  [dim]dry-run skip order preserved[/dim]",
+            )
+        _run_inprocess_batch(
+            prepared_dry_run_entries,
+            _apply_domain_dry_run_skip_entry,
+            max_workers=1,
+            progress_label=f"{progress_label_prefix} dry-run finalize",
+            progress_callback=_record_batch_progress,
+        )
+
     def _prepare_url_dry_run_skip_entry(
         item: tuple[str, int, str],
     ) -> dict[str, object] | None:
@@ -13548,9 +13619,9 @@ def kill_chain(
                  f"gh_orgs={len(mined['github_orgs'])}")
 
             # ─── Fan-out D3: Shodan enrichment per host discovered ───
-            # Runs only on iteration 1 for the seed domain — /dns/resolve
-            # is free, /shodan/host per IP costs no credits. Persists
-            # discovered hosts + services + CVEs into the standard tables.
+            # Runs only on iteration 1 for the seed domain. Domain mode
+            # uses /dns/resolve and capped /shodan/host IP enrichment.
+            # Persists discovered hosts + services + CVEs into standard tables.
             d_specs: list[ModuleDispatchSpec] = []
             d_schedule_merge_inputs: list[dict[str, object]] = []
             if iteration == 1 and root_domains:
@@ -13680,6 +13751,19 @@ def kill_chain(
                 max_workers=parallel_workers,
                 progress_callback=_record_batch_progress,
             )
+            if iteration == 1 and root_domains:
+                _record_domain_provider_dry_run_skips(
+                    stage_label=f"{iteration}.D3 shodan",
+                    loop_name="fanout_d3_shodan",
+                    completed_domains=completed_d3_domains,
+                    progress_label_prefix=f"{iteration}.D3",
+                )
+                _record_domain_provider_dry_run_skips(
+                    stage_label=f"{iteration}.D4 urlscan",
+                    loop_name="fanout_d4_urlscan",
+                    completed_domains=completed_d4_domains,
+                    progress_label_prefix=f"{iteration}.D4",
+                )
 
         # ─── Fan-out D5: in-scope URL-seed surface mining ────────────
         # Re-enters operator-provided URL seeds and same-scope crawl URLs

@@ -5,17 +5,17 @@ domain we can pull:
 
   - Per-host: open ports, banners, service versions, hostnames, CVEs
               (`vulns`), organisation, ISP, country, cloud provider.
-  - Per-domain: /dns/domain enumerates every subdomain Shodan has ever
-                seen resolve, plus MX/NS/A/AAAA/CNAME records.
+  - Per-domain: /dns/resolve resolves the root domain, then capped
+                /shodan/host lookups enrich observed hostnames/services.
 
 Endpoints touched:
 
-  GET /shodan/host/{ip}                — 1 query credit, deep host detail
+  GET /shodan/host/{ip}                — IP lookup, deep host detail
   GET /shodan/host/search?query=...    — 1 query credit (NOT USED here;
                                          search is capped at 1/engagement
                                          and lives in the kill-chain
                                          orchestrator, not this module)
-  GET /dns/domain/{domain}             — FREE, no credit cost
+  GET /dns/resolve                     — root A/AAAA resolve for domain mode
 
 Auth: `FORGE_SHODAN_API_KEY` env var. Empty key → returns error dict
 (never raises). Non-fatal on 401 / 402 / 404 / network failure.
@@ -571,7 +571,7 @@ def lookup_shodan_host(
 
 
 # ---------------------------------------------------------------------------
-# Lookup: /dns/domain/{domain}  (FREE, no query credits)
+# Lookup: /dns/resolve + capped /shodan/host enrichment
 # ---------------------------------------------------------------------------
 
 def lookup_shodan_domain(
@@ -581,7 +581,7 @@ def lookup_shodan_domain(
     timeout: float = 15.0,
     proxy: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Fetch subdomains and DNS records via Shodan's free /dns/domain.
+    """Fetch domain records via /dns/resolve plus capped host enrichment.
 
     Returns dict:
       {
@@ -591,8 +591,7 @@ def lookup_shodan_domain(
         "tags":       [...],
       }
 
-    Empty on 401/402/404/network failure. Non-fatal. This endpoint does
-    NOT consume query credits, so kill-chain can call it every iteration.
+    Empty on 401/402/404/network failure. Non-fatal.
     """
     result: dict[str, Any] = {
         "domain": (domain or "").strip().lower(),
@@ -627,10 +626,8 @@ def lookup_shodan_domain(
             },
             verify=False,  # noqa: S501
         ) as c:
-            # Free-tier friendly: /dns/domain requires paid membership on
-            # our "dev" plan (returns 401). Instead we use /dns/resolve
-            # (free) to get the A/AAAA IPs, then /shodan/host on each IP
-            # to enumerate every other hostname Shodan has seen there.
+            # Cost-aware: avoid /dns/domain domain-search expansion here.
+            # Resolve the root domain, then cap IP host enrichment.
             r = _shodan_get(
                 c,
                 f"{_SHODAN_BASE}/dns/resolve",
@@ -646,7 +643,6 @@ def lookup_shodan_domain(
                 result["error"] = "HTTP 429 (rate-limited)"
                 return result
             if r.status_code != 200:
-                # Fall through to try /dns/domain in case tier allows it
                 result["error"] = f"HTTP {r.status_code}"
                 return result
             resolved = r.json() or {}
@@ -664,7 +660,7 @@ def lookup_shodan_domain(
             # OTHER hostname Shodan has observed on that IP - reveals
             # subdomains + neighbouring hosted domains.
             other_hostnames: set[str] = set()
-            for ip in list(ips_seen)[:3]:  # cap to save credits
+            for ip in list(ips_seen)[:3]:
                 try:
                     hr = _shodan_get(
                         c,

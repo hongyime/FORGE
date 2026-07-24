@@ -65589,6 +65589,8 @@ def test_kill_chain_dry_run_populates_seed_runs_for_seeded_fanouts(
         run_map = {(row[0], row[1]): row[2] for row in rows}
         assert run_map[("acme.example", "fanout_a_subdomains")] == "skipped"
         assert run_map[("acme.example", "fanout_b_harvest")] == "skipped"
+        assert run_map[("acme.example", "fanout_d3_shodan")] == "skipped"
+        assert run_map[("acme.example", "fanout_d4_urlscan")] == "skipped"
         assert run_map[("acme.example", "fanout_g_dns")] == "skipped"
         assert run_map[("acme.example", "fanout_h_rdap")] == "skipped"
         assert run_map[("acme.example", "fanout_i_wayback")] == "skipped"
@@ -65613,6 +65615,71 @@ def test_kill_chain_dry_run_populates_seed_runs_for_seeded_fanouts(
         assert engagement_run[4] == 1
     finally:
         con.close()
+
+
+def test_kill_chain_dry_run_records_d3_d4_provider_skips_without_dispatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.delenv("FORGE_ROE_ID", raising=False)
+
+    def _provider_dispatch_must_not_run(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del run_module, max_workers, progress_label, progress_callback
+        provider_specs = [
+            spec
+            for spec in specs
+            if tuple(str(arg) for arg in spec.cmd_argv[:2]) in {
+                ("osint", "shodan"),
+                ("osint", "urlscan"),
+            }
+        ]
+        assert provider_specs == []
+        return [0] * len(specs)
+
+    monkeypatch.setattr("forge.cli._run_module_batch", _provider_dispatch_must_not_run)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=True,
+        attack_mode=False,
+        skip_cloud=True,
+        skip_keyscan=True,
+    )
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT es.seed_value, sr.loop_name, sr.status, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name IN ('fanout_d3_shodan', 'fanout_d4_urlscan')
+            ORDER BY sr.loop_name, es.seed_value
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    run_map = {(str(row[0]), str(row[1])): (str(row[2]), json.loads(str(row[3] or "{}"))) for row in rows}
+    assert set(run_map) == {
+        ("acme.example", "fanout_d3_shodan"),
+        ("acme.example", "fanout_d4_urlscan"),
+    }
+    for status, metadata in run_map.values():
+        assert status == "skipped"
+        assert metadata["mode"] == "dry_run"
+        assert metadata["iteration"] == 1
 
 
 def test_kill_chain_canonicalizes_duplicate_initial_domain_and_email_seeds(

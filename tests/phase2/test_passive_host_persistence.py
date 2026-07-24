@@ -408,6 +408,74 @@ def test_lookup_shodan_domain_paces_requests_and_respects_retry_after(
     assert sleeps == [0.25, 0.25, 1.0, 0.25]
 
 
+def test_lookup_shodan_domain_uses_dns_resolve_and_caps_host_enrichment(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "eng.db"
+    _bootstrap_engagement(db_path)
+    monkeypatch.setenv("FORGE_SHODAN_API_KEY", "test-key")
+    monkeypatch.setenv("FORGE_SHODAN_REQUEST_DELAY_SECONDS", "0")
+    monkeypatch.setenv("FORGE_SHODAN_RATE_LIMIT_RETRIES", "0")
+    http_pacing._clear_rate_limit_cooldowns_for_tests()
+
+    class _Response:
+        def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+            self.status_code = status_code
+            self._payload = payload
+            self.headers: dict[str, str] = {}
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def __enter__(self) -> "_Client":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def get(self, url: str, *, params: dict[str, object]) -> _Response:
+            calls.append((url, dict(params)))
+            if url.endswith("/dns/resolve"):
+                return _Response(
+                    200,
+                    {
+                        "acme.example": "203.0.113.10",
+                        "www.acme.example": "203.0.113.11",
+                        "api.acme.example": "203.0.113.12",
+                        "cdn.acme.example": "203.0.113.13",
+                    },
+                )
+            if "/shodan/host/" in url:
+                return _Response(
+                    200,
+                    {
+                        "hostnames": ["www.acme.example", "api.acme.example", "outside.example"],
+                        "domains": ["acme.example", "other.example"],
+                    },
+                )
+            raise AssertionError(url)
+
+    monkeypatch.setitem(sys.modules, "httpx", types.SimpleNamespace(Client=_Client))
+
+    result = lookup_shodan_domain("acme.example", 1001, db_path)
+
+    assert "error" not in result
+    assert set(result["subdomains"]) == {"api", "www"}
+    assert calls[0][0] == "https://api.shodan.io/dns/resolve"
+    host_calls = [call for call in calls if "/shodan/host/" in call[0]]
+    assert len(host_calls) == 3
+    assert all("/dns/domain" not in call[0] for call in calls)
+    assert {call[1]["minify"] for call in host_calls} == {"true"}
+    assert {call[1]["key"] for call in calls} == {"test-key"}
+
+
 def test_search_urlscan_paces_requests_and_respects_retry_after(
     tmp_path: Path,
     monkeypatch,

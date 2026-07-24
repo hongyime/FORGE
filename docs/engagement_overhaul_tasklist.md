@@ -91,11 +91,22 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix Shodan provider contract/dry-run parity by either
-  aligning implementation with the documented `/dns/domain` credit-free path or
-  documenting/testing the current `/dns/resolve` plus capped host-enrichment
-  cost model, and add dry-run evidence that D3/D4 intended provider fan-outs are
-  recorded without outbound calls.
+- [ ] Next checkpoint: audit another concrete passive-to-live
+  validation/report/API parity gap, preferably provider-specific proof/detail
+  reviewability for long-tail validators or imported graph/raw-export shape
+  mismatches. Keep live provider calls mocked unless an explicit ROE/scope
+  manifest and target are supplied.
+- [x] Shodan provider contract and D3/D4 dry-run parity checkpoint:
+  Shodan domain enrichment is now documented and tested as the current
+  `/dns/resolve` plus capped `/shodan/host/{ip}` enrichment model; stale
+  `/dns/domain` and incorrect free-domain-endpoint wording was removed from the
+  module and CLI docs. Dry-run kill-chain runs now persist skipped
+  `fanout_d3_shodan` and `fanout_d4_urlscan` seed-run rows for root domains
+  without dispatching Shodan or URLScan provider modules. Verification: Ruff
+  passed; compile passed; focused D3/D4 dry-run orchestrator tests passed (`2
+  passed, 763 deselected`); focused Shodan lookup contract/pacing tests passed
+  (`2 passed, 6 deselected`). Handoff:
+  `.claude/handoffs/2026-07-24-shodan-dry-run-provider-parity.md`.
 - [x] Kill-chain child scope-manifest propagation checkpoint:
   Explicit `scope_manifest` values now propagate into live-capable child
   dispatch argv for `recon ports`, domain Shodan D3, URLScan D4, and IP Shodan
