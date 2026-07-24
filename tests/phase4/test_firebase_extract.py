@@ -886,6 +886,62 @@ class TestWebConfigExtraction:
         assert projects[0].project_id == "web-proj"
 
 
+def test_firebase_web_extract_denies_db_url_scope_path_drift_before_fetch() -> None:
+    from forge.opsec.scope_gate import ScopeViolationError
+    from forge.phase4.firebase_extract import extract_firebase_config
+
+    con = sqlite3.connect(":memory:")
+    try:
+        with pytest.raises(ScopeViolationError):
+            extract_firebase_config(
+                1001,
+                ["https://allowed.example/app/"],
+                "https://allowed.example/admin",
+                con,
+                dry_run=True,
+            )
+    finally:
+        con.close()
+
+
+def test_firebase_web_extract_skips_out_of_prefix_js_before_fetch(monkeypatch) -> None:
+    from forge.phase4 import firebase_extract
+
+    target_url = "https://allowed.example/app/index.html"
+    drifted_js = "https://allowed.example/admin/app.js"
+    calls: list[str] = []
+
+    def _fake_fetch(url: str, _cfg=None):  # noqa: ANN001
+        calls.append(url)
+        if url == target_url:
+            return '<script src="/admin/app.js"></script>'
+        if url == drifted_js:
+            raise AssertionError("out-of-prefix JS must not be fetched")
+        return ""
+
+    monkeypatch.setattr(firebase_extract, "wait_for_internet", lambda: True)
+    monkeypatch.setattr(
+        firebase_extract,
+        "with_internet_retry",
+        lambda func, *args, **kwargs: func(*args, **kwargs),
+    )
+    monkeypatch.setattr(firebase_extract, "_fetch_text", _fake_fetch)
+
+    con = sqlite3.connect(":memory:")
+    try:
+        projects = firebase_extract.extract_firebase_config(
+            1001,
+            ["https://allowed.example/app/"],
+            target_url,
+            con,
+        )
+    finally:
+        con.close()
+
+    assert projects == []
+    assert calls == [target_url, target_url]
+
+
 def test_cloud_firebase_extract_cli_persists_supabase_from_archive_style_bundle(
     tmp_path: Path,
     monkeypatch,

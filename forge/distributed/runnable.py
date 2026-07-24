@@ -202,6 +202,20 @@ def _assert_scheduled_target_scope(
     scope = _load_engagement_scope(db_path, engagement_id)
     if not scope:
         _deny_scheduled_task(engagement_id, task_type, target, "engagement_scope_required", db_path)
+    if _scheduled_target_seed_type(target) == "url":
+        from forge.opsec.scope_gate import url_scope_filter  # noqa: PLC0415
+
+        scope_filter = url_scope_filter(scope)
+        if scope_filter is not None:
+            if not scope_filter(target):
+                _deny_scheduled_task(
+                    engagement_id,
+                    task_type,
+                    target,
+                    "engagement_scope_denied",
+                    db_path,
+                )
+            return
     from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope  # noqa: PLC0415
 
     try:
@@ -239,6 +253,40 @@ def _scheduled_network_scope(
     if not scope:
         _deny_scheduled_task(engagement_id, task_type, "", "engagement_scope_required", db_path)
     return scope
+
+
+def _scheduled_crawl_scope_options(
+    engagement_id: int,
+    payload: dict[str, object],
+    db_path: Path,
+) -> dict[str, object]:
+    scope_manifest = _load_scheduled_scope_manifest(
+        engagement_id=engagement_id,
+        task_type="crawl",
+        target="",
+        payload=payload,
+        db_path=db_path,
+    )
+    if scope_manifest is None:
+        return {"require_scope": True}
+    scope_values = [
+        str(item)
+        for item in [
+            *list(scope_manifest.get("domains") or []),
+            *list(scope_manifest.get("ip_ranges") or []),
+        ]
+        if str(item or "").strip()
+    ]
+    url_prefixes = [
+        str(item)
+        for item in list(scope_manifest.get("urls") or [])
+        if str(item or "").strip()
+    ]
+    return {
+        "scope_values": scope_values,
+        "url_prefixes": url_prefixes,
+        "require_scope": True,
+    }
 
 
 def run_scheduled_task(
@@ -317,6 +365,7 @@ def run_scheduled_task(
     if task_type == "crawl":
         if not target:
             raise RuntimeError("crawl task requires target.")
+        scope_options = _scheduled_crawl_scope_options(engagement_id, payload, db_path)
         crawl_target_sync(
             engagement_id=engagement_id,
             target_url=target,
@@ -325,6 +374,7 @@ def run_scheduled_task(
             timeout=15.0,
             screenshot=False,
             screenshot_dir=None,
+            **scope_options,
         )
         return
     if task_type == "ports":

@@ -229,6 +229,12 @@ def _ingest_har(engagement_id: int, db_path: Path, har: dict[str, object]) -> in
     return inserted
 
 
+def _assert_passive_target_in_scope(target_url: str, scope: list[str]) -> None:
+    from forge.opsec.scope_gate import assert_url_in_scope
+
+    assert_url_in_scope(target_url, scope)
+
+
 def run_passive_http_collection(
     engagement_id: int,
     db_path: Path,
@@ -236,9 +242,9 @@ def run_passive_http_collection(
     proxy: str | None = None,
     timeout: float = 12.0,
 ) -> int:
-    from forge.opsec.scope_gate import assert_in_scope, load_scope_from_db
+    from forge.opsec.scope_gate import load_scope_from_db
     scope = load_scope_from_db(str(db_path), engagement_id)
-    assert_in_scope(target_url, scope)
+    _assert_passive_target_in_scope(target_url, scope)
 
     try:
         resp = httpx.get(target_url, timeout=timeout, proxy=proxy)
@@ -417,7 +423,7 @@ def run_passive_http_collection_for_engagement(
     limit: int = 12,
     max_workers: int | None = None,
 ) -> int:
-    from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, load_scope_from_db
+    from forge.opsec.scope_gate import ScopeViolationError, load_scope_from_db
 
     scope = load_scope_from_db(str(db_path), engagement_id)
     targets = _engagement_passive_targets(
@@ -428,7 +434,7 @@ def run_passive_http_collection_for_engagement(
     scoped_targets: list[str] = []
     for target_url in targets:
         try:
-            assert_in_scope(target_url, scope)
+            _assert_passive_target_in_scope(target_url, scope)
         except ScopeViolationError:
             continue
         scoped_targets.append(target_url)

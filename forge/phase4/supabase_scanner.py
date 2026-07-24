@@ -23,11 +23,11 @@ import re
 import sqlite3
 import sys
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
 from forge.opsec.resilience import _SHUTDOWN, wait_for_internet, with_internet_retry
-from forge.opsec.scope_gate import assert_in_scope
+from forge.opsec.scope_gate import assert_url_in_scope
 
 _LOG = logging.getLogger(__name__)
 _RATE_LIMITER = AdaptiveRateLimiter(base_delay=1.0, max_delay=30.0, min_delay=0.5, jitter=0.3)
@@ -203,7 +203,7 @@ def scan_supabase(
     if target_url:
         domain = urlparse(target_url).netloc
         try:
-            assert_in_scope(domain, engagement_scope)
+            scope_filter = assert_url_in_scope(target_url, engagement_scope)
         except Exception:
             print(f"[SUPABASE] {target_url} not in scope")
             return []
@@ -219,12 +219,13 @@ def scan_supabase(
 
             # Also scan linked JS files
             js_pat = re.compile(r'src=["\']([^"\']+\.js(?:\?[^"\']*)?)["\']')
-            from urllib.parse import urljoin
             for m in js_pat.finditer(html):
                 js_url = m.group(1)
                 if not js_url.startswith("http"):
                     js_url = urljoin(target_url, js_url)
-                if urlparse(js_url).netloc == domain:
+                if urlparse(js_url).netloc == domain and (
+                    scope_filter is None or scope_filter(js_url)
+                ):
                     js_text = with_internet_retry(_fetch_text, js_url, cfg)
                     if js_text:
                         candidates.extend(_extract_supabase_keys(js_text, js_url))

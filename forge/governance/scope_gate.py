@@ -172,9 +172,19 @@ class ScopeGate:
         if not host_ok:
             return False
 
-        # When URL prefixes are declared, the full URL must also match.
+        # URL prefixes narrow their own host, but do not globally override
+        # separately declared domain/IP scope for other hosts.
         if self._url_prefixes:
-            return any(target.startswith(prefix) for prefix in self._url_prefixes)
+            if any(target.startswith(prefix) for prefix in self._url_prefixes):
+                return True
+            target_host = host.lower().rstrip(".")
+            for prefix in self._url_prefixes:
+                try:
+                    prefix_host = (urlsplit(prefix).hostname or "").lower().rstrip(".")
+                except ValueError:
+                    continue
+                if prefix_host and target_host == prefix_host:
+                    return False
         return True
 
     def _ip_in_scope(

@@ -23,7 +23,6 @@ from urllib.parse import urljoin, urlparse
 
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
 from forge.opsec.resilience import _SHUTDOWN, wait_for_internet, with_internet_retry
-from forge.opsec.scope_gate import assert_in_scope
 
 _LOG = logging.getLogger(__name__)
 _RATE_LIMITER = AdaptiveRateLimiter(base_delay=1.5, max_delay=30.0, min_delay=1.0, jitter=0.5)
@@ -168,7 +167,9 @@ def extract_firebase_config(
     Stores results in firebase_extracted table.
     No Firebase keys needed — discovers them FROM the target app.
     """
-    assert_in_scope(urlparse(target_url).netloc, engagement_scope)
+    from forge.opsec.scope_gate import assert_url_in_scope
+
+    scope_filter = assert_url_in_scope(target_url, engagement_scope)
     eng_db_conn.execute(SCHEMA_SQL)
     eng_db_conn.commit()
 
@@ -184,6 +185,8 @@ def extract_firebase_config(
 
     def _scan_url(url: str) -> Optional[dict]:
         if url in scanned_urls or _SHUTDOWN.is_set():
+            return None
+        if scope_filter is not None and not scope_filter(url):
             return None
         scanned_urls.add(url)
         text = with_internet_retry(_fetch_text, url, cfg)

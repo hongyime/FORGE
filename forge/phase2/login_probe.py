@@ -240,11 +240,12 @@ def _assert_online() -> None:
 
 def _scope_check(url: str, engagement_id: int, db_path: Path) -> None:
     """
-    Verify the target URL hostname is within engagement scope.
+    Verify the target URL is within engagement scope.
+    URL scope entries are enforced as prefixes for path-sensitive probes.
     Reads engagement_scope from the SQLite engagement DB.
     Raises ScopeViolationError if not in scope.
     """
-    from forge.opsec.scope_gate import assert_in_scope, load_scope_from_db
+    from forge.opsec.scope_gate import assert_url_in_scope, load_scope_from_db
 
     scope_entries: list[str] = []
     try:
@@ -261,7 +262,7 @@ def _scope_check(url: str, engagement_id: int, db_path: Path) -> None:
         scope_entries = []
     if not scope_entries:
         scope_entries = load_scope_from_db(str(db_path), engagement_id)
-    assert_in_scope(urlparse(url).hostname or "", scope_entries)
+    assert_url_in_scope(url, scope_entries)
 
 
 def _audit(db_path: Path, engagement_id: int, action: str, detail: str) -> None:
@@ -803,7 +804,7 @@ class WebPanelTester:
     Module 2-K orchestrator.
 
     Workflow:
-      1. Scope gate (target URL hostname vs engagement scope)
+      1. Scope gate (target URL vs engagement scope)
       2. Operator confirmation prompt (dry_run=False only)
       3. GET target URL → FormParser → ParsedForm
       4. Submit known-bad probe → establish DbkerDiscriminator baseline
@@ -1196,7 +1197,7 @@ def run_login_probe(
         List of WebPanelFinding objects for confirmed bypasses/weak passwords.
 
     Raises:
-        ScopeViolationError  — target URL hostname not in engagement scope.
+        ScopeViolationError  — target URL not in engagement scope.
         LoginProbeAborted    — operator cancelled interactive prompt.
         OfflineStrictError   — FORGE_OFFLINE_STRICT=1 with dry_run=False.
     """

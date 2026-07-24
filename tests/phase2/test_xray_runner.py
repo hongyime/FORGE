@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import httpx
+import pytest
 
 from forge.db.session import get_engagement_db
 from forge.phase2.xray_runner import (
@@ -112,6 +113,37 @@ def test_run_passive_http_collection_counts_duplicate_findings_as_zero_on_replay
     summary = summarize_passive_vulns(1001, db_path)
     assert summary["MEDIUM"] == 1
     assert summary["LOW"] == 1
+
+
+def test_run_passive_http_collection_denies_db_url_scope_path_drift_before_fetch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.opsec.scope_gate import ScopeViolationError
+
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+    con = get_engagement_db(db_path)
+    try:
+        con.execute(
+            "UPDATE engagements SET scope_json=? WHERE id=1001",
+            (json.dumps(["https://app.acme.example/app/"]),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    def _fail_get(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("path-drift passive target must not be fetched")
+
+    monkeypatch.setattr(httpx, "get", _fail_get)
+
+    with pytest.raises(ScopeViolationError):
+        run_passive_http_collection(
+            1001,
+            db_path,
+            "https://app.acme.example/admin",
+        )
 
 
 def test_run_passive_http_collection_for_engagement_uses_crawl_results_and_dedupes_targets(
@@ -599,6 +631,51 @@ def test_run_passive_http_collection_for_engagement_skips_out_of_scope_drifted_t
     summary = summarize_passive_vulns(1001, db_path)
     assert summary["MEDIUM"] == 1
     assert summary["LOW"] == 1
+
+
+def test_run_passive_http_collection_for_engagement_skips_db_url_scope_path_drift(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = get_engagement_db(db_path)
+    try:
+        con.execute(
+            "UPDATE engagements SET scope_json=? WHERE id=1001",
+            (json.dumps(["https://app.acme.example/app/"]),),
+        )
+        con.execute(
+            """
+            INSERT INTO crawl_results (engagement_id, url, final_url, title, screenshot_path, tech_stack_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                1001,
+                "https://app.acme.example/admin",
+                "https://app.acme.example/admin",
+                "Admin",
+                None,
+                "{}",
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    requested_urls: list[str] = []
+
+    def _fake_get(url: str, *_args: object, **_kwargs: object) -> object:
+        requested_urls.append(url)
+        raise AssertionError("path-drift engagement passive target must not be fetched")
+
+    monkeypatch.setattr(httpx, "get", _fake_get)
+
+    inserted = run_passive_http_collection_for_engagement(1001, db_path, max_workers=2)
+
+    assert inserted == 0
+    assert requested_urls == []
 
 
 def test_vuln_passive_without_target_uses_engagement_backed_collection(

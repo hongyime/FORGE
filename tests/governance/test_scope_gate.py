@@ -163,7 +163,7 @@ class TestUrlMatching:
         assert gate.is_in_scope("http://192.0.2.1/health") is False
 
     def test_url_prefix_required_when_urls_listed(self) -> None:
-        """When ``urls`` is non-empty the URL must also match a prefix."""
+        """When ``urls`` is non-empty same-host URLs must match a prefix."""
         gate = ScopeGate(
             EngagementScope(
                 domains=["example.com"],
@@ -173,6 +173,17 @@ class TestUrlMatching:
         assert gate.is_in_scope("https://example.com/api/v1/users") is True
         # Host is allowed but path falls outside the listed prefix.
         assert gate.is_in_scope("https://example.com/login") is False
+
+    def test_url_prefix_only_narrows_its_own_host(self) -> None:
+        gate = ScopeGate(
+            EngagementScope(
+                domains=["acme.example", "portal.acme.example"],
+                urls=["https://portal.acme.example/app"],
+            )
+        )
+        assert gate.is_in_scope("https://acme.example") is True
+        assert gate.is_in_scope("https://portal.acme.example/app/home") is True
+        assert gate.is_in_scope("https://portal.acme.example/admin") is False
 
     def test_malformed_url_rejected(self) -> None:
         gate = ScopeGate(EngagementScope(domains=["example.com"]))

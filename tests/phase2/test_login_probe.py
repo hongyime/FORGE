@@ -895,6 +895,20 @@ def test_scope_check_rejects_out_of_scope_hostname(tmp_eng_db):
         _scope_check("http://evil.attacker.com/login", ENGAGEMENT_ID, tmp_eng_db)
 
 
+def test_scope_check_rejects_url_prefix_path_drift(tmp_eng_db):
+    con = sqlite3.connect(tmp_eng_db)
+    con.execute("DELETE FROM engagement_scope WHERE engagement_id=?", (ENGAGEMENT_ID,))
+    con.execute(
+        "INSERT INTO engagement_scope (engagement_id, scope_entry) VALUES (?,?)",
+        (ENGAGEMENT_ID, "http://admin.acme.local/app/"),
+    )
+    con.commit()
+    con.close()
+
+    with pytest.raises(ScopeViolationError):
+        _scope_check("http://admin.acme.local/admin", ENGAGEMENT_ID, tmp_eng_db)
+
+
 # ── 27. Evasion assertion — payload not in audit_log ─────────────────────────
 
 def test_evasion_assertion_spray_password_never_in_audit_log(tmp_eng_db):

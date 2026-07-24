@@ -8,6 +8,7 @@ import pytest
 from forge.opsec.scope_gate import (
     ScopeViolationError,
     assert_in_scope,
+    assert_url_in_scope,
     email_address_in_scope,
     load_scope_from_db,
 )
@@ -53,6 +54,25 @@ def test_opsec_scope_gate_url_scope_entry_authorizes_host() -> None:
 
     with pytest.raises(ScopeViolationError):
         assert_in_scope("api.example.com", scope)
+
+
+def test_opsec_assert_url_in_scope_rejects_same_host_path_drift() -> None:
+    scope = ["https://portal.example.com/app/"]
+
+    assert_url_in_scope("https://portal.example.com/app/login", scope)
+
+    with pytest.raises(ScopeViolationError):
+        assert_url_in_scope("https://portal.example.com/admin", scope)
+
+
+def test_opsec_assert_url_in_scope_allows_explicit_other_domain_scope() -> None:
+    scope = ["acme.example", "https://portal.acme.example/app/"]
+
+    assert_url_in_scope("https://acme.example", scope)
+    assert_url_in_scope("https://portal.acme.example/app/login", scope)
+
+    with pytest.raises(ScopeViolationError):
+        assert_url_in_scope("https://portal.acme.example/admin", scope)
 
 
 def test_email_address_scope_handles_exact_domain_wildcard_and_ignores_urls() -> None:

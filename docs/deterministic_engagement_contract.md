@@ -1,6 +1,6 @@
 # Deterministic Engagement Contract
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`.
 
@@ -60,6 +60,12 @@ continuation wording.
 Live probing and follow-on tool execution are allowed only when scope and ROE
 configuration explicitly authorize them. Live work must be bounded, paced,
 logged, resumable, dry-run capable, and non-destructive.
+
+URL scope entries have split semantics by gate type: host-level gates may use a
+URL entry to authorize that URL's host, but crawler, remote-artifact, scheduled
+URL-task, and other path-sensitive gates must treat URL prefixes as same-host
+path constraints and deny same-host path drift before fetch or provider
+execution. Explicit domain/IP scope still authorizes its own host.
 
 FORGE must not add destructive exploitation, password attacks, persistence,
 lateral movement, post-exploitation, data modification, privilege escalation,

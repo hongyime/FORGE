@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import types
 from pathlib import Path
 
 import pytest
 
 from forge.db.session import get_engagement_db
 from forge.distributed import runnable
+from forge.phase1 import crawler
 from forge.phase1 import port_scanner
 
 
@@ -116,6 +118,79 @@ def test_scheduled_crawl_scope_manifest_url_prefix_denies_same_host_drift(
                 ),
                 "roe_id": "ROE-ACME-2026-07",
             },
+            db_path,
+        )
+
+
+def test_scheduled_crawl_scope_manifest_prefix_blocks_discovered_link_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    calls: list[str] = []
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> object:
+            calls.append(url)
+            if url == "https://allowed.example/admin":
+                raise AssertionError("manifest-denied discovered URL must not be fetched")
+            return types.SimpleNamespace(
+                status_code=200,
+                headers={},
+                text='<html><a href="/admin">Admin</a></html>',
+                url=url,
+            )
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    runnable.run_scheduled_task(
+        1001,
+        "crawl:https://allowed.example/app/",
+        {
+            "task_type": "crawl",
+            "target": "https://allowed.example/app/",
+            "scope_manifest": json.dumps(
+                {
+                    "roe_id": "ROE-ACME-2026-07",
+                    "domains": ["allowed.example"],
+                    "urls": ["https://allowed.example/app/"],
+                }
+            ),
+            "roe_id": "ROE-ACME-2026-07",
+        },
+        db_path,
+    )
+
+    assert calls == ["https://allowed.example/app/"]
+
+
+def test_scheduled_crawl_engagement_url_scope_denies_same_host_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["https://allowed.example/app/"])
+
+    def _fail_crawl(*_args: object, **_kwargs: object) -> list[object]:
+        raise AssertionError("DB URL-scope-denied scheduled crawl must not reach crawler")
+
+    monkeypatch.setattr(runnable, "crawl_target_sync", _fail_crawl)
+
+    with pytest.raises(RuntimeError, match="engagement_scope_denied"):
+        runnable.run_scheduled_task(
+            1001,
+            "crawl:https://allowed.example/admin",
+            {"task_type": "crawl", "target": "https://allowed.example/admin"},
             db_path,
         )
 

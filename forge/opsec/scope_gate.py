@@ -6,8 +6,8 @@ making any network request or DB write against a target. This ensures no
 module silently operates outside the declared engagement perimeter.
 
 OPSEC contract (PRD v7.2 §12.4):
-  - assert_in_scope() is the *only* acceptable scope check. Never roll your
-    own string comparison in module code.
+  - assert_in_scope() / assert_url_in_scope() are the acceptable scope checks.
+    Never roll your own string comparison in module code.
   - If scope is empty / None, the call fails closed. Callers that are purely
     passive/offline should not call this live-operation gate.
   - ScopeViolationError is a ValueError subclass so it propagates cleanly
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
-from typing import Optional
+from typing import Callable, Optional
 from urllib.parse import urlparse
 
 
@@ -194,6 +194,41 @@ def email_address_in_scope(email: str, scope: Optional[list[str]] = None) -> boo
     return False
 
 
+def url_scope_filter(scope: Optional[list[str]]) -> Callable[[str], bool] | None:
+    """Return a path-sensitive URL filter when scope contains URL prefixes."""
+    if not scope:
+        return None
+    prefixes: list[str] = []
+    domains: list[str] = []
+    ip_ranges: list[str] = []
+    for entry in scope:
+        text = str(entry or "").strip()
+        if not text:
+            continue
+        if text.startswith(("http://", "https://")):
+            prefixes.append(text)
+            host = urlparse(text).hostname
+            if host:
+                domains.append(host)
+        elif "/" in text:
+            ip_ranges.append(text)
+        else:
+            domains.append(text)
+    if not prefixes:
+        return None
+
+    from forge.governance.scope_gate import EngagementScope, ScopeGate
+
+    gate = ScopeGate(
+        EngagementScope(
+            domains=list(dict.fromkeys(domains)),
+            ip_ranges=list(dict.fromkeys(ip_ranges)),
+            urls=list(dict.fromkeys(prefixes)),
+        )
+    )
+    return gate.is_in_scope
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -225,6 +260,26 @@ def assert_in_scope(target: str, scope: Optional[list[str]] = None) -> None:
             return
 
     raise ScopeViolationError(normalised, scope)
+
+
+def assert_url_in_scope(
+    target_url: str,
+    scope: Optional[list[str]] = None,
+) -> Callable[[str], bool] | None:
+    """
+    Assert that a path-sensitive URL target is within scope.
+
+    When URL prefixes exist, they constrain same-host URL fetches through the
+    governance ScopeGate. Without URL prefixes, this falls back to the generic
+    host-level scope gate.
+    """
+    scope_filter = url_scope_filter(scope)
+    if scope_filter is not None:
+        if not scope_filter(target_url):
+            raise ScopeViolationError(target_url, list(scope or []))
+        return scope_filter
+    assert_in_scope(target_url, scope)
+    return None
 
 
 def load_scope_from_db(db_path: str, engagement_id: int) -> list[str]:

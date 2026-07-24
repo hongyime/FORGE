@@ -66,11 +66,27 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: document and test URL-scope semantics across host gates
-  and URL-prefix gates. Host-level gates may treat a URL entry as authorizing
-  that host, while crawler/path-sensitive gates must keep prefix/path drift
-  enforcement explicit. Add focused current-code tests only where a gap is
-  proven.
+- [ ] Next checkpoint: audit scheduled browser/stealth path-sensitive modules
+  for manifest propagation. Scheduled crawl now passes manifest-derived
+  `url_prefixes` into the crawler; next verify `crawl_stealth` and any browser
+  route/resource loaders cannot use broader DB host scope after a manifest URL
+  prefix authorizes only the initial target. Add focused current-code tests only
+  where a reachable gap is proven.
+- [x] URL-scope host-vs-prefix semantics checkpoint:
+  Host-level gates may treat a URL scope entry as authorizing that host, while
+  path-sensitive gates must treat URL prefixes as same-host path constraints
+  before fetch/provider execution. Explicit domain/IP scope still authorizes its
+  own host. Scheduled URL tasks, passive HTTP collection, Firebase web config
+  extraction, login probe, legacy Supabase extraction, and scheduled crawl
+  recursion now deny same-host path drift when DB or manifest scope declares a
+  URL prefix. Scheduled crawl also propagates manifest-derived `url_prefixes`
+  into the crawler so an allowed `/app/` seed cannot recursively fetch `/admin`
+  under broader DB host scope. Verification: focused URL-scope regression set
+  passed (`12 passed`); broader touched scheduler/passive/login/Firebase/
+  Supabase/governance/OPSEC selector passed (`171 passed`), covering scheduler
+  preflight/recursion, passive xray, Firebase, login-probe, legacy Supabase,
+  shared OPSEC URL assertions, OPSEC host authorization, and governance prefix
+  enforcement.
 - [x] Scope-json reader audit checkpoint:
   Remaining engagement `scope_json` readers now use the shared
   `scope_entries_from_payload()` manifest flattener or an explicit dict-aware
