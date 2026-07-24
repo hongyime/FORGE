@@ -13,7 +13,7 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, urlsplit, urlunsplit
 
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.config import ForgeConfig
@@ -438,6 +438,32 @@ def create_app() -> Any:
             return "name"
         return "other"
 
+    def _canonical_http_url_value(value: str) -> str | None:
+        try:
+            parsed = urlsplit(str(value or "").strip())
+        except ValueError:
+            return None
+        scheme = parsed.scheme.lower()
+        if scheme not in {"http", "https"}:
+            return None
+        host = (parsed.hostname or "").strip().lower()
+        if not host:
+            return None
+        try:
+            port = parsed.port
+        except ValueError:
+            return None
+        host_part = f"[{host}]" if ":" in host and not host.startswith("[") else host
+        default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
+        netloc = f"{host_part}:{port}" if port is not None and not default_port else host_part
+        return urlunsplit((scheme, netloc, parsed.path or "/", parsed.query, ""))
+
+    def _canonical_seed_value(seed_value: str, seed_type: str) -> str:
+        value = str(seed_value or "").strip()
+        if str(seed_type or "").strip().lower() in {"url", "apk_url"}:
+            return _canonical_http_url_value(value) or value
+        return value
+
     def _scope_entries_for_seed(seed_value: str, seed_type: str) -> list[str]:
         entries = [seed_value]
         if seed_type == "domain":
@@ -742,6 +768,7 @@ def create_app() -> Any:
         if not normalized_value:
             raise HTTPException(status_code=400, detail="seed_value must not be empty.")
         resolved_type = (seed_type or _classify_seed_value(normalized_value)).strip().lower()
+        normalized_value = _canonical_seed_value(normalized_value, resolved_type)
         if status not in _VALID_SEED_STATUSES:
             raise HTTPException(status_code=400, detail=f"Invalid seed status: {status}")
         normalized_source = _normalize_seed_source(source)
@@ -1267,6 +1294,7 @@ def create_app() -> Any:
                 raise HTTPException(status_code=400, detail="Each seed must be a string or object.")
             if not seed_value:
                 raise HTTPException(status_code=400, detail="Seed values must not be empty.")
+            seed_value = _canonical_seed_value(seed_value, seed_type)
             seed_key = (seed_type, seed_value)
             if seed_key in seen_seed_keys:
                 continue
@@ -1466,6 +1494,7 @@ def create_app() -> Any:
             except sqlite3.IntegrityError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
             resolved_type = seed_type or _classify_seed_value(seed_value)
+            seed_value = _canonical_seed_value(seed_value, resolved_type)
             _update_scope_json(
                 con,
                 engagement_id,
@@ -1506,6 +1535,7 @@ def create_app() -> Any:
             old_type = str(row["seed_type"] or "")
             updated_value = str(body.get("seed_value") or body.get("value") or old_value).strip()
             updated_type = str(body.get("seed_type") or old_type).strip().lower() or _classify_seed_value(updated_value)
+            updated_value = _canonical_seed_value(updated_value, updated_type)
             updated_source = _normalize_seed_source(str(body.get("source") or row["source"] or "operator"))
             updated_status = str(body.get("status") or row["status"] or "").strip().lower()
             updated_depth = int(body.get("depth") if "depth" in body else row["depth"] or 0)

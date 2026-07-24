@@ -2087,7 +2087,10 @@ def _graph_payload_for_engagement(
 
     seed_payload, seed_snapshot_at = _seed_graph_payload_for_engagement(con, engagement_id)
     if _graph_payload_has_structure(seed_payload):
-        return seed_payload, seed_snapshot_at
+        return (
+            _filter_graph_payload_for_validation(con, engagement_id, seed_payload),
+            seed_snapshot_at,
+        )
 
     return None, ""
 

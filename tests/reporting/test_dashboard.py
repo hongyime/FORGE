@@ -1658,7 +1658,7 @@ def test_generate_dashboard_surfaces_provider_matrix_artifacts_and_validation_ev
                 'VALIDATED',
                 'firebase_database_shallow_read',
                 200,
-                'HTTP 200 real data keys: customers,billing',
+                'Firebase project reference responded with non-empty data.; HTTP 200 real data keys: customers,billing',
                 'Firebase project reference responded with non-empty data.; provider matrix proof; honeypot heuristics passed',
                 '2026-07-09T09:30:00'
             )
@@ -1758,6 +1758,62 @@ def test_generate_dashboard_surfaces_provider_matrix_artifacts_and_validation_ev
     assert {"fanout_d3_shodan", "fanout_d4_urlscan"} <= {
         row["Loop"] for row in detail_payload["sections"]["seed_runs"]
     }
+
+
+def test_generate_dashboard_seed_fallback_graph_refreshes_cloud_validation_metadata(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            DELETE FROM attack_graph_snapshots;
+            CREATE TABLE IF NOT EXISTS cloud_assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                provider_identifier TEXT,
+                source TEXT,
+                discovered_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier, source, discovered_at)
+            VALUES
+                (1001, 'firebase', 'acme-firebase-prod', 'Acme Firebase Prod',
+                 'artifact_static_extract', '2026-07-09T09:00:00')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    assert detail_payload["graph_payload"]["source"] == "engagement_seed_graph"
+    graph_nodes = {node["node_id"]: node for node in detail_payload["graph_payload"]["nodes"]}
+    cloud_metadata = graph_nodes["CLOUD::firebase::acme-firebase-prod"]["metadata"]
+    assert cloud_metadata["validation_status"] == "VALIDATED"
+    assert cloud_metadata["validation_reportable"] is True
+    assert cloud_metadata["validation_method"] == "firebase_database_shallow_read"
 
 
 def test_generate_dashboard_orders_cloud_validation_results_by_latest_checked_at(
@@ -1885,7 +1941,7 @@ def test_generate_dashboard_cloud_assets_use_latest_validation_result(
             VALUES
                 (1001, 'firebase', 'acme-firebase-prod', 'VALIDATED',
                  'firebase_database_shallow_read', 200,
-                 'HTTP 200 real data keys: customers,billing',
+                 'Firebase project reference responded with non-empty data.; HTTP 200 real data keys: customers,billing',
                  'Firebase project reference responded with non-empty data.',
                  '2026-07-09T10:00:00')
             """

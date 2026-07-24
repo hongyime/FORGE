@@ -91,12 +91,26 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit one current-code deterministic kill-chain,
-  passive-recursion, validation, report/export, dashboard/API review, or
-  cleanup gap not already covered by recent URL canonicalization or legacy
-  reporting fallback lineage checkpoints. Prefer compact helpers and focused
-  tests over growing large files. Keep live calls mocked unless an explicit
-  ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: persist D5 recursive URL seeds denied before fetch as
+  terminal `seed_runs` rows. Keep the existing no-fetch and `audit_log`
+  `recursive_seed_scope_denied` behavior, add one skipped
+  `fanout_d5_url_seed_html` run record with `denied_before_fetch=true`, and
+  prove resume does not duplicate it. Minimal files: `forge/cli.py` and
+  `tests/phase1/test_engagement_orchestrator.py`.
+- [x] Web/API seed URL canonicalization and fallback graph validation parity
+  checkpoint:
+  Live web/API engagement create/add/update seed routes now canonicalize `url`
+  and `apk_url` seed values before dedupe, scope updates, upserts, and patch
+  persistence. Equivalent default-port, fragment, and host-case URL variants
+  collapse to one canonical seed in API-created engagements. Dashboard graph
+  generation now applies validation metadata refresh/filtering to
+  seed-generated fallback graphs as well as graph snapshots and graph artifacts.
+  Stale Firebase fixtures were updated to use stable proof text required by the
+  deterministic validator. Verification: compile passed; Ruff passed; focused
+  graph/API tests passed (`2 passed`); full web UI engagement API file passed
+  (`44 passed`); focused dashboard provider/fallback selector passed (`3
+  passed`). Handoff:
+  `.claude/handoffs/2026-07-24-web-api-seed-dashboard-graph-parity.md`.
 - [x] Legacy ReportingAgent fallback lineage checkpoint:
   Legacy `ReportingAgent` deterministic fallback output now includes
   payload-only `report_lineage` metadata with `requested_provider`,

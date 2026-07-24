@@ -89205,7 +89205,7 @@ def test_engagement_provider_matrix_recursion_preserves_caps_and_exports(
                 'VALIDATED',
                 'firebase_database_shallow_read',
                 200,
-                'HTTP 200 real data keys: customers,billing',
+                'Firebase project reference responded with non-empty data.; HTTP 200 real data keys: customers,billing',
                 'fixture'
             )
             """

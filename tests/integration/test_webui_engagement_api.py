@@ -1434,7 +1434,7 @@ def test_engagement_detail_surfaces_provider_matrix_outputs_for_dashboard_review
             """
             UPDATE cloud_validation_results
             SET identifier='provider-firebase',
-                evidence='HTTP 200 real data keys: customers,billing',
+                evidence='Firebase project reference responded with non-empty data.; HTTP 200 real data keys: customers,billing',
                 notes='provider matrix proof; honeypot heuristics passed',
                 checked_at='2026-07-09T09:30:00'
             WHERE engagement_id=1001 AND asset_type='firebase'
@@ -1680,7 +1680,7 @@ def test_engagement_detail_api_cloud_assets_use_latest_validation_result(
             VALUES
                 (1001, 'firebase', 'acme-firebase-prod', 'VALIDATED',
                  'firebase_database_shallow_read', 200,
-                 'HTTP 200 real data keys: customers,billing',
+                 'Firebase project reference responded with non-empty data.; HTTP 200 real data keys: customers,billing',
                  'Firebase project reference responded with non-empty data.',
                  '2026-07-09T10:00:00')
             """
@@ -2186,6 +2186,80 @@ def test_engagement_create_and_seed_crud_routes(tmp_path: Path, monkeypatch) -> 
         assert "+15550002222" not in final_detail["seeds"]
         assert final_detail["counts"]["engagement_seeds"] == 2
         assert final_detail["tags"] == ["priority-high", "beta-expanded"]
+
+
+def test_engagement_seed_routes_canonicalize_url_variants(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    _build_engagement(tmp_path)
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('architect')}"}
+        create_resp = client.post(
+            "/api/engagements",
+            json={
+                "name": "Gamma URLs",
+                "status": "PREP",
+                "seeds": [
+                    "HTTPS://GAMMA.EXAMPLE:443/login#top",
+                    "https://gamma.example/login",
+                    "HTTPS://downloads.gamma.example:443/mobile/app.xapk#download",
+                    "https://downloads.gamma.example/mobile/app.xapk",
+                ],
+            },
+            headers=headers,
+        )
+        assert create_resp.status_code == 200, create_resp.text
+        assert create_resp.json()["counts"]["engagement_seeds"] == 2
+
+        seeds_resp = client.get("/api/engagements/engagement-1002-gamma-urls/seeds", headers=headers)
+        assert seeds_resp.status_code == 200, seeds_resp.text
+        seeds = seeds_resp.json()["items"]
+        assert [(item["seed_value"], item["seed_type"]) for item in seeds] == [
+            ("https://gamma.example/login", "url"),
+            ("https://downloads.gamma.example/mobile/app.xapk", "apk_url"),
+        ]
+
+        duplicate_resp = client.post(
+            "/api/engagements/engagement-1002-gamma-urls/seeds",
+            json={"seed_value": "HTTPS://GAMMA.EXAMPLE:443/login#again"},
+            headers=headers,
+        )
+        assert duplicate_resp.status_code == 200, duplicate_resp.text
+        assert len(duplicate_resp.json()["items"]) == 2
+
+        phone_resp = client.post(
+            "/api/engagements/engagement-1002-gamma-urls/seeds",
+            json={"seed_value": "+15550003333"},
+            headers=headers,
+        )
+        assert phone_resp.status_code == 200, phone_resp.text
+        phone_seed_id = int(phone_resp.json()["seed"]["id"])
+
+        patch_resp = client.patch(
+            f"/api/engagements/engagement-1002-gamma-urls/seeds/{phone_seed_id}",
+            json={
+                "seed_value": "HTTPS://portal.gamma.example:443/app#details",
+                "seed_type": "url",
+            },
+            headers=headers,
+        )
+        assert patch_resp.status_code == 200, patch_resp.text
+        patched = patch_resp.json()["seed"]
+        assert patched["seed_value"] == "https://portal.gamma.example/app"
+        assert patched["seed_type"] == "url"
+
+        detail = client.get("/api/engagements/engagement-1002-gamma-urls", headers=headers).json()
+        assert "HTTPS://GAMMA.EXAMPLE:443/login#top" not in detail["seeds"]
+        assert "https://gamma.example/login" in detail["scope"]
+        assert "https://portal.gamma.example/app" in detail["scope"]
 
 
 def test_engagement_create_uses_monotonic_sequence_after_deleted_db(

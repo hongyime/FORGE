@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: legacy ReportingAgent fallback lineage is complete.
+Latest checkpoint: web/API seed URL canonicalization and fallback graph
+validation parity are complete.
+Live web/API engagement create/add/update seed routes now canonicalize `url` and
+`apk_url` seed values before dedupe, scope updates, upserts, and patch
+persistence. Equivalent default-port, fragment, and host-case URL variants
+collapse to one canonical seed in API-created engagements. Dashboard graph
+generation now applies the same validation metadata refresh/filtering to
+seed-generated fallback graphs as it already did for graph snapshots and graph
+artifacts. Stale Firebase test fixtures were updated to use stable proof text
+required by the deterministic validator. Verification: compile passed; Ruff
+passed; focused graph/API tests passed (`2 passed`); full web UI engagement API
+file passed (`44 passed`); focused dashboard provider/fallback selector passed
+(`3 passed`). Handoff:
+`.claude/handoffs/2026-07-24-web-api-seed-dashboard-graph-parity.md`.
+
+Next checkpoint: persist D5 recursive URL seeds denied before fetch as terminal
+`seed_runs` rows. Keep the existing no-fetch and `audit_log`
+`recursive_seed_scope_denied` behavior, add one skipped
+`fanout_d5_url_seed_html` run record with `denied_before_fetch=true`, and prove
+resume does not duplicate it.
+
+Previous checkpoint: legacy ReportingAgent fallback lineage is complete.
 Legacy `ReportingAgent` deterministic fallback output now includes payload-only
 `report_lineage` metadata with `requested_provider`, `rendered_provider`,
 `render_backend`, `format`, and sanitized `fallback_reason` codes for no-LLM,
@@ -39,13 +60,6 @@ compile passed; Ruff passed; focused fallback/API route set passed (`7
 passed`); full reporting property file passed (`13 passed`);
 `.forge_data/engagements` contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-legacy-reporting-fallback-lineage.md`.
-
-Next checkpoint: audit one current-code deterministic kill-chain,
-passive-recursion, validation, report/export, dashboard/API review, or cleanup
-gap not already covered by recent URL canonicalization or legacy reporting
-fallback lineage checkpoints. Prefer compact helpers and focused tests over
-growing large files. Keep live calls mocked unless an explicit ROE/scope
-manifest and target are supplied.
 
 Previous checkpoint: initial URL seed canonicalization is complete.
 Operator-supplied initial `url` and `apk_url` seeds now canonicalize before
