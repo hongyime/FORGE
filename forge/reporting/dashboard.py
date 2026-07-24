@@ -3862,8 +3862,8 @@ def _report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path
     ]
     grouped.sort(
         key=lambda item: (
-            family_mtimes.get(item[0], 0.0),
             family_has_json.get(item[0], False),
+            family_mtimes.get(item[0], 0.0),
             item[0].lower(),
         ),
         reverse=True,

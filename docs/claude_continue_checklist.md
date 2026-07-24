@@ -66,13 +66,7 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: raw-export fallback orphan report cleanup. If Phase 6
-  companion export persistence fails after Markdown has been written, remove or
-  mark the orphan report-family Markdown so dashboard/API `report_summary`
-  selects the authoritative `raw_export` JSON/CSV family. Regression targets:
-  `test_synthesizer_raw_export_fallback_removes_orphan_report_markdown` plus a
-  dashboard latest-family selection regression.
-- [ ] Then checkpoint: artifact-derived cloud asset provenance. Preserve a
+- [ ] Next checkpoint: artifact-derived cloud asset provenance. Preserve a
   durable non-secret relation from parsed artifacts to cloud validation targets
   with source seed/artifact URL/file/rule/format metadata, while keeping
   unvalidated refs non-reportable. Regression target:
@@ -81,6 +75,16 @@ historical notes only, not as current instructions.
   current-code deterministic gap audit and pick one compact task that advances
   intake, discovery, recursion, artifact analysis, validation, scoring, review,
   fallback, or cleanup.
+- [x] Raw-export fallback orphan report cleanup checkpoint:
+  Phase 6 now removes partial `.md/.json/.pdf/.csv` report-family artifacts if
+  companion export persistence fails after Markdown writing, then emits the
+  raw-export JSON/CSV fallback as the authoritative report family. Dashboard
+  report-family grouping now prefers JSON-backed families over Markdown-only
+  orphans, so a newer orphan Markdown cannot outrank the raw-export family in
+  `report_summary`. Verification: compile passed; Ruff passed; focused Phase 6
+  orphan cleanup test passed (`1 passed`); focused dashboard raw-export
+  selection test passed (`1 passed`); adjacent reporting selector passed (`2
+  passed, 131 deselected`).
 - [x] Stale running seed-run recovery checkpoint:
   `SeedRunTracker` now marks abandoned `seed_runs.status='running'` rows as
   `failed` with `completed_at` and `abandoned before explicit completion`

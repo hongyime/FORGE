@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: stale running seed-run recovery is complete.
+Latest checkpoint: raw-export fallback orphan report cleanup is complete.
+Phase 6 now removes partial `.md/.json/.pdf/.csv` report-family artifacts if
+companion export persistence fails after Markdown writing, then emits the
+raw-export JSON/CSV fallback as the authoritative report family. Dashboard
+report-family grouping now prefers JSON-backed families over Markdown-only
+orphans, so a newer orphan Markdown cannot outrank the raw-export family in
+`report_summary`. Verification: compile passed; Ruff passed; focused Phase 6
+orphan cleanup test passed (`1 passed`); focused dashboard raw-export selection
+test passed (`1 passed`); adjacent reporting selector passed (`2 passed, 131
+deselected`).
+
+Next checkpoint: artifact-derived cloud asset provenance. Preserve a durable
+non-secret relation from parsed artifacts to cloud validation targets with
+source seed/artifact URL/file/rule/format metadata, while keeping unvalidated
+refs non-reportable. Regression target:
+`test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validation_review`.
+
+Previous checkpoint: stale running seed-run recovery is complete.
 `SeedRunTracker` now marks abandoned `seed_runs.status='running'` rows as
 `failed` with `completed_at` and `abandoned before explicit completion` before
 resumed kill-chain work loads completed/skipped suppression sets. The
@@ -34,16 +51,6 @@ proves resume retries only the stale row and leaves no running seed-run rows.
 Verification: compile passed; Ruff passed; focused recovery test passed (`1
 passed`); adjacent seed-run/resume selector passed (`4 passed, 763
 deselected`).
-
-Next checkpoint: raw-export fallback orphan report cleanup. If Phase 6
-companion export persistence fails after Markdown has been written, remove or
-mark the orphan report-family Markdown so dashboard/API `report_summary`
-selects the authoritative `raw_export` JSON/CSV family. Regression targets:
-`test_synthesizer_raw_export_fallback_removes_orphan_report_markdown` plus a
-dashboard latest-family selection regression.
-
-Queued after that: artifact-derived cloud asset provenance. It is listed in
-`docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`.
 
 Previous checkpoint: Fan-out J denied cloud seed-run persistence is complete.
 Cloud references denied by the scope manifest before Fan-out J validation now

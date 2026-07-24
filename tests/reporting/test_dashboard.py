@@ -1076,6 +1076,12 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
         "severity,title\nHIGH,Validated Firebase data exposure\n",
         encoding="utf-8",
     )
+    orphan_markdown = reports_dir / "engagement_1001_report_20260709T014500.md"
+    orphan_markdown.write_text(
+        "# Orphan report\nThis Markdown has no companion lineage JSON.\n",
+        encoding="utf-8",
+    )
+    os.utime(orphan_markdown, (2_000_000_000, 2_000_000_000))
 
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
@@ -1086,11 +1092,14 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
     index_json = site_root / "data" / "engagements.json"
 
     overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
-    assert overview_payload["items"][0]["report_count"] == 2
+    assert overview_payload["items"][0]["report_count"] == 3
 
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     assert detail_payload["report_previews"] == []
     assert detail_payload["report_summary"]["provider"] == "raw_export"
+    assert detail_payload["report_summary"]["artifact_name"] == (
+        "engagement_1001_raw_export_20260709T014412.json"
+    )
     assert detail_payload["report_summary"]["render_backend"] == "template"
     assert detail_payload["report_summary"]["rendered_provider"] == "raw_export"
     assert detail_payload["report_summary"]["upstream_provider"] == "template"
@@ -1104,7 +1113,12 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
     assert {artifact["name"] for artifact in detail_payload["artifacts"]} >= {
         "engagement_1001_raw_export_20260709T014412.json",
         "engagement_1001_raw_export_20260709T014412.csv",
+        "engagement_1001_report_20260709T014500.md",
     }
+    assert detail_payload["report_history"][0]["provider"] == "raw_export"
+    assert detail_payload["report_history"][1]["family_stem"] == (
+        "engagement_1001_report_20260709T014500"
+    )
 
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Raw JSON" in detail_html

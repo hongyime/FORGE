@@ -2055,7 +2055,7 @@ def test_v13_synthesizer_template_uses_exposure_not_exploit_correlation(
     assert "## 5. Vulnerability & Exploit Correlation" not in content
 
 
-def test_synthesizer_report_write_failure_falls_back_to_raw_exports(
+def test_synthesizer_raw_export_fallback_removes_orphan_report_markdown(
     tmp_eng_db, tmp_path, patch_confirm_approve, monkeypatch
 ):
     synth = ReportSynthesizer(
@@ -2074,6 +2074,10 @@ def test_synthesizer_report_write_failure_falls_back_to_raw_exports(
     assert out.suffix == ".json"
     assert out.exists()
     assert out.with_suffix(".csv").exists()
+    assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.md"))
+    assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.json"))
+    assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.pdf"))
+    assert not list(tmp_path.glob(f"engagement_{ENGAGEMENT_ID}_report_*.csv"))
 
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["provider"] == "raw_export"

@@ -2760,6 +2760,15 @@ class ReportSynthesizer:
         }
 
     @staticmethod
+    def _remove_report_family_artifacts(markdown_path: Path) -> None:
+        for suffix in (".md", ".json", ".pdf", ".csv"):
+            artifact = markdown_path.with_suffix(suffix)
+            try:
+                artifact.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.warning("Unable to remove orphan report artifact %s: %s", artifact, exc)
+
+    @staticmethod
     def _csv_report_metadata(report_metadata: Mapping[str, Any] | None) -> dict[str, object]:
         metadata = report_metadata or {}
         return {
@@ -4193,12 +4202,16 @@ class ReportSynthesizer:
 
         markdown_text = self._decorate_report(ctx, raw_text, dry_run)
         out.write_text(markdown_text, encoding="utf-8")
-        self._write_companion_exports(
-            ctx,
-            out,
-            markdown_text,
-            dry_run=dry_run,
-        )
+        try:
+            self._write_companion_exports(
+                ctx,
+                out,
+                markdown_text,
+                dry_run=dry_run,
+            )
+        except Exception:
+            self._remove_report_family_artifacts(out)
+            raise
         logger.info("Report written to %s", out)
         return out
 
