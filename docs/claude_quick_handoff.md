@@ -25,7 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: crawler URL canonicalization recursion is complete.
+Latest checkpoint: recursive discovered URL seed persistence canonicalization is
+complete.
+Recursive discovered URL persistence now uses a shared CLI HTTP URL canonicalizer
+before archive-provider dedupe, URL metadata keying, crawl row insertion, URL
+seed insertion, existing crawl/seed duplicate checks, URL seed resume keys,
+scope decisions, and Playwright eligibility checks. Raw historical/provider
+variants like `HTTPS://archive.acme.example:443/config.js#bundle` and
+`https://shared.acme.example/app.js#wayback` collapse to canonical HTTP(S) URLs
+while preserving archive/provider metadata merging and existing `robots.txt` /
+`sitemap.xml`, artifact URL, root-domain, and scope-manifest gates.
+Verification: compile passed; Ruff passed; focused archive-source regression
+passed (`1 passed`); adjacent Wayback persistence selector passed (`2 passed,
+763 deselected`); reviewer subagent found no blocking findings;
+`.forge_data/engagements` contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-recursive-url-seed-canonicalization.md`.
+
+Next checkpoint: audit one current-code deterministic kill-chain,
+passive-recursion, validation, report/export, dashboard/API review, or cleanup
+gap not already covered by recent crawler URL canonicalization, dashboard alias
+validation, or report-route checkpoints. Prefer compact helpers and focused
+tests over growing large files. Keep live calls mocked unless an explicit
+ROE/scope manifest and target are supplied.
+
+Previous checkpoint: crawler URL canonicalization recursion is complete.
 `_crawl_http()` now canonicalizes seed, fetched final, and extracted URLs
 before recursive queue/fetch decisions. It drops fragments, lowercases
 scheme/host, removes default `:80`/`:443` ports, rejects non-HTTP(S) URLs, and
@@ -38,15 +61,6 @@ deselected`); focused href selector passed (`1 passed, 5 deselected`); full
 crawler unit file passed (`8 passed`); `.forge_data/engagements` contained `0`
 entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-crawler-url-canonicalization.md`.
-
-Next checkpoint: canonicalize recursive discovered URL seeds before
-persistence. `_prepare_discovered_seed_url()` in `forge/cli.py` still strips raw
-strings only, so recursive discovery can store variants such as
-`HTTPS://acme.example:443/app#x` after the crawler path already normalized them.
-Add a CLI-local canonical URL helper, use it before dedupe/insert, keep
-`robots.txt`/`sitemap.xml` exclusions, preserve scope checks after
-canonicalization, and add a focused orchestrator regression. Keep live calls
-mocked unless an explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: dashboard cloud asset validation alias is complete.
 Static engagement detail cloud-asset rows now normalize both sides of the

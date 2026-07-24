@@ -87290,7 +87290,10 @@ def test_kill_chain_wayback_commoncrawl_preserves_url_level_archive_source(
     monkeypatch.setenv("FORGE_ENV", "test")
 
     wayback_only_url = "https://portal.acme.example/login"
+    commoncrawl_only_raw_url = "HTTPS://archive.acme.example:443/config.js#bundle"
     commoncrawl_only_url = "https://archive.acme.example/config.js"
+    shared_wayback_raw_url = "https://shared.acme.example/app.js#wayback"
+    shared_commoncrawl_raw_url = "HTTPS://shared.acme.example:443/app.js#commoncrawl"
     shared_url = "https://shared.acme.example/app.js"
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -87366,12 +87369,12 @@ def test_kill_chain_wayback_commoncrawl_preserves_url_level_archive_source(
     def _fake_wayback_search(domain_name: str, **kwargs):  # noqa: ANN003
         del kwargs
         assert domain_name == "acme.example"
-        return [wayback_only_url, shared_url]
+        return [wayback_only_url, shared_wayback_raw_url]
 
     def _fake_commoncrawl_search(domain_name: str, **kwargs):  # noqa: ANN003
         del kwargs
         assert domain_name == "acme.example"
-        return [commoncrawl_only_url, shared_url]
+        return [commoncrawl_only_raw_url, shared_commoncrawl_raw_url]
 
     def _fake_download_remote_artifacts(
         self,  # noqa: ANN001
@@ -87456,14 +87459,23 @@ def test_kill_chain_wayback_commoncrawl_preserves_url_level_archive_source(
     assert crawl_metadata[shared_url]["archive_sources"] == ["wayback", "commoncrawl"]
     assert crawl_metadata[shared_url]["provider_sources"] == ["wayback", "commoncrawl"]
     assert crawl_metadata[shared_url]["root_domain"] == "acme.example"
+    assert commoncrawl_only_raw_url not in crawl_metadata
+    assert shared_wayback_raw_url not in crawl_metadata
+    assert shared_commoncrawl_raw_url not in crawl_metadata
     assert seed_metadata[wayback_only_url]["archive_sources"] == ["wayback"]
     assert seed_metadata[commoncrawl_only_url]["archive_sources"] == ["commoncrawl"]
     assert seed_metadata[shared_url]["archive_sources"] == ["wayback", "commoncrawl"]
+    assert commoncrawl_only_raw_url not in seed_metadata
+    assert shared_wayback_raw_url not in seed_metadata
+    assert shared_commoncrawl_raw_url not in seed_metadata
     assert artifact_metadata[commoncrawl_only_url]["archive_sources"] == ["commoncrawl"]
     assert artifact_metadata[commoncrawl_only_url]["provider_sources"] == ["commoncrawl"]
     assert artifact_metadata[commoncrawl_only_url]["root_domain"] == "acme.example"
     assert artifact_metadata[shared_url]["archive_sources"] == ["wayback", "commoncrawl"]
     assert artifact_metadata[shared_url]["provider_sources"] == ["wayback", "commoncrawl"]
+    assert commoncrawl_only_raw_url not in artifact_metadata
+    assert shared_wayback_raw_url not in artifact_metadata
+    assert shared_commoncrawl_raw_url not in artifact_metadata
 
     from forge.phase6.report_synthesizer import ContextBuilder
 

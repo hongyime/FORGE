@@ -40,7 +40,7 @@ import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence, cast
 
@@ -300,8 +300,29 @@ def _passive_archive_lookup_max_workers(requested_workers: int) -> int:
     )
 
 
+def _canonical_http_url_value(value: str) -> str | None:
+    try:
+        parsed = urlsplit(str(value or "").strip())
+    except ValueError:
+        return None
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"}:
+        return None
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    host_part = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
+    netloc = f"{host_part}:{port}" if port is not None and not default_port else host_part
+    return urlunsplit((scheme, netloc, parsed.path or "/", parsed.query, ""))
+
+
 def _is_mobile_bundle_url(value: str) -> bool:
-    text = str(value or "").strip()
+    text = _canonical_http_url_value(value) or ""
     if not text:
         return False
     parsed = urlparse(text)
@@ -7065,7 +7086,7 @@ def kill_chain(
         seen: set[str] = set()
         unique: list[str] = []
         for raw_value in values:
-            value = str(raw_value or "").strip()
+            value = _canonical_http_url_value(str(raw_value or "")) or str(raw_value or "").strip()
             if not value or value in seen:
                 continue
             seen.add(value)
@@ -7081,7 +7102,7 @@ def kill_chain(
         metadata_by_url: dict[str, dict[str, Any]] = {}
 
         def _append_source(raw_url: str, source_name: str) -> None:
-            normalized_url = str(raw_url or "").strip()
+            normalized_url = _canonical_http_url_value(raw_url) or ""
             if not normalized_url:
                 return
             metadata = metadata_by_url.setdefault(
@@ -7894,7 +7915,7 @@ def kill_chain(
         *,
         require_scope: bool,
     ) -> tuple[str, str] | None:
-        normalized_url = str(raw_url or "").strip()
+        normalized_url = _canonical_http_url_value(raw_url) or ""
         if not normalized_url:
             return None
         if require_scope:
@@ -7955,7 +7976,7 @@ def kill_chain(
                 crawl_rows = []
             existing_crawl_urls = _collect_normalized_text_row_value_set(
                 crawl_rows,
-                normalizer=lambda value: str(value or "").strip(),
+                normalizer=_normalize_url_seed_value,
                 max_workers=max_workers,
                 row_progress_label=_derive_child_progress_label(
                     progress_label,
@@ -7983,7 +8004,7 @@ def kill_chain(
                 seed_rows = []
             existing_url_seeds = _collect_normalized_text_row_value_set(
                 seed_rows,
-                normalizer=lambda value: str(value or "").strip(),
+                normalizer=_normalize_url_seed_value,
                 max_workers=max_workers,
                 row_progress_label=_derive_child_progress_label(
                     progress_label,
@@ -8133,7 +8154,7 @@ def kill_chain(
                 seed_rows = []
             existing_url_seeds = _collect_normalized_text_row_value_set(
                 seed_rows,
-                normalizer=lambda value: str(value or "").strip(),
+                normalizer=_normalize_url_seed_value,
                 max_workers=max_workers,
                 row_progress_label=_derive_child_progress_label(
                     progress_label,
@@ -9725,10 +9746,10 @@ def kill_chain(
         return value.strip().lower().lstrip("@")
 
     def _normalize_url_seed_value(value: str) -> str:
-        return str(value or "").strip().lower()
+        return _canonical_http_url_value(value) or str(value or "").strip().lower()
 
     def _url_seed_scope_decision(value: str) -> dict[str, object]:
-        raw_value = str(value or "").strip()
+        raw_value = _canonical_http_url_value(value) or ""
         if not raw_value:
             return {"allowed": False, "reason": "empty"}
         parsed = urlparse(raw_value)
@@ -9766,7 +9787,7 @@ def kill_chain(
     def _url_seed_should_use_playwright(value: str) -> bool:
         if no_playwright:
             return False
-        parsed = urlparse(str(value or "").strip())
+        parsed = urlparse(_canonical_http_url_value(value) or str(value or "").strip())
         suffix = Path(str(parsed.path or "").strip()).suffix.lower()
         return suffix in {"", ".html", ".htm", ".php", ".asp", ".aspx", ".jsp", ".jspx"}
 
