@@ -91,12 +91,29 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix GitHub org keyscan attribution and scope semantics.
-  Current Fan-out F still treats discovered GitHub org names as `--domain`
-  keyscan targets. Replace that with org-restricted scans tied to an in-scope
-  root domain or explicitly exact-authorized org seed, then add tests proving
-  discovered orgs do not churn the retry budget due scope denial while root
-  domain keyscans still run and carry the active scope manifest.
+- [ ] Next checkpoint: audit recursive non-root fan-out retry semantics.
+  Social handle, phone, IP, name, company, and cloud-ref chains should only be
+  marked processed on completed or intentional skipped outcomes, so failed
+  child fan-outs retry in later iterations without hiding pending work from the
+  stable-loop gate.
+- [x] GitHub org keyscan attribution/scope checkpoint:
+  Fan-out F no longer treats discovered GitHub org names as standalone
+  `--domain <org>` keyscan targets. Root-domain scans still run as
+  `--domain <root>` and carry `--scope-manifest`; discovered org scans now use
+  composite seed-run keys (`<root>::github_org::<org>`) while dispatching
+  `osint keyscan --domain <root> --org <org> --scope-manifest <manifest>`.
+  Resume/pending state tracks those composite keys, so multi-root engagements
+  do not globally suppress one root's org-restricted scan after another root
+  completes. Seed-run metadata records `origin=keyscan_org`, `query_domain`,
+  and `github_org` for dashboard/audit review. Direct `osint keyscan` still
+  denies the old unscoped `--domain <org>` shape under a domain-only manifest,
+  while allowing scoped `--domain <root> --org <org>`. Verification: recursive
+  retry-state suite passed (`8 passed`), convergence suite passed (`3 passed`),
+  direct live-scope suite passed (`34 passed`), root child scope propagation
+  regression passed (`1 passed`), focused org retry/direct/convergence/multi-root
+  tests passed, Ruff passed for touched files, and `py_compile` passed for
+  touched files. Built-in read-only sidecar audits confirmed the original bug
+  and recommended the composite key shape before implementation.
 - [x] Root child scope-manifest propagation checkpoint:
   A, B, B2, D3, D4, and F child dispatch argv now carries the active
   `--scope-manifest` from kill-chain launches. `recon subdomains`, `osint

@@ -478,6 +478,8 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
     assert all(project_ref != "echo" for _command, project_ref in cloud_attempts)
 
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    fail_key = "acme.example::github_org::failorg"
+    ok_key = "acme.example::github_org::okorg"
     con = sqlite3.connect(db_path)
     try:
         failed_rows = con.execute(
@@ -636,15 +638,16 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
         encoding="utf-8",
     )
 
-    keyscan_attempts: list[str] = []
+    keyscan_attempts: list[tuple[str, str]] = []
 
     def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
         del kwargs
         module_argv = tuple(str(item) for item in cmd_argv)
         if module_argv[:2] == ("osint", "keyscan") and "--domain" in module_argv:
-            target = module_argv[module_argv.index("--domain") + 1]
-            keyscan_attempts.append(target)
-            if target == "failorg":
+            domain = module_argv[module_argv.index("--domain") + 1]
+            org = module_argv[module_argv.index("--org") + 1] if "--org" in module_argv else ""
+            keyscan_attempts.append((domain, org))
+            if org == "failorg":
                 return subprocess.CompletedProcess(
                     ["forge", *module_argv],
                     1,
@@ -723,11 +726,15 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
         report_provider="template",
     )
 
-    assert keyscan_attempts.count("acme.example") == 1
-    assert keyscan_attempts.count("okorg") == 1
-    assert keyscan_attempts.count("failorg") == 2
+    assert keyscan_attempts.count(("acme.example", "")) == 1
+    assert keyscan_attempts.count(("acme.example", "okorg")) == 1
+    assert keyscan_attempts.count(("acme.example", "failorg")) == 2
+    assert ("okorg", "") not in keyscan_attempts
+    assert ("failorg", "") not in keyscan_attempts
 
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    fail_key = "acme.example::github_org::failorg"
+    ok_key = "acme.example::github_org::okorg"
     con = sqlite3.connect(db_path)
     try:
         failed_rows = con.execute(
@@ -737,9 +744,10 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
             JOIN engagement_seeds es ON es.id=sr.seed_id
             WHERE sr.engagement_id=1001
               AND sr.loop_name='fanout_f_keyscan'
-              AND es.seed_value='failorg'
+              AND es.seed_value=?
             ORDER BY sr.id
-            """
+            """,
+            (fail_key,),
         ).fetchall()
         completed_rows = con.execute(
             """
@@ -748,9 +756,10 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
             JOIN engagement_seeds es ON es.id=sr.seed_id
             WHERE sr.engagement_id=1001
               AND sr.loop_name='fanout_f_keyscan'
-              AND es.seed_value='okorg'
+              AND es.seed_value=?
             ORDER BY sr.id
-            """
+            """,
+            (ok_key,),
         ).fetchall()
     finally:
         con.close()
@@ -759,7 +768,133 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
     assert all(row[1] == "failed" for row in failed_rows)
     assert all("simulated keyscan failure" in str(row[2] or "") for row in failed_rows)
     assert all(json.loads(str(row[3] or "{}"))["returncode"] == 1 for row in failed_rows)
-    assert completed_rows == [("okorg", "completed")]
+    assert all(json.loads(str(row[3] or "{}"))["origin"] == "keyscan_org" for row in failed_rows)
+    assert all(json.loads(str(row[3] or "{}"))["query_domain"] == "acme.example" for row in failed_rows)
+    assert all(json.loads(str(row[3] or "{}"))["github_org"] == "failorg" for row in failed_rows)
+    assert completed_rows == [(ok_key, "completed")]
+
+
+def test_kill_chain_keyscan_org_targets_are_per_root_domain(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example", "beta.example"],
+                "authorized_seeds": ["acme.example", "beta.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    keyscan_attempts: list[tuple[str, str]] = []
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        if module_argv[:2] == ("osint", "keyscan") and "--domain" in module_argv:
+            domain = module_argv[module_argv.index("--domain") + 1]
+            org = module_argv[module_argv.index("--org") + 1] if "--org" in module_argv else ""
+            keyscan_attempts.append((domain, org))
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        if str(progress_label or "").endswith(".D cloud+HTML fetch"):
+            return ['<a href="https://github.com/sharedorg/repo">shared</a>' for _ in specs]
+        if str(progress_label or "").endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        related_seed=["beta.example"],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=False,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    assert keyscan_attempts.count(("acme.example", "")) == 1
+    assert keyscan_attempts.count(("beta.example", "")) == 1
+    assert keyscan_attempts.count(("acme.example", "sharedorg")) == 1
+    assert keyscan_attempts.count(("beta.example", "sharedorg")) == 1
+    assert ("sharedorg", "") not in keyscan_attempts
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    con = sqlite3.connect(db_path)
+    try:
+        completed = {
+            str(row[0])
+            for row in con.execute(
+                """
+                SELECT es.seed_value
+                FROM seed_runs sr
+                JOIN engagement_seeds es ON es.id=sr.seed_id
+                WHERE sr.engagement_id=1001
+                  AND sr.loop_name='fanout_f_keyscan'
+                  AND sr.status='completed'
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert "acme.example::github_org::sharedorg" in completed
+    assert "beta.example::github_org::sharedorg" in completed
 
 
 def test_kill_chain_retries_empty_d5_url_fetches_only(

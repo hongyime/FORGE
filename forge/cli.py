@@ -10115,7 +10115,7 @@ def kill_chain(
     processed_keyscan_targets = _load_completed_seed_values(["fanout_f_keyscan"])
     processed_github_orgs = {
         target for target in processed_keyscan_targets
-        if "." not in target
+        if "::github_org::" in target
     }
     processed_cloud_refs = _load_completed_seed_values(["fanout_j_cloud_scan"], seed_type="other")
     processed_url_seeds = {
@@ -10868,10 +10868,14 @@ def kill_chain(
         target: str,
         *,
         engagement_value: str,
+        query_domain_value: str,
+        github_org_value: str,
         processed_targets: set[str],
         dry_run_keyscan_value: bool,
         scope_manifest_value: str,
     ) -> dict[str, object]:
+        query_domain = str(query_domain_value or target or "").strip()
+        github_org = str(github_org_value or "").strip()
         keyscan_args = _append_scope_manifest_arg(
             [
                 "osint",
@@ -10879,20 +10883,28 @@ def kill_chain(
                 "--engagement",
                 engagement_value,
                 "--domain",
-                target,
+                query_domain,
                 "--no-validate",
             ],
             scope_manifest_value,
         )
+        if github_org:
+            keyscan_args.extend(["--org", github_org])
         if dry_run_keyscan_value:
             keyscan_args.append("--dry-run")
         target_key = _resume_normalize(target)
         return {
             "target": target,
+            "query_domain": query_domain,
+            "github_org": github_org,
             "already_processed": target_key in processed_targets,
-            "seed_type": "domain" if "." in target else "other",
+            "seed_type": "domain" if "." in target and not github_org else "other",
+            "origin": "keyscan_org" if github_org else "keyscan_target",
             "cmd_argv": keyscan_args,
         }
+
+    def _keyscan_org_target_key(query_domain: str, github_org: str) -> str:
+        return f"{str(query_domain or '').strip()}::github_org::{str(github_org or '').strip()}"
 
     def _prepare_passive_domain_schedule_reduction(
         item: dict[str, object],
@@ -11267,12 +11279,23 @@ def kill_chain(
     def _apply_keyscan_org_batch_item(
         item: str | None,
         *,
-        keyscan_targets_out: list[str],
+        keyscan_targets_out: list[dict[str, str]],
+        query_domain_values: list[str],
     ) -> str | None:
         org = str(item or "").strip()
         if not org:
             return None
-        keyscan_targets_out.append(org)
+        for query_domain in query_domain_values:
+            normalized_domain = str(query_domain or "").strip()
+            if not normalized_domain:
+                continue
+            keyscan_targets_out.append(
+                {
+                    "target": _keyscan_org_target_key(normalized_domain, org),
+                    "query_domain": normalized_domain,
+                    "github_org": org,
+                }
+            )
         return org
 
     def _prepare_processed_set_item(
@@ -11484,16 +11507,23 @@ def kill_chain(
     def _prepare_keyscan_schedule_reduction(
         item: dict[str, object],
     ) -> dict[str, object]:
+        target = str(item.get("target") or "")
+        query_domain = str(item.get("query_domain") or target)
+        github_org = str(item.get("github_org") or "")
+        label_target = f"{query_domain} org:{github_org}" if github_org else target
         return {
             "skip_log": (
                 (
-                    f"{iteration}.F keyscan ({str(item.get('target') or '')})",
+                    f"{iteration}.F keyscan ({label_target})",
                     "[dim]resume skip — already completed for this engagement[/dim]",
                 )
                 if bool(item.get("already_processed"))
                 else None
             ),
-            "target": str(item.get("target") or ""),
+            "target": target,
+            "query_domain": query_domain,
+            "github_org": github_org,
+            "origin": str(item.get("origin") or "keyscan_target"),
             "spec": item.get("spec"),
         }
 
@@ -11503,6 +11533,9 @@ def kill_chain(
         return {
             "skip_log": cast(tuple[str, str] | None, item.get("skip_log")),
             "target": str(item.get("target") or "").strip(),
+            "query_domain": str(item.get("query_domain") or "").strip(),
+            "github_org": str(item.get("github_org") or "").strip(),
+            "origin": str(item.get("origin") or "keyscan_target"),
             "spec": cast(ModuleDispatchSpec | None, item.get("spec")),
         }
 
@@ -11514,8 +11547,11 @@ def kill_chain(
             return None
         return {
             "target": target,
+            "query_domain": str(item.get("query_domain") or target).strip(),
+            "github_org": str(item.get("github_org") or "").strip(),
             "already_processed": bool(item.get("already_processed")),
             "seed_type": str(item.get("seed_type") or "").strip(),
+            "origin": str(item.get("origin") or "keyscan_target"),
             "cmd_argv": list(item.get("cmd_argv") or []),
         }
 
@@ -13642,6 +13678,23 @@ def kill_chain(
             if _resume_normalize(str(root_domain or "")) not in completed_domains
         )
 
+    def _keyscan_org_query_domains() -> list[str]:
+        return [str(root or "").strip() for root in root_domains if str(root or "").strip()]
+
+    def _pending_github_org_count() -> int:
+        if skip_keyscan:
+            return 0
+        query_domains = _keyscan_org_query_domains()
+        if not query_domains:
+            return 0
+        return sum(
+            1
+            for query_domain in query_domains
+            for github_org in all_github_orgs
+            if _resume_normalize(_keyscan_org_target_key(query_domain, github_org))
+            not in processed_github_orgs
+        )
+
     def _pending_work_counts() -> dict[str, int]:
         counts = {
             "root_subdomain_domains": _pending_root_domain_count(completed_a_domains),
@@ -13657,7 +13710,7 @@ def kill_chain(
             "social_handles": len(
                 _load_new_social_handles(processed_social_handles, max_workers=parallel_workers)
             ),
-            "github_orgs": 0 if skip_keyscan else len(all_github_orgs - processed_github_orgs),
+            "github_orgs": _pending_github_org_count(),
             "cloud_refs": _pending_cloud_ref_count(),
             "username_seeds": len(
                 _load_prioritized_seed_rows(
@@ -15650,9 +15703,24 @@ def kill_chain(
         # Skipped entirely if --skip-keyscan; --dry-run-keyscan forces
         # pattern-match only (no live API calls).
         if not skip_keyscan:
-            keyscan_targets: list[str] = list(root_domains)
-            new_orgs = all_github_orgs - processed_github_orgs
-            keyscan_org_inputs = sorted(new_orgs)
+            keyscan_targets: list[dict[str, str]] = [
+                {
+                    "target": str(root_domain),
+                    "query_domain": str(root_domain),
+                    "github_org": "",
+                }
+                for root_domain in root_domains
+            ]
+            org_query_domains = _keyscan_org_query_domains()
+            keyscan_org_inputs = [
+                github_org
+                for github_org in sorted(all_github_orgs)
+                if any(
+                    _resume_normalize(_keyscan_org_target_key(query_domain, github_org))
+                    not in processed_github_orgs
+                    for query_domain in org_query_domains
+                )
+            ]
             if len(keyscan_org_inputs) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.F keyscan org batch reduction",
@@ -15687,6 +15755,7 @@ def kill_chain(
                 lambda item: _apply_keyscan_org_batch_item(
                     item,
                     keyscan_targets_out=keyscan_targets,
+                    query_domain_values=org_query_domains,
                 ),
                 max_workers=1,
                 progress_label=f"{iteration}.F keyscan org target merge",
@@ -15699,9 +15768,11 @@ def kill_chain(
                 )
             prepared_keyscan_targets = _run_inprocess_batch(
                 keyscan_targets,
-                lambda target: _prepare_keyscan_target(
-                    target,
+                lambda target_spec: _prepare_keyscan_target(
+                    str(target_spec.get("target") or ""),
                     engagement_value=engagement,
+                    query_domain_value=str(target_spec.get("query_domain") or ""),
+                    github_org_value=str(target_spec.get("github_org") or ""),
                     processed_targets=processed_keyscan_targets,
                     dry_run_keyscan_value=dry_run_keyscan,
                     scope_manifest_value=scope_manifest,
@@ -15778,13 +15849,21 @@ def kill_chain(
                 unique_prepared_keyscan_targets,
                 lambda item: {
                     "target": str(item["target"]),
+                    "query_domain": str(item.get("query_domain") or item["target"]),
+                    "github_org": str(item.get("github_org") or ""),
                     "already_processed": bool(item.get("already_processed")),
                     "spec": (
                         None
                         if bool(item.get("already_processed"))
                         else ModuleDispatchSpec(
                             cmd_argv=list(item["cmd_argv"]),
-                            label=f"{iteration}.F keyscan ({str(item['target'])})",
+                            label=(
+                                f"{iteration}.F keyscan "
+                                f"({str(item.get('query_domain') or item['target'])} "
+                                f"org:{str(item.get('github_org') or '')})"
+                                if str(item.get("github_org") or "")
+                                else f"{iteration}.F keyscan ({str(item['target'])})"
+                            ),
                             loop_name="fanout_f_keyscan",
                             seed_contexts=[
                                 _seed_context(
@@ -15793,10 +15872,21 @@ def kill_chain(
                                     source="cross_reference",
                                     depth=1,
                                     confidence=0.75,
-                                    metadata={"origin": "keyscan_target"},
+                                    metadata={
+                                        "origin": str(item.get("origin") or "keyscan_target"),
+                                        "query_domain": str(
+                                            item.get("query_domain") or item["target"]
+                                        ),
+                                        "github_org": str(item.get("github_org") or ""),
+                                    },
                                 )
                             ],
-                            metadata={"iteration": iteration, "origin": "keyscan_target"},
+                            metadata={
+                                "iteration": iteration,
+                                "origin": str(item.get("origin") or "keyscan_target"),
+                                "query_domain": str(item.get("query_domain") or item["target"]),
+                                "github_org": str(item.get("github_org") or ""),
+                            },
                         )
                     ),
                 },
@@ -15813,6 +15903,8 @@ def kill_chain(
                 prepared_keyscan_specs,
                 lambda item: {
                     "target": str(item["target"]),
+                    "query_domain": str(item.get("query_domain") or item["target"]),
+                    "github_org": str(item.get("github_org") or ""),
                     "already_processed": bool(item["already_processed"]),
                     "spec": item["spec"],
                 },
@@ -15922,38 +16014,24 @@ def kill_chain(
                     progress_label=f"{iteration}.F keyscan processed-target update",
                     progress_callback=_record_batch_progress,
                 )
-                completed_keyscan_target_keys = {
-                    normalized
-                    for normalized in _run_inprocess_batch(
-                        completed_keyscan_targets,
-                        lambda item: _prepare_processed_set_item(
-                            item,
-                            normalizer=_resume_normalize,
-                        ),
-                        max_workers=parallel_workers,
-                        progress_label=f"{iteration}.F keyscan org completed-target prep",
-                        progress_callback=_record_batch_progress,
-                    )
-                    if normalized
-                }
-                completed_keyscan_orgs = [
-                    org
-                    for org in keyscan_org_batch
-                    if _resume_normalize(org) in completed_keyscan_target_keys
+                completed_keyscan_org_targets = [
+                    target
+                    for target in completed_keyscan_targets
+                    if "::github_org::" in _resume_normalize(target)
                 ]
-                if len(completed_keyscan_orgs) > 1 and parallel_workers > 1:
+                if len(completed_keyscan_org_targets) > 1 and parallel_workers > 1:
                     _log(
                         f"{iteration}.F keyscan org processed-set prep",
                         (
                             f"[dim]parallel parse x"
-                            f"{min(parallel_workers, len(completed_keyscan_orgs))}[/dim]"
+                            f"{min(parallel_workers, len(completed_keyscan_org_targets))}[/dim]"
                         ),
                     )
                 prepared_keyscan_org_updates = _run_inprocess_batch(
-                    completed_keyscan_orgs,
+                    completed_keyscan_org_targets,
                     lambda item: _prepare_processed_set_item(
                         item,
-                        normalizer=lambda value: value,
+                        normalizer=_resume_normalize,
                     ),
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.F keyscan org processed-set prep",

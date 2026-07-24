@@ -113,6 +113,59 @@ def test_detected_prereq_child_argv_adds_live_authorization_once() -> None:
     assert already_hardened.count("--scope-manifest") == 1
 
 
+def test_direct_keyscan_org_restriction_uses_scoped_domain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    manifest_path = tmp_path / "scope.json"
+    manifest_path.write_text(
+        json.dumps({"roe_id": "ROE-ACME-2026-07", "domains": ["acme.example"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    observed: dict[str, object] = {}
+
+    def _fake_run_key_scanner(**kwargs: object) -> int:
+        observed.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(
+        "forge.utils.intel.secret_finder.run_key_scanner",
+        _fake_run_key_scanner,
+    )
+
+    cli.osint_keyscan(
+        engagement="1001",
+        domain="acme.example",
+        org="okorg",
+        github_token=None,
+        gitlab_token=None,
+        validation_proxy=None,
+        scope_manifest=str(manifest_path),
+        no_validate=True,
+        dry_run=True,
+    )
+
+    assert observed["domain"] == "acme.example"
+    assert observed["org"] == "okorg"
+
+    observed.clear()
+    with pytest.raises(typer.BadParameter, match="outside scope manifest"):
+        cli.osint_keyscan(
+            engagement="1001",
+            domain="okorg",
+            org=None,
+            github_token=None,
+            gitlab_token=None,
+            validation_proxy=None,
+            scope_manifest=str(manifest_path),
+            no_validate=True,
+            dry_run=True,
+        )
+    assert observed == {}
+
+
 def _bootstrap_engagement(db_path: Path, *, scope: object) -> None:
     con = get_engagement_db(db_path)
     try:

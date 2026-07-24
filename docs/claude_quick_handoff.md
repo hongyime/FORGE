@@ -25,28 +25,37 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: root child scope-manifest propagation is complete. A, B,
+Latest checkpoint: GitHub org keyscan attribution/scope is complete. Fan-out F
+no longer treats discovered GitHub org names as standalone `--domain <org>`
+keyscan targets. Root-domain scans still run as `--domain <root>` and carry
+`--scope-manifest`; discovered org scans now use composite seed-run keys
+(`<root>::github_org::<org>`) while dispatching `osint keyscan --domain <root>
+--org <org> --scope-manifest <manifest>`. Resume/pending state tracks those
+composite keys, so multi-root engagements do not globally suppress one root's
+org-restricted scan after another root completes. Seed-run metadata records
+`origin=keyscan_org`, `query_domain`, and `github_org` for dashboard/audit
+review. Direct `osint keyscan` still denies the old unscoped `--domain <org>`
+shape under a domain-only manifest, while allowing scoped `--domain <root>
+--org <org>`. Verification: recursive retry-state suite passed (`8 passed`),
+convergence suite passed (`3 passed`), direct live-scope suite passed (`34
+passed`), root child scope propagation regression passed (`1 passed`), focused
+org retry/direct/convergence/multi-root tests passed, Ruff passed for touched
+files, and `py_compile` passed for touched files. Built-in read-only sidecar
+audits confirmed the original bug and recommended the composite key shape
+before implementation.
+
+Next checkpoint: audit recursive non-root fan-out retry semantics. Social
+handle, phone, IP, name, company, and cloud-ref chains should only be marked
+processed on completed or intentional skipped outcomes, so failed child
+fan-outs retry in later iterations without hiding pending work from the
+stable-loop gate.
+
+Previous checkpoint: root child scope-manifest propagation is complete. A, B,
 B2, D3, D4, and F child dispatch argv now carries the active
 `--scope-manifest` from kill-chain launches. `recon subdomains`, `osint
 harvest`, `osint linkedin`, and `osint keyscan` all accept direct
 `--scope-manifest`; harvest/linkedin/keyscan validate their direct target via
-the existing direct CLI scope loader before outbound work. D3/D4 already had
-propagation and remain unchanged. Verification: focused provider-status suite
-passed (`12 passed`), root-domain idempotency passed (`1 passed`), adjacent
-active-port/IP Shodan scope-manifest regressions passed (`2 passed`),
-recursive retry-state suite passed (`7 passed`), `py_compile` passed for
-touched files, Ruff passed for touched files, direct Typer help smoke checks
-show `--scope-manifest` on `osint keyscan`, `osint harvest`, and `osint
-linkedin`, and `git diff --check` found no whitespace errors. Claude CLI
-review was attempted but local OAuth is expired; built-in sidecar audit
-`019f9584-19a7-7db2-b640-a54fe21ef335` was spawned for read-only follow-up.
-
-Next checkpoint: fix GitHub org keyscan attribution and scope semantics.
-Current Fan-out F still treats discovered GitHub org names as `--domain`
-keyscan targets. Replace that with org-restricted scans tied to an in-scope
-root domain or explicitly exact-authorized org seed, then add tests proving
-discovered orgs do not churn the retry budget due scope denial while root
-domain keyscans still run and carry the active scope manifest.
+the existing direct CLI scope loader before outbound work.
 
 Previous checkpoint: synthesized root-domain scope gating is complete.
 `_refresh_root_domains()` now gates every synthesized

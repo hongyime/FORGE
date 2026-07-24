@@ -165,6 +165,17 @@ def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
 
     db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
     _bootstrap_engagement(db_path)
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example", "*.acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     import forge.cli as cli
 
@@ -198,6 +209,8 @@ def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
         skip_cloud=True,
         skip_keyscan=False,
         parallel_fanout=1,
@@ -205,6 +218,7 @@ def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
         report_max_loops=0,
     )
 
+    keyscan_seed = "acme.example::github_org::acmeidentity"
     con = sqlite3.connect(db_path)
     try:
         seed = con.execute(
@@ -212,8 +226,9 @@ def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
             SELECT source, metadata_json
             FROM engagement_seeds
             WHERE engagement_id=1001
-              AND seed_value='acmeidentity'
-            """
+              AND seed_value=?
+            """,
+            (keyscan_seed,),
         ).fetchone()
         assert seed is not None
         assert seed[0] == "cross_reference"
@@ -225,12 +240,16 @@ def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
             JOIN engagement_seeds es ON es.id=sr.seed_id
             WHERE sr.engagement_id=1001
               AND sr.loop_name='fanout_f_keyscan'
-              AND es.seed_value='acmeidentity'
+              AND es.seed_value=?
               AND sr.status='completed'
             LIMIT 1
-            """
+            """,
+            (keyscan_seed,),
         ).fetchone()
         assert keyscan_run is not None
-        assert json.loads(keyscan_run[0])["origin"] == "keyscan_target"
+        keyscan_metadata = json.loads(keyscan_run[0])
+        assert keyscan_metadata["origin"] == "keyscan_org"
+        assert keyscan_metadata["query_domain"] == "acme.example"
+        assert keyscan_metadata["github_org"] == "acmeidentity"
     finally:
         con.close()
