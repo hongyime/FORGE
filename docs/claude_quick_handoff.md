@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Backstage service-catalog static artifact discovery is
+Latest checkpoint: Redocly API-docs config static artifact discovery is
+complete. `.redocly.yaml`, `.redocly.yml`, `.redocly.json`, `redocly.yaml`,
+`redocly.yml`, `redocly.json`, and `redocly.config.*` are now first-class
+static config artifacts. Redocly API roots, definitions, URL fields, and
+`extends` entries are resolved through a source-aware parser so remote configs
+such as `https://docs.acme.example/reference/redocly.yaml` can turn relative
+`root: ./openapi.yaml` values into recursive URL seeds. No Redocly API calls,
+spec fetching, service probing, credential validation, or scope relaxation were
+added. Verification: focused Redocly/API metadata tests passed (`4 passed`),
+combined Redocly/Backstage/Buf/interface artifact regression slice passed (`8
+passed`), py_compile passed for touched files, Ruff passed for touched files,
+`git diff --check` passed, and no `.forge_data/engagements` leftovers were
+present.
+
+Next checkpoint: implement the scout-confirmed Supabase CLI static config
+parser for `supabase/config.toml`. A bare `project_id` or `project_ref` should
+become the passive recursive pivot `https://<ref>.supabase.co` and the existing
+cloud-asset persistence should record the Supabase project reference. Keep it
+static-only: parse local/downloaded TOML bytes, do not call Supabase, do not
+validate credentials, and do not relax scope.
+
+Previous checkpoint: Backstage service-catalog static artifact discovery is
 complete. `catalog-info.yaml`, `catalog-info.yml`, and `catalog-info.json` are
 now first-class static config artifacts. Backstage component/API catalog
 mappings pass through the existing bounded YAML structured-discovery path and
@@ -38,12 +59,6 @@ Buf/interface/Backstage/API metadata artifact regression slice passed (`8 passed
 py_compile passed for touched files, Ruff passed for touched files,
 `git diff --check` passed, and no `.forge_data/engagements` leftovers were
 present.
-
-Next checkpoint: continue the automated artifact discovery chain with one more
-current-code-audited passive parser/OCR gap, provider-proof hardening gap, or
-identity/provider-shape gap. Prefer compact focused regression coverage and keep
-implementation passive/proof-bound: recursive seeds/cloud refs only unless an
-explicitly scoped live check is already required by the validation contract.
 
 Previous checkpoint: Buf/Protobuf registry config static artifact discovery is
 complete. `buf.yaml`, `buf.yml`, `buf.gen.yaml`, `buf.gen.yml`,

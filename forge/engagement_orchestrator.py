@@ -165,6 +165,10 @@ from forge.utils.artifact_package_manager_config import (
 from forge.utils.artifact_passkey_metadata import passkey_endpoint_urls
 from forge.utils.artifact_public_metadata_links import public_metadata_document_urls
 from forge.utils.artifact_pulumi_config import pulumi_config_candidates
+from forge.utils.artifact_redocly_config import (
+    redocly_config_artifact_label,
+    redocly_config_urls,
+)
 from forge.utils.artifact_saml_metadata import saml_metadata_artifact_label, saml_metadata_urls
 from forge.utils.artifact_sst_config import sst_config_artifact_label, sst_config_candidates
 from forge.utils.artifact_storage_client_config import (
@@ -6265,6 +6269,8 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _graphql_config_artifact_label(raw_lowered):
         return True
+    if redocly_config_artifact_label(raw_lowered):
+        return True
     if _buf_config_artifact_label(raw_lowered):
         return True
     if backstage_catalog_artifact_label(raw_lowered):
@@ -6508,6 +6514,9 @@ def _artifact_format_label(value: str | Path) -> str:
     graphql_config_label = _graphql_config_artifact_label(str(value or ""))
     if graphql_config_label:
         return graphql_config_label
+    redocly_config_label = redocly_config_artifact_label(str(value or ""))
+    if redocly_config_label:
+        return redocly_config_label
     buf_config_label = _buf_config_artifact_label(str(value or ""))
     if buf_config_label:
         return buf_config_label
@@ -21239,6 +21248,7 @@ class ArtifactQueueProcessor:
                     "saml_metadata",
                     "web_manifest_metadata",
                     "helm_index",
+                    "redocly_config",
                     "package_registry",
                     "container_images",
                 ),
@@ -21521,6 +21531,10 @@ class ArtifactQueueProcessor:
                 source_hint=source_file,
                 base_url=source_file,
             )
+        if family == "redocly_config":
+            if _artifact_format_label(source_file) != "redocly-config":
+                return []
+            return redocly_config_urls(text, base_url=source_file)
         if family == "package_registry":
             return _extract_artifact_package_registry_urls(text)
         if family == "container_images":
