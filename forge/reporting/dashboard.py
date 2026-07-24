@@ -20,7 +20,7 @@ from xml.etree import ElementTree
 
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.utils.cloud_exposure_gate import (
-    effective_cloud_validation_status,
+    effective_validation_status,
     is_deterministic_cloud_exposure,
     is_reportable_cloud_validation,
     linked_cloud_validation_reportability,
@@ -1164,10 +1164,30 @@ def _graph_edge_endpoints(edge: dict[str, Any]) -> tuple[str, str]:
     )
 
 
+def _graph_edge_endpoint_values(edge: dict[str, Any]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    source_values = tuple(
+        value
+        for value in (
+            str(edge.get("source_node_id") or "").strip(),
+            str(edge.get("source") or "").strip(),
+        )
+        if value
+    )
+    target_values = tuple(
+        value
+        for value in (
+            str(edge.get("target_node_id") or "").strip(),
+            str(edge.get("target") or "").strip(),
+        )
+        if value
+    )
+    return source_values, target_values
+
+
 def _set_graph_edge_endpoints(edge: dict[str, Any], source: str, target: str) -> None:
-    if "source" in edge and "source_node_id" not in edge:
+    if "source" in edge:
         edge["source"] = source
-    if "target" in edge and "target_node_id" not in edge:
+    if "target" in edge:
         edge["target"] = target
     edge["source_node_id"] = source
     edge["target_node_id"] = target
@@ -1436,7 +1456,12 @@ def _filter_graph_payload_for_validation(
     filtered_edges = [
         edge
         for edge in edges
-        if isinstance(edge, dict) and not any(endpoint in removed for endpoint in _graph_edge_endpoints(edge))
+        if isinstance(edge, dict)
+        and not any(
+            endpoint in removed
+            for endpoint_values in _graph_edge_endpoint_values(edge)
+            for endpoint in endpoint_values
+        )
     ]
     filtered = dict(payload)
     filtered["nodes"] = filtered_nodes
@@ -1474,7 +1499,7 @@ def _cloud_validation_section_row(row: sqlite3.Row) -> dict[str, str]:
         "Asset": str(row["display_identifier"] or ""),
         "Type": asset_type,
         "Stored Type": stored_type,
-        "Status": effective_cloud_validation_status(
+        "Status": effective_validation_status(
             asset_type,
             stored_status,
             method,

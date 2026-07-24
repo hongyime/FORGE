@@ -143,6 +143,15 @@ def _create_cloud_exposure_db(path: Path) -> None:
                 "2026-07-02T00:00:00Z",
             ),
             (
+                "aws",
+                "742931608514",
+                "VALIDATED",
+                "aws_sts_get_caller_identity",
+                200,
+                "AWS STS GetCallerIdentity ok: AccountId=742931608514",
+                "2026-07-02T00:00:01Z",
+            ),
+            (
                 "aws_s3",
                 "stale-bucket",
                 "VALIDATED",
@@ -214,6 +223,10 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert inventory_by_identifier["acct-unsupported"]["evidence_summary"] == (
         "token=[REDACTED] unsupported provider"
     )
+    assert inventory_by_identifier["742931608514"]["validation_status"] == "VALIDATED"
+    assert inventory_by_identifier["742931608514"]["stored_validation_status"] == "VALIDATED"
+    assert inventory_by_identifier["742931608514"]["validation_reportable"] is False
+    assert inventory_by_identifier["742931608514"]["method"] == "aws_sts_get_caller_identity"
     assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"][
         "evidence_summary"
     ]
@@ -246,6 +259,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         "stale-bucket",
         "metadata-bucket",
         "acct-unsupported",
+        "742931608514",
     }
 
     synth = ReportSynthesizer(
@@ -315,6 +329,13 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         row["cloud_identifier"] == "manual-note-bucket"
         and row["validation_status"] == "UNVERIFIED"
         and row["stored_validation_status"] == "VALIDATED"
+        and row["validation_reportable"] == "False"
+        for row in raw_validation_rows
+    )
+    assert any(
+        row["cloud_asset_type"] == "aws"
+        and row["cloud_identifier"] == "742931608514"
+        and row["validation_status"] == "VALIDATED"
         and row["validation_reportable"] == "False"
         for row in raw_validation_rows
     )

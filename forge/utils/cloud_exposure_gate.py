@@ -165,6 +165,34 @@ def effective_cloud_validation_status(
     return "UNVERIFIED"
 
 
+def effective_validation_status(
+    asset_type: str,
+    validation_status: str,
+    validation_method: str,
+    *,
+    evidence: object = None,
+    notes: object = None,
+    require_stable_proof: bool = True,
+) -> str:
+    """Return display-facing validation status without changing report gates."""
+
+    stored_status = str(validation_status or "").strip().upper()
+    if stored_status != "VALIDATED":
+        return stored_status
+    if effective_cloud_validation_status(
+        asset_type,
+        stored_status,
+        validation_method,
+        evidence=evidence,
+        notes=notes,
+        require_stable_proof=require_stable_proof,
+    ) == "VALIDATED":
+        return "VALIDATED"
+    if require_stable_proof and _has_stable_validation_proof(validation_method, evidence, notes):
+        return "VALIDATED"
+    return "UNVERIFIED"
+
+
 def _cloud_validation_columns(con: sqlite3.Connection) -> set[str]:
     try:
         return {

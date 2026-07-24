@@ -1487,6 +1487,52 @@ def test_engagement_detail_api_orders_cloud_validation_results_by_latest_checked
     assert validation_rows[1]["Evidence"] == "older dead proof"
 
 
+def test_engagement_detail_api_surfaces_validated_key_provider_inventory(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES
+                (1001, 'aws', '742931608514', 'VALIDATED',
+                 'aws_sts_get_caller_identity', 200,
+                 'AWS STS GetCallerIdentity ok: AccountId=742931608514',
+                 'AWS STS GetCallerIdentity ok: AccountId=742931608514',
+                 '2026-07-09T10:30:00')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail = detail_resp.json()
+
+    validation_rows = {
+        row["Asset"]: row for row in detail["sections"]["cloud_validation_results"]
+    }
+    assert validation_rows["742931608514"]["Status"] == "VALIDATED"
+    assert validation_rows["742931608514"]["Stored Status"] == "VALIDATED"
+    assert validation_rows["742931608514"]["Reportable"] == "no"
+    assert validation_rows["742931608514"]["Method"] == "aws_sts_get_caller_identity"
+
+
 def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
     tmp_path: Path,
     monkeypatch,
@@ -1579,6 +1625,8 @@ def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(
                 "edge_type": "vuln_found",
             },
             {
+                "source_node_id": "HOST::app",
+                "target_node_id": "VULN::firebase",
                 "source": "HOST::app",
                 "target": "VULN::malformed-cloud",
                 "edge_type": "vuln_found",

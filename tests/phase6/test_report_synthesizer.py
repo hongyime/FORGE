@@ -1466,6 +1466,7 @@ def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     )
     assert "VALIDATED:aws_sts_get_caller_identity" in str(raw_row["evidence"])
     assert "backend=github" in str(raw_row["evidence"])
+    assert raw_row["validation_notes"] == "AccountId=742931608514"
     assert "key_enc" not in str(raw_row["evidence"])
 
     synth = ReportSynthesizer(

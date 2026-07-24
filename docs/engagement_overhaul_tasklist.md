@@ -267,6 +267,24 @@ sentences as historical notes only, not as current instructions.
   API malformed-cloud graph regression passed (`1 passed`); pytest engagement
   cleanup reported `removed=4 remaining=0`. Handoff:
   `.claude/handoffs/2026-07-24-imported-graph-legacy-edge-filtering.md`.
+- [x] Validation inventory/raw-export parity checkpoint:
+  Phase 6 raw CSV finding rows now preserve structured validation notes,
+  evidence summary, and checked timestamp from the same in-memory finding
+  context used by JSON/template reports. Cloud-validation inventory projection
+  now distinguishes display status from cloud-exposure reportability: stable
+  key-provider validations such as `aws_sts_get_caller_identity` display as
+  `VALIDATED` in Phase 6, dashboard, and API inventory while
+  `validation_reportable` remains false for cloud-exposure gates. Imported graph
+  filtering was also tightened for mixed edge payloads that contain both
+  canonical and legacy endpoint keys, rejecting any edge alias that still points
+  at a removed deterministic node and rewriting all aliases during cloud-node
+  dedupe. Verification: compile passed; Ruff passed; focused helper/Phase 6
+  report/raw-export tests passed (`8 passed`); focused dashboard graph and
+  inventory tests passed (`4 passed`); focused live API graph and inventory
+  tests passed (`2 passed`); dashboard cloud-alias graph test passed
+  (`1 passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-validation-inventory-raw-export-parity.md`.
 - [ ] Next target: audit another concrete passive-to-live validation/report/API
   parity gap, preferably provider-specific proof/detail reviewability for
   long-tail validators or imported graph/raw-export shape mismatches. Keep live

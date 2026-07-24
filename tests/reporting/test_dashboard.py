@@ -1698,6 +1698,70 @@ def test_generate_dashboard_orders_cloud_validation_results_by_latest_checked_at
     assert validation_rows[1]["Evidence"] == "older dead proof"
 
 
+def test_generate_dashboard_surfaces_validated_key_provider_inventory(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            );
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES
+                (1001, 'aws', '742931608514', 'VALIDATED',
+                 'aws_sts_get_caller_identity', 200,
+                 'AWS STS GetCallerIdentity ok: AccountId=742931608514',
+                 'AWS STS GetCallerIdentity ok: AccountId=742931608514',
+                 '2026-07-09T10:30:00')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    validation_rows = {
+        row["Asset"]: row for row in detail_payload["sections"]["cloud_validation_results"]
+    }
+
+    assert validation_rows["742931608514"]["Status"] == "VALIDATED"
+    assert validation_rows["742931608514"]["Stored Status"] == "VALIDATED"
+    assert validation_rows["742931608514"]["Reportable"] == "no"
+    assert validation_rows["742931608514"]["Method"] == "aws_sts_get_caller_identity"
+
+
 def test_generate_dashboard_filters_unknown_method_deterministic_cloud_rows(
     tmp_path: Path,
 ) -> None:
@@ -1832,6 +1896,8 @@ def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
         ],
         "edges": [
             {
+                "source_node_id": "HOST::app",
+                "target_node_id": "CLOUD::manual-note",
                 "source": "HOST::app",
                 "target": "VULN::manual-note",
                 "edge_type": "vuln_found",

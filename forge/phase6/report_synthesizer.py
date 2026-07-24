@@ -51,7 +51,7 @@ from forge.core.errors import ProviderUnavailableError
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.utils.cloud_exposure_gate import (
-    effective_cloud_validation_status,
+    effective_validation_status,
     is_deterministic_cloud_exposure,
     is_reportable_cloud_validation,
     latest_cloud_validation_reportability_index,
@@ -689,7 +689,7 @@ class ContextBuilder:
                 "validation_asset_type": asset_type,
                 "provider_identifier": str(row["provider_identifier"] or row["identifier"] or "").strip(),
                 "stored_validation_status": stored_status,
-                "validation_status": effective_cloud_validation_status(
+                "validation_status": effective_validation_status(
                     asset_type,
                     stored_status,
                     validation_method,
@@ -2630,6 +2630,11 @@ class ReportSynthesizer:
                     "validation_status": str(finding.get("validation_status") or ""),
                     "validation_method": str(finding.get("validation_method") or ""),
                     "validation_http_status": str(finding.get("validation_http_status") or ""),
+                    "validation_notes": str(finding.get("validation_notes") or ""),
+                    "validation_evidence_summary": str(
+                        finding.get("validation_evidence_summary") or ""
+                    ),
+                    "validation_checked_at": str(finding.get("validation_checked_at") or ""),
                     "seed_type": "",
                     "seed_value": "",
                     "seed_source": "",

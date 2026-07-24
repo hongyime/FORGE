@@ -25,23 +25,34 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: imported graph legacy edge-shape filtering is complete.
-Imported dashboard/API graph payload filtering now understands both canonical
-`source_node_id` / `target_node_id` edges and legacy `source` / `target` edges.
-Validation filtering and cloud-alias dedupe share the endpoint helper, so
-removed or merged deterministic cloud/key nodes cannot leave dangling stale
-graph edges in engagement review payloads. Verification: compile/Ruff passed;
-focused dashboard graph validation regressions passed (`3 passed`); focused
-cloud-alias graph test passed (`1 passed`); focused live engagement API
-malformed-cloud graph regression passed (`1 passed`); pytest engagement cleanup
-reported `removed=4 remaining=0`. Handoff:
-`.claude/handoffs/2026-07-24-imported-graph-legacy-edge-filtering.md`.
+Latest checkpoint: validation inventory/raw-export parity is complete. Phase 6
+raw CSV finding rows now preserve structured validation notes/evidence/check
+metadata from the same context used by JSON/template reports. Stable
+key-provider validations such as `aws_sts_get_caller_identity` display as
+`VALIDATED` in Phase 6, dashboard, and API inventory while
+`validation_reportable` remains false for cloud-exposure gates. Imported graph
+filtering now rejects mixed endpoint-key edges when any alias points to a
+removed deterministic node, and cloud-alias dedupe rewrites all existing endpoint
+aliases. Verification: compile/Ruff passed; focused helper/Phase 6
+report/raw-export tests passed (`8 passed`); focused dashboard graph/inventory
+tests passed (`4 passed`); focused API graph/inventory tests passed
+(`2 passed`); dashboard cloud-alias graph test passed (`1 passed`); pytest
+engagement cleanup reported `removed=4 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-validation-inventory-raw-export-parity.md`.
 
 Current next gate: audit another concrete passive-to-live validation/report/API
 parity gap, preferably provider-specific proof/detail reviewability for
 long-tail validators or imported graph/raw-export shape mismatches. Keep live
 provider calls mocked unless an explicit ROE/scope manifest and target are
 supplied.
+
+Previous checkpoint: imported graph legacy edge-shape filtering is complete.
+Imported dashboard/API graph payload filtering now understands both canonical
+`source_node_id` / `target_node_id` edges and legacy `source` / `target` edges.
+Validation filtering and cloud-alias dedupe share the endpoint helper, so
+removed or merged deterministic cloud/key nodes cannot leave dangling stale
+graph edges in engagement review payloads. Handoff:
+`.claude/handoffs/2026-07-24-imported-graph-legacy-edge-filtering.md`.
 
 Previous checkpoint: downgraded provider validation reviewability is complete.
 Method-tagged key-validation details now parse non-reportable statuses such as

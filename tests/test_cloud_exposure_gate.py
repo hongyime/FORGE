@@ -4,7 +4,11 @@ import pytest
 
 from forge.phase4.attack_path import AttackGraphBuilder
 from forge.phase6.report_synthesizer import ContextBuilder
-from forge.utils.cloud_exposure_gate import is_deterministic_cloud_exposure
+from forge.utils.cloud_exposure_gate import (
+    effective_validation_status,
+    is_deterministic_cloud_exposure,
+    is_reportable_cloud_validation,
+)
 
 
 @pytest.mark.parametrize(
@@ -57,3 +61,21 @@ def test_cloud_exposure_gate_is_shared_by_graph_and_report(
     assert helper_result is expected
     assert graph_result is expected
     assert report_result is expected
+
+
+def test_key_provider_validation_status_does_not_become_cloud_reportable() -> None:
+    evidence = "AWS STS GetCallerIdentity ok: AccountId=742931608514"
+
+    assert effective_validation_status(
+        "aws",
+        "VALIDATED",
+        "aws_sts_get_caller_identity",
+        evidence=evidence,
+    ) == "VALIDATED"
+    assert not is_reportable_cloud_validation(
+        "aws",
+        "VALIDATED",
+        "aws_sts_get_caller_identity",
+        evidence=evidence,
+        require_stable_proof=True,
+    )
