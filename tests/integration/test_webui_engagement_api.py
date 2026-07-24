@@ -2318,6 +2318,32 @@ def test_engagement_create_uses_monotonic_sequence_after_deleted_db(
         assert 1001 in ids
         assert 1002 not in ids
         assert 1003 in ids
+        assert sorted(path.name for path in db_root.glob("*.db")) == [
+            "1001.db",
+            "1003.db",
+            "master.db",
+        ]
+
+        with sqlite3.connect(db_root / "master.db") as con:
+            max_sequence_id = int(
+                con.execute(
+                    "SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence"
+                ).fetchone()[0]
+            )
+        assert max_sequence_id == 1003
+
+        (db_root / "1003.db").unlink()
+        assert sorted(path.name for path in db_root.glob("*.db")) == [
+            "1001.db",
+            "master.db",
+        ]
+        with sqlite3.connect(db_root / "master.db") as con:
+            preserved_max_sequence_id = int(
+                con.execute(
+                    "SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence"
+                ).fetchone()[0]
+            )
+        assert preserved_max_sequence_id == 1003
 
 
 def test_launch_engagement_kill_chain_route(tmp_path: Path, monkeypatch) -> None:

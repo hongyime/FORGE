@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: audit manifest bundle availability is complete.
+Latest checkpoint: API-created engagement cleanup and monotonic sequence
+coverage is complete. The API create sequence regression now proves deleting a
+test-owned engagement DB leaves no numeric DB debris while preserving the
+`master.db` monotonic sequence. It verifies `1002.db` deletion does not allow ID
+reuse, `1003.db` can be cleaned up, and the sequence remains at `1003` for the
+next allocation. No production code change was needed. Verification: compile
+passed; Ruff passed; focused cleanup/sequence test passed (`1 passed`); full
+web UI engagement API file passed (`44 passed`); `.forge_data/engagements`
+contained `0` entries after the run. Handoff:
+`.claude/handoffs/2026-07-24-api-create-cleanup-sequence.md`.
+
+Next checkpoint: perform a fresh current-code deterministic gap audit and pick
+one compact implementation/test task that advances intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
+The previous five sidecar-prioritized gaps are now closed; do not reopen them
+unless a regression is found.
+
+Previous checkpoint: audit manifest bundle availability is complete.
 Dashboard/API run summaries now annotate audit manifests with explicit
 `artifact_count`, `artifact_available`, `artifact_name`, and `artifact_href`
 fields when materialized manifest artifacts exist. Overview JSON, detail JSON,
@@ -36,10 +53,6 @@ bundle tests passed (`2 passed`); full web UI engagement API file passed (`44
 passed`); full static dashboard suite passed (`29 passed`);
 `.forge_data/engagements` contained `0` entries after the run. Handoff:
 `.claude/handoffs/2026-07-24-audit-manifest-bundle-availability.md`.
-
-Next checkpoint: add compact end-to-end cleanup assertions around API-created
-engagements. API create/run/delete-like test flows should prove no test-owned
-DB debris remains and `master.db` monotonic sequence is preserved.
 
 Previous checkpoint: API auxiliary-route validation/reportability parity is
 complete. `/api/engagements/{id}/assets` now filters false-positive passive

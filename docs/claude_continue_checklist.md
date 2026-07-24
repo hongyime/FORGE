@@ -66,11 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add compact end-to-end cleanup assertions around
-  API-created engagements. API create/run/delete-like test flows should prove
-  no test-owned DB debris remains and `master.db` monotonic sequence is
-  preserved. Minimal files: `tests/integration/test_webui_engagement_api.py`
-  and `forge/engagement_ids.py` only if a real sequence bug is found.
+- [ ] Next checkpoint: perform a fresh current-code deterministic gap audit and
+  pick one compact implementation/test task that advances intake, discovery,
+  recursion, artifact analysis, validation, scoring, review, fallback, or
+  cleanup. The previous five sidecar-prioritized gaps are now closed; do not
+  reopen them unless a regression is found.
+- [x] API-created engagement cleanup and monotonic sequence checkpoint:
+  The API create sequence regression now proves deleting a test-owned
+  engagement DB leaves no numeric DB debris while preserving the `master.db`
+  monotonic sequence. It verifies `1002.db` deletion does not allow ID reuse,
+  `1003.db` can be cleaned up, and the sequence remains at `1003` for the next
+  allocation. No production code change was needed. Verification: compile
+  passed; Ruff passed; focused cleanup/sequence test passed (`1 passed`); full
+  web UI engagement API file passed (`44 passed`); workspace
+  `.forge_data/engagements` contained `0` entries after the run. Handoff:
+  `.claude/handoffs/2026-07-24-api-create-cleanup-sequence.md`.
 - [x] Audit manifest bundle availability checkpoint:
   Dashboard/API run summaries now annotate audit manifests with explicit
   `artifact_count`, `artifact_available`, `artifact_name`, and `artifact_href`
