@@ -97,6 +97,12 @@ sentences as historical notes only, not as current instructions.
   fidelity for key findings, or bounded recursive execution behavior. Do not
   edit code until the audited gap maps to intake, discovery, recursion,
   artifact analysis, validation, scoring, review, fallback, or testing/cleanup.
+- [x] Dashboard/API render-path lineage visibility checkpoint:
+  Static dashboard and live web API report summaries now carry Phase 6
+  `render_path` lineage in addition to requested/rendered/backend provider
+  fields, and the static dashboard backend summary renders the path for review.
+  Verification: focused static dashboard/API lineage tests passed (`3 passed`);
+  Ruff, py_compile, and `git diff --check` passed.
 - [x] Dashboard/API HTML report-family visibility checkpoint:
   Static dashboard and live web API report-family discovery now include
   deterministic `.html` Phase 6 report companions alongside Markdown, PDF,

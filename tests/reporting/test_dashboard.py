@@ -667,6 +667,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
                 "engagement_id": 1001,
                 "provider": "template",
                 "requested_provider": "auto",
+                "render_path": "auto -> template",
                 "format": "markdown",
                 "generated_at": "2026-07-09T09:44:12+00:00",
                 "fallback_reason": "quota exceeded",
@@ -781,6 +782,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_report["provider"] == "template"
     assert overview_report["requested_provider"] == "auto"
     assert overview_report["render_backend"] == "template"
+    assert overview_report["render_path"] == "auto -> template"
     assert overview_report["fallback_reason"] == "quota exceeded"
     assert overview_report["export_count"] == 5
     assert [item["label"] for item in overview_report["available_exports"]] == [
@@ -834,6 +836,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["report_summary"]["provider"] == "template"
     assert detail_payload["report_summary"]["requested_provider"] == "auto"
     assert detail_payload["report_summary"]["render_backend"] == "template"
+    assert detail_payload["report_summary"]["render_path"] == "auto -> template"
     assert detail_payload["report_summary"]["fallback_reason"] == "quota exceeded"
     assert detail_payload["report_summary"]["export_count"] == 5
     assert detail_payload["report_summary"]["cloud_validation_inventory_count"] == 2
@@ -967,6 +970,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "Email Intelligence" in detail_html
     assert "Fallback reason: quota exceeded" in detail_html
     assert "HTML" in detail_html
+    assert '<span class="k">Path</span><span class="v">auto -&gt; template</span>' in detail_html
     assert "Report JSON" in detail_html
     assert "Validations" in detail_html
     assert "Reportable" in detail_html

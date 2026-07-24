@@ -261,6 +261,7 @@ def _build_engagement(tmp_path: Path, *, include_distributed_task: bool = False)
                 "engagement_id": 1001,
                 "provider": "template",
                 "requested_provider": "auto",
+                "render_path": "auto -> template",
                 "format": "markdown",
                 "generated_at": "2026-07-09T09:44:12+00:00",
                 "fallback_reason": "quota exceeded",
@@ -398,6 +399,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert list_report["provider"] == "template"
         assert list_report["requested_provider"] == "auto"
         assert list_report["render_backend"] == "template"
+        assert list_report["render_path"] == "auto -> template"
         assert list_report["fallback_reason"] == "quota exceeded"
         assert list_report["export_count"] == 5
         assert [item["label"] for item in list_report["available_exports"]] == [
@@ -448,6 +450,7 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert detail["report_summary"]["provider"] == "template"
         assert detail["report_summary"]["requested_provider"] == "auto"
         assert detail["report_summary"]["render_backend"] == "template"
+        assert detail["report_summary"]["render_path"] == "auto -> template"
         assert detail["report_summary"]["fallback_reason"] == "quota exceeded"
         assert detail["report_summary"]["export_count"] == 5
         assert detail["report_summary"]["cloud_validation_inventory_count"] == 2
@@ -764,6 +767,7 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
     assert report_payload["provider"] == "template"
     assert report_payload["requested_provider"] == "template"
     assert lineage["rendered_provider"] == "template"
+    assert lineage["render_path"] == "template"
     assert lineage["findings_checksum"] == report_payload["findings_checksum"]
     validation_inventory = report_payload["context"]["cloud_validation_inventory"]
     asset_inventory = report_payload["context"]["cloud_asset_inventory"]
@@ -790,6 +794,7 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
     assert dashboard_summary["requested_provider"] == report_payload["requested_provider"]
     assert dashboard_summary["render_backend"] == lineage["rendered_provider"]
     assert dashboard_summary["rendered_provider"] == lineage["rendered_provider"]
+    assert dashboard_summary["render_path"] == lineage["render_path"]
     assert dashboard_summary["findings_checksum"] == report_payload["findings_checksum"]
     assert dashboard_summary["cloud_validation_inventory_count"] == len(validation_inventory)
     assert dashboard_summary["cloud_asset_inventory_count"] == len(asset_inventory)
@@ -817,6 +822,7 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         assert api_summary["requested_provider"] == dashboard_summary["requested_provider"]
         assert api_summary["render_backend"] == dashboard_summary["render_backend"]
         assert api_summary["rendered_provider"] == dashboard_summary["rendered_provider"]
+        assert api_summary["render_path"] == dashboard_summary["render_path"]
         assert api_summary["findings_checksum"] == dashboard_summary["findings_checksum"]
         assert api_summary["cloud_validation_inventory_count"] == dashboard_summary[
             "cloud_validation_inventory_count"

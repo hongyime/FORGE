@@ -4182,6 +4182,7 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
         requested_provider = _report_payload_value(payload, lineage, "requested_provider")
         upstream_provider = _report_payload_value(payload, lineage, "upstream_provider")
         rendered_provider = _report_payload_value(lineage, payload, "rendered_provider", "render_backend", "provider")
+        render_path = _report_payload_value(payload, lineage, "render_path")
         fallback_reason = _report_payload_value(payload, lineage, "fallback_reason")
         report_write_error = _report_payload_value(payload, lineage, "report_write_error", "write_error")
         format_name = _report_payload_value(payload, lineage, "format")
@@ -4207,6 +4208,7 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
                 "provider": provider,
                 "requested_provider": requested_provider,
                 "render_backend": render_backend,
+                "render_path": render_path,
                 "rendered_provider": rendered_provider,
                 "upstream_provider": upstream_provider,
                 "format": format_name,
@@ -4272,6 +4274,7 @@ def _render_report_history(report_history: list[dict[str, Any]]) -> str:
                     ),
                 ),
                 _render_meta_block("Backend", str(family.get("render_backend") or "-")),
+                _render_meta_block("Path", str(family.get("render_path") or "-")),
                 _render_meta_block("Exports", str(family.get("export_count") or 0)),
             )
         )
@@ -4337,6 +4340,7 @@ def _render_report_backend_summary(summary: dict[str, Any] | None) -> str:
             ),
         ),
         _render_meta_block("Backend", str(summary.get("render_backend") or "-")),
+        _render_meta_block("Path", str(summary.get("render_path") or "-")),
         _render_meta_block("Exported", str(summary.get("provider") or "-")),
         _render_meta_block("Format", str(summary.get("format") or "-")),
         _render_meta_block("Generated", str(summary.get("generated_at") or "-")),
