@@ -10521,6 +10521,7 @@ class ArtifactTextDiscoveryBatch:
     ip_seeds: list[tuple[str, str]] = field(default_factory=list)
     host_seeds: list[tuple[str, str]] = field(default_factory=list)
     urls: list[str] = field(default_factory=list)
+    identity_seeds: list[tuple[str, str, str, str]] = field(default_factory=list)
     key_findings: list[dict[str, object]] = field(default_factory=list)
     cloud_assets: list[tuple[str, str, str]] = field(default_factory=list)
 
@@ -20699,7 +20700,16 @@ class ArtifactQueueProcessor:
         source_file: str,
     ) -> ArtifactTextDiscoveryBatch:
         family_batches = self._run_ordered_local_batch(
-            ("emails", "phones", "ips", "network_hosts", "urls", "keys", "cloud_assets"),
+            (
+                "emails",
+                "phones",
+                "ips",
+                "network_hosts",
+                "urls",
+                "contact_identities",
+                "keys",
+                "cloud_assets",
+            ),
             lambda family: self._collect_generic_text_discovery_family(
                 family,
                 text=text,
@@ -20734,6 +20744,7 @@ class ArtifactQueueProcessor:
             ip_seeds=list(family_batch.ip_seeds),
             host_seeds=list(family_batch.host_seeds),
             urls=list(family_batch.urls),
+            identity_seeds=list(family_batch.identity_seeds),
             key_findings=[dict(finding) for finding in family_batch.key_findings],
             cloud_assets=list(family_batch.cloud_assets),
         )
@@ -20750,6 +20761,7 @@ class ArtifactQueueProcessor:
             ip_seeds=list(family_batch.ip_seeds),
             host_seeds=list(family_batch.host_seeds),
             urls=list(family_batch.urls),
+            identity_seeds=list(family_batch.identity_seeds),
             key_findings=[dict(finding) for finding in family_batch.key_findings],
             cloud_assets=list(family_batch.cloud_assets),
         )
@@ -20867,6 +20879,14 @@ class ArtifactQueueProcessor:
                         continue
                     seen_urls.add(url)
                     batch.urls.append(url)
+            return batch
+        if family == "contact_identities":
+            batch.identity_seeds.extend(
+                self._artifact_text_contact_identity_candidates(
+                    text,
+                    source_file=source_file,
+                )
+            )
             return batch
         if family == "keys":
             seen_key_patterns: set[str] = set()
@@ -21132,6 +21152,136 @@ class ArtifactQueueProcessor:
 
     def _artifact_text_direct_url_candidate(self, raw_url: str) -> str:
         return _normalize_artifact_text_url(str(raw_url or ""))
+
+    @staticmethod
+    def _artifact_text_contact_identity_candidates(
+        text: str,
+        *,
+        source_file: str = "",
+    ) -> list[tuple[str, str, str, str]]:
+        source_label = _artifact_format_label(source_file)
+        marker_text = str(text or "")
+        lowered_marker_text = marker_text.lower()
+        if source_label not in {"calendar", "vcard", "vcf"} and not re.search(
+            r"(?im)^\s*begin\s*[:=]\s*v(?:card|calendar)\b",
+            lowered_marker_text,
+        ):
+            return []
+        title = ""
+        title_values = [
+            ArtifactQueueProcessor._calendar_contact_title_line_value(line)
+            for line in marker_text.splitlines()
+        ]
+        for value in title_values:
+            if value:
+                title = value
+                break
+        candidates: list[tuple[str, str, str, str]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for raw_line in marker_text.splitlines():
+            entry = ArtifactQueueProcessor._calendar_contact_identity_line_entry(raw_line)
+            if entry is None:
+                continue
+            enriched_entry = (entry[0], entry[1], entry[2], title)
+            if enriched_entry in seen:
+                continue
+            seen.add(enriched_entry)
+            candidates.append(enriched_entry)
+            if len(candidates) >= 40:
+                break
+        return candidates
+
+    @staticmethod
+    def _calendar_contact_identity_line_entry(raw_line: str) -> tuple[str, str, str] | None:
+        line = str(raw_line or "").strip()
+        if not line:
+            return None
+        separator = ""
+        if ":" in line:
+            raw_key = line.split(":", 1)[0].split(";", 1)[0].strip().lower()
+            if raw_key in {"fn", "n", "org", "title"}:
+                separator = ":"
+        if not separator and "=" in line:
+            separator = "="
+        if not separator:
+            return None
+        key_part, raw_value = line.split(separator, 1)
+        key = key_part.split(";", 1)[0].strip().lower()
+        if key not in {"fn", "n", "org"}:
+            return None
+        value = ArtifactQueueProcessor._calendar_contact_identity_value(key, raw_value)
+        if not value:
+            return None
+        if key in {"fn", "n"}:
+            if not _looks_like_person_name(value):
+                return None
+            return (value, "name", key)
+        if key == "org":
+            return (value, "company", key)
+        return None
+
+    @staticmethod
+    def _calendar_contact_title_line_value(raw_line: str) -> str:
+        line = str(raw_line or "").strip()
+        if not line:
+            return ""
+        separator = ""
+        if ":" in line:
+            raw_key = line.split(":", 1)[0].split(";", 1)[0].strip().lower()
+            if raw_key == "title":
+                separator = ":"
+        if not separator and "=" in line and line.split("=", 1)[0].strip().lower() == "title":
+            separator = "="
+        if not separator:
+            return ""
+        _key_part, raw_value = line.split(separator, 1)
+        return ArtifactQueueProcessor._calendar_contact_identity_value("title", raw_value)
+
+    @staticmethod
+    def _calendar_contact_identity_value(key: str, raw_value: str) -> str:
+        value = str(raw_value or "").strip()
+        if key == "n":
+            parts = [
+                ArtifactQueueProcessor._clean_calendar_contact_identity_value(part)
+                for part in value.split(";")
+            ]
+            family = parts[0] if len(parts) > 0 else ""
+            given = parts[1] if len(parts) > 1 else ""
+            additional = parts[2] if len(parts) > 2 else ""
+            prefix = parts[3] if len(parts) > 3 else ""
+            suffix = parts[4] if len(parts) > 4 else ""
+            value = " ".join(part for part in (prefix, given, additional, family, suffix) if part)
+        elif key == "org":
+            value = next(
+                (
+                    ArtifactQueueProcessor._clean_calendar_contact_identity_value(part)
+                    for part in value.split(";")
+                    if ArtifactQueueProcessor._clean_calendar_contact_identity_value(part)
+                ),
+                "",
+            )
+        else:
+            value = ArtifactQueueProcessor._clean_calendar_contact_identity_value(value)
+        return ArtifactQueueProcessor._clean_calendar_contact_identity_value(value)
+
+    @staticmethod
+    def _clean_calendar_contact_identity_value(value: str) -> str:
+        text = str(value or "").strip()
+        text = (
+            text.replace("\\n", " ")
+            .replace("\\N", " ")
+            .replace("\\,", ",")
+            .replace("\\;", ";")
+            .replace("\\\\", "\\")
+        )
+        text = re.sub(r"\s+", " ", text).strip(" \t\r\n,;")
+        if len(text) < 2 or len(text) > 96:
+            return ""
+        if "@" in text or "://" in text or any(char in text for char in "<>{}[]"):
+            return ""
+        if not any(char.isalpha() for char in text):
+            return ""
+        return text
 
     def _artifact_text_cloud_asset_family_candidates(
         self,
@@ -21404,7 +21554,16 @@ class ArtifactQueueProcessor:
         source: ArtifactTextDiscoveryBatch,
     ) -> None:
         merge_entries = self._run_ordered_local_batch(
-            ("emails", "phones", "ip_seeds", "host_seeds", "urls", "key_findings", "cloud_assets"),
+            (
+                "emails",
+                "phones",
+                "ip_seeds",
+                "host_seeds",
+                "urls",
+                "identity_seeds",
+                "key_findings",
+                "cloud_assets",
+            ),
             lambda family: self._artifact_text_discovery_merge_family_entry(
                 family,
                 source=source,
@@ -21450,6 +21609,16 @@ class ArtifactQueueProcessor:
                 for url in values:
                     if url not in target.urls:
                         target.urls.append(url)
+                continue
+            if family == "identity_seeds":
+                seen_identity_seeds = set(target.identity_seeds)
+                for identity_seed in values:
+                    if not isinstance(identity_seed, tuple) or len(identity_seed) != 4:
+                        continue
+                    if identity_seed in seen_identity_seeds:
+                        continue
+                    seen_identity_seeds.add(identity_seed)
+                    target.identity_seeds.append(identity_seed)
                 continue
             if family == "key_findings":
                 seen_key_patterns = {
@@ -21517,6 +21686,29 @@ class ArtifactQueueProcessor:
             }
         if family == "urls":
             return {"family": family, "values": [str(url).strip() for url in source.urls if str(url).strip()]}
+        if family == "identity_seeds":
+            values: list[tuple[str, str, str, str]] = []
+            for identity_seed in source.identity_seeds:
+                if not isinstance(identity_seed, tuple) or len(identity_seed) != 4:
+                    continue
+                seed_value, seed_type, contact_field, contact_title = identity_seed
+                seed_value_text = str(seed_value).strip()
+                seed_type_text = str(seed_type).strip()
+                contact_field_text = str(contact_field).strip()
+                contact_title_text = str(contact_title).strip()
+                if seed_value_text and seed_type_text and contact_field_text:
+                    values.append(
+                        (
+                            seed_value_text,
+                            seed_type_text,
+                            contact_field_text,
+                            contact_title_text,
+                        )
+                    )
+            return {
+                "family": family,
+                "values": values,
+            }
         if family == "key_findings":
             return {"family": family, "values": [dict(finding) for finding in source.key_findings]}
         if family == "cloud_assets":
@@ -21594,6 +21786,32 @@ class ArtifactQueueProcessor:
         return {
             "url": url,
             "relation_metadata": {"rule": "artifact_text_extract", "source_file": source_file},
+        }
+
+    def _artifact_text_identity_seed_persistence_entry(
+        self,
+        identity_seed: tuple[str, str, str, str],
+        *,
+        source_file: str,
+    ) -> dict[str, Any] | None:
+        seed_value, seed_type, contact_field, contact_title = identity_seed
+        if seed_type not in {"name", "company"}:
+            return None
+        confidence = {"company": 0.72, "name": 0.7}.get(seed_type, 0.5)
+        metadata = {
+            "rule": "calendar_contact_explicit_field",
+            "source_file": source_file,
+            "contact_field": contact_field,
+            "normalized_value": seed_value,
+            "artifact_contact_identity": True,
+        }
+        if contact_title:
+            metadata["contact_title"] = contact_title
+        return {
+            "seed_value": seed_value,
+            "seed_type": seed_type,
+            "confidence": confidence,
+            "metadata": metadata,
         }
 
     def _artifact_text_key_finding_persistence_entry(
@@ -21773,6 +21991,47 @@ class ArtifactQueueProcessor:
                     dict(url_entry["relation_metadata"]),
                     artifact_context,
                 ),
+            )
+
+        identity_entries = self._run_ordered_local_batch(
+            batch.identity_seeds,
+            lambda identity_seed: self._artifact_text_identity_seed_persistence_entry(
+                identity_seed,
+                source_file=source_file,
+            ),
+            default_factory=lambda: None,
+        )
+        for identity_entry in identity_entries:
+            if not isinstance(identity_entry, dict):
+                continue
+            seed_value = str(identity_entry["seed_value"])
+            seed_type = str(identity_entry["seed_type"])
+            confidence = float(identity_entry["confidence"])
+            metadata = self._merge_artifact_relation_context(
+                dict(identity_entry["metadata"]),
+                artifact_context,
+            )
+            if self._insert_seed(
+                con,
+                seed_value,
+                seed_type,
+                source="artifact",
+                confidence=confidence,
+            ):
+                inserted += 1
+            self._merge_artifact_metadata_into_seed(
+                con,
+                seed_value,
+                seed_type,
+                metadata,
+            )
+            self._link_artifact_source_seed(
+                con,
+                source_seed_id,
+                seed_value,
+                seed_type,
+                confidence=confidence,
+                metadata=metadata,
             )
 
         key_entries = self._run_ordered_local_batch(
@@ -22288,6 +22547,44 @@ class ArtifactQueueProcessor:
             (self._engagement_id, url, artifact_type, metadata_json),
         )
         return 1 if con.total_changes > before_changes else 0
+
+    def _merge_artifact_metadata_into_seed(
+        self,
+        con: sqlite3.Connection,
+        seed_value: str,
+        seed_type: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        target_seed_id = self._lookup_seed_id(con, seed_value, seed_type)
+        if target_seed_id is None:
+            return
+        row = con.execute(
+            """
+            SELECT metadata_json
+            FROM engagement_seeds
+            WHERE id=? AND engagement_id=?
+            """,
+            (target_seed_id, self._engagement_id),
+        ).fetchone()
+        if row is None:
+            return
+        incoming = {"artifact_provenance": True}
+        incoming.update(dict(metadata or {}))
+        existing = _safe_json_loads(str(row[0] or "{}"))
+        merged = self._merge_artifact_seed_metadata(existing, incoming)
+        con.execute(
+            """
+            UPDATE engagement_seeds
+            SET metadata_json=?,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=? AND engagement_id=?
+            """,
+            (
+                json.dumps(merged, sort_keys=True),
+                target_seed_id,
+                self._engagement_id,
+            ),
+        )
 
     def _store_social_profile_url_pivots(
         self,

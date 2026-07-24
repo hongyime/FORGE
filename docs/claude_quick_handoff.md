@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: generic artifact-text AWS ARN inventory is complete.
+Latest checkpoint: calendar/vCard explicit identity enrichment is complete.
+Calendar and vCard artifact parsing now promotes only explicit contact identity
+fields into the existing seed graph: `FN`/`N` become `name` seeds and `ORG`
+becomes `company` seeds. `TITLE` is preserved as `contact_title` provenance
+metadata on promoted seeds, not as a recursive `other`/title seed. Names or
+companies that appear only in `SUMMARY`, `DESCRIPTION`, or `ORGANIZER;CN` are
+ignored, preserving the no free-text identity inference boundary.
+Verification: focused TDD failed first with only email seed promotion;
+compile/Ruff passed; focused contact identity tests passed (`2 passed`);
+adjacent calendar/contact orchestrator slice passed (`11 passed, 751
+deselected`); adjacent static artifact suite passed (`14 passed`); selected
+name/company fanout slice passed (`2 passed, 760 deselected`);
+social-profile URL parser passed (`1 passed`); cleanup inventory found only
+`.forge_data/engagements` `1`, `5010`, and `master.db`. Handoff:
+`.claude/handoffs/2026-07-24-calendar-contact-identity.md`.
+
+Previous checkpoint: generic artifact-text AWS ARN inventory is complete.
 Generic artifact text cloud-reference parsing now inventories allowlisted AWS
 ARNs beyond S3/KMS without resolving, reading, or validating resources.
 Supported inventory-only families are IAM role/user/policy, Lambda function/
@@ -175,14 +191,11 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: add conservative calendar/vCard identity enrichment from
-explicit contact fields (`FN`, `N`, `ORG`, `TITLE`) with provenance. Target
-`_extract_calendar_contact_bytes_payloads`, `_calendar_contact_summary_lines`,
-and generic discovery/persistence around `_collect_generic_text_discoveries`.
-Do not infer identities from free text; preserve existing email/phone/URL
-pivots. Next after that: graph/report/dashboard parity checks for recursive
-artifact-derived pivots. Do not add live target probing without explicit
-ROE/scope manifest and mocked tests.
+Current next gate: add graph/report/dashboard parity checks for newly recursive
+artifact-derived pivots. Prove recent React Native/source-map/cloud ARN/contact
+identity pivots appear in review/export surfaces with lineage and deterministic
+report gates. Do not add live target probing without explicit ROE/scope
+manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

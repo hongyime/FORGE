@@ -91,12 +91,25 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add conservative calendar/vCard identity enrichment from explicit
-  contact fields (`FN`, `N`, `ORG`, `TITLE`) with provenance, keeping email/
-  phone/URL pivots unchanged and avoiding inferred identities from free text.
-- [ ] Then add graph/report/dashboard parity checks for newly recursive
+- [ ] Next checkpoint: add graph/report/dashboard parity checks for newly recursive
   artifact-derived pivots so RN/source-map/cloud refs appear in review/export
   surfaces with lineage and deterministic report gates.
+- [x] Calendar/vCard explicit identity enrichment checkpoint:
+  Calendar and vCard artifact parsing now promotes only explicit contact
+  identity fields into the existing seed graph: `FN`/`N` become `name` seeds and
+  `ORG` becomes `company` seeds. `TITLE` is preserved as `contact_title`
+  provenance metadata on promoted seeds, not as a recursive `other`/title seed.
+  Names or companies that appear only in `SUMMARY`, `DESCRIPTION`, or
+  `ORGANIZER;CN` are ignored, preserving the no free-text identity inference
+  boundary. Verification: focused TDD failed first with only email seed
+  promotion; compile passed; Ruff passed; focused contact identity tests passed
+  (`2 passed`); adjacent calendar/contact orchestrator slice passed (`11
+  passed, 751 deselected`); adjacent static artifact suite passed (`14
+  passed`); selected name/company fanout slice passed (`2 passed, 760
+  deselected`); social-profile URL parser passed (`1 passed`); cleanup
+  inventory found only `.forge_data/engagements` `1`, `5010`, and `master.db`.
+  Handoff:
+  `.claude/handoffs/2026-07-24-calendar-contact-identity.md`.
 - [x] Generic artifact-text AWS ARN inventory checkpoint:
   Generic artifact text cloud-reference parsing now inventories allowlisted AWS
   ARNs beyond S3/KMS without resolving, reading, or validating resources.
