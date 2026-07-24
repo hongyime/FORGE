@@ -552,6 +552,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         identifier      TEXT    NOT NULL,        -- project ID, bucket name, etc.
         provider_identifier TEXT,                -- first-seen exact provider identifier
         source          TEXT    NOT NULL,        -- 'manual' | 'firebase_extract' | 'recon'
+        metadata_json   TEXT    NOT NULL DEFAULT '{}',
         discovered_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (engagement_id, asset_type, identifier)
     )

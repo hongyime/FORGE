@@ -1659,6 +1659,8 @@ def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
     asset_type = normalize_cloud_exposure_asset_type(stored_type)
     stored_status = str(row["validation_status"] or "").strip().upper()
     method = str(row["validation_method"] or "").strip()
+    metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
+    metadata_dict = metadata if isinstance(metadata, dict) else {}
     reportable = False
     if stored_status:
         reportable = is_reportable_cloud_validation(
@@ -1684,6 +1686,7 @@ def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
         ),
         "Reportable": "yes" if reportable else "no",
         "Method": method,
+        "Provenance": _relation_evidence_preview(metadata_dict),
         "Discovered": _format_dt(str(row["discovered_at"] or "")),
         "Checked": _format_dt(str(row["checked_at"] or "")),
     }
@@ -1822,10 +1825,13 @@ def _seed_graph_payload_for_engagement(
         discovered_expr = (
             "discovered_at" if "discovered_at" in cloud_columns else "NULL AS discovered_at"
         )
+        metadata_expr = (
+            "metadata_json" if "metadata_json" in cloud_columns else "'{}' AS metadata_json"
+        )
         cloud_rows = _fetch_rows(
             con,
             f"""
-            SELECT id, asset_type, identifier, {provider_expr}, source, {discovered_expr}
+            SELECT id, asset_type, identifier, {provider_expr}, source, {metadata_expr}, {discovered_expr}
             FROM cloud_assets
             WHERE engagement_id=?
             ORDER BY asset_type ASC, identifier ASC
@@ -1929,6 +1935,24 @@ def _seed_graph_payload_for_engagement(
         if not asset_type or not identifier:
             continue
         node_id = f"CLOUD::{asset_type}::{identifier}"
+        stored_metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
+        stored_metadata_dict = stored_metadata if isinstance(stored_metadata, dict) else {}
+        node_metadata = {
+            "service": asset_type,
+            "identifier": identifier,
+            "provider_identifier": display_identifier,
+            "source": str(row["source"] or ""),
+            **(
+                {"asset_type_original": stored_type}
+                if stored_type and stored_type != asset_type
+                else {}
+            ),
+        }
+        for key, value in _safe_graph_metadata(stored_metadata_dict).items():
+            output_key = str(key)
+            if output_key in node_metadata:
+                output_key = f"metadata_{output_key}"
+            node_metadata[output_key] = value
         nodes.append(
             {
                 "node_id": node_id,
@@ -1937,17 +1961,7 @@ def _seed_graph_payload_for_engagement(
                 "severity": "INFO",
                 "source_table": "cloud_assets",
                 "source_id": int(row["id"] or 0),
-                "metadata": {
-                    "service": asset_type,
-                    "identifier": identifier,
-                    "provider_identifier": display_identifier,
-                    "source": str(row["source"] or ""),
-                    **(
-                        {"asset_type_original": stored_type}
-                        if stored_type and stored_type != asset_type
-                        else {}
-                    ),
-                },
+                "metadata": node_metadata,
             }
         )
         edge_key = (f"ENGAGEMENT::{engagement_id}", node_id, "cloud_reference")
@@ -3095,6 +3109,9 @@ def _detail_sections(
         discovered_expr = (
             "ca.discovered_at" if "discovered_at" in cloud_columns else "NULL AS discovered_at"
         )
+        metadata_expr = (
+            "ca.metadata_json" if "metadata_json" in cloud_columns else "'{}' AS metadata_json"
+        )
         order_expr = (
             "COALESCE(ca.discovered_at, '') DESC, ca.id DESC"
             if "discovered_at" in cloud_columns
@@ -3140,6 +3157,7 @@ def _detail_sections(
                        ca.identifier,
                        {provider_expr},
                        {source_expr},
+                       {metadata_expr},
                        {discovered_expr},
                        {validation_select}
                 FROM cloud_assets ca

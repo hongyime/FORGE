@@ -15,6 +15,7 @@ Migration index
   0006  credentials enrichment_data column
   0007  v7.2 tables: vulnerability_findings, cloud_assets, key_scanner_findings
   0019  provider_identifier exact cloud/provider identifier columns
+  0022  cloud asset provenance metadata
 
 Design constraints:
   - All ALTER TABLE statements use `IF NOT EXISTS` workaround (SQLite
@@ -1005,6 +1006,16 @@ def _m0021_run_audit_manifests(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0022_cloud_asset_metadata(conn: sqlite3.Connection) -> None:
+    """Add scrubbed cloud asset provenance metadata."""
+    if _table_sql_contains(conn, "cloud_assets", "cloud_assets"):
+        _safe_alter(
+            conn,
+            "ALTER TABLE cloud_assets ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'",
+        )
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -1031,6 +1042,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (19, "cloud_provider_identifier", _m0019_cloud_provider_identifier),
     (20, "validation_claims", _m0020_validation_claims),
     (21, "run_audit_manifests", _m0021_run_audit_manifests),
+    (22, "cloud_asset_metadata", _m0022_cloud_asset_metadata),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

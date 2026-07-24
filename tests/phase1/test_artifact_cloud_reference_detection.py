@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.reporting.dashboard import generate_dashboard
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
 
@@ -125,3 +127,158 @@ def test_generic_artifact_text_persists_allowlisted_aws_arns_as_inventory_only(
     assert not any(asset_type == "aws_cloudfront" for asset_type, *_ in cloud_assets)
     assert not any("notanaccount" in identifier for _asset_type, identifier, *_ in cloud_assets)
     assert validation_count == 0
+
+
+def test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validation_review(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+    db_path = db_root / "1001.db"
+    bootstrap_engagement(db_path, name="Artifact Cloud Provenance Test")
+
+    source_url = "https://downloads.acme.example/app-config.json"
+    artifact_path = tmp_path / "app-config.json"
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "firebase": {
+                    "projectId": "provenance-firebase",
+                    "databaseURL": "https://provenance-firebase.firebaseio.com",
+                    "storageBucket": "provenance-firebase.appspot.com",
+                    "apiKey": "AIzaSyDUMMYPROVENANCEKEY0000000000000000",
+                },
+                "supabaseUrl": "https://provenancevault.supabase.co",
+                "cdn": "https://provenance-bucket.s3.amazonaws.com/app.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES (1001, ?, 'url', 'operator', 'pending', 0, 1.0, ?)
+            """,
+            (
+                source_url,
+                json.dumps(
+                    {
+                        "provider_sources": ["urlscan"],
+                        "root_domain": "acme.example",
+                        "source_url": source_url,
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+        source_seed_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, local_path, artifact_type, discovered_from, status, metadata_json)
+            VALUES (1001, ?, ?, 'config', 'url_seed', 'downloaded', ?)
+            """,
+            (
+                source_url,
+                artifact_path.as_posix(),
+                json.dumps(
+                    {
+                        "content_type": "application/json",
+                        "download_filename": artifact_path.name,
+                        "downloaded_from_remote": True,
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = ArtifactQueueProcessor(db_path, 1001).process()
+    assert summary.processed == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = {
+            (str(row[0]), str(row[1])): (str(row[2]), json.loads(str(row[3] or "{}")))
+            for row in con.execute(
+                """
+                SELECT asset_type, identifier, source, metadata_json
+                FROM cloud_assets
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        finding_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM vulnerability_findings
+            WHERE engagement_id=1001
+            """
+        ).fetchone()[0]
+        validation_count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM cloud_validation_results
+            WHERE engagement_id=1001
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+    firebase_source, firebase_metadata = rows[("firebase", "provenance-firebase")]
+    assert firebase_source == "artifact_url_extract"
+    assert firebase_metadata["artifact_provenance"] is True
+    assert firebase_metadata["artifact_source_seed_id"] == source_seed_id
+    assert firebase_metadata["source_url"] == source_url
+    assert firebase_metadata["source_file"] == source_url
+    assert firebase_metadata["extract_rule"] == "artifact_text_extract"
+    assert firebase_metadata["format"] == "json"
+    assert firebase_metadata["artifact_type"] == "config"
+    assert firebase_metadata["content_type"] == "application/json"
+    assert firebase_metadata["download_filename"] == "app-config.json"
+    assert firebase_metadata["downloaded_from_remote"] is True
+    assert firebase_metadata["provider_sources"] == ["urlscan"]
+    assert firebase_metadata["root_domain"] == "acme.example"
+
+    _supabase_source, supabase_metadata = rows[("supabase", "provenancevault")]
+    assert supabase_metadata["artifact_source_seed_id"] == source_seed_id
+    assert supabase_metadata["source_url"] == source_url
+
+    assert finding_count == 0
+    assert validation_count == 0
+
+    output_path = reports_dir / "dashboard.html"
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+    detail_json = (
+        reports_dir
+        / "dashboard"
+        / "data"
+        / "engagements"
+        / "engagement-1001-artifact-cloud-provenance-test.json"
+    )
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    cloud_rows = detail_payload["sections"]["cloud_assets"]
+    firebase_row = next(row for row in cloud_rows if row["Asset"] == "provenance-firebase")
+    assert firebase_row["Reportable"] == "no"
+    assert "artifact_cloud_asset_provenance" in firebase_row["Provenance"]
+    assert "artifact_text_extract" in firebase_row["Provenance"]
+    assert "format=json" in firebase_row["Provenance"]
+    assert "sources=urlscan" in firebase_row["Provenance"]
+    graph_nodes = detail_payload["graph_payload"]["nodes"]
+    firebase_node = next(
+        node
+        for node in graph_nodes
+        if node["source_table"] == "cloud_assets"
+        and node["metadata"]["identifier"] == "provenance-firebase"
+    )
+    assert firebase_node["metadata"]["artifact_source_seed_id"] == source_seed_id
+    assert firebase_node["metadata"]["extract_rule"] == "artifact_text_extract"

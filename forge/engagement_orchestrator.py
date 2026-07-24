@@ -19903,6 +19903,62 @@ class ArtifactQueueProcessor:
             merged[str(key)] = value
         return merged
 
+    def _artifact_cloud_asset_metadata(
+        self,
+        con: sqlite3.Connection,
+        *,
+        source_seed_id: int | None,
+        relation_metadata: dict[str, Any] | None,
+        artifact_context: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        allowed_keys = {
+            "archive_sources",
+            "artifact_type",
+            "content_type",
+            "discovered_from",
+            "download_filename",
+            "downloaded_from_remote",
+            "extract_path",
+            "extract_rule",
+            "format",
+            "hostname",
+            "parser",
+            "payload_count",
+            "provider_sources",
+            "root_domain",
+            "rule",
+            "source",
+            "source_backend",
+            "source_file",
+            "source_provider",
+            "source_seed_url",
+            "source_url",
+        }
+        context = self._merge_artifact_relation_context(relation_metadata, artifact_context)
+        metadata: dict[str, Any] = {
+            "artifact_provenance": True,
+            "rule": "artifact_cloud_asset_provenance",
+        }
+        if source_seed_id is not None:
+            metadata["artifact_source_seed_id"] = source_seed_id
+            for key, value in self._artifact_source_seed_provenance(con, source_seed_id).items():
+                metadata.setdefault(key, value)
+        for key, value in context.items():
+            normalized_key = "extract_rule" if key == "rule" else str(key)
+            if normalized_key not in allowed_keys or value in (None, "", [], {}):
+                continue
+            if normalized_key in {"archive_sources", "provider_sources"}:
+                if isinstance(value, list):
+                    metadata[normalized_key] = [
+                        str(item).strip()
+                        for item in value
+                        if str(item).strip()
+                    ][:8]
+                continue
+            if isinstance(value, (str, int, float, bool)):
+                metadata[normalized_key] = value
+        return metadata
+
     def _artifact_relation_context(
         self,
         con: sqlite3.Connection,
@@ -20521,6 +20577,12 @@ class ArtifactQueueProcessor:
                 asset_type="firebase",
                 identifier=str(project_entry["project_id"]),
                 source="firebase_extract",
+                metadata=self._artifact_cloud_asset_metadata(
+                    con,
+                    source_seed_id=source_seed_id,
+                    relation_metadata=dict(project_entry["project_relation_metadata"]),
+                    artifact_context=artifact_context,
+                ),
             )
             self._insert_seed(
                 con,
@@ -20546,6 +20608,12 @@ class ArtifactQueueProcessor:
                     asset_type="gcs",
                     identifier=str(project_entry["storage_bucket"]),
                     source="firebase_extract_storage_bucket",
+                    metadata=self._artifact_cloud_asset_metadata(
+                        con,
+                        source_seed_id=source_seed_id,
+                        relation_metadata=dict(project_entry["storage_relation_metadata"]),
+                        artifact_context=artifact_context,
+                    ),
                 )
                 if self._store_artifact_url_seed(
                     con,
@@ -20611,6 +20679,12 @@ class ArtifactQueueProcessor:
                 asset_type="supabase",
                 identifier=str(config_entry["project_ref"]),
                 source="mobile_config_parse",
+                metadata=self._artifact_cloud_asset_metadata(
+                    con,
+                    source_seed_id=source_seed_id,
+                    relation_metadata=dict(config_entry["relation_metadata"]),
+                    artifact_context=artifact_context,
+                ),
             )
             if self._store_artifact_url_seed(
                 con,
@@ -21889,12 +21963,18 @@ class ArtifactQueueProcessor:
     def _artifact_text_cloud_asset_persistence_entry(
         self,
         cloud_asset: tuple[str, str, str],
+        *,
+        source_file: str,
     ) -> dict[str, Any] | None:
         asset_type, identifier, source = cloud_asset
         return {
             "asset_type": asset_type,
             "identifier": identifier,
             "source": source,
+            "relation_metadata": {
+                "rule": source,
+                "source_file": source_file,
+            },
         }
 
     def _persist_generic_text_discovery_batch(
@@ -22113,17 +22193,27 @@ class ArtifactQueueProcessor:
 
         cloud_asset_entries = self._run_ordered_local_batch(
             batch.cloud_assets,
-            self._artifact_text_cloud_asset_persistence_entry,
+            lambda cloud_asset: self._artifact_text_cloud_asset_persistence_entry(
+                cloud_asset,
+                source_file=source_file,
+            ),
             default_factory=lambda: None,
         )
         for cloud_asset_entry in cloud_asset_entries:
             if not isinstance(cloud_asset_entry, dict):
                 continue
+            cloud_metadata = self._artifact_cloud_asset_metadata(
+                con,
+                source_seed_id=source_seed_id,
+                relation_metadata=dict(cloud_asset_entry["relation_metadata"]),
+                artifact_context=artifact_context,
+            )
             self._store_cloud_asset_reference(
                 con,
                 asset_type=str(cloud_asset_entry["asset_type"]),
                 identifier=str(cloud_asset_entry["identifier"]),
                 source=str(cloud_asset_entry["source"]),
+                metadata=cloud_metadata,
             )
         return inserted
 
@@ -22562,6 +22652,8 @@ class ArtifactQueueProcessor:
             str(entry["url"]),
             source="artifact_url_extract",
             cloud_asset_entries=list(entry["cloud_asset_entries"]),
+            source_seed_id=source_seed_id,
+            relation_metadata=dict(entry["relation_metadata"]),
         )
         self._queue_artifact_text_discovered_url(
             con,
@@ -22709,6 +22801,8 @@ class ArtifactQueueProcessor:
         *,
         source: str,
         cloud_asset_entries: list[dict[str, Any]] | None = None,
+        source_seed_id: int | None = None,
+        relation_metadata: dict[str, Any] | None = None,
     ) -> None:
         prepared_cloud_asset_entries = (
             cloud_asset_entries
@@ -22728,6 +22822,12 @@ class ArtifactQueueProcessor:
                 asset_type=str(cloud_asset_entry["asset_type"]),
                 identifier=str(cloud_asset_entry["identifier"]),
                 source=str(cloud_asset_entry["source"]),
+                metadata=self._artifact_cloud_asset_metadata(
+                    con,
+                    source_seed_id=source_seed_id,
+                    relation_metadata=relation_metadata,
+                    artifact_context=None,
+                ),
             )
 
     @staticmethod
@@ -22772,6 +22872,7 @@ class ArtifactQueueProcessor:
         asset_type: str,
         identifier: str,
         source: str,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         normalized_type = str(asset_type or "").strip().lower()
         original_identifier = str(identifier or "").strip()
@@ -22780,17 +22881,20 @@ class ArtifactQueueProcessor:
             return
         existing = con.execute(
             """
-            SELECT 1
+            SELECT metadata_json
             FROM cloud_assets
             WHERE engagement_id=? AND asset_type=? AND identifier=?
             """,
             (self._engagement_id, normalized_type, normalized_identifier),
         ).fetchone()
+        existing_metadata = _safe_json_loads(str(existing[0] or "{}")) if existing is not None else {}
+        merged_metadata = self._merge_artifact_seed_metadata(existing_metadata, metadata or {})
+        metadata_json = json.dumps(merged_metadata, sort_keys=True)
         con.execute(
             """
             INSERT INTO cloud_assets
-                (engagement_id, asset_type, identifier, provider_identifier, source)
-            VALUES (?, ?, ?, ?, ?)
+                (engagement_id, asset_type, identifier, provider_identifier, source, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(engagement_id, asset_type, identifier) DO UPDATE SET
                 provider_identifier = CASE
                     WHEN cloud_assets.provider_identifier IS NULL
@@ -22798,7 +22902,8 @@ class ArtifactQueueProcessor:
                       OR cloud_assets.provider_identifier = cloud_assets.identifier
                     THEN excluded.provider_identifier
                     ELSE cloud_assets.provider_identifier
-                END
+                END,
+                metadata_json = excluded.metadata_json
             """,
             (
                 self._engagement_id,
@@ -22806,6 +22911,7 @@ class ArtifactQueueProcessor:
                 normalized_identifier,
                 original_identifier,
                 source,
+                metadata_json,
             ),
         )
         if existing is None:

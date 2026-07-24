@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: raw-export fallback orphan report cleanup is complete.
+Latest checkpoint: artifact-derived cloud asset provenance is complete.
+`cloud_assets` now stores scrubbed `metadata_json` provenance, including source
+artifact seed ID, source URL/file, extract rule, format, artifact type,
+provider/source metadata, and bounded parser context when cloud refs are
+discovered from artifacts. Generic text, Firebase, Supabase, and URL-derived
+artifact cloud refs all pass provenance into the shared cloud-asset storage
+path. Dashboard cloud-asset sections expose a provenance preview, fallback
+graph CLOUD nodes carry the same metadata, and unvalidated artifact refs remain
+inventory-only/non-reportable. Verification: compile passed; Ruff passed;
+focused artifact provenance test passed (`1 passed`); full artifact
+cloud-reference file passed (`2 passed`); dashboard graph/raw-export selector
+passed (`12 passed, 17 deselected`); full static dashboard suite passed (`29
+passed`).
+
+Next checkpoint: perform a fresh current-code deterministic gap audit and pick
+one compact implementation/test task that advances intake, discovery,
+recursion, artifact analysis, validation, scoring, review, fallback, or cleanup.
+The latest subagent-audited trio is now closed; do not reopen them unless a
+regression is found.
+
+Previous checkpoint: raw-export fallback orphan report cleanup is complete.
 Phase 6 now removes partial `.md/.json/.pdf/.csv` report-family artifacts if
 companion export persistence fails after Markdown writing, then emits the
 raw-export JSON/CSV fallback as the authoritative report family. Dashboard
@@ -35,12 +55,6 @@ orphans, so a newer orphan Markdown cannot outrank the raw-export family in
 orphan cleanup test passed (`1 passed`); focused dashboard raw-export selection
 test passed (`1 passed`); adjacent reporting selector passed (`2 passed, 131
 deselected`).
-
-Next checkpoint: artifact-derived cloud asset provenance. Preserve a durable
-non-secret relation from parsed artifacts to cloud validation targets with
-source seed/artifact URL/file/rule/format metadata, while keeping unvalidated
-refs non-reportable. Regression target:
-`test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validation_review`.
 
 Previous checkpoint: stale running seed-run recovery is complete.
 `SeedRunTracker` now marks abandoned `seed_runs.status='running'` rows as
