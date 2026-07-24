@@ -1713,6 +1713,55 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
     assert summary["passive_vulns"].get("CRITICAL", 0) == 0
 
 
+def test_asset_context_api_excludes_false_positive_passive_findings(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    db_path = _build_engagement(tmp_path)
+
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            INSERT INTO crawl_results
+                (engagement_id, url, final_url, title, discovered_at)
+            VALUES
+                (1001, 'https://203.0.113.10/admin', 'https://203.0.113.10/admin',
+                 'Admin', '2026-07-09T10:00:00')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO passive_vulns
+                (engagement_id, vuln_id, plugin, url, severity, verified,
+                 false_positive, discovered_at)
+            VALUES
+                (1001, 'fp-critical-host-context', 'fixture',
+                 'https://203.0.113.10/admin', 'CRITICAL', 0, 1,
+                 '2026-07-09T10:01:00')
+            """
+        )
+        con.commit()
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        response = client.get(
+            "/api/assets/203.0.113.10/context?engagement_id=1001",
+            headers=headers,
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["urls"][0]["url"] == "https://203.0.113.10/admin"
+    assert payload["latest_findings"] == []
+    assert payload["status"] != "critical"
+
+
 def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(
     tmp_path: Path,
     monkeypatch,

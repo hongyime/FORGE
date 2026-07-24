@@ -645,7 +645,7 @@ class CommandCenterService:
     def _build_host_context(self, con: sqlite3.Connection, host: str) -> dict[str, Any]:
         port_rows = con.execute(
             """
-            SELECT port, service, version, scanned_at, confidence, cdn_detected, waf_detected
+            SELECT port, service, version, CAST(scanned_at AS TEXT), confidence, cdn_detected, waf_detected
             FROM port_scan_results
             WHERE engagement_id=? AND host=?
             ORDER BY scanned_at DESC, port ASC
@@ -664,7 +664,7 @@ class CommandCenterService:
         ).fetchall()
         host_row = con.execute(
             """
-            SELECT os_family, host_context, discovered_at
+            SELECT os_family, host_context, CAST(discovered_at AS TEXT)
             FROM hosts
             WHERE engagement_id=? AND ip=?
             ORDER BY discovered_at DESC
@@ -674,7 +674,7 @@ class CommandCenterService:
         ).fetchone()
         crawl_rows = con.execute(
             """
-            SELECT COALESCE(final_url, url), title, discovered_at
+            SELECT COALESCE(final_url, url), title, CAST(discovered_at AS TEXT)
             FROM crawl_results
             WHERE engagement_id=? AND (final_url LIKE ? OR url LIKE ?)
             ORDER BY discovered_at DESC
@@ -689,9 +689,11 @@ class CommandCenterService:
             placeholders = ",".join("?" for _ in urls)
             vuln_rows = con.execute(
                 f"""
-                SELECT vuln_id, plugin, url, severity, verified, discovered_at
+                SELECT vuln_id, plugin, url, severity, verified, CAST(discovered_at AS TEXT)
                 FROM passive_vulns
-                WHERE engagement_id=? AND url IN ({placeholders})
+                WHERE engagement_id=?
+                  AND COALESCE(false_positive, 0)=0
+                  AND url IN ({placeholders})
                 ORDER BY discovered_at DESC
                 LIMIT 20
                 """,
@@ -699,7 +701,7 @@ class CommandCenterService:
             ).fetchall()
             auth_rows = con.execute(
                 f"""
-                SELECT target_url, attack_type, success, tested_at
+                SELECT target_url, attack_type, success, CAST(tested_at AS TEXT)
                 FROM auth_test_results
                 WHERE engagement_id=? AND target_url IN ({placeholders})
                 ORDER BY tested_at DESC

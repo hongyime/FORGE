@@ -91,9 +91,34 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: run a compact regression sweep across artifact recursion,
-  cloud stable-proof gates, dashboard detail, report context/raw export, and
-  cleanup inventory before opening the next implementation slice.
+- [ ] Next checkpoint: close cleanup inventory for local `.forge_data`
+  leftovers by classifying/deleting only confirmed test artifacts or
+  documenting non-test leftovers, then verify
+  `tests/scripts/test_run_phase1_orchestrator_partitions.py` and
+  `tests/phase1/test_engagement_ids.py`.
+- [ ] Then unify scope-gate semantics between `forge/governance/scope_gate.py`
+  and `forge/opsec/scope_gate.py`, with tests proving live/direct modules fail
+  closed before network/tool execution when scope or ROE is missing.
+- [ ] Then harden explicit LLM/provider fallback regressions for
+  quota/rate-limit/auth/timeout failures so every adapter degrades through
+  cascade/template/raw export deterministically.
+- [x] Compact regression sweep and live asset-context route parity checkpoint:
+  Artifact recursion/scope/review parity, dashboard cloud/detail paths, cloud
+  stable-proof gates, and report synthesis metadata all remained green. During
+  the direct API route audit, `/api/assets/{host}/context` was hardened so
+  `passive_vulns.false_positive=1` rows no longer become operator-facing
+  `latest_findings` or critical host status, while raw
+  `/api/engagements/{id}/assets` inventory remains reviewable. The same route
+  now casts timestamp columns to text so ISO `T` timestamps from engagement DB
+  rows do not crash SQLite timestamp conversion. Verification: artifact
+  recursive/scope/parity sweep passed (`5 passed`); dashboard cloud/graph/detail
+  selector passed (`11 passed, 14 deselected`); validation-proof cloud
+  listing/legacy slice passed (`22 passed, 83 deselected`); report synthesizer
+  metadata slice passed (`3 passed, 83 deselected`); focused asset-context
+  regression passed (`1 passed`); adjacent API reportability slice passed (`3
+  passed, 38 deselected`); compile/Ruff passed for touched route/test files.
+  Handoff:
+  `.claude/handoffs/2026-07-24-live-asset-context-reportability.md`.
 - [x] Dashboard storage stable-proof fixture checkpoint:
   Updated the stale dashboard storage-validation fixture to use the current
   strict proof formats: S3/Spaces XML object listings and GCS storage JSON

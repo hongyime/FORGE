@@ -25,10 +25,34 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: dashboard storage stable-proof fixture is complete. The stale
-dashboard storage-validation fixture now uses the current strict proof formats:
-S3/Spaces XML object listings and GCS storage JSON object inventory. The
-dashboard cloud/graph/detail selector is green without weakening validation
+Latest checkpoint: compact regression sweep and live asset-context route parity
+are complete. Artifact recursion/scope/review parity, dashboard cloud/detail
+paths, cloud stable-proof gates, and report synthesis metadata all remained
+green. During the direct API route audit, `/api/assets/{host}/context` was
+hardened so `passive_vulns.false_positive=1` rows no longer become
+operator-facing `latest_findings` or critical host status, while raw
+`/api/engagements/{id}/assets` inventory remains reviewable. The same route now
+casts timestamp columns to text so ISO `T` timestamps from engagement DB rows do
+not crash SQLite timestamp conversion. Verification: artifact
+recursive/scope/parity sweep passed (`5 passed`); dashboard cloud/graph/detail
+selector passed (`11 passed, 14 deselected`); validation-proof cloud
+listing/legacy slice passed (`22 passed, 83 deselected`); report synthesizer
+metadata slice passed (`3 passed, 83 deselected`); focused asset-context
+regression passed (`1 passed`); adjacent API reportability slice passed (`3
+passed, 38 deselected`); compile/Ruff passed for touched route/test files.
+Handoff: `.claude/handoffs/2026-07-24-live-asset-context-reportability.md`.
+
+Next checkpoint: close cleanup inventory for local `.forge_data` leftovers by
+classifying/deleting only confirmed test artifacts or documenting non-test
+leftovers, then verify `tests/scripts/test_run_phase1_orchestrator_partitions.py`
+and `tests/phase1/test_engagement_ids.py`. After that, unify scope-gate
+semantics between governance and opsec gates, then harden LLM/provider
+quota/rate-limit/auth/timeout fallback regressions.
+
+Previous checkpoint: dashboard storage stable-proof fixture is complete. The
+stale dashboard storage-validation fixture now uses the current strict proof
+formats: S3/Spaces XML object listings and GCS storage JSON object inventory.
+The dashboard cloud/graph/detail selector is green without weakening validation
 gates or changing production code. Verification: Ruff/compile passed; dashboard
 cloud/graph/detail selector passed (`11 passed, 14 deselected`);
 validation-proof cloud listing/legacy slice passed (`22 passed, 83
@@ -36,7 +60,7 @@ deselected`); stable-proof surface integration passed (`1 passed`); dashboard
 cloud-alias graph test passed (`1 passed`). Handoff:
 `.claude/handoffs/2026-07-24-dashboard-storage-stable-proof-fixture.md`.
 
-Previous checkpoint: artifact queue/cloud inventory audit-lineage is complete.
+Earlier checkpoint: artifact queue/cloud inventory audit-lineage is complete.
 `ArtifactQueueProcessor` now writes bounded non-sensitive audit rows when
 artifact text queues a follow-on artifact URL (`artifact_text_url_queued`) and
 when artifact parsing stores a new cloud inventory row
