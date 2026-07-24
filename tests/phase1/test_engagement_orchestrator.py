@@ -66100,6 +66100,76 @@ def test_kill_chain_scope_manifest_rejects_out_of_scope_seed_before_live_executi
         )
 
 
+def test_kill_chain_active_port_child_receives_scope_manifest(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-ACME-2026-07")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "authorized_seeds": ["@rootuser"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    module_invocations: list[list[str]] = []
+
+    def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
+        del kwargs
+        argv = [str(item) for item in cmd]
+        forge_index = argv.index("forge.cli")
+        module_argv = [item for item in argv[forge_index + 1 :] if item != "--no-tor"]
+        module_invocations.append(module_argv)
+        if module_argv[:2] == ["report", "generate"] and "--output" in module_argv:
+            report_path = tmp_path / module_argv[module_argv.index("--output") + 1]
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text("# Final report\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del max_workers, progress_label, progress_callback
+        return [worker(item) for item in items]
+
+    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del specs, run_module, max_workers, progress_label, progress_callback
+        return []
+
+    monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _fake_inprocess_batch)
+    monkeypatch.setattr("forge.cli._run_module_batch", _fake_module_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="@rootuser",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=True,
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        report_provider="template",
+    )
+
+    port_commands = [
+        argv for argv in module_invocations if argv[:2] == ["recon", "ports"]
+    ]
+    assert len(port_commands) == 1
+    assert "--scope-manifest" in port_commands[0]
+    assert port_commands[0][port_commands[0].index("--scope-manifest") + 1] == str(
+        manifest_path
+    )
+
+
 def test_kill_chain_scope_manifest_denies_out_of_scope_recursive_url_without_fetch(
     tmp_path: Path,
     monkeypatch,
@@ -66938,6 +67008,75 @@ def test_kill_chain_dry_run_routes_ipv4_and_ipv6_seeds_through_ip_fanout(
         assert run_map[("2001:db8::10", "ipv6", "fanout_o_seed_ip")] == "skipped"
     finally:
         con.close()
+
+
+def test_kill_chain_ip_shodan_child_receives_scope_manifest(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps({"roe_id": "ROE-ACME-2026-07", "ip_ranges": ["203.0.113.0/24"]}),
+        encoding="utf-8",
+    )
+    module_batch_argvs: list[tuple[str, ...]] = []
+
+    def _fake_gethostbyaddr(value: str):  # noqa: ANN001
+        raise OSError(value)
+
+    def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
+        del kwargs
+        argv = [str(item) for item in cmd]
+        forge_index = argv.index("forge.cli")
+        module_argv = [item for item in argv[forge_index + 1 :] if item != "--no-tor"]
+        if module_argv[:2] == ["report", "generate"] and "--output" in module_argv:
+            report_path = tmp_path / module_argv[module_argv.index("--output") + 1]
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text("# Final report\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del max_workers, progress_label, progress_callback
+        return [worker(item) for item in items]
+
+    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del run_module, max_workers, progress_label, progress_callback
+        module_batch_argvs.extend(tuple(str(arg) for arg in spec.cmd_argv) for spec in specs)
+        return [0] * len(specs)
+
+    monkeypatch.setattr(socket, "gethostbyaddr", _fake_gethostbyaddr)
+    monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _fake_inprocess_batch)
+    monkeypatch.setattr("forge.cli._run_module_batch", _fake_module_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="203.0.113.10",
+        related_seed=[],
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=True,
+        report_provider="template",
+    )
+
+    shodan_commands = [
+        argv for argv in module_batch_argvs if argv[:2] == ("osint", "shodan")
+    ]
+    assert shodan_commands
+    assert all("--scope-manifest" in argv for argv in shodan_commands)
+    assert {
+        argv[argv.index("--scope-manifest") + 1]
+        for argv in shodan_commands
+    } == {str(manifest_path)}
 
 
 def test_kill_chain_resume_reuses_seed_run_state_between_dry_runs(
@@ -88228,8 +88367,19 @@ def test_kill_chain_parallel_batches_passive_domain_prep(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-ACME-2026-07",
+                "domains": ["acme.example", "beta.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     parse_batch_calls: list[tuple[str, int, int]] = []
+    module_batch_argvs: list[tuple[str, ...]] = []
 
     def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
         del progress_callback
@@ -88238,6 +88388,7 @@ def test_kill_chain_parallel_batches_passive_domain_prep(
 
     def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
+        module_batch_argvs.extend(tuple(str(arg) for arg in spec.cmd_argv) for spec in specs)
         return [0] * len(specs)
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -88320,6 +88471,7 @@ def test_kill_chain_parallel_batches_passive_domain_prep(
         skip_keyscan=True,
         parallel_fanout=2,
         report_provider="template",
+        scope_manifest=str(manifest_path),
     )
 
     assert any(
@@ -88362,6 +88514,17 @@ def test_kill_chain_parallel_batches_passive_domain_prep(
         label == "1.B passive schedule merge" and max_workers == 1 and item_count >= 2
         for label, item_count, max_workers in parse_batch_calls
     )
+    provider_argvs = [
+        argv
+        for argv in module_batch_argvs
+        if argv[:2] in {("osint", "shodan"), ("osint", "urlscan")}
+    ]
+    assert provider_argvs
+    assert all("--scope-manifest" in argv for argv in provider_argvs)
+    assert {
+        argv[argv.index("--scope-manifest") + 1]
+        for argv in provider_argvs
+    } == {str(manifest_path)}
 
 
 def test_engagement_provider_matrix_recursion_preserves_caps_and_exports(

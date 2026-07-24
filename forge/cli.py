@@ -212,6 +212,10 @@ def _append_cli_flag_once(argv: list[str], flag: str) -> list[str]:
     return [*argv, flag]
 
 
+def _append_scope_manifest_arg(argv: list[str], scope_manifest: str) -> list[str]:
+    return _append_cli_option_once(argv, "--scope-manifest", str(scope_manifest or "").strip())
+
+
 def _detected_prereq_child_argv(
     argv: Sequence[str],
     *,
@@ -13036,8 +13040,11 @@ def kill_chain(
         # ─── Fan-out A2 (opt-in): active port scan ────────────────────
         if active_recon:
             _run_module(
-                ["recon", "ports", "--engagement", engagement, "--basic",
-                 "--timeout", "1.5"],
+                _append_scope_manifest_arg(
+                    ["recon", "ports", "--engagement", engagement, "--basic",
+                     "--timeout", "1.5"],
+                    scope_manifest,
+                ),
                 f"{iteration}.A2 port scan (ACTIVE)",
             )
 
@@ -13563,7 +13570,10 @@ def kill_chain(
                 d3_specs = _run_inprocess_batch(
                         pending_d3_domains,
                         lambda root_domain: ModuleDispatchSpec(
-                            cmd_argv=["osint", "shodan", "--engagement", engagement, "--target", root_domain],
+                            cmd_argv=_append_scope_manifest_arg(
+                                ["osint", "shodan", "--engagement", engagement, "--target", root_domain],
+                                scope_manifest,
+                            ),
                             label=f"{iteration}.D3 shodan ({root_domain})",
                             loop_name="fanout_d3_shodan",
                             seed_contexts=[_seed_context(root_domain, "domain")],
@@ -13606,7 +13616,10 @@ def kill_chain(
                 d4_specs = _run_inprocess_batch(
                         pending_d4_domains,
                         lambda root_domain: ModuleDispatchSpec(
-                            cmd_argv=["osint", "urlscan", "--engagement", engagement, "--hostname", root_domain],
+                            cmd_argv=_append_scope_manifest_arg(
+                                ["osint", "urlscan", "--engagement", engagement, "--hostname", root_domain],
+                                scope_manifest,
+                            ),
                             label=f"{iteration}.D4 urlscan ({root_domain})",
                             loop_name="fanout_d4_urlscan",
                             seed_contexts=[_seed_context(root_domain, "domain")],
@@ -15447,7 +15460,10 @@ def kill_chain(
             ip_specs = _run_inprocess_batch(
                 ip_batch,
                 lambda item: ModuleDispatchSpec(
-                    cmd_argv=["osint", "shodan", "--engagement", engagement, "--target", item[0]],
+                    cmd_argv=_append_scope_manifest_arg(
+                        ["osint", "shodan", "--engagement", engagement, "--target", item[0]],
+                        scope_manifest,
+                    ),
                     label=f"{iteration}.O ip fan-out ({item[0]})",
                     loop_name="fanout_o_seed_ip",
                     seed_contexts=[

@@ -25,7 +25,26 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: LLM/provider adapter fallback hardening is complete.
+Latest checkpoint: kill-chain child scope-manifest propagation is complete.
+Explicit `scope_manifest` values now propagate into live-capable child dispatch
+argv for `recon ports`, domain Shodan D3, URLScan D4, and IP Shodan fan-out.
+The child commands already support `--scope-manifest`; `--roe-id` was not added
+to those argv lists because those child signatures do not accept it. Focused
+regressions prove active port scan, domain provider fan-outs, and IP Shodan
+fan-out carry the manifest path even when direct child commands could otherwise
+fall back to broader DB scope. Verification: focused child propagation selector
+passed (`3 passed, 761 deselected`); broader engagement scope-manifest selector
+passed (`11 passed, 753 deselected`); direct/distributed scope suites passed
+(`38 passed`); Ruff/compile passed for touched files. Handoff:
+`.claude/handoffs/2026-07-24-child-scope-manifest-propagation.md`.
+
+Next checkpoint: fix Shodan provider contract/dry-run parity by either aligning
+implementation with the documented `/dns/domain` credit-free path or
+documenting/testing the current `/dns/resolve` plus capped host-enrichment cost
+model, and add dry-run evidence that D3/D4 intended provider fan-outs are
+recorded without outbound calls.
+
+Previous checkpoint: LLM/provider adapter fallback hardening is complete.
 Phase 6 local llama inference now normalizes backend exceptions, malformed
 response shapes, and per-call timeouts into `ProviderUnavailableError`, so the
 existing report pipeline deterministically falls back to template/raw export
@@ -38,13 +57,6 @@ provider/fallback/property slice passed (`82 passed`); LLM validation plus
 cloud report-gating slice passed (`16 passed`); Ruff/compile passed for touched
 files. Handoff:
 `.claude/handoffs/2026-07-24-llm-provider-adapter-fallback-hardening.md`.
-
-Next checkpoint: propagate explicit `scope_manifest` and `roe_id` into live
-child dispatch specs for `recon ports`, `osint shodan`, and `osint urlscan`,
-with a regression where DB scope is broader than the manifest and children
-still obey the narrower manifest. Current child commands support
-`--scope-manifest`; do not add `--roe-id` to those child argv lists unless the
-child command signatures are expanded first.
 
 Previous checkpoint: LLM validation non-convergence fallback is complete.
 Phase 6 now treats failed LLM validation/correction convergence as a hard
