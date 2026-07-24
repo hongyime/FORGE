@@ -1482,7 +1482,7 @@ def web_worker_once(
     worker_id: str = typer.Option("worker-1", "--worker-id"),
 ) -> None:
     from forge.distributed.coordinator import QueueCoordinator  # noqa: PLC0415
-    from forge.distributed.runnable import run_scheduled_task  # noqa: PLC0415
+    from forge.distributed.runnable import ScheduledTaskRunner  # noqa: PLC0415
     from forge.distributed.scheduler import TaskScheduler  # noqa: PLC0415
     from forge.distributed.worker import Worker  # noqa: PLC0415
 
@@ -1494,7 +1494,8 @@ def web_worker_once(
         worker_id=worker_id,
         queue=coordinator,
         scheduler=scheduler,
-        handler=lambda eid, tkey, payload: run_scheduled_task(eid, tkey, payload, db_path),
+        handler=ScheduledTaskRunner(db_path),
+        handler_execution_mode="process",
     )
     consumed = worker.run_once()
     if consumed:
@@ -1510,7 +1511,7 @@ def web_worker_loop(
     idle_sleep: float = typer.Option(0.5, "--idle-sleep"),
 ) -> None:
     from forge.distributed.coordinator import QueueCoordinator  # noqa: PLC0415
-    from forge.distributed.runnable import run_scheduled_task  # noqa: PLC0415
+    from forge.distributed.runnable import ScheduledTaskRunner  # noqa: PLC0415
     from forge.distributed.scheduler import TaskScheduler  # noqa: PLC0415
     from forge.distributed.worker import Worker  # noqa: PLC0415
 
@@ -1522,7 +1523,8 @@ def web_worker_loop(
         worker_id=worker_id,
         queue=coordinator,
         scheduler=scheduler,
-        handler=lambda eid, tkey, payload: run_scheduled_task(eid, tkey, payload, db_path),
+        handler=ScheduledTaskRunner(db_path),
+        handler_execution_mode="process",
     )
     console.print(f"[green]Worker loop started:[/green] {worker_id}")
     worker.run_forever(idle_sleep_seconds=idle_sleep)

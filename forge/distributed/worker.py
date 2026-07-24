@@ -4,6 +4,7 @@ import queue
 import signal
 import threading
 import time
+from multiprocessing import get_context
 from dataclasses import dataclass
 from typing import Callable
 
@@ -41,6 +42,21 @@ def _configured_handler_timeout_seconds() -> float:
     return timeout_seconds or _DEFAULT_HANDLER_TIMEOUT_SECONDS
 
 
+def _invoke_handler_process(
+    handler: TaskHandler,
+    engagement_id: int,
+    task_key: str,
+    body: dict[str, object],
+    result_queue: object,
+) -> None:
+    try:
+        handler(engagement_id, task_key, body)
+    except BaseException as exc:  # noqa: BLE001
+        result_queue.put(("error", f"{type(exc).__name__}: {exc}"))
+    else:
+        result_queue.put(("ok", ""))
+
+
 @dataclass(frozen=True)
 class Worker:
     worker_id: str
@@ -48,6 +64,7 @@ class Worker:
     scheduler: TaskScheduler
     handler: TaskHandler
     handler_timeout_seconds: float | None = None
+    handler_execution_mode: str = "thread"
 
     def run_once(self) -> bool:
         self.scheduler.record_worker_heartbeat(worker_id=self.worker_id, status="idle")
@@ -108,6 +125,20 @@ class Worker:
         task_key: str,
         body: dict[str, object],
     ) -> None:
+        mode = str(self.handler_execution_mode or "thread").strip().lower()
+        if mode == "process":
+            self._run_handler_process_with_deadline(engagement_id, task_key, body)
+            return
+        if mode != "thread":
+            raise ValueError(f"unsupported handler execution mode: {self.handler_execution_mode}")
+        self._run_handler_thread_with_deadline(engagement_id, task_key, body)
+
+    def _run_handler_thread_with_deadline(
+        self,
+        engagement_id: int,
+        task_key: str,
+        body: dict[str, object],
+    ) -> None:
         timeout_seconds = self._resolved_handler_timeout_seconds()
         result_queue: queue.Queue[BaseException | None] = queue.Queue(maxsize=1)
 
@@ -135,6 +166,43 @@ class Worker:
             raise RuntimeError("task handler exited without reporting a result") from exc
         if error is not None:
             raise error
+
+    def _run_handler_process_with_deadline(
+        self,
+        engagement_id: int,
+        task_key: str,
+        body: dict[str, object],
+    ) -> None:
+        timeout_seconds = self._resolved_handler_timeout_seconds()
+        ctx = get_context("spawn")
+        result_queue = ctx.Queue(maxsize=1)
+        process = ctx.Process(
+            target=_invoke_handler_process,
+            args=(self.handler, engagement_id, task_key, body, result_queue),
+            name=f"forge-task-handler:{task_key}",
+            daemon=True,
+        )
+        try:
+            process.start()
+            process.join(timeout_seconds)
+            if process.is_alive():
+                process.terminate()
+                process.join(1.0)
+                if process.is_alive() and hasattr(process, "kill"):
+                    process.kill()
+                    process.join(1.0)
+                raise TaskHandlerTimeoutError(timeout_seconds)
+            try:
+                status, message = result_queue.get(timeout=0.5)
+            except queue.Empty as exc:
+                if process.exitcode:
+                    raise RuntimeError(f"task handler process exited with code {process.exitcode}") from exc
+                raise RuntimeError("task handler exited without reporting a result") from exc
+            if status == "error":
+                raise RuntimeError(str(message))
+        finally:
+            result_queue.close()
+            result_queue.join_thread()
 
     def run_forever(self, idle_sleep_seconds: float = 0.25) -> None:
         stop = threading.Event()

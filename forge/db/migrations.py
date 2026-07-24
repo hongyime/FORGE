@@ -1032,6 +1032,19 @@ def _m0023_distributed_task_attempts(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0024_distributed_task_running_attempt_backfill(conn: sqlite3.Connection) -> None:
+    """Count already-running distributed tasks as one active claim after upgrade."""
+    if _table_sql_contains(conn, "distributed_tasks", "attempt_count"):
+        conn.execute(
+            """
+            UPDATE distributed_tasks
+            SET attempt_count=1
+            WHERE status='running' AND attempt_count=0
+            """
+        )
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -1060,6 +1073,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (21, "run_audit_manifests", _m0021_run_audit_manifests),
     (22, "cloud_asset_metadata", _m0022_cloud_asset_metadata),
     (23, "distributed_task_attempts", _m0023_distributed_task_attempts),
+    (24, "distributed_task_running_attempt_backfill", _m0024_distributed_task_running_attempt_backfill),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

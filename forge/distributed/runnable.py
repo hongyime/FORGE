@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -44,6 +45,14 @@ _DEFAULT_SCHEDULED_SEARXNG_URLS = {
     "http://localhost:8080",
     "http://127.0.0.1:8080",
 }
+
+
+@dataclass(frozen=True)
+class ScheduledTaskRunner:
+    db_path: Path
+
+    def __call__(self, engagement_id: int, task_key: str, payload: dict[str, object]) -> None:
+        run_scheduled_task(engagement_id, task_key, payload, self.db_path)
 
 
 def _payload_bool(value: object) -> bool:

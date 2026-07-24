@@ -138,24 +138,32 @@ class TaskScheduler:
         con = get_engagement_db(self._db_path)
         claimed: ScheduledTask | None = None
         metrics: dict[str, int] | None = None
+        lifecycle_events: list[tuple[int, str, dict[str, Any]]] = []
         try:
             con.execute("BEGIN IMMEDIATE")
-            stale_updates = self._requeue_stale_running(con)
+            lifecycle_events.extend(self._requeue_stale_running(con))
+            lifecycle_events.extend(self._fail_exhausted_queued(con))
             row = con.execute(select_sql, params).fetchone()
             if row is None:
-                if stale_updates:
+                if lifecycle_events:
                     con.commit()
                 else:
                     con.rollback()
-                return None
-            claimed = self._claim_row(con, row, worker_id)
-            if claimed is None:
-                con.rollback()
-                return None
-            metrics = self._snapshot_queue_metrics(con, claimed.engagement_id)
-            con.commit()
+                claimed = None
+            else:
+                claimed = self._claim_row(con, row, worker_id)
+                if claimed is None:
+                    con.rollback()
+                    lifecycle_events = []
+                    return None
+                metrics = self._snapshot_queue_metrics(con, claimed.engagement_id)
+                con.commit()
         finally:
             con.close()
+        for engagement_id, message, payload in lifecycle_events:
+            self._emit_event(engagement_id, message, payload)
+        if claimed is None:
+            return None
         self._emit_event(
             claimed.engagement_id,
             "task_running",
@@ -379,29 +387,30 @@ class TaskScheduler:
             priority=priority,
         )
 
-    def _requeue_stale_running(self, con: Any) -> int:
+    def _requeue_stale_running(self, con: Any) -> list[tuple[int, str, dict[str, Any]]]:
         stale_after_seconds = self._resolved_stale_task_seconds()
         if stale_after_seconds is None:
-            return 0
+            return []
         stale_rows = con.execute(
             """
-            SELECT id, engagement_id, task_key, attempt_count, max_attempts
+            SELECT id, engagement_id, task_key, attempt_count, max_attempts, worker_id
             FROM distributed_tasks
             WHERE status='running'
               AND strftime('%s', 'now') - strftime('%s', updated_at) >= ?
             """,
             (max(1, int(stale_after_seconds)),),
         ).fetchall()
-        changed = 0
+        events: list[tuple[int, str, dict[str, Any]]] = []
         for row in stale_rows:
             task_id = int(row[0])
             engagement_id = int(row[1])
             task_key = str(row[2])
             attempt_count = max(0, int(row[3] or 0))
             max_attempts = max(1, int(row[4] or self._resolved_max_task_attempts()))
+            stale_worker_id = str(row[5] or "")
             if attempt_count >= max_attempts:
                 error = f"stale worker claim attempts exhausted ({attempt_count}/{max_attempts})"
-                changed += con.execute(
+                updated = con.execute(
                     """
                     UPDATE distributed_tasks
                     SET status='failed',
@@ -411,6 +420,8 @@ class TaskScheduler:
                     """,
                     (error, task_id),
                 ).rowcount
+                if not updated:
+                    continue
                 con.execute(
                     """
                     UPDATE task_progress
@@ -421,8 +432,21 @@ class TaskScheduler:
                     """,
                     (json.dumps({"error": error}), engagement_id, task_key),
                 )
+                metrics = self._snapshot_queue_metrics(con, engagement_id)
+                events.append(
+                    (
+                        engagement_id,
+                        "task_failed",
+                        {
+                            "task_key": task_key,
+                            "worker_id": stale_worker_id,
+                            "error": error,
+                            "queue": metrics,
+                        },
+                    )
+                )
                 continue
-            changed += con.execute(
+            updated = con.execute(
                 """
                 UPDATE distributed_tasks
                 SET status='queued',
@@ -433,7 +457,70 @@ class TaskScheduler:
                 """,
                 (task_id,),
             ).rowcount
-        return changed
+            if updated:
+                metrics = self._snapshot_queue_metrics(con, engagement_id)
+                events.append(
+                    (
+                        engagement_id,
+                        "task_requeued",
+                        {"task_key": task_key, "reason": "stale_worker_claim", "queue": metrics},
+                    )
+                )
+        return events
+
+    def _fail_exhausted_queued(self, con: Any) -> list[tuple[int, str, dict[str, Any]]]:
+        fallback_max_attempts = self._resolved_max_task_attempts()
+        rows = con.execute(
+            """
+            SELECT id, engagement_id, task_key, attempt_count, max_attempts
+            FROM distributed_tasks
+            WHERE status='queued'
+              AND attempt_count >= CASE
+                    WHEN max_attempts < 1 THEN ?
+                    ELSE max_attempts
+              END
+            """,
+            (fallback_max_attempts,),
+        ).fetchall()
+        events: list[tuple[int, str, dict[str, Any]]] = []
+        for row in rows:
+            task_id = int(row[0])
+            engagement_id = int(row[1])
+            task_key = str(row[2])
+            attempt_count = max(0, int(row[3] or 0))
+            max_attempts = max(1, int(row[4] or fallback_max_attempts))
+            error = f"queued task attempts exhausted ({attempt_count}/{max_attempts})"
+            updated = con.execute(
+                """
+                UPDATE distributed_tasks
+                SET status='failed',
+                    error=?,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=? AND status='queued'
+                """,
+                (error, task_id),
+            ).rowcount
+            if not updated:
+                continue
+            con.execute(
+                """
+                UPDATE task_progress
+                SET status='failed',
+                    completed_at=CURRENT_TIMESTAMP,
+                    checkpoint=?
+                WHERE engagement_id=? AND task_key=?
+                """,
+                (json.dumps({"error": error}), engagement_id, task_key),
+            )
+            metrics = self._snapshot_queue_metrics(con, engagement_id)
+            events.append(
+                (
+                    engagement_id,
+                    "task_failed",
+                    {"task_key": task_key, "worker_id": "", "error": error, "queue": metrics},
+                )
+            )
+        return events
 
     def _resolved_stale_task_seconds(self) -> float | None:
         if self._stale_task_seconds is not None:

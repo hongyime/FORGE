@@ -97,9 +97,11 @@ def test_scheduler_reclaims_stale_running_task_once(tmp_path: Path) -> None:
 def test_scheduler_fails_stale_task_after_attempt_budget(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     _seed_engagement(db_path)
+    events: list[tuple[int, str, dict[str, object]]] = []
     scheduler = TaskScheduler(
         db_path=db_path,
         queue=QueueCoordinator(),
+        event_publisher=lambda eid, message, payload: events.append((eid, message, payload)),
         stale_task_seconds=1,
         max_task_attempts=2,
     )
@@ -154,3 +156,57 @@ def test_scheduler_fails_stale_task_after_attempt_budget(tmp_path: Path) -> None
     assert row[3:] == (2, 2)
     assert progress[0] == "failed"
     assert "attempts exhausted" in progress[1]
+    failed_events = [event for event in events if event[1] == "task_failed"]
+    assert failed_events[-1][2]["task_key"] == "validate:key:1"
+    assert failed_events[-1][2]["worker_id"] == "worker-b"
+    assert failed_events[-1][2]["queue"] == {"queued": 0, "running": 0, "done": 0, "failed": 1}
+
+
+def test_scheduler_fails_exhausted_queued_task_and_claims_next(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    _seed_engagement(db_path)
+    events: list[tuple[int, str, dict[str, object]]] = []
+    scheduler = TaskScheduler(
+        db_path=db_path,
+        queue=QueueCoordinator(),
+        event_publisher=lambda eid, message, payload: events.append((eid, message, payload)),
+        max_task_attempts=1,
+    )
+    scheduler.schedule(ScheduledTask(1, "validate:key:exhausted", {"task_type": "validate"}))
+    scheduler.schedule(ScheduledTask(1, "validate:key:next", {"task_type": "validate"}))
+
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            UPDATE distributed_tasks
+            SET attempt_count=1, max_attempts=1
+            WHERE engagement_id=1 AND task_key='validate:key:exhausted'
+            """
+        )
+        con.commit()
+
+    claimed = scheduler.claim_next("worker-a")
+    assert claimed is not None
+    assert claimed.task_key == "validate:key:next"
+
+    with sqlite3.connect(db_path) as con:
+        rows = con.execute(
+            """
+            SELECT task_key, status, error, attempt_count, max_attempts
+            FROM distributed_tasks
+            WHERE engagement_id=1
+            ORDER BY task_key
+            """
+        ).fetchall()
+
+    assert rows[0] == (
+        "validate:key:exhausted",
+        "failed",
+        "queued task attempts exhausted (1/1)",
+        1,
+        1,
+    )
+    assert rows[1][:2] == ("validate:key:next", "running")
+    failed_events = [event for event in events if event[1] == "task_failed"]
+    assert failed_events[-1][2]["task_key"] == "validate:key:exhausted"
+    assert failed_events[-1][2]["queue"]["failed"] == 1

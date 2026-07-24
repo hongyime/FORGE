@@ -270,3 +270,58 @@ def test_engagement_metadata_migration_adds_metadata_json_column(tmp_path: Path)
         assert str(row[0]) == "{}"
     finally:
         con.close()
+
+
+def test_distributed_task_attempt_backfill_counts_running_claims(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE distributed_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER NOT NULL,
+                task_key TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'queued',
+                priority INTEGER NOT NULL DEFAULT 100,
+                payload TEXT,
+                worker_id TEXT,
+                error TEXT,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 3,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (engagement_id, task_key)
+            );
+            CREATE TABLE _schema_version (
+                version INTEGER NOT NULL,
+                applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO distributed_tasks (engagement_id, task_key, status, worker_id)
+            VALUES (1001, 'validate:key:running', 'running', 'worker-a');
+            INSERT INTO distributed_tasks (engagement_id, task_key, status)
+            VALUES (1001, 'validate:key:queued', 'queued');
+            INSERT INTO _schema_version (version) VALUES (23);
+            """
+        )
+        con.commit()
+
+        run_migrations(con)
+
+        rows = dict(
+            con.execute(
+                """
+                SELECT task_key, attempt_count
+                FROM distributed_tasks
+                ORDER BY task_key
+                """
+            ).fetchall()
+        )
+        version = con.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0]
+        assert int(version) == TARGET_VERSION
+        assert rows == {
+            "validate:key:queued": 0,
+            "validate:key:running": 1,
+        }
+    finally:
+        con.close()
