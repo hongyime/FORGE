@@ -207,6 +207,26 @@ def search_commoncrawl_urls(
     per_index_limit: int | None = None,
     proxy: Optional[str] = None,
 ) -> list[str]:
+    return list(
+        search_commoncrawl_urls_detailed(
+            domain_name,
+            timeout=timeout,
+            max_indexes=max_indexes,
+            per_index_limit=per_index_limit,
+            proxy=proxy,
+        ).get("urls")
+        or []
+    )
+
+
+def search_commoncrawl_urls_detailed(
+    domain_name: str,
+    timeout: float = 15.0,
+    *,
+    max_indexes: int | None = None,
+    per_index_limit: int | None = None,
+    proxy: Optional[str] = None,
+) -> dict[str, Any]:
     """Return passive URLs from recent Common Crawl indexes for a domain.
 
     Defaults are intentionally small because Common Crawl asks users not to
@@ -214,10 +234,20 @@ def search_commoncrawl_urls(
     payloads are downloaded here.
     """
     if not _commoncrawl_enabled():
-        return []
+        return {
+            "provider": "commoncrawl",
+            "status": "skipped",
+            "urls": [],
+            "error": "commoncrawl_disabled",
+        }
     normalised = (domain_name or "").strip().lower().rstrip(".")
     if not normalised:
-        return []
+        return {
+            "provider": "commoncrawl",
+            "status": "skipped",
+            "urls": [],
+            "error": "empty_domain",
+        }
 
     index_limit = int(max_indexes if max_indexes is not None else _commoncrawl_index_limit())
     result_limit = int(
@@ -229,9 +259,16 @@ def search_commoncrawl_urls(
     try:
         import httpx
     except ImportError:
-        return []
+        return {
+            "provider": "commoncrawl",
+            "status": "failed",
+            "urls": [],
+            "error": "httpx_unavailable",
+        }
 
     urls: list[str] = []
+    errors: list[str] = []
+    successful_indexes = 0
     try:
         with httpx.Client(
             follow_redirects=True,
@@ -244,13 +281,31 @@ def search_commoncrawl_urls(
         ) as client:
             coll_response = _commoncrawl_get(client, _COMMONCRAWL_COLLINFO_URL)
             if getattr(coll_response, "status_code", None) != 200:
-                return []
+                return {
+                    "provider": "commoncrawl",
+                    "status": "failed",
+                    "urls": [],
+                    "error": (
+                        "collinfo_http_status_"
+                        f"{getattr(coll_response, 'status_code', 'unknown')}"
+                    ),
+                }
             try:
                 collections = coll_response.json()
             except Exception:  # noqa: BLE001
-                return []
+                return {
+                    "provider": "commoncrawl",
+                    "status": "failed",
+                    "urls": [],
+                    "error": "collinfo_json_parse_failed",
+                }
             if not isinstance(collections, list):
-                return []
+                return {
+                    "provider": "commoncrawl",
+                    "status": "failed",
+                    "urls": [],
+                    "error": "collinfo_invalid_payload",
+                }
             endpoints = [
                 endpoint
                 for endpoint in (_index_endpoint(entry) for entry in collections)
@@ -270,9 +325,26 @@ def search_commoncrawl_urls(
                     },
                 )
                 if getattr(response, "status_code", None) != 200:
+                    errors.append(
+                        f"{endpoint}:http_status_{getattr(response, 'status_code', 'unknown')}"
+                    )
                     continue
+                successful_indexes += 1
                 urls.extend(_parse_index_payload(response))
-    except Exception:  # noqa: BLE001
-        return _dedupe_preserving_order(urls)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"{type(exc).__name__}: {exc}")
 
-    return _dedupe_preserving_order(urls)
+    deduped = _dedupe_preserving_order(urls)
+    if errors and not deduped and successful_indexes == 0:
+        return {
+            "provider": "commoncrawl",
+            "status": "failed",
+            "urls": [],
+            "error": "; ".join(errors),
+        }
+    return {
+        "provider": "commoncrawl",
+        "status": "completed",
+        "urls": deduped,
+        "error": "; ".join(errors),
+    }

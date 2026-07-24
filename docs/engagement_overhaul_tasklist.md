@@ -91,10 +91,33 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit DNS/RDAP/Wayback callable provider-result
-  semantics. Patch only confirmed transient provider/network failures that are
-  currently finalized as `completed` or intentional `skipped`; keep true
-  no-data outcomes terminal and deterministic.
+- [ ] Next checkpoint: audit stable-loop termination versus retryable
+  provider/tool failures. Patch only confirmed cases where a failed
+  provider/tool outcome should schedule a bounded later-iteration retry inside
+  the same kill-chain run without creating tight retry loops, weakening
+  provider pacing, or making true no-data outcomes non-terminal. Current
+  invariant: retryable failed G/H/I provider runs are retried on resumed
+  kill-chain invocation; same-run retry requires a separate explicit
+  slow-and-steady budget decision.
+- [x] DNS/RDAP/Wayback provider-status checkpoint:
+  DNS enrichment now carries status/error/provider metadata from record lookup
+  through G seed-run finalization. Missing `dnspython`, resolver/runtime
+  failures, and all-active-provider DNS failures finalize as `failed`; test DNS
+  suppression remains an intentional `skipped` outcome; real no-record/no-data
+  outcomes remain terminal `completed`. RDAP now distinguishes 404/no-data
+  skips from transient/remote failures such as non-404 HTTP errors, JSON parse
+  failures, import/runtime exceptions, and timeouts. Wayback and Common Crawl
+  now expose backward-compatible detailed result APIs while preserving the old
+  list-returning calls. Fan-out I records per-provider archive statuses and
+  partial provider errors in seed-run metadata; it finalizes `failed` only when
+  all active archive providers fail, and keeps useful URLs when one provider
+  succeeds. Failed G/H/I seed-runs are not inserted into completed-domain sets,
+  so they remain retryable on resume; completed true no-data and intentional
+  skipped rows stay terminal. Verification: focused provider-status regressions
+  passed (`3 passed`), root-domain idempotency passed (`1 passed`),
+  recursive retry-state suite passed (`7 passed`), adjacent DNS/RDAP/Wayback
+  bounded parse tests passed with explicit ROE/scope env (`2 passed`), Ruff
+  passed for touched files, and py_compile passed for touched files.
 - [x] D5 URL/root-domain same-run retry checkpoint:
   D5 URL seed fetches with empty/failed payloads now finalize as failed with
   `empty_url_fetch` and `fetch_status=empty`, so those URL seeds remain

@@ -1,0 +1,282 @@
+import json
+import sqlite3
+import subprocess
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from tests.phase1.test_kill_chain_retry_state import _direct_batch, _write_report_if_requested
+
+ROOT_DOMAIN = "acme.example"
+PROVIDER_LOOPS = {
+    "G": "fanout_g_dns",
+    "H": "fanout_h_rdap",
+    "I": "fanout_i_wayback",
+}
+
+
+def _install_status_case_fakes(
+    tmp_path: Path,
+    monkeypatch,
+    factories: dict[str, Callable[[str], dict[str, Any]]],
+    attempts: list[tuple[str, str]],
+) -> None:
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        if str(progress_label or "").endswith(
+            (".D cloud+HTML fetch", ".D2 passive text fetch", ".D5 URL surface fetch")
+        ):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(  # noqa: ANN001
+        items,
+        worker,
+        *,
+        max_workers,
+        progress_label=None,
+        progress_callback=None,
+    ):
+        del worker, max_workers
+        if progress_callback is not None and progress_label:
+            progress_callback(
+                progress_label,
+                {
+                    "total": len(items),
+                    "workers": min(1, len(items)) if items else 0,
+                    "running": 0,
+                    "pending": 0,
+                    "queue_depth": 0,
+                    "completed": len(items),
+                    "failed": 0,
+                    "eta_seconds": 0.0,
+                },
+            )
+        progress_name = str(progress_label or "")
+        for stage, suffix in {
+            "G": ".G DNS enrichment",
+            "H": ".H whois/RDAP",
+            "I": ".I Wayback CDX",
+        }.items():
+            if progress_name.endswith(suffix):
+                attempts.extend((stage, str(item)) for item in items)
+                return [factories[stage](str(item)) for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+
+
+def _run_status_case(
+    tmp_path: Path,
+    monkeypatch,
+    factories: dict[str, Callable[[str], dict[str, Any]]],
+    *,
+    max_iter: int,
+    runs: int = 1,
+) -> tuple[Path, list[tuple[str, str]]]:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": [ROOT_DOMAIN],
+                "authorized_seeds": [ROOT_DOMAIN],
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[tuple[str, str]] = []
+    _install_status_case_fakes(tmp_path, monkeypatch, factories, attempts)
+
+    from forge.cli import kill_chain
+
+    for _ in range(max(1, int(runs))):
+        kill_chain(
+            seed=ROOT_DOMAIN,
+            engagement="1001",
+            max_iter=max_iter,
+            tor=False,
+            dry_run=False,
+            attack_mode=False,
+            roe_id="ROE-TEST-2026-07",
+            scope_manifest=str(manifest_path),
+            skip_cloud=True,
+            skip_keyscan=True,
+            parallel_fanout=1,
+            report_provider="template",
+        )
+    return tmp_path / ".forge_data" / "engagements" / "1001.db", attempts
+
+
+def _provider_seed_runs(db_path: Path) -> list[tuple[str, str, str, dict[str, Any]]]:
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT sr.loop_name, sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND es.seed_value=?
+              AND sr.loop_name IN ('fanout_g_dns', 'fanout_h_rdap', 'fanout_i_wayback')
+            ORDER BY sr.id
+            """,
+            (ROOT_DOMAIN,),
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        (str(loop), str(status), str(error or ""), json.loads(str(metadata or "{}")))
+        for loop, status, error, metadata in rows
+    ]
+
+
+def _dns_result(domain: str, status: str, error: str = "") -> dict[str, Any]:
+    return {
+        "root_domain": domain,
+        "status": status,
+        "error": error,
+        "provider_errors": [error] if error else [],
+        "queried_hosts": [domain],
+        "cname_targets": [],
+        "signals": [],
+    }
+
+
+def _rdap_result(domain: str, status: str, error: str = "") -> dict[str, Any]:
+    return {
+        "root_domain": domain,
+        "rdap": {
+            "_forge_status": status,
+            "_forge_error": error,
+            "_forge_http_status": 503 if status == "failed" else 404,
+        },
+    }
+
+
+def _archive_result(
+    domain: str,
+    status: str,
+    *,
+    urls: list[str] | None = None,
+    error: str = "",
+) -> dict[str, Any]:
+    return {
+        "root_domain": domain,
+        "status": status,
+        "error": error,
+        "archive_errors": [error] if error else [],
+        "provider_statuses": {
+            "wayback": "completed" if status == "completed" else status,
+            "commoncrawl": "failed" if error else "completed",
+        },
+        "urls": urls or [],
+        "url_metadata": {},
+    }
+
+
+def test_provider_failures_finalize_failed_and_retry(tmp_path: Path, monkeypatch) -> None:
+    db_path, attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "failed", "simulated_dns_timeout"),
+            "H": lambda domain: _rdap_result(domain, "failed", "simulated_rdap_503"),
+            "I": lambda domain: _archive_result(
+                domain,
+                "failed",
+                error="wayback:timeout; commoncrawl:timeout",
+            ),
+        },
+        max_iter=1,
+        runs=2,
+    )
+
+    assert attempts.count(("G", ROOT_DOMAIN)) == 2
+    assert attempts.count(("H", ROOT_DOMAIN)) == 2
+    assert attempts.count(("I", ROOT_DOMAIN)) == 2
+    failed_by_loop = {
+        loop: sum(1 for row_loop, status, _error, _metadata in _provider_seed_runs(db_path)
+                  if row_loop == loop and status == "failed")
+        for loop in PROVIDER_LOOPS.values()
+    }
+    assert failed_by_loop == {loop: 2 for loop in PROVIDER_LOOPS.values()}
+
+
+def test_provider_true_no_data_is_terminal(tmp_path: Path, monkeypatch) -> None:
+    db_path, attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(domain, "completed"),
+        },
+        max_iter=2,
+    )
+
+    assert attempts.count(("G", ROOT_DOMAIN)) == 1
+    assert attempts.count(("H", ROOT_DOMAIN)) == 1
+    assert attempts.count(("I", ROOT_DOMAIN)) == 1
+    statuses = [(loop, status) for loop, status, _error, _metadata in _provider_seed_runs(db_path)]
+    assert statuses == [
+        ("fanout_g_dns", "completed"),
+        ("fanout_h_rdap", "skipped"),
+        ("fanout_i_wayback", "completed"),
+    ]
+
+
+def test_archive_partial_provider_failure_keeps_urls_and_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    archived_url = f"https://portal.{ROOT_DOMAIN}/login"
+    db_path, _attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(
+                domain,
+                "completed",
+                urls=[archived_url],
+                error="commoncrawl:http_status_503",
+            ),
+        },
+        max_iter=1,
+    )
+
+    rows = _provider_seed_runs(db_path)
+    wayback_rows = [row for row in rows if row[0] == "fanout_i_wayback"]
+    assert [(row[1], row[2]) for row in wayback_rows] == [("completed", "")]
+    metadata = wayback_rows[0][3]
+    assert metadata["archive_errors"] == ["commoncrawl:http_status_503"]
+    assert metadata["provider_statuses"]["commoncrawl"] == "failed"
+
+    con = sqlite3.connect(db_path)
+    try:
+        crawl_urls = {
+            str(row[0])
+            for row in con.execute(
+                """
+                SELECT COALESCE(final_url, url)
+                FROM crawl_results
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+    finally:
+        con.close()
+    assert archived_url in crawl_urls

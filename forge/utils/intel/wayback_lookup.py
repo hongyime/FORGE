@@ -140,6 +140,23 @@ def search_wayback_urls(
     limit: int = 500,
     proxy: Optional[str] = None,
 ) -> list[str]:
+    return list(
+        search_wayback_urls_detailed(
+            domain_name,
+            timeout=timeout,
+            limit=limit,
+            proxy=proxy,
+        ).get("urls")
+        or []
+    )
+
+
+def search_wayback_urls_detailed(
+    domain_name: str,
+    timeout: float = 15.0,
+    limit: int = 500,
+    proxy: Optional[str] = None,
+) -> dict[str, Any]:
     """Return historical CDX URLs for ``domain_name``.
 
     ``limit > 0`` performs one capped request. ``limit == 0`` paginates up to
@@ -148,7 +165,12 @@ def search_wayback_urls(
     """
     normalised = (domain_name or "").strip().lower().rstrip(".")
     if not normalised:
-        return []
+        return {
+            "provider": "wayback",
+            "status": "skipped",
+            "urls": [],
+            "error": "empty_domain",
+        }
 
     params_base: dict[str, str] = {
         "url": f"{normalised}/*",
@@ -162,8 +184,14 @@ def search_wayback_urls(
     try:
         import httpx
     except ImportError:
-        return []
+        return {
+            "provider": "wayback",
+            "status": "failed",
+            "urls": [],
+            "error": "httpx_unavailable",
+        }
 
+    error = ""
     try:
         with httpx.Client(
             follow_redirects=True,
@@ -175,11 +203,21 @@ def search_wayback_urls(
                 params["limit"] = str(limit)
                 response = _wayback_get(client, _WAYBACK_CDX_URL, params=params)
                 if getattr(response, "status_code", None) != 200:
-                    return []
+                    return {
+                        "provider": "wayback",
+                        "status": "failed",
+                        "urls": [],
+                        "error": f"http_status_{getattr(response, 'status_code', 'unknown')}",
+                    }
                 try:
                     urls.extend(_extract_cdx_original_urls(response.json()))
                 except Exception:  # noqa: BLE001
-                    return []
+                    return {
+                        "provider": "wayback",
+                        "status": "failed",
+                        "urls": [],
+                        "error": "json_parse_failed",
+                    }
             else:
                 for page in range(_WAYBACK_MAX_PAGES):
                     params = dict(params_base)
@@ -187,17 +225,35 @@ def search_wayback_urls(
                     params["page"] = str(page)
                     response = _wayback_get(client, _WAYBACK_CDX_URL, params=params)
                     if getattr(response, "status_code", None) != 200:
+                        error = (
+                            f"page_{page}_http_status_"
+                            f"{getattr(response, 'status_code', 'unknown')}"
+                        )
                         break
                     try:
                         page_urls = _extract_cdx_original_urls(response.json())
                     except Exception:  # noqa: BLE001
+                        error = f"page_{page}_json_parse_failed"
                         break
                     if not page_urls:
                         break
                     urls.extend(page_urls)
                     if len(page_urls) < _WAYBACK_PAGE_SIZE:
                         break
-    except Exception:  # noqa: BLE001
-        return _dedupe_preserving_order(urls)
+    except Exception as exc:  # noqa: BLE001
+        error = f"{type(exc).__name__}: {exc}"
 
-    return _dedupe_preserving_order(urls)
+    deduped = _dedupe_preserving_order(urls)
+    if error and not deduped:
+        return {
+            "provider": "wayback",
+            "status": "failed",
+            "urls": [],
+            "error": error,
+        }
+    return {
+        "provider": "wayback",
+        "status": "completed",
+        "urls": deduped,
+        "error": error,
+    }

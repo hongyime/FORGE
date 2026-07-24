@@ -6901,7 +6901,7 @@ def kill_chain(
         except Exception:  # noqa: BLE001
             return ""
 
-    def _dns_records(host: str, timeout: float = 5.0) -> dict[str, list[str]]:
+    def _dns_records(host: str, timeout: float = 5.0) -> dict[str, object]:
         """Query MX / TXT / NS / CNAME for a host. Returns dict of record
         type -> list of string values. Empty on any resolver failure.
 
@@ -6909,11 +6909,15 @@ def kill_chain(
         tokens for Google, Slack, Zoom, Stripe, GitHub Enterprise, MS 365 etc.
         Each token is a signal that org uses that SaaS.
         """
-        result: dict[str, list[str]] = {"MX": [], "TXT": [], "NS": [], "CNAME": []}
+        records: dict[str, list[str]] = {"MX": [], "TXT": [], "NS": [], "CNAME": []}
         try:
             import dns.resolver  # noqa: PLC0415
         except ImportError:
-            return result
+            return {
+                "records": records,
+                "status": "failed",
+                "error": "dnspython_unavailable",
+            }
         resolve_method = getattr(dns.resolver.Resolver, "resolve", None)
         if (
             os.environ.get("FORGE_ENV", "").strip().lower() == "test"
@@ -6921,18 +6925,40 @@ def kill_chain(
             not in {"1", "true", "yes", "on"}
             and getattr(resolve_method, "__module__", "") == "dns.resolver"
         ):
-            return result
+            return {
+                "records": records,
+                "status": "skipped",
+                "error": "test_dns_disabled",
+            }
         resolver = dns.resolver.Resolver()
         resolver.lifetime = timeout
         resolver.timeout = timeout
-        for rtype in result:
+        errors: list[str] = []
+        terminal_no_data = 0
+        successful_queries = 0
+        for rtype in records:
             try:
                 answers = resolver.resolve(host, rtype, raise_on_no_answer=False)
                 for a in answers:
-                    result[rtype].append(str(a).strip('"').strip())
-            except Exception:  # noqa: BLE001
+                    records[rtype].append(str(a).strip('"').strip())
+                successful_queries += 1
+            except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+                terminal_no_data += 1
                 continue
-        return result
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{rtype}:{type(exc).__name__}")
+                continue
+        if errors and successful_queries == 0 and terminal_no_data == 0:
+            return {
+                "records": records,
+                "status": "failed",
+                "error": "; ".join(errors),
+            }
+        return {
+            "records": records,
+            "status": "completed",
+            "error": "; ".join(errors),
+        }
 
     def _dns_worker_count(requested_workers: int) -> int:
         try:
@@ -7001,7 +7027,26 @@ def kill_chain(
             max_workers=dns_record_workers,
             progress_label=progress_label,
         )
-        for _host, rec in record_results:
+        active_statuses = 0
+        failed_statuses = 0
+        skipped_statuses = 0
+        provider_errors: list[str] = []
+        for host, record_probe in record_results:
+            probe = record_probe if isinstance(record_probe, dict) else {}
+            status = str(probe.get("status") or "completed").strip().lower()
+            if status not in {"completed", "skipped", "failed"}:
+                status = "completed"
+            error = str(probe.get("error") or "").strip()
+            if status == "skipped":
+                skipped_statuses += 1
+            else:
+                active_statuses += 1
+            if status == "failed":
+                failed_statuses += 1
+            if error:
+                provider_errors.append(f"{host}:{error}")
+            raw_records = probe.get("records") if probe else record_probe
+            rec = raw_records if isinstance(raw_records, dict) else {}
             for tgt in rec.get("CNAME", []):
                 normalized_target = tgt.rstrip(".").lower()
                 if normalized_target == root_domain or normalized_target.endswith("." + root_domain):
@@ -7011,8 +7056,20 @@ def kill_chain(
                 for marker, signal_name in _DNS_SIGNAL_MARKERS:
                     if marker in lowered_txt:
                         signals.add(signal_name)
+        if active_statuses == 0 and skipped_statuses:
+            status = "skipped"
+            error = "; ".join(provider_errors) or "dns_lookup_skipped"
+        elif active_statuses > 0 and failed_statuses == active_statuses:
+            status = "failed"
+            error = "; ".join(provider_errors) or "dns_lookup_failed"
+        else:
+            status = "completed"
+            error = "; ".join(provider_errors)
         return {
             "root_domain": root_domain,
+            "status": status,
+            "error": error,
+            "provider_errors": provider_errors,
             "queried_hosts": queried_hosts,
             "cname_targets": sorted(discovered_targets),
             "signals": sorted(signals),
@@ -7030,10 +7087,25 @@ def kill_chain(
                               verify=False) as c:  # noqa: S501
                 r = c.get(f"https://rdap.org/domain/{domain_name}")
                 if r.status_code != 200:
-                    return {}
-                data = r.json()
-        except Exception:  # noqa: BLE001
-            return {}
+                    status = "skipped" if int(r.status_code) == 404 else "failed"
+                    return {
+                        "_forge_status": status,
+                        "_forge_error": f"http_status_{r.status_code}",
+                        "_forge_http_status": int(r.status_code),
+                    }
+                try:
+                    data = r.json()
+                except Exception:  # noqa: BLE001
+                    return {
+                        "_forge_status": "failed",
+                        "_forge_error": "json_parse_failed",
+                        "_forge_http_status": int(r.status_code),
+                    }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "_forge_status": "failed",
+                "_forge_error": f"{type(exc).__name__}: {exc}",
+            }
         emails: list[str] = []
         for entity in data.get("entities", []):
             vcard = entity.get("vcardArray")
@@ -7059,10 +7131,11 @@ def kill_chain(
         result["registrant_emails"] = emails
         result["registrar"] = registrar
         result["related_nameservers"] = ns
+        result["_forge_status"] = "completed"
         return result
 
     def _wayback_urls(domain_name: str, timeout: float = 15.0,
-                      limit: int = 500) -> list[str]:
+                      limit: int = 500) -> dict[str, object]:
         """Query archive.org CDX API for every URL ever crawled under
         <domain>/*. Returns unique original URLs. Empty on failure.
 
@@ -7072,15 +7145,79 @@ def kill_chain(
         limit=0 enables pagination — repeatedly requests until CDX
         returns an empty page, capped at 10,000 URLs total for safety.
         """
-        from forge.utils.intel.wayback_lookup import search_wayback_urls  # noqa: PLC0415
+        from forge.utils.intel.wayback_lookup import (  # noqa: PLC0415
+            search_wayback_urls_detailed,
+        )
 
-        return search_wayback_urls(domain_name, timeout=timeout, limit=limit)
+        return search_wayback_urls_detailed(domain_name, timeout=timeout, limit=limit)
 
-    def _commoncrawl_urls(domain_name: str, timeout: float = 15.0) -> list[str]:
+    def _commoncrawl_urls(domain_name: str, timeout: float = 15.0) -> dict[str, object]:
         """Query recent Common Crawl indexes for passive historical URLs."""
-        from forge.utils.intel.commoncrawl_lookup import search_commoncrawl_urls  # noqa: PLC0415
+        from forge.utils.intel.commoncrawl_lookup import (  # noqa: PLC0415
+            search_commoncrawl_urls_detailed,
+        )
 
-        return search_commoncrawl_urls(domain_name, timeout=timeout)
+        return search_commoncrawl_urls_detailed(domain_name, timeout=timeout)
+
+    def _normalize_fanout_status(value: object, default: str = "completed") -> str:
+        status = str(value or default).strip().lower()
+        return status if status in {"completed", "skipped", "failed"} else default
+
+    def _archive_provider_urls(result: dict[str, object]) -> list[str]:
+        return [
+            str(url or "").strip()
+            for url in list(result.get("urls") or [])
+            if str(url or "").strip()
+        ]
+
+    def _archive_lookup_root_domain(
+        root_domain: str,
+        *,
+        timeout: float,
+        limit: int,
+    ) -> dict[str, object]:
+        wayback_result = _wayback_urls(root_domain, timeout=timeout, limit=limit)
+        commoncrawl_result = _commoncrawl_urls(root_domain, timeout=timeout)
+        provider_results = [wayback_result, commoncrawl_result]
+        provider_statuses: dict[str, str] = {}
+        archive_errors: list[str] = []
+        active_providers = 0
+        failed_providers = 0
+        for result in provider_results:
+            provider = str(result.get("provider") or "archive").strip()
+            status = _normalize_fanout_status(result.get("status"))
+            provider_statuses[provider] = status
+            if status != "skipped":
+                active_providers += 1
+            if status == "failed":
+                failed_providers += 1
+            error = str(result.get("error") or "").strip()
+            if error:
+                archive_errors.append(f"{provider}:{error}")
+        if active_providers == 0:
+            status = "skipped"
+            error = "archive_providers_skipped"
+        elif failed_providers == active_providers:
+            status = "failed"
+            error = "; ".join(archive_errors) or "archive_providers_failed"
+        else:
+            status = "completed"
+            error = ""
+        wayback_url_values = _archive_provider_urls(wayback_result)
+        commoncrawl_url_values = _archive_provider_urls(commoncrawl_result)
+        return {
+            "root_domain": root_domain,
+            "status": status,
+            "error": error,
+            "archive_errors": archive_errors,
+            "provider_statuses": provider_statuses,
+            "urls": _dedupe_url_list([*wayback_url_values, *commoncrawl_url_values]),
+            "url_metadata": _archive_url_source_metadata(
+                root_domain=root_domain,
+                wayback_urls=wayback_url_values,
+                commoncrawl_urls=commoncrawl_url_values,
+            ),
+        }
 
     def _dedupe_url_list(values: Iterable[str]) -> list[str]:
         seen: set[str] = set()
@@ -12238,6 +12375,8 @@ def kill_chain(
     ) -> dict[str, object]:
         root_domain = str(item[0] or "").strip()
         result = item[1] or {}
+        status = _normalize_fanout_status(result.get("status"))
+        error = str(result.get("error") or "").strip()
         queried_hosts = [
             str(host or "").strip().lower()
             for host in (result.get("queried_hosts", []) or [])
@@ -12255,6 +12394,9 @@ def kill_chain(
         ]
         return {
             "root_domain": root_domain,
+            "status": status,
+            "error": error,
+            "provider_errors": list(result.get("provider_errors") or []),
             "queried_hosts": queried_hosts,
             "signals": signals,
             "cname_targets": cname_targets,
@@ -12266,6 +12408,11 @@ def kill_chain(
         root_domain = str(item[0] or "").strip()
         result = item[1] or {}
         rdap = result.get("rdap") or {}
+        status = _normalize_fanout_status(
+            rdap.get("_forge_status"),
+            "completed" if rdap else "skipped",
+        )
+        error = str(rdap.get("_forge_error") or "").strip()
         registrant_emails = [
             str(email or "").strip()
             for email in (rdap.get("registrant_emails", []) or [])
@@ -12278,7 +12425,10 @@ def kill_chain(
         ]
         return {
             "root_domain": root_domain,
-            "has_rdap": bool(rdap),
+            "status": status,
+            "error": error,
+            "http_status": int(rdap.get("_forge_http_status") or 0),
+            "has_rdap": bool(registrant_emails or nameservers or rdap.get("registrar")),
             "registrant_emails": registrant_emails,
             "registrar": str(rdap.get("registrar", "") or ""),
             "nameservers": nameservers,
@@ -12291,9 +12441,13 @@ def kill_chain(
         queried_hosts = list(prepared_result.get("queried_hosts", []) or [])
         signals = list(prepared_result.get("signals", []) or [])
         cname_targets = list(prepared_result.get("cname_targets", []) or [])
+        status = _normalize_fanout_status(prepared_result.get("status"))
         return {
             "handle": handle,
             "root_domain": str(prepared_result.get("root_domain", "") or ""),
+            "status": status,
+            "error": str(prepared_result.get("error") or "").strip(),
+            "provider_errors": list(prepared_result.get("provider_errors") or []),
             "queried_hosts": queried_hosts,
             "signals": signals,
             "signal_preview": signals[:8],
@@ -12343,8 +12497,29 @@ def kill_chain(
     ) -> dict[str, object]:
         handle = item["handle"]
         root_domain = str(item["root_domain"])
+        status = _normalize_fanout_status(item.get("status"))
+        error = str(item.get("error") or "").strip()
         queried_hosts = cast(list[str], item["queried_hosts"])
         signals = cast(list[str], item["signals"])
+        if status in {"failed", "skipped"}:
+            con.commit()
+            level = "[yellow]failed[/yellow]" if status == "failed" else "[dim]skipped[/dim]"
+            _log(
+                f"{iteration}.G DNS enrichment",
+                f"{root_domain}: DNS lookup {level} ({error or status})",
+            )
+            return {
+                "handle": handle,
+                "root_domain": root_domain,
+                "status": status,
+                "error": error or status,
+                "domain_added": 0,
+                "hosts_queried": int(item["hosts_queried"]),
+                "signals": [],
+                "signal_preview": [],
+                "output_count_base": 0,
+                "provider_errors": list(item.get("provider_errors") or []),
+            }
         domain_added = 0
         for normalized_target in cast(list[str], item["cname_targets"]):
             resolved_target = resolved_cname_map.get(
@@ -12382,11 +12557,14 @@ def kill_chain(
         return {
             "handle": handle,
             "root_domain": root_domain,
+            "status": status,
+            "error": error,
             "domain_added": domain_added,
             "hosts_queried": int(item["hosts_queried"]),
             "signals": list(signals),
             "signal_preview": list(cast(list[str], item["signal_preview"])),
             "output_count_base": int(item["output_count_base"]),
+            "provider_errors": list(item.get("provider_errors") or []),
         }
 
     def _prepare_dns_domain_finalize_entry(
@@ -12395,6 +12573,25 @@ def kill_chain(
         handle = item.get("handle")
         if handle is None:
             return None
+        status = _normalize_fanout_status(item.get("status"))
+        if status in {"failed", "skipped"}:
+            reason = str(item.get("error") or status)
+            return _prepare_module_seed_run_finalization_entry(
+                (
+                    handle,
+                    {"metadata": {"iteration": iteration}},
+                ),
+                base_metadata_value={},
+                status=status,
+                output_count=0,
+                error=reason if status == "failed" else None,
+                extra_metadata={
+                    "iteration": iteration,
+                    "reason": reason,
+                    "hosts_queried": int(item.get("hosts_queried") or 0),
+                    "provider_errors": list(item.get("provider_errors") or []),
+                },
+            )
         return _prepare_module_seed_run_finalization_entry(
             (
                 handle,
@@ -12445,9 +12642,16 @@ def kill_chain(
         registrant_emails = list(prepared_result.get("registrant_emails", []) or [])
         nameservers = list(prepared_result.get("nameservers", []) or [])
         has_rdap = bool(prepared_result.get("has_rdap"))
+        status = _normalize_fanout_status(
+            prepared_result.get("status"),
+            "completed" if has_rdap else "skipped",
+        )
         return {
             "handle": handle,
             "root_domain": str(prepared_result.get("root_domain", "") or ""),
+            "status": status,
+            "error": str(prepared_result.get("error") or "").strip(),
+            "http_status": int(prepared_result.get("http_status") or 0),
             "has_rdap": has_rdap,
             "registrant_emails": registrant_emails,
             "registrar": str(prepared_result.get("registrar", "") or ""),
@@ -12461,6 +12665,13 @@ def kill_chain(
         wayback_full_value: bool,
     ) -> dict[str, object]:
         root_domain, handle, result, host_candidates = item
+        status = _normalize_fanout_status(result.get("status"))
+        raw_provider_statuses = result.get("provider_statuses") or {}
+        provider_statuses = (
+            dict(raw_provider_statuses)
+            if isinstance(raw_provider_statuses, dict)
+            else {}
+        )
         urls = list(result.get("urls", []) or [])
         raw_url_metadata = result.get("url_metadata") or {}
         url_metadata = raw_url_metadata if isinstance(raw_url_metadata, dict) else {}
@@ -12474,6 +12685,10 @@ def kill_chain(
         return {
             "root_domain": str(root_domain or ""),
             "handle": handle,
+            "status": status,
+            "error": str(result.get("error") or "").strip(),
+            "archive_errors": list(result.get("archive_errors") or []),
+            "provider_statuses": provider_statuses,
             "urls": urls,
             "url_metadata": url_metadata,
             "url_count": len(urls),
@@ -12710,6 +12925,25 @@ def kill_chain(
     ) -> dict[str, object]:
         rdap_handle = item["handle"]
         root_domain = str(item["root_domain"])
+        status = _normalize_fanout_status(
+            item.get("status"),
+            "completed" if bool(item.get("has_rdap")) else "skipped",
+        )
+        error = str(item.get("error") or "").strip()
+        http_status = int(item.get("http_status") or 0)
+        if status == "failed":
+            _log(
+                f"{iteration}.H whois/RDAP",
+                f"{root_domain}: RDAP lookup [yellow]failed[/yellow] ({error or status})",
+            )
+            return {
+                "root_domain": root_domain,
+                "handle": rdap_handle,
+                "status": "failed",
+                "error": error or "rdap_lookup_failed",
+                "http_status": http_status,
+                "has_rdap": False,
+            }
         if bool(item["has_rdap"]):
             reg_emails = cast(list[str], item["registrant_emails"])
             registrar = str(item["registrar"])
@@ -12740,6 +12974,9 @@ def kill_chain(
             return {
                 "root_domain": root_domain,
                 "handle": rdap_handle,
+                "status": "completed",
+                "error": error,
+                "http_status": http_status,
                 "has_rdap": True,
                 "output_count_base": int(item["output_count_base"]),
                 "registrar": str(registrar)[:80],
@@ -12753,6 +12990,9 @@ def kill_chain(
         return {
             "root_domain": root_domain,
             "handle": rdap_handle,
+            "status": "skipped",
+            "error": error or "no_data",
+            "http_status": http_status,
             "has_rdap": False,
         }
 
@@ -12763,8 +13003,18 @@ def kill_chain(
         if handle is None:
             return None
         has_rdap = bool(item.get("has_rdap"))
+        status = _normalize_fanout_status(
+            item.get("status"),
+            "completed" if has_rdap else "skipped",
+        )
         extra_metadata: dict[str, object]
-        if has_rdap:
+        if status == "failed":
+            extra_metadata = {
+                "iteration": iteration,
+                "reason": str(item.get("error") or "rdap_lookup_failed"),
+                "http_status": int(item.get("http_status") or 0),
+            }
+        elif has_rdap:
             extra_metadata = {
                 "iteration": iteration,
                 "registrar": str(item.get("registrar") or "")[:80],
@@ -12772,15 +13022,20 @@ def kill_chain(
                 "nameservers": int(item.get("nameservers") or 0),
             }
         else:
-            extra_metadata = {"iteration": iteration, "reason": "no_data"}
+            extra_metadata = {
+                "iteration": iteration,
+                "reason": str(item.get("error") or "no_data"),
+                "http_status": int(item.get("http_status") or 0),
+            }
         return _prepare_module_seed_run_finalization_entry(
             (
                 handle,
                 {"metadata": {"iteration": iteration}},
             ),
             base_metadata_value={},
-            status="completed" if has_rdap else "skipped",
+            status=status,
             output_count=int(item.get("output_count_base") or 0) if has_rdap else 0,
+            error=str(item.get("error") or "") if status == "failed" else None,
             extra_metadata=extra_metadata,
         )
 
@@ -12794,6 +13049,27 @@ def kill_chain(
     ) -> dict[str, object]:
         root_domain = str(item["root_domain"])
         wayback_handle = item["handle"]
+        status = _normalize_fanout_status(item.get("status"))
+        error = str(item.get("error") or "").strip()
+        if status in {"failed", "skipped"}:
+            level = "[yellow]failed[/yellow]" if status == "failed" else "[dim]skipped[/dim]"
+            _log(
+                f"{iteration}.I Wayback CDX",
+                f"{root_domain}: archive lookup {level} ({error or status})",
+            )
+            return {
+                "root_domain": root_domain,
+                "handle": wayback_handle,
+                "status": status,
+                "error": error or status,
+                "url_count": 0,
+                "host_count": 0,
+                "new_host_count": 0,
+                "new_url_count": 0,
+                "mode": str(item["mode"]),
+                "archive_errors": list(item.get("archive_errors") or []),
+                "provider_statuses": dict(item.get("provider_statuses") or {}),
+            }
         wayback_hosts = cast(list[str], item["unique_hosts"])
         wayback_urls = {
             str(url or "").strip()
@@ -12847,11 +13123,15 @@ def kill_chain(
         return {
             "root_domain": root_domain,
             "handle": wayback_handle,
+            "status": status,
+            "error": error,
             "url_count": url_count,
             "host_count": host_count,
             "new_host_count": new_host_count,
             "new_url_count": new_url_count,
             "mode": str(item["mode"]),
+            "archive_errors": list(item.get("archive_errors") or []),
+            "provider_statuses": dict(item.get("provider_statuses") or {}),
         }
 
     def _prepare_wayback_domain_finalize_entry(
@@ -12860,6 +13140,26 @@ def kill_chain(
         handle = item.get("handle")
         if handle is None:
             return None
+        status = _normalize_fanout_status(item.get("status"))
+        if status in {"failed", "skipped"}:
+            reason = str(item.get("error") or status)
+            return _prepare_module_seed_run_finalization_entry(
+                (
+                    handle,
+                    {"metadata": {"iteration": iteration}},
+                ),
+                base_metadata_value={},
+                status=status,
+                output_count=0,
+                error=reason if status == "failed" else None,
+                extra_metadata={
+                    "iteration": iteration,
+                    "reason": reason,
+                    "mode": str(item.get("mode") or ""),
+                    "archive_errors": list(item.get("archive_errors") or []),
+                    "provider_statuses": dict(item.get("provider_statuses") or {}),
+                },
+            )
         return _prepare_module_seed_run_finalization_entry(
             (
                 handle,
@@ -12878,6 +13178,8 @@ def kill_chain(
                 "new_hosts": int(item.get("new_host_count") or 0),
                 "new_urls": int(item.get("new_url_count") or 0),
                 "mode": str(item.get("mode") or ""),
+                "archive_errors": list(item.get("archive_errors") or []),
+                "provider_statuses": dict(item.get("provider_statuses") or {}),
             },
         )
 
@@ -17166,34 +17468,13 @@ def kill_chain(
                             f"[dim]provider-bounded dispatch x"
                             f"{min(passive_archive_workers, len(pending_wayback_domains))}[/dim]"
                         ),
-                    )
+                )
                 wayback_results = _run_callable_batch(
                     pending_wayback_domains,
-                    lambda root_domain: (
-                        lambda wayback_url_values, commoncrawl_url_values: {
-                            "root_domain": root_domain,
-                            "urls": _dedupe_url_list(
-                                [
-                                    *wayback_url_values,
-                                    *commoncrawl_url_values,
-                                ]
-                            ),
-                            "url_metadata": _archive_url_source_metadata(
-                                root_domain=root_domain,
-                                wayback_urls=wayback_url_values,
-                                commoncrawl_urls=commoncrawl_url_values,
-                            ),
-                        }
-                    )(
-                        _wayback_urls(
-                            root_domain,
-                            timeout=30.0 if wayback_full else 15.0,
-                            limit=wb_limit,
-                        ),
-                        _commoncrawl_urls(
-                            root_domain,
-                            timeout=30.0 if wayback_full else 15.0,
-                        ),
+                    lambda root_domain: _archive_lookup_root_domain(
+                        root_domain,
+                        timeout=30.0 if wayback_full else 15.0,
+                        limit=wb_limit,
                     ),
                     max_workers=passive_archive_workers,
                     progress_label=f"{iteration}.I Wayback CDX",

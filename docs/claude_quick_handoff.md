@@ -25,25 +25,37 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: D5 URL/root-domain same-run retry gating is complete. D5 URL
-seed fetches with empty/failed payloads now finalize as failed with
+Latest checkpoint: DNS/RDAP/Wayback provider-status gating is complete. DNS
+record lookup, RDAP, Wayback, and Common Crawl results now carry status/error
+metadata through G/H/I seed-run finalization. Transient provider/network
+failures finalize as `failed`; RDAP 404/no-data and test DNS suppression remain
+intentional terminal skips; true empty DNS/archive results remain terminal
+completed no-data. Fan-out I records per-provider archive statuses and partial
+provider errors while keeping useful URLs if one archive provider succeeds.
+Failed G/H/I rows are not added to completed-domain sets, so they are
+retryable on resumed kill-chain runs. Verification: focused provider-status
+regressions passed (`3 passed`), root-domain idempotency passed (`1 passed`),
+recursive retry-state suite passed (`7 passed`), adjacent DNS/RDAP/Wayback
+bounded parse tests passed with explicit ROE/scope env (`2 passed`), Ruff
+passed for touched files, and py_compile passed for touched files.
+
+Next checkpoint: audit stable-loop termination versus retryable provider/tool
+failures. Patch only confirmed cases where a failed provider/tool outcome
+should schedule a bounded later-iteration retry inside the same kill-chain run
+without creating tight retry loops, weakening provider pacing, or making true
+no-data outcomes non-terminal. Current invariant: retryable failed G/H/I
+provider runs retry on resumed kill-chain invocation; same-run retry requires a
+separate explicit slow-and-steady budget decision.
+
+Previous checkpoint: D5 URL/root-domain same-run retry gating is complete. D5
+URL seed fetches with empty/failed payloads now finalize as failed with
 `empty_url_fetch` and `fetch_status=empty`, so those URL seeds remain retryable
 across recursive iterations and resume. D5 dry-run and scope-denied URLs remain
 intentional terminal skips, and successful URL payloads still enter
 `processed_url_seeds`. Root-domain fan-outs A/B/B2/D3/D4 now update
 completed-domain sets from zero-returncode module dispatches, and G/H/I update
 completed-domain sets from completed/skipped finalization statuses, preventing
-same-run reruns while preserving retries for failures. Verification: focused
-retry-state suite passed (`7 passed`), focused root-domain idempotency test
-passed (`1 passed`), adjacent dry-run resume/root-domain/D5 canonicalization
-checks passed, slow D5 provider provenance check passed with
-explicit ROE/scope env, Ruff passed, py_compile passed, and `git diff --check`
-was whitespace-clean.
-
-Next checkpoint: audit DNS/RDAP/Wayback callable provider-result semantics.
-Patch only confirmed transient provider/network failures that are currently
-finalized as `completed` or intentional `skipped`; keep true no-data outcomes
-terminal and deterministic.
+same-run reruns while preserving retries for failures.
 
 Previous checkpoint: email/keyscan retry-state gating plus dashboard task-error
 redaction is complete. Failed `email` engagement seed rows are reloadable by
