@@ -24,6 +24,7 @@ def _install_status_case_fakes(
     attempts: list[tuple[str, str]],
     *,
     module_fail_stages: set[str] | None = None,
+    module_argvs: list[tuple[str, tuple[str, ...]]] | None = None,
 ) -> None:
     def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
         del kwargs
@@ -45,8 +46,13 @@ def _install_status_case_fakes(
         elif module_argv[:2] == ("osint", "urlscan") and "--hostname" in module_argv:
             stage = "D4"
             target = module_argv[module_argv.index("--hostname") + 1]
+        elif module_argv[:2] == ("osint", "keyscan") and "--domain" in module_argv:
+            stage = "F"
+            target = module_argv[module_argv.index("--domain") + 1]
         if stage:
             attempts.append((stage, target))
+            if module_argvs is not None:
+                module_argvs.append((stage, module_argv))
         _write_report_if_requested(module_argv, tmp_path)
         if stage and stage in (module_fail_stages or set()):
             return subprocess.CompletedProcess(
@@ -115,6 +121,8 @@ def _run_status_case(
     manifest_domains: list[str] | None = None,
     dry_run: bool = False,
     use_scope_manifest: bool = True,
+    skip_keyscan: bool = True,
+    module_argvs: list[tuple[str, tuple[str, ...]]] | None = None,
 ) -> tuple[Path, list[tuple[str, str]]]:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
@@ -138,6 +146,7 @@ def _run_status_case(
         factories,
         attempts,
         module_fail_stages=module_fail_stages,
+        module_argvs=module_argvs,
     )
 
     from forge.cli import kill_chain
@@ -153,7 +162,7 @@ def _run_status_case(
             roe_id="ROE-TEST-2026-07" if use_scope_manifest else None,
             scope_manifest=str(manifest_path) if use_scope_manifest else None,
             skip_cloud=True,
-            skip_keyscan=True,
+            skip_keyscan=skip_keyscan,
             parallel_fanout=1,
             report_provider="template",
         )
@@ -350,6 +359,39 @@ def test_root_tool_failure_keeps_same_run_retry_budget_alive(
     assert run_metadata["pending_work_counts"][pending_key] == 1
     assert run_metadata["pending_work_total"] >= 1
     assert run_metadata["last_iteration_stable"] is False
+
+
+def test_root_child_commands_receive_scope_manifest(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module_argvs: list[tuple[str, tuple[str, ...]]] = []
+    _db_path, attempts = _run_status_case(
+        tmp_path,
+        monkeypatch,
+        {
+            "G": lambda domain: _dns_result(domain, "completed"),
+            "H": lambda domain: _rdap_result(domain, "skipped", "http_status_404"),
+            "I": lambda domain: _archive_result(domain, "completed"),
+        },
+        max_iter=1,
+        skip_keyscan=False,
+        module_argvs=module_argvs,
+    )
+
+    expected_stages = {"A", "B", "B2", "D3", "D4", "F"}
+    assert expected_stages <= {stage for stage, target in attempts if target == ROOT_DOMAIN}
+    manifest_path = str(tmp_path / "roe-scope.json")
+    argv_by_stage = {
+        stage: argv
+        for stage, argv in module_argvs
+        if stage in expected_stages
+    }
+    assert expected_stages <= set(argv_by_stage)
+    for stage in expected_stages:
+        argv = argv_by_stage[stage]
+        assert "--scope-manifest" in argv
+        assert argv[argv.index("--scope-manifest") + 1] == manifest_path
 
 
 def test_synthesized_out_of_scope_root_is_not_dispatched(

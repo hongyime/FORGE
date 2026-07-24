@@ -66,11 +66,29 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit child command scope-manifest propagation for
-  root-domain provider fan-outs. D3/D4 already pass `--scope-manifest`; confirm
-  and patch A/B/B2 and keyscan root/org dispatches so downstream modules also
-  receive explicit ROE/scope context instead of relying only on parent
-  scheduling.
+- [ ] Next checkpoint: fix GitHub org keyscan attribution and scope semantics.
+  Current Fan-out F still treats discovered GitHub org names as `--domain`
+  keyscan targets. Replace that with org-restricted scans tied to an in-scope
+  root domain or explicitly exact-authorized org seed, then add tests proving
+  discovered orgs do not churn the retry budget due scope denial while root
+  domain keyscans still run and carry the active scope manifest.
+- [x] Root child scope-manifest propagation checkpoint:
+  A, B, B2, D3, D4, and F child dispatch argv now carries the active
+  `--scope-manifest` from kill-chain launches. `recon subdomains`, `osint
+  harvest`, `osint linkedin`, and `osint keyscan` all accept direct
+  `--scope-manifest`; harvest/linkedin/keyscan validate their direct target via
+  the existing direct CLI scope loader before outbound work. D3/D4 already had
+  propagation and remain unchanged. The patch does not add provider endpoints,
+  live probes, proxy/IP rotation, or scope relaxation. Verification: focused
+  provider-status suite passed (`12 passed`), root-domain idempotency passed
+  (`1 passed`), adjacent active-port/IP Shodan scope-manifest regressions
+  passed (`2 passed`), recursive retry-state suite passed (`7 passed`),
+  `py_compile` passed for touched files, Ruff passed for touched files, direct
+  Typer help smoke checks show `--scope-manifest` on `osint keyscan`, `osint
+  harvest`, and `osint linkedin`, and `git diff --check` found no whitespace
+  errors. Claude CLI review was attempted but could not run because the local
+  OAuth session is expired; a built-in read-only sidecar audit was spawned for
+  independent follow-up.
 - [x] Synthesized root-domain scope-gating checkpoint:
   `_refresh_root_domains()` now gates every synthesized
   `synthesis_summary.root_domains` value before appending it to the runtime

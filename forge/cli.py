@@ -1882,6 +1882,11 @@ def osint_keyscan(
         envvar="FORGE_VALIDATION_PROXY",
         help="Proxy URI for provider validation calls (e.g., socks5://127.0.0.1:9050).",
     ),
+    scope_manifest: Optional[str] = typer.Option(
+        None,
+        "--scope-manifest",
+        help="Scope manifest path/JSON for direct keyscan gating.",
+    ),
     no_validate: bool = typer.Option(
         False,
         "--no-validate",
@@ -1909,6 +1914,13 @@ def osint_keyscan(
 
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
+    _direct_cli_load_scope_lists(
+        engagement_id=int(engagement),
+        db_path=db_path,
+        scope_manifest=scope_manifest,
+        target=domain,
+        seed_type="domain" if "." in domain else "other",
+    )
 
     run_key_scanner(
         db_path=db_path,
@@ -2004,6 +2016,11 @@ def osint_harvest(
         envvar="FORGE_PROXY",
         help="Optional HTTP/SOCKS proxy for theHarvester subprocess requests.",
     ),
+    scope_manifest: Optional[str] = typer.Option(
+        None,
+        "--scope-manifest",
+        help="Scope manifest path/JSON for direct harvest gating.",
+    ),
     dry_run: bool = typer.Option(False, "--dry-run"),
 ) -> None:
     """Enumerate emails and subdomains via theHarvester >= 4.0.0 (Module 2-E)."""
@@ -2011,8 +2028,16 @@ def osint_harvest(
     from forge.utils.intel.contact_enum import run_harvester  # noqa: PLC0415
 
     cfg = ForgeConfig.load()
+    db_path = cfg.engagement_db_path(engagement)
+    _direct_cli_load_scope_lists(
+        engagement_id=int(engagement),
+        db_path=db_path,
+        scope_manifest=scope_manifest,
+        target=domain,
+        seed_type="domain",
+    )
     run_harvester(
-        db_path=cfg.engagement_db_path(engagement),
+        db_path=db_path,
         engagement_id=int(engagement),
         domain=domain,
         sources=sources,
@@ -2492,6 +2517,11 @@ def osint_linkedin(
         max=2,
         help="Bounded LinkedIn public-search dork concurrency. Defaults to 1.",
     ),
+    scope_manifest: Optional[str] = typer.Option(
+        None,
+        "--scope-manifest",
+        help="Scope manifest path/JSON for direct LinkedIn lookup gating.",
+    ),
 ) -> None:
     """CrossLinked-style LinkedIn employee discovery (Module 2-Q).
 
@@ -2507,6 +2537,13 @@ def osint_linkedin(
     )
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
+    _direct_cli_load_scope_lists(
+        engagement_id=int(engagement),
+        db_path=db_path,
+        scope_manifest=scope_manifest,
+        target=domain,
+        seed_type="domain",
+    )
     result = enumerate_linkedin_employees(
         domain=domain, engagement_id=int(engagement),
         db_path=db_path, max_dorks=max_dorks,
@@ -10833,16 +10870,20 @@ def kill_chain(
         engagement_value: str,
         processed_targets: set[str],
         dry_run_keyscan_value: bool,
+        scope_manifest_value: str,
     ) -> dict[str, object]:
-        keyscan_args = [
-            "osint",
-            "keyscan",
-            "--engagement",
-            engagement_value,
-            "--domain",
-            target,
-            "--no-validate",
-        ]
+        keyscan_args = _append_scope_manifest_arg(
+            [
+                "osint",
+                "keyscan",
+                "--engagement",
+                engagement_value,
+                "--domain",
+                target,
+                "--no-validate",
+            ],
+            scope_manifest_value,
+        )
         if dry_run_keyscan_value:
             keyscan_args.append("--dry-run")
         target_key = _resume_normalize(target)
@@ -13732,7 +13773,17 @@ def kill_chain(
             a_specs = _run_inprocess_batch(
                 pending_a_domains,
                 lambda root_domain: ModuleDispatchSpec(
-                    cmd_argv=["recon", "subdomains", "--engagement", engagement, "--domain", root_domain],
+                    cmd_argv=_append_scope_manifest_arg(
+                        [
+                            "recon",
+                            "subdomains",
+                            "--engagement",
+                            engagement,
+                            "--domain",
+                            root_domain,
+                        ],
+                        scope_manifest,
+                    ),
                     label=f"{iteration}.A subdomain enum ({root_domain})",
                     loop_name="fanout_a_subdomains",
                     seed_contexts=[_seed_context(root_domain, "domain")],
@@ -13851,16 +13902,19 @@ def kill_chain(
                         *(
                             [
                                 ModuleDispatchSpec(
-                                    cmd_argv=[
-                                        "osint",
-                                        "harvest",
-                                        "--engagement",
-                                        engagement,
-                                        "--domain",
-                                        root_domain,
-                                        "--sources",
-                                        "crtsh,duckduckgo,certspotter,dnsdumpster,rapiddns",
-                                    ],
+                                    cmd_argv=_append_scope_manifest_arg(
+                                        [
+                                            "osint",
+                                            "harvest",
+                                            "--engagement",
+                                            engagement,
+                                            "--domain",
+                                            root_domain,
+                                            "--sources",
+                                            "crtsh,duckduckgo,certspotter,dnsdumpster,rapiddns",
+                                        ],
+                                        scope_manifest,
+                                    ),
                                     label=f"{iteration}.B harvest ({root_domain})",
                                     loop_name="fanout_b_harvest",
                                     seed_contexts=[_seed_context(root_domain, "domain")],
@@ -13873,16 +13927,19 @@ def kill_chain(
                         *(
                             [
                                 ModuleDispatchSpec(
-                                    cmd_argv=[
-                                        "osint",
-                                        "linkedin",
-                                        "--engagement",
-                                        engagement,
-                                        "--domain",
-                                        root_domain,
-                                        "--max-dorks",
-                                        "3",
-                                    ],
+                                    cmd_argv=_append_scope_manifest_arg(
+                                        [
+                                            "osint",
+                                            "linkedin",
+                                            "--engagement",
+                                            engagement,
+                                            "--domain",
+                                            root_domain,
+                                            "--max-dorks",
+                                            "3",
+                                        ],
+                                        scope_manifest,
+                                    ),
                                     label=f"{iteration}.B2 crosslinked ({root_domain})",
                                     loop_name="fanout_b2_linkedin",
                                     seed_contexts=[_seed_context(root_domain, "domain")],
@@ -15647,6 +15704,7 @@ def kill_chain(
                     engagement_value=engagement,
                     processed_targets=processed_keyscan_targets,
                     dry_run_keyscan_value=dry_run_keyscan,
+                    scope_manifest_value=scope_manifest,
                 ),
                 max_workers=parallel_workers,
                 progress_label=f"{iteration}.F keyscan target prep",

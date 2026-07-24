@@ -25,7 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: synthesized root-domain scope gating is complete.
+Latest checkpoint: root child scope-manifest propagation is complete. A, B,
+B2, D3, D4, and F child dispatch argv now carries the active
+`--scope-manifest` from kill-chain launches. `recon subdomains`, `osint
+harvest`, `osint linkedin`, and `osint keyscan` all accept direct
+`--scope-manifest`; harvest/linkedin/keyscan validate their direct target via
+the existing direct CLI scope loader before outbound work. D3/D4 already had
+propagation and remain unchanged. Verification: focused provider-status suite
+passed (`12 passed`), root-domain idempotency passed (`1 passed`), adjacent
+active-port/IP Shodan scope-manifest regressions passed (`2 passed`),
+recursive retry-state suite passed (`7 passed`), `py_compile` passed for
+touched files, Ruff passed for touched files, direct Typer help smoke checks
+show `--scope-manifest` on `osint keyscan`, `osint harvest`, and `osint
+linkedin`, and `git diff --check` found no whitespace errors. Claude CLI
+review was attempted but local OAuth is expired; built-in sidecar audit
+`019f9584-19a7-7db2-b640-a54fe21ef335` was spawned for read-only follow-up.
+
+Next checkpoint: fix GitHub org keyscan attribution and scope semantics.
+Current Fan-out F still treats discovered GitHub org names as `--domain`
+keyscan targets. Replace that with org-restricted scans tied to an in-scope
+root domain or explicitly exact-authorized org seed, then add tests proving
+discovered orgs do not churn the retry budget due scope denial while root
+domain keyscans still run and carry the active scope manifest.
+
+Previous checkpoint: synthesized root-domain scope gating is complete.
 `_refresh_root_domains()` now gates every synthesized
 `synthesis_summary.root_domains` value before appending it to the runtime
 `root_domains` list used by A/B/B2/D3/D4/G/H/I scheduling and stable-loop
@@ -34,17 +57,6 @@ pending counts. Live runs reuse the existing scope-manifest validator with
 `root_domain_scope_denied` and never dispatched or shown in run metadata.
 Authorized synthesized roots still enter normal root fan-outs, and dry-run
 no-manifest previews can still include synthesized roots without denial audit.
-Verification: focused provider/root suite passed (`11 passed`), root-domain
-idempotency passed (`1 passed`), recursive retry-state suite passed (`7
-passed`), adjacent scope-manifest regressions passed (`4 passed`), adjacent
-DNS/RDAP/Wayback bounded parse tests passed with explicit ROE/scope env (`2
-passed`), Ruff passed for touched files, py_compile passed for touched files,
-and sidecar audit confirmed no unsafe synthesized-root append path remains.
-
-Next checkpoint: audit child command scope-manifest propagation for root-domain
-provider fan-outs. D3/D4 already pass `--scope-manifest`; confirm and patch
-A/B/B2 and keyscan root/org dispatches so downstream modules also receive
-explicit ROE/scope context instead of relying only on parent scheduling.
 
 Previous checkpoint: B2/D3/D4 bounded retry scheduling is complete. B2
 LinkedIn, D3 Shodan, and D4 URLScan no longer have first-iteration-only
