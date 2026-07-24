@@ -260,6 +260,17 @@ historical notes only, not as current instructions.
   (`1 passed`); pytest engagement cleanup reported `removed=4 remaining=0`.
   Handoff:
   `.claude/handoffs/2026-07-24-validation-inventory-raw-export-parity.md`.
+- [x] Report artifact/API isolation checkpoint:
+  Static dashboard and live web API report/audit discovery now require
+  ID-delimited artifact stems (`engagement_{id}` or `engagement_{id}_...` and
+  `audit_{id}` or `audit_{id}_...`) instead of broad prefix matches, so
+  engagement `1001` no longer sees or downloads `engagement_10010_*` report
+  artifacts. The live `/api/engagements/{id}/vuln-summary` route now excludes
+  passive false positives the same way dashboard severity summaries do.
+  Verification: compile passed; Ruff passed; focused dashboard/API report
+  prefix-collision, report-history, and vuln-summary tests passed (`5 passed`);
+  pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-report-artifact-api-isolation.md`.
 - [ ] Next target: audit another concrete passive-to-live validation/report/API
   parity gap, preferably provider-specific proof/detail reviewability for
   long-tail validators or imported graph/raw-export shape mismatches. Keep live

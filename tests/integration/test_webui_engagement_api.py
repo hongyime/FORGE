@@ -787,6 +787,65 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
         }
 
 
+def test_engagement_detail_api_excludes_report_prefix_collisions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_WEB_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("FORGE_WEB_AUTH", "jwt")
+    _build_engagement(tmp_path)
+
+    reports_dir = tmp_path / "reports"
+    colliding_stem = "engagement_10010_report_20260709T014512"
+    (reports_dir / f"{colliding_stem}.md").write_text(
+        "# Executive Summary\nwrong engagement\n",
+        encoding="utf-8",
+    )
+    (reports_dir / f"{colliding_stem}.json").write_text(
+        json.dumps(
+            {
+                "engagement_id": 10010,
+                "provider": "template",
+                "requested_provider": "template",
+                "format": "markdown",
+                "generated_at": "2026-07-09T01:45:12+00:00",
+                "findings_checksum": "sha256:engagement-10010",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / f"{colliding_stem}.csv").write_text(
+        "record_type,engagement_id,title\nsummary,10010,\n",
+        encoding="utf-8",
+    )
+
+    app = create_app()
+    with TestClient(app) as client:
+        headers = {"Authorization": f"Bearer {mint_token('tester')}"}
+        detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
+        assert detail_resp.status_code == 200, detail_resp.text
+        detail = detail_resp.json()
+
+        colliding_artifact_resp = client.get(
+            f"/api/engagements/engagement-1001-acme-example/artifacts/{colliding_stem}.json",
+            headers=headers,
+        )
+        assert colliding_artifact_resp.status_code == 404
+
+    artifact_names = {artifact["name"] for artifact in detail["artifacts"]}
+    preview_names = {preview["name"] for preview in detail["report_previews"]}
+    history_names = {family["artifact_name"] for family in detail["report_history"]}
+
+    assert detail["report_summary"]["findings_checksum"] == "sha256:test-checksum-1001"
+    assert all(not name.startswith("engagement_10010") for name in artifact_names)
+    assert all(not name.startswith("engagement_10010") for name in preview_names)
+    assert all(not name.startswith("engagement_10010") for name in history_names)
+
+
 def test_engagement_api_unions_seed_only_hosts_and_emails(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
@@ -1556,6 +1615,16 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
             WHERE engagement_id=1001 AND asset_type='firebase'
             """
         )
+        con.execute(
+            """
+            INSERT INTO passive_vulns
+                (engagement_id, vuln_id, plugin, url, severity, verified,
+                 false_positive, discovered_at)
+            VALUES
+                (1001, 'passive-fp-critical', 'fixture', 'https://app.acme.example',
+                 'CRITICAL', 0, 1, '2026-07-09T10:00:00')
+            """
+        )
         con.commit()
     finally:
         con.close()
@@ -1574,6 +1643,7 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
         summary = summary_resp.json()
 
     assert summary["vulnerability_findings"].get("HIGH", 0) == 0
+    assert summary["passive_vulns"].get("CRITICAL", 0) == 0
 
 
 def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(

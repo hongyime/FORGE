@@ -797,24 +797,36 @@ def create_app() -> Any:
             matches.extend(reports_dir.glob(pattern))
         return sorted(set(matches), key=lambda path: (path.suffix, path.name.lower()))
 
+    def _engagement_prefixed_artifact_files(
+        *,
+        prefix: str,
+        engagement_id: int,
+        suffixes: tuple[str, ...],
+    ) -> list[Path]:
+        reports_dir = _reports_dir()
+        stem_prefix = f"{prefix}_{engagement_id}"
+        return sorted(
+            {
+                path
+                for suffix in suffixes
+                for path in reports_dir.glob(f"{stem_prefix}*{suffix}")
+                if path.stem == stem_prefix or path.stem.startswith(f"{stem_prefix}_")
+            },
+            key=lambda path: (path.suffix, path.name.lower()),
+        )
+
     def _report_files(engagement_id: int) -> list[Path]:
-        return _files_matching(
-            (
-                f"engagement_{engagement_id}*.md",
-                f"engagement_{engagement_id}*.pdf",
-                f"engagement_{engagement_id}*.json",
-                f"engagement_{engagement_id}*.csv",
-            ),
+        return _engagement_prefixed_artifact_files(
+            prefix="engagement",
+            engagement_id=engagement_id,
+            suffixes=(".md", ".pdf", ".json", ".csv"),
         )
 
     def _audit_files(engagement_id: int) -> list[Path]:
-        return _files_matching(
-            (
-                f"audit_{engagement_id}*.md",
-                f"audit_{engagement_id}*.pdf",
-                f"audit_{engagement_id}*.json",
-                f"audit_{engagement_id}*.csv",
-            ),
+        return _engagement_prefixed_artifact_files(
+            prefix="audit",
+            engagement_id=engagement_id,
+            suffixes=(".md", ".pdf", ".json", ".csv"),
         )
 
     def _artifact_payload(engagement_ref: str, artifact: Path, kind: str) -> dict[str, Any]:
@@ -2352,6 +2364,7 @@ def create_app() -> Any:
                 SELECT UPPER(COALESCE(severity, 'UNKNOWN')), COUNT(*)
                 FROM passive_vulns
                 WHERE engagement_id=?
+                  AND COALESCE(false_positive, 0)=0
                 GROUP BY UPPER(COALESCE(severity, 'UNKNOWN'))
                 """,
                 (engagement_id,),

@@ -723,27 +723,40 @@ def _files_matching(reports_dir: Path, patterns: tuple[str, ...]) -> list[Path]:
     return sorted(set(matches), key=lambda path: (path.suffix, path.name.lower()))
 
 
+def _engagement_prefixed_artifact_files(
+    reports_dir: Path,
+    *,
+    prefix: str,
+    engagement_id: str,
+    suffixes: tuple[str, ...],
+) -> list[Path]:
+    stem_prefix = f"{prefix}_{engagement_id}"
+    return sorted(
+        {
+            path
+            for suffix in suffixes
+            for path in reports_dir.glob(f"{stem_prefix}*{suffix}")
+            if path.stem == stem_prefix or path.stem.startswith(f"{stem_prefix}_")
+        },
+        key=lambda path: (path.suffix, path.name.lower()),
+    )
+
+
 def _artifact_files(eng_id: str, reports_dir: Path) -> list[Path]:
-    return _files_matching(
+    return _engagement_prefixed_artifact_files(
         reports_dir,
-        (
-            f"engagement_{eng_id}*.md",
-            f"engagement_{eng_id}*.pdf",
-            f"engagement_{eng_id}*.json",
-            f"engagement_{eng_id}*.csv",
-        ),
+        prefix="engagement",
+        engagement_id=eng_id,
+        suffixes=(".md", ".pdf", ".json", ".csv"),
     )
 
 
 def _audit_files(eng_id: str, reports_dir: Path) -> list[Path]:
-    return _files_matching(
+    return _engagement_prefixed_artifact_files(
         reports_dir,
-        (
-            f"audit_{eng_id}*.md",
-            f"audit_{eng_id}*.pdf",
-            f"audit_{eng_id}*.json",
-            f"audit_{eng_id}*.csv",
-        ),
+        prefix="audit",
+        engagement_id=eng_id,
+        suffixes=(".md", ".pdf", ".json", ".csv"),
     )
 
 

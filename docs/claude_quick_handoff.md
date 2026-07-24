@@ -25,26 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: validation inventory/raw-export parity is complete. Phase 6
-raw CSV finding rows now preserve structured validation notes/evidence/check
-metadata from the same context used by JSON/template reports. Stable
-key-provider validations such as `aws_sts_get_caller_identity` display as
-`VALIDATED` in Phase 6, dashboard, and API inventory while
-`validation_reportable` remains false for cloud-exposure gates. Imported graph
-filtering now rejects mixed endpoint-key edges when any alias points to a
-removed deterministic node, and cloud-alias dedupe rewrites all existing endpoint
-aliases. Verification: compile/Ruff passed; focused helper/Phase 6
-report/raw-export tests passed (`8 passed`); focused dashboard graph/inventory
-tests passed (`4 passed`); focused API graph/inventory tests passed
-(`2 passed`); dashboard cloud-alias graph test passed (`1 passed`); pytest
-engagement cleanup reported `removed=4 remaining=0`. Handoff:
-`.claude/handoffs/2026-07-24-validation-inventory-raw-export-parity.md`.
+Latest checkpoint: report artifact/API isolation is complete. Static dashboard
+and live web API report/audit discovery now require ID-delimited artifact stems,
+so engagement `1001` no longer sees or downloads `engagement_10010_*` report
+artifacts. Live `/api/engagements/{id}/vuln-summary` now excludes passive false
+positives the same way dashboard severity summaries do. Verification:
+compile/Ruff passed; focused dashboard/API report prefix-collision,
+report-history, and vuln-summary tests passed (`5 passed`); pytest engagement
+cleanup reported `removed=3 remaining=0`. Handoff:
+`.claude/handoffs/2026-07-24-report-artifact-api-isolation.md`.
 
 Current next gate: audit another concrete passive-to-live validation/report/API
 parity gap, preferably provider-specific proof/detail reviewability for
 long-tail validators or imported graph/raw-export shape mismatches. Keep live
 provider calls mocked unless an explicit ROE/scope manifest and target are
 supplied.
+
+Previous checkpoint: validation inventory/raw-export parity is complete. Phase
+6 raw CSV finding rows preserve structured validation notes/evidence/check
+metadata from the same context used by JSON/template reports. Stable
+key-provider validations such as `aws_sts_get_caller_identity` display as
+`VALIDATED` in Phase 6, dashboard, and API inventory while
+`validation_reportable` remains false for cloud-exposure gates. Handoff:
+`.claude/handoffs/2026-07-24-validation-inventory-raw-export-parity.md`.
 
 Previous checkpoint: imported graph legacy edge-shape filtering is complete.
 Imported dashboard/API graph payload filtering now understands both canonical

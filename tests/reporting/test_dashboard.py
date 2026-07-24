@@ -555,6 +555,39 @@ def _insert_dashboard_key_scanner_row(
         con.close()
 
 
+def _write_report_family(
+    reports_dir: Path,
+    stem: str,
+    *,
+    checksum: str,
+    generated_at: str,
+) -> None:
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    engagement_id = int(stem.split("_", 2)[1])
+    (reports_dir / f"{stem}.md").write_text(
+        f"# Report {stem}\n",
+        encoding="utf-8",
+    )
+    (reports_dir / f"{stem}.json").write_text(
+        json.dumps(
+            {
+                "engagement_id": engagement_id,
+                "provider": "template",
+                "requested_provider": "template",
+                "format": "markdown",
+                "generated_at": generated_at,
+                "findings_checksum": checksum,
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    (reports_dir / f"{stem}.csv").write_text(
+        "record_type,engagement_id,title\nsummary,,\n",
+        encoding="utf-8",
+    )
+
+
 def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) -> None:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"
@@ -781,6 +814,45 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "Fallback reason: quota exceeded" in detail_html
     assert "Report JSON" in detail_html
     assert manifest_hash[:12] in detail_html
+
+
+def test_generate_dashboard_excludes_report_prefix_collisions(tmp_path: Path) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    _build_minimal_engagement_db(db_root / "1001.db")
+    _write_report_family(
+        reports_dir,
+        "engagement_1001_report_20260709T014412",
+        checksum="sha256:engagement-1001",
+        generated_at="2026-07-09T01:44:12+00:00",
+    )
+    _write_report_family(
+        reports_dir,
+        "engagement_10010_report_20260709T014512",
+        checksum="sha256:engagement-10010",
+        generated_at="2026-07-09T01:45:12+00:00",
+    )
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    artifact_names = {artifact["name"] for artifact in detail_payload["artifacts"]}
+    preview_names = {preview["name"] for preview in detail_payload["report_previews"]}
+    history_names = {family["artifact_name"] for family in detail_payload["report_history"]}
+
+    assert detail_payload["report_summary"]["findings_checksum"] == "sha256:engagement-1001"
+    assert all(not name.startswith("engagement_10010") for name in artifact_names)
+    assert all(not name.startswith("engagement_10010") for name in preview_names)
+    assert all(not name.startswith("engagement_10010") for name in history_names)
 
 
 def test_generate_dashboard_surfaces_compiled_artifact_review_metadata(
