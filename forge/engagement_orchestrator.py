@@ -141,6 +141,11 @@ from forge.utils.artifact_ad_metadata import (
     sellers_json_seller_account_assets,
 )
 from forge.utils.artifact_aasa import aasa_ios_app_ids
+from forge.utils.artifact_android_manifest import (
+    android_manifest_artifact_label,
+    android_manifest_package_names,
+    android_manifest_urls,
+)
 from forge.utils.artifact_assetlinks import assetlinks_android_packages
 from forge.utils.artifact_backstage_catalog import (
     backstage_catalog_artifact_label,
@@ -6536,6 +6541,9 @@ def _artifact_format_label(value: str | Path) -> str:
     sanity_config_label = sanity_config_artifact_label(str(value or ""))
     if sanity_config_label:
         return sanity_config_label
+    android_manifest_label = android_manifest_artifact_label(str(value or ""))
+    if android_manifest_label:
+        return android_manifest_label
     buf_config_label = _buf_config_artifact_label(str(value or ""))
     if buf_config_label:
         return buf_config_label
@@ -18767,6 +18775,7 @@ class ArtifactQueueProcessor:
         "recon_tool_output_text",
         "graphql_config_text",
         "interface_definition_text",
+        "android_manifest_text",
         "json",
         "sanity_config_text",
         "key_value",
@@ -20561,6 +20570,8 @@ class ArtifactQueueProcessor:
                 text,
                 source_hint=source_hint,
             )
+        if family == "android_manifest_text":
+            return "\n".join(android_manifest_urls(text))
         if family == "key_value":
             return self._key_value_structured_payload_text(
                 text,
@@ -21381,6 +21392,7 @@ class ArtifactQueueProcessor:
                     "sellers_json_seller_accounts",
                     "ai_plugin_manifests",
                     "android_assetlinks",
+                    "android_manifest",
                     "apple_app_site_association",
                     "web_manifest_related_applications",
                     "kubernetes_secret_manifests",
@@ -21833,6 +21845,20 @@ class ArtifactQueueProcessor:
                     "artifact_assetlinks_android_package",
                 )
                 for package_name in assetlinks_android_packages(text)
+            ]
+        if family == "android_manifest":
+            if (
+                _artifact_format_label(source_file) != "android-manifest"
+                and "<manifest" not in text[:2048].lower()
+            ):
+                return []
+            return [
+                (
+                    "mobile_android_package",
+                    package_name,
+                    "artifact_android_manifest_package",
+                )
+                for package_name in android_manifest_package_names(text)
             ]
         if family == "apple_app_site_association":
             if _artifact_format_label(source_file) != "apple-app-site-association":
@@ -39656,6 +39682,8 @@ class ArtifactQueueProcessor:
     ) -> list[tuple[str, str, str]]:
         lowered = member_name.lower()
         text = self._decode_text_artifact_bytes(data)
+        if android_manifest_artifact_label(member_name):
+            return [(source_file, member_name, text)]
         if lowered.endswith(".rels"):
             payloads = self._run_ordered_local_batch(
                 ("relationships",),

@@ -25,7 +25,30 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Sanity runtime public-env static extraction is complete.
+Latest checkpoint: AndroidManifest attribute-aware static extraction is
+complete. `AndroidManifest.xml` is now a first-class static artifact label.
+Direct XML manifests and archive members preserve raw XML attributes instead of
+being stripped through generic `itertext()` extraction. The parser inventories
+valid Android package names as `mobile_android_package` assets and emits only
+safe HTTP(S) BROWSABLE/VIEW deep-link URL seeds while rejecting custom schemes,
+templated values, localhost/private hosts, wildcard hosts, and malformed
+packages. No APK execution, dynamic analysis, live probing, credential
+validation, or scope relaxation was added. Verification: focused
+AndroidManifest tests passed (`3 passed`), adjacent Android/mobile metadata
+tests passed (`6 passed`), py_compile passed for touched files, Ruff passed for
+touched files, `git diff --check` passed, and no `.forge_data/engagements`
+leftovers were present.
+
+Next checkpoint: fix HTML/passive-text cloud-reference inventory consistency
+exposed by the mocked recursive kill-chain E2E. The E2E now reaches live-run
+ROE/scope gates when supplied test `roe_id` and scope manifest, but
+HTML-derived Firebase refs such as `https://web-firebase-prod.firebaseio.com`
+are validated/scheduled without a matching `cloud_assets` inventory row. Keep
+the ROE/scope requirement intact; ensure scoped HTML/passive text cloud refs
+persist as cloud assets before validation/reporting, then rerun the long mocked
+E2E.
+
+Previous checkpoint: Sanity runtime public-env static extraction is complete.
 Public runtime JavaScript config extraction now derives passive Sanity API
 pivots from public env maps containing both a valid Sanity project ID and a
 dataset (`NEXT_PUBLIC_SANITY_*`, `VITE_SANITY_*`, and adjacent public naming
@@ -37,15 +60,6 @@ config tests passed (`9 passed`), broader current artifact regression slice
 passed (`21 passed`), py_compile passed for touched files, Ruff passed for
 touched files, `git diff --check` passed, and no `.forge_data/engagements`
 leftovers were present.
-
-Next checkpoint: implement AndroidManifest attribute-aware static extraction.
-Current generic XML handling strips attribute-only Android manifests, losing
-`package`, `android:scheme`, `android:host`, and path-based deep-link pivots.
-Add a compact `AndroidManifest.xml` parser that inventories valid Android
-packages as mobile assets and emits only safe HTTP(S) BROWSABLE/VIEW deep-link
-URL seeds; reject templated values, localhost/private hosts, wildcard-only
-hosts, custom schemes, and malformed packages. Cover direct files and archive
-members with focused regression tests.
 
 Previous checkpoint: Cloud Run provider-shape support is complete. Qualified
 `*.run.app` URLs are now treated as managed provider hosts rather than generic
