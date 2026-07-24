@@ -3648,6 +3648,31 @@ def _render_overview_page(
         if tag_text:
             row_meta = f"{row_meta} · {tag_text}"
         tag_keys = "|".join(str(tag).casefold() for tag in tags)
+        report_summary = item.get("report_summary") or {}
+        report_count = len(item["report_files"])
+        report_rendered = str(
+            report_summary.get("rendered_provider")
+            or report_summary.get("provider")
+            or report_summary.get("render_backend")
+            or "-"
+        )
+        report_backend = str(report_summary.get("render_backend") or "").strip()
+        report_export_count = int(
+            report_summary.get("export_count")
+            or len(report_summary.get("available_exports") or [])
+            or report_count
+        )
+        report_note = (
+            f"{report_rendered} · {report_export_count} exports"
+            if report_summary
+            else "no report summary"
+        )
+        if report_backend and report_backend != report_rendered:
+            report_note = f"{report_note} · backend {report_backend}"
+        if report_summary.get("raw_export"):
+            report_note = f"{report_note} · raw"
+        if report_summary.get("fallback_reason"):
+            report_note = f"{report_note} · fallback"
         rows.append(
             "<tr class='eng-row'"
             f" data-status='{html.escape(str(status))}'"
@@ -3663,7 +3688,7 @@ def _render_overview_page(
             f"<td class='right'>{int(item['counts'].get('hosts', 0))}</td>"
             f"<td class='right'>{int(item['counts'].get('emails', 0))}</td>"
             f"<td class='right'>{int(item['counts'].get('services', 0))}</td>"
-            f"<td class='right'>{len(item['report_files'])}</td>"
+            f"<td class='right'>{report_count}<div class='tiny muted'>{html.escape(report_note)}</div></td>"
             f"<td>{graph_badge}</td>"
             f"<td class='tiny'>{html.escape(item['latest_audit'] or item['updated_at'] or '-')}</td>"
             f"<td class='tiny mono'>{html.escape(item['slug'])}</td>"
@@ -4125,7 +4150,16 @@ def _render_report_history(report_history: list[dict[str, Any]]) -> str:
         meta = "".join(
             (
                 _render_meta_block("Generated", str(family.get("generated_at") or "-")),
-                _render_meta_block("Rendered", str(family.get("render_backend") or family.get("provider") or "-")),
+                _render_meta_block(
+                    "Rendered",
+                    str(
+                        family.get("rendered_provider")
+                        or family.get("provider")
+                        or family.get("render_backend")
+                        or "-"
+                    ),
+                ),
+                _render_meta_block("Backend", str(family.get("render_backend") or "-")),
                 _render_meta_block("Exports", str(family.get("export_count") or 0)),
             )
         )
@@ -4181,7 +4215,16 @@ def _render_report_backend_summary(summary: dict[str, Any] | None) -> str:
         return ""
     meta_blocks = [
         _render_meta_block("Requested", str(summary.get("requested_provider") or "-")),
-        _render_meta_block("Rendered", str(summary.get("render_backend") or "-")),
+        _render_meta_block(
+            "Rendered",
+            str(
+                summary.get("rendered_provider")
+                or summary.get("provider")
+                or summary.get("render_backend")
+                or "-"
+            ),
+        ),
+        _render_meta_block("Backend", str(summary.get("render_backend") or "-")),
         _render_meta_block("Exported", str(summary.get("provider") or "-")),
         _render_meta_block("Format", str(summary.get("format") or "-")),
         _render_meta_block("Generated", str(summary.get("generated_at") or "-")),
@@ -4574,7 +4617,7 @@ def _render_engagement_page(
 
 
 def _engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "id": engagement["id"],
         "slug": engagement["slug"],
         "name": engagement["name"],
@@ -4598,6 +4641,10 @@ def _engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
         "detail_route": engagement["detail_route"],
         "detail_data": engagement["detail_data"],
     }
+    report_summary = engagement.get("report_summary")
+    if report_summary is not None:
+        payload["report_summary"] = report_summary
+    return payload
 
 
 def _engagement_detail_payload(engagement: dict[str, Any], root_page: Path) -> dict[str, Any]:

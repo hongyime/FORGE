@@ -351,6 +351,18 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["slug"] == "engagement-1001-acme-example"
         assert items[0]["detail_route"] == "/engagements/engagement-1001-acme-example"
         assert items[0]["report_count"] == 4
+        list_report = items[0]["report_summary"]
+        assert list_report["provider"] == "template"
+        assert list_report["requested_provider"] == "auto"
+        assert list_report["render_backend"] == "template"
+        assert list_report["fallback_reason"] == "quota exceeded"
+        assert list_report["export_count"] == 4
+        assert [item["label"] for item in list_report["available_exports"]] == [
+            "Markdown",
+            "PDF",
+            "Report JSON",
+            "CSV",
+        ]
         assert items[0]["graph_count"] == 1
         assert items[0]["tags"] == ["external", "priority-high"]
         assert items[0]["highest_severity"] == "HIGH"
@@ -594,6 +606,12 @@ def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, mon
         assert list_resp.status_code == 200, list_resp.text
         items = list_resp.json()["items"]
         assert items[0]["report_count"] == 2
+        assert items[0]["report_summary"]["provider"] == "raw_export"
+        assert items[0]["report_summary"]["render_backend"] == "template"
+        assert items[0]["report_summary"]["rendered_provider"] == "raw_export"
+        assert items[0]["report_summary"]["upstream_provider"] == "template"
+        assert items[0]["report_summary"]["raw_export"] is True
+        assert items[0]["report_summary"]["export_count"] == 2
 
         detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
         assert detail_resp.status_code == 200, detail_resp.text

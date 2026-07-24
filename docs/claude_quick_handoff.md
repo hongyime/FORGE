@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: distributed task dashboard/API review is complete.
+Latest checkpoint: report overview render/export parity is complete.
+Static dashboard overview JSON, static overview HTML, live `/api/engagements`
+list payloads, and React overview cards now surface the latest `report_summary`
+render/export state instead of only `report_count`. Raw-export UI labels now
+distinguish final `rendered_provider=raw_export` from upstream
+`render_backend=template`, preventing dashboard review from misreading raw
+fallback output as a template-rendered report. Verification: compile passed;
+Ruff passed; frontend build passed; focused dashboard/API report-route
+contracts passed (`4 passed`); full static dashboard plus web engagement API
+suites passed (`79 passed`); `.forge_data/engagements` contained `0`
+non-master engagement DBs after the run.
+
+Next checkpoint: add report-history aggregate review state to overview and
+detail payloads/UI, starting with report family count and latest export family
+visibility, so operators can identify engagements with multiple report
+generations from the dashboard without opening every detail route. Keep provider
+calls mocked unless explicit ROE/scope manifest and target are supplied.
+
+Previous checkpoint: distributed task dashboard/API review is complete.
 Engagement detail counts/sections for static dashboard JSON, static dashboard
 HTML, live web API list/detail review, and React detail labels now expose
 `distributed_tasks` scheduling inventory using only safe fields: task key,
@@ -36,11 +54,6 @@ compile passed; Ruff passed; frontend build passed; focused dashboard/API route
 contracts passed (`2 passed`); full static dashboard plus web engagement API
 suites passed (`79 passed`); `.forge_data/engagements` contained `0`
 non-master engagement DBs after the run.
-
-Next checkpoint: audit current-code report/export/dashboard/API parity for one
-concrete review-surface gap, preferably report render-history aggregate stats or
-provider/export parity found from code evidence. Keep provider calls mocked
-unless explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: explicit cloud-leak validation scheduling is complete.
 `PlaybookEngine.run_cloud_leak_loop()` now fails closed without ROE/scope

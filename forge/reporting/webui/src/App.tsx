@@ -42,6 +42,7 @@ type ReportSummary = {
   provider?: string
   requested_provider?: string
   render_backend?: string
+  rendered_provider?: string
   upstream_provider?: string
   format?: string
   generated_at?: string
@@ -153,6 +154,7 @@ type EngagementSummary = {
   highest_severity: string
   graph_summary: GraphSummary | null
   run_summary?: RunSummary | null
+  report_summary?: ReportSummary
   report_count: number
   graph_count: number
   audit_count?: number
@@ -613,6 +615,7 @@ const SAMPLE_INDEX: EngagementIndex = {
     severity_summary: item.severity_summary,
     highest_severity: item.highest_severity,
     graph_summary: item.graph_summary,
+    report_summary: item.report_summary,
     report_count: item.report_count,
     graph_count: item.graph_count,
     audit_count: item.audit_count,
@@ -1735,6 +1738,31 @@ function OverviewPage({
                 <span>{formatCount(engagementFindingCount(item))} findings</span>
                 <span>{formatCount(engagementDataPointCount(item))} data points</span>
               </div>
+              {item.report_summary ? (
+                <div className="card-metrics">
+                  <span>
+                    report{' '}
+                    {item.report_summary.rendered_provider
+                      || item.report_summary.provider
+                      || item.report_summary.render_backend
+                      || '-'}
+                  </span>
+                  {item.report_summary.render_backend
+                  && item.report_summary.render_backend !== (
+                    item.report_summary.rendered_provider || item.report_summary.provider
+                  ) ? (
+                    <span>backend {item.report_summary.render_backend}</span>
+                  ) : null}
+                  <span>
+                    {formatCount(
+                      item.report_summary.export_count ?? item.report_summary.available_exports?.length,
+                    )}{' '}
+                    exports
+                  </span>
+                  {item.report_summary.raw_export ? <span>raw export</span> : null}
+                  {item.report_summary.fallback_reason ? <span>fallback</span> : null}
+                </div>
+              ) : null}
               {item.run_summary ? (
                 <div className="card-metrics">
                   <span>{item.run_summary.run_kind}</span>
@@ -3077,7 +3105,10 @@ function DetailPage({
                 <span className="summary-label">Render path</span>
                 <div className="token-wrap">
                   <span className="token">requested {reportSummary.requested_provider || '-'}</span>
-                  <span className="token">rendered {reportSummary.render_backend || reportSummary.provider || '-'}</span>
+                  <span className="token">
+                    rendered {reportSummary.rendered_provider || reportSummary.provider || reportSummary.render_backend || '-'}
+                  </span>
+                  <span className="token">backend {reportSummary.render_backend || '-'}</span>
                   <span className="token">exported {reportSummary.provider || '-'}</span>
                   <span className="token">{reportSummary.format || 'unknown format'}</span>
                   {reportSummary.raw_export ? <span className="token">raw export</span> : null}
@@ -3159,7 +3190,11 @@ function DetailPage({
                         </div>
                         <div className="mini-table-row">
                           <span>Rendered</span>
-                          <span>{historyEntry.render_backend || historyEntry.provider || '-'}</span>
+                          <span>{historyEntry.rendered_provider || historyEntry.provider || historyEntry.render_backend || '-'}</span>
+                        </div>
+                        <div className="mini-table-row">
+                          <span>Backend</span>
+                          <span>{historyEntry.render_backend || '-'}</span>
                         </div>
                         <div className="mini-table-row">
                           <span>Exports</span>

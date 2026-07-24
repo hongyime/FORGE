@@ -733,6 +733,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "data-tags='external|priority-high'" in site_html
     assert "data-updated-ms='" in site_html
     assert "data-finding-count='" in site_html
+    assert "template · 4 exports · fallback" in site_html
 
     overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
     overview_payload_json = json.dumps(overview_payload, sort_keys=True)
@@ -744,6 +745,18 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["highest_severity"] == "HIGH"
     assert overview_payload["items"][0]["severity_summary"]["HIGH"] == 1
     assert overview_payload["items"][0]["report_count"] == 4
+    overview_report = overview_payload["items"][0]["report_summary"]
+    assert overview_report["provider"] == "template"
+    assert overview_report["requested_provider"] == "auto"
+    assert overview_report["render_backend"] == "template"
+    assert overview_report["fallback_reason"] == "quota exceeded"
+    assert overview_report["export_count"] == 4
+    assert [item["label"] for item in overview_report["available_exports"]] == [
+        "Markdown",
+        "PDF",
+        "Report JSON",
+        "CSV",
+    ]
     assert overview_payload["items"][0]["audit_count"] == 2
     assert overview_payload["items"][0]["counts"]["seed_runs"] == 1
     assert overview_payload["items"][0]["counts"]["engagement_runs"] == 1
@@ -1185,6 +1198,9 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
 
     overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
     assert overview_payload["items"][0]["report_count"] == 3
+    assert overview_payload["items"][0]["report_summary"]["rendered_provider"] == "raw_export"
+    assert overview_payload["items"][0]["report_summary"]["render_backend"] == "template"
+    assert overview_payload["items"][0]["report_summary"]["upstream_provider"] == "template"
 
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     assert detail_payload["report_previews"] == []
@@ -1215,6 +1231,11 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Raw JSON" in detail_html
     assert "CSV" in detail_html
+    assert '<span class="k">Rendered</span><span class="v">raw_export</span>' in detail_html
+    assert '<span class="k">Backend</span><span class="v">template</span>' in detail_html
+
+    site_html = (site_root / "index.html").read_text(encoding="utf-8")
+    assert "raw_export · 2 exports · backend template · raw · fallback" in site_html
 
 
 def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(tmp_path: Path) -> None:

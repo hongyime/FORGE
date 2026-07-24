@@ -66,10 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit current-code report/export/dashboard/API parity for
-  one concrete review-surface gap, preferably report render-history aggregate
-  stats or provider/export parity found from code evidence. Keep provider calls
-  mocked unless explicit ROE/scope manifest and target are supplied.
+- [ ] Next checkpoint: add report-history aggregate review state to overview
+  and detail payloads/UI, starting with report family count and latest export
+  family visibility, so operators can identify engagements with multiple report
+  generations from the dashboard without opening every detail route. Keep
+  provider calls mocked unless explicit ROE/scope manifest and target are
+  supplied.
+- [x] Report overview render/export parity checkpoint:
+  Static dashboard overview JSON, static overview HTML, live `/api/engagements`
+  list payloads, and React overview cards now surface the latest `report_summary`
+  render/export state instead of only `report_count`. Raw-export UI labels now
+  distinguish final `rendered_provider=raw_export` from upstream
+  `render_backend=template`, preventing dashboard review from misreading raw
+  fallback output as a template-rendered report. Verification: compile passed;
+  Ruff passed; frontend build passed; focused dashboard/API report-route
+  contracts passed (`4 passed`); full static dashboard plus web engagement API
+  suites passed (`79 passed`); workspace `.forge_data/engagements` contained
+  `0` non-master engagement DBs after the run.
 - [x] Distributed task dashboard/API review checkpoint:
   Engagement detail counts/sections for static dashboard JSON, static dashboard
   HTML, live web API list/detail review, and React detail labels now expose

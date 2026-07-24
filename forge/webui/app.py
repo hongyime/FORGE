@@ -949,7 +949,7 @@ def create_app() -> Any:
             ),
             [_artifact_payload(slug, path, "audit") for path in audit_files],
         )
-        return {
+        payload = {
             "db": db_file.name,
             "id": engagement_id,
             "slug": slug,
@@ -974,6 +974,10 @@ def create_app() -> Any:
             "detail_route": f"/engagements/{slug}",
             "detail_api": f"/api/engagements/{slug}",
         }
+        report_summary = _report_summary_payload(report_files)
+        if report_summary is not None:
+            payload["report_summary"] = report_summary
+        return payload
 
     def _engagement_detail_payload(
         db_file: Path,
