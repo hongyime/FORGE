@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: cleanup inventory is complete. Stale local test/backup
+Latest checkpoint: scope-gate unification is complete.
+`forge/opsec/scope_gate.py` now matches the governance gate: missing or empty
+scope fails closed, bare domains authorize only exact apex matches, wildcard
+entries authorize subdomains only, and CIDR matching uses Python's `ipaddress`
+implementation. Stale login-probe fixtures now express subdomain authorization
+explicitly with `*.acme.local` instead of relying on broad bare-domain
+matching. Verification: opsec/governance scope suite passed (`37 passed`);
+Phase 2 scope selector passed (`7 passed, 137 deselected`); direct CLI and
+distributed scope suites passed (`38 passed`); engagement ID plus scope gate
+suite passed (`40 passed`); FastAPI live scope-manifest selector passed (`3
+passed, 38 deselected`); Ruff/compile passed for touched files. Handoff:
+`.claude/handoffs/2026-07-24-scope-gate-unification.md`.
+
+Next checkpoint: harden LLM/provider quota/rate-limit/auth and timeout fallback
+regressions so every adapter degrades through cascade/template/raw export
+deterministically.
+
+Previous checkpoint: cleanup inventory is complete. Stale local test/backup
 artifacts were removed from `.forge_data`: old Phase 3 template files under
 `.forge_data/engagements/1` and `.forge_data/engagements/5010`, the zero-byte
 allocator scratch `.forge_data/engagements/master.db`, and
@@ -35,12 +52,6 @@ Final inventory: `.forge_data/engagements` has no entries; the backup DB is
 gone. Verification: `tests/scripts/test_run_phase1_orchestrator_partitions.py`
 passed (`6 passed`); `tests/phase1/test_engagement_ids.py` passed (`3 passed`).
 Handoff: `.claude/handoffs/2026-07-24-cleanup-inventory.md`.
-
-Next checkpoint: unify scope-gate semantics between
-`forge/governance/scope_gate.py` and `forge/opsec/scope_gate.py`, with tests
-proving live/direct modules fail closed before network/tool execution when
-scope or ROE is missing. After that, harden LLM/provider quota/rate-limit/auth
-and timeout fallback regressions.
 
 Previous checkpoint: compact regression sweep and live asset-context route parity
 are complete. Artifact recursion/scope/review parity, dashboard cloud/detail

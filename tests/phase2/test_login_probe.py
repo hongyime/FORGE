@@ -88,7 +88,9 @@ def tmp_eng_db(tmp_path: Path) -> Path:
             scope_entry TEXT
         );
         INSERT INTO engagement_scope (engagement_id, scope_entry)
-            VALUES ({ENGAGEMENT_ID}, 'acme.local');
+            VALUES
+                ({ENGAGEMENT_ID}, 'acme.local'),
+                ({ENGAGEMENT_ID}, '*.acme.local');
 
         CREATE TABLE audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -872,8 +874,8 @@ def test_scope_check_exact_hostname_passes(tmp_eng_db):
     _scope_check("http://exact.acme.local/login", ENGAGEMENT_ID, tmp_eng_db)
 
 
-def test_scope_check_subdomain_under_registered_domain_passes(tmp_eng_db):
-    # "acme.local" scope entry should allow "admin.acme.local"
+def test_scope_check_subdomain_under_wildcard_domain_passes(tmp_eng_db):
+    # Subdomains require an explicit wildcard entry.
     _scope_check("http://admin.acme.local/login", ENGAGEMENT_ID, tmp_eng_db)
 
 

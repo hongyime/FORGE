@@ -66,12 +66,22 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: unify scope-gate semantics between `forge/governance/scope_gate.py`
-  and `forge/opsec/scope_gate.py`, with tests proving live/direct modules fail
-  closed before network/tool execution when scope or ROE is missing.
-- [ ] Then harden explicit LLM/provider fallback regressions for
+- [ ] Next checkpoint: harden explicit LLM/provider fallback regressions for
   quota/rate-limit/auth/timeout failures so every adapter degrades through
   cascade/template/raw export deterministically.
+- [x] Scope-gate unification checkpoint:
+  `forge/opsec/scope_gate.py` now matches the governance gate: missing or empty
+  scope fails closed, bare domains authorize only exact apex matches, wildcard
+  entries authorize subdomains only, and CIDR matching uses Python's
+  `ipaddress` implementation. Stale login-probe fixtures now express subdomain
+  authorization explicitly with `*.acme.local` instead of relying on broad
+  bare-domain matching. Verification: opsec/governance scope suite passed (`37
+  passed`); Phase 2 scope selector passed (`7 passed, 137 deselected`); direct
+  CLI and distributed scope suites passed (`38 passed`); engagement ID plus
+  scope gate suite passed (`40 passed`); FastAPI live scope-manifest selector
+  passed (`3 passed, 38 deselected`); Ruff/compile passed for touched files.
+  Handoff:
+  `.claude/handoffs/2026-07-24-scope-gate-unification.md`.
 - [x] Cleanup inventory checkpoint:
   Confirmed and removed stale local test/backup artifacts from `.forge_data`:
   old Phase 3 template files under `.forge_data/engagements/1` and
