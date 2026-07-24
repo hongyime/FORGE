@@ -25,30 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: K2 terminal artifact queue metrics are complete. Stable
-termination with failed cloud URL artifact fetch rows is expected inventory
-behavior when `pending_work_total=0`, but it must be visible. `forge
-kill-chain` now writes an `artifact_queue_terminal_metrics` audit row at
-completion, and the service-worker/precache E2E asserts final run metadata
-exposes artifact queue status counts, cumulative processor processed/failed
-counts, zero pending work, dashboard artifact queue rows, and the terminal audit
-summary. The same fixture also proves page/manifest -> service worker ->
-root-relative precache chunk recursion and exported attack-graph
-`derived_from` edges for `manifest -> service-worker -> precache -> chunk`.
-Node:
-`tests/phase1/test_kill_chain_service_worker_precache_e2e.py::test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_report_outputs`.
+Latest checkpoint: stable-proof validator surface gates are complete. Phase 6
+deterministic-cloud report filtering now requires stable proof for proof-bound
+cloud methods, matching deterministic findings, graph, dashboard, and API
+gates. Phase 6 raw CSV finding rows now include non-sensitive target identity
+fields (`target_url`, `parameter`, `cloud_provider`, `resource_id`) so raw
+exports can be audited by asset. The new focused local integration fixture
+proves weak `VALIDATED` Firebase/S3 rows and a honeypot Supabase row remain
+validation inventory only and stay out of deterministic findings, Phase 6
+template/JSON/CSV outputs, attack graph vuln nodes, dashboard detail, and web
+API severity summaries. Node:
+`tests/integration/test_cloud_validation_stable_proof_surfaces.py::test_stable_proof_gate_filters_validated_looking_cloud_rows_across_surfaces`.
 
-Verification: compile passed; Ruff passed; focused service-worker/precache E2E
-passed (`1 passed`); pytest engagement cleanup reported `removed=2 remaining=0`.
-Handoff:
-`.claude/handoffs/2026-07-24-k2-terminal-artifact-queue-metrics.md`.
-Prior static/E2E parser checkpoints remain in the adjacent 2026-07-24
-service-worker handoff files.
+Verification: compile passed; Ruff passed; focused stable-proof surface test
+passed (`1 passed`); adjacent latest-row reportability slice passed with it
+(`2 passed`); pytest engagement cleanup reported `removed=2 remaining=0`.
+Handoff: `.claude/handoffs/2026-07-24-stable-proof-surface-gates.md`.
 
-Current next gate: add focused validator tests for stable-proof and
-honeypot/placeholder gating. Keep these local/mocked and prove
-`VALIDATED`-looking rows without stable proof stay out of deterministic
-findings/report/graph/dashboard surfaces.
+Current next gate: run a broader validation/reportability regression slice and
+fix any drift. Recommended local subset: core validation proof parsing, latest
+validation reportability integration, attack graph stale-validation gates,
+reporting dashboard validation gates, and the new stable-proof surface fixture.
+Keep it local/mocked and preserve inventory visibility while keeping reportable
+findings proof-bound.
 
 Previous checkpoint: runtime frontend config JS recursion is complete. Explicit
 public runtime config files such as `runtime-env.js`, `env-config.js`, and

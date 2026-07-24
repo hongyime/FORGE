@@ -1333,6 +1333,9 @@ class ContextBuilder:
             asset_type,
             str(finding.get("validation_status") or ""),
             str(finding.get("validation_method") or ""),
+            evidence=finding.get("validation_evidence_summary"),
+            notes=finding.get("validation_notes"),
+            require_stable_proof=True,
         )
 
     @classmethod
@@ -2563,6 +2566,10 @@ class ReportSynthesizer:
                     "cve_id": str(finding.get("cve_id") or ""),
                     "title": str(finding.get("title") or ""),
                     "evidence": str(finding.get("evidence") or ""),
+                    "target_url": str(finding.get("target_url") or ""),
+                    "parameter": str(finding.get("parameter") or ""),
+                    "cloud_provider": str(finding.get("cloud_provider") or ""),
+                    "resource_id": str(finding.get("resource_id") or ""),
                     "validation_status": str(finding.get("validation_status") or ""),
                     "validation_method": str(finding.get("validation_method") or ""),
                     "validation_http_status": str(finding.get("validation_http_status") or ""),
@@ -2733,6 +2740,10 @@ class ReportSynthesizer:
                 "cve_id",
                 "title",
                 "evidence",
+                "target_url",
+                "parameter",
+                "cloud_provider",
+                "resource_id",
                 "validation_status",
                 "validation_method",
                 "validation_http_status",

@@ -135,10 +135,27 @@ sentences as historical notes only, not as current instructions.
   passed; focused service-worker/precache E2E passed (`1 passed`); pytest
   engagement cleanup reported `removed=2 remaining=0`. Handoff:
   `.claude/handoffs/2026-07-24-k2-terminal-artifact-queue-metrics.md`.
-- [ ] Next target: add focused validator tests for stable-proof and
-  honeypot/placeholder gating. Keep these local/mocked and prove
-  `VALIDATED`-looking rows without stable proof stay out of deterministic
-  findings/report/graph/dashboard surfaces.
+- [x] Stable-proof validator surface-gate checkpoint:
+  Phase 6 deterministic-cloud report filtering now requires stable proof for
+  proof-bound cloud methods, matching deterministic findings, graph, dashboard,
+  and API gates. Phase 6 raw CSV finding rows now include non-sensitive target
+  identity fields (`target_url`, `parameter`, `cloud_provider`, `resource_id`)
+  so raw exports can be audited by asset. Added a focused local integration
+  fixture with stable Firebase/S3 positives plus weak `VALIDATED` Firebase/S3
+  rows and a honeypot Supabase row; it proves weak/placeholder/honeypot rows
+  remain validation inventory only and stay out of deterministic findings,
+  Phase 6 template/JSON/CSV outputs, attack graph vuln nodes, dashboard detail,
+  and web API severity summaries. Verification: compile passed; Ruff passed;
+  focused stable-proof surface test passed (`1 passed`); adjacent latest-row
+  reportability slice passed with it (`2 passed`); pytest engagement cleanup
+  reported `removed=2 remaining=0`. Handoff:
+  `.claude/handoffs/2026-07-24-stable-proof-surface-gates.md`.
+- [ ] Next target: run a broader validation/reportability regression slice and
+  fix any drift. Recommended local subset: core validation proof parsing,
+  latest validation reportability integration, attack graph stale-validation
+  gates, reporting dashboard validation gates, and the new stable-proof surface
+  fixture. Keep it local/mocked and preserve inventory visibility while keeping
+  reportable findings proof-bound.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from
