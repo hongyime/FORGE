@@ -205,11 +205,24 @@ historical notes only, not as current instructions.
   passed, 13 deselected`); web UI graph/cloud validation slice passed (`5
   passed, 32 deselected, 6 warnings`). Handoff:
   `.claude/handoffs/2026-07-24-dashboard-cloud-alias-graph-parity.md`.
+- [x] Effective cloud validation status projection checkpoint:
+  Canonicalized cloud-validation alias ordering now uses canonical asset type,
+  identifier, checked timestamp, and row ID before choosing latest validation
+  state, so stale alias rows cannot override newer canonical rows. Phase 6
+  report metadata, raw CSV exports, and dashboard/API validation inventory now
+  expose both stored status and effective report-gated status; low-proof
+  `VALIDATED` rows remain reviewable inventory but project as `UNVERIFIED` and
+  `validation_reportable=False`. Deterministic cloud findings use the same
+  canonical latest-row ordering. Verification: compile passed; Ruff passed;
+  cloud stable-proof/latest/dashboard/API slice passed (`5 passed`); dashboard
+  cloud/key selector slice passed (`8 passed, 13 deselected`); engagement API
+  graph/cloud selector slice passed (`5 passed, 32 deselected`); focused Phase
+  6 and attack-path slices passed. Handoff:
+  `.claude/handoffs/2026-07-24-effective-cloud-validation-status.md`.
 - [ ] Next target: audit another concrete passive-to-live validation parity gap,
   preferably provider-specific proof/detail reviewability for long-tail
-  validators or report/raw-export parity for canonicalized aliases. Keep live
-  provider calls mocked unless an explicit ROE/scope manifest and target are
-  supplied.
+  validators. Keep live provider calls mocked unless an explicit ROE/scope
+  manifest and target are supplied.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from

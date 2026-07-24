@@ -1356,7 +1356,8 @@ def test_synthesizer_template_renders_cloud_validation_metadata(
             """
             INSERT INTO cloud_validation_results
                 (engagement_id, asset_type, identifier, validation_status, validation_method, http_status, evidence, notes, checked_at)
-            VALUES (?, 'aws_s3', 'validated-bucket', 'VALIDATED', 's3_list_bucket', 200, '<ListBucketResult/>',
+            VALUES (?, 'aws_s3', 'validated-bucket', 'VALIDATED', 's3_list_bucket', 200,
+                    '<ListBucketResult><Contents><Key>reports/customer.csv</Key></Contents></ListBucketResult>',
                     'Bucket listing returned object metadata through a low-impact probe.', '2026-07-14T00:00:00Z')
             """,
             (ENGAGEMENT_ID,),

@@ -189,15 +189,26 @@ class DeterministicFindingEngine:
             id_expr = "id" if "id" in validation_columns else "0"
             validation_index = self._validation_index(con)
 
-            for row in con.execute(
+            cloud_validation_rows = con.execute(
                 f"""
-                SELECT asset_type, identifier, validation_status, validation_method, http_status, evidence, notes
+                SELECT asset_type, identifier, validation_status, validation_method,
+                       http_status, evidence, notes, {checked_expr} AS checked_at_sort,
+                       {id_expr} AS id_sort
                 FROM cloud_validation_results
                 WHERE engagement_id=?
-                ORDER BY asset_type ASC, identifier ASC, {checked_expr} ASC, {id_expr} ASC
                 """,
                 (self._engagement_id,),
-            ).fetchall():
+            ).fetchall()
+            cloud_validation_rows = sorted(
+                cloud_validation_rows,
+                key=lambda row: (
+                    _normalize_asset_type(str(row["asset_type"] or "")),
+                    str(row["identifier"] or "").strip().lower(),
+                    str(row["checked_at_sort"] or ""),
+                    int(row["id_sort"] or 0),
+                ),
+            )
+            for row in cloud_validation_rows:
                 spec = self._build_cloud_finding(row)
                 if spec is None:
                     summary.removed += self._delete_finding(

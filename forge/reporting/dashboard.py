@@ -20,7 +20,9 @@ from xml.etree import ElementTree
 
 from forge.audit.manifest import summarize_run_audit_manifest
 from forge.utils.cloud_exposure_gate import (
+    effective_cloud_validation_status,
     is_deterministic_cloud_exposure,
+    is_reportable_cloud_validation,
     linked_cloud_validation_reportability,
     latest_cloud_validation_reportability_index,
     normalize_cloud_exposure_asset_type,
@@ -1439,6 +1441,43 @@ def _filter_graph_payload_for_validation(
     return filtered
 
 
+def _cloud_validation_section_row(row: sqlite3.Row) -> dict[str, str]:
+    stored_type = str(row["asset_type"] or "").strip().lower()
+    asset_type = normalize_cloud_exposure_asset_type(stored_type)
+    stored_status = str(row["validation_status"] or "").strip().upper()
+    method = str(row["validation_method"] or "").strip()
+    evidence = row["evidence"]
+    notes = row["notes"]
+    reportable = is_reportable_cloud_validation(
+        asset_type,
+        stored_status,
+        method,
+        evidence=evidence,
+        notes=notes,
+        require_stable_proof=True,
+    )
+    return {
+        "Asset": str(row["display_identifier"] or ""),
+        "Type": asset_type,
+        "Stored Type": stored_type,
+        "Status": effective_cloud_validation_status(
+            asset_type,
+            stored_status,
+            method,
+            evidence=evidence,
+            notes=notes,
+            require_stable_proof=True,
+        ),
+        "Stored Status": stored_status,
+        "Reportable": "yes" if reportable else "no",
+        "Method": method,
+        "HTTP": str(row["http_status"] or ""),
+        "Evidence": _truncate(evidence, 120),
+        "Notes": _truncate(notes, 120),
+        "Checked": _format_dt(str(row["checked_at"] or "")),
+    }
+
+
 def _parse_graph_payload(raw: str) -> dict[str, Any] | None:
     try:
         payload = json.loads(raw)
@@ -2769,16 +2808,7 @@ def _detail_sections(
         else "identifier AS display_identifier"
     )
     sections["cloud_validation_results"] = [
-        {
-            "Asset": str(row["display_identifier"] or ""),
-            "Type": str(row["asset_type"] or ""),
-            "Status": str(row["validation_status"] or ""),
-            "Method": str(row["validation_method"] or ""),
-            "HTTP": str(row["http_status"] or ""),
-            "Evidence": _truncate(row["evidence"], 120),
-            "Notes": _truncate(row["notes"], 120),
-            "Checked": _format_dt(str(row["checked_at"] or "")),
-        }
+        _cloud_validation_section_row(row)
         for row in _fetch_rows(
             con,
             f"""

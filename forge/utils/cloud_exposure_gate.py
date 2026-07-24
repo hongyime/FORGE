@@ -139,6 +139,32 @@ def is_reportable_cloud_validation(
     return True
 
 
+def effective_cloud_validation_status(
+    asset_type: str,
+    validation_status: str,
+    validation_method: str,
+    *,
+    evidence: object = None,
+    notes: object = None,
+    require_stable_proof: bool = True,
+) -> str:
+    """Return report-facing status without losing raw validation inventory."""
+
+    stored_status = str(validation_status or "").strip().upper()
+    if stored_status != "VALIDATED":
+        return stored_status
+    if is_reportable_cloud_validation(
+        asset_type,
+        stored_status,
+        validation_method,
+        evidence=evidence,
+        notes=notes,
+        require_stable_proof=require_stable_proof,
+    ):
+        return "VALIDATED"
+    return "UNVERIFIED"
+
+
 def _cloud_validation_columns(con: sqlite3.Connection) -> set[str]:
     try:
         return {
@@ -169,10 +195,9 @@ def latest_cloud_validation_reportability_index(
         rows = con.execute(
             f"""
             SELECT asset_type, identifier, validation_status, {method_expr},
-                   {evidence_expr}, {notes_expr}
+                   {evidence_expr}, {notes_expr}, {checked_expr}, {id_expr}
             FROM cloud_validation_results
             WHERE engagement_id=?
-            ORDER BY asset_type ASC, identifier ASC, {checked_expr} ASC, {id_expr} ASC
             """,
             (engagement_id,),
         ).fetchall()
@@ -180,7 +205,25 @@ def latest_cloud_validation_reportability_index(
         return {}
 
     index: dict[tuple[str, str], bool] = {}
-    for asset_raw, identifier_raw, status_raw, method_raw, evidence_raw, notes_raw in rows:
+    ordered_rows = sorted(
+        rows,
+        key=lambda row: (
+            normalize_cloud_exposure_asset_type(str(row[0] or "")),
+            str(row[1] or "").strip().lower(),
+            str(row[6] or ""),
+            int(row[7] or 0),
+        ),
+    )
+    for (
+        asset_raw,
+        identifier_raw,
+        status_raw,
+        method_raw,
+        evidence_raw,
+        notes_raw,
+        _checked_at,
+        _row_id,
+    ) in ordered_rows:
         asset_type = normalize_cloud_exposure_asset_type(str(asset_raw or ""))
         identifier = str(identifier_raw or "").strip().lower()
         if not asset_type or not identifier:

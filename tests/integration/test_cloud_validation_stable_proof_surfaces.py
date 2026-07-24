@@ -390,8 +390,10 @@ def _assert_phase6_report_surface_filters_stale_rows(
     assert WEAK_KEY_TARGET not in report_text
     assert HONEYPOT_KEY_TARGET not in report_text
     inventory = payload["context"]["cloud_validation_inventory"]
-    assert _inventory_status(inventory, "firebase", WEAK_FIREBASE) == "VALIDATED"
-    assert _inventory_status(inventory, "aws_s3", PLACEHOLDER_BUCKET) == "VALIDATED"
+    assert _inventory_status(inventory, "firebase", WEAK_FIREBASE) == "UNVERIFIED"
+    assert _inventory_stored_status(inventory, "firebase", WEAK_FIREBASE) == "VALIDATED"
+    assert _inventory_status(inventory, "aws_s3", PLACEHOLDER_BUCKET) == "UNVERIFIED"
+    assert _inventory_stored_status(inventory, "aws_s3", PLACEHOLDER_BUCKET) == "VALIDATED"
     assert _inventory_status(inventory, "supabase", HONEYPOT_SUPABASE) == "HONEYPOT_SUSPECTED"
 
     with report_path.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
@@ -402,7 +404,8 @@ def _assert_phase6_report_surface_filters_stale_rows(
         f"firebase://{STABLE_FIREBASE}",
     }
     validation_rows = [row for row in rows if row.get("record_type") == "cloud_validation"]
-    assert _csv_validation_status(validation_rows, "firebase", WEAK_FIREBASE) == "VALIDATED"
+    assert _csv_validation_status(validation_rows, "firebase", WEAK_FIREBASE) == "UNVERIFIED"
+    assert _csv_stored_validation_status(validation_rows, "firebase", WEAK_FIREBASE) == "VALIDATED"
     assert _csv_validation_status(validation_rows, "supabase", HONEYPOT_SUPABASE) == "HONEYPOT_SUSPECTED"
 
 
@@ -455,9 +458,15 @@ def _assert_dashboard_filters_stale_rows(data_dir: Path, reports_dir: Path) -> s
         (row["Type"], row["Asset"]): row["Status"]
         for row in detail["sections"]["cloud_validation_results"]
     }
-    assert validation_rows[("firebase", WEAK_FIREBASE)] == "VALIDATED"
-    assert validation_rows[("aws_s3", PLACEHOLDER_BUCKET)] == "VALIDATED"
+    assert validation_rows[("firebase", WEAK_FIREBASE)] == "UNVERIFIED"
+    assert validation_rows[("aws_s3", PLACEHOLDER_BUCKET)] == "UNVERIFIED"
     assert validation_rows[("supabase", HONEYPOT_SUPABASE)] == "HONEYPOT_SUSPECTED"
+    stored_validation_rows = {
+        (row["Type"], row["Asset"]): row["Stored Status"]
+        for row in detail["sections"]["cloud_validation_results"]
+    }
+    assert stored_validation_rows[("firebase", WEAK_FIREBASE)] == "VALIDATED"
+    assert stored_validation_rows[("aws_s3", PLACEHOLDER_BUCKET)] == "VALIDATED"
     return slug
 
 
@@ -527,6 +536,19 @@ def _inventory_status(
     return str(row.get("validation_status") or "")
 
 
+def _inventory_stored_status(
+    inventory: list[dict[str, object]],
+    asset_type: str,
+    identifier: str,
+) -> str:
+    row = next(
+        item
+        for item in inventory
+        if item.get("asset_type") == asset_type and item.get("identifier") == identifier
+    )
+    return str(row.get("stored_validation_status") or "")
+
+
 def _csv_validation_status(
     rows: list[dict[str, str]],
     asset_type: str,
@@ -539,6 +561,20 @@ def _csv_validation_status(
         and item.get("cloud_identifier") == identifier
     )
     return row.get("validation_status") or ""
+
+
+def _csv_stored_validation_status(
+    rows: list[dict[str, str]],
+    asset_type: str,
+    identifier: str,
+) -> str:
+    row = next(
+        item
+        for item in rows
+        if item.get("cloud_asset_type") == asset_type
+        and item.get("cloud_identifier") == identifier
+    )
+    return row.get("stored_validation_status") or ""
 
 
 def _dashboard_targets(detail_payload: dict[str, object]) -> set[str]:

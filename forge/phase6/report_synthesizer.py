@@ -51,6 +51,7 @@ from forge.core.errors import ProviderUnavailableError
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.utils.cloud_exposure_gate import (
+    effective_cloud_validation_status,
     is_deterministic_cloud_exposure,
     is_reportable_cloud_validation,
     latest_cloud_validation_reportability_index,
@@ -639,6 +640,7 @@ class ContextBuilder:
         if not {"asset_type", "identifier", "validation_status"}.issubset(columns):
             return {}
         select_parts = [
+            "id" if "id" in columns else "0 AS id",
             "asset_type",
             "identifier",
             "provider_identifier" if "provider_identifier" in columns else "identifier AS provider_identifier",
@@ -649,30 +651,54 @@ class ContextBuilder:
             "evidence" if "evidence" in columns else "NULL AS evidence",
             "checked_at" if "checked_at" in columns else "NULL AS checked_at",
         ]
-        order_checked_at_expr = "COALESCE(checked_at, '')" if "checked_at" in columns else "''"
-        order_id_expr = "id" if "id" in columns else "0"
         try:
             rows = con.execute(
                 f"SELECT {', '.join(select_parts)} FROM cloud_validation_results "
-                "WHERE engagement_id=? "
-                f"ORDER BY asset_type ASC, identifier ASC, {order_checked_at_expr} ASC, "
-                f"{order_id_expr} ASC",
+                "WHERE engagement_id=?",
                 (self._eid,),
             ).fetchall()
         except sqlite3.OperationalError:
             return {}
 
         metadata: dict[tuple[str, str], dict[str, Any]] = {}
-        for row in rows:
+        ordered_rows = sorted(
+            rows,
+            key=lambda row: (
+                self._normalize_validation_asset_type(str(row["asset_type"] or "")),
+                str(row["identifier"] or "").strip().lower(),
+                str(row["checked_at"] or ""),
+                int(row["id"] or 0),
+            ),
+        )
+        for row in ordered_rows:
             asset_type = self._normalize_validation_asset_type(str(row["asset_type"] or ""))
             identifier = str(row["identifier"] or "").strip().lower()
             if not asset_type or not identifier:
                 continue
+            stored_status = str(row["validation_status"] or "").strip().upper()
+            validation_method = str(row["validation_method"] or "").strip()
+            validation_reportable = is_reportable_cloud_validation(
+                asset_type,
+                stored_status,
+                validation_method,
+                evidence=row["evidence"],
+                notes=row["notes"],
+                require_stable_proof=True,
+            )
             metadata[(asset_type, identifier)] = {
                 "validation_asset_type": asset_type,
                 "provider_identifier": str(row["provider_identifier"] or row["identifier"] or "").strip(),
-                "validation_status": str(row["validation_status"] or "").strip().upper(),
-                "validation_method": str(row["validation_method"] or "").strip(),
+                "stored_validation_status": stored_status,
+                "validation_status": effective_cloud_validation_status(
+                    asset_type,
+                    stored_status,
+                    validation_method,
+                    evidence=row["evidence"],
+                    notes=row["notes"],
+                    require_stable_proof=True,
+                ),
+                "validation_reportable": validation_reportable,
+                "validation_method": validation_method,
                 "validation_http_status": row["http_status"],
                 "validation_notes": _safe_validation_summary(row["notes"]),
                 "validation_evidence_summary": _safe_validation_summary(row["evidence"]),
@@ -688,6 +714,8 @@ class ContextBuilder:
                 "identifier": identifier,
                 "provider_identifier": str(item.get("provider_identifier") or identifier),
                 "validation_status": str(item.get("validation_status") or ""),
+                "stored_validation_status": str(item.get("stored_validation_status") or ""),
+                "validation_reportable": item.get("validation_reportable") is True,
                 "method": str(item.get("validation_method") or ""),
                 "http_status": item.get("validation_http_status"),
                 "checked_at": str(item.get("validation_checked_at") or ""),
@@ -2627,6 +2655,12 @@ class ReportSynthesizer:
                     "engagement_name": ctx.engagement_name,
                     "overall_risk": ctx.overall_risk,
                     "validation_status": str(validation.get("validation_status") or ""),
+                    "stored_validation_status": str(
+                        validation.get("stored_validation_status") or ""
+                    ),
+                    "validation_reportable": str(
+                        validation.get("validation_reportable") is True
+                    ),
                     "validation_method": str(validation.get("method") or ""),
                     "validation_http_status": str(validation.get("http_status") or ""),
                     "cloud_asset_type": str(validation.get("asset_type") or ""),
@@ -2756,6 +2790,8 @@ class ReportSynthesizer:
             "validation_checked_at": "",
             "validation_notes": "",
             "validation_evidence_summary": "",
+            "stored_validation_status": "",
+            "validation_reportable": "",
         }
         report_defaults = ReportSynthesizer._csv_report_metadata(report_metadata)
         for row in rows:
@@ -2823,6 +2859,8 @@ class ReportSynthesizer:
                 "validation_checked_at": "",
                 "validation_notes": "",
                 "validation_evidence_summary": "",
+                "stored_validation_status": "",
+                "validation_reportable": "",
                 **report_defaults,
                 "emails_found": ctx.osint.emails_found,
                 "hosts_found": len(ctx.recon.hosts),

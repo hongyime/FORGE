@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: dashboard graph alias parity is complete. Imported/stale
+Latest checkpoint: effective cloud validation status projection is complete.
+Canonicalized cloud-validation alias ordering now uses canonical asset type,
+identifier, checked timestamp, and row ID before choosing latest validation
+state, so stale alias rows cannot override newer canonical rows. Phase 6 report
+metadata, raw CSV exports, and dashboard/API validation inventory now expose
+both stored status and effective report-gated status; low-proof `VALIDATED`
+rows stay reviewable inventory but project as `UNVERIFIED` and
+`validation_reportable=False`. Deterministic cloud findings use the same
+canonical latest-row ordering. Verification: compile/Ruff passed; cloud
+stable-proof/latest/dashboard/API slice passed (`5 passed`); dashboard
+cloud/key selector slice passed (`8 passed, 13 deselected`); engagement API
+graph/cloud selector slice passed (`5 passed, 32 deselected`); focused Phase 6
+and attack-path slices passed. Handoff:
+`.claude/handoffs/2026-07-24-effective-cloud-validation-status.md`.
+
+Current next gate: audit another concrete passive-to-live validation parity
+gap, preferably provider-specific proof/detail reviewability for long-tail
+validators. Keep live provider calls mocked unless an explicit ROE/scope
+manifest and target are supplied.
+
+Previous checkpoint: dashboard graph alias parity is complete. Imported/stale
 dashboard graph payloads now merge duplicate CLOUD review nodes sharing the
 same canonical cloud asset key; alias/canonical pairs such as `CLOUD::s3::*`
 and `CLOUD::aws_s3::*` collapse before detail JSON export. Edges and
@@ -35,12 +55,6 @@ cloud-alias graph test passed (`1 passed`); adjacent dashboard graph/cloud
 validation slice passed (`8 passed, 13 deselected`); web UI graph/cloud
 validation slice passed (`5 passed, 32 deselected, 6 warnings`). Handoff:
 `.claude/handoffs/2026-07-24-dashboard-cloud-alias-graph-parity.md`.
-
-Current next gate: audit another concrete passive-to-live validation parity
-gap, preferably provider-specific proof/detail reviewability for long-tail
-validators or report/raw-export parity for canonicalized aliases. Keep live
-provider calls mocked unless an explicit ROE/scope manifest and target are
-supplied.
 
 Previous checkpoint: cloud asset alias validation/graph handoff is complete.
 Legacy cloud asset aliases (`s3`, `digitalocean_spaces`,

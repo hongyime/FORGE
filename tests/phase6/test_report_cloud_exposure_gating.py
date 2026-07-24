@@ -217,7 +217,9 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"][
         "evidence_summary"
     ]
-    assert inventory_by_identifier["manual-note-bucket"]["validation_status"] == "VALIDATED"
+    assert inventory_by_identifier["manual-note-bucket"]["validation_status"] == "UNVERIFIED"
+    assert inventory_by_identifier["manual-note-bucket"]["stored_validation_status"] == "VALIDATED"
+    assert inventory_by_identifier["manual-note-bucket"]["validation_reportable"] is False
     assert inventory_by_identifier["manual-note-bucket"]["method"] == "manual_validated_note"
     validated_finding = next(
         item
@@ -307,6 +309,13 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert any(
         row["cloud_identifier"] == "acct-unsupported"
         and row["validation_status"] == "UNSUPPORTED"
+        for row in raw_validation_rows
+    )
+    assert any(
+        row["cloud_identifier"] == "manual-note-bucket"
+        and row["validation_status"] == "UNVERIFIED"
+        and row["stored_validation_status"] == "VALIDATED"
+        and row["validation_reportable"] == "False"
         for row in raw_validation_rows
     )
     assert "raw-validation-secret" not in json.dumps(raw_payload)

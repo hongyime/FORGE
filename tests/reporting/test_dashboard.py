@@ -1779,7 +1779,9 @@ def test_generate_dashboard_filters_unknown_method_deterministic_cloud_rows(
     validation_rows = {
         row["Asset"]: row for row in detail_payload["sections"]["cloud_validation_results"]
     }
-    assert validation_rows["manual-note-bucket"]["Status"] == "VALIDATED"
+    assert validation_rows["manual-note-bucket"]["Status"] == "UNVERIFIED"
+    assert validation_rows["manual-note-bucket"]["Stored Status"] == "VALIDATED"
+    assert validation_rows["manual-note-bucket"]["Reportable"] == "no"
     assert validation_rows["manual-note-bucket"]["Method"] == "manual_validated_note"
 
 
