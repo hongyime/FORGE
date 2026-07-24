@@ -216,11 +216,25 @@ def test_artifact_text_queued_artifact_converges_on_second_process_pass(
             """,
             (nested_url,),
         ).fetchone()
+        first_audit_rows = con.execute(
+            """
+            SELECT action, target, result
+            FROM audit_log
+            WHERE engagement_id=1001 AND action='artifact_text_url_queued'
+            """
+        ).fetchall()
     finally:
         con.close()
 
     assert first_summary.processed == 1
     assert first_row == ("queued", None)
+    assert first_audit_rows == [
+        (
+            "artifact_text_url_queued",
+            nested_url,
+            "rule=artifact_text_discovered_artifact_queue artifact_type=config seed_type=url",
+        )
+    ]
 
     downloaded_urls: list[str] = []
 
@@ -287,6 +301,18 @@ def test_artifact_text_queued_artifact_converges_on_second_process_pass(
                 """
             ).fetchall()
         }
+        audit_rows = con.execute(
+            """
+            SELECT action, target, result
+            FROM audit_log
+            WHERE engagement_id=1001
+              AND action IN (
+                  'artifact_text_url_queued',
+                  'artifact_cloud_asset_inventoried'
+              )
+            ORDER BY id ASC
+            """
+        ).fetchall()
     finally:
         con.close()
 
@@ -302,3 +328,8 @@ def test_artifact_text_queued_artifact_converges_on_second_process_pass(
         "second-pass-firebase",
         "artifact_url_extract",
     ) in cloud_rows
+    assert (
+        "artifact_cloud_asset_inventoried",
+        "second-pass-firebase",
+        "asset_type=firebase source=artifact_url_extract validation_status=UNVALIDATED reportable=no",
+    ) in audit_rows

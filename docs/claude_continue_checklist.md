@@ -66,9 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add audit-lineage assertions for artifact-derived queued URLs and
-  cloud inventory so operators can trace discovered text -> queued artifact ->
-  parsed seed/cloud asset.
+- [ ] Next checkpoint: audit/update the stale dashboard storage-validation
+  stable-proof fixture so the `tests/reporting/test_dashboard.py -k "cloud or
+  graph or detail"` selector is green under current strict proof gates.
+- [x] Artifact queue/cloud inventory audit-lineage checkpoint:
+  `ArtifactQueueProcessor` now writes bounded non-sensitive audit rows when
+  artifact text queues a follow-on artifact URL
+  (`artifact_text_url_queued`) and when artifact parsing stores a new cloud
+  inventory row (`artifact_cloud_asset_inventoried`). Focused assertions prove
+  the trace from discovered artifact text -> queued remote artifact -> parsed
+  cloud inventory, without promoting inventory into findings. Verification:
+  compile passed; Ruff passed; focused recursive queue tests passed (`3
+  passed`); artifact recursive/remote-scope/review parity slice passed (`5
+  passed`); artifact provenance/cloud/contact slice passed (`7 passed`);
+  cleanup inventory unchanged (`1`, `5010`, `master.db`). Handoff:
+  `.claude/handoffs/2026-07-24-artifact-audit-lineage.md`.
 - [x] Recursive artifact queue second-pass convergence checkpoint:
   Added focused coverage proving artifact-text-discovered artifact URLs are not
   fetched in the same `ArtifactQueueProcessor.process()` call, remain queued,

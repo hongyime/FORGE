@@ -25,7 +25,20 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: recursive artifact queue second-pass convergence is complete.
+Latest checkpoint: artifact queue/cloud inventory audit-lineage is complete.
+`ArtifactQueueProcessor` now writes bounded non-sensitive audit rows when
+artifact text queues a follow-on artifact URL (`artifact_text_url_queued`) and
+when artifact parsing stores a new cloud inventory row
+(`artifact_cloud_asset_inventoried`). Focused assertions prove the trace from
+discovered artifact text -> queued remote artifact -> parsed cloud inventory,
+without promoting inventory into findings. Verification: compile/Ruff passed;
+focused recursive queue tests passed (`3 passed`); artifact
+recursive/remote-scope/review parity slice passed (`5 passed`); artifact
+provenance/cloud/contact slice passed (`7 passed`); cleanup inventory unchanged
+(`1`, `5010`, `master.db`). Handoff:
+`.claude/handoffs/2026-07-24-artifact-audit-lineage.md`.
+
+Previous checkpoint: recursive artifact queue second-pass convergence is complete.
 Focused coverage now proves artifact-text-discovered artifact URLs are not
 fetched in the same `ArtifactQueueProcessor.process()` call, remain queued, and
 converge on the next `process()` pass by downloading/parsing the queued artifact
@@ -231,10 +244,10 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: add audit-lineage assertions for artifact-derived queued
-URLs/cloud inventory so operators can trace discovered text -> queued artifact
--> parsed seed/cloud asset. Do not add live target probing without explicit
-ROE/scope manifest and mocked tests.
+Current next gate: audit/update the stale dashboard storage-validation
+stable-proof fixture so the `tests/reporting/test_dashboard.py -k "cloud or
+graph or detail"` selector is green under current strict proof gates. Do not
+add live target probing without explicit ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

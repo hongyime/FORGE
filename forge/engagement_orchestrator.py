@@ -18522,6 +18522,31 @@ class ArtifactQueueProcessor:
         self._remote_url_scope_checker = checker
         self._remote_scope_denied_callback = denied_callback
 
+    def _audit_artifact_lineage(
+        self,
+        con: sqlite3.Connection,
+        *,
+        action: str,
+        target: str,
+        result: str,
+    ) -> None:
+        try:
+            con.execute(
+                """
+                INSERT INTO audit_log
+                    (engagement_id, phase, module, action, target, result, operator)
+                VALUES (?, 'artifact_analysis', 'artifact_queue', ?, ?, ?, 'forge')
+                """,
+                (
+                    self._engagement_id,
+                    str(action or "")[:96],
+                    str(target or "")[:512],
+                    str(result or "")[:1024],
+                ),
+            )
+        except sqlite3.Error:
+            return
+
     def ingest_local_artifacts(self, search_roots: list[Path] | None = None) -> int:
         roots = search_roots or default_local_artifact_roots()
         con = sqlite3.connect(self._db_path)
@@ -22545,7 +22570,18 @@ class ArtifactQueueProcessor:
             """,
             (self._engagement_id, url, artifact_type, metadata_json),
         )
-        return 1 if con.total_changes > before_changes else 0
+        inserted = con.total_changes > before_changes
+        if inserted:
+            self._audit_artifact_lineage(
+                con,
+                action="artifact_text_url_queued",
+                target=url,
+                result=(
+                    "rule=artifact_text_discovered_artifact_queue "
+                    f"artifact_type={artifact_type} seed_type={seed_type}"
+                ),
+            )
+        return 1 if inserted else 0
 
     def _merge_artifact_metadata_into_seed(
         self,
@@ -22710,6 +22746,14 @@ class ArtifactQueueProcessor:
         normalized_identifier = original_identifier.lower()
         if not normalized_type or not normalized_identifier:
             return
+        existing = con.execute(
+            """
+            SELECT 1
+            FROM cloud_assets
+            WHERE engagement_id=? AND asset_type=? AND identifier=?
+            """,
+            (self._engagement_id, normalized_type, normalized_identifier),
+        ).fetchone()
         con.execute(
             """
             INSERT INTO cloud_assets
@@ -22732,6 +22776,16 @@ class ArtifactQueueProcessor:
                 source,
             ),
         )
+        if existing is None:
+            self._audit_artifact_lineage(
+                con,
+                action="artifact_cloud_asset_inventoried",
+                target=normalized_identifier,
+                result=(
+                    f"asset_type={normalized_type} source={source} "
+                    "validation_status=UNVALIDATED reportable=no"
+                ),
+            )
 
     def _extract_firebase_from_text(
         self,
