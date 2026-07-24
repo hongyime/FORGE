@@ -437,6 +437,124 @@ def test_scheduled_searxng_passive_allows_default_provider_url(
     assert calls == [("allowed.example", "http://searxng:8080")]
 
 
+def test_scheduled_url_bound_workflow_enforces_manifest_across_dispatchers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_engagement(db_path, scope=["allowed.example"])
+    manifest = {
+        "roe_id": "ROE-ACME-2026-07",
+        "domains": ["allowed.example"],
+        "urls": ["https://allowed.example/app/"],
+    }
+    scope_payload = {
+        "scope_manifest": json.dumps(manifest),
+        "roe_id": "ROE-ACME-2026-07",
+    }
+    crawl_calls: list[str] = []
+
+    class _RedirectResponse:
+        status_code = 302
+        headers = {"location": "https://allowed.example/admin"}
+        text = ""
+        url = "https://allowed.example/app/"
+
+    class _Client:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Client":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> object:
+            crawl_calls.append(url)
+            if url == "https://allowed.example/admin":
+                raise AssertionError("scheduled crawl must not fetch out-of-prefix redirect")
+            return _RedirectResponse()
+
+    monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
+
+    runnable.run_scheduled_task(
+        1001,
+        "crawl:https://allowed.example/app/",
+        {"task_type": "crawl", "target": "https://allowed.example/app/", **scope_payload},
+        db_path,
+    )
+
+    stealth_calls: list[dict[str, object]] = []
+    passive_calls: list[dict[str, object]] = []
+    auth_calls: list[dict[str, object]] = []
+
+    monkeypatch.setattr(
+        runnable,
+        "run_crawl_stealth",
+        lambda *args, **kwargs: stealth_calls.append({"args": args, "kwargs": kwargs})
+        or {"status": "success"},
+    )
+    monkeypatch.setattr(
+        runnable,
+        "run_passive_http_collection",
+        lambda *args, **kwargs: passive_calls.append({"args": args, "kwargs": kwargs}) or 0,
+    )
+    monkeypatch.setattr(
+        runnable,
+        "run_bypass_assessment",
+        lambda *args, **kwargs: auth_calls.append({"args": args, "kwargs": kwargs}) or object(),
+    )
+    monkeypatch.setattr(
+        runnable,
+        "run_searxng_passive",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("denied SearXNG provider must not be called")
+        ),
+    )
+
+    runnable.run_scheduled_task(
+        1001,
+        "crawl_stealth:https://allowed.example/app/",
+        {"task_type": "crawl_stealth", "target": "https://allowed.example/app/", **scope_payload},
+        db_path,
+    )
+    runnable.run_scheduled_task(
+        1001,
+        "passive:https://allowed.example/app/",
+        {"task_type": "passive", "target": "https://allowed.example/app/", **scope_payload},
+        db_path,
+    )
+    runnable.run_scheduled_task(
+        1001,
+        "auth-bypass:https://allowed.example/app/login",
+        {
+            "task_type": "auth-bypass",
+            "target": "https://allowed.example/app/login",
+            **scope_payload,
+        },
+        db_path,
+    )
+    with pytest.raises(RuntimeError, match="provider_url_denied"):
+        runnable.run_scheduled_task(
+            1001,
+            "searxng_passive:allowed.example",
+            {
+                "task_type": "searxng_passive",
+                "target": "allowed.example",
+                "searxng_url": "https://outside.example",
+                **scope_payload,
+            },
+            db_path,
+        )
+
+    assert crawl_calls == ["https://allowed.example/app/"]
+    for call in [stealth_calls[0], passive_calls[0], auth_calls[0]]:
+        assert call["kwargs"]["scope_values"] == ["allowed.example"]
+        assert call["kwargs"]["url_prefixes"] == ["https://allowed.example/app/"]
+        assert call["kwargs"]["require_scope"] is True
+
+
 def test_scheduled_sensitive_auth_bypass_requires_roe_before_execution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

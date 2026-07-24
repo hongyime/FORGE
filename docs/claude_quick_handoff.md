@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: remaining scheduled dispatcher scope propagation is complete.
+Latest checkpoint: combined scheduled URL-bound workflow fixture is complete.
+Added a mocked/local distributed scheduler fixture that runs scheduled crawl,
+crawl_stealth, passive, auth-bypass, and searxng_passive under one narrow URL
+manifest. The fixture proves crawl redirect denial does not fetch `/admin`,
+stealth/passive/auth receive explicit manifest URL-prefix scope, and an
+untrusted SearXNG provider URL is denied before provider dispatch.
+Verification: Ruff passed for the combined fixture; focused combined fixture
+passed (`1 passed`); full distributed scheduler scope suite passed
+(`19 passed`).
+
+Next checkpoint: verify dashboard/API/audit review visibility for scheduled
+scope-denial events. Confirm `scheduled_task_scope_denied` rows for redirect,
+browser final-URL, provider URL, and downstream manifest denials are visible in
+static dashboard, live detail API, and audit-log review without leaking full
+scope manifests or sensitive task payloads.
+
+Previous checkpoint: remaining scheduled dispatcher scope propagation is complete.
 Scheduled `passive` and `auth-bypass` now receive manifest/DB URL-fetch scope
 options downstream instead of relying on stale DB reloads after scheduler
 preflight. Passive collection accepts explicit scope options and can run under
@@ -41,11 +57,6 @@ crawler changes; focused regression set passed (`6 passed`); broader
 crawler/distributed/passive suite passed (`43 passed`). Read-only subagent
 audit identified the crawl redirect and SearXNG provider URL gaps and verified
 `crawl_stealth`, `passive`, `auth-bypass`, `safe_check`, and `weaponize` status.
-
-Next checkpoint: add one combined scheduled URL-bound workflow fixture. Prove
-scheduled crawl redirect denial, stealth browser bounds, passive/auth explicit
-scope propagation, and SearXNG provider URL denial under one narrow manifest,
-with mocked/local execution and cleanup assertions.
 
 Previous checkpoint: scheduled stealth/browser URL-prefix propagation is complete.
 Scheduled `crawl_stealth` now receives the same manifest/DB scope options as

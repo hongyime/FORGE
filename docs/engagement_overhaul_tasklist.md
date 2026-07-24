@@ -91,10 +91,20 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add one combined scheduled URL-bound workflow fixture.
-  Prove scheduled crawl redirect denial, stealth browser bounds, passive/auth
-  explicit scope propagation, and SearXNG provider URL denial under one narrow
-  manifest, with mocked/local execution and cleanup assertions.
+- [ ] Next checkpoint: verify dashboard/API/audit review visibility for
+  scheduled scope-denial events. Confirm `scheduled_task_scope_denied` rows for
+  redirect, browser final-URL, provider URL, and downstream manifest denials are
+  visible in static dashboard, live detail API, and audit-log review without
+  leaking full scope manifests or sensitive task payloads.
+- [x] Combined scheduled URL-bound workflow fixture checkpoint:
+  Added a mocked/local distributed scheduler fixture that runs scheduled crawl,
+  crawl_stealth, passive, auth-bypass, and searxng_passive under one narrow URL
+  manifest. The fixture proves crawl redirect denial does not fetch `/admin`,
+  stealth/passive/auth receive explicit manifest URL-prefix scope, and an
+  untrusted SearXNG provider URL is denied before provider dispatch.
+  Verification: Ruff passed for the combined fixture; focused combined fixture
+  passed (`1 passed`); full distributed scheduler scope suite passed
+  (`19 passed`).
 - [x] Remaining scheduled dispatcher scope propagation checkpoint:
   Scheduled `passive` and `auth-bypass` now receive manifest/DB URL-fetch scope
   options downstream instead of relying on stale DB reloads after scheduler
