@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 import sys
 import types
 
 from forge.utils.intel.gravatar_lookup import lookup_gravatar
-from forge.utils.intel.instagram_lookup import lookup_instagram
+from forge.utils.intel.instagram_lookup import lookup_instagram, persist_instagram_findings
 from forge.utils.intel import http_pacing
 
 
@@ -156,6 +158,43 @@ def test_instagram_lookup_paces_requests_and_retries_429(monkeypatch, tmp_path) 
     assert sleeps == [0.25, 1.0, 0.25]
     assert len(client_cls.instances[0].calls) == 2
     assert client_cls.instances[0].calls[0][1]["params"] == {"username": "aliceops"}
+
+
+def test_instagram_lookup_preserves_business_contacts_for_recursion(monkeypatch, tmp_path) -> None:
+    http_pacing._clear_rate_limit_cooldowns_for_tests()
+    monkeypatch.setenv("FORGE_IDENTITY_LOOKUP_REQUEST_DELAY_SECONDS", "0")
+    payload = {
+        "data": {
+            "user": {
+                "full_name": "Alice Ops",
+                "biography": "Public business profile",
+                "business_email": "Biz@Acme.Example",
+                "business_phone_number": "+15551234567",
+            }
+        }
+    }
+    _install_httpx_client(monkeypatch, [_Response(200, payload)])
+
+    result = lookup_instagram("@AliceOps", 1001, tmp_path / "unused.db")
+
+    assert result["found"] is True
+    assert result["profile"]["business_email"] == "biz@acme.example"
+    assert result["profile"]["business_phone"] == "+15551234567"
+
+    db_path = tmp_path / "instagram.db"
+    counts = persist_instagram_findings("@AliceOps", 1001, db_path, result)
+
+    con = sqlite3.connect(db_path)
+    try:
+        profile_data = json.loads(
+            con.execute("SELECT profile_data FROM social_profiles").fetchone()[0]
+        )
+    finally:
+        con.close()
+
+    assert counts["social_profiles"] == 1
+    assert profile_data["business_email"] == "biz@acme.example"
+    assert profile_data["business_phone"] == "+15551234567"
 
 
 def test_identity_get_reuses_provider_cooldown_between_calls(monkeypatch) -> None:

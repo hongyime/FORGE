@@ -72,6 +72,50 @@ def _extract_urls(text: str) -> list[str]:
     return seen
 
 
+def _first_text_field(data: dict[str, Any], keys: tuple[str, ...]) -> str:
+    for key in keys:
+        value = data.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _public_business_email(user: dict[str, Any]) -> str:
+    text = _first_text_field(
+        user,
+        (
+            "business_email",
+            "businessEmail",
+            "public_email",
+            "publicEmail",
+            "contact_email",
+            "contactEmail",
+        ),
+    )
+    emails = _extract_emails(text)
+    return emails[0] if emails else ""
+
+
+def _public_business_phone(user: dict[str, Any]) -> str:
+    text = _first_text_field(
+        user,
+        (
+            "business_phone_number",
+            "businessPhoneNumber",
+            "business_phone",
+            "businessPhone",
+            "public_phone_number",
+            "publicPhoneNumber",
+            "contact_phone",
+            "contactPhone",
+        ),
+    )
+    return text if re.search(r"\d", text) else ""
+
+
 def lookup_instagram(
     username: str,
     engagement_id: int,
@@ -189,12 +233,14 @@ def lookup_instagram(
     )
     emails_in_bio = _extract_emails(bio_text)
     urls_in_bio = _extract_urls(bio_text)
+    business_email = _public_business_email(user)
+    business_phone = _public_business_phone(user)
     # external_url itself may be a bare domain — surface it too
     if external_url and external_url not in urls_in_bio:
         urls_in_bio.append(external_url)
 
     result["found"] = True
-    result["profile"] = {
+    profile = {
         "full_name":      str(user.get("full_name", "") or ""),
         "biography":      biography,
         "external_url":   external_url,
@@ -208,6 +254,11 @@ def lookup_instagram(
         "pk":             str(user.get("pk", "") or user.get("id", "") or ""),
         "profile_pic_url": str(user.get("profile_pic_url", "") or ""),
     }
+    if business_email:
+        profile["business_email"] = business_email
+    if business_phone:
+        profile["business_phone"] = business_phone
+    result["profile"] = profile
     return result
 
 
@@ -302,6 +353,9 @@ def persist_instagram_findings(
             "pk":             profile.get("pk", ""),
             "profile_url":    f"https://www.instagram.com/{handle}/",
         }
+        for key in ("business_email", "business_phone"):
+            if profile.get(key):
+                summary_payload[key] = profile[key]
         summary_json = json.dumps(summary_payload)
         ig_key = f"instagram:{handle}"
         try:

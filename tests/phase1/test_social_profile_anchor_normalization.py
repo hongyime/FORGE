@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -61,3 +62,65 @@ def test_social_profile_phone_anchors_normalize_before_recursive_seed_promotion(
     assert ("+15559990000", "phone") in seeds
     assert ("+1 (555) 999-0000", "phone") not in seeds
     assert ("not-a-phone", "phone") not in seeds
+
+
+def test_instagram_business_contacts_feed_recursive_identity_pivots(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    bootstrap_engagement(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            CREATE TABLE social_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER NOT NULL,
+                email TEXT NOT NULL,
+                source TEXT,
+                profile_data TEXT
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
+            VALUES (1001, ?, ?, ?)
+            """,
+            (
+                "instagram:aliceops",
+                "instagram",
+                json.dumps(
+                    {
+                        "source": "instagram",
+                        "handle": "aliceops",
+                        "business_email": "biz@acme.example",
+                        "business_phone": "+15551234567",
+                    }
+                ),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            tuple(row)
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            )
+        }
+    finally:
+        con.close()
+
+    assert ("biz@acme.example", "email") in seeds
+    assert ("+15551234567", "phone") in seeds

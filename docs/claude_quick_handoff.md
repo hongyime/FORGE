@@ -25,7 +25,18 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: HAR WebSocket message alias support is complete. Passive HAR
+Latest checkpoint: Instagram business-contact recursion is complete. Public
+Instagram `business_email` and `business_phone_number`/alias fields from
+`web_profile_info` are now normalized into lookup results and persisted in
+`social_profiles`, so the existing synthesis engine can promote them into
+recursive email and phone seeds. Verification: focused TDD failed first on
+missing `business_email`; compile/Ruff passed; focused lookup plus synthesis
+regressions passed (`2 passed`); full identity pacing file passed (`6 passed`);
+adjacent social-profile synthesis slice passed (`4 passed`); cleanup inventory
+found no new pytest/test-like engagement DBs. Handoff:
+`.claude/handoffs/2026-07-24-instagram-business-contact-recursion.md`.
+
+Previous checkpoint: HAR WebSocket message alias support is complete. Passive HAR
 parsing now accepts both Chrome-style `_webSocketMessages[]` and unprefixed
 `webSocketMessages[]` arrays, so exporter variants do not drop captured message
 payloads before recursive artifact discovery. Verification: focused alias TDD
@@ -49,12 +60,11 @@ passed (`6 passed`); packaged Helm/API-label/orchestration parser slice passed
 pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
 `.claude/handoffs/2026-07-24-har-websocket-message-recursion.md`.
 
-Current next gate: run a fresh bounded audit for one concrete backend
-kill-chain gap. Good targets are another verified passive parser/container/OCR
-source shape, provider-proof hardening, identity/provider normalization where a
-source payload is missing, or bounded-worker migration for a proven pure-local
-sequential enricher. Do not add live target probing without explicit ROE/scope
-manifest and mocked tests.
+Current next gate: finish the Parquet columnar artifact parser gap already
+identified, then consider the read-only subagent finding that Realm mobile DB
+artifacts (`.realm`) are not classified and can be safely routed through the
+existing bounded binary-string extraction path. Do not add live target probing
+without explicit ROE/scope manifest and mocked tests.
 
 Previous checkpoint: dashboard/API key-section proof gating is complete. Static
 dashboard and live engagement detail API section payloads now reuse the shared

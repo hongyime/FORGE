@@ -91,6 +91,16 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Instagram business-contact recursion checkpoint:
+  Public Instagram `business_email` and `business_phone_number`/alias fields
+  from `web_profile_info` are now normalized into lookup results and persisted
+  in `social_profiles`, so the existing synthesis engine can promote them into
+  recursive email and phone seeds. Verification: focused TDD failed first on
+  missing `business_email`; compile passed; Ruff passed; focused lookup plus
+  synthesis regressions passed (`2 passed`); full identity pacing file passed
+  (`6 passed`); adjacent social-profile synthesis slice passed (`4 passed`);
+  cleanup inventory found no new pytest/test-like engagement DBs. Handoff:
+  `.claude/handoffs/2026-07-24-instagram-business-contact-recursion.md`.
 - [x] HAR WebSocket message alias checkpoint:
   Passive HAR parsing now accepts both Chrome-style `_webSocketMessages[]` and
   unprefixed `webSocketMessages[]` arrays, so exporter variants do not drop
