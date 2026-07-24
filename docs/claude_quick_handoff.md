@@ -25,30 +25,53 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: long-tail and non-promoted validator proof reviewability is
+Latest checkpoint: Phase 6 artifact inventory export parity is complete.
+Phase 6 now includes scrubbed `artifact_queue` inventory in companion JSON
+context and raw CSV exports as `record_type=artifact`. The new helper is
+`forge.phase6.artifact_inventory` and the focused regression is
+`tests/phase6/test_report_artifact_inventory_export.py`. Artifact exports
+preserve source URL, type, status, hash, notes, parser/format/count metadata,
+and timestamps while omitting local paths and secret-bearing metadata. No live
+execution, validation gate, severity rule, LLM provider, retry, proxy, or scope
+behavior changed. Verification: compile passed; Ruff passed; focused artifact
+export test passed (`1 passed`); adjacent artifact seed-relation/archive
+provenance selector passed (`3 passed, 102 deselected`). Handoff:
+`.claude/handoffs/2026-07-24-phase6-artifact-inventory-export.md`.
+
+Next checkpoint: fix the workflow report API lineage gap where
+`/reports/{workflow_id}` reads top-level `report_lineage` but can miss Phase 6
+lineage nested under `intermediate_results["report"]["report_lineage"]`.
+Suggested focused test:
+`tests/integration/test_mvp_workflow.py::TestApiReportRoute::test_report_route_surfaces_nested_phase6_report_lineage`.
+
+Previous checkpoint: compact mocked kill-chain/report/dashboard smoke is
 complete.
+Added `tests/phase1/test_kill_chain_dashboard_smoke.py`, a focused mocked
+`kill_chain()` run proving homepage HTML can discover a remote APK, static
+artifact parsing can feed Firebase/Supabase/AWS/Slack/Mailchimp/Azure
+validation inventory, recursive email/URL seeds reach the engagement detail
+surface, graph payload metadata keeps validation status/method, `provider=auto`
+falls back to deterministic template on LLM failure, and generated dashboard
+detail JSON exposes report lineage plus validation inventory without leaking
+raw secrets. Verification: compile passed; Ruff passed; smoke passed (`1
+passed in 27.46s` with `-m "slow or not slow"`); dashboard validation selector
+passed (`5 passed, 22 deselected`); Phase 6 fallback/proof/raw-export selector
+passed (`20 passed, 84 deselected`). Handoff:
+`.claude/handoffs/2026-07-24-compact-kill-chain-dashboard-smoke.md`.
+
+Previous checkpoint: long-tail and non-promoted validator proof reviewability
+is complete.
 Phase 6 standalone reportable key-scanner proof exports now have a
 parameterized regression covering Cloudflare, Discord, GitLab, HuggingFace,
 Netlify, Notion, PostHog, SendGrid, Sentry, Stripe, Telegram, Twilio, and
-Vercel. The shared proof parser supports opt-in raw proof extraction for
-analyst review surfaces. Datadog remains non-promoted (`UNVERIFIED` with empty
+Vercel. Datadog remains non-promoted (`UNVERIFIED` with empty
 `validation_proof`), but its read-only `/validate` proof detail is preserved in
-Phase 6 `validation_notes`, raw CSV rows, dashboard vulnerability rows,
-dashboard key inventory notes when applicable, and graph metadata notes. No
-report gate, severity rule, live provider call, endpoint, retry, proxy,
-rate-limit, or scope behavior changed. Verification: compile passed; Ruff
-passed; shared proof parser suite passed (`106 passed`); focused parser/report
-dashboard suite passed (`121 passed`); broader Phase 6 validation/export
-selector passed (`22 passed, 82 deselected`); cloud-gating/alias suite passed
-(`2 passed`); dashboard validation selector passed (`5 passed, 22 deselected`).
-Handoff:
+review/export surfaces. Verification: compile passed; Ruff passed; shared proof
+parser suite passed (`106 passed`); focused parser/report dashboard suite
+passed (`121 passed`); broader Phase 6 validation/export selector passed (`22
+passed, 82 deselected`); cloud-gating/alias suite passed (`2 passed`);
+dashboard validation selector passed (`5 passed, 22 deselected`). Handoff:
 `.claude/handoffs/2026-07-24-long-tail-validator-proof-reviewability.md`.
-
-Next checkpoint: run a compact mocked end-to-end kill-chain/report/dashboard
-smoke that proves recursive discovery output, validation inventory, graph
-review, deterministic template/raw fallback, and test-engagement cleanup still
-compose after the latest proof-reviewability changes. Keep live provider calls
-mocked unless an explicit ROE/scope manifest and target are supplied.
 
 Previous checkpoint: compact cleanup/regression sweep is complete.
 After the dashboard graph and Phase 6 proof-export parity commits, the repo was

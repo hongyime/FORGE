@@ -51,6 +51,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFo
 from forge.core.errors import ProviderUnavailableError
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.phase6.artifact_inventory import load_artifact_inventory
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
@@ -246,6 +247,7 @@ class ReportContext:
     osint:               OsintContext
     exploits:            ExploitContext
     post_exploitation:   PostExploitContext
+    artifact_inventory:  list[dict[str, Any]] = field(default_factory=list)
     cloud_asset_inventory: list[dict[str, Any]] = field(default_factory=list)
     cloud_validation_inventory: list[dict[str, Any]] = field(default_factory=list)
     key_findings:        list[dict[str, Any]] = field(default_factory=list)
@@ -312,6 +314,7 @@ class ContextBuilder:
                 osint               = self._load_osint(con),
                 exploits            = self._load_exploits(con),
                 post_exploitation   = self._load_post_exploit(con),
+                artifact_inventory  = load_artifact_inventory(con, self._eid),
                 cloud_asset_inventory=self._cloud_asset_inventory(con),
                 cloud_validation_inventory=self._cloud_validation_inventory(con),
                 key_findings        = self._load_key_findings(con),
@@ -2979,6 +2982,50 @@ class ReportSynthesizer:
                     "key_findings_count": ctx.osint.key_findings_count,
                 }
             )
+        for artifact in ctx.artifact_inventory:
+            rows.append(
+                {
+                    "record_type": "artifact",
+                    "engagement_id": ctx.engagement_id,
+                    "engagement_name": ctx.engagement_name,
+                    "overall_risk": ctx.overall_risk,
+                    "severity": "",
+                    "cve_id": "",
+                    "title": str(artifact.get("artifact_type") or ""),
+                    "evidence": str(artifact.get("metadata_summary") or ""),
+                    "validation_status": "",
+                    "validation_method": "",
+                    "validation_http_status": "",
+                    "seed_type": "",
+                    "seed_value": "",
+                    "seed_source": "",
+                    "seed_depth": "",
+                    "seed_confidence": "",
+                    "relation_source": "",
+                    "relation_type": "",
+                    "relation_target": "",
+                    "relation_confidence": "",
+                    "relation_evidence": "",
+                    "artifact_source_url": str(artifact.get("source_url") or ""),
+                    "artifact_type": str(artifact.get("artifact_type") or ""),
+                    "artifact_status": str(artifact.get("status") or ""),
+                    "artifact_discovered_from": str(artifact.get("discovered_from") or ""),
+                    "artifact_sha256": str(artifact.get("sha256") or ""),
+                    "artifact_notes": str(artifact.get("notes") or ""),
+                    "artifact_metadata_summary": str(artifact.get("metadata_summary") or ""),
+                    "artifact_metadata_json": json.dumps(
+                        artifact.get("metadata") or {},
+                        sort_keys=True,
+                    ),
+                    "artifact_queued_at": str(artifact.get("queued_at") or ""),
+                    "artifact_updated_at": str(artifact.get("updated_at") or ""),
+                    "emails_found": ctx.osint.emails_found,
+                    "hosts_found": len(ctx.recon.hosts),
+                    "subdomains_found": len(ctx.recon.subdomains),
+                    "open_ports_found": len(ctx.recon.open_ports),
+                    "key_findings_count": ctx.osint.key_findings_count,
+                }
+            )
         for archive_url in ctx.recon.archive_urls:
             rows.append(
                 {
@@ -3020,6 +3067,18 @@ class ReportSynthesizer:
             "archive_root_domain": "",
             "archive_discovered_from": "",
         }
+        artifact_defaults = {
+            "artifact_source_url": "",
+            "artifact_type": "",
+            "artifact_status": "",
+            "artifact_discovered_from": "",
+            "artifact_sha256": "",
+            "artifact_notes": "",
+            "artifact_metadata_summary": "",
+            "artifact_metadata_json": "",
+            "artifact_queued_at": "",
+            "artifact_updated_at": "",
+        }
         cloud_validation_defaults = {
             "cloud_asset_type": "",
             "cloud_identifier": "",
@@ -3044,6 +3103,8 @@ class ReportSynthesizer:
         report_defaults = ReportSynthesizer._csv_report_metadata(report_metadata)
         for row in rows:
             for key, value in archive_defaults.items():
+                row.setdefault(key, value)
+            for key, value in artifact_defaults.items():
                 row.setdefault(key, value)
             for key, value in cloud_validation_defaults.items():
                 row.setdefault(key, value)
@@ -3104,6 +3165,16 @@ class ReportSynthesizer:
                 "archive_sources": "",
                 "archive_root_domain": "",
                 "archive_discovered_from": "",
+                "artifact_source_url": "",
+                "artifact_type": "",
+                "artifact_status": "",
+                "artifact_discovered_from": "",
+                "artifact_sha256": "",
+                "artifact_notes": "",
+                "artifact_metadata_summary": "",
+                "artifact_metadata_json": "",
+                "artifact_queued_at": "",
+                "artifact_updated_at": "",
                 "cloud_asset_type": "",
                 "cloud_identifier": "",
                 "cloud_provider_identifier": "",

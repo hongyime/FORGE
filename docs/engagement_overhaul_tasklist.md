@@ -91,11 +91,25 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: audit one current-code deterministic review/export or
-  passive-recursion gap that is not already covered by the compact smoke below.
-  Prefer a small modular test/helper over adding to the large Phase 1 fixture.
-  Keep live provider calls mocked unless an explicit ROE/scope manifest and
-  target are supplied.
+- [ ] Next checkpoint: fix the workflow report API lineage gap where
+  `/reports/{workflow_id}` reads top-level `report_lineage` but can miss Phase 6
+  lineage nested under `intermediate_results["report"]["report_lineage"]`.
+  Keep this as a focused API parity patch/test; no live provider calls or kill
+  chain behavior changes.
+- [x] Phase 6 artifact inventory export parity checkpoint:
+  Added a compact `forge.phase6.artifact_inventory` helper and a focused
+  regression proving parsed `artifact_queue` rows are included in Phase 6
+  companion JSON context and raw CSV exports as `record_type=artifact`.
+  Artifact inventory now preserves scrubbed source URL, type, status, hash,
+  notes, parser/format/count metadata, and timestamps while omitting local paths
+  and secret-bearing metadata. This closes the reviewability gap where dashboard
+  JSON exposed artifact queue provenance but deterministic report/raw-export
+  artifacts did not. No live execution, validation gate, severity rule, LLM
+  provider, retry, proxy, or scope behavior changed. Verification: compile
+  passed; Ruff passed; focused artifact export test passed (`1 passed`);
+  adjacent artifact seed-relation/archive provenance selector passed (`3 passed,
+  102 deselected`). Handoff:
+  `.claude/handoffs/2026-07-24-phase6-artifact-inventory-export.md`.
 - [x] Compact mocked kill-chain/report/dashboard smoke checkpoint:
   Added `tests/phase1/test_kill_chain_dashboard_smoke.py`, a focused mocked
   `kill_chain()` run that proves homepage HTML can discover a remote APK,
