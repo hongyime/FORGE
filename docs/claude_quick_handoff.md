@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Hugging Face profile-proof hash gate is complete.
+Latest checkpoint: modern image/favicon artifact route recursion is complete.
+Artifact-side HTML/CSS route extraction now treats common passive image and
+favicon assets (`.avif`, `.bmp`, `.heic`, `.heif`, `.ico`, `.tif`, `.tiff`) as
+useful static route suffixes. Modern image pivots flow into recursive URL
+seeds and queue as document artifacts where classification already supports
+them; favicon ICOs become recursive URL seeds without forcing binary parsing.
+Verification: focused CSS/HTML artifact route suite passed (`3 passed`),
+adjacent route/classification/recursive queue suite passed (`25 passed`),
+adjacent SPA route and same-iteration URL seed E2E slice passed (`2 passed`),
+Ruff passed, py_compile passed, and `git diff --check` passed.
+
+Next checkpoint candidate: provider-proof source-of-truth drift. Phase 4 still
+has a separate `_validated_identifier_from_detail()` provider parser while
+report/dashboard/graph gates use `parse_validated_detail()` through shared
+proof helpers. A safe next step is a parity helper or contract test so provider
+proof reportability/identifier decisions do not drift across validation,
+findings, graph, dashboard, and report export.
+
+Previous checkpoint: Hugging Face profile-proof hash gate is complete.
 Hugging Face token validation now emits a non-sensitive `profile_hash` from
 stable whoami profile-presence fields, and both core proof parsing and Phase 4
 identifier extraction require that hash before treating `whoami` success as
@@ -36,12 +54,6 @@ deselected`), Phase 4 identifier test passed (`1 passed`), Phase 4 provider
 active downgrade slices passed (`2 passed`), Hugging Face secret finder slice
 passed (`7 passed, 167 deselected`), Ruff passed, py_compile passed, and
 `git diff --check` passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
-queue, or validation/report parity gaps only when the code lacks a focused
-implementation or regression.
 
 Previous checkpoint: barcode cloud-asset provenance parity is complete.
 Artifact-derived cloud assets now preserve non-zero passive payload proof

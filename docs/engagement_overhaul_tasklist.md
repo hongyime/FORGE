@@ -91,6 +91,16 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Modern image/favicon artifact route recursion checkpoint:
+  Artifact-side HTML/CSS route extraction now treats common passive image and
+  favicon assets (`.avif`, `.bmp`, `.heic`, `.heif`, `.ico`, `.tif`, `.tiff`)
+  as useful static route suffixes. Modern image pivots flow into recursive URL
+  seeds and queue as document artifacts where classification already supports
+  them; favicon ICOs become recursive URL seeds without forcing binary parsing.
+  Verification: focused CSS/HTML artifact route suite passed (`3 passed`),
+  adjacent route/classification/recursive queue suite passed (`25 passed`),
+  adjacent SPA route and same-iteration URL seed E2E slice passed (`2 passed`),
+  Ruff passed, py_compile passed, and `git diff --check` passed.
 - [x] Hugging Face profile-proof hash gate checkpoint:
   Hugging Face token validation now emits a non-sensitive `profile_hash` from
   stable whoami profile-presence fields, and both core proof parsing and Phase
