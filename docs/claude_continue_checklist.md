@@ -66,6 +66,18 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Audit-manifest report-family parity checkpoint:
+  Run audit manifests now treat deterministic report `.html` and report `.csv`
+  companions as first-class report-family artifacts alongside `.md`, `.json`,
+  and `.pdf`. Manifest hashing remains whitelist-based, signed bundle exports
+  now verify manifests containing the full report family, and HTML/CSV tamper
+  is detected as a manifest hash mismatch. Verification: run audit manifest
+  suite passed (`11 passed`), run audit manifest bundle suite passed
+  (`7 passed`), Ruff passed, and py_compile passed.
+- [ ] Next checkpoint: decouple artifact queue processing concurrency from
+  global `--parallel-fanout` with a bounded `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`
+  cap, record the effective cap in run metadata, and prove the processor
+  receives that cap independently of identity/validation/global fan-out.
 - [x] Scope-boundary denial reviewability checkpoint:
   Dashboard/static exports and the live engagement detail API now surface
   scheduled, recursive-seed, remote-artifact, cloud-validation,
@@ -77,9 +89,6 @@ historical notes only, not as current instructions.
   passed (`31 passed`), focused live API scope-denial/scope-preflight slice
   passed (`4 passed, 49 deselected`), focused live denial test passed
   (`1 passed`), Ruff passed, and py_compile passed.
-- [ ] Next checkpoint: bring run audit manifests into parity with current
-  report-family exports by hashing `.html` and report `.csv` companions in
-  addition to `.md`, `.json`, and `.pdf`, with tamper verification tests.
 - [x] Provider-proof identity source-of-truth checkpoint:
   Phase 4 provider identifier extraction now delegates to the shared
   `parse_provider_validation_identity()` path, which first applies the same

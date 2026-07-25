@@ -17,7 +17,21 @@ from forge.db.schema import apply_schema
 from forge.engagement_orchestrator import EngagementRunTracker
 
 
+def _write_report_family(primary_path: Path) -> None:
+    primary_path.parent.mkdir(parents=True, exist_ok=True)
+    for suffix, content in {
+        ".md": "# Report\n",
+        ".json": '{"report": true}\n',
+        ".pdf": "%PDF-1.4\n",
+        ".html": "<!doctype html><title>Report</title>\n",
+        ".csv": "section,value\nsummary,ok\n",
+    }.items():
+        primary_path.with_suffix(suffix).write_text(content, encoding="utf-8")
+
+
 def _bootstrap(db_path: Path) -> int:
+    report_path = db_path.parent / "reports" / "engagement_1001_report.md"
+    _write_report_family(report_path)
     con = sqlite3.connect(db_path)
     try:
         apply_schema(con)
@@ -33,7 +47,7 @@ def _bootstrap(db_path: Path) -> int:
         con.close()
     tracker = EngagementRunTracker(db_path, 1001)
     handle = tracker.start_run(run_kind="kill_chain")
-    tracker.finish_run(handle, status="completed")
+    tracker.finish_run(handle, status="completed", metadata={"report_path": str(report_path)})
     return handle.run_id
 
 
@@ -62,6 +76,7 @@ def test_manifest_bundle_exports_receipt_without_raw_rows(tmp_path: Path) -> Non
         assert sorted(archive.namelist()) == list(bundle.files)
         assert {info.date_time for info in archive.infolist()} == {(1980, 1, 1, 0, 0, 0)}
         manifest_bytes = archive.read("manifest.json")
+        manifest = json.loads(manifest_bytes)
         verification = json.loads(archive.read("verification.json"))
         checksums = archive.read("checksums.sha256").decode("utf-8")
         archive_text = "\n".join(
@@ -72,6 +87,13 @@ def test_manifest_bundle_exports_receipt_without_raw_rows(tmp_path: Path) -> Non
     assert bundle.manifest_hash == hashlib.sha256(manifest_bytes).hexdigest()
     assert verification["schema"] == "forge.run_audit_manifest_bundle.v1"
     assert verification["verification"]["ok"] is True
+    assert {artifact["path"] for artifact in manifest["artifacts"]} >= {
+        "engagement_1001_report.md",
+        "engagement_1001_report.json",
+        "engagement_1001_report.pdf",
+        "engagement_1001_report.html",
+        "engagement_1001_report.csv",
+    }
     assert verification["manifest_hash"] == bundle.manifest_hash
     assert f"{hashlib.sha256(manifest_bytes).hexdigest()}  manifest.json" in checksums
     assert "manifest_json" not in archive_text

@@ -21,7 +21,7 @@ _EXCLUDED_TABLE_REASONS = {
     "validation_claims": "transient validation lease state",
 }
 _MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
-_REPORT_SUFFIXES = {".md", ".json", ".pdf"}
+_REPORT_SUFFIXES = {".md", ".json", ".pdf", ".html", ".csv"}
 _SENSITIVE_EXACT = {
     "api_key",
     "authorization",

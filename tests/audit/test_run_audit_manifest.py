@@ -5,6 +5,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from forge.audit.manifest import (
     GENESIS_HASH,
     canonical_json,
@@ -49,11 +51,27 @@ def _manifest_row(db_path: Path, run_id: int) -> tuple[str, str]:
     return str(row[0]), str(row[1])
 
 
+def _write_report_family(primary_path: Path) -> dict[str, Path]:
+    primary_path.parent.mkdir(parents=True, exist_ok=True)
+    family = {
+        ".md": "# Report\n",
+        ".json": '{"report": true}\n',
+        ".pdf": "%PDF-1.4\n",
+        ".html": "<!doctype html><title>Report</title>\n",
+        ".csv": "section,value\nsummary,ok\n",
+    }
+    paths: dict[str, Path] = {}
+    for suffix, content in family.items():
+        path = primary_path.with_suffix(suffix)
+        path.write_text(content, encoding="utf-8")
+        paths[suffix] = path
+    return paths
+
+
 def test_engagement_finish_writes_manifest_without_secret_material(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     report_path = tmp_path / "reports" / "engagement_1001_report.md"
-    report_path.parent.mkdir()
-    report_path.write_text("# Report\n", encoding="utf-8")
+    report_family = _write_report_family(report_path)
     _bootstrap(db_path)
 
     tracker = EngagementRunTracker(db_path, 1001)
@@ -95,8 +113,11 @@ def test_engagement_finish_writes_manifest_without_secret_material(tmp_path: Pat
     assert "super-secret-value" not in manifest_json
     assert "key_enc" not in manifest_json
     assert any(table["table"] == "engagements" for table in payload["database"]["tables"])
+    artifact_names = {artifact["path"] for artifact in payload["artifacts"]}
     artifact_hashes = {artifact["sha256"] for artifact in payload["artifacts"]}
-    assert hashlib.sha256(report_path.read_bytes()).hexdigest() in artifact_hashes
+    assert artifact_names >= {path.name for path in report_family.values()}
+    for path in report_family.values():
+        assert hashlib.sha256(path.read_bytes()).hexdigest() in artifact_hashes
 
     con = sqlite3.connect(db_path)
     try:
@@ -109,6 +130,71 @@ def test_engagement_finish_writes_manifest_without_secret_material(tmp_path: Pat
     finally:
         con.close()
     assert result.ok is True
+
+
+@pytest.mark.parametrize("tampered_suffix", [".html", ".csv"])
+def test_manifest_verifier_detects_report_family_html_csv_tamper(
+    tmp_path: Path,
+    tampered_suffix: str,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    report_path = tmp_path / "reports" / "engagement_1001_report.md"
+    report_family = _write_report_family(report_path)
+    _bootstrap(db_path)
+    tracker = EngagementRunTracker(db_path, 1001)
+    handle = tracker.start_run(run_kind="kill_chain")
+    tracker.finish_run(
+        handle,
+        status="completed",
+        metadata={"phase": "completed", "report_path": str(report_path)},
+    )
+
+    con = sqlite3.connect(db_path)
+    try:
+        unchanged = verify_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=handle.run_id,
+        )
+        assert unchanged.ok is True
+        report_family[tampered_suffix].write_text("tampered\n", encoding="utf-8")
+        result = verify_run_audit_manifest(
+            con,
+            db_path=db_path,
+            engagement_id=1001,
+            run_id=handle.run_id,
+        )
+    finally:
+        con.close()
+
+    assert result.ok is False
+    assert result.reason == "manifest hash mismatch"
+
+
+@pytest.mark.parametrize("primary_suffix", [".html", ".csv"])
+def test_manifest_accepts_html_csv_primary_report_paths(
+    tmp_path: Path,
+    primary_suffix: str,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    report_path = tmp_path / "reports" / "engagement_1001_report.md"
+    report_family = _write_report_family(report_path)
+    primary_report = report_path.with_suffix(primary_suffix)
+    _bootstrap(db_path)
+    tracker = EngagementRunTracker(db_path, 1001)
+    handle = tracker.start_run(run_kind="kill_chain")
+    tracker.finish_run(
+        handle,
+        status="completed",
+        metadata={"phase": "completed", "report_path": str(primary_report)},
+    )
+
+    manifest_json, _manifest_hash = _manifest_row(db_path, handle.run_id)
+    payload = json.loads(manifest_json)
+
+    artifact_names = {artifact["path"] for artifact in payload["artifacts"]}
+    assert artifact_names >= {path.name for path in report_family.values()}
 
 
 def test_manifest_summary_is_dashboard_safe_and_verifies(tmp_path: Path) -> None:

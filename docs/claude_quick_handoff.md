@@ -25,7 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: scope-boundary denial reviewability is complete. Dashboard
+Latest checkpoint: audit-manifest report-family parity is complete. Run audit
+manifests now treat deterministic report `.html` and report `.csv` companions
+as first-class report-family artifacts alongside `.md`, `.json`, and `.pdf`.
+Manifest hashing remains whitelist-based, signed bundle exports now verify
+manifests containing the full report family, and HTML/CSV tamper is detected as
+a manifest hash mismatch. Verification: run audit manifest suite passed (`11
+passed`), run audit manifest bundle suite passed (`7 passed`), Ruff passed, and
+py_compile passed.
+
+Next checkpoint candidate: decouple artifact queue processing concurrency from
+global `--parallel-fanout` with a bounded `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`
+cap, record the effective cap in run metadata, and prove the processor receives
+that cap independently of identity/validation/global fan-out.
+
+Previous checkpoint: scope-boundary denial reviewability is complete. Dashboard
 static exports and the live engagement detail API now surface scheduled,
 recursive-seed, remote-artifact, cloud-validation, key-validation, and
 automation scope denials in one dedicated `scope_denials` review section even
@@ -35,10 +49,6 @@ truncation. Verification: full static dashboard suite passed (`31 passed`),
 focused live API scope-denial/scope-preflight slice passed (`4 passed, 49
 deselected`), focused live denial test passed (`1 passed`), Ruff passed, and
 py_compile passed.
-
-Next checkpoint candidate: run audit manifest report-family parity. Include
-`.html` and report `.csv` companions in audit-manifest hashing/verification in
-addition to `.md`, `.json`, and `.pdf`; add tamper tests for HTML/CSV.
 
 Previous checkpoint: provider-proof identity source-of-truth is complete. Phase
 4 provider identifier extraction now delegates to
