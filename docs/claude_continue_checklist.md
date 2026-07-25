@@ -128,13 +128,25 @@ historical notes only, not as current instructions.
   raw-export audit fallback unit passed (`1 passed`); raw-export integration
   fallback passed (`1 passed`); broad multi-seed recursive E2E passed
   (`1 passed in 262.31s`).
-- [ ] Next checkpoint: build the compact canonical raw-export all-surface E2E.
-  Create an engagement through the web/API path, launch mocked `kill_chain()`
-  with ROE/scope manifest, force LLM failure plus report-family write failure
-  into raw JSON/CSV fallback, then prove recursion/artifacts/cloud-key
-  validation/deterministic findings/graph exports/dashboard/API downloads/report
-  history/checksums/report inclusion audit/run audit manifest/cleanup/no-ID-reuse
-  in one bounded fixture. This is the direct path to closing `SPEC.md` T1.
+- [x] Compact canonical raw-export all-surface E2E checkpoint:
+  `tests/integration/test_canonical_release_e2e.py` now creates a multi-seed
+  engagement through the live API, launches mocked non-dry-run `kill-chain`
+  with explicit ROE/scope manifest, proves recursive web/identity/artifact/cloud
+  pivots, runs real static APK/config parsing, synthesis, deterministic
+  validation/finding gates, graph/MTGX export, template-to-raw JSON/CSV
+  fallback, dashboard/API/download parity, report history/checksums,
+  `report_findings_included` audit receipt, verified run audit manifest,
+  cleanup helper scoping, and no ID reuse after deleting the numeric DB.
+  Verification: canonical E2E passed (`1 passed`), focused fallback/API/cleanup
+  bundle passed (`9 passed`), existing dashboard smoke passed (`1 passed`),
+  Ruff passed, and py_compile passed. `SPEC.md` T1 is now closed.
+- [ ] Next checkpoint: add first-class `cloud_ref` seed support if still
+  product-required. Current schema/API classifiers persist HTTP cloud refs as
+  `url` and non-HTTP provider refs as `other`; implementing `cloud_ref` requires
+  a schema/migration update, API classifier/canonicalizer changes, seed
+  validation rules, synthesis/dispatcher routing, dashboard labels, and focused
+  tests proving cloud refs remain ROE/scope-gated and do not bypass
+  validation-before-reporting.
 - [x] Artifact processor worker-cap checkpoint:
   Static artifact queue processing no longer inherits full global
   `--parallel-fanout` by default. `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`

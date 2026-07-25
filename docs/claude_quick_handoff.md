@@ -25,27 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: canonical end-goal completion audit is complete, but the
-product is not release-complete. See `docs/end_goal_completion_audit.md`.
-The representative dashboard smoke now runs non-dry-run with explicit ROE and
-scope manifest, validates scoped Firebase/Supabase resources, and asserts
-dashboard ROE/scope review without raw manifest leakage. The multi-seed
-recursive fixture now includes the current `HTML` report-family export label.
-Raw-export fallback now writes a `report_findings_included` audit receipt for
-the raw JSON target with raw-export lineage, render path, format, checksum, and
-targets. Verification completed: upgraded dashboard smoke passed (`1 passed`);
-raw-export fallback audit unit passed (`1 passed`); raw-export integration
-fallback passed (`1 passed`); broad multi-seed recursive E2E passed
-(`1 passed in 262.31s`). This is still not release closure because the compact
-API-to-cleanup raw-export all-surface E2E remains open.
+Latest checkpoint: compact canonical raw-export all-surface E2E is complete.
+`tests/integration/test_canonical_release_e2e.py` creates a multi-seed
+engagement through the live API, launches mocked non-dry-run `kill-chain` with
+explicit ROE/scope manifest, proves recursive web/identity/artifact/cloud
+pivots, runs real static APK/config parsing, synthesis, deterministic
+validation/finding gates, graph/MTGX export, template-to-raw JSON/CSV fallback,
+dashboard/API/download parity, report history/checksums,
+`report_findings_included` audit receipt, verified run audit manifest, cleanup
+helper scoping, and no ID reuse after deleting the numeric DB. Verification:
+canonical E2E passed (`1 passed`), focused fallback/API/cleanup bundle passed
+(`9 passed`), existing dashboard smoke passed (`1 passed`), Ruff passed, and
+py_compile passed. `SPEC.md` T1 is now closed.
 
-Next checkpoint: build the compact canonical raw-export all-surface E2E. Create
-an engagement through the web/API path, launch mocked `kill_chain()` with
-ROE/scope manifest, force LLM failure plus report-family write failure into raw
-JSON/CSV fallback, then prove recursion/artifacts/cloud-key validation/
-deterministic findings/graph exports/dashboard/API downloads/report history/
-checksums/report inclusion audit/run audit manifest/cleanup/no-ID-reuse in one
-bounded fixture. This directly targets `SPEC.md` T1.
+Next checkpoint: add first-class `cloud_ref` seed support if still
+product-required. Current schema/API classifiers persist HTTP cloud refs as
+`url` and non-HTTP provider refs as `other`; implementing `cloud_ref` requires a
+schema/migration update, API classifier/canonicalizer changes, seed validation
+rules, synthesis/dispatcher routing, dashboard labels, and focused tests proving
+cloud refs remain ROE/scope-gated and cannot bypass validation-before-reporting.
 
 Previous checkpoint: OCI/Docker-save kill-chain review parity is complete. Local
 static OCI image-layout and Docker-save archives now have an engagement-backed
