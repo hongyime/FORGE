@@ -91,10 +91,27 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: perform a fresh current-code audit for the next real
-  kill-chain correctness gap before adding provider breadth or UI polish.
-  Prioritize validation/report gates, recursive queue termination,
-  artifact/static extraction fidelity, or dashboard evidence lineage.
+- [ ] Next checkpoint: persist and reload failed GitHub-org keyscan targets
+  across fresh resume processes. Discovered GitHub orgs are currently
+  in-memory, so failed `fanout_f_keyscan` org targets can be lost when a later
+  resumed process skips already-completed host-surface parsing. Minimal target:
+  schedule/count retryable `root::github_org::org` seed-run rows independent of
+  `all_github_orgs`, with a resume regression.
+- [ ] Then patch cloud-key validation worker exceptions so exception batches
+  write non-reportable attempted receipts instead of leaving rows invisible or
+  repeatedly claimable.
+- [ ] Then patch artifact-derived cloud provenance in attack-graph snapshots so
+  dashboard graph review keeps scrubbed `cloud_assets.metadata_json`
+  provenance when it prefers saved snapshots over the fallback graph.
+- [x] Root-domain keyscan pending-work checkpoint:
+  Failed root-domain `fanout_f_keyscan` work now contributes
+  `root_keyscan_domains` to kill-chain pending-work metadata, so a stable
+  snapshot cannot terminate as complete while the root keyscan remains
+  retryable. The regression proves three failed root keyscan attempts across
+  `max_iter=3`, three failed seed-run receipts, nonzero pending work, and
+  `last_iteration_stable is False`. Verification: focused keyscan retry/per-
+  root slice passed (`3 passed`), full retry-state suite passed (`16 passed`),
+  Ruff passed, and py_compile passed for touched files.
 - [x] Cloud-asset validation claim alias checkpoint:
   Active validation claims now compare normalized cloud asset types and
   case-normalized identifiers, so a live legacy alias claim such as

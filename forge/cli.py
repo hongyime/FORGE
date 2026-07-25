@@ -14033,6 +14033,15 @@ def kill_chain(
             not in processed_github_orgs
         )
 
+    def _pending_root_keyscan_count() -> int:
+        if skip_keyscan:
+            return 0
+        return sum(
+            1
+            for root_domain in _keyscan_org_query_domains()
+            if _resume_normalize(root_domain) not in processed_keyscan_targets
+        )
+
     def _pending_work_counts() -> dict[str, int]:
         counts = {
             "root_subdomain_domains": _pending_root_domain_count(completed_a_domains),
@@ -14049,6 +14058,7 @@ def kill_chain(
             "social_handles": len(
                 _load_new_social_handles(processed_social_handles, max_workers=parallel_workers)
             ),
+            "root_keyscan_domains": _pending_root_keyscan_count(),
             "github_orgs": _pending_github_org_count(),
             "cloud_refs": _pending_cloud_ref_count(),
             "username_seeds": len(
