@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: recursive discovery E2E seed-run proof is complete. The
+Latest checkpoint: validation/reportability matrix parity is complete. The
+stable-proof integration fixture now proves the shared reportability gate across
+`VALIDATED`, weak-effective `UNVERIFIED`, raw `DEAD`, `HONEYPOT_SUSPECTED`, and
+`ACCESSIBLE_BUT_NO_DATA` rows. Stale deterministic findings for
+dead/accessible resources remain validation inventory only across Phase 6
+report/JSON/CSV, cloud asset inventory/raw asset rows, attack graph,
+dashboard/API detail, live `/api/engagements/{id}/assets`, vuln summary, helper
+gates, and deterministic finding cleanup. Verification: expanded stable-proof
+integration fixture passed (`1 passed`), adjacent Phase 6/latest-validation
+gate slice passed (`2 passed`), Ruff passed, and py_compile passed.
+
+Next checkpoint: prove seed-to-report audit traceability for reported findings.
+Every reportable finding should have a deterministic provenance or audit chain
+covering seed ingestion, fan-out, derived data point, validation attempt/result,
+rule-engine severity assignment, and report inclusion.
+
+Previous checkpoint: recursive discovery E2E seed-run proof is complete. The
 service-worker/precache kill-chain E2E now launches with explicit ROE/scope
 manifest, mocks RDAP/archive/API URL paths to converge deterministically, and
 proves newly discovered secondary seeds are processed through audit-visible
@@ -35,17 +51,6 @@ completed/skipped recursive seed-run rows are reviewable. Verification: focused
 service-worker/precache E2E passed (`1 passed`), adjacent depth-limit and
 pending-work retry-state slice passed (`2 passed`), Ruff passed, and py_compile
 passed.
-
-Next checkpoint: centralize and prove validation/reportability gating as one
-source of truth across findings, reports, graph payloads, dashboard/API
-summaries, validation inventory, and raw exports. Add a matrix fixture with
-`VALIDATED`, `UNVERIFIED`, `DEAD`, `HONEYPOT_SUSPECTED`, and
-`ACCESSIBLE_BUT_NO_DATA` rows.
-
-Then checkpoint: prove seed-to-report audit traceability for reported findings.
-Every reportable finding should have a deterministic provenance or audit chain
-covering seed ingestion, fan-out, derived data point, validation attempt/result,
-rule-engine severity assignment, and report inclusion.
 
 Previous checkpoint: non-graph cloud asset inventory metadata sanitization is
 complete. Live `/api/engagements/{id}/assets`, Phase 6 cloud asset inventory,

@@ -91,15 +91,21 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: centralize and prove validation/reportability gating as
-  one source of truth across findings, reports, graph payloads, dashboard/API
-  summaries, validation inventory, and raw exports. Add a matrix fixture with
-  `VALIDATED`, `UNVERIFIED`, `DEAD`, `HONEYPOT_SUSPECTED`, and
-  `ACCESSIBLE_BUT_NO_DATA` rows.
-- [ ] Then checkpoint: prove seed-to-report audit traceability for reported
+- [ ] Next checkpoint: prove seed-to-report audit traceability for reported
   findings. Every reportable finding should have a deterministic provenance or
   audit chain covering seed ingestion, fan-out, derived data point, validation
   attempt/result, rule-engine severity assignment, and report inclusion.
+- [x] Validation/reportability matrix parity checkpoint:
+  The stable-proof integration fixture now proves the shared reportability gate
+  across `VALIDATED`, weak-effective `UNVERIFIED`, raw `DEAD`,
+  `HONEYPOT_SUSPECTED`, and `ACCESSIBLE_BUT_NO_DATA` rows. Stale deterministic
+  findings for dead/accessible resources remain validation inventory only
+  across Phase 6 report/JSON/CSV, cloud asset inventory/raw asset rows, attack
+  graph, dashboard/API detail, live `/api/engagements/{id}/assets`, vuln
+  summary, helper gates, and deterministic finding cleanup. Verification:
+  expanded stable-proof integration fixture passed (`1 passed`), adjacent
+  Phase 6/latest-validation gate slice passed (`2 passed`), Ruff passed, and
+  py_compile passed.
 - [x] Recursive discovery E2E seed-run proof checkpoint:
   The service-worker/precache kill-chain E2E now launches with explicit
   ROE/scope manifest, mocks RDAP/archive/API URL paths to converge

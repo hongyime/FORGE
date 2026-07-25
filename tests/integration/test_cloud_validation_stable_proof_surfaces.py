@@ -24,6 +24,8 @@ WEAK_FIREBASE = "weak-firebase-lab"
 STABLE_BUCKET = "stable-report-bucket"
 PLACEHOLDER_BUCKET = "placeholder-report-bucket"
 HONEYPOT_SUPABASE = "honeypotbase"
+DEAD_FIREBASE = "dead-firebase-prod"
+ACCESSIBLE_BUCKET = "accessible-metadata-bucket"
 WEAK_KEY_TARGET = f"artifact://{WEAK_FIREBASE}/app.js"
 HONEYPOT_KEY_TARGET = f"artifact://{HONEYPOT_SUPABASE}/app.js"
 
@@ -72,6 +74,8 @@ def _build_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
             ("aws_s3", STABLE_BUCKET),
             ("aws_s3", PLACEHOLDER_BUCKET),
             ("supabase", HONEYPOT_SUPABASE),
+            ("firebase", DEAD_FIREBASE),
+            ("aws_s3", ACCESSIBLE_BUCKET),
         ):
             con.execute(
                 """
@@ -133,6 +137,24 @@ def _build_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
                 '{"sample":"test data","placeholder":"changeme"}',
                 "honeypot placeholder response",
             ),
+            (
+                "firebase",
+                DEAD_FIREBASE,
+                "DEAD",
+                "firebase_database_shallow_read",
+                404,
+                "Firebase project reference was unreachable.",
+                "dead resource",
+            ),
+            (
+                "aws_s3",
+                ACCESSIBLE_BUCKET,
+                "ACCESSIBLE_BUT_NO_DATA",
+                "s3_head_probe",
+                403,
+                "Bucket exists but listing is denied.",
+                "structure visible, no data returned",
+            ),
         ]
         con.executemany(
             """
@@ -151,6 +173,8 @@ def _build_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
         _insert_stale_finding(con, "aws_s3", STABLE_BUCKET)
         _insert_stale_finding(con, "aws_s3", PLACEHOLDER_BUCKET)
         _insert_stale_finding(con, "supabase", HONEYPOT_SUPABASE)
+        _insert_stale_finding(con, "firebase", DEAD_FIREBASE)
+        _insert_stale_finding(con, "aws_s3", ACCESSIBLE_BUCKET)
         _insert_stale_key_finding(
             con,
             "firebase",
@@ -358,6 +382,20 @@ def _assert_gate_helper_contract() -> None:
         evidence="Live records observed",
         require_stable_proof=True,
     )
+    assert not is_reportable_cloud_validation(
+        "firebase",
+        "DEAD",
+        "firebase_database_shallow_read",
+        evidence="Firebase project reference was unreachable.",
+        require_stable_proof=True,
+    )
+    assert not is_reportable_cloud_validation(
+        "aws_s3",
+        "ACCESSIBLE_BUT_NO_DATA",
+        "s3_head_probe",
+        evidence="Bucket exists but listing is denied.",
+        require_stable_proof=True,
+    )
 
 
 def _assert_phase6_report_surface_filters_stale_rows(
@@ -387,6 +425,8 @@ def _assert_phase6_report_surface_filters_stale_rows(
     assert f"firebase://{WEAK_FIREBASE}" not in report_text
     assert f"aws_s3://{PLACEHOLDER_BUCKET}" not in report_text
     assert f"supabase://{HONEYPOT_SUPABASE}" not in report_text
+    assert f"firebase://{DEAD_FIREBASE}" not in report_text
+    assert f"aws_s3://{ACCESSIBLE_BUCKET}" not in report_text
     assert WEAK_KEY_TARGET not in report_text
     assert HONEYPOT_KEY_TARGET not in report_text
     inventory = payload["context"]["cloud_validation_inventory"]
@@ -395,6 +435,9 @@ def _assert_phase6_report_surface_filters_stale_rows(
     assert _inventory_status(inventory, "aws_s3", PLACEHOLDER_BUCKET) == "UNVERIFIED"
     assert _inventory_stored_status(inventory, "aws_s3", PLACEHOLDER_BUCKET) == "VALIDATED"
     assert _inventory_status(inventory, "supabase", HONEYPOT_SUPABASE) == "HONEYPOT_SUSPECTED"
+    assert _inventory_status(inventory, "firebase", DEAD_FIREBASE) == "DEAD"
+    assert _inventory_status(inventory, "aws_s3", ACCESSIBLE_BUCKET) == "ACCESSIBLE_BUT_NO_DATA"
+    _assert_asset_inventory_matrix(payload["context"]["cloud_asset_inventory"])
 
     with report_path.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
@@ -407,6 +450,16 @@ def _assert_phase6_report_surface_filters_stale_rows(
     assert _csv_validation_status(validation_rows, "firebase", WEAK_FIREBASE) == "UNVERIFIED"
     assert _csv_stored_validation_status(validation_rows, "firebase", WEAK_FIREBASE) == "VALIDATED"
     assert _csv_validation_status(validation_rows, "supabase", HONEYPOT_SUPABASE) == "HONEYPOT_SUSPECTED"
+    assert _csv_validation_status(validation_rows, "firebase", DEAD_FIREBASE) == "DEAD"
+    assert _csv_validation_status(validation_rows, "aws_s3", ACCESSIBLE_BUCKET) == "ACCESSIBLE_BUT_NO_DATA"
+    asset_rows = [row for row in rows if row.get("record_type") == "cloud_asset"]
+    assert _csv_asset_reportable(asset_rows, "firebase", STABLE_FIREBASE) == "True"
+    assert _csv_asset_reportable(asset_rows, "aws_s3", STABLE_BUCKET) == "True"
+    assert _csv_asset_reportable(asset_rows, "firebase", WEAK_FIREBASE) == "False"
+    assert _csv_asset_reportable(asset_rows, "aws_s3", PLACEHOLDER_BUCKET) == "False"
+    assert _csv_asset_reportable(asset_rows, "supabase", HONEYPOT_SUPABASE) == "False"
+    assert _csv_asset_reportable(asset_rows, "firebase", DEAD_FIREBASE) == "False"
+    assert _csv_asset_reportable(asset_rows, "aws_s3", ACCESSIBLE_BUCKET) == "False"
 
 
 def _assert_attack_graph_filters_stale_rows(db_path: Path) -> None:
@@ -428,6 +481,8 @@ def _assert_attack_graph_filters_stale_rows(db_path: Path) -> None:
     assert cloud_metadata[WEAK_FIREBASE]["validation_reportable"] is False
     assert cloud_metadata[PLACEHOLDER_BUCKET]["validation_reportable"] is False
     assert cloud_metadata[HONEYPOT_SUPABASE]["validation_status"] == "HONEYPOT_SUSPECTED"
+    assert cloud_metadata[DEAD_FIREBASE]["validation_status"] == "DEAD"
+    assert cloud_metadata[ACCESSIBLE_BUCKET]["validation_status"] == "ACCESSIBLE_BUT_NO_DATA"
 
 
 def _assert_dashboard_filters_stale_rows(data_dir: Path, reports_dir: Path) -> str:
@@ -462,6 +517,8 @@ def _assert_dashboard_filters_stale_rows(data_dir: Path, reports_dir: Path) -> s
     assert validation_rows[("firebase", WEAK_FIREBASE)] == "UNVERIFIED"
     assert validation_rows[("aws_s3", PLACEHOLDER_BUCKET)] == "UNVERIFIED"
     assert validation_rows[("supabase", HONEYPOT_SUPABASE)] == "HONEYPOT_SUSPECTED"
+    assert validation_rows[("firebase", DEAD_FIREBASE)] == "DEAD"
+    assert validation_rows[("aws_s3", ACCESSIBLE_BUCKET)] == "ACCESSIBLE_BUT_NO_DATA"
     stored_validation_rows = {
         (row["Type"], row["Asset"]): row["Stored Status"]
         for row in detail["sections"]["cloud_validation_results"]
@@ -484,6 +541,9 @@ def _assert_api_filters_stale_rows(slug: str) -> None:
         )
         assert summary_resp.status_code == 200, summary_resp.text
         summary = summary_resp.json()
+        assets_resp = client.get(f"/api/engagements/{ENGAGEMENT_ID}/assets", headers=headers)
+        assert assets_resp.status_code == 200, assets_resp.text
+        assets = assets_resp.json()
 
     assert _dashboard_targets(detail) == {
         f"aws_s3://{STABLE_BUCKET}",
@@ -493,6 +553,13 @@ def _assert_api_filters_stale_rows(slug: str) -> None:
     assert detail["counts"]["key_scanner_findings"] == 0
     assert detail["sections"]["key_scanner_findings"] == []
     assert summary["vulnerability_findings"].get("HIGH", 0) == 2
+    validation_rows = {
+        (row["Type"], row["Asset"]): row["Status"]
+        for row in detail["sections"]["cloud_validation_results"]
+    }
+    assert validation_rows[("firebase", DEAD_FIREBASE)] == "DEAD"
+    assert validation_rows[("aws_s3", ACCESSIBLE_BUCKET)] == "ACCESSIBLE_BUT_NO_DATA"
+    _assert_asset_inventory_matrix(assets["cloud_assets"])
     _assert_graph_payload_excludes_stale_key_nodes(detail)
 
 
@@ -577,6 +644,40 @@ def _csv_stored_validation_status(
         and item.get("cloud_identifier") == identifier
     )
     return row.get("stored_validation_status") or ""
+
+
+def _csv_asset_reportable(
+    rows: list[dict[str, str]],
+    asset_type: str,
+    identifier: str,
+) -> str:
+    row = next(
+        item
+        for item in rows
+        if item.get("cloud_asset_type") == asset_type
+        and item.get("cloud_identifier") == identifier
+    )
+    return row.get("validation_reportable") or ""
+
+
+def _assert_asset_inventory_matrix(inventory: list[dict[str, object]]) -> None:
+    rows = {
+        (str(item.get("asset_type") or ""), str(item.get("identifier") or "")): item
+        for item in inventory
+    }
+    expected = {
+        ("firebase", STABLE_FIREBASE): ("VALIDATED", True),
+        ("aws_s3", STABLE_BUCKET): ("VALIDATED", True),
+        ("firebase", WEAK_FIREBASE): ("UNVERIFIED", False),
+        ("aws_s3", PLACEHOLDER_BUCKET): ("UNVERIFIED", False),
+        ("supabase", HONEYPOT_SUPABASE): ("HONEYPOT_SUSPECTED", False),
+        ("firebase", DEAD_FIREBASE): ("DEAD", False),
+        ("aws_s3", ACCESSIBLE_BUCKET): ("ACCESSIBLE_BUT_NO_DATA", False),
+    }
+    assert set(expected) <= set(rows)
+    for key, (status, reportable) in expected.items():
+        assert rows[key]["validation_status"] == status
+        assert rows[key]["validation_reportable"] is reportable
 
 
 def _dashboard_targets(detail_payload: dict[str, object]) -> set[str]:
