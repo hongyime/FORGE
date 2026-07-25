@@ -92314,6 +92314,7 @@ def test_kill_chain_dry_run_queues_seed_artifact_urls_and_processes_remote_apk(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
+    monkeypatch.setenv("FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS", "1")
 
     served_root = tmp_path / "served"
     served_root.mkdir()
@@ -92381,6 +92382,7 @@ def test_kill_chain_dry_run_queues_seed_artifact_urls_and_processes_remote_apk(
             attack_mode=False,
             skip_cloud=True,
             skip_keyscan=True,
+            parallel_fanout=4,
         )
 
         con = sqlite3.connect(db_path)
@@ -92438,6 +92440,9 @@ def test_kill_chain_dry_run_queues_seed_artifact_urls_and_processes_remote_apk(
             ).fetchone()
             assert run_row is not None
             run_metadata = json.loads(str(run_row[0] or "{}"))
+            assert run_metadata.get("parallel_fanout") == 4
+            assert run_metadata.get("artifact_processor_worker_cap") == 1
+            assert run_metadata.get("artifact_processor_max_workers") == 1
             artifact_queue_metrics = (
                 run_metadata.get("queue_metrics", {}).get("artifact_queue", {})
             )
@@ -92446,6 +92451,7 @@ def test_kill_chain_dry_run_queues_seed_artifact_urls_and_processes_remote_apk(
             )
             assert int(artifact_queue_metrics.get("parsed", 0)) >= 1
             assert int(artifact_stage_metrics.get("completed", 0)) >= 1
+            assert int(artifact_stage_metrics.get("workers", 0)) == 1
             assert run_metadata.get("active_artifact_stage_label")
             assert float(run_metadata.get("active_artifact_eta_seconds") or 0.0) >= 0.0
         finally:

@@ -63,6 +63,7 @@ _MOBILE_BUNDLE_SEED_SUFFIXES = (".apk", ".ipa", ".aab", ".apkm", ".apks", ".xapk
 _WEB_FETCH_DEFAULT_REQUEST_DELAY_SECONDS = 0.0
 _IDENTITY_LOOKUP_DEFAULT_MAX_WORKERS = 1
 _VALIDATION_DEFAULT_MAX_WORKERS = 1
+_ARTIFACT_PROCESSOR_DEFAULT_MAX_WORKERS = 4
 _DNS_DEFAULT_MAX_WORKERS = 1
 _PROVIDER_DEFAULT_MAX_WORKERS = 1
 _PROVIDER_BATCH_STAGGER_DEFAULT_SECONDS = 0.0
@@ -114,6 +115,15 @@ def _validation_max_workers() -> int:
     return _cli_int_env(
         "FORGE_VALIDATION_MAX_WORKERS",
         _VALIDATION_DEFAULT_MAX_WORKERS,
+        minimum=1,
+        maximum=4,
+    )
+
+
+def _artifact_processor_max_workers() -> int:
+    return _cli_int_env(
+        "FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS",
+        _ARTIFACT_PROCESSOR_DEFAULT_MAX_WORKERS,
         minimum=1,
         maximum=4,
     )
@@ -5094,6 +5104,8 @@ def kill_chain(
     module_timeout_seconds = _module_subprocess_timeout_seconds()
     identity_lookup_workers = _identity_lookup_max_workers()
     validation_workers = _validation_max_workers()
+    artifact_processor_worker_cap = _artifact_processor_max_workers()
+    artifact_processor_workers = min(parallel_workers, artifact_processor_worker_cap)
     try:
         synthesis_depth_limit = normalize_kill_chain_synthesis_depth(
             os.environ.get("FORGE_KILL_CHAIN_SYNTHESIS_DEPTH"),
@@ -6096,6 +6108,8 @@ def kill_chain(
             "processed_name_seeds": len(processed_name_seeds),
             "processed_company_seeds": len(processed_company_seeds),
             "parallel_fanout": parallel_workers,
+            "artifact_processor_max_workers": artifact_processor_workers,
+            "artifact_processor_worker_cap": artifact_processor_worker_cap,
             "synthesis_depth_limit": synthesis_depth_limit,
             "pending_validation_batch_limit": pending_validation_batch_limit,
             "skip_cloud": skip_cloud,
@@ -9342,7 +9356,7 @@ def kill_chain(
     artifact_processor = ArtifactQueueProcessor(
         db_path,
         engagement_id,
-        max_workers=parallel_workers,
+        max_workers=artifact_processor_workers,
     )
     finding_engine = DeterministicFindingEngine(db_path, engagement_id)
 

@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: audit-manifest report-family parity is complete. Run audit
+Latest checkpoint: artifact processor worker-cap is complete. Static artifact
+queue processing no longer inherits full global `--parallel-fanout` by default.
+`FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS` provides a bounded `1..4` cap, the
+effective artifact worker count is `min(parallel_fanout, cap)`, and run
+metadata records both the effective worker count and configured cap outside
+transient queue metrics. Verification: artifact processor cap helper test
+passed (`1 passed`), focused remote APK kill-chain artifact regression passed
+(`1 passed`), adjacent worker-cap selector passed (`6 passed, 26 deselected`),
+Ruff passed, and py_compile passed.
+
+Next checkpoint candidate: run a fresh current-code gap audit for remaining
+deterministic kill-chain acceptance stages. Prefer concrete
+artifact/container parsing, recursive queue, validation/report parity,
+dashboard review, report fallback, auditability, or bounded-concurrency gaps
+only when current code lacks focused implementation or regression.
+
+Previous checkpoint: audit-manifest report-family parity is complete. Run audit
 manifests now treat deterministic report `.html` and report `.csv` companions
 as first-class report-family artifacts alongside `.md`, `.json`, and `.pdf`.
 Manifest hashing remains whitelist-based, signed bundle exports now verify
@@ -33,11 +49,6 @@ manifests containing the full report family, and HTML/CSV tamper is detected as
 a manifest hash mismatch. Verification: run audit manifest suite passed (`11
 passed`), run audit manifest bundle suite passed (`7 passed`), Ruff passed, and
 py_compile passed.
-
-Next checkpoint candidate: decouple artifact queue processing concurrency from
-global `--parallel-fanout` with a bounded `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`
-cap, record the effective cap in run metadata, and prove the processor receives
-that cap independently of identity/validation/global fan-out.
 
 Previous checkpoint: scope-boundary denial reviewability is complete. Dashboard
 static exports and the live engagement detail API now surface scheduled,

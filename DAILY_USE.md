@@ -129,6 +129,7 @@ forge report generate --engagement 1001 --yes
 | Holehe dependency conflicts with FORGE packages | Use the default per-tool venv or set `FORGE_HOLEHE_VENV` / `FORGE_HOLEHE_COMMAND`; do not downgrade the project `.venv` just for Holehe |
 | Sherlock/Maigret/WhatsMyName dependency conflicts with FORGE packages | Use the default per-tool venvs or set `FORGE_SHERLOCK_VENV`, `FORGE_MAIGRET_VENV`, or `FORGE_WHATSMYNAME_VENV`; do not downgrade the project `.venv` just for username enumeration |
 | Key/cloud validation hits 429 | Keep `FORGE_VALIDATION_MAX_WORKERS=1`, then increase `FORGE_KEY_VALIDATION_REQUEST_DELAY_SECONDS` and `FORGE_KEY_VALIDATION_RATE_LIMIT_BACKOFF_SECONDS` |
+| Artifact parsing is saturating CPU/disk | Lower `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`; `--parallel-fanout` still caps the effective artifact worker count |
 | Cloud discovery misses SPA content | Verify Playwright installed: `.venv\Scripts\playwright install chromium` |
 
 Everything else: see `README.md`.

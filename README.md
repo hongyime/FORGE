@@ -312,6 +312,7 @@ Everything else is internal to kill-chain and no longer surfaced in `--help`.
 | `FORGE_KEY_VALIDATION_MAX_RETRY_AFTER_SECONDS` | Cap for credential/cloud-provider validation `Retry-After` sleeps; default `300.0` |
 | `FORGE_KEY_VALIDATION_RATE_LIMIT_RETRIES` | Bounded credential/cloud-provider validation 429 retries; default `1`, max `3` |
 | `FORGE_VALIDATION_MAX_WORKERS` | Max concurrent recursive kill-chain key/cloud validation workers; default `1`, max `4` |
+| `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS` | Max concurrent static artifact queue workers inside kill-chain; default `4`, max `4`, still capped by `--parallel-fanout` |
 | `FORGE_VALIDATION_PROXY` | e.g. `socks5://127.0.0.1:9050` for keyscan OPSEC gate |
 
 Leave `FORGE_SUPABASE_ANON_KEY`, `FORGE_FIREBASE_API_KEY`, `FORGE_DEHASHED_*` **empty** — empty enables auto-discovery.

@@ -14,6 +14,7 @@ from forge.cli import (
     osint_google,
     osint_gravatar,
     osint_usernames,
+    _artifact_processor_max_workers,
     _extract_html_surface_urls,
     _extract_passive_text_urls,
     _passive_archive_lookup_max_workers,
@@ -322,6 +323,20 @@ def test_validation_worker_cap_defaults_serial_and_caps_high_values(monkeypatch)
 
     monkeypatch.setenv("FORGE_VALIDATION_MAX_WORKERS", "0")
     assert _validation_max_workers() == 1
+
+
+def test_artifact_processor_worker_cap_defaults_and_clamps_values(monkeypatch) -> None:
+    monkeypatch.delenv("FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS", raising=False)
+    assert _artifact_processor_max_workers() == 4
+
+    monkeypatch.setenv("FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS", "8")
+    assert _artifact_processor_max_workers() == 4
+
+    monkeypatch.setenv("FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS", "0")
+    assert _artifact_processor_max_workers() == 1
+
+    monkeypatch.setenv("FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS", "not-an-int")
+    assert _artifact_processor_max_workers() == 4
 
 
 def test_osint_gravatar_parallelizes_lookups_but_persists_in_input_order(

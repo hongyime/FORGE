@@ -66,6 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Artifact processor worker-cap checkpoint:
+  Static artifact queue processing no longer inherits full global
+  `--parallel-fanout` by default. `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`
+  provides a bounded `1..4` cap, the effective artifact worker count is
+  `min(parallel_fanout, cap)`, and run metadata records both the effective
+  worker count and configured cap outside transient queue metrics. Verification:
+  artifact processor cap helper test passed (`1 passed`), focused remote APK
+  kill-chain artifact regression passed (`1 passed`), adjacent worker-cap
+  selector passed (`6 passed, 26 deselected`), Ruff passed, and py_compile
+  passed.
+- [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
+  deterministic kill-chain acceptance stages, starting with concrete
+  artifact/container parsing, recursive queue, validation/report parity,
+  dashboard review, report fallback, auditability, or bounded-concurrency gaps
+  only when current code lacks a focused implementation or regression.
 - [x] Audit-manifest report-family parity checkpoint:
   Run audit manifests now treat deterministic report `.html` and report `.csv`
   companions as first-class report-family artifacts alongside `.md`, `.json`,
@@ -74,10 +89,6 @@ historical notes only, not as current instructions.
   is detected as a manifest hash mismatch. Verification: run audit manifest
   suite passed (`11 passed`), run audit manifest bundle suite passed
   (`7 passed`), Ruff passed, and py_compile passed.
-- [ ] Next checkpoint: decouple artifact queue processing concurrency from
-  global `--parallel-fanout` with a bounded `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`
-  cap, record the effective cap in run metadata, and prove the processor
-  receives that cap independently of identity/validation/global fan-out.
 - [x] Scope-boundary denial reviewability checkpoint:
   Dashboard/static exports and the live engagement detail API now surface
   scheduled, recursive-seed, remote-artifact, cloud-validation,
