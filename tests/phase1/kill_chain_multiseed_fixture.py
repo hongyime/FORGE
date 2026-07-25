@@ -67,6 +67,7 @@ def assert_dashboard_review_visibility(
     assert str(report_summary["findings_checksum"]).startswith("sha256:")
     assert {item["label"] for item in report_summary["available_exports"]} == {
         "Markdown",
+        "HTML",
         "PDF",
         "Report JSON",
         "CSV",

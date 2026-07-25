@@ -2555,6 +2555,23 @@ def test_v13_synthesizer_template_uses_exposure_not_exploit_correlation(
 def test_synthesizer_raw_export_fallback_removes_orphan_report_markdown(
     tmp_eng_db, tmp_path, patch_confirm_approve, monkeypatch
 ):
+    with sqlite3.connect(tmp_eng_db) as con:
+        con.execute(
+            """
+            CREATE TABLE audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                phase TEXT,
+                module TEXT,
+                action TEXT,
+                target TEXT,
+                result TEXT,
+                operator TEXT
+            )
+            """
+        )
+        con.commit()
+
     synth = ReportSynthesizer(
         db_path=tmp_eng_db,
         model_path=tmp_path / "nonexistent.gguf",
@@ -2622,6 +2639,24 @@ def test_synthesizer_raw_export_fallback_removes_orphan_report_markdown(
     } == {"raw_export"}
     assert all("disk full" in row["fallback_reason"] for row in csv_rows)
     assert all("disk full" in row["report_write_error"] for row in csv_rows)
+    with sqlite3.connect(tmp_eng_db) as con:
+        audit_row = con.execute(
+            """
+            SELECT target, result
+            FROM audit_log
+            WHERE engagement_id=? AND action='report_findings_included'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (ENGAGEMENT_ID,),
+        ).fetchone()
+    assert audit_row is not None
+    assert Path(audit_row[0]).name == out.name
+    assert "rendered_provider=raw_export" in audit_row[1]
+    assert "render_backend=template" in audit_row[1]
+    assert "render_path=template -> raw_export" in audit_row[1]
+    assert "format=raw_export" in audit_row[1]
+    assert payload["findings_checksum"] in audit_row[1]
 
 
 def test_synthesise_output_path_pdf_mirrors_report_family(

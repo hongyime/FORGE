@@ -142,12 +142,24 @@ sentences as historical notes only, not as current instructions.
   pull, container execution, Docker/OCI CLI invocation, credential use, live
   provider call, destructive validation, scope relaxation, proxy/IP rotation,
   or rate-limit bypass was added.
-- [ ] Next checkpoint: run the canonical end-goal completion audit.
-  Compare the current implementation against `docs/end_goal.md`, `END_GOAL.md`,
-  `SPEC.md`, and the canonical end-goal checklist in this file. Produce the
-  next concrete implementation/test checkpoint from missing or weak evidence;
-  do not mark the goal complete unless every requirement is proven by current
-  code, docs, tests, and runtime artifacts.
+- [x] Canonical end-goal completion audit checkpoint:
+  The audit is recorded in `docs/end_goal_completion_audit.md`. Current status:
+  not release-complete. Most gates are implemented and proven by focused tests,
+  the representative dashboard smoke now runs non-dry-run with explicit
+  ROE/scope manifest, the multi-seed fixture matches the current HTML-inclusive
+  report-family contract, and raw-export fallback now writes a
+  `report_findings_included` audit receipt with raw-export lineage/checksum.
+  Verification completed: upgraded dashboard smoke passed (`1 passed`);
+  raw-export audit fallback unit passed (`1 passed`); raw-export integration
+  fallback passed (`1 passed`); broad multi-seed recursive E2E passed
+  (`1 passed in 262.31s`).
+- [ ] Next checkpoint: build the compact canonical raw-export all-surface E2E.
+  Create an engagement through the web/API path, launch mocked `kill_chain()`
+  with ROE/scope manifest, force LLM failure plus report-family write failure
+  into raw JSON/CSV fallback, then prove recursion/artifacts/cloud-key
+  validation/deterministic findings/graph exports/dashboard/API downloads/report
+  history/checksums/report inclusion audit/run audit manifest/cleanup/no-ID-reuse
+  in one bounded fixture. This is the direct path to closing `SPEC.md` T1.
 - [x] Artifact processor worker-cap checkpoint:
   Static artifact queue processing no longer inherits full global
   `--parallel-fanout` by default. `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`

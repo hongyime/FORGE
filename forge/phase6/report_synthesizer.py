@@ -3447,6 +3447,7 @@ class ReportSynthesizer:
                     encoding="utf-8",
                 )
                 self._write_raw_export_csv_file(ctx, csv_path, report_metadata=lineage)
+                self._audit_report_inclusion(ctx, json_path, lineage=lineage)
                 logger.warning(
                     "Report-family write failed; emitted raw export fallback to %s",
                     json_path,
@@ -4375,16 +4376,24 @@ class ReportSynthesizer:
         logger.info("Report written to %s", out)
         return out
 
-    def _audit_report_inclusion(self, ctx: ReportContext, report_path: Path) -> None:
+    def _audit_report_inclusion(
+        self,
+        ctx: ReportContext,
+        report_path: Path,
+        *,
+        lineage: Mapping[str, Any] | None = None,
+    ) -> None:
         targets = [
             str(finding.get("target_url") or "").strip()
             for finding in ctx.exploits.exploited
             if str(finding.get("target_url") or "").strip()
         ][:12]
-        lineage = self._report_lineage_payload(ctx, provider=self._render_backend)
+        lineage = dict(lineage or self._report_lineage_payload(ctx, provider=self._render_backend))
         result = (
             f"rendered_provider={lineage.get('rendered_provider') or ''} "
             f"render_backend={lineage.get('render_backend') or ''} "
+            f"render_path={lineage.get('render_path') or ''} "
+            f"format={lineage.get('format') or ''} "
             f"fallback_reason={lineage.get('fallback_reason') or ''} "
             f"finding_count={ctx.exploits.finding_count} "
             f"findings_checksum={lineage.get('findings_checksum') or ''} "

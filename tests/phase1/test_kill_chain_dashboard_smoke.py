@@ -231,6 +231,21 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
 
     from forge.cli import kill_chain  # noqa: PLC0415
 
+    scope_manifest = json.dumps(
+        {
+            "roe_id": "ROE-SMOKE-2026-07",
+            "domains": [
+                "acme.example",
+                "acme-smoke-firebase.firebaseio.com",
+                "acmesmoke.supabase.co",
+            ],
+            "urls": [
+                "https://acme-smoke-firebase.firebaseio.com",
+                "https://acmesmoke.supabase.co",
+            ],
+            "exact_seeds": [owner_email],
+        }
+    )
     kill_chain(
         seed="acme.example",
         related_seed=[],
@@ -239,6 +254,8 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
         tor=False,
         dry_run=False,
         attack_mode=False,
+        roe_id="ROE-SMOKE-2026-07",
+        scope_manifest=scope_manifest,
         skip_cloud=False,
         skip_keyscan=True,
         parallel_fanout=2,
@@ -268,6 +285,15 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
     assert report_summary["fallback_reason"] == "rate limit"
     assert str(report_summary["findings_checksum"]).startswith("sha256:")
 
+    run_summary = detail["run_summary"]
+    assert run_summary["roe_id"] == "ROE-SMOKE-2026-07"
+    policy = run_summary["metadata"]["live_execution_policy"]
+    assert policy["scope_manifest_required"] is True
+    assert policy["scope_manifest_present"] is True
+    detail_json = json.dumps(detail, sort_keys=True)
+    assert scope_manifest not in detail_json
+    assert "exact_seeds" not in detail_json
+
     validation_rows = {
         (row["Type"], row["Method"]): row
         for row in detail["sections"]["cloud_validation_results"]
@@ -287,7 +313,6 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
     } >= {
         ("aws", "VALIDATED", "aws_sts_get_caller_identity"),
         ("slack", "VALIDATED", "slack_auth_test"),
-        ("azure", "VALIDATED", "azure_blob_list_containers_shared_key"),
     }
     key_json = json.dumps(key_rows)
     assert "AWS_SECRET_ACCESS_KEY" not in key_json

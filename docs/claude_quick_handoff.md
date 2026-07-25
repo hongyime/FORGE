@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: OCI/Docker-save kill-chain review parity is complete. Local
+Latest checkpoint: canonical end-goal completion audit is complete, but the
+product is not release-complete. See `docs/end_goal_completion_audit.md`.
+The representative dashboard smoke now runs non-dry-run with explicit ROE and
+scope manifest, validates scoped Firebase/Supabase resources, and asserts
+dashboard ROE/scope review without raw manifest leakage. The multi-seed
+recursive fixture now includes the current `HTML` report-family export label.
+Raw-export fallback now writes a `report_findings_included` audit receipt for
+the raw JSON target with raw-export lineage, render path, format, checksum, and
+targets. Verification completed: upgraded dashboard smoke passed (`1 passed`);
+raw-export fallback audit unit passed (`1 passed`); raw-export integration
+fallback passed (`1 passed`); broad multi-seed recursive E2E passed
+(`1 passed in 262.31s`). This is still not release closure because the compact
+API-to-cleanup raw-export all-surface E2E remains open.
+
+Next checkpoint: build the compact canonical raw-export all-surface E2E. Create
+an engagement through the web/API path, launch mocked `kill_chain()` with
+ROE/scope manifest, force LLM failure plus report-family write failure into raw
+JSON/CSV fallback, then prove recursion/artifacts/cloud-key validation/
+deterministic findings/graph exports/dashboard/API downloads/report history/
+checksums/report inclusion audit/run audit manifest/cleanup/no-ID-reuse in one
+bounded fixture. This directly targets `SPEC.md` T1.
+
+Previous checkpoint: OCI/Docker-save kill-chain review parity is complete. Local
 static OCI image-layout and Docker-save archives now have an engagement-backed
 parity regression proving only referenced configs/layers are parsed,
 unreferenced decoy layers and path-traversal members do not create seeds/assets,
@@ -42,13 +64,6 @@ deselected`), Phase 6 cloud/report-artifact suites passed (`2 passed`),
 dashboard cloud/artifact selectors passed (`19 passed, 13 deselected`), Ruff
 passed, py_compile passed, and `git diff --check` passed with only the repo's
 known LF-to-CRLF warning.
-
-Next checkpoint: run the canonical end-goal completion audit. Compare current
-implementation against `docs/end_goal.md`, `END_GOAL.md`, `SPEC.md`, and the
-canonical end-goal checklist in `docs/engagement_overhaul_tasklist.md`.
-Produce the next concrete implementation/test checkpoint from missing or weak
-evidence; do not mark the goal complete unless every requirement is proven by
-current code, docs, tests, and runtime artifacts.
 
 Previous checkpoint: remote Helm repository recursion is complete. Mocked
 scoped Helm `index.yaml` processing now queues only safe in-scope chart
