@@ -2335,6 +2335,18 @@ def test_generate_dashboard_surfaces_slack_validation_proof_on_finding_rows(
     try:
         con.execute(
             """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES (
+                1001, 'slack', 'T9B2D6F4/U7A3C9K2', 'VALIDATED',
+                'slack_auth_test', 200, ?, ?, '2026-07-09T10:14:00'
+            )
+            """,
+            (proof, proof),
+        )
+        con.execute(
+            """
             INSERT INTO vulnerability_findings
                 (engagement_id, vuln_type, target_url, parameter, severity, title,
                  description, evidence, found_at)
@@ -3271,6 +3283,38 @@ def test_generate_dashboard_excludes_unlinked_bot_token_validation_proof_rows(
             "bot_id=739251864203918576 bot_profile_present=true"
         ),
     )
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, domain, service, pattern_name, source_backend, source_url,
+                 repo_name, key_redacted, key_enc, validation_state, validation_detail,
+                 found_at, validated_at)
+            VALUES (
+                1001,
+                'artifact://bundle/slack.env',
+                'slack',
+                'slack_bot_token',
+                'artifact_queue_ingest',
+                'artifact://bundle/slack.env',
+                'mobile-drop',
+                'xoxb...ABCD',
+                'encrypted-secret-never-render',
+                'ACTIVE',
+                ?,
+                '2026-07-15T09:20:00',
+                '2026-07-15T09:25:00'
+            )
+            """,
+            (
+                "VALIDATED:slack_auth_test:Slack auth ok: "
+                "actor_id=U7A3C9K2 team_id=T9B2D6F4",
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
 
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
@@ -3281,6 +3325,7 @@ def test_generate_dashboard_excludes_unlinked_bot_token_validation_proof_rows(
     assert detail_payload["counts"]["key_scanner_findings"] == 0
     assert detail_payload["sections"]["key_scanner_findings"] == []
     assert "discord_current_user" not in json.dumps(detail_payload)
+    assert "slack_auth_test" not in json.dumps(detail_payload)
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 

@@ -7,9 +7,10 @@ from typing import Any
 from forge.utils.cloud_exposure_gate import normalize_cloud_exposure_asset_type
 from forge.utils.validation_proof import parse_validated_detail
 
-BOT_TOKEN_PROVIDERS = frozenset({"discord", "telegram"})
+BOT_TOKEN_PROVIDERS = frozenset({"discord", "slack", "telegram"})
 BOT_TOKEN_METHOD_PROVIDERS = {
     "discord_current_user": "discord",
+    "slack_auth_test": "slack",
     "telegram_get_me": "telegram",
 }
 
@@ -50,6 +51,17 @@ def key_validation_detail_is_reportable(service: str, validation_detail: object)
 
 def _bot_proof_identifier(provider: str, validation_detail: object) -> str:
     proof = _proof_text(validation_detail)
+    if provider == "slack":
+        actor_match = re.search(r"\b(?:actor_id|user_id|bot_id)=([A-Z0-9]+)\b", proof, re.IGNORECASE)
+        team_match = re.search(r"\bteam_id=([A-Z0-9]+)\b", proof, re.IGNORECASE)
+        actor = str(actor_match.group(1) if actor_match else "").strip().upper()
+        team = str(team_match.group(1) if team_match else "").strip().upper()
+        if re.fullmatch(r"[UWB][A-Z0-9]{4,32}", actor) and re.fullmatch(
+            r"[TE][A-Z0-9]{4,32}",
+            team,
+        ):
+            return f"{team}/{actor}".lower()
+        return ""
     limits = {"discord": (15, 22), "telegram": (6, 20)}.get(provider)
     if not limits:
         return ""

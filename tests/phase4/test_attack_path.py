@@ -1345,6 +1345,35 @@ class TestLoadApiKeys:
         assert all(node.node_type != NodeType.APIKEY for node in graph.nodes)
         assert "discord_current_user" not in graph.model_dump_json()
 
+    def test_apikey_node_excludes_unlinked_slack_bot_token_validation_proof(
+        self,
+        full_db: Path,
+    ):
+        con = sqlite3.connect(full_db)
+        try:
+            con.execute(
+                """
+                UPDATE key_scanner_findings
+                SET service='slack',
+                    pattern_name='slack_bot_token',
+                    validation_detail=?,
+                    validated_at=?
+                WHERE engagement_id=1 AND service='aws'
+                """,
+                (
+                    "VALIDATED:slack_auth_test:Slack auth ok: "
+                    "actor_id=U7A3C9K2 team_id=T9B2D6F4",
+                    "2026-07-15T09:30:00+00:00",
+                ),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        graph = AttackGraphBuilder(engagement_id=1, db_path=full_db).build()
+        assert all(node.node_type != NodeType.APIKEY for node in graph.nodes)
+        assert "slack_auth_test" not in graph.model_dump_json()
+
     def test_apikey_node_excludes_bare_legacy_cloud_validation_proof(
         self,
         full_db: Path,

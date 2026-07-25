@@ -721,6 +721,15 @@ def test_context_builder_excludes_unlinked_bot_token_validation_proofs(tmp_eng_d
                 ),
                 (
                     ENGAGEMENT_ID,
+                    "slack",
+                    "slack_bot_token",
+                    (
+                        "VALIDATED:slack_auth_test:Slack auth ok: "
+                        "actor_id=U7A3C9K2 team_id=T9B2D6F4"
+                    ),
+                ),
+                (
+                    ENGAGEMENT_ID,
                     "telegram",
                     "telegram_bot_token",
                     (
@@ -739,19 +748,20 @@ def test_context_builder_excludes_unlinked_bot_token_validation_proofs(tmp_eng_d
     assert not [
         item
         for item in ctx.key_findings
-        if item["service"] in {"discord", "telegram"}
+        if item["service"] in {"discord", "slack", "telegram"}
     ]
     raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
     assert not [
         row
         for row in raw_rows
         if row["record_type"] == "key_finding"
-        and row["key_service"] in {"discord", "telegram"}
+        and row["key_service"] in {"discord", "slack", "telegram"}
     ]
 
 
 def test_context_builder_allows_linked_bot_token_validation_proof(tmp_eng_db):
-    proof = "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true"
+    discord_proof = "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true"
+    slack_proof = "Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4"
     con = sqlite3.connect(tmp_eng_db)
     try:
         con.execute("ALTER TABLE key_scanner_findings ADD COLUMN service TEXT")
@@ -778,26 +788,55 @@ def test_context_builder_allows_linked_bot_token_validation_proof(tmp_eng_db):
             )
             """
         )
-        con.execute(
+        con.executemany(
             """
             INSERT INTO cloud_validation_results
                 (engagement_id, asset_type, identifier, validation_status,
                  validation_method, evidence, notes, checked_at)
-            VALUES (?, 'discord', '739251864203918576', 'VALIDATED',
-                    'discord_current_user', ?, ?, '2026-07-24T10:01:00')
+            VALUES (?, ?, ?, 'VALIDATED', ?, ?, ?, '2026-07-24T10:01:00')
             """,
-            (ENGAGEMENT_ID, proof, proof),
+            [
+                (
+                    ENGAGEMENT_ID,
+                    "discord",
+                    "739251864203918576",
+                    "discord_current_user",
+                    discord_proof,
+                    discord_proof,
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "slack",
+                    "T9B2D6F4/U7A3C9K2",
+                    "slack_auth_test",
+                    slack_proof,
+                    slack_proof,
+                ),
+            ],
         )
-        con.execute(
+        con.executemany(
             """
             INSERT INTO key_scanner_findings
                 (engagement_id, validation_state, service, pattern_name, domain,
                  source_backend, source_url, repo_name, key_redacted,
                  validation_detail, validated_at)
-            VALUES (?, 'ACTIVE', 'discord', 'discord_bot_token', '',
-                    'artifact', '', 'bot.env', 'redacted-key', ?, '2026-07-24T10:00:00')
+            VALUES (?, 'ACTIVE', ?, ?, '', 'artifact', '', 'bot.env',
+                    'redacted-key', ?, '2026-07-24T10:00:00')
             """,
-            (ENGAGEMENT_ID, f"VALIDATED:discord_current_user:{proof}"),
+            [
+                (
+                    ENGAGEMENT_ID,
+                    "discord",
+                    "discord_bot_token",
+                    f"VALIDATED:discord_current_user:{discord_proof}",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "slack",
+                    "slack_bot_token",
+                    f"VALIDATED:slack_auth_test:{slack_proof}",
+                ),
+            ],
         )
         con.commit()
     finally:
@@ -805,14 +844,11 @@ def test_context_builder_allows_linked_bot_token_validation_proof(tmp_eng_db):
 
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
 
-    matching = [
-        item
-        for item in ctx.key_findings
-        if item["validation_method"] == "discord_current_user"
-    ]
-    assert len(matching) == 1
-    assert matching[0]["service"] == "discord"
-    assert matching[0]["validation_proof"] == proof
+    matching = {item["validation_method"]: item for item in ctx.key_findings}
+    assert matching["discord_current_user"]["service"] == "discord"
+    assert matching["discord_current_user"]["validation_proof"] == discord_proof
+    assert matching["slack_auth_test"]["service"] == "slack"
+    assert matching["slack_auth_test"]["validation_proof"] == slack_proof
 
 
 def test_context_builder_unions_seed_only_hosts_and_emails(tmp_eng_db):

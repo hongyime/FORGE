@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: CSS/HTML artifact route recursion is complete. Static
+Latest checkpoint: linked Slack bot-token proof gates are complete. Slack
+bot-token key rows and deterministic key-exposure findings can no longer become
+report/dashboard/graph/deterministic findings from standalone legacy
+`VALIDATED:slack_auth_test` strings. Fresh Slack provider validation remains
+reportable when the latest linked `cloud_validation_results` row is
+proof-stable and bound to the `team_id/actor_id` provider identifier.
+Verification: focused Phase 6/dashboard/deterministic/attack-graph Slack gate
+slice passed (`6 passed`), full Phase 6 report synthesizer suite passed
+(`108 passed`), full dashboard suite passed (`31 passed`), deterministic
+findings plus attack graph suites passed (`130 passed`), adjacent cloud
+validation/stable-proof slice passed (`3 passed`), and Ruff passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
+queue, or validation/report parity gaps only when the code lacks a focused
+implementation or regression.
+
+Previous checkpoint: CSS/HTML artifact route recursion is complete. Static
 artifact parsing now extracts common CSS `url(...)` dependencies and HTML route
 attributes, `srcset`, and meta-refresh targets from remote artifact payloads,
 resolving them against the source artifact URL through the existing safe route
@@ -35,12 +53,6 @@ crawler path. Verification: focused CSS/HTML artifact route suite passed
 (`2 passed`), adjacent artifact recursive queue and JS runtime suites passed
 (`9 passed`), adjacent SPA route and same-iteration URL seed E2E slice passed
 (`2 passed`), Ruff passed, and py_compile passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
-queue, or validation/report parity gaps only when the code lacks a focused
-implementation or regression.
 
 Previous checkpoint: archived-PDF barcode recursion and linked bot-token proof
 gates are complete. Static archive parsing no longer requires Tesseract before

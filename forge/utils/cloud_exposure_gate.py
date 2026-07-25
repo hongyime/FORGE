@@ -38,6 +38,7 @@ CLOUD_DATA_VALIDATION_METHODS = {
 }
 PROVIDER_KEY_VALIDATION_METHODS = {
     "discord": frozenset({"discord_current_user"}),
+    "slack": frozenset({"slack_auth_test"}),
     "telegram": frozenset({"telegram_get_me"}),
 }
 

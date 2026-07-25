@@ -66,6 +66,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Linked Slack bot-token proof gate checkpoint:
+  Slack bot-token key rows and deterministic key-exposure findings can no
+  longer become report/dashboard/graph/deterministic findings from standalone
+  legacy `VALIDATED:slack_auth_test` strings. Fresh Slack provider validation
+  remains reportable when the latest linked `cloud_validation_results` row is
+  proof-stable and bound to the `team_id/actor_id` provider identifier.
+  Verification: focused Phase 6/dashboard/deterministic/attack-graph Slack gate
+  slice passed (`6 passed`), full Phase 6 report synthesizer suite passed
+  (`108 passed`), full dashboard suite passed (`31 passed`), deterministic
+  findings plus attack graph suites passed (`130 passed`), adjacent cloud
+  validation/stable-proof slice passed (`3 passed`), and Ruff passed.
 - [x] CSS/HTML artifact route recursion checkpoint:
   Static artifact parsing now extracts common CSS `url(...)` dependencies and
   HTML route attributes, `srcset`, and meta-refresh targets from remote
