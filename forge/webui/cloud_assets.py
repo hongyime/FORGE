@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import re
 import sqlite3
 from typing import Any
 
@@ -11,81 +9,19 @@ from forge.reporting.dashboard import (
     _table_columns,
     _table_exists,
 )
+from forge.utils.cloud_asset_graph_metadata import stored_cloud_asset_graph_metadata
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_reportable_cloud_validation,
     normalize_cloud_exposure_asset_type,
 )
 
-_FORBIDDEN_METADATA_KEYS = {
-    "access_token",
-    "api_key",
-    "apikey",
-    "client_secret",
-    "credential",
-    "credentials",
-    "key",
-    "key_enc",
-    "key_raw",
-    "password",
-    "password_enc",
-    "private_key",
-    "raw_secret",
-    "raw_token",
-    "refresh_token",
-    "secret",
-    "secret_enc",
-    "token",
-    "token_enc",
-}
-
-
-def _safe_json_loads(raw: str) -> Any:
-    try:
-        return json.loads(raw)
-    except Exception:  # noqa: BLE001
-        return {}
-
-
-def _is_sensitive_key(key: str) -> bool:
-    normalized = re.sub(r"[^a-z0-9]+", "_", str(key or "").lower()).strip("_")
-    return bool(
-        normalized
-        and (
-            normalized in _FORBIDDEN_METADATA_KEYS
-            or normalized.endswith(("_token", "_secret", "_password", "_api_key", "_apikey", "_key"))
-            or "client_secret" in normalized
-            or "raw_secret" in normalized
-            or "raw_token" in normalized
-        )
-    )
-
-
-def _scrub_metadata(value: Any) -> dict[str, Any]:
-    def scrub(current: Any) -> Any:
-        if isinstance(current, dict):
-            return {
-                str(key): scrub(raw_value)
-                for key, raw_value in current.items()
-                if not _is_sensitive_key(str(key))
-            }
-        if isinstance(current, list):
-            return [scrub(item) for item in current]
-        if current is None or isinstance(current, (str, int, float, bool)):
-            return current
-        return str(current)
-
-    scrubbed = scrub(value)
-    return scrubbed if isinstance(scrubbed, dict) else {}
-
-
 def _cloud_asset_row(row: sqlite3.Row) -> dict[str, Any]:
     stored_type = str(row["asset_type"] or "").strip().lower()
     asset_type = normalize_cloud_exposure_asset_type(stored_type)
     stored_status = str(row["validation_status"] or "").strip().upper()
     method = str(row["validation_method"] or "").strip()
-    raw_metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
-    metadata = _scrub_metadata(raw_metadata)
+    metadata = stored_cloud_asset_graph_metadata(row["metadata_json"])
     reportable = bool(
         stored_status
         and is_reportable_cloud_validation(

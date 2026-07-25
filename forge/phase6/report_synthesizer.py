@@ -54,6 +54,7 @@ from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.phase6.artifact_inventory import load_artifact_inventory
 from forge.opsec.scope_gate import scope_entries_from_payload
+from forge.utils.cloud_asset_graph_metadata import stored_cloud_asset_graph_metadata
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
@@ -805,8 +806,7 @@ class ContextBuilder:
             if not asset_type or not identifier:
                 continue
             validation = validation_metadata.get((asset_type, identifier), {})
-            raw_metadata = self._safe_json_loads(str(row["metadata_json"] or "{}"))
-            metadata = self._scrub_evidence_metadata(raw_metadata)
+            metadata = stored_cloud_asset_graph_metadata(row["metadata_json"])
             inventory.append(
                 {
                     "asset_type": asset_type,

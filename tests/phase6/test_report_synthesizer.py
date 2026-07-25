@@ -799,12 +799,15 @@ def test_synthesizer_exports_artifact_cloud_asset_provenance(tmp_eng_db, tmp_pat
                     {
                         "artifact_provenance": True,
                         "artifact_source_seed_id": 42,
-                        "source_url": "https://downloads.acme.local/app-config.json",
-                        "source_file": "https://downloads.acme.local/app-config.json",
+                        "source_url": "https://user:pass@downloads.acme.local/app-config.json?token=secret&ok=1",
+                        "source_file": "https://downloads.acme.local/app-config.json?access_token=secret",
                         "extract_rule": "artifact_text_extract",
                         "format": "json",
                         "artifact_type": "config",
                         "provider_sources": ["urlscan"],
+                        "access-token": "must-not-export-access-token",
+                        "raw_config": "must-not-export-raw-config",
+                        "nested": {"safe": "drop-me", "client_secret": "must-not-export-secret"},
                         "token": "must-not-export",
                         "key_enc": "age-secret-ciphertext",
                     },
@@ -823,14 +826,18 @@ def test_synthesizer_exports_artifact_cloud_asset_provenance(tmp_eng_db, tmp_pat
     assert asset["asset_type"] == "firebase"
     assert asset["artifact_provenance"] is True
     assert asset["artifact_source_seed_id"] == 42
-    assert asset["artifact_source_url"] == "https://downloads.acme.local/app-config.json"
+    assert asset["artifact_source_url"] == "https://downloads.acme.local/app-config.json?ok=1"
     assert asset["artifact_source_file"] == "https://downloads.acme.local/app-config.json"
     assert asset["artifact_extract_rule"] == "artifact_text_extract"
     assert asset["artifact_format"] == "json"
     assert asset["metadata"]["provider_sources"] == ["urlscan"]
+    assert "nested" not in asset["metadata"]
+    assert "raw_config" not in asset["metadata"]
+    assert "access-token" not in asset["metadata"]
     assert "token" not in asset["metadata"]
     assert "key_enc" not in asset["metadata"]
     assert "must-not-export" not in json.dumps(ctx.cloud_asset_inventory, sort_keys=True)
+    assert "user:pass" not in json.dumps(ctx.cloud_asset_inventory, sort_keys=True)
 
     raw_row = next(
         row
@@ -842,6 +849,8 @@ def test_synthesizer_exports_artifact_cloud_asset_provenance(tmp_eng_db, tmp_pat
     assert raw_row["cloud_artifact_extract_rule"] == "artifact_text_extract"
     assert raw_row["cloud_artifact_format"] == "json"
     assert "must-not-export" not in raw_row["cloud_metadata_json"]
+    assert "user:pass" not in raw_row["cloud_metadata_json"]
+    assert "token=secret" not in raw_row["cloud_metadata_json"]
 
     synth = ReportSynthesizer(
         db_path=tmp_eng_db,
@@ -854,9 +863,13 @@ def test_synthesizer_exports_artifact_cloud_asset_provenance(tmp_eng_db, tmp_pat
     payload = json.loads(report_path.with_suffix(".json").read_text(encoding="utf-8"))
     exported_asset = payload["context"]["cloud_asset_inventory"][0]
     assert exported_asset["artifact_source_seed_id"] == 42
+    assert exported_asset["artifact_source_url"] == "https://downloads.acme.local/app-config.json?ok=1"
+    assert exported_asset["artifact_source_file"] == "https://downloads.acme.local/app-config.json"
     assert exported_asset["artifact_extract_rule"] == "artifact_text_extract"
     assert "artifact_text_extract / json / https://downloads.acme.local/app-config.json" in report_text
     assert "must-not-export" not in json.dumps(payload, sort_keys=True)
+    assert "user:pass" not in json.dumps(payload, sort_keys=True)
+    assert "token=secret" not in report_text
 
 
 def test_context_builder_filters_non_validated_managed_cloud_seeds_from_summary(

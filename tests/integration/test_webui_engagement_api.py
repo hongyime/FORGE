@@ -2005,13 +2005,15 @@ def test_engagement_assets_api_surfaces_cloud_artifact_provenance_without_secret
     metadata = {
         "artifact_provenance": True,
         "artifact_source_seed_id": 42,
-        "source_url": "https://acme.example/mobile/app.apk",
-        "source_file": "app.apk",
+        "source_url": "https://user:pass@acme.example/mobile/app.apk?token=secret&ok=1",
+        "source_file": "https://acme.example/mobile/app.apk?access_token=secret",
         "extract_rule": "artifact_firebase_config",
         "format": "apk",
         "artifact_type": "android-apk",
         "api_key": "must-not-leak-api-key",
+        "access-token": "must-not-leak-access-token",
         "token": "must-not-leak-token",
+        "raw_config": "must-not-leak-raw-config",
         "nested": {"safe": "kept", "client_secret": "must-not-leak-secret"},
     }
     with sqlite3.connect(db_path) as con:
@@ -2055,19 +2057,22 @@ def test_engagement_assets_api_surfaces_cloud_artifact_provenance_without_secret
     assert cloud_row["source"] == "artifact_static_extract"
     assert cloud_row["artifact_provenance"] is True
     assert cloud_row["artifact_source_seed_id"] == 42
-    assert cloud_row["artifact_source_url"] == "https://acme.example/mobile/app.apk"
-    assert cloud_row["artifact_source_file"] == "app.apk"
+    assert cloud_row["artifact_source_url"] == "https://acme.example/mobile/app.apk?ok=1"
+    assert cloud_row["artifact_source_file"] == "https://acme.example/mobile/app.apk"
     assert cloud_row["artifact_extract_rule"] == "artifact_firebase_config"
     assert cloud_row["artifact_format"] == "apk"
     assert cloud_row["validation_status"] == "VALIDATED"
     assert cloud_row["validation_reportable"] is True
-    assert cloud_row["metadata"]["nested"] == {"safe": "kept"}
-    assert "source=https://acme.example/mobile/app.apk" in cloud_row["provenance"]
+    assert "nested" not in cloud_row["metadata"]
+    assert "raw_config" not in cloud_row["metadata"]
+    assert "source=https://acme.example/mobile/app.apk?ok=1" in cloud_row["provenance"]
     serialized = json.dumps(cloud_row, sort_keys=True)
     assert "must-not-leak" not in serialized
     assert "api_key" not in serialized
+    assert "access-token" not in serialized
     assert "client_secret" not in serialized
     assert "token" not in serialized
+    assert "user:pass" not in serialized
 
 
 def test_engagement_detail_api_surfaces_slack_validation_proof_on_finding_rows(

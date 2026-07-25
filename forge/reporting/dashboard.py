@@ -1715,8 +1715,7 @@ def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
     asset_type = normalize_cloud_exposure_asset_type(stored_type)
     stored_status = str(row["validation_status"] or "").strip().upper()
     method = str(row["validation_method"] or "").strip()
-    metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
-    metadata_dict = metadata if isinstance(metadata, dict) else {}
+    metadata = stored_cloud_asset_graph_metadata(row["metadata_json"])
     reportable = False
     if stored_status:
         reportable = is_reportable_cloud_validation(
@@ -1742,7 +1741,7 @@ def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
         ),
         "Reportable": "yes" if reportable else "no",
         "Method": method,
-        "Provenance": _relation_evidence_preview(metadata_dict),
+        "Provenance": _relation_evidence_preview(metadata),
         "Discovered": _format_dt(str(row["discovered_at"] or "")),
         "Checked": _format_dt(str(row["checked_at"] or "")),
     }

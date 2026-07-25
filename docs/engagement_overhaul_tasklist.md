@@ -91,11 +91,31 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: align non-graph cloud asset inventory surfaces with the
-  shared provenance sanitizer. Live `/api/engagements/{id}/assets`, Phase 6
-  cloud asset inventory, report JSON, and raw CSV should not expose arbitrary
-  safe-looking nested metadata or unsanitized URL provenance from
-  `cloud_assets.metadata_json`.
+- [ ] Next checkpoint: add a recursive discovery end-to-end proof that newly
+  discovered secondary seeds are requeued, processed automatically, depth
+  limited, audited, and reflected in final graph/report/dashboard state. Start
+  with `tests/integration/test_recursive_discovery_end_to_end.py` or extend the
+  existing compact multi-seed recursive E2E fixture only if it keeps code small.
+- [ ] Then checkpoint: centralize and prove validation/reportability gating as
+  one source of truth across findings, reports, graph payloads, dashboard/API
+  summaries, validation inventory, and raw exports. Add a matrix fixture with
+  `VALIDATED`, `UNVERIFIED`, `DEAD`, `HONEYPOT_SUSPECTED`, and
+  `ACCESSIBLE_BUT_NO_DATA` rows.
+- [ ] Then checkpoint: prove seed-to-report audit traceability for reported
+  findings. Every reportable finding should have a deterministic provenance or
+  audit chain covering seed ingestion, fan-out, derived data point, validation
+  attempt/result, rule-engine severity assignment, and report inclusion.
+- [x] Non-graph cloud asset inventory metadata sanitizer checkpoint:
+  Live `/api/engagements/{id}/assets`, Phase 6 cloud asset inventory, report
+  JSON/raw CSV, and static dashboard cloud asset tables now reuse the shared
+  allowlisted cloud-asset metadata sanitizer. Arbitrary nested/raw metadata,
+  variant secret keys, URL userinfo, and sensitive URL query parameters from
+  `cloud_assets.metadata_json` are stripped while artifact provenance fields
+  remain reviewable. Verification: focused live/API/report/dashboard sanitizer
+  regressions passed (`3 passed`), full Phase 6 report synthesizer suite passed
+  (`108 passed`), adjacent dashboard/API cloud asset tests passed (`2 passed`),
+  stable-proof integration fixture passed (`1 passed`), Ruff passed, and
+  py_compile passed.
 - [x] Dashboard/API fallback graph cloud metadata sanitizer checkpoint:
   Fallback graph cloud nodes now use the same shared allowlisted
   cloud-asset graph metadata sanitizer as saved attack-graph snapshots, so

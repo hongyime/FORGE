@@ -2166,18 +2166,33 @@ def test_generate_dashboard_cloud_assets_use_latest_validation_result(
                 identifier TEXT,
                 provider_identifier TEXT,
                 source TEXT,
+                metadata_json TEXT,
                 discovered_at TEXT
             );
             """
         )
+        metadata = {
+            "artifact_provenance": True,
+            "artifact_source_seed_id": 42,
+            "source_url": "https://user:pass@acme.example/mobile/app.apk?token=secret&ok=1",
+            "source_file": "https://acme.example/mobile/app.apk?access_token=secret",
+            "extract_rule": "artifact_firebase_config",
+            "format": "apk",
+            "provider_sources": ["urlscan"],
+            "access-token": "must-not-leak-access-token",
+            "raw_config": "must-not-leak-raw-config",
+            "nested": {"safe": "drop-me", "client_secret": "must-not-leak-secret"},
+        }
         con.execute(
             """
             INSERT INTO cloud_assets
-                (engagement_id, asset_type, identifier, provider_identifier, source, discovered_at)
+                (engagement_id, asset_type, identifier, provider_identifier, source,
+                 metadata_json, discovered_at)
             VALUES
                 (1001, 'firebase', 'acme-firebase-prod', 'Acme-Firebase-Prod',
-                 'artifact_static_extract', '2026-07-09T09:00:00')
-            """
+                 'artifact_static_extract', ?, '2026-07-09T09:00:00')
+            """,
+            (json.dumps(metadata),),
         )
         con.execute(
             """
@@ -2222,6 +2237,14 @@ def test_generate_dashboard_cloud_assets_use_latest_validation_result(
     assert asset_row["Validation"] == "VALIDATED"
     assert asset_row["Method"] == "firebase_database_shallow_read"
     assert asset_row["Reportable"] == "yes"
+    assert "source=https://acme.example/mobile/app.apk?ok=1" in asset_row["Provenance"]
+    assert "format=apk" in asset_row["Provenance"]
+    assert "sources=urlscan" in asset_row["Provenance"]
+    assert "must-not-leak" not in asset_row["Provenance"]
+    assert "user:pass" not in asset_row["Provenance"]
+    assert "token=secret" not in asset_row["Provenance"]
+    assert "raw_config" not in asset_row["Provenance"]
+    assert "nested" not in asset_row["Provenance"]
     assert asset_row["Checked"] == "2026-07-09 10:00:00"
 
 
