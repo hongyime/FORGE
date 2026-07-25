@@ -66,6 +66,16 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Bare CSS artifact asset recursion checkpoint:
+  Static artifact parsing now resolves common bare same-directory CSS
+  dependencies such as `@import "theme.css"`, `@import url(print.css)`, and
+  `url(hero.png)` against the remote source stylesheet URL. Those dependencies
+  flow through the existing safe route resolver, seed persistence, and queued
+  artifact path without enabling unsafe schemes. Verification: focused
+  CSS/HTML artifact route suite passed (`2 passed`), adjacent artifact
+  recursive queue and JS runtime suites passed (`11 passed`), adjacent SPA
+  route and same-iteration URL seed E2E slice passed (`2 passed`), Ruff passed,
+  and py_compile passed.
 - [x] Linked Slack bot-token proof gate checkpoint:
   Slack bot-token key rows and deterministic key-exposure findings can no
   longer become report/dashboard/graph/deterministic findings from standalone

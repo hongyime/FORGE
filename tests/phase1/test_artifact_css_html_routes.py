@@ -16,7 +16,10 @@ def test_css_and_html_route_extractor_handles_unquoted_asset_refs() -> None:
     text = dedent(
         """
         @import url(/static/css/theme.css);
+        @import "theme.css";
+        @import url(print.css);
         .hero { background: url(../img/banner.png?token=secret&view=public); }
+        .logo { background: url(hero.png); }
         .font { src: url(//cdn.acme.example/fonts/app.woff2); }
         .skip-data { background: url(data:image/png;base64,AAAA); }
         .skip-js { background: url(javascript:alert(1)); }
@@ -34,7 +37,9 @@ def test_css_and_html_route_extractor_handles_unquoted_asset_refs() -> None:
 
     assert urls == [
         "https://app.acme.example/static/css/theme.css",
+        "https://app.acme.example/static/css/print.css",
         "https://app.acme.example/static/img/banner.png?view=public",
+        "https://app.acme.example/static/css/hero.png",
         "https://cdn.acme.example/fonts/app.woff2",
         "https://app.acme.example/assets/app.js",
         "https://app.acme.example/manifest.webmanifest",
@@ -56,7 +61,10 @@ def test_remote_css_and_html_artifacts_promote_recursive_route_seeds(
     css_path.write_text(
         """
         @import url(/static/css/theme.css);
+        @import "base.css";
+        @import url(print.css);
         .hero { background: url(../img/banner.png?token=secret&view=public); }
+        .logo { background: url(hero.png); }
         """.strip(),
         encoding="utf-8",
     )
@@ -126,7 +134,10 @@ def test_remote_css_and_html_artifacts_promote_recursive_route_seeds(
         con.close()
 
     assert "https://app.acme.example/static/css/theme.css" in url_seeds
+    assert "https://app.acme.example/static/css/base.css" in url_seeds
+    assert "https://app.acme.example/static/css/print.css" in url_seeds
     assert "https://app.acme.example/static/img/banner.png?view=public" in url_seeds
+    assert "https://app.acme.example/static/css/hero.png" in url_seeds
     assert "https://app.acme.example/img/card-640.html" in url_seeds
     assert "https://app.acme.example/img/card-1280.html" in url_seeds
     assert "https://app.acme.example/assets/app.js" in url_seeds
@@ -134,6 +145,14 @@ def test_remote_css_and_html_artifacts_promote_recursive_route_seeds(
     assert not any("token=secret" in value for value in url_seeds)
 
     assert queued_artifacts["https://app.acme.example/static/css/theme.css"][:2] == (
+        "config",
+        "queued",
+    )
+    assert queued_artifacts["https://app.acme.example/static/css/base.css"][:2] == (
+        "config",
+        "queued",
+    )
+    assert queued_artifacts["https://app.acme.example/static/css/print.css"][:2] == (
         "config",
         "queued",
     )

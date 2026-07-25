@@ -1744,6 +1744,7 @@ def _extract_artifact_relative_route_urls(text: str, *, base_url: str) -> list[s
             "route_object_keys",
             "route_declarations",
             "route_lists",
+            "css_imports",
             "css_url_functions",
             "html_url_attrs",
             "html_srcset",
@@ -1810,6 +1811,15 @@ def _artifact_relative_route_family_candidates(
         for list_match in _ARTIFACT_ROUTE_LIST_FIELD_RE.finditer(raw_text):
             for route_match in _ARTIFACT_QUOTED_SLASH_ROUTE_RE.finditer(list_match.group("body")):
                 _append(route_match.group("path"), allow_route_path=True)
+        return ordered_urls
+    if family == "css_imports":
+        for pattern in (
+            _ARTIFACT_CSS_IMPORT_URL_RE,
+            _ARTIFACT_CSS_IMPORT_STRING_RE,
+            _ARTIFACT_CSS_IMPORT_BARE_RE,
+        ):
+            for match in pattern.finditer(raw_text):
+                _append(match.group("path"), allow_bare_file=True)
         return ordered_urls
     if family == "css_url_functions":
         for match in _ARTIFACT_CSS_URL_FUNCTION_RE.finditer(raw_text):
@@ -2686,10 +2696,63 @@ _ARTIFACT_CSS_URL_FUNCTION_RE = re.compile(
             |\./
             |\.\./
             |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+            |[a-z0-9][a-z0-9_.~-]{0,128}\.[a-z0-9]{1,16}
         )
-        [^)"'`<>\s]{1,512}
+        [^)"'`<>\s]{0,512}
     )
     (?P=quote)\s*\)
+    """
+)
+_ARTIFACT_CSS_IMPORT_URL_RE = re.compile(
+    r"""(?ix)@import\s+url\(\s*
+    (?P<quote>["']?)
+    (?P<path>
+        (?:
+            https?://
+            |//
+            |/
+            |\./
+            |\.\./
+            |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+            |[a-z0-9][a-z0-9_.~-]{0,128}\.[a-z0-9]{1,16}
+        )
+        [^)"'`<>\s]{0,512}
+    )
+    (?P=quote)\s*\)
+    """
+)
+_ARTIFACT_CSS_IMPORT_STRING_RE = re.compile(
+    r"""(?ix)@import\s+
+    (?P<quote>["'])
+    (?P<path>
+        (?:
+            https?://
+            |//
+            |/
+            |\./
+            |\.\./
+            |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+            |[a-z0-9][a-z0-9_.~-]{0,128}\.[a-z0-9]{1,16}
+        )
+        [^"'`<>\s]{0,512}
+    )
+    (?P=quote)
+    """
+)
+_ARTIFACT_CSS_IMPORT_BARE_RE = re.compile(
+    r"""(?ix)@import\s+
+    (?P<path>
+        (?:
+            https?://
+            |//
+            |/
+            |\./
+            |\.\./
+            |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+            |[a-z0-9][a-z0-9_.~-]{0,128}\.[a-z0-9]{1,16}
+        )
+        [^;"'`<>\s]{0,512}
+    )
     """
 )
 _ARTIFACT_HTML_URL_ATTR_RE = re.compile(

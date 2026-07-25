@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: linked Slack bot-token proof gates are complete. Slack
+Latest checkpoint: bare CSS artifact asset recursion is complete. Static
+artifact parsing now resolves common bare same-directory CSS dependencies such
+as `@import "theme.css"`, `@import url(print.css)`, and `url(hero.png)` against
+the remote source stylesheet URL. Those dependencies flow through the existing
+safe route resolver, seed persistence, and queued artifact path without
+enabling unsafe schemes. Verification: focused CSS/HTML artifact route suite
+passed (`2 passed`), adjacent artifact recursive queue and JS runtime suites
+passed (`11 passed`), adjacent SPA route and same-iteration URL seed E2E slice
+passed (`2 passed`), Ruff passed, and py_compile passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
+queue, or validation/report parity gaps only when the code lacks a focused
+implementation or regression.
+
+Previous checkpoint: linked Slack bot-token proof gates are complete. Slack
 bot-token key rows and deterministic key-exposure findings can no longer become
 report/dashboard/graph/deterministic findings from standalone legacy
 `VALIDATED:slack_auth_test` strings. Fresh Slack provider validation remains
@@ -36,12 +52,6 @@ slice passed (`6 passed`), full Phase 6 report synthesizer suite passed
 (`108 passed`), full dashboard suite passed (`31 passed`), deterministic
 findings plus attack graph suites passed (`130 passed`), adjacent cloud
 validation/stable-proof slice passed (`3 passed`), and Ruff passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
-queue, or validation/report parity gaps only when the code lacks a focused
-implementation or regression.
 
 Previous checkpoint: CSS/HTML artifact route recursion is complete. Static
 artifact parsing now extracts common CSS `url(...)` dependencies and HTML route
