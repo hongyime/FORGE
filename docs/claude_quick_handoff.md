@@ -25,27 +25,46 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: remote Helm repository recursion is complete. Mocked scoped
-Helm `index.yaml` processing now queues only safe in-scope chart archives,
-parses the later `.tgz/.tar.gz`, preserves `helm-index -> chart -> values.yaml`
-provenance via `helm_index_url`, and promotes chart-derived hosts, emails,
-Firebase refs, and S3 refs into recursive seeds/cloud assets with relation and
-audit evidence. Generic direct URL extraction no longer bypasses Helm index
-safety filters for chart archives, and queue-time scope rejection keeps
-out-of-scope chart packages out of `artifact_queue` when a scope checker is
-configured. Verification: focused Helm recursion suite passed (`6 passed, 2
-deselected`), adjacent artifact provenance/cloud/remote-download suites passed
-(`15 passed`), adjacent dashboard artifact/cloud slices passed (`9 passed, 23
-deselected`), adjacent Phase 6 report/raw-export slices passed (`15 passed, 95
-deselected`), Ruff passed, py_compile passed, and `git diff --check` passed
-with only the repo's known LF-to-CRLF warnings.
+Latest checkpoint: OCI/Docker-save kill-chain review parity is complete. Local
+static OCI image-layout and Docker-save archives now have an engagement-backed
+parity regression proving only referenced configs/layers are parsed,
+unreferenced decoy layers and path-traversal members do not create seeds/assets,
+discovered refs feed validation inventory and deterministic finding gates, and
+sanitized `#oci-layer/` / `#docker-layer/` provenance reaches seed relations,
+recursive seed metadata, cloud-asset metadata, Phase 4 graph gates, dashboard
+detail payloads, Phase 6 Markdown, JSON, CSV, and raw export rows. Non-HTTP
+local artifacts now get a synthetic completed `artifact://queue/{id}` source
+seed so derived seeds have graph lineage without exposing local paths as
+recursive live targets. Verification: OCI/Docker review parity regression
+passed (`1 passed`), adjacent OCI/container artifact suites passed (`10
+passed`), Phase 4 cloud/artifact graph selectors passed (`12 passed, 100
+deselected`), Phase 6 cloud/report-artifact suites passed (`2 passed`),
+dashboard cloud/artifact selectors passed (`19 passed, 13 deselected`), Ruff
+passed, py_compile passed, and `git diff --check` passed with only the repo's
+known LF-to-CRLF warning.
 
-Next checkpoint: add OCI/Docker-save kill-chain review parity proof. Remote or
-local static OCI/Docker-save archives should parse only referenced
-layers/configs, ignore unreferenced decoy layers and path traversal, feed
-discovered refs into validation inventory/finding gates, and expose sanitized
-provenance through graph/dashboard/report/raw exports. Do not pull registries,
-execute images, run container tools, or parse unreferenced unsafe members.
+Next checkpoint: run the canonical end-goal completion audit. Compare current
+implementation against `docs/end_goal.md`, `END_GOAL.md`, `SPEC.md`, and the
+canonical end-goal checklist in `docs/engagement_overhaul_tasklist.md`.
+Produce the next concrete implementation/test checkpoint from missing or weak
+evidence; do not mark the goal complete unless every requirement is proven by
+current code, docs, tests, and runtime artifacts.
+
+Previous checkpoint: remote Helm repository recursion is complete. Mocked
+scoped Helm `index.yaml` processing now queues only safe in-scope chart
+archives, parses the later `.tgz/.tar.gz`, preserves
+`helm-index -> chart -> values.yaml` provenance via `helm_index_url`, and
+promotes chart-derived hosts, emails, Firebase refs, and S3 refs into recursive
+seeds/cloud assets with relation and audit evidence. Generic direct URL
+extraction no longer bypasses Helm index safety filters for chart archives, and
+queue-time scope rejection keeps out-of-scope chart packages out of
+`artifact_queue` when a scope checker is configured. Verification: focused Helm
+recursion suite passed (`6 passed, 2 deselected`), adjacent artifact
+provenance/cloud/remote-download suites passed (`15 passed`), adjacent
+dashboard artifact/cloud slices passed (`9 passed, 23 deselected`), adjacent
+Phase 6 report/raw-export slices passed (`15 passed, 95 deselected`), Ruff
+passed, py_compile passed, and `git diff --check` passed with only the repo's
+known LF-to-CRLF warnings.
 
 Previous checkpoint: legacy cloud-audit reportability is complete. Legacy
 `FIREBASE_MISCONFIG`, `FIREBASE_CREDENTIAL_STATUS`, `AWS_MISCONFIG`, and

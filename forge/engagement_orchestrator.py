@@ -20478,8 +20478,14 @@ class ArtifactQueueProcessor:
         parsed: ParsedArtifact,
     ) -> tuple[int, int, int, dict[str, Any]]:
         discovered_seeds = 0
-        source_seed_id = self._artifact_source_seed_id(con, parsed.source_url)
         artifact_context = self._artifact_relation_context(con, parsed)
+        source_seed_id = self._artifact_source_seed_id(con, parsed.source_url)
+        if source_seed_id is None:
+            source_seed_id = self._ensure_local_artifact_source_seed(
+                con,
+                parsed,
+                artifact_context=artifact_context,
+            )
         discovery_payloads = self._artifact_discovery_payloads(parsed)
         discovery_jobs = self._expand_structured_discovery_jobs(discovery_payloads)
         for batch in self._collect_generic_text_discovery_batches(discovery_jobs):
@@ -40356,6 +40362,76 @@ class ArtifactQueueProcessor:
             if seed_id is not None:
                 return seed_id
         return None
+
+    def _ensure_local_artifact_source_seed(
+        self,
+        con: sqlite3.Connection,
+        parsed: ParsedArtifact,
+        *,
+        artifact_context: dict[str, Any] | None,
+    ) -> int | None:
+        parsed_source = str(parsed.source_url or "").strip()
+        parsed_url = urlparse(parsed_source)
+        if parsed_url.scheme in {"http", "https"} and parsed_url.netloc:
+            return None
+        seed_value = f"artifact://queue/{int(parsed.artifact_id)}"
+        metadata = self._local_artifact_source_seed_metadata(
+            parsed,
+            artifact_context=artifact_context,
+            seed_value=seed_value,
+        )
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, status, depth, confidence, metadata_json)
+            VALUES (?, ?, 'other', 'artifact', 'completed', 0, 0.9, ?)
+            ON CONFLICT(engagement_id, seed_type, seed_value) DO UPDATE SET
+                source='artifact',
+                status='completed',
+                confidence=MAX(engagement_seeds.confidence, excluded.confidence),
+                metadata_json=excluded.metadata_json,
+                updated_at=CURRENT_TIMESTAMP
+            """,
+            (
+                self._engagement_id,
+                seed_value,
+                json.dumps(metadata, sort_keys=True),
+            ),
+        )
+        return self._lookup_seed_id(con, seed_value, "other")
+
+    @staticmethod
+    def _local_artifact_source_seed_metadata(
+        parsed: ParsedArtifact,
+        *,
+        artifact_context: dict[str, Any] | None,
+        seed_value: str,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "artifact_provenance": True,
+            "artifact_source_seed": True,
+            "artifact_queue_id": int(parsed.artifact_id),
+            "source_url": seed_value,
+        }
+        artifact_type = str(parsed.artifact_type or "").strip()
+        if artifact_type:
+            metadata["artifact_type"] = artifact_type[:64]
+        for key, value in dict(artifact_context or {}).items():
+            if key in {
+                "artifact_type",
+                "barcode_payload_count",
+                "content_type",
+                "download_filename",
+                "downloaded_from_remote",
+                "format",
+                "metadata_payload_count",
+                "ocr_payload_count",
+                "parser",
+                "payload_count",
+                "relationship_payload_count",
+            } and isinstance(value, (str, int, float, bool)):
+                metadata[key] = value
+        return metadata
 
     @staticmethod
     def _artifact_source_seed_provenance(

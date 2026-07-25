@@ -121,12 +121,33 @@ sentences as historical notes only, not as current instructions.
   execution, chart install, registry pull, Kubernetes API call, authentication,
   live provider call, destructive action, scope relaxation, proxy/IP rotation,
   or rate-limit bypass was added.
-- [ ] Next checkpoint: add OCI/Docker-save kill-chain review parity proof. Remote or
-  local static OCI/Docker-save archives should parse only referenced
-  layers/configs, ignore unreferenced decoy layers and path traversal, feed
-  discovered refs into validation inventory/finding gates, and expose sanitized
-  provenance through graph/dashboard/report/raw exports. Do not pull registries,
-  execute images, run container tools, or parse unreferenced unsafe members.
+- [x] OCI/Docker-save kill-chain review parity checkpoint:
+  Local static OCI image-layout and Docker-save archives now have an
+  engagement-backed parity regression proving only referenced configs/layers
+  are parsed, unreferenced decoy layers and path-traversal members do not
+  create seeds/assets, discovered refs feed validation inventory and
+  deterministic finding gates, and sanitized `#oci-layer/` / `#docker-layer/`
+  provenance reaches seed relations, recursive seed metadata, cloud-asset
+  metadata, Phase 4 graph gates, dashboard detail payloads, Phase 6 Markdown,
+  JSON, CSV, and raw export rows. Non-HTTP local artifacts now get a synthetic
+  completed `artifact://queue/{id}` source seed so derived seeds have graph
+  lineage without exposing local paths as recursive live targets. Verification:
+  OCI/Docker review parity regression passed (`1 passed`), adjacent
+  OCI/container artifact suites passed (`10 passed`), Phase 4 cloud/artifact
+  graph selectors passed (`12 passed, 100 deselected`), Phase 6
+  cloud/report-artifact suites passed (`2 passed`), dashboard cloud/artifact
+  selectors passed (`19 passed, 13 deselected`), Ruff passed, py_compile
+  passed, and `git diff --check` passed with only the repo's known LF-to-CRLF
+  warning. Safety: passive/static parsing and reviewability only; no registry
+  pull, container execution, Docker/OCI CLI invocation, credential use, live
+  provider call, destructive validation, scope relaxation, proxy/IP rotation,
+  or rate-limit bypass was added.
+- [ ] Next checkpoint: run the canonical end-goal completion audit.
+  Compare the current implementation against `docs/end_goal.md`, `END_GOAL.md`,
+  `SPEC.md`, and the canonical end-goal checklist in this file. Produce the
+  next concrete implementation/test checkpoint from missing or weak evidence;
+  do not mark the goal complete unless every requirement is proven by current
+  code, docs, tests, and runtime artifacts.
 - [x] Artifact processor worker-cap checkpoint:
   Static artifact queue processing no longer inherits full global
   `--parallel-fanout` by default. `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`
