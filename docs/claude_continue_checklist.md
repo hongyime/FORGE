@@ -66,6 +66,15 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Barcode recursive provenance parity checkpoint:
+  QR/barcode-derived recursive seeds now preserve `barcode_payload_count`
+  provenance in seed metadata and artifact relation context, matching the
+  artifact-level parse summary already stored on queued artifacts. This keeps
+  barcode pivots reviewable as passive artifact-derived recursion rather than
+  anonymous secondary seeds. Verification: focused artifact barcode suite
+  passed (`8 passed`), adjacent artifact provenance/review surface slice
+  passed (`13 passed`), Ruff passed, py_compile passed, and `git diff --check`
+  passed.
 - [x] Bare HTML artifact asset recursion checkpoint:
   Static artifact parsing now resolves bare same-directory HTML asset
   references such as `src=app.js`, `href=style.css`, manifest links, image

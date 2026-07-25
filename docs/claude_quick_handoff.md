@@ -25,7 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: bare HTML artifact asset recursion is complete. Static
+Latest checkpoint: barcode recursive provenance parity is complete.
+QR/barcode-derived recursive seeds now preserve `barcode_payload_count`
+provenance in seed metadata and artifact relation context, matching the
+artifact-level parse summary already stored on queued artifacts. This keeps
+barcode pivots reviewable as passive artifact-derived recursion rather than
+anonymous secondary seeds. Verification: focused artifact barcode suite passed
+(`8 passed`), adjacent artifact provenance/review surface slice passed
+(`13 passed`), Ruff passed, py_compile passed, and `git diff --check` passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
+queue, or validation/report parity gaps only when the code lacks a focused
+implementation or regression.
+
+Previous checkpoint: bare HTML artifact asset recursion is complete. Static
 artifact parsing now resolves bare same-directory HTML asset references such as
 `src=app.js`, `href=style.css`, manifest links, image sources, and meta-refresh
 URLs against the remote source HTML URL. The existing safe resolver still
@@ -35,12 +50,6 @@ artifact route suite passed (`3 passed`), adjacent artifact recursive queue and
 JS runtime suites passed (`12 passed`), adjacent SPA route and same-iteration
 URL seed E2E slice passed (`2 passed`), Ruff passed, py_compile passed, and
 `git diff --check` passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
-queue, or validation/report parity gaps only when the code lacks a focused
-implementation or regression.
 
 Previous checkpoint: bare CSS artifact asset recursion is complete. Static
 artifact parsing now resolves common bare same-directory CSS dependencies such

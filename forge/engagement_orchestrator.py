@@ -20317,6 +20317,7 @@ class ArtifactQueueProcessor:
             "metadata_payload_count",
             "relationship_payload_count",
             "ocr_payload_count",
+            "barcode_payload_count",
         )
         for key in scalar_keys:
             value = parsed.parse_metadata.get(key)
@@ -40377,6 +40378,7 @@ class ArtifactQueueProcessor:
             "metadata_payload_count",
             "relationship_payload_count",
             "ocr_payload_count",
+            "barcode_payload_count",
             "hostname",
             "scan_domain",
             "scan_id",

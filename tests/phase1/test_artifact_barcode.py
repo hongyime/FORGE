@@ -66,7 +66,32 @@ def test_artifact_queue_processor_extracts_image_qr_payloads(
     monkeypatch.setattr(ArtifactQueueProcessor, "_ocr_image_path", lambda _self, _path: "")
 
     processor = ArtifactQueueProcessor(db_path, 1001)
-    assert processor.ingest_local_artifacts([artifact_root]) == 1
+    source_url = "https://cdn.acme.example/static/qr-intel.png"
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, depth, confidence, metadata_json)
+            VALUES
+                (1001, ?, 'url', 'operator', 0, 1.0, '{}')
+            """,
+            (source_url,),
+        )
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, local_path, artifact_type,
+                 discovered_from, status, metadata_json)
+            VALUES
+                (1001, ?, ?, 'document', 'remote_artifact', 'downloaded', '{}')
+            """,
+            (source_url, image_path.resolve().as_posix()),
+        )
+        con.commit()
+    finally:
+        con.close()
+
     assert processor.process().processed == 1
 
     con = sqlite3.connect(db_path)
@@ -90,6 +115,16 @@ def test_artifact_queue_processor_extracts_image_qr_payloads(
                 "SELECT seed_value, seed_type FROM engagement_seeds WHERE engagement_id=1001"
             ).fetchall()
         }
+        seed_metadata = {
+            (row[0], row[1]): json.loads(str(row[2] or "{}"))
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type, metadata_json
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
     finally:
         con.close()
 
@@ -97,6 +132,14 @@ def test_artifact_queue_processor_extracts_image_qr_payloads(
     assert "qr-owner@acme.example" in emails
     assert ("qr-owner@acme.example", "email") in seeds
     assert ("https://qr.acme.example/bootstrap?view=public", "url") in seeds
+    for seed_key in (
+        ("qr-owner@acme.example", "email"),
+        ("https://qr.acme.example/bootstrap?view=public", "url"),
+    ):
+        assert seed_metadata[seed_key]["artifact_provenance"] is True
+        assert seed_metadata[seed_key]["format"] == "png"
+        assert seed_metadata[seed_key]["barcode_payload_count"] == 1
+        assert seed_metadata[seed_key].get("ocr_payload_count") in (None, 0)
     assert not any("token=secret" in seed for seed, _type in seeds)
 
 
