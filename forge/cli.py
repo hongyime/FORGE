@@ -9348,6 +9348,22 @@ def kill_chain(
 
     def _run_finding_synthesis(pass_label: str) -> Any:
         summary = finding_engine.run()
+        _cli_audit(
+            db_path,
+            engagement_id,
+            "phase4",
+            "deterministic_findings",
+            "deterministic_finding_synthesis",
+            target=domain,
+            result=(
+                f"pass={pass_label} "
+                f"inserted={summary.inserted} "
+                f"updated={summary.updated} "
+                f"removed={summary.removed} "
+                f"active={summary.active_findings} "
+                f"severity_summary={json.dumps(summary.severity_summary, sort_keys=True)}"
+            ),
+        )
         if summary.inserted or summary.updated or summary.removed:
             _log(
                 pass_label,

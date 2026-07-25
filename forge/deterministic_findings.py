@@ -59,6 +59,27 @@ def _truncate(value: str | None, limit: int) -> str:
     return str(value or "")[:limit]
 
 
+def _audit(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    *,
+    action: str,
+    target: str,
+    result: str,
+) -> None:
+    try:
+        con.execute(
+            """
+            INSERT INTO audit_log
+                (engagement_id, phase, module, action, target, result, operator)
+            VALUES (?, 'phase4', 'deterministic_findings', ?, ?, ?, 'system')
+            """,
+            (engagement_id, action, target[:512], result[:1024]),
+        )
+    except sqlite3.OperationalError:
+        return
+
+
 def _normalize_asset_type(value: str) -> str:
     text = str(value or "").strip().lower()
     if text == "s3":
@@ -211,19 +232,48 @@ class DeterministicFindingEngine:
             for row in cloud_validation_rows:
                 spec = self._build_cloud_finding(row)
                 if spec is None:
-                    summary.removed += self._delete_finding(
+                    target_url = self._cloud_target_url(
+                        _normalize_asset_type(str(row["asset_type"] or "")),
+                        str(row["identifier"] or ""),
+                    )
+                    removed = self._delete_finding(
                         con,
                         "DETERMINISTIC_CLOUD_EXPOSURE",
-                        self._cloud_target_url(
-                            _normalize_asset_type(str(row["asset_type"] or "")),
-                            str(row["identifier"] or ""),
-                        ),
+                        target_url,
                         _normalize_asset_type(str(row["asset_type"] or "")),
+                    )
+                    summary.removed += removed
+                    _audit(
+                        con,
+                        self._engagement_id,
+                        action="deterministic_finding_rule_skipped",
+                        target=target_url,
+                        result=(
+                            "rule=DETERMINISTIC_CLOUD_EXPOSURE "
+                            f"asset_type={_normalize_asset_type(str(row['asset_type'] or ''))} "
+                            f"identifier={str(row['identifier'] or '').strip()} "
+                            f"validation_status={str(row['validation_status'] or '').strip().upper()} "
+                            f"validation_method={str(row['validation_method'] or '').strip()} "
+                            f"removed={removed}"
+                        ),
                     )
                     continue
                 inserted, updated = self._upsert_finding(con, spec, columns)
                 summary.inserted += inserted
                 summary.updated += updated
+                _audit(
+                    con,
+                    self._engagement_id,
+                    action="deterministic_finding_rule_applied",
+                    target=spec.target_url,
+                    result=(
+                        f"rule={spec.vuln_type} severity={spec.severity} "
+                        f"asset_type={spec.parameter} resource_id={spec.resource_id or ''} "
+                        f"validation_status={str(row['validation_status'] or '').strip().upper()} "
+                        f"validation_method={str(row['validation_method'] or '').strip()} "
+                        f"inserted={inserted} updated={updated}"
+                    ),
+                )
 
             for row in con.execute(
                 """

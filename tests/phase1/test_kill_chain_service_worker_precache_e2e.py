@@ -125,6 +125,7 @@ def test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_repo
         run_metadata = json.loads(run["metadata_json"])
         assert run_metadata["last_iteration_stable"] is True
         _assert_terminal_artifact_queue_metrics(con, run_metadata)
+        _assert_seed_to_report_traceability(con, report_payload, graph)
 
     _assert_report_exports(report_path, report_text, report_payload)
     _assert_graph_outputs(graph)
@@ -567,6 +568,126 @@ def _assert_validation_and_findings(con: sqlite3.Connection) -> None:
     assert not any("sw-precache-public" in json.dumps(dict(row), sort_keys=True) for row in findings)
 
 
+def _assert_seed_to_report_traceability(
+    con: sqlite3.Connection,
+    report_payload: dict[str, Any],
+    graph: dict[str, Any],
+) -> None:
+    target = "supabase://swreportvault"
+    relations = {
+        (row["source_value"], row["target_value"], row["relation_type"])
+        for row in con.execute(
+            """
+            SELECT source.seed_value AS source_value,
+                   target.seed_value AS target_value,
+                   sr.relation_type
+            FROM seed_relations sr
+            JOIN engagement_seeds source ON source.id=sr.source_seed_id
+            JOIN engagement_seeds target ON target.id=sr.target_seed_id
+            WHERE sr.engagement_id=?
+            """,
+            (EID,),
+        )
+    }
+    assert (PRECACHE_URL, REPORT_CHUNK_URL, "derived_from") in relations
+    assert (REPORT_CHUNK_URL, "https://swreportvault.supabase.co", "derived_from") in relations
+
+    artifact = con.execute(
+        "SELECT status, artifact_type, metadata_json FROM artifact_queue WHERE engagement_id=? AND source_url=?",
+        (EID, REPORT_CHUNK_URL),
+    ).fetchone()
+    assert artifact is not None
+    artifact_metadata = json.loads(artifact["metadata_json"])
+    assert artifact["status"] == "parsed"
+    assert artifact["artifact_type"] == "config"
+    assert artifact_metadata["format"] == "js"
+    assert int(artifact_metadata["payload_count"]) >= 1
+
+    validation = con.execute(
+        """
+        SELECT validation_status, validation_method, http_status, evidence, notes
+        FROM cloud_validation_results
+        WHERE engagement_id=? AND asset_type='supabase' AND identifier='swreportvault'
+        """,
+        (EID,),
+    ).fetchone()
+    assert validation is not None
+    assert validation["validation_status"] == "VALIDATED"
+    assert validation["validation_method"] == "supabase_rest_root"
+    assert int(validation["http_status"]) == 200
+
+    finding = con.execute(
+        """
+        SELECT vuln_type, severity, title, target_url, parameter, resource_id, evidence
+        FROM vulnerability_findings
+        WHERE engagement_id=? AND target_url=?
+        """,
+        (EID, target),
+    ).fetchone()
+    assert finding is not None
+    assert finding["vuln_type"] == "DETERMINISTIC_CLOUD_EXPOSURE"
+    assert finding["severity"] == "HIGH"
+    assert finding["parameter"] == "supabase"
+    assert finding["resource_id"] == "swreportvault"
+    assert finding["evidence"] == validation["evidence"]
+
+    exported = next(
+        row
+        for row in report_payload["context"]["exploits"]["exploited"]
+        if row["target_url"] == target
+    )
+    assert exported["severity"] == "HIGH"
+    assert exported["validation_status"] == "VALIDATED"
+    assert exported["validation_method"] == "supabase_rest_root"
+    assert report_payload["findings_checksum"].startswith("sha256:")
+
+    assert any(
+        node.get("source_table") == "cloud_assets"
+        and (node.get("metadata") or {}).get("identifier") == "swreportvault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+    assert any(
+        node.get("source_table") == "vulnerability_findings"
+        and (node.get("metadata") or {}).get("resource_id") == "swreportvault"
+        and (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in graph["nodes"]
+    )
+
+    audit_rows = [
+        dict(row)
+        for row in con.execute(
+            """
+            SELECT action, target, result
+            FROM audit_log
+            WHERE engagement_id=?
+            ORDER BY id ASC
+            """,
+            (EID,),
+        )
+    ]
+    actions = {row["action"] for row in audit_rows}
+    assert "artifact_queue_terminal_metrics" in actions
+    assert "deterministic_finding_synthesis" in actions
+    assert "deterministic_finding_rule_applied" in actions
+    assert "report_findings_included" in actions
+    assert "kill_chain_complete" in actions
+    assert any(
+        row["action"] == "deterministic_finding_rule_applied"
+        and row["target"] == target
+        and "rule=DETERMINISTIC_CLOUD_EXPOSURE" in row["result"]
+        and "severity=HIGH" in row["result"]
+        and "validation_method=supabase_rest_root" in row["result"]
+        for row in audit_rows
+    )
+    assert any(
+        row["action"] == "report_findings_included"
+        and target in row["result"]
+        and report_payload["findings_checksum"] in row["result"]
+        for row in audit_rows
+    )
+
+
 def _assert_report_exports(report_path: Path, report_text: str, report_payload: dict[str, Any]) -> None:
     finding_section = report_text.split("### 5.1 Validated findings", 1)[1].split(
         "## 6. Validation Boundaries",
@@ -739,4 +860,11 @@ def _assert_dashboard_outputs(data_dir: Path, reports_dir: Path) -> None:
         for row in detail_payload["sections"]["cloud_validation_results"]
     }
     assert validation_rows[("aws_s3", "sw-precache-logs")]["Status"] == "UNSUPPORTED"
+    audit_rows = detail_payload["sections"]["audit_log"]
+    assert any(
+        row["Action"] == "deterministic_finding_rule_applied"
+        and row["Target"] == "supabase://swreportvault"
+        for row in audit_rows
+    )
+    assert any(row["Action"] == "report_findings_included" for row in audit_rows)
     assert "Maltego Workspace" in detail_html.read_text(encoding="utf-8")

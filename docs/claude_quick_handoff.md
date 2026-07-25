@@ -25,8 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: validation/reportability matrix parity is complete. The
-stable-proof integration fixture now proves the shared reportability gate across
+Latest checkpoint: seed-to-report audit traceability is complete. The
+service-worker/precache kill-chain E2E now proves one reportable Supabase
+finding from derived seed relation and parsed artifact through cloud
+validation, deterministic rule-engine `HIGH` severity, report JSON/checksum
+inclusion, attack-graph nodes, dashboard review rows, and audit receipts.
+Production now writes per-finding deterministic rule applied/skipped receipts,
+batch `deterministic_finding_synthesis` receipts, and Phase 6
+`report_findings_included` receipts with provider lineage, finding count,
+checksum, and included targets. Verification: focused service-worker/precache
+E2E passed (`1 passed`), deterministic finding suite passed (`18 passed`),
+full Phase 6 report synthesizer suite passed (`108 passed`), adjacent Phase
+6/latest-validation gate slice passed (`3 passed`), Ruff passed, and
+py_compile passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR fallback, or provider-proof gaps only when the
+code lacks a focused implementation or regression.
+
+Previous checkpoint: validation/reportability matrix parity is complete. The
+stable-proof integration fixture proves the shared reportability gate across
 `VALIDATED`, weak-effective `UNVERIFIED`, raw `DEAD`, `HONEYPOT_SUSPECTED`, and
 `ACCESSIBLE_BUT_NO_DATA` rows. Stale deterministic findings for
 dead/accessible resources remain validation inventory only across Phase 6
@@ -35,11 +54,6 @@ dashboard/API detail, live `/api/engagements/{id}/assets`, vuln summary, helper
 gates, and deterministic finding cleanup. Verification: expanded stable-proof
 integration fixture passed (`1 passed`), adjacent Phase 6/latest-validation
 gate slice passed (`2 passed`), Ruff passed, and py_compile passed.
-
-Next checkpoint: prove seed-to-report audit traceability for reported findings.
-Every reportable finding should have a deterministic provenance or audit chain
-covering seed ingestion, fan-out, derived data point, validation attempt/result,
-rule-engine severity assignment, and report inclusion.
 
 Previous checkpoint: recursive discovery E2E seed-run proof is complete. The
 service-worker/precache kill-chain E2E now launches with explicit ROE/scope

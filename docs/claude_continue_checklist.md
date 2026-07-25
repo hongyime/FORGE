@@ -66,10 +66,27 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: prove seed-to-report audit traceability for reported
-  findings. Every reportable finding should have a deterministic provenance or
-  audit chain covering seed ingestion, fan-out, derived data point, validation
-  attempt/result, rule-engine severity assignment, and report inclusion.
+- [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
+  deterministic kill-chain acceptance stages, starting with concrete
+  artifact/container parsing, OCR fallback, or provider-proof gaps only when the
+  code lacks a focused implementation or regression.
+- [x] Seed-to-report audit traceability checkpoint:
+  The service-worker/precache kill-chain E2E now proves one reportable Supabase
+  finding from derived seed relation and parsed artifact through cloud
+  validation, deterministic rule-engine `HIGH` severity, report JSON/checksum
+  inclusion, attack-graph nodes, dashboard review rows, and audit receipts.
+  `DeterministicFindingEngine` writes per-finding rule applied/skipped audit
+  rows, `forge kill-chain` writes a batch `deterministic_finding_synthesis`
+  receipt, and Phase 6 writes `report_findings_included` with provider lineage,
+  finding count, checksum, and included targets after report export persistence
+  succeeds. Verification: focused service-worker/precache E2E passed
+  (`1 passed`), deterministic finding suite passed (`18 passed`), full Phase 6
+  synthesizer suite passed (`108 passed`), adjacent Phase 6/latest-validation
+  gate slice passed (`3 passed`), Ruff passed, and py_compile passed.
+- [x] Previous next checkpoint completed: seed-to-report audit traceability for
+  reported findings now has deterministic provenance/audit proof covering seed
+  ingestion, fan-out, derived data point, validation attempt/result,
+  rule-engine severity assignment, and report inclusion.
 - [x] Validation/reportability matrix parity checkpoint:
   The stable-proof integration fixture now proves the shared reportability gate
   across `VALIDATED`, weak-effective `UNVERIFIED`, raw `DEAD`,

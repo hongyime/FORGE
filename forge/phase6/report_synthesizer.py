@@ -4347,8 +4347,44 @@ class ReportSynthesizer:
         except Exception:
             self._remove_report_family_artifacts(out)
             raise
+        self._audit_report_inclusion(ctx, out)
         logger.info("Report written to %s", out)
         return out
+
+    def _audit_report_inclusion(self, ctx: ReportContext, report_path: Path) -> None:
+        targets = [
+            str(finding.get("target_url") or "").strip()
+            for finding in ctx.exploits.exploited
+            if str(finding.get("target_url") or "").strip()
+        ][:12]
+        lineage = self._report_lineage_payload(ctx, provider=self._render_backend)
+        result = (
+            f"rendered_provider={lineage.get('rendered_provider') or ''} "
+            f"render_backend={lineage.get('render_backend') or ''} "
+            f"fallback_reason={lineage.get('fallback_reason') or ''} "
+            f"finding_count={ctx.exploits.finding_count} "
+            f"findings_checksum={lineage.get('findings_checksum') or ''} "
+            f"targets={json.dumps(targets, sort_keys=True)}"
+        )
+        try:
+            with sqlite3.connect(self._db_path) as con:
+                con.execute(
+                    """
+                    INSERT INTO audit_log
+                        (engagement_id, phase, module, action, target, result, operator)
+                    VALUES (?, 'phase6', 'report_synthesizer',
+                            'report_findings_included', ?, ?, ?)
+                    """,
+                    (
+                        ctx.engagement_id,
+                        str(report_path)[:512],
+                        result[:1024],
+                        os.environ.get("FORGE_OPERATOR", "system"),
+                    ),
+                )
+                con.commit()
+        except sqlite3.Error as exc:
+            logger.debug("report inclusion audit failed (non-fatal): %s", exc)
 
 
 def synthesise(
