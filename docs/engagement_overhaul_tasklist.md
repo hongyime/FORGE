@@ -91,6 +91,25 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Archived-PDF barcode recursion checkpoint:
+  Static archive parsing no longer requires an OCR binary before extracting QR
+  or barcode pivots from rendered embedded PDF pages. Direct PDFs and PDFs
+  inside ZIP artifacts now share the same barcode-only fallback when a PDF
+  rasterizer is available, so discovered QR URLs can become recursive URL seeds
+  even on hosts without Tesseract. Verification: artifact barcode suite passed
+  (`8 passed`), deterministic finding suite passed (`19 passed` in focused
+  pair), Ruff passed, py_compile passed, and `git diff --check` passed.
+- [x] Linked bot-token proof gate checkpoint:
+  Discord/Telegram bot-token key rows can no longer become report/dashboard/
+  graph/deterministic findings from standalone legacy `VALIDATED:*` strings.
+  Fresh provider validation remains reportable only when the latest linked
+  `cloud_validation_results` row is reportable and proof-bound to the provider
+  bot identifier. Verification: focused gate slice passed (`32 passed`), full
+  Phase 6 report synthesizer suite passed (`108 passed`), full dashboard suite
+  passed (`31 passed`), full attack graph suite passed (`110 passed`), full
+  cloud validation suite passed (`136 passed`), stable-proof integration/core
+  slice passed (`111 passed`), Ruff passed, py_compile passed, and
+  `git diff --check` passed.
 - [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
   deterministic kill-chain acceptance stages, starting with concrete
   artifact/container parsing, OCR fallback, or provider-proof gaps only when the

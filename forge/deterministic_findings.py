@@ -13,8 +13,11 @@ from forge.utils.cloud_exposure_gate import (
     STORAGE_LISTING_VALIDATION_METHODS,
     STORAGE_METADATA_VALIDATION_METHODS,
     is_reportable_cloud_validation,
-    linked_cloud_validation_reportability,
     latest_cloud_validation_reportability_index,
+)
+from forge.utils.key_validation_gate import (
+    key_validation_detail_is_reportable,
+    linked_key_validation_reportability,
 )
 from forge.utils.validation_proof import parse_validated_detail
 
@@ -417,16 +420,17 @@ class DeterministicFindingEngine:
         if validation_state != "ACTIVE" or not service:
             return None
 
-        linked_reportable = linked_cloud_validation_reportability(
+        linked_reportable = linked_key_validation_reportability(
             validation_index,
-            _validation_asset_types_for_key_service(service),
+            service,
             domain,
+            validation_detail,
+            asset_aliases=_validation_asset_types_for_key_service(service),
         )
         if linked_reportable is not None:
             confirmed = linked_reportable
         else:
-            parsed_validation = parse_validated_detail(validation_detail)
-            confirmed = parsed_validation["validation_status"] == "VALIDATED"
+            confirmed = key_validation_detail_is_reportable(service, validation_detail)
         if not confirmed:
             return None
         description = (

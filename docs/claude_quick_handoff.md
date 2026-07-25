@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: seed-to-report audit traceability is complete. The
+Latest checkpoint: archived-PDF barcode recursion and linked bot-token proof
+gates are complete. Static archive parsing no longer requires Tesseract before
+extracting barcode pivots from embedded rendered PDF pages, so ZIP-contained
+scanned PDFs can feed QR URLs back into recursive URL seeds when a rasterizer is
+available. Discord/Telegram bot-token key rows can no longer become
+report/dashboard/graph/deterministic findings from standalone legacy
+`VALIDATED:*` strings; fresh provider validation remains reportable only when a
+latest linked `cloud_validation_results` row is reportable and proof-bound to
+the provider bot ID. Verification: focused gate slice passed (`32 passed`),
+artifact/deterministic focused suites passed (`27 passed`), full Phase 6 report
+synthesizer suite passed (`108 passed`), full dashboard suite passed
+(`31 passed`), full attack graph suite passed (`110 passed`), full cloud
+validation suite passed (`136 passed`), stable-proof integration/core slice
+passed (`111 passed`), Ruff passed, py_compile passed, and `git diff --check`
+passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR fallback, or provider-proof gaps only when the
+code lacks a focused implementation or regression.
+
+Previous checkpoint: seed-to-report audit traceability is complete. The
 service-worker/precache kill-chain E2E now proves one reportable Supabase
 finding from derived seed relation and parsed artifact through cloud
 validation, deterministic rule-engine `HIGH` severity, report JSON/checksum
@@ -38,11 +59,6 @@ E2E passed (`1 passed`), deterministic finding suite passed (`18 passed`),
 full Phase 6 report synthesizer suite passed (`108 passed`), adjacent Phase
 6/latest-validation gate slice passed (`3 passed`), Ruff passed, and
 py_compile passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR fallback, or provider-proof gaps only when the
-code lacks a focused implementation or regression.
 
 Previous checkpoint: validation/reportability matrix parity is complete. The
 stable-proof integration fixture proves the shared reportability gate across

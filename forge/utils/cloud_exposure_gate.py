@@ -36,6 +36,10 @@ CLOUD_DATA_VALIDATION_METHODS = {
     "firebase": frozenset({"firebase_database_node_read", "firebase_database_shallow_read"}),
     "supabase": frozenset({"supabase_rest_root"}),
 }
+PROVIDER_KEY_VALIDATION_METHODS = {
+    "discord": frozenset({"discord_current_user"}),
+    "telegram": frozenset({"telegram_get_me"}),
+}
 
 _ASSET_TYPE_ALIASES = {
     "azure_blob_storage": "azure_blob",
@@ -129,6 +133,8 @@ def vulnerability_finding_evidence_is_reportable(
 def is_reportable_cloud_validation_method(asset_type: str, validation_method: str) -> bool:
     asset = normalize_cloud_exposure_asset_type(asset_type)
     method = str(validation_method or "").strip().lower()
+    if method in PROVIDER_KEY_VALIDATION_METHODS.get(asset, frozenset()):
+        return True
     if method in CLOUD_DATA_VALIDATION_METHODS.get(asset, frozenset()):
         return True
     if asset in STORAGE_CLOUD_ASSET_TYPES and method in STORAGE_LISTING_VALIDATION_METHODS:
@@ -139,7 +145,10 @@ def is_reportable_cloud_validation_method(asset_type: str, validation_method: st
 def cloud_validation_requires_stable_proof(asset_type: str, validation_method: str) -> bool:
     asset = normalize_cloud_exposure_asset_type(asset_type)
     method = str(validation_method or "").strip().lower()
-    return method in CLOUD_DATA_VALIDATION_METHODS.get(asset, frozenset()) or (
+    return (
+        method in PROVIDER_KEY_VALIDATION_METHODS.get(asset, frozenset())
+        or method in CLOUD_DATA_VALIDATION_METHODS.get(asset, frozenset())
+    ) or (
         asset in STORAGE_CLOUD_ASSET_TYPES
         and method in STORAGE_LISTING_VALIDATION_METHODS
     )

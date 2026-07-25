@@ -30,6 +30,10 @@ from forge.utils.cloud_exposure_gate import (
     linked_cloud_validation_reportability,
     normalize_cloud_exposure_asset_type,
 )
+from forge.utils.key_validation_gate import (
+    key_validation_detail_is_reportable,
+    linked_key_validation_reportability,
+)
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
@@ -1000,10 +1004,11 @@ class AttackGraphBuilder:
         columns = _table_columns(con, "vulnerability_findings")
         cloud_provider_expr = "cloud_provider" if "cloud_provider" in columns else "NULL AS cloud_provider"
         resource_id_expr = "resource_id" if "resource_id" in columns else "NULL AS resource_id"
+        evidence_expr = "evidence" if "evidence" in columns else "NULL AS evidence"
         rows = con.execute(
             f"""
             SELECT id, vuln_type, target_url, parameter, severity, title,
-                   {cloud_provider_expr}, {resource_id_expr}
+                   {cloud_provider_expr}, {resource_id_expr}, {evidence_expr}
             FROM vulnerability_findings
             WHERE engagement_id=?
             """,
@@ -1018,6 +1023,7 @@ class AttackGraphBuilder:
             title,
             cloud_provider,
             resource_id,
+            evidence,
         ) in rows:
             try:
                 severity = Severity(str(severity_raw).upper())
@@ -1056,15 +1062,31 @@ class AttackGraphBuilder:
                     self._node_for_cloud(validation_lookup_service, resource_id_str)
                 continue
             if self._vuln_is_deterministic_key_exposure(vuln_type_str, str(title or "")):
-                linked_reportable = linked_cloud_validation_reportability(
-                    {
-                        key: value.get("validation_reportable") is True
-                        for key, value in self._cloud_validation_by_key.items()
-                    },
-                    (validation_lookup_service,),
+                validation_index = {
+                    key: value.get("validation_reportable") is True
+                    for key, value in self._cloud_validation_by_key.items()
+                }
+                evidence_str = str(evidence or "")
+                linked_reportable = linked_key_validation_reportability(
+                    validation_index,
+                    validation_lookup_service,
                     resource_id_str,
+                    evidence_str,
                 )
+                if linked_reportable is None:
+                    linked_reportable = linked_cloud_validation_reportability(
+                        validation_index,
+                        (validation_lookup_service,),
+                        resource_id_str,
+                    )
                 if linked_reportable is False:
+                    if validation_lookup_service and resource_id_str:
+                        self._node_for_cloud(validation_lookup_service, resource_id_str)
+                    continue
+                if linked_reportable is None and not key_validation_detail_is_reportable(
+                    validation_lookup_service,
+                    evidence_str,
+                ):
                     if validation_lookup_service and resource_id_str:
                         self._node_for_cloud(validation_lookup_service, resource_id_str)
                     continue
@@ -1166,6 +1188,23 @@ class AttackGraphBuilder:
             repo_name,
         ) in rows:
             svc = str(service or "unknown").lower()
+            validation_index = {
+                key: value.get("validation_reportable") is True
+                for key, value in self._cloud_validation_by_key.items()
+            }
+            linked_reportable = linked_key_validation_reportability(
+                validation_index,
+                svc,
+                str(domain or ""),
+                validation_detail,
+            )
+            if linked_reportable is False:
+                continue
+            if linked_reportable is None and not key_validation_detail_is_reportable(
+                svc,
+                validation_detail,
+            ):
+                continue
             validation_proof = parse_validated_detail(validation_detail)
             if str(validation_proof["validation_status"] or "").upper() != "VALIDATED":
                 continue

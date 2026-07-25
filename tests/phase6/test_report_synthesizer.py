@@ -557,11 +557,6 @@ def test_context_builder_exports_standalone_reportable_key_findings(
             "Cloudflare token valid: token_id=abcdef1234567890abcdef1234567890 status=active",
         ),
         (
-            "discord",
-            "discord_current_user",
-            "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true",
-        ),
-        (
             "gitlab",
             "gitlab_current_user_api",
             (
@@ -621,11 +616,6 @@ def test_context_builder_exports_standalone_reportable_key_findings(
             "stripe",
             "stripe_balance_api",
             "Stripe balance accessible: mode=live currencies=sgd,usd balances=available:1,pending:1",
-        ),
-        (
-            "telegram",
-            "telegram_get_me",
-            "Telegram bot auth ok: bot_id=725419863 bot_profile_present=true",
         ),
         (
             "twilio",
@@ -696,6 +686,133 @@ def test_context_builder_exports_long_tail_key_validation_proofs(
     assert key_row["key_service"] == service
     assert key_row["validation_proof"] == proof
     assert key_row["validation_detail"].startswith(f"VALIDATED:{method}:")
+
+
+def test_context_builder_excludes_unlinked_bot_token_validation_proofs(tmp_eng_db):
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN service TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN pattern_name TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN domain TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN source_backend TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN source_url TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN repo_name TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN key_redacted TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validation_detail TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validated_at TEXT")
+        con.executemany(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, validation_state, service, pattern_name, domain,
+                 source_backend, source_url, repo_name, key_redacted,
+                 validation_detail, validated_at)
+            VALUES (?, 'ACTIVE', ?, ?, '', 'artifact', '', 'bot.env',
+                    'redacted-key', ?, '2026-07-24T10:00:00')
+            """,
+            [
+                (
+                    ENGAGEMENT_ID,
+                    "discord",
+                    "discord_bot_token",
+                    (
+                        "VALIDATED:discord_current_user:Discord bot auth ok: "
+                        "bot_id=739251864203918576 bot_profile_present=true"
+                    ),
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "telegram",
+                    "telegram_bot_token",
+                    (
+                        "VALIDATED:telegram_get_me:Telegram bot auth ok: "
+                        "bot_id=725419863 bot_profile_present=true"
+                    ),
+                ),
+            ],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+
+    assert not [
+        item
+        for item in ctx.key_findings
+        if item["service"] in {"discord", "telegram"}
+    ]
+    raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
+    assert not [
+        row
+        for row in raw_rows
+        if row["record_type"] == "key_finding"
+        and row["key_service"] in {"discord", "telegram"}
+    ]
+
+
+def test_context_builder_allows_linked_bot_token_validation_proof(tmp_eng_db):
+    proof = "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true"
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN service TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN pattern_name TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN domain TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN source_backend TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN source_url TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN repo_name TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN key_redacted TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validation_detail TEXT")
+        con.execute("ALTER TABLE key_scanner_findings ADD COLUMN validated_at TEXT")
+        con.execute(
+            """
+            CREATE TABLE cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, evidence, notes, checked_at)
+            VALUES (?, 'discord', '739251864203918576', 'VALIDATED',
+                    'discord_current_user', ?, ?, '2026-07-24T10:01:00')
+            """,
+            (ENGAGEMENT_ID, proof, proof),
+        )
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, validation_state, service, pattern_name, domain,
+                 source_backend, source_url, repo_name, key_redacted,
+                 validation_detail, validated_at)
+            VALUES (?, 'ACTIVE', 'discord', 'discord_bot_token', '',
+                    'artifact', '', 'bot.env', 'redacted-key', ?, '2026-07-24T10:00:00')
+            """,
+            (ENGAGEMENT_ID, f"VALIDATED:discord_current_user:{proof}"),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+
+    matching = [
+        item
+        for item in ctx.key_findings
+        if item["validation_method"] == "discord_current_user"
+    ]
+    assert len(matching) == 1
+    assert matching[0]["service"] == "discord"
+    assert matching[0]["validation_proof"] == proof
 
 
 def test_context_builder_unions_seed_only_hosts_and_emails(tmp_eng_db):

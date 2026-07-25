@@ -31,6 +31,11 @@ from forge.utils.cloud_exposure_gate import (
     normalize_cloud_exposure_asset_type,
     vulnerability_finding_evidence_is_reportable,
 )
+from forge.utils.key_validation_gate import (
+    key_validation_detail_is_reportable,
+    key_validation_requires_linked_result,
+    linked_key_validation_reportability,
+)
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
@@ -537,8 +542,7 @@ def _validation_asset_types_for_key_service(service: str) -> list[str]:
 
 
 def _key_validation_detail_is_reportable(value: object) -> bool:
-    proof = parse_validated_detail(value)
-    return str(proof["validation_status"] or "").strip().upper() == "VALIDATED"
+    return key_validation_detail_is_reportable("", value)
 
 
 def _key_row_is_reportable(
@@ -550,16 +554,17 @@ def _key_row_is_reportable(
         return False
     identifier = str(row["domain"] or "").strip().lower() if "domain" in row.keys() else ""
     service = str(row["service"] or "").strip().lower() if "service" in row.keys() else ""
-    linked_reportable = linked_cloud_validation_reportability(
+    validation_detail = row["validation_detail"] if "validation_detail" in row.keys() else ""
+    linked_reportable = linked_key_validation_reportability(
         validation_index,
-        _validation_asset_types_for_key_service(service),
+        service,
         identifier,
+        validation_detail,
+        asset_aliases=_validation_asset_types_for_key_service(service),
     )
     if linked_reportable is not None:
         return linked_reportable
-    return _key_validation_detail_is_reportable(
-        row["validation_detail"] if "validation_detail" in row.keys() else ""
-    )
+    return key_validation_detail_is_reportable(service, validation_detail)
 
 
 def _key_scanner_rows(
@@ -670,14 +675,18 @@ def _vulnerability_row_is_reportable(
         return reportable is True
     if vuln_type == "DETERMINISTIC_KEY_EXPOSURE" or title.lower().startswith("active exposed "):
         identifier = _vulnerability_validation_identifier(row)
-        linked_reportable = linked_cloud_validation_reportability(
+        evidence = str(row["evidence"] or "") if "evidence" in row.keys() else ""
+        linked_reportable = linked_key_validation_reportability(
             validation_index,
-            (asset,),
+            asset,
             identifier,
+            evidence,
         )
         if linked_reportable is not None:
             return linked_reportable
-        proof = parse_validated_detail(str(row["evidence"] or "") if "evidence" in row.keys() else "")
+        if key_validation_requires_linked_result(asset, evidence):
+            return False
+        proof = parse_validated_detail(evidence)
         return str(proof["validation_status"] or "").strip().upper() == "VALIDATED"
     return vulnerability_finding_evidence_is_reportable(
         vuln_type,
@@ -1421,20 +1430,21 @@ def _graph_node_is_unreportable_key_finding(
     if source_table and source_table not in {"key_scanner_findings", "vulnerability_findings"} and node_type != "APIKEY":
         return False
     asset, identifier = _graph_node_validation_key(node)
-    linked_reportable = linked_cloud_validation_reportability(
+    detail = _graph_node_key_validation_detail(node)
+    linked_reportable = linked_key_validation_reportability(
         validation_index,
-        (asset,),
+        asset,
         identifier,
+        detail,
     )
     if linked_reportable is not None:
         return not linked_reportable
-    detail = _graph_node_key_validation_detail(node)
     if not detail and not any(
         str(metadata.get(key) or "").strip()
         for key in ("validation_status", "validation_method", "validation_proof")
     ):
         return True
-    return not _key_validation_detail_is_reportable(detail)
+    return not key_validation_detail_is_reportable(asset, detail)
 
 
 def _graph_node_is_cloud_review_node(node: dict[str, Any]) -> bool:

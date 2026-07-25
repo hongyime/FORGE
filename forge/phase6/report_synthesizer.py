@@ -62,6 +62,10 @@ from forge.utils.cloud_exposure_gate import (
     latest_cloud_validation_reportability_index,
     vulnerability_finding_evidence_is_reportable,
 )
+from forge.utils.key_validation_gate import (
+    key_validation_detail_is_reportable,
+    linked_key_validation_reportability,
+)
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
 
@@ -1396,15 +1400,17 @@ class ContextBuilder:
     ) -> bool:
         service = self._normalize_validation_asset_type(str(row["service"] or ""))
         identifier = str(row["domain"] or "").strip().lower()
-        linked_reportable = self._linked_cloud_validation_reportability(
+        validation_detail = row["validation_detail"]
+        linked_reportable = linked_key_validation_reportability(
             validation_index,
-            (service, *self._validation_asset_types_for_provider(service)),
+            service,
             identifier,
+            validation_detail,
+            asset_aliases=self._validation_asset_types_for_provider(service),
         )
         if linked_reportable is not None:
             return linked_reportable
-        proof = parse_validated_detail(row["validation_detail"])
-        return proof["validation_status"] == "VALIDATED"
+        return key_validation_detail_is_reportable(service, validation_detail)
 
     @staticmethod
     def _linked_cloud_validation_reportability(

@@ -39028,7 +39028,7 @@ class ArtifactQueueProcessor:
         source_file: str,
         member_name: str,
     ) -> list[tuple[str, str, str]]:
-        if not self._ocr_binary or not self._pdf_raster_binary or not data:
+        if not self._pdf_raster_binary or not data:
             return []
         try:
             with tempfile.TemporaryDirectory() as temp_dir:

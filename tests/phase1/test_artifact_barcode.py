@@ -169,6 +169,48 @@ def test_pdf_page_barcode_payloads_do_not_require_ocr_binary(
     assert not page_image.exists()
 
 
+def test_archived_pdf_page_barcode_payloads_do_not_require_ocr_binary(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_barcode_pdf_zip"
+    artifact_root.mkdir()
+    archive_path = artifact_root / "evidence.zip"
+    page_image = tmp_path / "archived-page-1.png"
+    page_image.write_bytes(b"\x89PNG\r\n\x1a\narchived-pdf-page-qr")
+    with zipfile.ZipFile(archive_path, "w") as zf:
+        zf.writestr("docs/scanned.pdf", b"%PDF-1.7 archived fake")
+    bootstrap_engagement(db_path)
+    _patch_barcode_decoder(monkeypatch, "https://archived-pdf-qr.acme.example/runbook")
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    processor._ocr_binary = None
+    processor._pdf_raster_binary = "fake-pdftoppm"
+    monkeypatch.setattr(
+        ArtifactQueueProcessor,
+        "_render_pdf_pages_for_ocr",
+        lambda _self, _path: [page_image],
+    )
+
+    assert processor.ingest_local_artifacts([artifact_root]) == 1
+    assert processor.process().processed == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                "SELECT seed_value, seed_type FROM engagement_seeds WHERE engagement_id=1001"
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    assert ("https://archived-pdf-qr.acme.example/runbook", "url") in seeds
+    assert not page_image.exists()
+
+
 def test_data_uri_image_barcode_payloads_feed_structured_text(
     tmp_path: Path,
     monkeypatch,

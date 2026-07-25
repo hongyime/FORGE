@@ -88,6 +88,46 @@ def test_deterministic_findings_synthesizes_cloud_and_key_evidence(tmp_path: Pat
         con.close()
 
 
+def test_deterministic_findings_excludes_unlinked_bot_token_validation_proof(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO key_scanner_findings
+                (engagement_id, domain, service, pattern_name, source_backend, source_url,
+                 repo_name, key_redacted, validation_state, validation_detail)
+            VALUES
+                (1001, '', 'discord', 'discord_bot_token', 'artifact_queue_ingest',
+                 'artifact://bot.env', 'bot.env', 'discord...ABCD', 'ACTIVE',
+                 'VALIDATED:discord_current_user:Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true')
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = DeterministicFindingEngine(db_path, 1001).run()
+
+    assert summary.active_findings == 0
+    con = sqlite3.connect(db_path)
+    try:
+        count = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM vulnerability_findings
+            WHERE engagement_id=1001 AND vuln_type='DETERMINISTIC_KEY_EXPOSURE'
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+    assert count == 0
+
+
 def test_deterministic_findings_scores_validated_supabase_rest_access_high(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_db(db_path)
