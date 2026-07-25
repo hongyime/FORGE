@@ -91,10 +91,19 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: fix max-iteration kill-chain finalization so a run with
-  remaining retryable recursive work does not finish as status `completed`
-  solely because a report artifact exists. Extend the root-keyscan pending-work
-  regression to assert latest `engagement_runs.status`/error metadata.
+- [ ] Next checkpoint: align dashboard/API fallback graph cloud metadata
+  sanitization with the stricter attack-graph snapshot path. Fallback graph
+  nodes should not expose variant secret keys such as `access-token` or
+  unsanitized URL provenance from `cloud_assets.metadata_json`.
+- [x] Max-iteration pending-work finalization checkpoint:
+  Kill-chain finalization now fails the engagement run when a report artifact
+  exists but `pending_work_total > 0`, records
+  `max iterations exhausted with pending recursive work: <count>` as the run
+  error, and avoids console wording that claims full completion when retryable
+  work remains. Verification: root-keyscan pending-work status regression
+  passed (`1 passed`), full retry-state suite passed (`17 passed`),
+  report-finalization fallback slice passed (`4 passed`), Ruff passed,
+  py_compile passed, and `git diff --check` passed.
 - [x] Phase 6 raw-validation reportability checkpoint:
   Phase 6 now trusts the raw-derived `validation_reportable` flag attached from
   the latest cloud validation row before falling back to summary re-parsing for

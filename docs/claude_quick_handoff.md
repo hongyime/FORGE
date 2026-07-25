@@ -25,7 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: Phase 6 raw-validation reportability is complete. Phase 6
+Latest checkpoint: max-iteration pending-work finalization is complete.
+Kill-chain finalization now fails the engagement run when a report artifact
+exists but `pending_work_total > 0`, records
+`max iterations exhausted with pending recursive work: <count>` as the run
+error, and avoids console wording that claims full completion when retryable
+work remains. Verification: root-keyscan pending-work status regression passed
+(`1 passed`), full retry-state suite passed (`17 passed`),
+report-finalization fallback slice passed (`4 passed`), Ruff passed,
+py_compile passed, and `git diff --check` passed.
+
+Next checkpoint: align dashboard/API fallback graph cloud metadata sanitization
+with the stricter attack-graph snapshot path. Fallback graph nodes should not
+expose variant secret keys such as `access-token` or unsanitized URL provenance
+from `cloud_assets.metadata_json`.
+
+Previous checkpoint: Phase 6 raw-validation reportability is complete. Phase 6
 now trusts the raw-derived `validation_reportable` flag attached from the
 latest cloud validation row before falling back to summary re-parsing for
 legacy evidence. This prevents sanitized/truncated summaries from dropping a
@@ -35,11 +50,6 @@ adjacent S3 validation report test passed (`2 passed`), full Phase 6 report
 synthesizer suite passed (`108 passed`), stable-proof integration fixture
 passed (`1 passed`), Ruff passed, py_compile passed, and `git diff --check`
 passed.
-
-Next checkpoint: fix max-iteration kill-chain finalization so a run with
-remaining retryable recursive work does not finish as status `completed` solely
-because a report artifact exists. Extend the root-keyscan pending-work
-regression to assert latest `engagement_runs.status`/error metadata.
 
 Previous checkpoint: attack-graph artifact cloud provenance is complete.
 AttackGraphBuilder now loads scrubbed `cloud_assets.metadata_json` into

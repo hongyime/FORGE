@@ -19328,10 +19328,16 @@ def kill_chain(
         "kill_chain_complete", target=domain,
         result=f"elapsed_s={total:.1f} emails_chained={len(emails) if emails else 0}",
     )
+    final_pending_total = int(run_progress_state.get("pending_work_total") or 0)
     if report_artifact_path is None:
         console.print(
             f"\n[bold red]Kill-chain finalization failed[/bold red] in {total:.1f}s "
             "[dim](no report artifact persisted)[/dim]"
+        )
+    elif final_pending_total > 0:
+        console.print(
+            f"\n[bold yellow]Kill-chain stopped with pending recursive work[/bold yellow] "
+            f"in {total:.1f}s [dim](pending={final_pending_total})[/dim]"
         )
     else:
         console.print(f"\n[bold green]Kill-chain complete[/bold green] in {total:.1f}s")
@@ -19359,11 +19365,13 @@ def kill_chain(
         nonlocal engagement_run_completed
         if engagement_run_completed:
             return
-        _refresh_pending_work_state()
+        pending_counts = _refresh_pending_work_state()
         _set_progress_counts()
         report_ready = report_artifact_path is not None
-        run_status = "completed" if report_ready else "failed"
-        run_phase = "completed" if report_ready else "failed"
+        pending_total = sum(int(count or 0) for count in pending_counts.values())
+        run_succeeded = report_ready and pending_total == 0
+        run_status = "completed" if run_succeeded else "failed"
+        run_phase = "completed" if run_succeeded else "failed"
         final_metadata: dict[str, object] = {
             **_engagement_run_metadata(phase=run_phase),
             "elapsed_seconds": round(total, 3),
@@ -19389,7 +19397,15 @@ def kill_chain(
             engagement_run_handle,
             status=run_status,
             current_iteration=last_iteration,
-            error=None if report_ready else "final report generation failed and no fallback artifact exists",
+            error=(
+                None
+                if run_succeeded
+                else (
+                    f"max iterations exhausted with pending recursive work: {pending_total}"
+                    if report_ready
+                    else "final report generation failed and no fallback artifact exists"
+                )
+            ),
             metadata=final_metadata,
         )
         _clear_run_control_markers()

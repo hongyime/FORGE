@@ -131,6 +131,26 @@ def _latest_run_metadata(db_path: Path) -> dict[str, object]:
     return json.loads(str((row or ["{}"])[0] or "{}"))
 
 
+def _latest_run_status_error(db_path: Path) -> tuple[str, str]:
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT status, error
+            FROM engagement_runs
+            WHERE engagement_id=1001
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        con.close()
+    return (
+        str((row or ["", ""])[0] or ""),
+        str((row or ["", ""])[1] or ""),
+    )
+
+
 def test_artifact_queue_retries_failed_rows_until_attempts_exhausted(
     tmp_path: Path,
     monkeypatch,
@@ -2085,6 +2105,9 @@ def test_kill_chain_counts_failed_root_keyscan_as_pending_work(
     assert pending_counts["root_keyscan_domains"] == 1
     assert metadata["pending_work_total"] >= 1
     assert metadata["last_iteration_stable"] is False
+    run_status, run_error = _latest_run_status_error(db_path)
+    assert run_status == "failed"
+    assert "max iterations exhausted with pending recursive work" in run_error
 
 
 def test_kill_chain_keyscan_org_targets_are_per_root_domain(
