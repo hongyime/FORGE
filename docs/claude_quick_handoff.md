@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: non-graph cloud asset inventory metadata sanitization is
+Latest checkpoint: recursive discovery E2E seed-run proof is complete. The
+service-worker/precache kill-chain E2E now launches with explicit ROE/scope
+manifest, mocks RDAP/archive/API URL paths to converge deterministically, and
+proves newly discovered secondary seeds are processed through audit-visible
+`seed_runs`: derived email E-chain, derived username fan-out, derived URL D5
+fetch, and over-depth skip receipts. Dashboard detail JSON also proves the
+completed/skipped recursive seed-run rows are reviewable. Verification: focused
+service-worker/precache E2E passed (`1 passed`), adjacent depth-limit and
+pending-work retry-state slice passed (`2 passed`), Ruff passed, and py_compile
+passed.
+
+Next checkpoint: centralize and prove validation/reportability gating as one
+source of truth across findings, reports, graph payloads, dashboard/API
+summaries, validation inventory, and raw exports. Add a matrix fixture with
+`VALIDATED`, `UNVERIFIED`, `DEAD`, `HONEYPOT_SUSPECTED`, and
+`ACCESSIBLE_BUT_NO_DATA` rows.
+
+Then checkpoint: prove seed-to-report audit traceability for reported findings.
+Every reportable finding should have a deterministic provenance or audit chain
+covering seed ingestion, fan-out, derived data point, validation attempt/result,
+rule-engine severity assignment, and report inclusion.
+
+Previous checkpoint: non-graph cloud asset inventory metadata sanitization is
 complete. Live `/api/engagements/{id}/assets`, Phase 6 cloud asset inventory,
 report JSON/raw CSV, and static dashboard cloud asset tables now reuse the
 shared allowlisted cloud-asset metadata sanitizer. Arbitrary nested/raw
@@ -36,21 +58,6 @@ regressions passed (`3 passed`), full Phase 6 report synthesizer suite passed
 (`108 passed`), adjacent dashboard/API cloud asset tests passed (`2 passed`),
 stable-proof integration fixture passed (`1 passed`), Ruff passed, and
 py_compile passed.
-
-Next checkpoint: add a recursive discovery end-to-end proof that newly
-discovered secondary seeds are requeued, processed automatically, depth limited,
-audited, and reflected in final graph/report/dashboard state. Start with
-`tests/integration/test_recursive_discovery_end_to_end.py` or extend the
-existing compact multi-seed recursive E2E fixture only if it keeps code small.
-
-Then checkpoint: centralize and prove validation/reportability gating as one
-source of truth across findings, reports, graph payloads, dashboard/API
-summaries, validation inventory, and raw exports.
-
-Then checkpoint: prove seed-to-report audit traceability for reported findings.
-Every reportable finding should have a deterministic provenance or audit chain
-covering seed ingestion, fan-out, derived data point, validation attempt/result,
-rule-engine severity assignment, and report inclusion.
 
 Previous checkpoint: dashboard/API fallback graph cloud metadata sanitization is
 complete. Fallback graph cloud nodes now use the same shared allowlisted

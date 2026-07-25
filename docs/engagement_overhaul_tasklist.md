@@ -91,12 +91,7 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: add a recursive discovery end-to-end proof that newly
-  discovered secondary seeds are requeued, processed automatically, depth
-  limited, audited, and reflected in final graph/report/dashboard state. Start
-  with `tests/integration/test_recursive_discovery_end_to_end.py` or extend the
-  existing compact multi-seed recursive E2E fixture only if it keeps code small.
-- [ ] Then checkpoint: centralize and prove validation/reportability gating as
+- [ ] Next checkpoint: centralize and prove validation/reportability gating as
   one source of truth across findings, reports, graph payloads, dashboard/API
   summaries, validation inventory, and raw exports. Add a matrix fixture with
   `VALIDATED`, `UNVERIFIED`, `DEAD`, `HONEYPOT_SUSPECTED`, and
@@ -105,6 +100,16 @@ sentences as historical notes only, not as current instructions.
   findings. Every reportable finding should have a deterministic provenance or
   audit chain covering seed ingestion, fan-out, derived data point, validation
   attempt/result, rule-engine severity assignment, and report inclusion.
+- [x] Recursive discovery E2E seed-run proof checkpoint:
+  The service-worker/precache kill-chain E2E now launches with explicit
+  ROE/scope manifest, mocks RDAP/archive/API URL paths to converge
+  deterministically, and proves newly discovered secondary seeds are processed
+  through audit-visible `seed_runs`: derived email E-chain, derived username
+  fan-out, derived URL D5 fetch, and over-depth skip receipts. The dashboard
+  detail payload also proves completed/skipped recursive seed-run rows are
+  reviewable. Verification: focused service-worker/precache E2E passed
+  (`1 passed`), adjacent depth-limit and pending-work retry-state slice passed
+  (`2 passed`), Ruff passed, and py_compile passed.
 - [x] Non-graph cloud asset inventory metadata sanitizer checkpoint:
   Live `/api/engagements/{id}/assets`, Phase 6 cloud asset inventory, report
   JSON/raw CSV, and static dashboard cloud asset tables now reuse the shared

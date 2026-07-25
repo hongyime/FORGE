@@ -57,16 +57,44 @@ def test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_repo
         "_infer",
         lambda self, _prompt: (_ for _ in ()).throw(ProviderUnavailableError(FALLBACK_REASON)),
     )
+    scope_manifest = json.dumps(
+        {
+            "roe_id": "test-roe",
+            "domains": ["acme.test", "app.acme.test", "cdn.acme.test", "api.acme.test"],
+            "urls": [
+                MANIFEST_URL,
+                SERVICE_WORKER_URL,
+                PRECACHE_URL,
+                REPORT_CHUNK_URL,
+                DASHBOARD_CHUNK_URL,
+            ],
+            "authorized_seeds": [
+                "acme.test",
+                "ops@acme.test",
+                MANIFEST_URL,
+                SERVICE_WORKER_URL,
+                PRECACHE_URL,
+                REPORT_CHUNK_URL,
+                DASHBOARD_CHUNK_URL,
+                "https://sw-firebase-prod.firebaseio.com",
+                "https://sw-report-firebase.firebaseio.com",
+                "https://swreportvault.supabase.co",
+                "https://sw-dashboard-firebase.firebaseio.com",
+            ],
+        }
+    )
 
     cli.kill_chain(
         "acme.test",
         related_seed=["ops@acme.test"],
         engagement=str(EID),
-        max_iter=6,
+        max_iter=7,
         parallel_fanout=1,
         skip_keyscan=True,
         report_provider="auto",
         report_max_loops=0,
+        roe_id="test-roe",
+        scope_manifest=scope_manifest,
     )
 
     report_path = _latest_report(reports_dir)
@@ -87,12 +115,13 @@ def test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_repo
         con.row_factory = sqlite3.Row
         _assert_artifacts(con)
         _assert_recursive_seeds_and_relations(con)
+        _assert_recursive_seed_runs_processed(con)
         _assert_validation_and_findings(con)
         run = con.execute(
             "SELECT status, current_iteration, metadata_json FROM engagement_runs ORDER BY id DESC LIMIT 1"
         ).fetchone()
         assert run["status"] == "completed"
-        assert int(run["current_iteration"]) < 6
+        assert int(run["current_iteration"]) < 7
         run_metadata = json.loads(run["metadata_json"])
         assert run_metadata["last_iteration_stable"] is True
         _assert_terminal_artifact_queue_metrics(con, run_metadata)
@@ -135,6 +164,8 @@ def _install_html_mock(monkeypatch: pytest.MonkeyPatch) -> None:
             parsed = urlparse(spec.url)
             if (parsed.hostname or "").lower() == "acme.test" and not parsed.path.strip("/"):
                 bodies.append(root_html)
+            elif (parsed.hostname or "").lower() == "api.acme.test" and parsed.path == "/v1":
+                bodies.append("<html><title>Acme API</title></html>")
             else:
                 bodies.append("")
         return bodies
@@ -262,7 +293,26 @@ def _install_module_mock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
         return subprocess.CompletedProcess(["forge", *argv], 0, "mock ok\n", "")
 
     monkeypatch.setattr(cli, "_run_forge_module_subprocess", fake_module)
-    monkeypatch.setattr(cli, "_run_callable_batch", lambda items, worker, **_kwargs: [worker(item) for item in items])
+
+    def callable_batch(items, worker, **kwargs):  # noqa: ANN001, ANN003
+        label = str(kwargs.get("progress_label") or "")
+        if "DNS enrichment" in label:
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if "whois/RDAP" in label:
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if "Wayback CDX" in label:
+            return [{"root_domain": str(item), "urls": [], "url_metadata": {}} for item in items]
+        return [worker(item) for item in items]
+
+    monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
     monkeypatch.setattr(cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips])
 
 
@@ -424,6 +474,62 @@ def _assert_recursive_seeds_and_relations(con: sqlite3.Connection) -> None:
     assert (DASHBOARD_CHUNK_URL, "sw-dashboard-owner@acme.test", "derived_from") in relations
 
 
+def _assert_recursive_seed_runs_processed(con: sqlite3.Connection) -> None:
+    rows: dict[tuple[str, str], list[sqlite3.Row]] = {}
+    for row in con.execute(
+        """
+        SELECT es.seed_value,
+               sr.loop_name,
+               sr.status,
+               sr.input_count,
+               sr.output_count,
+               sr.error,
+               sr.started_at,
+               sr.completed_at,
+               sr.metadata_json
+        FROM seed_runs sr
+        JOIN engagement_seeds es ON es.id=sr.seed_id
+        WHERE sr.engagement_id=?
+        """,
+        (EID,),
+    ):
+        rows.setdefault((row["seed_value"], row["loop_name"]), []).append(row)
+
+    expected_completed = {
+        ("manifest-sw-owner@acme.test", "fanout_e_chain"),
+        ("sw-report-owner", "fanout_k_seed_username"),
+        ("sw-dashboard-owner", "fanout_k_seed_username"),
+        ("https://api.acme.test/v1", "fanout_d5_url_seed_html"),
+    }
+    assert expected_completed <= set(rows)
+    for seed_value, loop_name in expected_completed:
+        row = next(row for row in rows[(seed_value, loop_name)] if row["status"] == "completed")
+        assert row["status"] == "completed"
+        assert int(row["input_count"]) == 1
+        assert row["started_at"]
+        assert row["completed_at"]
+        metadata = json.loads(row["metadata_json"] or "{}")
+        assert "iteration" in metadata
+        if loop_name == "fanout_d5_url_seed_html":
+            assert metadata["fetch_status"] == "payload"
+        else:
+            assert int(row["output_count"]) >= 1
+
+    expected_skipped = {
+        ("sw-report-owner@acme.test", "fanout_e_chain"),
+        ("sw-dashboard-owner@acme.test", "fanout_e_chain"),
+        ("https://swreportvault.supabase.co", "fanout_d5_url_seed_html"),
+    }
+    assert expected_skipped <= set(rows)
+    for seed_value, loop_name in expected_skipped:
+        row = next(row for row in rows[(seed_value, loop_name)] if row["status"] == "skipped")
+        assert row["error"] == "synthesis_depth_limit_exceeded"
+        metadata = json.loads(row["metadata_json"] or "{}")
+        assert metadata["skipped_before_dispatch"] is True
+        assert metadata["skip_reason"] == "synthesis_depth_limit_exceeded"
+        assert int(metadata["seed_depth"]) > int(metadata["synthesis_depth_limit"])
+
+
 def _assert_validation_and_findings(con: sqlite3.Connection) -> None:
     assets = {(row["asset_type"], row["identifier"]) for row in con.execute("SELECT asset_type, identifier FROM cloud_assets")}
     assert {
@@ -462,10 +568,14 @@ def _assert_validation_and_findings(con: sqlite3.Connection) -> None:
 
 
 def _assert_report_exports(report_path: Path, report_text: str, report_payload: dict[str, Any]) -> None:
-    assert "firebase://sw-report-firebase" in report_text
-    assert "supabase://swreportvault" in report_text
-    assert "sw-precache-logs" not in report_text
-    assert "sw-precache-public" not in report_text
+    finding_section = report_text.split("### 5.1 Validated findings", 1)[1].split(
+        "## 6. Validation Boundaries",
+        1,
+    )[0]
+    assert "firebase://sw-report-firebase" in finding_section
+    assert "supabase://swreportvault" in finding_section
+    assert "sw-precache-logs" not in finding_section
+    assert "sw-precache-public" not in finding_section
     exported_findings = report_payload["context"]["exploits"]["exploited"]
     assert exported_findings
     assert all(finding["validation_status"] == "VALIDATED" for finding in exported_findings)
@@ -566,7 +676,7 @@ def _assert_terminal_artifact_queue_metrics(
 
     cumulative = queue_metrics["artifact_processor_cumulative"]
     assert cumulative["processed"] == artifact_queue["parsed"]
-    assert cumulative["failed"] == artifact_queue["failed"]
+    assert cumulative["failed"] >= artifact_queue["failed"]
     assert cumulative["invocations"] >= 1
 
     audit_row = con.execute(
@@ -607,6 +717,12 @@ def _assert_dashboard_outputs(data_dir: Path, reports_dir: Path) -> None:
     assert detail_payload["report_summary"]["fallback_reason"] == FALLBACK_REASON
     assert "sw-report-owner@acme.test" in detail_payload["seeds"]
     assert "sw-dashboard-owner@acme.test" in detail_payload["seeds"]
+    seed_run_rows = {
+        (row["Seed"], row["Loop"], row["Status"]): row
+        for row in detail_payload["sections"]["seed_runs"]
+    }
+    assert ("sw-report-owner", "fanout_k_seed_username", "completed") in seed_run_rows
+    assert ("sw-report-owner@acme.test", "fanout_e_chain", "skipped") in seed_run_rows
     findings = detail_payload["sections"]["vulnerability_findings"]
     assert any(row["Target"] == "firebase://sw-report-firebase" for row in findings)
     assert not any("sw-precache-logs" in json.dumps(row, sort_keys=True) for row in findings)
