@@ -724,6 +724,28 @@ def _azure_shared_key_proof_is_stable(proof: str) -> bool:
     return bool(_stable_provider_identifier(account_match.group(1)))
 
 
+def _authenticated_audit_proof_is_stable(proof: str, *, provider: str) -> bool:
+    text = str(proof or "").strip()
+    if not text or not re.search(rf"\bprovider={re.escape(provider)}\b", text, re.IGNORECASE):
+        return False
+    hash_match = re.search(
+        r"\b(?:resource|project|subscription|audit)_hash=([a-f0-9]{16,64})\b",
+        text,
+        re.IGNORECASE,
+    )
+    if hash_match and not _looks_repeated_compact_identifier(hash_match.group(1)):
+        return True
+    id_match = re.search(
+        r"\b(?:resource_id|project_id|subscription_id|account_id)=([A-Za-z0-9_.:/-]{3,180})\b",
+        text,
+        re.IGNORECASE,
+    )
+    if not id_match:
+        return False
+    compact_identifier = re.sub(r"[^A-Za-z0-9_-]+", "", id_match.group(1))[:128]
+    return bool(_stable_provider_identifier(compact_identifier))
+
+
 def _legacy_cloud_read_proof_is_stable(method: str, proof: str) -> bool:
     normalized_method = str(method or "").strip().lower()
     normalized_proof = str(proof or "").strip().lower()
@@ -1011,6 +1033,12 @@ def _validated_proof_is_reportable(method: str, proof: str) -> bool:
         return _slack_auth_proof_is_stable(proof)
     if normalized_method == "azure_blob_list_containers_shared_key":
         return _azure_shared_key_proof_is_stable(proof)
+    if normalized_method == "aws_authenticated_config_audit":
+        return _authenticated_audit_proof_is_stable(proof, provider="aws")
+    if normalized_method == "azure_authenticated_config_audit":
+        return _authenticated_audit_proof_is_stable(proof, provider="azure")
+    if normalized_method == "firebase_agneyastra_audit":
+        return _authenticated_audit_proof_is_stable(proof, provider="firebase")
     if normalized_method in {"s3_list_bucket", "do_spaces_list_bucket"}:
         return _cloud_object_listing_proof_is_stable(
             proof,

@@ -7,7 +7,9 @@ from forge.phase6.report_synthesizer import ContextBuilder
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
+    legacy_cloud_audit_finding_is_reportable,
     is_reportable_cloud_validation,
+    vulnerability_finding_evidence_is_reportable,
 )
 
 
@@ -122,4 +124,33 @@ def test_storage_metadata_probe_gate_keeps_concrete_low_severity_metadata_review
         evidence="{'server': 'AmazonS3', 'x-amz-bucket-region': 'us-east-1'}",
         notes="Bucket responded to a bounded HEAD request.",
         require_stable_proof=True,
+    )
+
+
+def test_legacy_cloud_audit_gate_fails_closed_without_explicit_proof() -> None:
+    assert not vulnerability_finding_evidence_is_reportable(
+        "AWS_MISCONFIG",
+        "CloudTrail not enabled in region: us-east-1",
+        '{"trails": []}',
+        ("aws",),
+    )
+    assert not legacy_cloud_audit_finding_is_reportable(
+        "FIREBASE_CREDENTIAL_STATUS",
+        "Firebase credential auto-fill unavailable",
+        "project=acme-prod",
+        ("firebase",),
+    )
+
+
+def test_legacy_cloud_audit_gate_allows_stable_authenticated_receipts() -> None:
+    evidence = (
+        "validation=VALIDATED:aws_authenticated_config_audit:"
+        "provider=aws service=CloudTrail resource_hash=0123456789abcdef"
+    )
+
+    assert vulnerability_finding_evidence_is_reportable(
+        "AWS_MISCONFIG",
+        "CloudTrail not enabled in region: us-east-1",
+        evidence,
+        ("aws",),
     )

@@ -27,6 +27,7 @@ Severity mapping (§9.15.3):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -284,6 +285,19 @@ class FirebaseFinding:
     evidence: str  # first 512 chars
 
 
+def _receipt_hash(value: object) -> str:
+    return hashlib.sha256(str(value or "").encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _firebase_audit_evidence(project_id: str, finding: FirebaseFinding) -> str:
+    proof = (
+        "validation=VALIDATED:firebase_agneyastra_audit:"
+        f"provider=firebase project_hash={_receipt_hash(project_id)} "
+        f"category={re.sub(r'[^a-z0-9_-]+', '_', finding.category.lower())}"
+    )
+    return f"{proof}; detail={finding.evidence}"[:512]
+
+
 # ── Auditor ────────────────────────────────────────────────────────────────────
 
 
@@ -480,7 +494,7 @@ class FirebaseAuditor:
                     f.severity,
                     f.title,
                     f.description,
-                    f.evidence,
+                    _firebase_audit_evidence(project_id, f),
                 ),
             )
             count += 1

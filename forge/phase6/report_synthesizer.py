@@ -58,7 +58,9 @@ from forge.utils.cloud_asset_graph_metadata import stored_cloud_asset_graph_meta
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
+    is_legacy_cloud_audit_finding,
     is_reportable_cloud_validation,
+    legacy_cloud_audit_finding_is_reportable,
     latest_cloud_validation_reportability_index,
     vulnerability_finding_evidence_is_reportable,
 )
@@ -1485,6 +1487,21 @@ class ContextBuilder:
             finding.update(structured_validation)
             if self._finding_is_unvalidated_key_exposure(finding):
                 continue
+            linked_reportable = finding.get("validation_reportable")
+            linked_reportable = linked_reportable if isinstance(linked_reportable, bool) else None
+            if is_legacy_cloud_audit_finding(str(finding.get("vuln_type") or "")):
+                if not legacy_cloud_audit_finding_is_reportable(
+                    str(finding.get("vuln_type") or ""),
+                    str(finding.get("title") or ""),
+                    evidence,
+                    (
+                        str(finding.get("validation_asset_type") or ""),
+                        str(finding.get("parameter") or "").split(":", 1)[0],
+                        str(finding.get("cloud_provider") or ""),
+                    ),
+                    linked_cloud_validation_reportable=linked_reportable,
+                ):
+                    continue
             if self._finding_is_unvalidated_deterministic_cloud_exposure(finding):
                 continue
             if not vulnerability_finding_evidence_is_reportable(
@@ -1495,6 +1512,7 @@ class ContextBuilder:
                     str(finding.get("validation_asset_type") or ""),
                     str(finding.get("parameter") or "").split(":", 1)[0],
                 ),
+                linked_cloud_validation_reportable=linked_reportable,
             ):
                 continue
             exploited.append(finding)

@@ -230,9 +230,10 @@ def _seed_full(db: Path) -> None:
     # Vulnerability findings
     con.executemany(
         "INSERT INTO vulnerability_findings"
-        " (engagement_id, vuln_type, target_url, parameter, severity, title) VALUES (?,?,?,?,?,?)",
+        " (engagement_id, vuln_type, target_url, parameter, severity, title, evidence)"
+        " VALUES (?,?,?,?,?,?,?)",
         [
-            (1, "IDOR", "https://web01.corp/api?id=1", "id", "HIGH", "IDOR on /api"),
+            (1, "IDOR", "https://web01.corp/api?id=1", "id", "HIGH", "IDOR on /api", ""),
             (
                 1,
                 "FIREBASE_MISCONFIG",
@@ -240,6 +241,8 @@ def _seed_full(db: Path) -> None:
                 None,
                 "CRITICAL",
                 "Auth bypass",
+                "validation=VALIDATED:firebase_agneyastra_audit:"
+                "provider=firebase project_hash=0123456789abcdef category=auth_bypass",
             ),
             (
                 1,
@@ -248,6 +251,7 @@ def _seed_full(db: Path) -> None:
                 "users",
                 "CRITICAL",
                 "RLS disabled",
+                "",
             ),
         ],
     )
@@ -701,6 +705,60 @@ class TestLoadVulns:
             if d.get("data") and d["data"].node_type == NodeType.VULN
         ]
         assert len(vuln_nodes) == 3  # seeded 3 vulnerability_findings rows
+
+    def test_legacy_cloud_audit_rows_require_receipt_for_graph(self, tmp_path: Path):
+        db = _make_db(tmp_path, "legacy-cloud-audit-gate.db")
+        proof = (
+            "validation=VALIDATED:azure_authenticated_config_audit:"
+            "provider=azure service=Storage resource_hash=0123456789abcdef"
+        )
+        con = sqlite3.connect(db)
+        try:
+            con.executescript(
+                """
+                ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT;
+                ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT;
+                """
+            )
+            con.executemany(
+                """
+                INSERT INTO vulnerability_findings
+                    (engagement_id, vuln_type, target_url, parameter, severity,
+                     title, description, evidence, cloud_provider, resource_id)
+                VALUES (1, ?, ?, ?, 'HIGH', ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        "AWS_MISCONFIG",
+                        "https://console.aws.amazon.com/cloudtrail/home",
+                        "aws",
+                        "CloudTrail legacy note without proof",
+                        "Legacy provider output without explicit validation receipt.",
+                        '{"trails":[]}',
+                        "aws",
+                        "us-east-1",
+                    ),
+                    (
+                        "AZURE_MISCONFIG",
+                        "https://portal.azure.com/#resource/storageAccounts/prod",
+                        "azure",
+                        "Azure storage authenticated audit finding",
+                        "Authenticated Azure configuration audit produced this finding.",
+                        proof,
+                        "azure",
+                        "storage-prod",
+                    ),
+                ],
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        graph = AttackGraphBuilder(engagement_id=1, db_path=db).build()
+        vuln_labels = {node.label for node in graph.nodes if node.node_type == NodeType.VULN}
+
+        assert "CloudTrail legacy note without proof" not in vuln_labels
+        assert "Azure storage authenticated audit finding" in vuln_labels
 
 
 class TestLoadCloudAssets:

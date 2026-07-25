@@ -25,7 +25,28 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: artifact processor worker-cap is complete. Static artifact
+Latest checkpoint: legacy cloud-audit reportability is complete. Legacy
+`FIREBASE_MISCONFIG`, `FIREBASE_CREDENTIAL_STATUS`, `AWS_MISCONFIG`, and
+`AZURE_MISCONFIG` rows now fail closed across Phase 6 report context,
+Markdown/JSON/CSV exports, dashboard finding tables/severity summaries, and
+attack-graph VULN nodes unless they have a latest linked reportable validation
+row or a stable explicit authenticated-audit receipt. Firebase, AWS, and Azure
+audit writers now persist compact non-secret receipts for new authenticated
+audit output. Verification: focused helper/report/dashboard/graph regressions
+passed (`19 passed`), adjacent graph/dashboard/report selectors passed (`36
+passed, 217 deselected`), Ruff passed, py_compile passed, and `git diff
+--check` passed.
+
+Next checkpoint: prove remote Helm repository recursion end to end. A mocked
+scoped `index.yaml` should queue a chart archive, parse the later chart
+`.tgz/.tar.gz`, preserve `helm-index -> chart -> values.yaml` provenance,
+promote hosts/cloud refs into recursive seeds/cloud assets, and expose
+sanitized artifact provenance through graph/dashboard/report/audit. Keep it
+passive/static only: no Helm execution, no registry pull, no Kubernetes API
+calls, no auth, no live provider calls, and reject unsafe chart URLs before
+queueing.
+
+Previous checkpoint: artifact processor worker-cap is complete. Static artifact
 queue processing no longer inherits full global `--parallel-fanout` by default.
 `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS` provides a bounded `1..4` cap, the
 effective artifact worker count is `min(parallel_fanout, cap)`, and run
@@ -34,12 +55,6 @@ transient queue metrics. Verification: artifact processor cap helper test
 passed (`1 passed`), focused remote APK kill-chain artifact regression passed
 (`1 passed`), adjacent worker-cap selector passed (`6 passed, 26 deselected`),
 Ruff passed, and py_compile passed.
-
-Next checkpoint candidate: run a fresh current-code gap audit for remaining
-deterministic kill-chain acceptance stages. Prefer concrete
-artifact/container parsing, recursive queue, validation/report parity,
-dashboard review, report fallback, auditability, or bounded-concurrency gaps
-only when current code lacks focused implementation or regression.
 
 Previous checkpoint: audit-manifest report-family parity is complete. Run audit
 manifests now treat deterministic report `.html` and report `.csv` companions

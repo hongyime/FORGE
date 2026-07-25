@@ -66,6 +66,33 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Legacy cloud-audit reportability checkpoint:
+  Legacy `FIREBASE_MISCONFIG`, `FIREBASE_CREDENTIAL_STATUS`,
+  `AWS_MISCONFIG`, and `AZURE_MISCONFIG` rows now fail closed across Phase 6
+  report context, Markdown/JSON/CSV exports, dashboard finding tables/severity
+  summaries, and attack-graph VULN nodes unless they have a latest linked
+  reportable validation row or a stable explicit authenticated-audit receipt.
+  New Firebase, AWS, and Azure audit writers persist compact non-secret
+  `VALIDATED:*_authenticated_config_audit` receipts so real authenticated audit
+  output remains reviewable. Verification: focused helper/report/dashboard/graph
+  regressions passed (`19 passed`), adjacent graph/dashboard/report selectors
+  passed (`36 passed, 217 deselected`), Ruff passed, py_compile passed, and
+  `git diff --check` passed.
+- [ ] Next checkpoint: prove remote Helm repository recursion end to end.
+  A mocked scoped `index.yaml` should queue a chart archive, parse the later
+  chart `.tgz/.tar.gz`, preserve `helm-index -> chart -> values.yaml`
+  provenance, promote hosts/cloud refs into recursive seeds/cloud assets, and
+  expose sanitized artifact provenance through graph/dashboard/report/audit.
+  Keep it passive/static only: no Helm execution, no registry pull, no
+  Kubernetes API calls, no auth, no live provider calls, and reject userinfo,
+  localhost/private IP, protocol-relative, templated, or out-of-scope chart
+  URLs before queueing.
+- [ ] After Helm: add OCI/Docker-save kill-chain review parity proof. Remote or
+  local static OCI/Docker-save archives should parse only referenced
+  layers/configs, ignore unreferenced decoy layers and path traversal, feed
+  discovered refs into validation inventory/finding gates, and expose sanitized
+  provenance through graph/dashboard/report/raw exports. Do not pull registries,
+  execute images, run container tools, or parse unreferenced unsafe members.
 - [x] Artifact processor worker-cap checkpoint:
   Static artifact queue processing no longer inherits full global
   `--parallel-fanout` by default. `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`
@@ -76,11 +103,6 @@ historical notes only, not as current instructions.
   kill-chain artifact regression passed (`1 passed`), adjacent worker-cap
   selector passed (`6 passed, 26 deselected`), Ruff passed, and py_compile
   passed.
-- [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
-  deterministic kill-chain acceptance stages, starting with concrete
-  artifact/container parsing, recursive queue, validation/report parity,
-  dashboard review, report fallback, auditability, or bounded-concurrency gaps
-  only when current code lacks a focused implementation or regression.
 - [x] Audit-manifest report-family parity checkpoint:
   Run audit manifests now treat deterministic report `.html` and report `.csv`
   companions as first-class report-family artifacts alongside `.md`, `.json`,

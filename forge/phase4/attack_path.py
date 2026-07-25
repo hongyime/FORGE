@@ -26,7 +26,9 @@ from forge.utils.cloud_asset_graph_metadata import (
 )
 from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
+    is_legacy_cloud_audit_finding,
     is_reportable_cloud_validation,
+    legacy_cloud_audit_finding_is_reportable,
     linked_cloud_validation_reportability,
     normalize_cloud_exposure_asset_type,
 )
@@ -1050,6 +1052,20 @@ class AttackGraphBuilder:
                 if validation_lookup_service and resource_id_str
                 else None
             )
+            if is_legacy_cloud_audit_finding(vuln_type_str):
+                linked_reportable = None
+                if validation_metadata and "validation_reportable" in validation_metadata:
+                    linked_reportable = validation_metadata.get("validation_reportable") is True
+                if not legacy_cloud_audit_finding_is_reportable(
+                    vuln_type_str,
+                    str(title or ""),
+                    str(evidence or ""),
+                    (validation_lookup_service, cloud_provider_str),
+                    linked_cloud_validation_reportable=linked_reportable,
+                ):
+                    if validation_lookup_service and resource_id_str:
+                        self._node_for_cloud(validation_lookup_service, resource_id_str)
+                    continue
             if (
                 self._vuln_is_deterministic_cloud_exposure(
                     vuln_type_str,

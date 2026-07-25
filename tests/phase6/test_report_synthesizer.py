@@ -2241,6 +2241,80 @@ def test_synthesizer_excludes_unverified_legacy_validation_inventory_rows(
     )
 
 
+def test_synthesizer_gates_legacy_cloud_audit_findings_by_receipt(
+    tmp_eng_db,
+    tmp_path,
+    patch_confirm_approve,
+):
+    weak_title = "CloudTrail legacy note without proof"
+    strong_title = "Azure storage authenticated audit finding"
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN vuln_type TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN target_url TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN parameter TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT")
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, cve_id, title, severity, evidence,
+                 target_url, parameter, cloud_provider, resource_id)
+            VALUES (?, 'AWS_MISCONFIG', NULL, ?, 'HIGH', '{"trails":[]}',
+                    'https://console.aws.amazon.com/cloudtrail/home',
+                    'aws', 'aws', 'us-east-1')
+            """,
+            (ENGAGEMENT_ID, weak_title),
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, cve_id, title, severity, evidence,
+                 target_url, parameter, cloud_provider, resource_id)
+            VALUES (?, 'AZURE_MISCONFIG', NULL, ?, 'HIGH', ?,
+                    'https://portal.azure.com/#resource/storageAccounts/prod',
+                    'azure', 'azure', 'storage-prod')
+            """,
+            (
+                ENGAGEMENT_ID,
+                strong_title,
+                "validation=VALIDATED:azure_authenticated_config_audit:"
+                "provider=azure service=Storage resource_hash=0123456789abcdef",
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+    titles = {item.get("title") for item in ctx.exploits.exploited}
+    assert weak_title not in titles
+    assert strong_title in titles
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+    out = synth.generate(ENGAGEMENT_ID)
+    content = out.read_text(encoding="utf-8")
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+
+    assert weak_title not in content
+    assert strong_title in content
+    exported_titles = {
+        item.get("title") for item in payload["context"]["exploits"]["exploited"]
+    }
+    assert weak_title not in exported_titles
+    assert strong_title in exported_titles
+    csv_titles = {row.get("title") for row in csv_rows}
+    assert weak_title not in csv_titles
+    assert strong_title in csv_titles
+
+
 def test_synthesizer_does_not_promote_unlabelled_embedded_validated_evidence(
     tmp_eng_db, tmp_path, patch_confirm_approve
 ):

@@ -2600,6 +2600,129 @@ def test_generate_dashboard_filters_unknown_method_deterministic_cloud_rows(
     assert validation_rows["manual-note-bucket"]["Method"] == "manual_validated_note"
 
 
+def test_generate_dashboard_gates_legacy_cloud_audit_rows_and_graph_nodes(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    reports_dir = tmp_path / "reports"
+    db_root = data_dir / "engagements"
+    db_root.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+
+    db_path = db_root / "1001.db"
+    _build_minimal_engagement_db(db_path)
+    proof = (
+        "validation=VALIDATED:azure_authenticated_config_audit:"
+        "provider=azure service=Storage resource_hash=0123456789abcdef"
+    )
+    graph = {
+        "nodes": [
+            {"node_id": "HOST::app", "node_type": "HOST", "label": "app.acme.example"},
+            {
+                "node_id": "VULN::weak-aws",
+                "node_type": "VULN",
+                "label": "CloudTrail legacy note without proof",
+                "severity": "HIGH",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "AWS_MISCONFIG",
+                    "cloud_provider": "aws",
+                    "resource_id": "us-east-1",
+                    "evidence": '{"trails":[]}',
+                },
+            },
+            {
+                "node_id": "VULN::strong-azure",
+                "node_type": "VULN",
+                "label": "Azure storage authenticated audit finding",
+                "severity": "HIGH",
+                "source_table": "vulnerability_findings",
+                "metadata": {
+                    "vuln_type": "AZURE_MISCONFIG",
+                    "cloud_provider": "azure",
+                    "resource_id": "storage-prod",
+                    "evidence": proof,
+                },
+            },
+        ],
+        "edges": [
+            {"source_node_id": "HOST::app", "target_node_id": "VULN::weak-aws"},
+            {"source_node_id": "HOST::app", "target_node_id": "VULN::strong-azure"},
+        ],
+        "critical_path_nodes": ["HOST::app", "VULN::weak-aws", "VULN::strong-azure"],
+    }
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT")
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at, cloud_provider, resource_id)
+            VALUES (
+                1001, 'AWS_MISCONFIG',
+                'https://console.aws.amazon.com/cloudtrail/home', 'aws', 'HIGH',
+                'CloudTrail legacy note without proof',
+                'Legacy provider output without explicit validation receipt.',
+                '{"trails":[]}', '2026-07-09T09:45:00', 'aws', 'us-east-1'
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, vuln_type, target_url, parameter, severity, title,
+                 description, evidence, found_at, cloud_provider, resource_id)
+            VALUES (
+                1001, 'AZURE_MISCONFIG',
+                'https://portal.azure.com/#resource/storageAccounts/prod',
+                'azure', 'HIGH',
+                'Azure storage authenticated audit finding',
+                'Authenticated Azure configuration audit produced this finding.',
+                ?, '2026-07-09T09:45:01', 'azure', 'storage-prod'
+            )
+            """,
+            (proof,),
+        )
+        con.execute("DELETE FROM attack_graph_snapshots WHERE engagement_id=1001")
+        con.execute(
+            """
+            INSERT INTO attack_graph_snapshots
+                (engagement_id, snapshot_at, node_count, edge_count,
+                 critical_path_weight, min_severity, pruned, graph_json,
+                 mermaid_output, dot_output)
+            VALUES
+                (1001, '2026-07-09T09:46:00', 3, 2, 20.0, 'LOW', 0, ?,
+                 'graph TD; app-->weak; app-->strong;',
+                 'digraph G { app -> weak; app -> strong; }')
+            """,
+            (json.dumps(graph, sort_keys=True),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    generate_dashboard(
+        data_dir=data_dir,
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
+
+    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    finding_titles = {
+        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
+    }
+    assert "CloudTrail legacy note without proof" not in finding_titles
+    assert "Azure storage authenticated audit finding" in finding_titles
+    assert detail_payload["severity_summary"]["HIGH"] == 2
+
+    node_ids = {node["node_id"] for node in detail_payload["graph_payload"]["nodes"]}
+    assert "VULN::weak-aws" not in node_ids
+    assert "VULN::strong-azure" in node_ids
+
+
 def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
     tmp_path: Path,
 ) -> None:

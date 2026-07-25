@@ -75,11 +75,31 @@ _LOW_SIGNAL_STORAGE_METADATA_MARKERS = (
 )
 _INVENTORY_ONLY_VULNERABILITY_TYPES = frozenset(
     {
+        "FIREBASE_CREDENTIAL_STATUS",
         "VALIDATION_INVENTORY",
         "VALIDATION_REVIEW",
         "VALIDATION_NOTE",
     }
 )
+LEGACY_CLOUD_AUDIT_VULN_TYPES = frozenset(
+    {
+        "AWS_MISCONFIG",
+        "AZURE_MISCONFIG",
+        "FIREBASE_CREDENTIAL_STATUS",
+        "FIREBASE_MISCONFIG",
+    }
+)
+_LEGACY_CLOUD_AUDIT_METHODS = {
+    "AWS_MISCONFIG": frozenset({"aws_authenticated_config_audit"}),
+    "AZURE_MISCONFIG": frozenset({"azure_authenticated_config_audit"}),
+    "FIREBASE_MISCONFIG": frozenset(
+        {
+            "firebase_agneyastra_audit",
+            "firebase_database_node_read",
+            "firebase_database_shallow_read",
+        }
+    ),
+}
 
 
 def normalize_cloud_exposure_asset_type(value: str) -> str:
@@ -108,17 +128,70 @@ def is_deterministic_cloud_exposure(
     )
 
 
+def is_legacy_cloud_audit_finding(vuln_type: str) -> bool:
+    return str(vuln_type or "").strip().upper() in LEGACY_CLOUD_AUDIT_VULN_TYPES
+
+
+def legacy_cloud_audit_finding_is_reportable(
+    vuln_type: str,
+    title: str,
+    evidence: object,
+    asset_hints: Iterable[str] = (),
+    *,
+    linked_cloud_validation_reportable: bool | None = None,
+) -> bool:
+    """Fail closed for legacy cloud-audit rows unless proof is explicit."""
+
+    del title
+    normalized_type = str(vuln_type or "").strip().upper()
+    if normalized_type in _INVENTORY_ONLY_VULNERABILITY_TYPES:
+        return False
+    if normalized_type not in LEGACY_CLOUD_AUDIT_VULN_TYPES:
+        return True
+    if linked_cloud_validation_reportable is not None:
+        return linked_cloud_validation_reportable is True
+
+    proof = parse_validated_detail(evidence)
+    if str(proof["validation_status"] or "").strip().upper() != "VALIDATED":
+        return False
+    method = str(proof["validation_method"] or "").strip().lower()
+    if method in _LEGACY_CLOUD_AUDIT_METHODS.get(normalized_type, frozenset()):
+        return True
+    for raw_asset in asset_hints:
+        asset = normalize_cloud_exposure_asset_type(str(raw_asset or ""))
+        if is_reportable_cloud_validation(
+            asset,
+            "VALIDATED",
+            method,
+            evidence=evidence,
+            notes=evidence,
+            require_stable_proof=True,
+        ):
+            return True
+    return False
+
+
 def vulnerability_finding_evidence_is_reportable(
     vuln_type: str,
     title: str,
     evidence: object,
     asset_hints: Iterable[str] = (),
+    *,
+    linked_cloud_validation_reportable: bool | None = None,
 ) -> bool:
     """Gate legacy finding rows that embed validation inventory in evidence."""
 
     normalized_type = str(vuln_type or "").strip().upper()
     if normalized_type in _INVENTORY_ONLY_VULNERABILITY_TYPES:
         return False
+    if normalized_type in LEGACY_CLOUD_AUDIT_VULN_TYPES:
+        return legacy_cloud_audit_finding_is_reportable(
+            normalized_type,
+            title,
+            evidence,
+            asset_hints,
+            linked_cloud_validation_reportable=linked_cloud_validation_reportable,
+        )
     normalized_title = str(title or "").strip().lower()
     if normalized_type == "DETERMINISTIC_KEY_EXPOSURE" or normalized_title.startswith(
         "active exposed "

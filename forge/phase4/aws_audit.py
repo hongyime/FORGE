@@ -19,6 +19,7 @@ Authoritative source: PRD v7.2 §9.15.3 (Cloud Audit Scope Expansion)
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -52,6 +53,19 @@ _AWS_SEVERITY_MAP = {
     "ACCESS_KEY_UNUSED": "MEDIUM",
     "PRIVILEGE_ESCALATION": "CRITICAL",
 }
+
+
+def _receipt_hash(value: object) -> str:
+    return hashlib.sha256(str(value or "").encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _aws_audit_evidence(finding: "AWSFinding") -> str:
+    proof = (
+        "validation=VALIDATED:aws_authenticated_config_audit:"
+        f"provider=aws service={re.sub(r'[^A-Za-z0-9_-]+', '_', finding.service)} "
+        f"resource_hash={_receipt_hash(finding.resource_id)}"
+    )
+    return f"{proof}; detail={json.dumps(finding.evidence, sort_keys=True)}"[:512]
 
 # OPSEC-banned patterns that should not appear in findings
 _BANNED_PATTERNS = [
@@ -792,7 +806,7 @@ class AWSAuditor:
                         finding.severity,
                         finding.title,
                         finding.description,
-                        json.dumps(finding.evidence)[:512],
+                        _aws_audit_evidence(finding),
                         self._get_cvss_score(finding.severity),
                         finding.resource_id,
                         ",".join(finding.compliance_controls),

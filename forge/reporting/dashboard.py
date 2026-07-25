@@ -25,7 +25,9 @@ from forge.utils.cloud_asset_graph_metadata import stored_cloud_asset_graph_meta
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
+    is_legacy_cloud_audit_finding,
     is_reportable_cloud_validation,
+    legacy_cloud_audit_finding_is_reportable,
     linked_cloud_validation_reportability,
     latest_cloud_validation_reportability_index,
     normalize_cloud_exposure_asset_type,
@@ -683,8 +685,21 @@ def _vulnerability_row_is_reportable(
     vuln_type = str(row["vuln_type"] or "").strip().upper() if "vuln_type" in row.keys() else ""
     title = str(row["title"] or "").strip()
     asset = _vulnerability_validation_asset(row)
+    identifier = _vulnerability_validation_identifier(row)
+    linked_reportable = (
+        linked_cloud_validation_reportability(validation_index, (asset,), identifier)
+        if asset and identifier
+        else None
+    )
+    if is_legacy_cloud_audit_finding(vuln_type):
+        return legacy_cloud_audit_finding_is_reportable(
+            vuln_type,
+            title,
+            str(row["evidence"] or "") if "evidence" in row.keys() else "",
+            (asset,),
+            linked_cloud_validation_reportable=linked_reportable,
+        )
     if is_deterministic_cloud_exposure(vuln_type, title, (asset,)):
-        identifier = _vulnerability_validation_identifier(row)
         if not asset or not identifier:
             return False
         reportable = validation_index.get((asset, identifier))
@@ -709,6 +724,7 @@ def _vulnerability_row_is_reportable(
         title,
         str(row["evidence"] or "") if "evidence" in row.keys() else "",
         (asset,),
+        linked_cloud_validation_reportable=linked_reportable,
     )
 
 
@@ -1406,6 +1422,20 @@ def _graph_node_is_unreportable_cloud_finding(
     vuln_type = str(metadata.get("vuln_type") or node.get("vuln_type") or "").strip().upper()
     label = str(node.get("label") or node.get("title") or "")
     asset, identifier = _graph_node_validation_key(node)
+    if is_legacy_cloud_audit_finding(vuln_type):
+        linked_reportable = (
+            validation_index.get((asset, identifier))
+            if asset and identifier and (asset, identifier) in validation_index
+            else None
+        )
+        evidence = str(metadata.get("evidence") or _graph_node_key_validation_detail(node) or "")
+        return not legacy_cloud_audit_finding_is_reportable(
+            vuln_type,
+            label,
+            evidence,
+            (asset,),
+            linked_cloud_validation_reportable=linked_reportable,
+        )
     if not is_deterministic_cloud_exposure(vuln_type, label, (asset,)):
         return False
     if not asset or not identifier:

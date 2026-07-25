@@ -20,6 +20,7 @@ Authoritative source: PRD v7.2 §9.15.3 (Cloud Audit Scope Expansion)
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -63,6 +64,19 @@ from forge.db.schema import apply_schema
 from forge.opsec.scope_gate import assert_in_scope
 
 _LOG = logging.getLogger(__name__)
+
+
+def _receipt_hash(value: object) -> str:
+    return hashlib.sha256(str(value or "").encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _azure_audit_evidence(finding: "AzureFinding") -> str:
+    proof = (
+        "validation=VALIDATED:azure_authenticated_config_audit:"
+        f"provider=azure service={re.sub(r'[^A-Za-z0-9_-]+', '_', finding.service)} "
+        f"resource_hash={_receipt_hash(finding.resource_id)}"
+    )
+    return f"{proof}; detail={json.dumps(finding.evidence, sort_keys=True)}"[:512]
 
 # Azure Service severity mapping
 _AZURE_SEVERITY_MAP = {
@@ -663,7 +677,7 @@ class AzureAuditor:
                         finding.severity,
                         finding.title,
                         finding.description,
-                        json.dumps(finding.evidence)[:512],
+                        _azure_audit_evidence(finding),
                         self._get_cvss_score(finding.severity),
                         finding.resource_id,
                         ",".join(finding.compliance_controls),
