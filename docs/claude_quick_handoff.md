@@ -25,7 +25,27 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: modern image/favicon artifact route recursion is complete.
+Latest checkpoint: provider-proof identity source-of-truth is complete. Phase
+4 provider identifier extraction now delegates to
+`parse_provider_validation_identity()`, which first applies the same
+`parse_validated_detail()` reportability gates used by report/dashboard/graph
+surfaces. Provider proof decisions for AWS, GitHub, GitLab, Hugging Face,
+Vercel, Netlify, Notion, PostHog, Sentry, SendGrid, Stripe, Twilio, Slack,
+Discord, Telegram, Cloudflare, and known validation-inventory-only providers
+now have a parity contract instead of a duplicated parser. Verification:
+provider/core proof suites passed (`129 passed`), Phase 4 provider-active
+slice passed (`2 passed, 134 deselected`), dashboard proof gate slice passed
+(`2 passed, 29 deselected`), attack-path proof gate slice passed (`6 passed,
+105 deselected`), Phase 6 linked-proof slice passed (`2 passed`), Ruff passed,
+py_compile passed, and `git diff --check` passed.
+
+Next checkpoint candidate: run a fresh current-code gap audit for remaining
+deterministic kill-chain acceptance stages. Prefer concrete artifact/container
+parsing, OCR/barcode fallback, recursive queue, validation/report parity,
+dashboard review, or fallback gaps only when current code lacks a focused
+implementation or regression.
+
+Previous checkpoint: modern image/favicon artifact route recursion is complete.
 Artifact-side HTML/CSS route extraction now treats common passive image and
 favicon assets (`.avif`, `.bmp`, `.heic`, `.heif`, `.ico`, `.tif`, `.tiff`) as
 useful static route suffixes. Modern image pivots flow into recursive URL
@@ -35,13 +55,6 @@ Verification: focused CSS/HTML artifact route suite passed (`3 passed`),
 adjacent route/classification/recursive queue suite passed (`25 passed`),
 adjacent SPA route and same-iteration URL seed E2E slice passed (`2 passed`),
 Ruff passed, py_compile passed, and `git diff --check` passed.
-
-Next checkpoint candidate: provider-proof source-of-truth drift. Phase 4 still
-has a separate `_validated_identifier_from_detail()` provider parser while
-report/dashboard/graph gates use `parse_validated_detail()` through shared
-proof helpers. A safe next step is a parity helper or contract test so provider
-proof reportability/identifier decisions do not drift across validation,
-findings, graph, dashboard, and report export.
 
 Previous checkpoint: Hugging Face profile-proof hash gate is complete.
 Hugging Face token validation now emits a non-sensitive `profile_hash` from

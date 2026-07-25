@@ -1,6 +1,112 @@
 from __future__ import annotations
 
+import pytest
+
 from forge.phase4 import cloud_validate
+from forge.utils.validation_proof import parse_provider_validation_identity
+
+
+@pytest.mark.parametrize(
+    ("service", "detail", "expected_identifier"),
+    [
+        ("aws", "AWS AccountId: 742931608514 UserId=AIDAEXAMPLE", "742931608514"),
+        (
+            "github",
+            "GitHub user ok: user_id=738251 login=acmebot "
+            "user_profile_present=true profile_url_matches_login=true",
+            "acmebot",
+        ),
+        (
+            "gitlab",
+            "GitLab user ok: user_id=739251 username=delta-ops "
+            "user_profile_present=true profile_url_matches_login=true",
+            "delta-ops",
+        ),
+        (
+            "huggingface",
+            "Hugging Face auth ok: user=acme-mlops "
+            "user_profile_present=true profile_hash=0123456789abcdef",
+            "acme-mlops",
+        ),
+        (
+            "vercel",
+            "Vercel user ok: user_id=usr_abcdefghijklmnop "
+            "user_profile_present=true profile_hash=0123456789abcdef",
+            "usr_abcdefghijklmnop",
+        ),
+        (
+            "netlify",
+            "Netlify user ok: user_id=netlify-user-123 "
+            "user_profile_present=true profile_hash=0123456789abcdef",
+            "netlify-user-123",
+        ),
+        (
+            "notion",
+            "Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a "
+            "user_profile_present=true profile_hash=0123456789abcdef",
+            "3c90c3cc-0d44-4b50-8888-8dd25736052a",
+        ),
+        (
+            "posthog",
+            "PostHog users me ok: host=eu.posthog.com "
+            "user_id=018f9b7d-1234-4567-9abc-def012345678 "
+            "user_profile_present=true profile_hash=0123456789abcdef",
+            "eu.posthog.com/018f9b7d-1234-4567-9abc-def012345678",
+        ),
+        (
+            "sentry",
+            "Sentry organizations ok: org_id=4505524236910592 "
+            "org_slug_present=true org_slug_stable=true org_slug_hash=d2836b7de9447c4a",
+            "4505524236910592",
+        ),
+        (
+            "sendgrid",
+            "SendGrid profile ok: proof=profile "
+            "profile_hash=0123456789abcdef email_present=true",
+            "profile/0123456789abcdef",
+        ),
+        (
+            "sendgrid",
+            "SendGrid scopes accessible: count=2 scope_hash=0123456789abcdef",
+            "scopes/0123456789abcdef",
+        ),
+        (
+            "stripe",
+            "Stripe balance accessible: mode=live currencies=sgd,usd "
+            "balances=available:1,pending:1",
+            "live/sgd,usd",
+        ),
+        (
+            "twilio",
+            "Twilio account accessible: "
+            "sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 status=active type=Full",
+            "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",
+        ),
+        ("slack", "Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4", "t9b2d6f4/u7a3c9k2"),
+        (
+            "cloudflare",
+            "Cloudflare token valid: token_id=abcdef1234567890abcdef1234567890 status=active",
+            "abcdef1234567890abcdef1234567890",
+        ),
+        ("mailchimp", "Mailchimp ping ok: dc=us1 health=Everything's Chimpy!", None),
+        ("datadog", "Datadog API key valid: site=datadoghq.eu proof=valid_true", None),
+        (
+            "huggingface",
+            "Hugging Face auth ok: user=acme-mlops user_profile_present=true",
+            None,
+        ),
+    ],
+)
+def test_provider_validation_identity_stays_in_sync_with_phase4_identifier_parser(
+    service: str,
+    detail: str,
+    expected_identifier: str | None,
+) -> None:
+    identity = parse_provider_validation_identity(service, detail)
+
+    assert cloud_validate._validated_identifier_from_detail(service, detail) == expected_identifier
+    assert identity["identifier"] == (expected_identifier or "")
+    assert identity["reportable"] is bool(expected_identifier)
 
 
 def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_details() -> None:

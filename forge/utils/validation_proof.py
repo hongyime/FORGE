@@ -47,6 +47,32 @@ _LOW_SIGNAL_CLOUD_READ_PROOF_MARKERS = (
     "unexpected non-json",
 )
 _POSTHOG_VALIDATION_HOSTS = {"us.posthog.com", "eu.posthog.com"}
+_PROVIDER_VALIDATION_METHODS = {
+    "anthropic": "anthropic_models_list",
+    "aws": "aws_sts_get_caller_identity",
+    "azure": "azure_blob_list_containers_shared_key",
+    "azure_blob": "azure_blob_list_containers_shared_key",
+    "azure_blob_storage": "azure_blob_list_containers_shared_key",
+    "cloudflare": "cloudflare_token_verify",
+    "datadog": "datadog_api_key_validate",
+    "discord": "discord_current_user",
+    "github": "github_user_api",
+    "gitlab": "gitlab_current_user_api",
+    "google": "google_generative_language_models_list",
+    "huggingface": "huggingface_whoami_v2",
+    "mailchimp": "mailchimp_ping_api",
+    "netlify": "netlify_current_user",
+    "notion": "notion_users_me",
+    "openai": "openai_models_list",
+    "posthog": "posthog_users_me",
+    "sendgrid": "sendgrid_profile_api",
+    "sentry": "sentry_list_organizations",
+    "slack": "slack_auth_test",
+    "stripe": "stripe_balance_api",
+    "telegram": "telegram_get_me",
+    "twilio": "twilio_account_api",
+    "vercel": "vercel_user_get",
+}
 _CLOUD_OBJECT_PLACEHOLDER_MARKERS = {
     "changeme",
     "demo",
@@ -782,6 +808,138 @@ def _sentry_org_proof_is_stable(proof: str) -> bool:
     if not hash_match or _looks_repeated_compact_identifier(hash_match.group(1)):
         return False
     return bool(_stable_numeric_identifier(match.group(1)))
+
+
+def _provider_validation_method_for_service(service: object) -> str:
+    normalized = str(service or "").strip().lower()
+    return _PROVIDER_VALIDATION_METHODS.get(normalized, "")
+
+
+def _identifier_from_reportable_provider_proof(service: str, method: str, proof: str) -> str:
+    normalized_service = str(service or "").strip().lower()
+    normalized_method = str(method or "").strip().lower()
+    if normalized_service == "aws" or normalized_method in _AWS_STS_METHODS:
+        match = _AWS_ACCOUNT_ID_RE.search(proof)
+        return _stable_numeric_identifier(match.group(1), min_len=12, max_len=12) if match else ""
+    if normalized_service == "github" or normalized_method == "github_user_api":
+        match = re.search(
+            r"github user ok:\s*user_id=([0-9]{2,16})\s+login=([a-z0-9-]+)\b",
+            proof,
+            re.IGNORECASE,
+        )
+        if match:
+            return _stable_handle_identifier(match.group(2), allow_dot=False)
+        return ""
+    if normalized_service == "gitlab" or normalized_method == "gitlab_current_user_api":
+        match = re.search(
+            r"gitlab user ok:\s*user_id=([0-9]{2,16})\s+username=([a-z0-9_.-]+)\b",
+            proof,
+            re.IGNORECASE,
+        )
+        return _stable_handle_identifier(match.group(2)) if match else ""
+    if normalized_service == "huggingface" or normalized_method == "huggingface_whoami_v2":
+        match = re.search(r"hugging face auth ok:\s*user=([a-z0-9_.-]+)\b", proof, re.IGNORECASE)
+        return _stable_handle_identifier(match.group(1)) if match else ""
+    if normalized_service == "discord" or normalized_method == "discord_current_user":
+        match = re.search(r"discord bot auth ok:\s*bot_id=([0-9]{15,22})\b", proof, re.IGNORECASE)
+        return _stable_numeric_identifier(match.group(1), min_len=15, max_len=22) if match else ""
+    if normalized_service == "telegram" or normalized_method == "telegram_get_me":
+        match = re.search(r"telegram bot auth ok:\s*bot_id=([0-9]{6,20})\b", proof, re.IGNORECASE)
+        return _stable_numeric_identifier(match.group(1), min_len=6, max_len=20) if match else ""
+    if normalized_service == "notion" or normalized_method == "notion_users_me":
+        match = re.search(
+            r"notion users me ok:\s*user_id=([0-9a-f-]{32,36})\b",
+            proof,
+            re.IGNORECASE,
+        )
+        return _stable_uuid_or_32hex(match.group(1)) if match else ""
+    if normalized_service == "cloudflare" or normalized_method == "cloudflare_token_verify":
+        match = re.search(
+            r"cloudflare token valid:\s*token_id=([a-z0-9_-]{8,32})\b",
+            proof,
+            re.IGNORECASE,
+        )
+        return _stable_provider_identifier(match.group(1)) if match else ""
+    if normalized_service == "vercel" or normalized_method == "vercel_user_get":
+        match = re.search(r"vercel user ok:\s*user_id=([a-z0-9_-]{3,128})\b", proof, re.IGNORECASE)
+        return _stable_provider_identifier(match.group(1)) if match else ""
+    if normalized_service == "netlify" or normalized_method == "netlify_current_user":
+        match = re.search(r"netlify user ok:\s*user_id=([a-z0-9_-]{3,128})\b", proof, re.IGNORECASE)
+        return _stable_provider_identifier(match.group(1)) if match else ""
+    if normalized_service == "posthog" or normalized_method == "posthog_users_me":
+        match = re.search(
+            r"posthog users me ok:\s*host=([a-z0-9.-]+)\s+user_id=([a-z0-9_-]{3,128})\b",
+            proof,
+            re.IGNORECASE,
+        )
+        if not match:
+            return ""
+        host = match.group(1).lower()
+        user_id = _stable_provider_identifier(match.group(2))
+        return f"{host}/{user_id}" if host in _POSTHOG_VALIDATION_HOSTS and user_id else ""
+    if normalized_service == "sentry" or normalized_method == "sentry_list_organizations":
+        match = re.search(r"sentry organizations ok:\s*org_id=([0-9]{3,32})\b", proof, re.IGNORECASE)
+        return _stable_numeric_identifier(match.group(1)) if match else ""
+    if normalized_service == "sendgrid" or normalized_method == "sendgrid_profile_api":
+        if re.search(r"sendgrid profile ok:", proof, re.IGNORECASE):
+            hash_match = re.search(r"\bprofile_hash=([a-f0-9]{16,64})\b", proof, re.IGNORECASE)
+            return f"profile/{hash_match.group(1).lower()[:16]}" if hash_match else ""
+        scope_hash_match = re.search(r"\bscope_hash=([a-f0-9]{16,64})\b", proof, re.IGNORECASE)
+        return f"scopes/{scope_hash_match.group(1).lower()[:16]}" if scope_hash_match else ""
+    if normalized_service == "stripe" or normalized_method == "stripe_balance_api":
+        mode_match = re.search(r"\bmode=(live|test|unknown)\b", proof, re.IGNORECASE)
+        currency_match = re.search(r"\bcurrencies=([a-z0-9_,.-]+)", proof, re.IGNORECASE)
+        if not mode_match or mode_match.group(1).lower() != "live":
+            return ""
+        currencies = _stable_currency_summary(currency_match.group(1) if currency_match else "")
+        return f"live/{currencies}" if currencies else ""
+    if normalized_service == "twilio" or normalized_method == "twilio_account_api":
+        match = re.search(r"\bsid=(AC[a-z0-9]{32})\b", proof, re.IGNORECASE)
+        return _stable_twilio_account_sid(match.group(1)) if match else ""
+    if normalized_service == "slack" or normalized_method == "slack_auth_test":
+        actor_match = re.search(r"\b(?:actor_id|user_id|bot_id)=([a-z0-9]+)\b", proof, re.IGNORECASE)
+        team_match = re.search(r"\bteam_id=([a-z0-9]+)\b", proof, re.IGNORECASE)
+        actor_id = _stable_slack_identifier(actor_match.group(1), ("U", "W", "B")) if actor_match else ""
+        team_id = _stable_slack_identifier(team_match.group(1), ("T", "E")) if team_match else ""
+        return f"{team_id.lower()}/{actor_id.lower()}" if team_id and actor_id else ""
+    if normalized_service == "azure" or normalized_method == "azure_blob_list_containers_shared_key":
+        match = re.search(r"\baccount=([a-z0-9]{3,24})\b", proof, re.IGNORECASE)
+        return _stable_provider_identifier(match.group(1)) if match else ""
+    return ""
+
+
+def parse_provider_validation_identity(service: object, detail: object) -> dict[str, Any]:
+    """Return the shared reportability decision and stable provider identifier."""
+
+    method = _provider_validation_method_for_service(service)
+    if not method:
+        return {
+            "reportable": False,
+            "validation_method": "",
+            "validation_proof": "",
+            "identifier": "",
+        }
+    proof = str(detail or "").strip()
+    parsed = parse_validated_detail(
+        f"VALIDATED:{method}:{proof}",
+        proof_limit=1000,
+        include_raw_proof=True,
+    )
+    if parsed.get("validation_status") != "VALIDATED":
+        return {
+            "reportable": False,
+            "validation_method": method,
+            "validation_proof": "",
+            "identifier": "",
+        }
+    raw_proof = str(parsed.get("validation_raw_proof") or parsed.get("validation_proof") or "")
+    identifier = _identifier_from_reportable_provider_proof(str(service or ""), method, raw_proof)
+    return {
+        "reportable": bool(identifier),
+        "validation_method": method,
+        "validation_proof": str(parsed.get("validation_proof") or ""),
+        "identifier": identifier,
+    }
 
 
 def _validated_proof_is_reportable(method: str, proof: str) -> bool:

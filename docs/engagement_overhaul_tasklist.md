@@ -91,6 +91,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Provider-proof identity source-of-truth checkpoint:
+  Phase 4 provider identifier extraction now delegates to the shared
+  `parse_provider_validation_identity()` path, which first applies the same
+  `parse_validated_detail()` reportability gates used by report/dashboard/graph
+  surfaces. Provider proof decisions for AWS, GitHub, GitLab, Hugging Face,
+  Vercel, Netlify, Notion, PostHog, Sentry, SendGrid, Stripe, Twilio, Slack,
+  Discord, Telegram, Cloudflare, and known validation-inventory-only providers
+  now have a parity contract instead of a duplicated parser. Verification:
+  provider/core proof suites passed (`129 passed`), Phase 4 provider-active
+  slice passed (`2 passed, 134 deselected`), dashboard proof gate slice passed
+  (`2 passed, 29 deselected`), attack-path proof gate slice passed (`6 passed,
+  105 deselected`), Phase 6 linked-proof slice passed (`2 passed`), Ruff
+  passed, py_compile passed, and `git diff --check` passed.
+- [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
+  deterministic kill-chain acceptance stages, starting with concrete
+  artifact/container parsing, OCR/barcode fallback, recursive queue,
+  validation/report parity, dashboard review, or fallback gaps only when the
+  code lacks a focused implementation or regression.
 - [x] Modern image/favicon artifact route recursion checkpoint:
   Artifact-side HTML/CSS route extraction now treats common passive image and
   favicon assets (`.avif`, `.bmp`, `.heic`, `.heif`, `.ico`, `.tif`, `.tiff`)
@@ -192,11 +210,6 @@ sentences as historical notes only, not as current instructions.
   cloud validation suite passed (`136 passed`), stable-proof integration/core
   slice passed (`111 passed`), Ruff passed, py_compile passed, and
   `git diff --check` passed.
-- [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
-  deterministic kill-chain acceptance stages, starting with concrete
-  artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
-  queue, or validation/report parity gaps only when the code lacks a focused
-  implementation or regression.
 - [x] Seed-to-report audit traceability checkpoint:
   The service-worker/precache kill-chain E2E now proves one reportable Supabase
   finding from derived seed relation and parsed artifact through cloud
