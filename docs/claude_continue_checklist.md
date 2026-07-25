@@ -66,6 +66,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] CSS/HTML artifact route recursion checkpoint:
+  Static artifact parsing now extracts common CSS `url(...)` dependencies and
+  HTML route attributes, `srcset`, and meta-refresh targets from remote
+  artifact payloads, resolving them against the source artifact URL through the
+  existing safe route resolver. This promotes stylesheet, bundle, image/font,
+  manifest, and route pivots into recursive URL seeds and queued artifacts
+  without relying on the live crawler path. Verification: focused CSS/HTML
+  artifact route suite passed (`2 passed`), adjacent artifact recursive queue
+  and JS runtime suites passed (`9 passed`), adjacent SPA route and same-
+  iteration URL seed E2E slice passed (`2 passed`), Ruff passed, and
+  py_compile passed.
 - [x] Archived-PDF barcode recursion checkpoint:
   Static archive parsing no longer requires an OCR binary before extracting QR
   or barcode pivots from rendered embedded PDF pages. Direct PDFs and PDFs
@@ -87,8 +98,9 @@ historical notes only, not as current instructions.
   `git diff --check` passed.
 - [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
   deterministic kill-chain acceptance stages, starting with concrete
-  artifact/container parsing, OCR fallback, or provider-proof gaps only when the
-  code lacks a focused implementation or regression.
+  artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
+  queue, or validation/report parity gaps only when the code lacks a focused
+  implementation or regression.
 - [x] Seed-to-report audit traceability checkpoint:
   The service-worker/precache kill-chain E2E now proves one reportable Supabase
   finding from derived seed relation and parsed artifact through cloud

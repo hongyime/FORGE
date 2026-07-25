@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: archived-PDF barcode recursion and linked bot-token proof
+Latest checkpoint: CSS/HTML artifact route recursion is complete. Static
+artifact parsing now extracts common CSS `url(...)` dependencies and HTML route
+attributes, `srcset`, and meta-refresh targets from remote artifact payloads,
+resolving them against the source artifact URL through the existing safe route
+resolver. This promotes stylesheet, bundle, image/font, manifest, and route
+pivots into recursive URL seeds and queued artifacts without relying on the live
+crawler path. Verification: focused CSS/HTML artifact route suite passed
+(`2 passed`), adjacent artifact recursive queue and JS runtime suites passed
+(`9 passed`), adjacent SPA route and same-iteration URL seed E2E slice passed
+(`2 passed`), Ruff passed, and py_compile passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
+queue, or validation/report parity gaps only when the code lacks a focused
+implementation or regression.
+
+Previous checkpoint: archived-PDF barcode recursion and linked bot-token proof
 gates are complete. Static archive parsing no longer requires Tesseract before
 extracting barcode pivots from embedded rendered PDF pages, so ZIP-contained
 scanned PDFs can feed QR URLs back into recursive URL seeds when a rasterizer is
@@ -40,11 +57,6 @@ synthesizer suite passed (`108 passed`), full dashboard suite passed
 validation suite passed (`136 passed`), stable-proof integration/core slice
 passed (`111 passed`), Ruff passed, py_compile passed, and `git diff --check`
 passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR fallback, or provider-proof gaps only when the
-code lacks a focused implementation or regression.
 
 Previous checkpoint: seed-to-report audit traceability is complete. The
 service-worker/precache kill-chain E2E now proves one reportable Supabase

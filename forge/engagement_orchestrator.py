@@ -1744,6 +1744,10 @@ def _extract_artifact_relative_route_urls(text: str, *, base_url: str) -> list[s
             "route_object_keys",
             "route_declarations",
             "route_lists",
+            "css_url_functions",
+            "html_url_attrs",
+            "html_srcset",
+            "html_meta_refresh",
             "relative_routes",
         ),
         lambda family: _artifact_relative_route_family_candidates(
@@ -1806,6 +1810,24 @@ def _artifact_relative_route_family_candidates(
         for list_match in _ARTIFACT_ROUTE_LIST_FIELD_RE.finditer(raw_text):
             for route_match in _ARTIFACT_QUOTED_SLASH_ROUTE_RE.finditer(list_match.group("body")):
                 _append(route_match.group("path"), allow_route_path=True)
+        return ordered_urls
+    if family == "css_url_functions":
+        for match in _ARTIFACT_CSS_URL_FUNCTION_RE.finditer(raw_text):
+            _append(match.group("path"), allow_bare_file=True)
+        return ordered_urls
+    if family == "html_url_attrs":
+        for match in _ARTIFACT_HTML_URL_ATTR_RE.finditer(raw_text):
+            _append(match.group("path"), allow_bare_file=True, allow_route_path=True)
+        return ordered_urls
+    if family == "html_srcset":
+        for match in _ARTIFACT_HTML_SRCSET_ATTR_RE.finditer(raw_text):
+            for part in match.group("body").split(","):
+                candidate = part.strip().split(None, 1)[0] if part.strip() else ""
+                _append(candidate, allow_bare_file=True, allow_route_path=True)
+        return ordered_urls
+    if family == "html_meta_refresh":
+        for match in _ARTIFACT_HTML_META_REFRESH_URL_RE.finditer(raw_text):
+            _append(match.group("path"), allow_bare_file=True, allow_route_path=True)
         return ordered_urls
     if family == "relative_routes":
         for match in _ARTIFACT_RELATIVE_ROUTE_RE.finditer(raw_text):
@@ -2652,6 +2674,60 @@ _ARTIFACT_ROUTE_LIST_FIELD_RE = re.compile(
 _ARTIFACT_QUOTED_SLASH_ROUTE_RE = re.compile(
     r"""["'](?P<path>/[^"'`<>\s]{1,256})["']""",
     re.IGNORECASE,
+)
+_ARTIFACT_CSS_URL_FUNCTION_RE = re.compile(
+    r"""(?ix)\burl\(\s*
+    (?P<quote>["']?)
+    (?P<path>
+        (?:
+            https?://
+            |//
+            |/
+            |\./
+            |\.\./
+            |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+        )
+        [^)"'`<>\s]{1,512}
+    )
+    (?P=quote)\s*\)
+    """
+)
+_ARTIFACT_HTML_URL_ATTR_RE = re.compile(
+    r"""(?ix)\b
+    (?:action|data|data-href|data-src|data-srcset|formaction|href|manifest|poster|src)
+    \s*=\s*
+    (?P<quote>["']?)
+    (?P<path>
+        (?:
+            https?://
+            |//
+            |/
+            |\./
+            |\.\./
+            |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+        )
+        [^"'`<>\s,]{1,512}
+    )
+    (?P=quote)
+    """
+)
+_ARTIFACT_HTML_SRCSET_ATTR_RE = re.compile(
+    r"""(?is)\bsrcset\s*=\s*(?P<quote>["'])(?P<body>[^"']{1,4096})(?P=quote)"""
+)
+_ARTIFACT_HTML_META_REFRESH_URL_RE = re.compile(
+    r"""(?ix)\burl\s*=\s*
+    (?P<path>
+        (?:
+            https?://
+            |//
+            |/
+            |\./
+            |\.\./
+            |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+        )
+        [^"'`<>\s;]{1,512}
+    )
+    """
 )
 _ARTIFACT_RELATIVE_ROUTE_ROOT_PREFIXES = {
     "_app",
