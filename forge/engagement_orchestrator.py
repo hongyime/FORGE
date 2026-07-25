@@ -111,7 +111,11 @@ from forge.utils.artifact_hashicorp_config import (
     hashicorp_config_artifact_label,
     hashicorp_config_candidates,
 )
-from forge.utils.artifact_helm_index import helm_index_chart_package_urls
+from forge.utils.artifact_helm_index import (
+    helm_index_chart_package_urls,
+    source_looks_like_helm_index,
+    url_looks_like_helm_chart_archive,
+)
 from forge.utils.artifact_host_meta_metadata import host_meta_href_urls
 from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
 from forge.utils.artifact_js_runtime_config import (
@@ -2431,6 +2435,21 @@ def _artifact_email_seed_entry(candidate: str) -> str:
 
 def _artifact_phone_seed_entry(candidate: str) -> str:
     return _normalize_phone_seed_value(candidate)
+
+
+def _helm_index_chart_url_metadata(
+    url: str,
+    *,
+    source_file: str,
+) -> dict[str, Any]:
+    metadata = {"rule": "artifact_text_extract", "source_file": source_file}
+    if (
+        source_looks_like_helm_index(source_file)
+        and url_looks_like_helm_chart_archive(url)
+    ):
+        metadata["rule"] = "helm_index_chart_url"
+        metadata["helm_index_url"] = source_file
+    return metadata
 
 
 _ARTIFACT_PACKAGE_PROTOCOL_RELATIVE_REGISTRY_DIRECTIVE_RE = re.compile(
@@ -20335,7 +20354,13 @@ class ArtifactQueueProcessor:
         artifact_type = str(parsed.artifact_type or "").strip()
         if artifact_type:
             context["artifact_type"] = artifact_type[:64]
-        for key in ("content_type", "download_filename", "downloaded_from_remote"):
+        for key in (
+            "content_type",
+            "download_filename",
+            "downloaded_from_remote",
+            "helm_index_url",
+            "source_rule",
+        ):
             value = raw_metadata.get(key)
             if value in (None, "", [], {}):
                 continue
@@ -20376,6 +20401,7 @@ class ArtifactQueueProcessor:
             "extract_path",
             "extract_rule",
             "format",
+            "helm_index_url",
             "hostname",
             "barcode_payload_count",
             "metadata_payload_count",
@@ -20391,6 +20417,7 @@ class ArtifactQueueProcessor:
             "source_file",
             "source_provider",
             "source_seed_url",
+            "source_rule",
             "source_url",
         }
         context = self._merge_artifact_relation_context(relation_metadata, artifact_context)
@@ -21668,6 +21695,7 @@ class ArtifactQueueProcessor:
             urls: list[str] = []
             seen_urls: set[str] = set()
             strip_fragment = _artifact_format_label(source_file) in {"manifest.json", "webmanifest"}
+            helm_index_source = source_looks_like_helm_index(source_file)
             url_entries = self._run_ordered_local_batch(
                 [url_match.group(0) for url_match in _ARTIFACT_URL_RE.finditer(text)],
                 self._artifact_text_direct_url_candidate,
@@ -21682,6 +21710,8 @@ class ArtifactQueueProcessor:
                     parsed = urlparse(url)
                     if url in seen_urls:
                         continue
+                if helm_index_source and url_looks_like_helm_chart_archive(url):
+                    continue
                 seen_urls.add(url)
                 urls.append(url)
             return urls
@@ -22436,7 +22466,10 @@ class ArtifactQueueProcessor:
     ) -> dict[str, Any] | None:
         return {
             "url": url,
-            "relation_metadata": {"rule": "artifact_text_extract", "source_file": source_file},
+            "relation_metadata": _helm_index_chart_url_metadata(
+                url,
+                source_file=source_file,
+            ),
         }
 
     def _artifact_text_identity_seed_persistence_entry(
@@ -23214,6 +23247,25 @@ class ArtifactQueueProcessor:
         artifact_type = _classify_remote_artifact_candidate(url, seed_type)
         if artifact_type is None:
             return 0
+        checker = self._remote_url_scope_checker
+        if checker is not None:
+            denial_reason = "scope_manifest_denied_remote_artifact"
+            try:
+                allowed = bool(checker(url))
+            except Exception as exc:  # noqa: BLE001
+                allowed = False
+                denial_reason = f"scope_checker_error:{type(exc).__name__}"
+            if not allowed:
+                self._audit_artifact_lineage(
+                    con,
+                    action="artifact_text_url_scope_denied",
+                    target=url,
+                    result=(
+                        "rule=artifact_text_discovered_artifact_queue "
+                        f"artifact_type={artifact_type} seed_type={seed_type} reason={denial_reason}"
+                    ),
+                )
+                return 0
         metadata = dict(relation_metadata or {})
         source_rule = str(metadata.get("rule") or "").strip()
         metadata["rule"] = "artifact_text_discovered_artifact_queue"
@@ -40335,6 +40387,7 @@ class ArtifactQueueProcessor:
             "fixture_provider",
             "source_url",
             "source_seed_url",
+            "source_rule",
             "content_type",
             "download_filename",
             "downloaded_from_remote",
@@ -40344,6 +40397,7 @@ class ArtifactQueueProcessor:
             "relationship_payload_count",
             "ocr_payload_count",
             "barcode_payload_count",
+            "helm_index_url",
             "hostname",
             "scan_domain",
             "scan_id",
@@ -40388,9 +40442,11 @@ class ArtifactQueueProcessor:
             "source_url",
             "source_seed_url",
             "source_file",
+            "source_rule",
             "extract_path",
             "extract_rule",
             "format",
+            "helm_index_url",
             "artifact_type",
             "content_type",
             "download_filename",

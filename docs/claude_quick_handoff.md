@@ -25,7 +25,29 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: legacy cloud-audit reportability is complete. Legacy
+Latest checkpoint: remote Helm repository recursion is complete. Mocked scoped
+Helm `index.yaml` processing now queues only safe in-scope chart archives,
+parses the later `.tgz/.tar.gz`, preserves `helm-index -> chart -> values.yaml`
+provenance via `helm_index_url`, and promotes chart-derived hosts, emails,
+Firebase refs, and S3 refs into recursive seeds/cloud assets with relation and
+audit evidence. Generic direct URL extraction no longer bypasses Helm index
+safety filters for chart archives, and queue-time scope rejection keeps
+out-of-scope chart packages out of `artifact_queue` when a scope checker is
+configured. Verification: focused Helm recursion suite passed (`6 passed, 2
+deselected`), adjacent artifact provenance/cloud/remote-download suites passed
+(`15 passed`), adjacent dashboard artifact/cloud slices passed (`9 passed, 23
+deselected`), adjacent Phase 6 report/raw-export slices passed (`15 passed, 95
+deselected`), Ruff passed, py_compile passed, and `git diff --check` passed
+with only the repo's known LF-to-CRLF warnings.
+
+Next checkpoint: add OCI/Docker-save kill-chain review parity proof. Remote or
+local static OCI/Docker-save archives should parse only referenced
+layers/configs, ignore unreferenced decoy layers and path traversal, feed
+discovered refs into validation inventory/finding gates, and expose sanitized
+provenance through graph/dashboard/report/raw exports. Do not pull registries,
+execute images, run container tools, or parse unreferenced unsafe members.
+
+Previous checkpoint: legacy cloud-audit reportability is complete. Legacy
 `FIREBASE_MISCONFIG`, `FIREBASE_CREDENTIAL_STATUS`, `AWS_MISCONFIG`, and
 `AZURE_MISCONFIG` rows now fail closed across Phase 6 report context,
 Markdown/JSON/CSV exports, dashboard finding tables/severity summaries, and
@@ -36,15 +58,6 @@ audit output. Verification: focused helper/report/dashboard/graph regressions
 passed (`19 passed`), adjacent graph/dashboard/report selectors passed (`36
 passed, 217 deselected`), Ruff passed, py_compile passed, and `git diff
 --check` passed.
-
-Next checkpoint: prove remote Helm repository recursion end to end. A mocked
-scoped `index.yaml` should queue a chart archive, parse the later chart
-`.tgz/.tar.gz`, preserve `helm-index -> chart -> values.yaml` provenance,
-promote hosts/cloud refs into recursive seeds/cloud assets, and expose
-sanitized artifact provenance through graph/dashboard/report/audit. Keep it
-passive/static only: no Helm execution, no registry pull, no Kubernetes API
-calls, no auth, no live provider calls, and reject unsafe chart URLs before
-queueing.
 
 Previous checkpoint: artifact processor worker-cap is complete. Static artifact
 queue processing no longer inherits full global `--parallel-fanout` by default.

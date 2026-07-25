@@ -120,6 +120,6 @@ ingress:
         payload for payload in payloads if payload[1] == "acme-portal/values.yaml"
     )
     jobs = processor._structured_discovery_jobs_for_payload(values_payload)
-    structured_text = "\n".join(payload for _source_file, payload in jobs)
+    structured_text = "\n".join(payload for _source_file, _extract_path, payload in jobs)
 
     assert "http://values-only.acme.example" in structured_text

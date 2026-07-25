@@ -103,16 +103,25 @@ sentences as historical notes only, not as current instructions.
   regressions passed (`19 passed`), adjacent graph/dashboard/report selectors
   passed (`36 passed, 217 deselected`), Ruff passed, py_compile passed, and
   `git diff --check` passed.
-- [ ] Next checkpoint: prove remote Helm repository recursion end to end.
-  A mocked scoped `index.yaml` should queue a chart archive, parse the later
-  chart `.tgz/.tar.gz`, preserve `helm-index -> chart -> values.yaml`
-  provenance, promote hosts/cloud refs into recursive seeds/cloud assets, and
-  expose sanitized artifact provenance through graph/dashboard/report/audit.
-  Keep it passive/static only: no Helm execution, no registry pull, no
-  Kubernetes API calls, no auth, no live provider calls, and reject userinfo,
-  localhost/private IP, protocol-relative, templated, or out-of-scope chart
-  URLs before queueing.
-- [ ] After Helm: add OCI/Docker-save kill-chain review parity proof. Remote or
+- [x] Remote Helm repository recursion checkpoint:
+  Mocked scoped Helm `index.yaml` processing now queues only safe in-scope chart
+  archives, parses the later `.tgz/.tar.gz`, preserves
+  `helm-index -> chart -> values.yaml` provenance via `helm_index_url`, and
+  promotes chart-derived hosts, emails, Firebase refs, and S3 refs into
+  recursive seeds/cloud assets with relation/audit evidence. Generic direct URL
+  extraction no longer bypasses Helm index safety filters for chart archives,
+  and queue-time scope rejection keeps out-of-scope chart packages out of
+  `artifact_queue` when a scope checker is configured. Verification: focused
+  Helm recursion suite passed (`6 passed, 2 deselected`), adjacent artifact
+  provenance/cloud/remote-download suites passed (`15 passed`), adjacent
+  dashboard artifact/cloud slices passed (`9 passed, 23 deselected`), adjacent
+  Phase 6 report/raw-export slices passed (`15 passed, 95 deselected`), Ruff
+  passed, py_compile passed, and `git diff --check` passed with only the repo's
+  known LF-to-CRLF warnings. Safety: passive/static parsing only; no Helm
+  execution, chart install, registry pull, Kubernetes API call, authentication,
+  live provider call, destructive action, scope relaxation, proxy/IP rotation,
+  or rate-limit bypass was added.
+- [ ] Next checkpoint: add OCI/Docker-save kill-chain review parity proof. Remote or
   local static OCI/Docker-save archives should parse only referenced
   layers/configs, ignore unreferenced decoy layers and path traversal, feed
   discovered refs into validation inventory/finding gates, and expose sanitized

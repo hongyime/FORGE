@@ -56,6 +56,15 @@ def helm_index_chart_package_urls(
     return urls
 
 
+def source_looks_like_helm_index(value: str) -> bool:
+    return _source_looks_like_helm_index(value)
+
+
+def url_looks_like_helm_chart_archive(value: str) -> bool:
+    parsed = urlparse(str(value or "").strip())
+    return parsed.path.lower().endswith(_HELM_CHART_ARCHIVE_SUFFIXES)
+
+
 def _source_looks_like_helm_index(value: str) -> bool:
     parsed = urlparse(str(value or "").strip())
     path = parsed.path if parsed.scheme else str(value or "")
