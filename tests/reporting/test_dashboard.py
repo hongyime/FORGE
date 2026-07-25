@@ -274,6 +274,51 @@ def _build_minimal_engagement_db(db_path: Path) -> None:
                 "scheduled_task",
                 "task_type=crawl reason=scope_manifest_denied",
             ),
+            (
+                1001,
+                "recursive_seed_scope_denied",
+                "https://admin.acme.example/private",
+                "2026-07-09T09:05:01",
+                "phase1",
+                "recursive_seed",
+                'seed_type=url reason=scope_manifest_denied scope_manifest={"sentinel":"DO-NOT-LEAK-SCOPE-SENTINEL","domains":["app.acme.example"]}',
+            ),
+            (
+                1001,
+                "remote_artifact_scope_denied",
+                "https://cdn.acme.example/private.apk",
+                "2026-07-09T09:05:02",
+                "phase1",
+                "artifact_queue",
+                'source_url=https://cdn.acme.example/private.apk scope_manifest_payload={"sentinel":"DO-NOT-LEAK-SCOPE-SENTINEL"}',
+            ),
+            (
+                1001,
+                "cloud_validation_scope_denied",
+                "firebase://offscope-prod",
+                "2026-07-09T09:05:03",
+                "phase4",
+                "cloud_validate",
+                "asset_type=firebase reason=scope_manifest_denied",
+            ),
+            (
+                1001,
+                "key_validation_scope_denied",
+                "key_id=99",
+                "2026-07-09T09:05:04",
+                "phase4",
+                "key_validate",
+                'source_url=https://admin.acme.example/app.js scope_manifest_json={"sentinel":"DO-NOT-LEAK-SCOPE-SENTINEL"}',
+            ),
+            (
+                1001,
+                "automation_scope_denied",
+                "https://app.acme.example/admin",
+                "2026-07-09T09:05:05",
+                "webui",
+                "automation",
+                "task_type=crawl reason=scope_manifest_denied",
+            ),
             *(
                 (
                     1001,
@@ -840,7 +885,7 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         "CSV",
     ]
     assert overview_payload["items"][0]["audit_count"] == 2
-    assert overview_payload["items"][0]["counts"]["audit_log"] == 28
+    assert overview_payload["items"][0]["counts"]["audit_log"] == 33
     assert overview_payload["items"][0]["counts"]["seed_runs"] == 1
     assert overview_payload["items"][0]["counts"]["engagement_runs"] == 1
     assert overview_payload["items"][0]["counts"]["distributed_tasks"] == 1
@@ -929,11 +974,27 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
         row["Action"] == "scheduled_task_scope_denied"
         for row in detail_payload["sections"]["audit_log"]
     )
-    denial_row = detail_payload["sections"]["scope_denials"][0]
-    assert denial_row["Action"] == "scheduled_task_scope_denied"
-    assert denial_row["Module"] == "scheduled_task"
-    assert denial_row["Target"] == "https://app.acme.example/admin"
-    assert denial_row["Result"] == "task_type=crawl reason=scope_manifest_denied"
+    scope_denials = detail_payload["sections"]["scope_denials"]
+    denial_actions = {row["Action"] for row in scope_denials}
+    assert denial_actions >= {
+        "scheduled_task_scope_denied",
+        "recursive_seed_scope_denied",
+        "remote_artifact_scope_denied",
+        "cloud_validation_scope_denied",
+        "key_validation_scope_denied",
+        "automation_scope_denied",
+    }
+    scheduled_denial = next(
+        row for row in scope_denials if row["Action"] == "scheduled_task_scope_denied"
+    )
+    assert scheduled_denial["Module"] == "scheduled_task"
+    assert scheduled_denial["Target"] == "https://app.acme.example/admin"
+    assert scheduled_denial["Result"] == "task_type=crawl reason=scope_manifest_denied"
+    recursive_denial = next(
+        row for row in scope_denials if row["Action"] == "recursive_seed_scope_denied"
+    )
+    assert "scope_manifest=[redacted]" in recursive_denial["Result"]
+    assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in json.dumps(scope_denials, sort_keys=True)
     assert detail_payload["counts"]["distributed_tasks"] == 1
     task_row = detail_payload["sections"]["distributed_tasks"][0]
     assert task_row == {
@@ -1022,8 +1083,13 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "Validations" in detail_html
     assert "Reportable" in detail_html
     assert "Distributed Task Queue" in detail_html
-    assert "Scheduled Scope Denials" in detail_html
+    assert "Scope Boundary Denials" in detail_html
     assert "scheduled_task_scope_denied" in detail_html
+    assert "recursive_seed_scope_denied" in detail_html
+    assert "remote_artifact_scope_denied" in detail_html
+    assert "cloud_validation_scope_denied" in detail_html
+    assert "key_validation_scope_denied" in detail_html
+    assert "automation_scope_denied" in detail_html
     assert "task_type=crawl reason=scope_manifest_denied" in detail_html
     assert "validate:key:42:20260709T094414" in detail_html
     assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_html

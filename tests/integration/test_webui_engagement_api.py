@@ -357,6 +357,65 @@ def _insert_scope_denial_review_rows(db_path: Path) -> None:
             [
                 (
                     1001,
+                    "phase1",
+                    "recursive_seed",
+                    "recursive_seed_scope_denied",
+                    "https://admin.acme.example/private",
+                    'seed_type=url reason=scope_manifest_denied scope_manifest={"sentinel":"DO-NOT-LEAK-SCOPE-SENTINEL"}',
+                    "scheduler",
+                    "2026-07-09T09:05:01",
+                ),
+                (
+                    1001,
+                    "phase1",
+                    "artifact_queue",
+                    "remote_artifact_scope_denied",
+                    "https://cdn.acme.example/private.apk",
+                    'source_url=https://cdn.acme.example/private.apk scope_manifest_payload={"sentinel":"DO-NOT-LEAK-SCOPE-SENTINEL"}',
+                    "scheduler",
+                    "2026-07-09T09:05:02",
+                ),
+                (
+                    1001,
+                    "phase4",
+                    "cloud_validate",
+                    "cloud_validation_scope_denied",
+                    "firebase://offscope-prod",
+                    "asset_type=firebase reason=scope_manifest_denied",
+                    "scheduler",
+                    "2026-07-09T09:05:03",
+                ),
+                (
+                    1001,
+                    "phase4",
+                    "key_validate",
+                    "key_validation_scope_denied",
+                    "key_id=99",
+                    'source_url=https://admin.acme.example/app.js scope_manifest_json={"sentinel":"DO-NOT-LEAK-SCOPE-SENTINEL"}',
+                    "scheduler",
+                    "2026-07-09T09:05:04",
+                ),
+                (
+                    1001,
+                    "webui",
+                    "automation",
+                    "automation_scope_denied",
+                    "https://app.acme.example/admin",
+                    "task_type=crawl reason=scope_manifest_denied",
+                    "scheduler",
+                    "2026-07-09T09:05:05",
+                ),
+            ],
+        )
+        con.executemany(
+            """
+            INSERT INTO audit_log
+                (engagement_id, phase, module, action, target, result, operator, logged_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    1001,
                     "phase0",
                     "noise",
                     f"noise_event_{index:02d}",
@@ -633,11 +692,27 @@ def test_engagement_detail_surfaces_old_scope_denials_without_scope_payload(
         row["Action"] == "scheduled_task_scope_denied"
         for row in detail["sections"]["audit_log"]
     )
-    denial_row = detail["sections"]["scope_denials"][0]
-    assert denial_row["Action"] == "scheduled_task_scope_denied"
-    assert denial_row["Module"] == "scheduled_task"
-    assert denial_row["Target"] == "https://app.acme.example/admin"
-    assert denial_row["Result"] == "task_type=crawl reason=scope_manifest_denied"
+    scope_denials = detail["sections"]["scope_denials"]
+    denial_actions = {row["Action"] for row in scope_denials}
+    assert denial_actions >= {
+        "scheduled_task_scope_denied",
+        "recursive_seed_scope_denied",
+        "remote_artifact_scope_denied",
+        "cloud_validation_scope_denied",
+        "key_validation_scope_denied",
+        "automation_scope_denied",
+    }
+    scheduled_denial = next(
+        row for row in scope_denials if row["Action"] == "scheduled_task_scope_denied"
+    )
+    assert scheduled_denial["Module"] == "scheduled_task"
+    assert scheduled_denial["Target"] == "https://app.acme.example/admin"
+    assert scheduled_denial["Result"] == "task_type=crawl reason=scope_manifest_denied"
+    recursive_denial = next(
+        row for row in scope_denials if row["Action"] == "recursive_seed_scope_denied"
+    )
+    assert "scope_manifest=[redacted]" in recursive_denial["Result"]
+    assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in json.dumps(scope_denials, sort_keys=True)
 
 
 def test_engagement_detail_surfaces_raw_export_report_family(tmp_path: Path, monkeypatch) -> None:

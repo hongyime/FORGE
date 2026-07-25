@@ -25,7 +25,22 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: provider-proof identity source-of-truth is complete. Phase
+Latest checkpoint: scope-boundary denial reviewability is complete. Dashboard
+static exports and the live engagement detail API now surface scheduled,
+recursive-seed, remote-artifact, cloud-validation, key-validation, and
+automation scope denials in one dedicated `scope_denials` review section even
+after those audit rows fall out of the recent audit timeline. Scope-manifest
+payload assignments and URLs in denial result text are redacted before
+truncation. Verification: full static dashboard suite passed (`31 passed`),
+focused live API scope-denial/scope-preflight slice passed (`4 passed, 49
+deselected`), focused live denial test passed (`1 passed`), Ruff passed, and
+py_compile passed.
+
+Next checkpoint candidate: run audit manifest report-family parity. Include
+`.html` and report `.csv` companions in audit-manifest hashing/verification in
+addition to `.md`, `.json`, and `.pdf`; add tamper tests for HTML/CSV.
+
+Previous checkpoint: provider-proof identity source-of-truth is complete. Phase
 4 provider identifier extraction now delegates to
 `parse_provider_validation_identity()`, which first applies the same
 `parse_validated_detail()` reportability gates used by report/dashboard/graph
@@ -38,12 +53,6 @@ slice passed (`2 passed, 134 deselected`), dashboard proof gate slice passed
 (`2 passed, 29 deselected`), attack-path proof gate slice passed (`6 passed,
 105 deselected`), Phase 6 linked-proof slice passed (`2 passed`), Ruff passed,
 py_compile passed, and `git diff --check` passed.
-
-Next checkpoint candidate: run a fresh current-code gap audit for remaining
-deterministic kill-chain acceptance stages. Prefer concrete artifact/container
-parsing, OCR/barcode fallback, recursive queue, validation/report parity,
-dashboard review, or fallback gaps only when current code lacks a focused
-implementation or regression.
 
 Previous checkpoint: modern image/favicon artifact route recursion is complete.
 Artifact-side HTML/CSS route extraction now treats common passive image and

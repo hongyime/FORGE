@@ -66,6 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Scope-boundary denial reviewability checkpoint:
+  Dashboard/static exports and the live engagement detail API now surface
+  scheduled, recursive-seed, remote-artifact, cloud-validation,
+  key-validation, and automation scope denials in one dedicated
+  `scope_denials` review section even after those audit rows fall out of the
+  recent audit timeline. Scope-manifest payload assignments and URLs in denial
+  result text are redacted before truncation, preserving boundary visibility
+  without exposing raw manifests. Verification: full static dashboard suite
+  passed (`31 passed`), focused live API scope-denial/scope-preflight slice
+  passed (`4 passed, 49 deselected`), focused live denial test passed
+  (`1 passed`), Ruff passed, and py_compile passed.
+- [ ] Next checkpoint: bring run audit manifests into parity with current
+  report-family exports by hashing `.html` and report `.csv` companions in
+  addition to `.md`, `.json`, and `.pdf`, with tamper verification tests.
 - [x] Provider-proof identity source-of-truth checkpoint:
   Phase 4 provider identifier extraction now delegates to the shared
   `parse_provider_validation_identity()` path, which first applies the same
@@ -79,11 +93,6 @@ historical notes only, not as current instructions.
   (`2 passed, 29 deselected`), attack-path proof gate slice passed (`6 passed,
   105 deselected`), Phase 6 linked-proof slice passed (`2 passed`), Ruff
   passed, py_compile passed, and `git diff --check` passed.
-- [ ] Next checkpoint: run a fresh current-code gap audit for the remaining
-  deterministic kill-chain acceptance stages, starting with concrete
-  artifact/container parsing, OCR/barcode fallback, recursive queue,
-  validation/report parity, dashboard review, or fallback gaps only when the
-  code lacks a focused implementation or regression.
 - [x] Modern image/favicon artifact route recursion checkpoint:
   Artifact-side HTML/CSS route extraction now treats common passive image and
   favicon assets (`.avif`, `.bmp`, `.heic`, `.heif`, `.ico`, `.tif`, `.tiff`)

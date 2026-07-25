@@ -43,6 +43,14 @@ GRAPHML_NS = {"g": "http://graphml.graphdrawing.org/xmlns"}
 MALTEGO_NS = {"m": "http://maltego.paterva.com/xml/mtgx"}
 SECTION_LIMIT = 12
 SEVERITY_ORDER = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+_SCOPE_BOUNDARY_DENIAL_ACTIONS = (
+    "scheduled_task_scope_denied",
+    "recursive_seed_scope_denied",
+    "remote_artifact_scope_denied",
+    "cloud_validation_scope_denied",
+    "key_validation_scope_denied",
+    "automation_scope_denied",
+)
 _GRAPH_FORBIDDEN_METADATA_KEYS = {
     "api_key",
     "apikey",
@@ -128,16 +136,24 @@ _DASHBOARD_SECRET_ASSIGNMENT_RE = re.compile(
     r"private[_-]?key|raw[_-]?(?:secret|token)|refresh[_-]?token|secret|"
     r"scope_manifest(?:_json|_payload)?|token)\b\s*[:=]\s*[^,\s;]+"
 )
+_DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(scope_manifest(?:_json|_payload)?)\b\s*[:=]\s*"
+    r"(?:\{[^;]*\}|\[[^;]*\]|\"[^\"]*\"|'[^']*'|[^,\s;]+)"
+)
 _DASHBOARD_URL_RE = re.compile(r"https?://[^\s,;]+", re.IGNORECASE)
 
 
 def _redact_dashboard_error(value: Any, limit: int = 140) -> str:
-    text = _truncate(value, limit)
+    text = str(value or "").strip()
+    text = _DASHBOARD_SCOPE_MANIFEST_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group(1)}=[redacted]",
+        text,
+    )
     text = _DASHBOARD_SECRET_ASSIGNMENT_RE.sub(
         lambda match: f"{match.group(1)}=[redacted]",
         text,
     )
-    return _DASHBOARD_URL_RE.sub("[redacted-url]", text)
+    return _truncate(_DASHBOARD_URL_RE.sub("[redacted-url]", text), limit)
 
 
 def _safe_json_loads(value: str) -> Any:
@@ -1758,13 +1774,19 @@ def _cloud_asset_section_row(row: sqlite3.Row) -> dict[str, str]:
 
 
 def _audit_section_row(row: sqlite3.Row) -> dict[str, str]:
+    action = str(row["action"] or "")
+    result = (
+        _redact_dashboard_error(row["result"], 96)
+        if action in _SCOPE_BOUNDARY_DENIAL_ACTIONS
+        else _truncate(row["result"], 96)
+    )
     return {
         "When": _format_dt(str(row["logged_at"] or "")),
         "Phase": str(row["phase"] or ""),
         "Module": str(row["module"] or ""),
-        "Action": str(row["action"] or ""),
+        "Action": action,
         "Target": _truncate(row["target"], 96),
-        "Result": _truncate(row["result"], 96),
+        "Result": result,
     }
 
 
@@ -3387,14 +3409,14 @@ def _detail_sections(
         _audit_section_row(row)
         for row in _fetch_rows(
             con,
-            """
+            f"""
             SELECT logged_at, phase, module, action, target, result
             FROM audit_log
-            WHERE engagement_id=? AND action='scheduled_task_scope_denied'
+            WHERE engagement_id=? AND action IN ({",".join("?" for _ in _SCOPE_BOUNDARY_DENIAL_ACTIONS)})
             ORDER BY id DESC
             LIMIT ?
             """,
-            (engagement_id, SECTION_LIMIT),
+            (engagement_id, *_SCOPE_BOUNDARY_DENIAL_ACTIONS, SECTION_LIMIT),
         )
     ]
 
@@ -4620,7 +4642,7 @@ def _render_engagement_page(
         "vulnerability_findings": "Recent Vulnerability Findings",
         "auth_test_results": "Recent Auth Test Results",
         "cloud_validation_results": "Cloud Validation Results",
-        "scope_denials": "Scheduled Scope Denials",
+        "scope_denials": "Scope Boundary Denials",
         "audit_log": "Recent Audit Log",
     }
     evidence_sections = "".join(
