@@ -3801,7 +3801,10 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail="Hugging Face auth ok: user=acme-mlops user_profile_present=true",
+            detail=(
+                "Hugging Face auth ok: user=acme-mlops "
+                "user_profile_present=true profile_hash=0123456789abcdef"
+            ),
         ),
     )
     monkeypatch.setattr(

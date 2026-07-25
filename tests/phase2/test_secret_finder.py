@@ -2569,7 +2569,11 @@ def test_huggingface_token_validator_active_uses_whoami_without_private_detail(m
     result = HuggingFaceTokenValidator().validate("hf_" + "H" * 36)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == "Hugging Face auth ok: user=acme-mlops user_profile_present=true"
+    assert re.fullmatch(
+        r"Hugging Face auth ok: user=acme-mlops "
+        r"user_profile_present=true profile_hash=[a-f0-9]{16}",
+        result.detail or "",
+    )
     assert "private@acme.io" not in (result.detail or "")
     assert "sensitive-org" not in (result.detail or "")
 

@@ -593,7 +593,7 @@ def _huggingface_user_proof_is_stable(proof: str) -> bool:
     match = re.search(r"hugging face auth ok:\s*user=([a-z0-9_.-]+)\b", proof, re.IGNORECASE)
     if not match or not re.search(r"\buser_profile_present=true\b", proof, re.IGNORECASE):
         return False
-    return bool(_stable_handle_identifier(match.group(1)))
+    return bool(_stable_handle_identifier(match.group(1)) and _profile_hash_is_stable(proof))
 
 
 def _bot_numeric_proof_is_stable(

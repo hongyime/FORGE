@@ -1609,6 +1609,15 @@ class HuggingFaceTokenValidator(BaseKeyValidator):
         )
 
     @staticmethod
+    def _user_profile_proof_hash(payload: object) -> str:
+        if not isinstance(payload, dict):
+            return ""
+        return _profile_presence_proof_hash(
+            payload,
+            ("email", "fullname", "avatarUrl", "avatar_url"),
+        )
+
+    @staticmethod
     def _error_detail(payload: object, fallback: str) -> str:
         if not isinstance(payload, dict):
             return fallback
@@ -1648,9 +1657,18 @@ class HuggingFaceTokenValidator(BaseKeyValidator):
                         state=ValidationState.UNCONFIRMED,
                         detail="Hugging Face whoami response missing user proof",
                     )
+                profile_hash = self._user_profile_proof_hash(payload)
+                if not profile_hash:
+                    return ValidationResult(
+                        state=ValidationState.UNCONFIRMED,
+                        detail="Hugging Face whoami response missing user proof",
+                    )
                 return ValidationResult(
                     state=ValidationState.ACTIVE,
-                    detail=f"Hugging Face auth ok: user={user} user_profile_present=true",
+                    detail=(
+                        f"Hugging Face auth ok: user={user} "
+                        f"user_profile_present=true profile_hash={profile_hash}"
+                    ),
                 )
             detail = self._error_detail(payload, f"HTTP {resp.status_code}")
             if resp.status_code in (401, 403):

@@ -3794,7 +3794,11 @@ def _validated_identifier_from_detail(service: str, detail: str | None) -> str |
         return None
     if provider_service == "huggingface":
         match = re.search(r"hugging face auth ok:\s*user=([a-z0-9_.-]+)\b", text, re.IGNORECASE)
-        if match and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE):
+        if (
+            match
+            and re.search(r"\buser_profile_present=true\b", text, re.IGNORECASE)
+            and _profile_hash_is_stable(text)
+        ):
             return _stable_handle_identifier(match.group(1))
     if provider_service == "discord":
         match = re.search(r"discord bot auth ok:\s*bot_id=([0-9]{15,22})\b", text, re.IGNORECASE)

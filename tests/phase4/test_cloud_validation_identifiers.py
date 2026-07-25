@@ -554,6 +554,11 @@ def test_non_cloud_validation_identifier_parser_rejects_low_signal_success_detai
     assert cloud_validate._validated_identifier_from_detail(
         "huggingface",
         "Hugging Face auth ok: user=acme-mlops user_profile_present=true",
+    ) is None
+    assert cloud_validate._validated_identifier_from_detail(
+        "huggingface",
+        "Hugging Face auth ok: user=acme-mlops "
+        "user_profile_present=true profile_hash=0123456789abcdef",
     ) == "acme-mlops"
     assert cloud_validate._validated_identifier_from_detail(
         "sentry",

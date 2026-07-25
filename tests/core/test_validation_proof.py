@@ -323,7 +323,7 @@ def test_parse_validated_detail_downgrades_low_signal_cloud_listing_proofs(
         ),
         (
             "VALIDATED:huggingface_whoami_v2:Hugging Face auth ok: "
-            "user=acme-mlops user_profile_present=true",
+            "user=acme-mlops user_profile_present=true profile_hash=0123456789abcdef",
             "huggingface_whoami_v2",
         ),
         (

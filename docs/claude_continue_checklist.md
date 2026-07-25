@@ -66,6 +66,17 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
+- [x] Hugging Face profile-proof hash gate checkpoint:
+  Hugging Face token validation now emits a non-sensitive `profile_hash` from
+  stable whoami profile-presence fields, and both core proof parsing and Phase
+  4 identifier extraction require that hash before treating `whoami` success
+  as reportable. Hashless `user_profile_present=true` details now downgrade to
+  validation inventory only. Verification: focused Hugging Face validator test
+  passed (`1 passed`), core profile-provider proof slice passed (`80 passed,
+  30 deselected`), Phase 4 identifier test passed (`1 passed`), Phase 4
+  provider active downgrade slices passed (`2 passed`), Hugging Face secret
+  finder slice passed (`7 passed, 167 deselected`), Ruff passed, py_compile
+  passed, and `git diff --check` passed.
 - [x] Barcode cloud-asset provenance parity checkpoint:
   Artifact-derived cloud assets now preserve non-zero passive payload proof
   counts, including `barcode_payload_count`, while omitting zero-value noise

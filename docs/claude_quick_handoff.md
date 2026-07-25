@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: barcode cloud-asset provenance parity is complete.
+Latest checkpoint: Hugging Face profile-proof hash gate is complete.
+Hugging Face token validation now emits a non-sensitive `profile_hash` from
+stable whoami profile-presence fields, and both core proof parsing and Phase 4
+identifier extraction require that hash before treating `whoami` success as
+reportable. Hashless `user_profile_present=true` details now downgrade to
+validation inventory only. Verification: focused Hugging Face validator test
+passed (`1 passed`), core profile-provider proof slice passed (`80 passed, 30
+deselected`), Phase 4 identifier test passed (`1 passed`), Phase 4 provider
+active downgrade slices passed (`2 passed`), Hugging Face secret finder slice
+passed (`7 passed, 167 deselected`), Ruff passed, py_compile passed, and
+`git diff --check` passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
+queue, or validation/report parity gaps only when the code lacks a focused
+implementation or regression.
+
+Previous checkpoint: barcode cloud-asset provenance parity is complete.
 Artifact-derived cloud assets now preserve non-zero passive payload proof
 counts, including `barcode_payload_count`, while omitting zero-value noise that
 can crowd out source provenance in dashboard previews. QR/barcode discovered
@@ -34,12 +52,6 @@ storage and attack-graph metadata. Verification: focused barcode-to-cloud
 provenance test passed (`1 passed`), full artifact cloud reference suite passed
 (`3 passed`), adjacent artifact barcode/review slice passed (`9 passed`), Ruff
 passed, py_compile passed, and `git diff --check` passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
-queue, or validation/report parity gaps only when the code lacks a focused
-implementation or regression.
 
 Previous checkpoint: barcode recursive provenance parity is complete.
 QR/barcode-derived recursive seeds now preserve `barcode_payload_count`
