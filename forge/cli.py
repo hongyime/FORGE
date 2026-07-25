@@ -10237,6 +10237,14 @@ def kill_chain(
         target for target in processed_keyscan_targets
         if "::github_org::" in target
     }
+    retryable_github_org_targets = {
+        target
+        for target in _load_seed_run_values(
+            ["fanout_f_keyscan"],
+            statuses={"failed"},
+        )
+        if "::github_org::" in target and target not in processed_keyscan_targets
+    }
     processed_cloud_refs = _load_completed_seed_values(["fanout_j_cloud_scan"], seed_type="other")
     completed_host_surfaces = _load_completed_seed_values(["fanout_d_host_surface"])
     processed_host_surfaces = {
@@ -11095,6 +11103,18 @@ def kill_chain(
 
     def _keyscan_org_target_key(query_domain: str, github_org: str) -> str:
         return f"{str(query_domain or '').strip()}::github_org::{str(github_org or '').strip()}"
+
+    def _keyscan_org_target_parts(target_key: str) -> tuple[str, str] | None:
+        query_domain, separator, github_org = str(target_key or "").strip().partition(
+            "::github_org::"
+        )
+        if not separator:
+            return None
+        query_domain = query_domain.strip()
+        github_org = github_org.strip()
+        if not query_domain or not github_org:
+            return None
+        return query_domain, github_org
 
     def _prepare_passive_domain_schedule_reduction(
         item: dict[str, object],
@@ -14019,19 +14039,61 @@ def kill_chain(
     def _keyscan_org_query_domains() -> list[str]:
         return [str(root or "").strip() for root in root_domains if str(root or "").strip()]
 
-    def _pending_github_org_count() -> int:
+    def _retryable_github_org_keyscan_specs() -> list[dict[str, str]]:
         if skip_keyscan:
-            return 0
+            return []
         query_domains = _keyscan_org_query_domains()
         if not query_domains:
-            return 0
-        return sum(
-            1
+            return []
+        query_domains_by_key = {
+            _resume_normalize(query_domain): query_domain
+            for query_domain in query_domains
+        }
+        specs: list[dict[str, str]] = []
+        for target_key in sorted(retryable_github_org_targets):
+            parts = _keyscan_org_target_parts(target_key)
+            if parts is None:
+                continue
+            query_key = _resume_normalize(parts[0])
+            query_domain = query_domains_by_key.get(query_key)
+            if not query_domain:
+                continue
+            github_org = parts[1]
+            normalized_target = _resume_normalize(_keyscan_org_target_key(query_domain, github_org))
+            if normalized_target in processed_github_orgs:
+                continue
+            specs.append(
+                {
+                    "target": normalized_target,
+                    "query_domain": query_domain,
+                    "github_org": github_org,
+                }
+            )
+        return specs
+
+    def _pending_github_org_target_keys() -> set[str]:
+        if skip_keyscan:
+            return set()
+        query_domains = _keyscan_org_query_domains()
+        if not query_domains:
+            return set()
+        target_keys = {
+            _resume_normalize(_keyscan_org_target_key(query_domain, github_org))
             for query_domain in query_domains
             for github_org in all_github_orgs
-            if _resume_normalize(_keyscan_org_target_key(query_domain, github_org))
-            not in processed_github_orgs
+        }
+        target_keys.update(
+            _resume_normalize(str(item.get("target") or ""))
+            for item in _retryable_github_org_keyscan_specs()
         )
+        return {
+            target_key
+            for target_key in target_keys
+            if target_key and target_key not in processed_github_orgs
+        }
+
+    def _pending_github_org_count() -> int:
+        return len(_pending_github_org_target_keys())
 
     def _pending_root_keyscan_count() -> int:
         if skip_keyscan:
@@ -16205,6 +16267,7 @@ def kill_chain(
                 }
                 for root_domain in root_domains
             ]
+            keyscan_targets.extend(_retryable_github_org_keyscan_specs())
             org_query_domains = _keyscan_org_query_domains()
             keyscan_org_inputs = [
                 github_org

@@ -66,18 +66,21 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: persist and reload failed GitHub-org keyscan targets
-  across fresh resume processes. Discovered GitHub orgs are currently
-  in-memory, so failed `fanout_f_keyscan` org targets can be lost when a later
-  resumed process skips already-completed host-surface parsing. Minimal target:
-  schedule/count retryable `root::github_org::org` seed-run rows independent of
-  `all_github_orgs`, with a resume regression.
-- [ ] Then patch cloud-key validation worker exceptions so exception batches
-  write non-reportable attempted receipts instead of leaving rows invisible or
-  repeatedly claimable.
+- [ ] Next checkpoint: patch cloud-key validation worker exceptions so
+  exception batches write non-reportable attempted receipts instead of leaving
+  rows invisible or repeatedly claimable.
 - [ ] Then patch artifact-derived cloud provenance in attack-graph snapshots so
   dashboard graph review keeps scrubbed `cloud_assets.metadata_json`
   provenance when it prefers saved snapshots over the fallback graph.
+- [x] GitHub-org keyscan fresh-resume checkpoint:
+  Failed `fanout_f_keyscan` composite org targets now reload from failed
+  seed-run rows, stay constrained to current scoped root domains, count toward
+  `github_orgs` pending work, and schedule through the existing scoped keyscan
+  path even when already-completed host-surface parsing is skipped and no
+  GitHub links are rediscovered. Verification: focused keyscan resume/retry
+  slice passed (`4 passed`), full retry-state suite passed (`17 passed`),
+  Ruff passed, py_compile passed, and a sidecar patch review approved with no
+  blocking findings.
 - [x] Root-domain keyscan pending-work checkpoint:
   Failed root-domain `fanout_f_keyscan` work now contributes
   `root_keyscan_domains` to kill-chain pending-work metadata, so a stable

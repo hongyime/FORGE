@@ -1841,6 +1841,162 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
     assert completed_rows == [(ok_key, "completed")]
 
 
+def test_kill_chain_resume_retries_failed_github_org_keyscan_without_rediscovery(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
+    monkeypatch.setenv("FORGE_ENV", "test")
+    manifest_path = tmp_path / "roe-scope.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "roe_id": "ROE-TEST-2026-07",
+                "domains": ["acme.example"],
+                "authorized_seeds": ["acme.example"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_label = {"value": "first"}
+    keyscan_attempts: list[tuple[str, str, str]] = []
+
+    def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
+        del kwargs
+        module_argv = tuple(str(item) for item in cmd_argv)
+        if module_argv[:2] == ("osint", "keyscan") and "--domain" in module_argv:
+            domain = module_argv[module_argv.index("--domain") + 1]
+            org = module_argv[module_argv.index("--org") + 1] if "--org" in module_argv else ""
+            keyscan_attempts.append((run_label["value"], domain, org))
+            if org == "failorg":
+                return subprocess.CompletedProcess(
+                    ["forge", *module_argv],
+                    1,
+                    stdout="",
+                    stderr="simulated keyscan failure",
+                )
+        _write_report_if_requested(module_argv, tmp_path)
+        return subprocess.CompletedProcess(["forge", *module_argv], 0, stdout="ok\n", stderr="")
+
+    def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
+        if str(progress_label or "").endswith(".D cloud+HTML fetch"):
+            if run_label["value"] == "first":
+                return [
+                    (
+                        "<html>"
+                        '<a href="https://github.com/failorg/repo">fail</a>'
+                        '<a href="https://github.com/okorg/repo">ok</a>'
+                        "</html>"
+                    )
+                    for _ in specs
+                ]
+            return ["<html>no github links on resume</html>" for _ in specs]
+        if str(progress_label or "").endswith((".D2 passive text fetch", ".D5 URL surface fetch")):
+            return ["" for _ in specs]
+        raise AssertionError(f"unexpected html batch label: {progress_label}")
+
+    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+        del worker, max_workers
+        _emit_done_progress(
+            items,
+            progress_label=progress_label,
+            progress_callback=progress_callback,
+        )
+        progress_name = str(progress_label or "")
+        if progress_name.endswith(".G DNS enrichment"):
+            return [
+                {
+                    "root_domain": str(item),
+                    "queried_hosts": [str(item)],
+                    "cname_targets": [],
+                    "signals": [],
+                }
+                for item in items
+            ]
+        if progress_name.endswith(".H whois/RDAP"):
+            return [{"root_domain": str(item), "rdap": {}} for item in items]
+        if progress_name.endswith(".I Wayback CDX"):
+            return [{"root_domain": str(item), "urls": []} for item in items]
+        raise AssertionError(f"unexpected callable batch label: {progress_label}")
+
+    monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
+    monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
+    monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
+    monkeypatch.setattr("forge.cli._run_inprocess_batch", _direct_batch)
+
+    from forge.cli import kill_chain
+
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=False,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    run_label["value"] = "second"
+    kill_chain(
+        seed="acme.example",
+        engagement="1001",
+        max_iter=1,
+        tor=False,
+        dry_run=False,
+        attack_mode=False,
+        roe_id="ROE-TEST-2026-07",
+        scope_manifest=str(manifest_path),
+        skip_cloud=True,
+        skip_keyscan=False,
+        parallel_fanout=1,
+        report_provider="template",
+    )
+
+    assert keyscan_attempts.count(("first", "acme.example", "")) == 1
+    assert keyscan_attempts.count(("first", "acme.example", "okorg")) == 1
+    assert keyscan_attempts.count(("first", "acme.example", "failorg")) == 1
+    assert keyscan_attempts.count(("second", "acme.example", "failorg")) == 1
+    assert ("second", "acme.example", "") not in keyscan_attempts
+    assert ("second", "acme.example", "okorg") not in keyscan_attempts
+
+    db_path = tmp_path / ".forge_data" / "engagements" / "1001.db"
+    fail_key = "acme.example::github_org::failorg"
+    con = sqlite3.connect(db_path)
+    try:
+        failed_rows = con.execute(
+            """
+            SELECT sr.status, sr.error, sr.metadata_json
+            FROM seed_runs sr
+            JOIN engagement_seeds es ON es.id=sr.seed_id
+            WHERE sr.engagement_id=1001
+              AND sr.loop_name='fanout_f_keyscan'
+              AND es.seed_value=?
+            ORDER BY sr.id
+            """,
+            (fail_key,),
+        ).fetchall()
+    finally:
+        con.close()
+
+    assert len(failed_rows) == 2
+    assert all(row[0] == "failed" for row in failed_rows)
+    assert all("simulated keyscan failure" in str(row[1] or "") for row in failed_rows)
+    assert all(json.loads(str(row[2] or "{}"))["origin"] == "keyscan_org" for row in failed_rows)
+
+    metadata = _latest_run_metadata(db_path)
+    pending_counts = metadata.get("pending_work_counts", {})
+    assert pending_counts["github_orgs"] == 1
+    assert metadata["pending_work_total"] >= 1
+    assert metadata["last_iteration_stable"] is False
+
+
 def test_kill_chain_counts_failed_root_keyscan_as_pending_work(
     tmp_path: Path,
     monkeypatch,
