@@ -7,7 +7,14 @@ from pathlib import Path
 from forge.engagement_orchestrator import ArtifactQueueProcessor
 from forge.phase4.attack_path import AttackGraphBuilder, DotRenderer, MermaidRenderer
 from forge.reporting.dashboard import generate_dashboard
+from forge.utils import artifact_barcode
 from tests.phase1.artifact_test_support import bootstrap_engagement
+
+
+def _patch_barcode_decoder(monkeypatch, *payloads: str) -> None:  # noqa: ANN001
+    monkeypatch.setattr(artifact_barcode, "_available_backend_names", lambda: ("pyzbar",))
+    monkeypatch.setattr(artifact_barcode, "_decode_with_pyzbar", lambda _data: list(payloads))
+    monkeypatch.setattr(artifact_barcode, "_decode_with_opencv", lambda _data: [])
 
 
 def test_generic_artifact_text_persists_allowlisted_aws_arns_as_inventory_only(
@@ -128,6 +135,91 @@ def test_generic_artifact_text_persists_allowlisted_aws_arns_as_inventory_only(
     assert not any(asset_type == "aws_cloudfront" for asset_type, *_ in cloud_assets)
     assert not any("notanaccount" in identifier for _asset_type, identifier, *_ in cloud_assets)
     assert validation_count == 0
+
+
+def test_barcode_cloud_assets_preserve_artifact_payload_provenance(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:  # noqa: ANN001
+    db_path = tmp_path / "engagement.db"
+    bootstrap_engagement(db_path, name="Barcode Cloud Provenance Test")
+    image_path = tmp_path / "qr-cloud.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nqr-cloud")
+    source_url = "https://downloads.acme.example/qr-cloud.png"
+    _patch_barcode_decoder(monkeypatch, "https://barcode-firebase.firebaseio.com/bootstrap")
+    monkeypatch.setattr(ArtifactQueueProcessor, "_ocr_image_path", lambda _self, _path: "")
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, depth, confidence, metadata_json)
+            VALUES
+                (1001, ?, 'url', 'operator', 0, 1.0, '{}')
+            """,
+            (source_url,),
+        )
+        source_seed_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
+        con.execute(
+            """
+            INSERT INTO artifact_queue
+                (engagement_id, source_url, local_path, artifact_type,
+                 discovered_from, status, metadata_json)
+            VALUES
+                (1001, ?, ?, 'document', 'remote_artifact', 'downloaded', '{}')
+            """,
+            (source_url, image_path.resolve().as_posix()),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    summary = ArtifactQueueProcessor(db_path, 1001).process()
+    assert summary.processed == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        artifact_metadata = json.loads(
+            str(
+                con.execute(
+                    "SELECT metadata_json FROM artifact_queue WHERE engagement_id=1001"
+                ).fetchone()[0]
+            )
+        )
+        cloud_metadata = json.loads(
+            str(
+                con.execute(
+                    """
+                    SELECT metadata_json
+                    FROM cloud_assets
+                    WHERE engagement_id=1001
+                      AND asset_type='firebase'
+                      AND identifier='barcode-firebase'
+                    """
+                ).fetchone()[0]
+            )
+        )
+    finally:
+        con.close()
+
+    assert artifact_metadata["barcode_payload_count"] == 1
+    assert cloud_metadata["artifact_provenance"] is True
+    assert cloud_metadata["artifact_source_seed_id"] == source_seed_id
+    assert cloud_metadata["format"] == "png"
+    assert cloud_metadata["payload_count"] >= 1
+    assert cloud_metadata["barcode_payload_count"] == 1
+    assert cloud_metadata.get("ocr_payload_count") in (None, 0)
+
+    graph = AttackGraphBuilder(engagement_id=1001, db_path=db_path).build()
+    firebase_node = next(
+        node
+        for node in graph.nodes
+        if node.source_table == "cloud_assets"
+        and node.metadata["identifier"] == "barcode-firebase"
+    )
+    assert firebase_node.metadata["barcode_payload_count"] == 1
+    assert firebase_node.metadata["artifact_source_seed_id"] == source_seed_id
 
 
 def test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validation_review(

@@ -91,6 +91,16 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Barcode cloud-asset provenance parity checkpoint:
+  Artifact-derived cloud assets now preserve non-zero passive payload proof
+  counts, including `barcode_payload_count`, while omitting zero-value noise
+  that can crowd out source provenance in dashboard previews. QR/barcode
+  discovered Firebase references keep their passive artifact origin through
+  cloud asset storage and attack-graph metadata. Verification: focused
+  barcode-to-cloud provenance test passed (`1 passed`), full artifact cloud
+  reference suite passed (`3 passed`), adjacent artifact barcode/review slice
+  passed (`9 passed`), Ruff passed, py_compile passed, and `git diff --check`
+  passed.
 - [x] Barcode recursive provenance parity checkpoint:
   QR/barcode-derived recursive seeds now preserve `barcode_payload_count`
   provenance in seed metadata and artifact relation context, matching the

@@ -20370,9 +20370,13 @@ class ArtifactQueueProcessor:
             "extract_rule",
             "format",
             "hostname",
+            "barcode_payload_count",
+            "metadata_payload_count",
+            "ocr_payload_count",
             "parser",
             "payload_count",
             "provider_sources",
+            "relationship_payload_count",
             "root_domain",
             "rule",
             "source",
@@ -20395,6 +20399,17 @@ class ArtifactQueueProcessor:
             normalized_key = "extract_rule" if key == "rule" else str(key)
             if normalized_key not in allowed_keys or value in (None, "", [], {}):
                 continue
+            if normalized_key in {
+                "barcode_payload_count",
+                "metadata_payload_count",
+                "ocr_payload_count",
+                "relationship_payload_count",
+            }:
+                try:
+                    if int(value) <= 0:
+                        continue
+                except (TypeError, ValueError):
+                    continue
             if normalized_key in {"archive_sources", "provider_sources"}:
                 if isinstance(value, list):
                     metadata[normalized_key] = [
