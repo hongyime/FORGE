@@ -2768,6 +2768,7 @@ _ARTIFACT_HTML_URL_ATTR_RE = re.compile(
             |\./
             |\.\./
             |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+            |[a-z0-9][a-z0-9_.~-]{0,128}\.[a-z0-9]{1,16}
         )
         [^"'`<>\s,]{1,512}
     )
@@ -2787,6 +2788,7 @@ _ARTIFACT_HTML_META_REFRESH_URL_RE = re.compile(
             |\./
             |\.\./
             |(?:_app|_next|_nuxt|api|assets|backup|backups|build|chunks|css|dist|download|downloads|fonts|img|images|js|media|public|release|releases|static)/
+            |[a-z0-9][a-z0-9_.~-]{0,128}\.[a-z0-9]{1,16}
         )
         [^"'`<>\s;]{1,512}
     )

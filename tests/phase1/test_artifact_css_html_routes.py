@@ -49,6 +49,36 @@ def test_css_and_html_route_extractor_handles_unquoted_asset_refs() -> None:
     ]
 
 
+def test_html_route_extractor_handles_bare_same_directory_asset_refs() -> None:
+    text = dedent(
+        """
+        <script src=app.js></script>
+        <link rel=stylesheet href=style.css>
+        <link rel=manifest href=manifest.webmanifest>
+        <img src=logo.png>
+        <meta http-equiv="refresh" content="0; url=login.html">
+        <img srcset="small.png 1x, large.png 2x">
+        <a href=javascript:alert(1)>skip</a>
+        <a href=mailto:owner@example.test>skip</a>
+        """
+    )
+
+    urls = _extract_artifact_relative_route_urls(
+        text,
+        base_url="https://app.acme.example/app/index.html",
+    )
+
+    assert urls == [
+        "https://app.acme.example/app/app.js",
+        "https://app.acme.example/app/style.css",
+        "https://app.acme.example/app/manifest.webmanifest",
+        "https://app.acme.example/app/logo.png",
+        "https://app.acme.example/app/small.png",
+        "https://app.acme.example/app/large.png",
+        "https://app.acme.example/app/login.html",
+    ]
+
+
 def test_remote_css_and_html_artifacts_promote_recursive_route_seeds(
     tmp_path: Path,
 ) -> None:
@@ -74,6 +104,11 @@ def test_remote_css_and_html_artifacts_promote_recursive_route_seeds(
         <script src=/assets/app.js></script>
         <link rel=stylesheet href=/static/css/app.css>
         <meta http-equiv="refresh" content="0; url=/login">
+        <script src=app.js></script>
+        <link rel=stylesheet href=style.css>
+        <link rel=manifest href=manifest.webmanifest>
+        <img src=logo.png>
+        <meta http-equiv="refresh" content="0; url=login.html">
         """.strip(),
         encoding="utf-8",
     )
@@ -142,6 +177,11 @@ def test_remote_css_and_html_artifacts_promote_recursive_route_seeds(
     assert "https://app.acme.example/img/card-1280.html" in url_seeds
     assert "https://app.acme.example/assets/app.js" in url_seeds
     assert "https://app.acme.example/login" in url_seeds
+    assert "https://app.acme.example/app.js" in url_seeds
+    assert "https://app.acme.example/style.css" in url_seeds
+    assert "https://app.acme.example/manifest.webmanifest" in url_seeds
+    assert "https://app.acme.example/logo.png" in url_seeds
+    assert "https://app.acme.example/login.html" in url_seeds
     assert not any("token=secret" in value for value in url_seeds)
 
     assert queued_artifacts["https://app.acme.example/static/css/theme.css"][:2] == (
@@ -157,6 +197,18 @@ def test_remote_css_and_html_artifacts_promote_recursive_route_seeds(
         "queued",
     )
     assert queued_artifacts["https://app.acme.example/assets/app.js"][:2] == (
+        "config",
+        "queued",
+    )
+    assert queued_artifacts["https://app.acme.example/app.js"][:2] == (
+        "config",
+        "queued",
+    )
+    assert queued_artifacts["https://app.acme.example/style.css"][:2] == (
+        "config",
+        "queued",
+    )
+    assert queued_artifacts["https://app.acme.example/manifest.webmanifest"][:2] == (
         "config",
         "queued",
     )

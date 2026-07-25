@@ -25,7 +25,24 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: bare CSS artifact asset recursion is complete. Static
+Latest checkpoint: bare HTML artifact asset recursion is complete. Static
+artifact parsing now resolves bare same-directory HTML asset references such as
+`src=app.js`, `href=style.css`, manifest links, image sources, and meta-refresh
+URLs against the remote source HTML URL. The existing safe resolver still
+rejects unsafe schemes and only promotes useful static route suffixes into
+recursive URL seeds and queued artifacts. Verification: focused CSS/HTML
+artifact route suite passed (`3 passed`), adjacent artifact recursive queue and
+JS runtime suites passed (`12 passed`), adjacent SPA route and same-iteration
+URL seed E2E slice passed (`2 passed`), Ruff passed, py_compile passed, and
+`git diff --check` passed.
+
+Next checkpoint: run a fresh current-code gap audit for the remaining
+deterministic kill-chain acceptance stages. Start with concrete
+artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
+queue, or validation/report parity gaps only when the code lacks a focused
+implementation or regression.
+
+Previous checkpoint: bare CSS artifact asset recursion is complete. Static
 artifact parsing now resolves common bare same-directory CSS dependencies such
 as `@import "theme.css"`, `@import url(print.css)`, and `url(hero.png)` against
 the remote source stylesheet URL. Those dependencies flow through the existing
@@ -34,12 +51,6 @@ enabling unsafe schemes. Verification: focused CSS/HTML artifact route suite
 passed (`2 passed`), adjacent artifact recursive queue and JS runtime suites
 passed (`11 passed`), adjacent SPA route and same-iteration URL seed E2E slice
 passed (`2 passed`), Ruff passed, and py_compile passed.
-
-Next checkpoint: run a fresh current-code gap audit for the remaining
-deterministic kill-chain acceptance stages. Start with concrete
-artifact/container parsing, OCR/barcode fallback, provider-proof, recursive
-queue, or validation/report parity gaps only when the code lacks a focused
-implementation or regression.
 
 Previous checkpoint: linked Slack bot-token proof gates are complete. Slack
 bot-token key rows and deterministic key-exposure findings can no longer become

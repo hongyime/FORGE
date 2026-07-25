@@ -91,6 +91,16 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Bare HTML artifact asset recursion checkpoint:
+  Static artifact parsing now resolves bare same-directory HTML asset
+  references such as `src=app.js`, `href=style.css`, manifest links, image
+  sources, and meta-refresh URLs against the remote source HTML URL. The
+  existing safe resolver still rejects unsafe schemes and only promotes
+  useful static route suffixes into recursive URL seeds and queued artifacts.
+  Verification: focused CSS/HTML artifact route suite passed (`3 passed`),
+  adjacent artifact recursive queue and JS runtime suites passed (`12 passed`),
+  adjacent SPA route and same-iteration URL seed E2E slice passed (`2 passed`),
+  Ruff passed, py_compile passed, and `git diff --check` passed.
 - [x] Bare CSS artifact asset recursion checkpoint:
   Static artifact parsing now resolves common bare same-directory CSS
   dependencies such as `@import "theme.css"`, `@import url(print.css)`, and
