@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: attack-graph artifact cloud provenance is complete.
+Latest checkpoint: Phase 6 raw-validation reportability is complete. Phase 6
+now trusts the raw-derived `validation_reportable` flag attached from the
+latest cloud validation row before falling back to summary re-parsing for
+legacy evidence. This prevents sanitized/truncated summaries from dropping a
+genuinely validated deterministic cloud exposure from report context, JSON, and
+raw CSV finding rows. Verification: focused summary-redaction regression plus
+adjacent S3 validation report test passed (`2 passed`), full Phase 6 report
+synthesizer suite passed (`108 passed`), stable-proof integration fixture
+passed (`1 passed`), Ruff passed, py_compile passed, and `git diff --check`
+passed.
+
+Next checkpoint: fix max-iteration kill-chain finalization so a run with
+remaining retryable recursive work does not finish as status `completed` solely
+because a report artifact exists. Extend the root-keyscan pending-work
+regression to assert latest `engagement_runs.status`/error metadata.
+
+Previous checkpoint: attack-graph artifact cloud provenance is complete.
 AttackGraphBuilder now loads scrubbed `cloud_assets.metadata_json` into
 allowlisted CLOUD node provenance, so saved `attack_graph_snapshots` preserve
 artifact provenance fields such as `artifact_source_seed_id`, `source_url`,
@@ -36,12 +52,6 @@ config blobs are dropped, and URL provenance is sanitized before graph snapshot
 persistence. Verification: focused artifact cloud provenance regression passed
 (`1 passed`), adjacent artifact review/cloud-reference suite passed
 (`3 passed`), Ruff passed, py_compile passed, and `git diff --check` passed.
-
-Next checkpoint: run a fresh current-code audit for the next concrete
-deterministic kill-chain correctness gap, prioritizing validation/report gates,
-recursive queue termination, artifact/static extraction fidelity, and
-dashboard/API/graph evidence lineage. Patch only proven gaps with focused
-regressions and keep live probing bounded by ROE/scope.
 
 Previous checkpoint: cloud-key provider exception receipts are complete. Cloud
 key validation worker exceptions now persist non-reportable

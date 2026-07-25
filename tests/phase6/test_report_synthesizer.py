@@ -1832,6 +1832,98 @@ def test_synthesizer_template_renders_cloud_validation_metadata(
     assert exported_finding["validation_method"] == "s3_list_bucket"
 
 
+def test_synthesizer_keeps_raw_reportable_cloud_finding_when_summary_redacts_proof(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
+    raw_listing_evidence = (
+        "<ListBucketResult>?token=example-redacted-by-summary"
+        "<Contents><Key>reports/customer.csv</Key></Contents></ListBucketResult>"
+    )
+    con = sqlite3.connect(tmp_eng_db)
+    try:
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN target_url TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN parameter TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN description TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT")
+        con.execute("ALTER TABLE vulnerability_findings ADD COLUMN remediation_cli TEXT")
+        con.execute(
+            """
+            CREATE TABLE cloud_validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                engagement_id INTEGER,
+                asset_type TEXT,
+                identifier TEXT,
+                validation_status TEXT,
+                validation_method TEXT,
+                http_status INTEGER,
+                evidence TEXT,
+                notes TEXT,
+                checked_at TEXT
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO cloud_validation_results
+                (engagement_id, asset_type, identifier, validation_status,
+                 validation_method, http_status, evidence, notes, checked_at)
+            VALUES (?, 'aws_s3', 'summary-redacted-bucket', 'VALIDATED',
+                    's3_list_bucket', 200, ?,
+                    'Bucket listing returned object metadata through a low-impact probe.',
+                    '2026-07-14T00:00:00Z')
+            """,
+            (ENGAGEMENT_ID, raw_listing_evidence),
+        )
+        con.execute(
+            """
+            INSERT INTO vulnerability_findings
+                (engagement_id, cve_id, title, severity, evidence, target_url,
+                 parameter, description, cloud_provider, resource_id, remediation_cli)
+            VALUES (?, NULL, 'Validated public S3 bucket listing exposure', 'HIGH',
+                    ?, 'aws_s3://summary-redacted-bucket', 'aws_s3',
+                    'Deterministic validation confirmed unauthenticated object metadata enumeration.',
+                    'aws', 'summary-redacted-bucket',
+                    'Block public bucket access and review bucket policy.')
+            """,
+            (ENGAGEMENT_ID, raw_listing_evidence),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
+    finding = next(
+        item
+        for item in ctx.exploits.exploited
+        if item.get("resource_id") == "summary-redacted-bucket"
+    )
+    assert finding["validation_status"] == "VALIDATED"
+    assert finding["validation_method"] == "s3_list_bucket"
+    assert finding["validation_reportable"] is True
+
+    raw_row = next(
+        row
+        for row in ReportSynthesizer._raw_export_csv_rows(ctx)
+        if row["resource_id"] == "summary-redacted-bucket"
+    )
+    assert raw_row["validation_status"] == "VALIDATED"
+    assert raw_row["validation_method"] == "s3_list_bucket"
+
+    synth = ReportSynthesizer(
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
+    )
+    out = synth.generate(ENGAGEMENT_ID)
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert any(
+        item.get("resource_id") == "summary-redacted-bucket"
+        for item in payload["context"]["exploits"]["exploited"]
+    )
+
+
 def test_synthesizer_template_and_exports_preserve_key_validation_proof(
     tmp_eng_db, tmp_path, patch_confirm_approve
 ):

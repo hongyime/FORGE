@@ -897,6 +897,7 @@ class ContextBuilder:
             "validation_status": "",
             "validation_method": "",
             "validation_http_status": None,
+            "validation_reportable": None,
             "validation_proof": "",
             "validation_notes": "",
             "validation_evidence_summary": "",
@@ -916,6 +917,7 @@ class ContextBuilder:
                 "validation_status": "",
                 "validation_method": "",
                 "validation_http_status": None,
+                "validation_reportable": None,
                 "validation_proof": "",
                 "validation_notes": "",
                 "validation_evidence_summary": "",
@@ -925,6 +927,7 @@ class ContextBuilder:
             "validation_status": proof["validation_status"],
             "validation_method": proof["validation_method"],
             "validation_http_status": None,
+            "validation_reportable": None,
             "validation_proof": proof["validation_proof"],
             "validation_notes": _safe_validation_summary(
                 proof["validation_proof"] or proof["validation_raw_proof"]
@@ -1528,6 +1531,10 @@ class ContextBuilder:
         if vuln_type != "DETERMINISTIC_KEY_EXPOSURE" and not title.startswith("active exposed "):
             return False
         asset_type = str(finding.get("validation_asset_type") or "").split(":", 1)[0]
+        if finding.get("validation_reportable") is True:
+            return False
+        if finding.get("validation_reportable") is False:
+            return True
         if asset_type:
             return not is_reportable_cloud_validation(
                 asset_type,
@@ -1546,6 +1553,10 @@ class ContextBuilder:
     ) -> bool:
         if not cls._finding_is_deterministic_cloud_exposure(finding):
             return False
+        if finding.get("validation_reportable") is True:
+            return False
+        if finding.get("validation_reportable") is False:
+            return True
         asset_type = str(
             finding.get("validation_asset_type") or finding.get("parameter") or ""
         ).split(":", 1)[0]

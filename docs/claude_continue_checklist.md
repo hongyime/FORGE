@@ -66,11 +66,20 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: run a fresh current-code audit for the next concrete
-  deterministic kill-chain correctness gap, prioritizing validation/report
-  gates, recursive queue termination, artifact/static extraction fidelity, and
-  dashboard/API/graph evidence lineage. Patch only proven gaps with focused
-  regressions and keep live probing bounded by ROE/scope.
+- [ ] Next checkpoint: fix max-iteration kill-chain finalization so a run with
+  remaining retryable recursive work does not finish as status `completed`
+  solely because a report artifact exists. Extend the root-keyscan pending-work
+  regression to assert latest `engagement_runs.status`/error metadata.
+- [x] Phase 6 raw-validation reportability checkpoint:
+  Phase 6 now trusts the raw-derived `validation_reportable` flag attached from
+  the latest cloud validation row before falling back to summary re-parsing for
+  legacy evidence. This prevents sanitized/truncated summaries from dropping a
+  genuinely validated deterministic cloud exposure from report context, JSON,
+  and raw CSV finding rows. Verification: focused summary-redaction regression
+  plus adjacent S3 validation report test passed (`2 passed`), full Phase 6
+  report synthesizer suite passed (`108 passed`), stable-proof integration
+  fixture passed (`1 passed`), Ruff passed, py_compile passed, and
+  `git diff --check` passed.
 - [x] Attack-graph artifact cloud provenance checkpoint:
   AttackGraphBuilder now loads scrubbed `cloud_assets.metadata_json` into
   allowlisted CLOUD node provenance, so saved `attack_graph_snapshots` preserve artifact
