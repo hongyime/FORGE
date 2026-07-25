@@ -21,6 +21,7 @@ from xml.etree import ElementTree
 from forge.audit.manifest import _graph_artifact_names, summarize_run_audit_manifest
 from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.reporting.graph_validation_metadata import latest_cloud_validation_metadata_index
+from forge.utils.cloud_asset_graph_metadata import stored_cloud_asset_graph_metadata
 from forge.utils.cloud_exposure_gate import (
     effective_validation_status,
     is_deterministic_cloud_exposure,
@@ -2001,8 +2002,6 @@ def _seed_graph_payload_for_engagement(
         if not asset_type or not identifier:
             continue
         node_id = f"CLOUD::{asset_type}::{identifier}"
-        stored_metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
-        stored_metadata_dict = stored_metadata if isinstance(stored_metadata, dict) else {}
         node_metadata = {
             "service": asset_type,
             "identifier": identifier,
@@ -2014,7 +2013,7 @@ def _seed_graph_payload_for_engagement(
                 else {}
             ),
         }
-        for key, value in _safe_graph_metadata(stored_metadata_dict).items():
+        for key, value in stored_cloud_asset_graph_metadata(row["metadata_json"]).items():
             output_key = str(key)
             if output_key in node_metadata:
                 output_key = f"metadata_{output_key}"

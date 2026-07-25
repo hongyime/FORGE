@@ -25,7 +25,23 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: max-iteration pending-work finalization is complete.
+Latest checkpoint: dashboard/API fallback graph cloud metadata sanitization is
+complete. Fallback graph cloud nodes now use the same shared allowlisted
+cloud-asset graph metadata sanitizer as saved attack-graph snapshots, so
+variant secret keys, raw config blobs, URL userinfo, and sensitive URL query
+parameters from `cloud_assets.metadata_json` do not enter static dashboard
+graph payloads or live engagement detail API graph payloads. Verification:
+static/live fallback graph regressions passed (`2 passed`), artifact graph
+provenance plus fallback graph slice passed (`3 passed`), Phase 4
+cloud/snapshot selector passed (`16 passed, 93 deselected`), Ruff passed,
+py_compile passed, and `git diff --check` passed.
+
+Next checkpoint: align non-graph cloud asset inventory surfaces with the shared
+provenance sanitizer. Live `/api/engagements/{id}/assets`, Phase 6 cloud asset
+inventory, report JSON, and raw CSV should not expose arbitrary safe-looking
+nested metadata or unsanitized URL provenance from `cloud_assets.metadata_json`.
+
+Previous checkpoint: max-iteration pending-work finalization is complete.
 Kill-chain finalization now fails the engagement run when a report artifact
 exists but `pending_work_total > 0`, records
 `max iterations exhausted with pending recursive work: <count>` as the run
@@ -34,11 +50,6 @@ work remains. Verification: root-keyscan pending-work status regression passed
 (`1 passed`), full retry-state suite passed (`17 passed`),
 report-finalization fallback slice passed (`4 passed`), Ruff passed,
 py_compile passed, and `git diff --check` passed.
-
-Next checkpoint: align dashboard/API fallback graph cloud metadata sanitization
-with the stricter attack-graph snapshot path. Fallback graph nodes should not
-expose variant secret keys such as `access-token` or unsanitized URL provenance
-from `cloud_assets.metadata_json`.
 
 Previous checkpoint: Phase 6 raw-validation reportability is complete. Phase 6
 now trusts the raw-derived `validation_reportable` flag attached from the

@@ -1272,6 +1272,31 @@ def test_engagement_api_falls_back_to_seed_graph_payload_without_attack_graph_ar
                 "2026-07-09T09:31:00",
             ),
         )
+        con.execute(
+            """
+            INSERT INTO cloud_assets
+                (engagement_id, asset_type, identifier, provider_identifier, source, metadata_json)
+            VALUES (1001, 'firebase', 'fallback-firebase', 'FallbackFirebase',
+                    'artifact_url_extract', ?)
+            """,
+            (
+                json.dumps(
+                    {
+                        "artifact_provenance": True,
+                        "artifact_source_seed_id": 42,
+                        "source_url": "https://user:pass@cdn.acme.example/app.js?token=secret&ok=1",
+                        "source_file": "https://cdn.acme.example/app.js?access_token=secret",
+                        "extract_rule": "artifact_text_extract",
+                        "format": "javascript",
+                        "provider_sources": ["urlscan"],
+                        "access-token": "variant-secret-never-render",
+                        "client secret": "client-secret-never-render",
+                        "raw_config": "raw-config-never-render",
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        )
         con.commit()
     finally:
         con.close()
@@ -1299,6 +1324,23 @@ def test_engagement_api_falls_back_to_seed_graph_payload_without_attack_graph_ar
         assert provider_node["metadata"]["provider_sources"] == ["urlscan"]
         assert provider_node["metadata"]["scan_domain"] == "acme.example"
         assert provider_node["metadata"]["scan_id"] == "urlscan-result-1"
+        cloud_node = next(
+            node
+            for node in detail["graph_payload"]["nodes"]
+            if node["node_id"] == "CLOUD::firebase::fallback-firebase"
+        )
+        assert cloud_node["metadata"]["artifact_source_seed_id"] == 42
+        assert cloud_node["metadata"]["source_url"] == "https://cdn.acme.example/app.js?ok=1"
+        assert cloud_node["metadata"]["source_file"] == "https://cdn.acme.example/app.js"
+        assert cloud_node["metadata"]["extract_rule"] == "artifact_text_extract"
+        assert cloud_node["metadata"]["format"] == "javascript"
+        assert cloud_node["metadata"]["provider_sources"] == ["urlscan"]
+        cloud_metadata_text = json.dumps(cloud_node["metadata"], sort_keys=True)
+        assert "variant-secret-never-render" not in cloud_metadata_text
+        assert "client-secret-never-render" not in cloud_metadata_text
+        assert "raw-config-never-render" not in cloud_metadata_text
+        assert "user:pass" not in cloud_metadata_text
+        assert "token=secret" not in cloud_metadata_text
         assert "api-secret-never-render" not in json.dumps(detail, sort_keys=True)
         edge_types = {edge["edge_type"] for edge in detail["graph_payload"]["edges"]}
         assert "seed_root" in edge_types
