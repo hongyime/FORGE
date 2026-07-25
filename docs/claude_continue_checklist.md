@@ -66,10 +66,23 @@ checkpoint summaries in this file may still contain retained "not a git repo" or
 "no commit possible" sentences from pre-repo sessions. Treat those sentences as
 historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: patch artifact-derived cloud provenance in attack-graph
-  snapshots so
-  dashboard graph review keeps scrubbed `cloud_assets.metadata_json`
-  provenance when it prefers saved snapshots over the fallback graph.
+- [ ] Next checkpoint: run a fresh current-code audit for the next concrete
+  deterministic kill-chain correctness gap, prioritizing validation/report
+  gates, recursive queue termination, artifact/static extraction fidelity, and
+  dashboard/API/graph evidence lineage. Patch only proven gaps with focused
+  regressions and keep live probing bounded by ROE/scope.
+- [x] Attack-graph artifact cloud provenance checkpoint:
+  AttackGraphBuilder now loads scrubbed `cloud_assets.metadata_json` into
+  allowlisted CLOUD node provenance, so saved `attack_graph_snapshots` preserve artifact
+  provenance fields such as `artifact_source_seed_id`, `source_url`,
+  `source_file`, `extract_rule`, and `format` when the dashboard prefers a
+  snapshot over its fallback graph. Sensitive metadata keys such as `apiKey`,
+  `accessToken`, `clientSecret`, `api-key`, and `refreshToken` are stripped,
+  raw config blobs are dropped, and URL provenance is sanitized before graph
+  snapshot persistence.
+  Verification: focused artifact cloud provenance regression passed
+  (`1 passed`), adjacent artifact review/cloud-reference suite passed
+  (`3 passed`), Ruff passed, py_compile passed, and `git diff --check` passed.
 - [x] Cloud-key provider exception receipt checkpoint:
   Cloud key validation worker exceptions now persist non-reportable
   `UNVERIFIED / provider_exception` receipts, update the key row

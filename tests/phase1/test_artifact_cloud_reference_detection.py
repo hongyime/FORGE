@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
+from forge.phase4.attack_path import AttackGraphBuilder, DotRenderer, MermaidRenderer
 from forge.reporting.dashboard import generate_dashboard
 from tests.phase1.artifact_test_support import bootstrap_engagement
 
@@ -274,6 +275,7 @@ def test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validatio
     assert "format=json" in firebase_row["Provenance"]
     assert "sources=urlscan" in firebase_row["Provenance"]
     graph_nodes = detail_payload["graph_payload"]["nodes"]
+    assert detail_payload["graph_payload"]["source"] == "engagement_seed_graph"
     firebase_node = next(
         node
         for node in graph_nodes
@@ -281,4 +283,87 @@ def test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validatio
         and node["metadata"]["identifier"] == "provenance-firebase"
     )
     assert firebase_node["metadata"]["artifact_source_seed_id"] == source_seed_id
+    assert firebase_node["metadata"]["source_url"] == source_url
     assert firebase_node["metadata"]["extract_rule"] == "artifact_text_extract"
+
+    secret_source_url = (
+        "https://user:pass@downloads.acme.example/app-config.json?token=secret&ok=1"
+    )
+    safe_source_url = "https://downloads.acme.example/app-config.json?ok=1"
+    firebase_metadata["source_url"] = secret_source_url
+    firebase_metadata["apiKey"] = "AIzaSyDUMMYPROVENANCEKEY0000000000000000"
+    firebase_metadata["accessToken"] = "dummy-sensitive-token"
+    firebase_metadata["clientSecret"] = "dummy-client-secret"
+    firebase_metadata["api-key"] = "dummy-api-key"
+    firebase_metadata["refreshToken"] = "dummy-refresh-token"
+    firebase_metadata["nested"] = {"clientSecret": "dummy-nested-secret"}
+    firebase_metadata["raw_config"] = "should-not-enter-graph-metadata"
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE cloud_assets
+            SET metadata_json=?
+            WHERE engagement_id=1001 AND asset_type='firebase' AND identifier='provenance-firebase'
+            """,
+            (json.dumps(firebase_metadata, sort_keys=True),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    builder = AttackGraphBuilder(engagement_id=1001, db_path=db_path)
+    graph = builder.build()
+    snapshot_node = next(
+        node
+        for node in graph.nodes
+        if node.source_table == "cloud_assets"
+        and node.metadata["identifier"] == "provenance-firebase"
+    )
+    assert snapshot_node.metadata["artifact_source_seed_id"] == source_seed_id
+    assert snapshot_node.metadata["source_url"] == safe_source_url
+    assert snapshot_node.metadata["source_file"] == source_url
+    assert snapshot_node.metadata["extract_rule"] == "artifact_text_extract"
+    assert snapshot_node.metadata["format"] == "json"
+    assert "apiKey" not in snapshot_node.metadata
+    assert "accessToken" not in snapshot_node.metadata
+    assert "clientSecret" not in snapshot_node.metadata
+    assert "api-key" not in snapshot_node.metadata
+    assert "refreshToken" not in snapshot_node.metadata
+    assert "nested" not in snapshot_node.metadata
+    assert "raw_config" not in snapshot_node.metadata
+    assert "DUMMYPROVENANCEKEY" not in json.dumps(snapshot_node.metadata, sort_keys=True)
+    assert "user:pass" not in graph.model_dump_json()
+    assert "token=secret" not in graph.model_dump_json()
+    builder.write_snapshot(
+        graph,
+        mermaid=MermaidRenderer().render_bounded_preview(graph),
+        dot=DotRenderer().render(graph),
+    )
+
+    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
+    detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
+    assert detail_payload["graph_payload"]["source"] == "attack_graph_snapshot"
+    graph_nodes = detail_payload["graph_payload"]["nodes"]
+    firebase_node = next(
+        node
+        for node in graph_nodes
+        if node["source_table"] == "cloud_assets"
+        and node["metadata"]["identifier"] == "provenance-firebase"
+    )
+    assert firebase_node["metadata"]["artifact_source_seed_id"] == source_seed_id
+    assert firebase_node["metadata"]["source_url"] == safe_source_url
+    assert firebase_node["metadata"]["source_file"] == source_url
+    assert firebase_node["metadata"]["extract_rule"] == "artifact_text_extract"
+    assert firebase_node["metadata"]["format"] == "json"
+    assert "apiKey" not in firebase_node["metadata"]
+    assert "accessToken" not in firebase_node["metadata"]
+    assert "clientSecret" not in firebase_node["metadata"]
+    assert "api-key" not in firebase_node["metadata"]
+    assert "refreshToken" not in firebase_node["metadata"]
+    assert "nested" not in firebase_node["metadata"]
+    assert "raw_config" not in firebase_node["metadata"]
+    assert "DUMMYPROVENANCEKEY" not in json.dumps(
+        firebase_node["metadata"],
+        sort_keys=True,
+    )

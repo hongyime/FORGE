@@ -20,6 +20,7 @@ from forge.models.attack_graph_models import (
     NodeType,
     Severity,
 )
+from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
 from forge.utils.cloud_exposure_gate import (
     is_deterministic_cloud_exposure,
     is_reportable_cloud_validation,
@@ -73,6 +74,42 @@ _DISCOVERY_PROVIDER_SOURCES = {
     # The kill-chain archive fan-out currently stores the merged Wayback
     # and CommonCrawl output as historical_cdx.
     "historical_cdx": ("wayback", "commoncrawl"),
+}
+_CLOUD_ASSET_GRAPH_LIST_METADATA_KEYS = {"archive_sources", "provider_sources"}
+_CLOUD_ASSET_GRAPH_URL_METADATA_KEYS = {"source_file", "source_seed_url", "source_url"}
+_CLOUD_ASSET_GRAPH_METADATA_KEYS = {
+    "archive_sources",
+    "artifact_provenance",
+    "artifact_source_seed_id",
+    "artifact_type",
+    "barcode_payload_count",
+    "content_type",
+    "discovered_from",
+    "download_filename",
+    "downloaded_from_remote",
+    "extract_path",
+    "extract_rule",
+    "fixture_provider",
+    "format",
+    "hostname",
+    "metadata_payload_count",
+    "ocr_payload_count",
+    "parser",
+    "payload_count",
+    "port",
+    "provider_sources",
+    "relationship_payload_count",
+    "root_domain",
+    "rule",
+    "scan_domain",
+    "scan_id",
+    "scheme",
+    "source",
+    "source_backend",
+    "source_file",
+    "source_provider",
+    "source_seed_url",
+    "source_url",
 }
 
 
@@ -128,6 +165,7 @@ def _severity_to_weight(severity: Severity) -> float:
 
 
 def _assert_no_sensitive_data(graph_json: str) -> None:
+    forbidden_fingerprints = {_metadata_key_fingerprint(key) for key in _FORBIDDEN_KEYS}
     for key in _FORBIDDEN_KEYS:
         if re.search(rf'"{re.escape(key)}"\s*:', graph_json):
             raise ValueError(f"Sensitive key detected in graph output: {key}")
@@ -140,11 +178,15 @@ def _assert_no_sensitive_data(graph_json: str) -> None:
         current = stack.pop()
         if isinstance(current, dict):
             for key, value in current.items():
-                if key in _FORBIDDEN_KEYS:
+                if key in _FORBIDDEN_KEYS or _metadata_key_fingerprint(key) in forbidden_fingerprints:
                     raise ValueError(f"Sensitive key detected in graph output: {key}")
                 stack.append(value)
         elif isinstance(current, list):
                 stack.extend(current)
+
+
+def _metadata_key_fingerprint(key: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(key).lower())
 
 
 def _scrub_graph_metadata(value: Any) -> dict[str, Any]:
@@ -152,13 +194,14 @@ def _scrub_graph_metadata(value: Any) -> dict[str, Any]:
         return {}
 
     forbidden = {key.lower() for key in _FORBIDDEN_KEYS}
+    forbidden.update(_metadata_key_fingerprint(key) for key in _FORBIDDEN_KEYS)
 
     def _scrub(current: Any) -> Any:
         if isinstance(current, dict):
             clean: dict[str, Any] = {}
             for raw_key, raw_value in current.items():
                 key = str(raw_key)
-                if key.lower() in forbidden:
+                if key.lower() in forbidden or _metadata_key_fingerprint(key) in forbidden:
                     continue
                 clean[key] = _scrub(raw_value)
             return clean
@@ -213,6 +256,68 @@ def _host_context_graph_metadata(raw_context: Any) -> dict[str, Any]:
     if provider_sources:
         metadata["provider_sources"] = provider_sources
     return metadata
+
+
+def _stored_json_graph_metadata(raw_metadata: Any) -> dict[str, Any]:
+    if raw_metadata is None:
+        return {}
+    if isinstance(raw_metadata, str):
+        raw_text = raw_metadata.strip()
+        if not raw_text:
+            return {}
+        try:
+            parsed = json.loads(raw_text)
+        except (TypeError, ValueError):
+            return {}
+        return _scrub_graph_metadata(parsed)
+    return _scrub_graph_metadata(raw_metadata)
+
+
+def _sanitize_graph_url_metadata(value: Any) -> str:
+    text = str(value or "").strip()
+    parsed = urlparse(text)
+    if parsed.scheme not in {"http", "https"}:
+        return text
+    stripped = strip_sensitive_url_query(text)
+    parsed = urlparse(stripped)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return stripped
+    netloc = parsed.hostname
+    if parsed.port:
+        netloc = f"{netloc}:{parsed.port}"
+    return parsed._replace(netloc=netloc).geturl()
+
+
+def _stored_cloud_asset_graph_metadata(raw_metadata: Any) -> dict[str, Any]:
+    metadata = _stored_json_graph_metadata(raw_metadata)
+    if not metadata:
+        return {}
+    clean: dict[str, Any] = {}
+    for key in sorted(_CLOUD_ASSET_GRAPH_METADATA_KEYS):
+        value = metadata.get(key)
+        if value in (None, "", [], {}):
+            continue
+        if key in _CLOUD_ASSET_GRAPH_LIST_METADATA_KEYS:
+            if not isinstance(value, list):
+                continue
+            normalized: list[str] = []
+            for raw_item in value:
+                item = str(raw_item or "").strip()
+                if item and item not in normalized:
+                    normalized.append(item)
+                if len(normalized) >= 8:
+                    break
+            if normalized:
+                clean[key] = normalized
+            continue
+        if not isinstance(value, (str, int, float, bool)):
+            continue
+        clean[key] = (
+            _sanitize_graph_url_metadata(value)
+            if key in _CLOUD_ASSET_GRAPH_URL_METADATA_KEYS
+            else value
+        )
+    return clean
 
 
 def _seed_graph_metadata(raw_metadata: Any) -> dict[str, Any]:
@@ -590,21 +695,27 @@ class AttackGraphBuilder:
             if "provider_identifier" in columns
             else "identifier AS provider_identifier"
         )
+        metadata_expr = (
+            "metadata_json"
+            if "metadata_json" in columns
+            else "NULL AS metadata_json"
+        )
         rows = con.execute(
             f"""
-            SELECT id, asset_type, identifier, {provider_expr}, source
+            SELECT id, asset_type, identifier, {provider_expr}, source, {metadata_expr}
             FROM cloud_assets
             WHERE engagement_id=?
             """,
             (self.engagement_id,),
         ).fetchall()
-        for asset_id, asset_type, identifier, provider_identifier, source in rows:
+        for asset_id, asset_type, identifier, provider_identifier, source, metadata_json in rows:
             raw_svc = str(asset_type or "cloud").strip().lower()
             svc = normalize_cloud_exposure_asset_type(raw_svc)
             ident = str(identifier or svc).strip().lower()
             cloud_key = (svc, ident)
             display_identifier = str(provider_identifier or identifier or ident)
             node_id = f"CLOUD::{svc}::{ident}"
+            stored_metadata = _stored_cloud_asset_graph_metadata(metadata_json)
             metadata = {
                 "service": svc,
                 "identifier": ident,
@@ -613,6 +724,13 @@ class AttackGraphBuilder:
                 **({"asset_type_original": raw_svc} if raw_svc and raw_svc != svc else {}),
                 **self._cloud_validation_by_key.get((svc, ident), {}),
             }
+            for key, value in stored_metadata.items():
+                if value is None or value == "":
+                    continue
+                output_key = str(key)
+                if output_key in metadata:
+                    output_key = f"metadata_{output_key}"
+                metadata[output_key] = value
             existing_node = self._g.nodes.get(node_id, {}).get("data")
             if isinstance(existing_node, AttackNode):
                 original_types = set(existing_node.metadata.get("asset_type_aliases") or [])

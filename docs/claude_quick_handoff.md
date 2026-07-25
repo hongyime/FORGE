@@ -25,7 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: cloud-key provider exception receipts are complete. Cloud
+Latest checkpoint: attack-graph artifact cloud provenance is complete.
+AttackGraphBuilder now loads scrubbed `cloud_assets.metadata_json` into
+allowlisted CLOUD node provenance, so saved `attack_graph_snapshots` preserve
+artifact provenance fields such as `artifact_source_seed_id`, `source_url`,
+`source_file`, `extract_rule`, and `format` when the dashboard prefers a
+snapshot over its fallback graph. Sensitive metadata keys such as `apiKey`,
+`accessToken`, `clientSecret`, `api-key`, and `refreshToken` are stripped, raw
+config blobs are dropped, and URL provenance is sanitized before graph snapshot
+persistence. Verification: focused artifact cloud provenance regression passed
+(`1 passed`), adjacent artifact review/cloud-reference suite passed
+(`3 passed`), Ruff passed, py_compile passed, and `git diff --check` passed.
+
+Next checkpoint: run a fresh current-code audit for the next concrete
+deterministic kill-chain correctness gap, prioritizing validation/report gates,
+recursive queue termination, artifact/static extraction fidelity, and
+dashboard/API/graph evidence lineage. Patch only proven gaps with focused
+regressions and keep live probing bounded by ROE/scope.
+
+Previous checkpoint: cloud-key provider exception receipts are complete. Cloud
 key validation worker exceptions now persist non-reportable
 `UNVERIFIED / provider_exception` receipts, update key row `validation_detail`
 and `validated_at`, release validation claims, and keep raw exception text out
@@ -34,10 +52,6 @@ reclaims the same failed rows. Verification: focused cloud-key
 exception/claim/progress slice passed (`5 passed`), key runtime suite passed
 (`5 passed`), broader cloud validation sweep slice passed
 (`46 passed, 90 deselected`), Ruff passed, and py_compile passed.
-
-Next checkpoint: patch artifact-derived cloud provenance in attack-graph
-snapshots so dashboard graph review keeps scrubbed `cloud_assets.metadata_json`
-provenance when it prefers saved snapshots over the fallback graph.
 
 Previous checkpoint: GitHub-org keyscan fresh-resume retrying is complete.
 Failed `fanout_f_keyscan` composite org targets now reload from failed seed-run
