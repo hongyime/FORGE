@@ -25,18 +25,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: host-surface resume retry fairness is complete. Pending
+Latest checkpoint: cloud-asset validation claim alias gating is complete.
+Active validation claims now compare normalized cloud asset types and
+case-normalized identifiers, so a live `s3/shared-assets` claim blocks
+concurrent canonical `aws_s3/shared-assets` validation attempts until the claim
+expires or is released. Verification: cloud-validation asset alias suite passed
+(`3 passed`), and Ruff plus py_compile passed for touched files.
+
+Next checkpoint: perform a fresh current-code audit for the next real
+kill-chain correctness gap before adding provider breadth or UI polish.
+Prioritize validation/report gates, recursive queue termination,
+artifact/static extraction fidelity, or dashboard evidence lineage.
+
+Previous checkpoint: host-surface resume retry fairness is complete. Pending
 `fanout_d_host_surface` rows that were attempted before but not completed now
 run before never-attempted known hosts, so abandoned/recovered hosts are retried
 in the next resumed D-stage batch while new-host backlog remains visible in
 pending-work metadata. Verification: focused host-surface retry/backlog slice
 passed (`2 passed`), adjacent stale-running recovery regression passed
 (`1 passed`), and Ruff plus py_compile passed for touched files.
-
-Next checkpoint: perform a fresh current-code audit for the next real
-kill-chain correctness gap before adding provider breadth or UI polish.
-Prioritize validation/report gates, recursive queue termination,
-artifact/static extraction fidelity, or dashboard evidence lineage.
 
 Previous checkpoint: legacy validation-inventory finding gates are hardened.
 `vulnerability_findings` rows tagged as validation inventory, or generic rows

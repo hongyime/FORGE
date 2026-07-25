@@ -168,3 +168,70 @@ def test_sweep_pending_cloud_asset_validations_dedupes_alias_and_canonical_asset
         assert con.execute("SELECT COUNT(*) FROM validation_claims").fetchone()[0] == 0
     finally:
         con.close()
+
+
+def test_sweep_pending_cloud_asset_validations_respects_active_alias_claims(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            INSERT INTO cloud_assets (engagement_id, asset_type, identifier, source)
+            VALUES (?, 'aws_s3', 'shared-assets', 'artifact_s3_uri')
+            """,
+            (ENGAGEMENT_ID,),
+        )
+        con.execute(
+            """
+            INSERT INTO validation_claims
+                (engagement_id, claim_type, asset_type, identifier, owner, expires_at)
+            VALUES (?, 'asset', 's3', 'shared-assets', 'other-worker',
+                    datetime('now', '+300 seconds'))
+            """,
+            (ENGAGEMENT_ID,),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    def _fail_validate_batch(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        raise AssertionError("canonical asset should be blocked by active alias claim")
+
+    monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", _fail_validate_batch)
+
+    summary = cloud_validate.sweep_pending_cloud_asset_validations(
+        ENGAGEMENT_ID,
+        db_path,
+        limit=10,
+        max_workers=4,
+    )
+
+    assert summary == {
+        "status": "success",
+        "engagement_id": ENGAGEMENT_ID,
+        "attempted": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "status_counts": {},
+        "results": [],
+    }
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            """
+            SELECT asset_type, identifier, owner
+            FROM validation_claims
+            WHERE engagement_id=? AND claim_type='asset'
+            """,
+            (ENGAGEMENT_ID,),
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert row == ("s3", "shared-assets", "other-worker")

@@ -95,6 +95,15 @@ sentences as historical notes only, not as current instructions.
   kill-chain correctness gap before adding provider breadth or UI polish.
   Prioritize validation/report gates, recursive queue termination,
   artifact/static extraction fidelity, or dashboard evidence lineage.
+- [x] Cloud-asset validation claim alias checkpoint:
+  Active validation claims now compare normalized cloud asset types and
+  case-normalized identifiers, so a live legacy alias claim such as
+  `s3/shared-assets` blocks concurrent canonical `aws_s3/shared-assets`
+  validation attempts until the claim expires or is released. This keeps
+  bounded Fan-out J sweeps from duplicating alias-equivalent cloud validation
+  work across workers without changing raw claim storage or release semantics.
+  Verification: cloud-validation asset alias suite passed (`3 passed`), and
+  Ruff plus py_compile passed for touched files.
 - [x] Host-surface resume retry fairness checkpoint:
   Pending `fanout_d_host_surface` rows that were attempted before but not
   completed now run before never-attempted known hosts, so abandoned/recovered

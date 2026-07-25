@@ -162,6 +162,7 @@ def claim_pending_cloud_asset_rows(
         _purge_stale(con, "asset")
         ca_type_expr = _normalized_cloud_asset_type_sql("ca.asset_type")
         cvr_type_expr = _normalized_cloud_asset_type_sql("cvr.asset_type")
+        vc_type_expr = _normalized_cloud_asset_type_sql("vc.asset_type")
         rows = con.execute(
             f"""
             SELECT ca.asset_type,
@@ -175,8 +176,8 @@ def claim_pending_cloud_asset_rows(
             LEFT JOIN validation_claims vc
               ON vc.engagement_id = ca.engagement_id
              AND vc.claim_type = 'asset'
-             AND vc.asset_type = ca.asset_type
-             AND vc.identifier = ca.identifier
+             AND {vc_type_expr} = {ca_type_expr}
+             AND LOWER(vc.identifier) = LOWER(ca.identifier)
             WHERE ca.engagement_id=?
               AND cvr.id IS NULL
               AND vc.id IS NULL
