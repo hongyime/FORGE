@@ -25,7 +25,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint: GitHub-org keyscan fresh-resume retrying is complete.
+Latest checkpoint: cloud-key provider exception receipts are complete. Cloud
+key validation worker exceptions now persist non-reportable
+`UNVERIFIED / provider_exception` receipts, update key row `validation_detail`
+and `validated_at`, release validation claims, and keep raw exception text out
+of API/persisted notes. A second `only_unattempted=True` sweep no longer
+reclaims the same failed rows. Verification: focused cloud-key
+exception/claim/progress slice passed (`5 passed`), key runtime suite passed
+(`5 passed`), broader cloud validation sweep slice passed
+(`46 passed, 90 deselected`), Ruff passed, and py_compile passed.
+
+Next checkpoint: patch artifact-derived cloud provenance in attack-graph
+snapshots so dashboard graph review keeps scrubbed `cloud_assets.metadata_json`
+provenance when it prefers saved snapshots over the fallback graph.
+
+Previous checkpoint: GitHub-org keyscan fresh-resume retrying is complete.
 Failed `fanout_f_keyscan` composite org targets now reload from failed seed-run
 rows, stay constrained to current scoped root domains, count toward
 `github_orgs` pending work, and schedule through the existing scoped keyscan
@@ -34,14 +48,6 @@ links are rediscovered. Verification: focused keyscan resume/retry slice passed
 (`4 passed`), full retry-state suite passed (`17 passed`), Ruff passed,
 py_compile passed, and a sidecar patch review approved with no blocking
 findings.
-
-Next checkpoint: patch cloud-key validation worker exceptions so exception
-batches write non-reportable attempted receipts instead of leaving rows
-invisible or repeatedly claimable.
-
-Then patch artifact-derived cloud provenance in attack-graph snapshots so
-dashboard graph review keeps scrubbed `cloud_assets.metadata_json` provenance
-when it prefers saved snapshots.
 
 Previous checkpoint: root-domain keyscan pending-work accounting is complete.
 Failed root-domain `fanout_f_keyscan` work now contributes

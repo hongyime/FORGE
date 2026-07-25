@@ -4799,6 +4799,23 @@ def _cloud_validator_exception_result(
     )
 
 
+def _cloud_key_provider_exception_result(
+    row_payload: sqlite3.Row | dict[str, Any],
+    exc: Exception,
+) -> CloudValidationResult:
+    service = str(row_payload["service"] or "unknown").strip().lower() or "unknown"
+    identifier = _key_validation_identifier(row_payload, service)
+    return CloudValidationResult(
+        asset_type=service,
+        identifier=identifier,
+        validation_status="UNVERIFIED",
+        validation_method="provider_exception",
+        evidence="provider exception converted to non-reportable key validation receipt",
+        notes=f"provider_exception:{type(exc).__name__}",
+        provider_identifier=identifier,
+    )
+
+
 def run_cloud_asset_validate(
     engagement_id: int,
     asset_type: str,
@@ -5200,7 +5217,8 @@ def sweep_pending_cloud_validations(
             return {
                 "key_id": int(row_payload["id"]),
                 "engagement_id": int(row_payload["engagement_id"]),
-                "error": str(exc),
+                "result": _cloud_key_provider_exception_result(row_payload, exc),
+                "provider_exception": True,
             }
 
     _emit_validation_progress(
@@ -5220,7 +5238,7 @@ def sweep_pending_cloud_validations(
         for index, row in enumerate(allowed_rows, start=1):
             item = _worker(row)
             processed_results.append(item)
-            if item.get("error"):
+            if item.get("error") or item.get("provider_exception"):
                 failed_items += 1
             _emit_validation_progress(
                 progress_label=progress_label,
@@ -5245,7 +5263,7 @@ def sweep_pending_cloud_validations(
                 processed_results[index] = future.result()
                 completed += 1
                 item = processed_results[index]
-                if isinstance(item, dict) and item.get("error"):
+                if isinstance(item, dict) and (item.get("error") or item.get("provider_exception")):
                     failed_items += 1
                 _emit_validation_progress(
                     progress_label=progress_label,
@@ -5285,7 +5303,10 @@ def sweep_pending_cloud_validations(
             result = item["result"]
             _persist_validation_result(con, result_engagement_id, result)
             _update_key_validation_state(con, key_id, result)
-            summary.succeeded += 1
+            if item.get("provider_exception"):
+                summary.failed += 1
+            else:
+                summary.succeeded += 1
             validation_status = str(result.validation_status or "UNKNOWN").upper()
             summary.status_counts[validation_status] = summary.status_counts.get(validation_status, 0) + 1
             payload = result.to_api_dict()

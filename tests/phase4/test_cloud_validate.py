@@ -11047,6 +11047,125 @@ def test_sweep_pending_cloud_validations_claims_rows_before_provider_call(
         con.close()
 
 
+def test_sweep_pending_cloud_validations_persists_provider_exception_receipts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    _bootstrap_db(db_path)
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.executemany(
+            """
+            INSERT INTO key_scanner_findings
+                (id, engagement_id, domain, service, pattern_name, source_backend,
+                 source_url, repo_name, key_redacted, validation_state)
+            VALUES
+                (?, 1001, ?, ?, ?, 'crawler', ?, 'webapp', ?, 'UNCONFIRMED')
+            """,
+            [
+                (
+                    41,
+                    "acme-firebase-prod",
+                    "firebase",
+                    "firebase_web_config",
+                    "https://acme-firebase-prod.firebaseapp.com/__/firebase/init.json",
+                    "AIza...7890",
+                ),
+                (
+                    42,
+                    "https://acme-workspace.supabase.co",
+                    "supabase",
+                    "supabase_mobile_config",
+                    "https://acme-workspace.supabase.co/rest/v1/",
+                    "sb_publishable_1234",
+                ),
+            ],
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    provider_calls: list[int] = []
+
+    def _fake_validate_key_row_payload(row_payload, **kwargs):  # noqa: ANN001, ANN003
+        del kwargs
+        provider_calls.append(int(row_payload["id"]))
+        raise RuntimeError("raw secret should not leak")
+
+    monkeypatch.setattr(cloud_validate, "_validate_key_row_payload", _fake_validate_key_row_payload)
+
+    first_summary = cloud_validate.sweep_pending_cloud_validations(
+        1001,
+        db_path,
+        limit=2,
+        max_workers=2,
+        only_unattempted=True,
+    )
+    second_summary = cloud_validate.sweep_pending_cloud_validations(
+        1001,
+        db_path,
+        limit=2,
+        max_workers=2,
+        only_unattempted=True,
+    )
+
+    assert first_summary["attempted"] == 2
+    assert first_summary["succeeded"] == 0
+    assert first_summary["failed"] == 2
+    assert first_summary["status_counts"] == {"UNVERIFIED": 2}
+    assert second_summary["attempted"] == 0
+    assert provider_calls == [41, 42]
+    assert "raw secret" not in json.dumps(first_summary)
+
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT asset_type, identifier, validation_status, validation_method, evidence, notes
+            FROM cloud_validation_results
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        key_rows = con.execute(
+            """
+            SELECT id, validation_state, validation_detail, validated_at
+            FROM key_scanner_findings
+            WHERE id IN (41, 42)
+            ORDER BY id
+            """
+        ).fetchall()
+        claim_count = con.execute("SELECT COUNT(*) FROM validation_claims").fetchone()[0]
+    finally:
+        con.close()
+
+    assert rows == [
+        (
+            "firebase",
+            "https://acme-firebase-prod.firebaseapp.com/__/firebase/init.json",
+            "UNVERIFIED",
+            "provider_exception",
+            "provider exception converted to non-reportable key validation receipt",
+            "provider_exception:RuntimeError",
+        ),
+        (
+            "supabase",
+            "https://acme-workspace.supabase.co/rest/v1/",
+            "UNVERIFIED",
+            "provider_exception",
+            "provider exception converted to non-reportable key validation receipt",
+            "provider_exception:RuntimeError",
+        ),
+    ]
+    assert [row[0] for row in key_rows] == [41, 42]
+    assert all(row[1] == "UNCONFIRMED" for row in key_rows)
+    assert all(str(row[2]).startswith("UNVERIFIED:provider_exception:") for row in key_rows)
+    assert all(row[3] for row in key_rows)
+    assert claim_count == 0
+
+
 def test_sweep_pending_cloud_asset_validations_claims_assets_before_provider_batch(
     tmp_path: Path,
     monkeypatch,

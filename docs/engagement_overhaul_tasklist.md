@@ -91,12 +91,20 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
-- [ ] Next checkpoint: patch cloud-key validation worker exceptions so
-  exception batches write non-reportable attempted receipts instead of leaving
-  rows invisible or repeatedly claimable.
-- [ ] Then patch artifact-derived cloud provenance in attack-graph snapshots so
+- [ ] Next checkpoint: patch artifact-derived cloud provenance in attack-graph
+  snapshots so
   dashboard graph review keeps scrubbed `cloud_assets.metadata_json`
   provenance when it prefers saved snapshots over the fallback graph.
+- [x] Cloud-key provider exception receipt checkpoint:
+  Cloud key validation worker exceptions now persist non-reportable
+  `UNVERIFIED / provider_exception` receipts, update the key row
+  `validation_detail` and `validated_at`, release validation claims, and keep
+  raw exception text out of API/persisted notes. A second
+  `only_unattempted=True` sweep no longer reclaims the same failed rows.
+  Verification: focused cloud-key exception/claim/progress slice passed
+  (`5 passed`), key runtime suite passed (`5 passed`), broader cloud validation
+  sweep slice passed (`46 passed, 90 deselected`), Ruff passed, and py_compile
+  passed.
 - [x] GitHub-org keyscan fresh-resume checkpoint:
   Failed `fanout_f_keyscan` composite org targets now reload from failed
   seed-run rows, stay constrained to current scoped root domains, count toward
