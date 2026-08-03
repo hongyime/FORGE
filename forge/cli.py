@@ -3710,7 +3710,8 @@ def cloud_supabase(
     project_ref: Optional[str] = typer.Option(
         None,
         "--project-ref",
-        help="Supabase project reference ID (e.g. xyzxyzxyz).",
+        "--project-id",
+        help="Supabase project reference ID (e.g. xyzxyzxyz). --project-id accepted as alias for parity with `cloud firebase`.",
     ),
     url: Optional[str] = typer.Option(
         None,
