@@ -231,7 +231,7 @@ def scan_engagement(
             host_delay = _port_scan_host_delay_seconds()
             if host_delay > 0:
                 time.sleep(host_delay)
-            open_ports = asyncio.run(_scan_host_async(ip, selected_ports, timeout))
+            open_ports = _scan_host_ports_sync(ip, selected_ports, timeout)
             if progress_callback is not None:
                 progress_callback(index, total_hosts, ip, open_ports)
             for port in open_ports:
@@ -306,6 +306,27 @@ async def _scan_host_async(
     checks = [asyncio.create_task(_check(port)) for port in ports]
     states = await asyncio.gather(*checks)
     return [ports[i] for i, ok in enumerate(states) if ok]
+
+
+def _scan_host_ports_sync(
+    ip: str,
+    ports: Sequence[int],
+    timeout: float,
+) -> list[int]:
+    """Shared sync entry point used by both ``scan_engagement`` (--basic) and
+    ``scan_engagement_enhanced`` (--enhanced).
+
+    P2/P3 audit item #7 asked for these two modes to share their async
+    fan-out so the "basic" path could not fall back to a sequential
+    blocking implementation. Both callers now route through this helper,
+    which in turn drives :func:`_scan_host_async` (semaphore-bounded port
+    concurrency + optional per-port delay from ``FORGE_PORT_SCAN_PORT_*``).
+
+    Keeping this helper as a thin sync wrapper (rather than moving both
+    callers to fully-async) preserves the sequential SQLite write pattern
+    the DB layer relies on today.
+    """
+    return asyncio.run(_scan_host_async(ip, list(ports), timeout))
 
 
 def _fetch_shodan_services(ip: str, api_key: str) -> dict[int, str]:
@@ -424,7 +445,7 @@ def scan_engagement_enhanced(
             host_delay = _port_scan_host_delay_seconds()
             if host_delay > 0:
                 time.sleep(host_delay)
-            open_ports = asyncio.run(_scan_host_async(ip, selected_ports, timeout))
+            open_ports = _scan_host_ports_sync(ip, selected_ports, timeout)
             shodan_map = _fetch_shodan_services(ip, shodan_key) if shodan_key else {}
             cdn_detected = False
             waf_detected = False
