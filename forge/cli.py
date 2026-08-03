@@ -45,6 +45,15 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence, cast
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+# P2/P3 audit fix: even at WARNING level, httpx can emit URLs (e.g. on 429
+# retry paths) that carry Shodan / GitHub / Azure SAS / AWS SigV4 secrets in
+# query params. Install a redaction filter on every HTTP-client logger so
+# nothing leaks through stdout, journalctl, or file handlers.
+from forge.utils.log_redaction import install_query_redaction_filter  # noqa: E402
+
+install_query_redaction_filter()
 
 import typer
 from rich.console import Console
