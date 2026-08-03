@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -132,17 +133,32 @@ def _v02_risk_label_in_exec_summary(
 
 
 def _v03_no_internal_ips(
-    text: str, approved_ips: list[str] | None,
-    result: ValidationResult, strict: bool
+    text: str,
+    approved_ips: list[str] | None,
+    result: ValidationResult,
+    strict: bool,
+    approved_ip_ranges: list[str] | None = None,
 ) -> None:
     """
     V-03: RFC-1918 addresses in prose are suspicious in client reports.
-    IPs in scope or header blocks are exempt. Others are flagged.
+
+    IPs the engagement is authorized against are exempt. An IP is
+    considered approved if it either:
+
+    * appears literally in ``approved_ips`` (populated from the
+      engagement ``hosts`` table), OR
+    * falls inside a CIDR block in ``approved_ip_ranges`` (populated
+      from the engagement scope manifest ``ip_ranges``).
+
+    Others are flagged as warnings (or errors when ``strict``).
     """
-    approved = set(approved_ips or [])
+    approved = {str(ip).strip() for ip in (approved_ips or ()) if str(ip).strip()}
+    networks = _parse_approved_ip_ranges(approved_ip_ranges or ())
     for match in _RFC1918_RE.finditer(text):
         ip = match.group()
         if ip in approved:
+            continue
+        if _ip_in_any_network(ip, networks):
             continue
         msg = (
             f"[V-03] Internal IP {ip!r} found in report body. "
@@ -153,6 +169,40 @@ def _v03_no_internal_ips(
         else:
             result.warnings.append(msg)
             logger.warning(msg)
+
+
+def _parse_approved_ip_ranges(
+    ranges: "Iterable[str]",
+) -> "list[ipaddress.IPv4Network | ipaddress.IPv6Network]":
+    """Parse operator-supplied CIDR strings; skip and log malformed entries."""
+    import ipaddress  # noqa: PLC0415
+
+    parsed: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for raw in ranges:
+        candidate = str(raw or "").strip()
+        if not candidate:
+            continue
+        try:
+            parsed.append(ipaddress.ip_network(candidate, strict=False))
+        except ValueError:
+            logger.debug("V-03: dropping invalid CIDR %r from allowlist", candidate)
+            continue
+    return parsed
+
+
+def _ip_in_any_network(
+    ip_string: str,
+    networks: "list[ipaddress.IPv4Network | ipaddress.IPv6Network]",
+) -> bool:
+    if not networks:
+        return False
+    import ipaddress  # noqa: PLC0415
+
+    try:
+        ip_obj = ipaddress.ip_address(ip_string)
+    except ValueError:
+        return False
+    return any(ip_obj in net for net in networks)
 
 
 def _v04_no_credential_leaks(
@@ -308,6 +358,7 @@ def validate_report(
     approved_internal_ips: list[str] | None = None,
     strict:               bool = False,
     ongoing_intel:        "OngoingIntelligenceContext | None" = None,
+    approved_ip_ranges:   list[str] | None = None,
 ) -> ValidationResult:
     """
     Run all validation rules against a generated report.
@@ -315,7 +366,11 @@ def validate_report(
     Args:
         raw_text:              Full Markdown text produced by the LLM.
         overall_risk:          Rule-derived overall risk label (e.g. 'HIGH').
-        approved_internal_ips: IPs from engagement scope; exempt from V-03.
+        approved_internal_ips: IPs from engagement hosts; exempt from V-03.
+        approved_ip_ranges:    CIDR blocks from the engagement scope manifest
+                               ``ip_ranges``; every IP inside these is exempt
+                               from V-03. Malformed entries are logged at DEBUG
+                               and skipped.
         strict:                Promote WARNINGs to ERRORs.
         ongoing_intel:         OngoingIntelligenceContext; required for V-10.
 
@@ -326,7 +381,13 @@ def validate_report(
 
     _v01_mandatory_sections(raw_text, result, strict)
     _v02_risk_label_in_exec_summary(raw_text, overall_risk, result, strict)
-    _v03_no_internal_ips(raw_text, approved_internal_ips, result, strict)
+    _v03_no_internal_ips(
+        raw_text,
+        approved_internal_ips,
+        result,
+        strict,
+        approved_ip_ranges=approved_ip_ranges,
+    )
     _v04_no_credential_leaks(raw_text, result, strict)
     _v05_minimum_section_length(raw_text, result, strict)
     _v06_exec_summary_word_cap(raw_text, result, strict)

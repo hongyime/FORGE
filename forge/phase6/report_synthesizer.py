@@ -27,6 +27,7 @@ OPSEC invariants:
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import html as html_lib
 import json
@@ -162,6 +163,38 @@ _AUTO_CASCADE_DEFAULT_ORDER = (
     "llama_cpp",
     "template",
 )
+
+
+def _scope_entries_as_ip_ranges(scope_entries: Iterable[str] | None) -> list[str]:
+    """Return the subset of engagement scope entries that parse as IP networks.
+
+    P2/P3 audit item #2: V-03 previously only accepted the literal IPs in
+    ``hosts.ip_address``. When an engagement scope was declared as a CIDR
+    range (e.g. ``10.0.0.0/24``) and the report body cited any IP in that
+    range that was NOT already in ``hosts``, V-03 spammed 20-31 false
+    positives per Kiro run. Passing the CIDR blocks through explicitly
+    silences those.
+
+    Malformed entries are silently dropped — this is a hint-quality
+    allowlist, not a security boundary. The actual scope enforcement lives
+    in :mod:`forge.opsec.scope_gate`.
+    """
+    if not scope_entries:
+        return []
+    import ipaddress  # noqa: PLC0415
+
+    ranges: list[str] = []
+    for raw in scope_entries:
+        candidate = str(raw or "").strip()
+        if not candidate:
+            continue
+        try:
+            ipaddress.ip_network(candidate, strict=False)
+        except ValueError:
+            continue
+        ranges.append(candidate)
+    return ranges
+
 
 # ── Exceptions ─────────────────────────────────────────────────────────────────
 
@@ -2351,6 +2384,7 @@ class ReportSynthesizer:
                 overall_risk=ctx.overall_risk,
                 ongoing_intel=ctx.ongoing_intelligence,
                 approved_internal_ips=[h.get("ip_address") for h in ctx.recon.hosts if h.get("ip_address")],
+                approved_ip_ranges=_scope_entries_as_ip_ranges(ctx.scope),
             )
             telemetry = self._build_validation_telemetry(
                 ctx=ctx,
