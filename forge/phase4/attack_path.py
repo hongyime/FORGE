@@ -1397,9 +1397,14 @@ class MermaidRenderer:
     def render(self, graph: AttackGraph) -> str:
         output = self._render_full(graph)
         if len(output) > _MERMAID_CHAR_LIMIT:
+            # P2/P3 audit fix #6: point CLI operators at --critical-path-only /
+            # --min-severity, not just the Python render_bounded_preview() API.
             warnings.warn(
                 f"Mermaid output is {len(output)} chars; exceeds {_MERMAID_CHAR_LIMIT}. "
-                "Use render_bounded_preview() for report and snapshot previews.",
+                "Use render_bounded_preview() for report/snapshot previews, or "
+                "re-run `forge graph build --format mermaid --critical-path-only` "
+                "(optionally with --min-severity HIGH) to emit a smaller graph "
+                "focused on the reportable attack path.",
                 stacklevel=2,
             )
         return output
