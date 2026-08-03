@@ -1726,7 +1726,57 @@ def recon_subdomains(
         operator=str(getattr(cfg, "operator", "operator") or "operator"),
     )
     from forge.cli import console
-    console.print(f"\n[bold green]Recon Subdomains Complete[/bold green]: Found [cyan]{len(found)}[/cyan] subdomains.")
+    _print_recon_subdomain_summary(console, domain, found)
+
+
+_RECON_SUBDOMAIN_STDOUT_SAMPLE = 15
+
+
+def _print_recon_subdomain_summary(
+    stream: Console,
+    domain: str,
+    found: Any,
+) -> None:
+    """P2/P3 audit fix #5: give operator a stdout summary after subdomain enum.
+
+    Prior behaviour printed the count only via ``console.print`` while the
+    actual hostnames stayed in the logger, so operators running with the
+    logger silenced saw an empty terminal. Now we render the count plus a
+    bounded sample of hostnames (``_RECON_SUBDOMAIN_STDOUT_SAMPLE``) and a
+    concise ``... and N more`` tail when the result set exceeds the sample.
+    """
+    hostnames: list[str] = []
+    for entry in found or ():
+        if isinstance(entry, str):
+            host = entry.strip()
+        elif isinstance(entry, dict):
+            host = str(
+                entry.get("hostname")
+                or entry.get("host")
+                or entry.get("subdomain")
+                or entry.get("name")
+                or ""
+            ).strip()
+        else:
+            host = str(getattr(entry, "hostname", "") or getattr(entry, "host", "") or "").strip()
+        if host:
+            hostnames.append(host)
+
+    count = len(hostnames)
+    stream.print(
+        f"\n[bold green]Recon Subdomains Complete[/bold green]: "
+        f"Found [cyan]{count}[/cyan] subdomain{'s' if count != 1 else ''} for [magenta]{domain}[/magenta]."
+    )
+
+    if count == 0:
+        return
+
+    sample = hostnames[:_RECON_SUBDOMAIN_STDOUT_SAMPLE]
+    for host in sample:
+        stream.print(f"  [dim]•[/dim] {host}")
+    remaining = count - len(sample)
+    if remaining > 0:
+        stream.print(f"  [dim]... and {remaining} more (see engagement DB / dashboard)[/dim]")
 
 
 @recon_app.command("crawl")
