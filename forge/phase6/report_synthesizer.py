@@ -3624,22 +3624,31 @@ class ReportSynthesizer:
     def _ensure_provider_loaded(self) -> None:
         """Instantiate the LLMProvider on first use.
 
-        Handles seven paths:
-        ``llama_cpp`` (local Qwen — falls through to _ensure_model_loaded),
-        ``kiro_cli`` (Kiro CLI subscription — usually the highest-quality
-        default when kiro-cli is on PATH),
-        ``claude_code`` / ``codex_cli`` / ``gemini_cli`` (subscription CLIs),
-        ``bedrock_anthropic`` (AWS creds), and
-        ``openai_compatible`` (any OpenAI-shaped endpoint).
+        Provider names must stay in sync with
+        ``_AUTO_CASCADE_DEFAULT_ORDER`` (see top of this module) and the
+        ``--provider`` help block in :mod:`forge.cli`. The canonical
+        8-backend cascade in order is:
+
+        1. ``kiro_cli`` — Kiro CLI subscription (usually highest-quality
+           default when kiro-cli is on PATH).
+        2. ``claude_code`` — Anthropic Claude Code CLI subscription.
+        3. ``openai_compatible`` — any OpenAI-shaped endpoint (requires
+           ``FORGE_OPENAI_BASE_URL``, ``FORGE_OPENAI_MODEL``, optional
+           ``FORGE_OPENAI_API_KEY``).
+        4. ``codex_cli`` — OpenAI Codex CLI subscription.
+        5. ``gemini_cli`` — Google Gemini CLI subscription.
+        6. ``bedrock_anthropic`` — AWS Bedrock Anthropic (requires AWS
+           credentials).
+        7. ``llama_cpp`` — local Qwen 2.5-1.5B via llama-cpp-python (offline
+           fallback; falls through to _ensure_model_loaded).
+        8. ``template`` — deterministic Markdown from engagement data;
+           always works with zero LLM access.
 
         The special value ``auto`` builds a FallbackChainProvider that
         tries configured providers in env-driven order
         (``FORGE_LLM_CASCADE_ORDER`` or ``LLM_CASCADE_ORDER``). If no
         cloud provider loads, callers can still fall back to the local
         ``llama_cpp`` path before the deterministic template.
-
-        For ``openai_compatible``, config is sourced from env vars:
-            FORGE_OPENAI_BASE_URL, FORGE_OPENAI_MODEL, FORGE_OPENAI_API_KEY
         """
         if self._llm_provider is not None:
             return
