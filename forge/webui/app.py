@@ -109,10 +109,11 @@ _MOBILE_BUNDLE_SEED_SUFFIXES = (".apk", ".ipa", ".aab", ".apkm", ".apks", ".xapk
 
 def create_app() -> Any:
     try:
-        from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
-        from fastapi.responses import FileResponse, JSONResponse
+        from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket
+        from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
         from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
         from fastapi.staticfiles import StaticFiles
+        from fastapi.templating import Jinja2Templates
     except ImportError as exc:
         raise RuntimeError("FastAPI is required for web interface support.") from exc
 
@@ -1344,6 +1345,58 @@ def create_app() -> Any:
     @app.get("/")
     def dashboard() -> Any:
         return _frontend_entry_response()
+
+    # ---------------------------------------------------------------- HTMX tabs
+    # Task 23: server-rendered engagement detail tabs. Runs in parallel to
+    # the React SPA (which stays as /engagements/{ref}). New URL prefix is
+    # /engagements/{ref}/htmx and /engagements/{ref}/tab/{name} so the SPA
+    # catch-all below still serves everything else.
+
+    _htmx_templates_dir = Path(__file__).parent / "templates" / "htmx"
+    _htmx_templates = Jinja2Templates(directory=_htmx_templates_dir)
+    _HTMX_VALID_TABS: tuple[str, ...] = (
+        "overview", "seeds", "findings", "graph", "report", "audit",
+    )
+
+    def _render_htmx(
+        template_name: str, detail: dict, active_tab: str, is_htmx: bool = False,
+    ) -> HTMLResponse:
+        """Render a Jinja2 template without needing a Request object.
+
+        Bypasses FastAPI's Request resolution quirks for factory-created
+        apps by rendering the template to a string ourselves.
+        """
+        env = _htmx_templates.env
+        template = env.get_template(template_name)
+        html = template.render(
+            detail=detail, active_tab=active_tab, tabs=_HTMX_VALID_TABS,
+        )
+        headers = {"Cache-Control": "no-store"}
+        return HTMLResponse(content=html, headers=headers)
+
+    @app.get("/engagements/{engagement_ref}/htmx", response_class=HTMLResponse)
+    def engagement_htmx_shell(engagement_ref: str) -> Any:
+        """Base HTMX shell with the default 'overview' tab pre-rendered."""
+        payload = _find_engagement_detail(engagement_ref)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Engagement not found.")
+        return _render_htmx("base.html", payload, "overview")
+
+    @app.get(
+        "/engagements/{engagement_ref}/tab/{tab_name}",
+        response_class=HTMLResponse,
+    )
+    def engagement_htmx_tab(
+        engagement_ref: str, tab_name: str, hx_request: str = Header(default=""),
+    ) -> Any:
+        if tab_name not in _HTMX_VALID_TABS:
+            raise HTTPException(status_code=404, detail=f"Unknown tab: {tab_name}")
+        payload = _find_engagement_detail(engagement_ref)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Engagement not found.")
+        is_htmx = hx_request.lower() == "true"
+        template_name = f"tabs/{tab_name}.html" if is_htmx else "base.html"
+        return _render_htmx(template_name, payload, tab_name, is_htmx=is_htmx)
 
     @app.get("/engagements/{engagement_path:path}")
     def engagement_spa_route(engagement_path: str) -> Any:
