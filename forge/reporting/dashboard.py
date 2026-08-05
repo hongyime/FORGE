@@ -1887,7 +1887,7 @@ def _graph_payload_from_graphml(graphml_path: Path) -> dict[str, Any] | None:
 
 def _seed_graph_node_type(seed_type: str) -> str:
     normalized = str(seed_type or "").strip().lower()
-    if normalized in {"domain", "subdomain", "url", "apk_url", "ipv4", "ipv6"}:
+    if normalized in {"domain", "subdomain", "url", "apk_url", "cloud_ref", "ipv4", "ipv6"}:
         return "HOST"
     if normalized in {"email", "phone", "username"}:
         return "CREDENTIAL"

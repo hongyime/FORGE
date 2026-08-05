@@ -106,9 +106,23 @@ def provider_url_in_scope(value: str, root: str) -> bool:
 
 
 def provider_url_seed_type(value: str) -> str:
+    """Classify a normalized provider URL into a seed_type.
+
+    Priority order: ``apk_url`` (mobile bundle path) beats ``cloud_ref``
+    (provider hostname) which beats generic ``url``. This ordering matches
+    the classifier in :mod:`forge.engagement_orchestrator` so persistence
+    and detection stay in lockstep.
+    """
     parsed = urlparse(normalize_provider_url(value))
     path = (parsed.path or "").lower()
-    return "apk_url" if any(path.endswith(suffix) for suffix in _MOBILE_BUNDLE_SUFFIXES) else "url"
+    if any(path.endswith(suffix) for suffix in _MOBILE_BUNDLE_SUFFIXES):
+        return "apk_url"
+    # Lazy import to avoid circulars — engagement_orchestrator imports us.
+    from forge.engagement_orchestrator import _hostname_is_cloud_ref  # noqa: PLC0415
+
+    if _hostname_is_cloud_ref(parsed.netloc):
+        return "cloud_ref"
+    return "url"
 
 
 def persist_provider_url_candidate(

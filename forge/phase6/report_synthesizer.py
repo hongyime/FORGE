@@ -451,12 +451,15 @@ class ContextBuilder:
     @staticmethod
     def _safe_seed_display_value(seed_value: str, seed_type: str) -> str:
         value = str(seed_value or "").strip()
-        if seed_type in {"url", "apk_url"}:
+        if seed_type in {"url", "apk_url", "cloud_ref"}:
             try:
                 parsed = urlsplit(value)
             except ValueError:
                 return value[:160]
-            value = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+            # If the value is a bare hostname (no scheme), preserve it as-is
+            # so cloud_refs like "xyz.supabase.co" don't get mangled.
+            if parsed.scheme:
+                value = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
         return value[:160]
 
     @classmethod

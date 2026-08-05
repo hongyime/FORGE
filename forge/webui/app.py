@@ -436,15 +436,23 @@ def create_app() -> Any:
             return "ipv6" if parsed_ip.version == 6 else "ipv4"
         except ValueError:
             pass
+        # Import lazily so webui doesn't force-load the whole orchestrator
+        # module at request time. Mirrors slice 2 of the cloud_ref rollout;
+        # keeps this classifier and the orchestrator classifier in lockstep.
+        from forge.engagement_orchestrator import _hostname_is_cloud_ref  # noqa: PLC0415
         parsed = urlparse(text)
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             if parsed.path.lower().endswith(_MOBILE_BUNDLE_SEED_SUFFIXES):
                 return "apk_url"
+            if _hostname_is_cloud_ref(parsed.netloc):
+                return "cloud_ref"
             return "url"
         if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", text):
             return "email"
         if lowered.startswith("*."):
             lowered = lowered[2:]
+        if _hostname_is_cloud_ref(lowered):
+            return "cloud_ref"
         if re.match(
             r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
             lowered,

@@ -4233,6 +4233,15 @@ def _validation_scope_seed_targets(seed_value: str, seed_type: str) -> list[str]
         _append(value)
         parsed = urlparse(value)
         _append(str(parsed.hostname or "").strip().lower().strip("."))
+    elif kind == "cloud_ref":
+        # cloud_ref: URL-form and bare-hostname-form both emit; the scope
+        # gate can then match by URL prefix OR domain.
+        parsed = urlparse(value)
+        if parsed.scheme and parsed.netloc:
+            _append(value)
+            _append(str(parsed.hostname or "").strip().lower().strip("."))
+        else:
+            _append(value.lower().strip("."))
     elif kind == "email" and "@" in value:
         _append(value.rsplit("@", 1)[1].strip().lower().strip("."))
     elif kind in {"domain", "subdomain", "ipv4", "ipv6"}:

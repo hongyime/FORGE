@@ -687,7 +687,7 @@ class AttackGraphBuilder:
     def _seed_node_type(self, seed_type: str) -> NodeType:
         if seed_type in {"email", "phone", "username"}:
             return NodeType.CREDENTIAL
-        if seed_type in {"domain", "subdomain", "url", "apk_url", "ipv4", "ipv6"}:
+        if seed_type in {"domain", "subdomain", "url", "apk_url", "cloud_ref", "ipv4", "ipv6"}:
             return NodeType.HOST
         if seed_type in {"name", "company"}:
             return NodeType.EXTERNAL

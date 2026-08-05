@@ -436,6 +436,16 @@ def _scope_manifest_seed_targets(seed_value: str, seed_type: str) -> list[str]:
         _append(value)
         parsed = urlparse(value)
         _append(str(parsed.hostname or "").strip().lower().strip("."))
+    elif kind == "cloud_ref":
+        # cloud_ref may be a URL ("https://xyz.supabase.co/") or a bare
+        # hostname ("xyz.supabase.co"). Emit both the URL form (if any) and
+        # the hostname so the scope gate can match by URL prefix OR domain.
+        parsed = urlparse(value)
+        if parsed.scheme and parsed.netloc:
+            _append(value)
+            _append(str(parsed.hostname or "").strip().lower().strip("."))
+        else:
+            _append(value.lower().strip("."))
     elif kind == "email" and "@" in value:
         _append(value.rsplit("@", 1)[1].strip().lower().strip("."))
     elif kind in {"domain", "subdomain", "ipv4", "ipv6"}:
