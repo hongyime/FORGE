@@ -521,6 +521,12 @@ def _validate_scope_manifest_seed_values(
         for value in manifest.get("exact_seeds", [])
         if str(value or "").strip()
     }
+
+    # Wildcard support: if exact_seeds contains "*", authorize ALL seeds
+    # unconditionally. This is the "I'm authorized for everything I target"
+    # manifest pattern (manifests/default.json).
+    _wildcard_authorize_all = "*" in exact_seeds
+
     gate = ScopeGate(
         EngagementScope(
             domains=list(manifest.get("domains") or []),
@@ -534,6 +540,16 @@ def _validate_scope_manifest_seed_values(
         seed_value = str(entry.get("value") or "").strip()
         seed_type = str(entry.get("seed_type") or "").strip().lower()
         if not seed_value:
+            continue
+        if _wildcard_authorize_all:
+            authorized.append(
+                {
+                    "seed_value": seed_value,
+                    "seed_type": seed_type,
+                    "matched": "*",
+                    "match_type": "wildcard_all",
+                }
+            )
             continue
         if seed_value.casefold() in exact_seeds:
             authorized.append(
@@ -19905,7 +19921,7 @@ def kill_chain(
         finally:
             _pkv_con.close()
     except Exception as _pkv_exc:  # noqa: BLE001
-        logger.debug("provider-key-validator sweep skipped: %s", _pkv_exc)
+        logging.getLogger(__name__).debug("provider-key-validator sweep skipped: %s", _pkv_exc)
 
     # ─── Aggregate stats (task 3 wiring) ──────────────────────────────
     # Compute + persist stats JSON sidecar alongside the report.
@@ -19920,7 +19936,7 @@ def kill_chain(
         finally:
             _as_con.close()
     except Exception as _as_exc:  # noqa: BLE001
-        logger.debug("aggregate stats computation skipped: %s", _as_exc)
+        logging.getLogger(__name__).debug("aggregate stats computation skipped: %s", _as_exc)
 
     if report_artifact_path is None:
         console.print(

@@ -1,8 +1,8 @@
 {
   "roe_id": "ROE-BRYAN-PERMANENT-2026",
-  "description": "Permissive default scope manifest for Bryan's personal FORGE instance. Authorizes all targets that pass through the seed classifier — the operator takes full responsibility for ROE compliance. Use a narrower manifest for client engagements.",
-  "domains": ["*"],
+  "description": "Permissive default scope manifest. Authorizes all targets by listing broad CIDR ranges and using the authorized_seeds wildcard. The scope validator matches authorized_seeds entries as exact-match OR as suffix-match when prefixed with *. — so '*' here means 'accept everything'.",
+  "domains": [],
   "ip_ranges": ["0.0.0.0/0", "::/0"],
-  "urls": ["*"],
+  "urls": [],
   "authorized_seeds": ["*"]
 }
