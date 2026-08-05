@@ -448,16 +448,26 @@ def _run_handle_finder_batch(
             for index, uname in enumerate(usernames)
         ]
 
+    # P2-B04: use the canonical bounded worker-pool primitive so error
+    # handling / concurrency cap / deterministic ordering stay consistent
+    # with other enrichers. run_bounded returns results in input order and
+    # captures per-item exceptions as WorkerPoolItemResult.error instead of
+    # re-raising, so one bad row can't kill the sweep.
+    from forge.utils.bounded_worker_pool import run_bounded  # noqa: PLC0415
+
     bounded_workers = max(1, min(worker_count, len(usernames), 4))
+    outcome = run_bounded(
+        list(enumerate(usernames)),
+        _worker,
+        max_workers=bounded_workers,
+        logger_prefix="handle-finder",
+    )
     ordered_results: list[list[UsernameProfile]] = [[] for _ in usernames]
-    with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-        future_map = {
-            executor.submit(_worker, (index, uname)): index
-            for index, uname in enumerate(usernames)
-        }
-        for future in as_completed(future_map):
-            index, profiles = future.result()
-            ordered_results[index] = profiles
+    for row in outcome.results:
+        if row.error or row.value is None:
+            continue
+        idx, profiles = row.value
+        ordered_results[idx] = profiles
     return ordered_results
 
 

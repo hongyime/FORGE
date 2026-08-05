@@ -325,8 +325,30 @@ def _scan_host_ports_sync(
     Keeping this helper as a thin sync wrapper (rather than moving both
     callers to fully-async) preserves the sequential SQLite write pattern
     the DB layer relies on today.
+
+    P2-B05: guard against being called from a running event loop (async
+    test, FastAPI background task). When a loop is already running,
+    ``asyncio.run()`` raises ``RuntimeError`` — instead, delegate the
+    async work to a dedicated worker thread so callers on either side of
+    the sync/async boundary get correct behaviour.
     """
-    return asyncio.run(_scan_host_async(ip, list(ports), timeout))
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No loop running — the common CLI / distributed-worker path.
+        return asyncio.run(_scan_host_async(ip, list(ports), timeout))
+
+    # Running loop present. Run the async primitive in a worker thread
+    # with its own loop so we don't collide with the caller's loop.
+    import concurrent.futures as _cf  # noqa: PLC0415
+
+    def _run_in_thread() -> list[int]:
+        return asyncio.run(_scan_host_async(ip, list(ports), timeout))
+
+    with _cf.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="port-scan-sync-bridge"
+    ) as pool:
+        return pool.submit(_run_in_thread).result()
 
 
 def _fetch_shodan_services(ip: str, api_key: str) -> dict[int, str]:

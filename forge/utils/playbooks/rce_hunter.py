@@ -130,9 +130,10 @@ def _queue_payload(
 ) -> None:
     try:
         conn.execute(
-            """INSERT OR IGNORE INTO audit_log (engagement_id, action, detail, operator, timestamp)
-               VALUES (?, 'rce_payload_queued', ?, 'forge', datetime('now'))""",
-            (engagement_id, f"{cve_id} on {ip}"),
+            """INSERT OR IGNORE INTO audit_log
+               (engagement_id, phase, module, action, target, result, operator, logged_at)
+               VALUES (?, 'phase5', 'rce_hunter', 'rce_payload_queued', ?, ?, 'forge', datetime('now'))""",
+            (engagement_id, ip, cve_id),
         )
         conn.commit()
     except Exception:

@@ -151,3 +151,35 @@ def db_url(postgres_db_url: str) -> str:
     schema URL automatically.
     """
     return postgres_db_url
+
+
+
+# ---------------------------------------------------------------------------
+# P2-B08: autouse fixture scrubbing FORGE_ env vars from the test environment
+# ---------------------------------------------------------------------------
+#
+# Developers commonly export FORGE_ROE_ID / FORGE_SCOPE_MANIFEST /
+# FORGE_REQUIRE_SCOPE_MANIFEST for a live-run experiment, then run
+# `pytest` in the same shell. Without this fixture, kill-chain tests that
+# assert `raise typer.BadParameter(...)` for missing ROE will silently
+# PASS because the CLI reads the env var fallback. That's a silent
+# false-negative on the ROE gate coverage.
+#
+# The autouse fixture uses monkeypatch.delenv() so each test starts with
+# these vars unset. Individual tests can still `monkeypatch.setenv()`
+# them when they want a specific value.
+
+
+@pytest.fixture(autouse=True)
+def _forge_env_clean(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scrub FORGE_ROE_ID / FORGE_SCOPE_MANIFEST / FORGE_REQUIRE_SCOPE_MANIFEST
+    from every test's env so shell-level exports don't silently pass tests
+    that were supposed to fail. Tests that need these vars set can call
+    ``monkeypatch.setenv(...)`` themselves.
+    """
+    for name in (
+        "FORGE_ROE_ID",
+        "FORGE_SCOPE_MANIFEST",
+        "FORGE_REQUIRE_SCOPE_MANIFEST",
+    ):
+        monkeypatch.delenv(name, raising=False)

@@ -37,11 +37,36 @@ logger = logging.getLogger(__name__)
 
 # ── Patterns ───────────────────────────────────────────────────────────────────
 
-_RFC1918_RE = re.compile(
-    r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+# Internal addresses that should not appear verbatim in client-deliverable
+# reports. Covers RFC-1918, IPv4 loopback (127/8), CGNAT (100.64/10),
+# IPv4 link-local (169.254/16), IPv6 ULA (fc00::/7), IPv6 link-local
+# (fe80::/10), IPv6 loopback (::1).
+_INTERNAL_IPV4_RE = re.compile(
+    r"\b(?:"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
     r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
-    r"|192\.168\.\d{1,3}\.\d{1,3})\b",
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|127\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}"
+    r"|169\.254\.\d{1,3}\.\d{1,3}"
+    r")\b",
 )
+# IPv6 detection: matches ULA (fc00::/7 - starts fc or fd), link-local
+# (fe80::/10 - starts fe80-febf), and loopback (::1). Uses a very-loose
+# regex (colons + hex) and defers precise categorisation to ipaddress.
+_INTERNAL_IPV6_RE = re.compile(
+    r"(?<![0-9A-Fa-f:])"
+    r"(?:"
+    r"::1(?:%[0-9A-Za-z]+)?"
+    r"|[fF][cCdD][0-9A-Fa-f]{2}:[0-9A-Fa-f:]{2,}"
+    r"|[fF][eE][89aAbB][0-9A-Fa-f]:[0-9A-Fa-f:]{2,}"
+    r")"
+    r"(?![0-9A-Fa-f:])",
+)
+
+# Backwards-compat alias for existing callers/tests that still reference
+# the old constant name.
+_RFC1918_RE = _INTERNAL_IPV4_RE
 
 _CRED_LEAK_RE = re.compile(
     r"(?:password|passwd|api[_-]?key|secret|token)\s*[=:]\s*\S+",
@@ -154,27 +179,35 @@ def _v03_no_internal_ips(
     """
     approved = {str(ip).strip() for ip in (approved_ips or ()) if str(ip).strip()}
     networks = _parse_approved_ip_ranges(approved_ip_ranges or ())
-    for match in _RFC1918_RE.finditer(text):
-        ip = match.group()
-        if ip in approved:
-            continue
-        if _ip_in_any_network(ip, networks):
-            continue
-        msg = (
-            f"[V-03] Internal IP {ip!r} found in report body. "
-            "Reference targets by hostname or role only."
-        )
-        if strict:
-            result.errors.append(msg)
-        else:
-            result.warnings.append(msg)
-            logger.warning(msg)
+    # Iterate BOTH IPv4 internal patterns and IPv6 internal patterns so ULA,
+    # link-local, and loopback addresses are also flagged.
+    for pattern in (_INTERNAL_IPV4_RE, _INTERNAL_IPV6_RE):
+        for match in pattern.finditer(text):
+            ip = match.group()
+            if ip in approved:
+                continue
+            if _ip_in_any_network(ip, networks):
+                continue
+            msg = (
+                f"[V-03] Internal IP {ip!r} found in report body. "
+                "Reference targets by hostname or role only."
+            )
+            if strict:
+                result.errors.append(msg)
+            else:
+                result.warnings.append(msg)
+                logger.warning(msg)
 
 
 def _parse_approved_ip_ranges(
     ranges: "Iterable[str]",
 ) -> "list[ipaddress.IPv4Network | ipaddress.IPv6Network]":
-    """Parse operator-supplied CIDR strings; skip and log malformed entries."""
+    """Parse operator-supplied CIDR strings; skip and log malformed entries.
+
+    P2-B07: also warn (single WARNING per parse) when an operator supplies
+    an overly-broad allowlist entry that would silently disable V-03 for
+    all traffic. Threshold: /8 for IPv4, /48 for IPv6.
+    """
     import ipaddress  # noqa: PLC0415
 
     parsed: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
@@ -183,10 +216,19 @@ def _parse_approved_ip_ranges(
         if not candidate:
             continue
         try:
-            parsed.append(ipaddress.ip_network(candidate, strict=False))
+            network = ipaddress.ip_network(candidate, strict=False)
         except ValueError:
             logger.debug("V-03: dropping invalid CIDR %r from allowlist", candidate)
             continue
+        parsed.append(network)
+        min_prefix = 8 if isinstance(network, ipaddress.IPv4Network) else 48
+        if network.prefixlen < min_prefix:
+            logger.warning(
+                "V-03: approved_ip_ranges entry %s is unusually broad "
+                "(prefix /%d < recommended /%d) — every address inside it "
+                "will bypass internal-IP detection.",
+                candidate, network.prefixlen, min_prefix,
+            )
     return parsed
 
 

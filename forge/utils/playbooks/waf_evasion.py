@@ -166,9 +166,10 @@ def _store_passive_results(
     for r in results:
         try:
             conn.execute(
-                """INSERT OR IGNORE INTO audit_log (engagement_id, action, detail, operator, timestamp)
-                   VALUES (?, 'passive_recon', ?, 'forge', datetime('now'))""",
-                (engagement_id, f"{domain}: {r.get('source')} {r.get('url', '')}"),
+                """INSERT OR IGNORE INTO audit_log
+                   (engagement_id, phase, module, action, target, result, operator, logged_at)
+                   VALUES (?, 'phase4', 'waf_evasion', 'passive_recon', ?, ?, 'forge', datetime('now'))""",
+                (engagement_id, domain, f"{r.get('source')}: {r.get('url', '')}"),
             )
         except Exception:
             pass

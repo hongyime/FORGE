@@ -139,9 +139,10 @@ def _record_exfil(
 ) -> None:
     try:
         conn.execute(
-            """INSERT OR IGNORE INTO audit_log (engagement_id, action, detail, operator, timestamp)
-               VALUES (?, 'exfiltration', ?, 'forge', datetime('now'))""",
-            (engagement_id, f"{source_ip}:{remote_path} -> {local_path} [{sha256[:8]}]"),
+            """INSERT OR IGNORE INTO audit_log
+               (engagement_id, phase, module, action, target, result, operator, logged_at)
+               VALUES (?, 'phase5', 'exfiltration', 'exfiltration', ?, ?, 'forge', datetime('now'))""",
+            (engagement_id, f"{source_ip}:{remote_path}", f"{local_path} [{sha256[:8]}]"),
         )
         conn.commit()
     except Exception:

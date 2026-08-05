@@ -383,17 +383,73 @@ def _scope_manifest_values(data: dict[str, Any], *keys: str) -> list[str]:
     return values
 
 
+def _path_under(candidate: Path, root: Path) -> bool:
+    """True if *candidate* is *root* or a descendant of *root*.
+
+    Uses :meth:`Path.relative_to` (available since 3.9). Returns False on
+    OSError / ValueError instead of raising, so a symlink hop that fails
+    to resolve doesn't crash the manifest loader.
+    """
+    try:
+        candidate.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 def _load_scope_manifest(value: str) -> dict[str, Any]:
     manifest_ref = str(value or "").strip()
     if not manifest_ref:
         raise ValueError("scope manifest path or JSON payload is required")
     if manifest_ref.startswith("{"):
+        # P2-B10: cap inline JSON at 1 MiB to prevent OOM from a
+        # pathological caller.
+        if len(manifest_ref) > 1_048_576:
+            raise ValueError(
+                f"scope manifest inline JSON is too large: "
+                f"{len(manifest_ref)} bytes exceeds 1 MiB cap"
+            )
         source = "inline_json"
         payload = json.loads(manifest_ref)
     else:
         path = Path(manifest_ref).expanduser()
-        source = path.resolve().as_posix()
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        # P2-B10: size cap + safe read.
+        # - Reject files >1 MiB (scope manifest should never be that big;
+        #   larger typically indicates a wrong path like /dev/urandom).
+        # - Refuse to follow the file if resolving it would traverse outside
+        #   the current working directory tree AND outside the caller's
+        #   home. This blocks casual `--scope-manifest /etc/shadow` reads.
+        # - Wrap OSError so upstream `raise typer.BadParameter(...invalid --scope-manifest: {exc}...)`
+        #   picks it up as a clean CLI error rather than a raw traceback.
+        try:
+            stat = path.stat()
+        except OSError as exc:
+            raise ValueError(f"cannot stat scope manifest: {exc}") from exc
+        if stat.st_size > 1_048_576:
+            raise ValueError(
+                f"scope manifest file too large: {stat.st_size} bytes exceeds 1 MiB cap"
+            )
+        try:
+            resolved = path.resolve(strict=False)
+        except OSError as exc:
+            raise ValueError(f"cannot resolve scope manifest path: {exc}") from exc
+        cwd = Path.cwd().resolve()
+        home = Path.home().resolve()
+        if not (
+            _path_under(resolved, cwd)
+            or _path_under(resolved, home)
+        ):
+            raise ValueError(
+                f"scope manifest path {resolved.as_posix()!r} is outside "
+                f"the current working directory and the operator home; "
+                f"refusing to read for OPSEC (drop the manifest under the "
+                f"engagement workspace and re-run)."
+            )
+        source = resolved.as_posix()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            raise ValueError(f"cannot read scope manifest: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError("scope manifest must decode to a JSON object")
 
@@ -3714,7 +3770,12 @@ def cloud_firebase_extract(
         if not found:
             console.print("[yellow]No Firebase config found in web app.[/yellow]")
         for c in found:
-            console.print(f"  [green]Found:[/green] project_id={c.get('project_id')}  api_key={str(c.get('api_key',''))[:12]}...")
+            _api_key_raw = str(c.get('api_key','') or '')
+            _api_key_disp = (
+                f"{_api_key_raw[:4]}...{_api_key_raw[-4:]}"
+                if len(_api_key_raw) > 8 else "***"
+            )
+            console.print(f"  [green]Found:[/green] project_id={c.get('project_id')}  api_key={_api_key_disp}")
             console.print(f"  [dim]→ forge cloud firebase --project-id {c.get('project_id')}[/dim]")
         if output_json and found:
             import json as _json
@@ -19622,60 +19683,6 @@ def dashboard(
     if open_browser:
         import webbrowser
         webbrowser.open(result.resolve().as_uri())
-@app.command("doctor")
-def doctor() -> None:
-    """Proactive environment and dependency health check."""
-    import platform
-    import shutil
-    import sys
-    import sqlite3
-    from rich.table import Table
-    from forge.config import ForgeConfig
-
-    console.print("\n[bold cyan]FORGE Doctor[/bold cyan] - Environment Health Check\n")
-    
-    cfg = ForgeConfig.load()
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Component", width=20)
-    table.add_column("Status", width=15)
-    table.add_column("Details")
-
-    table.add_row("OS Platform", "[green]OK[/green]", f"{platform.system()} {platform.release()}")
-    table.add_row("Python Version", "[green]OK[/green]", sys.version.split()[0])
-
-    db_path = cfg.kb_db_path
-    if db_path.exists():
-        try:
-            with sqlite3.connect(str(db_path)) as conn:
-                count = conn.execute("SELECT count(*) FROM cve_records").fetchone()[0]
-                if count > 0:
-                    table.add_row("Knowledge Base", "[green]OK[/green]", f"{count} CVEs loaded")
-                else:
-                    table.add_row("Knowledge Base", "[yellow]EMPTY[/yellow]", "Run `forge kb sync`")
-        except Exception as e:
-            table.add_row("Knowledge Base", "[red]ERROR[/red]", str(e))
-    else:
-        table.add_row("Knowledge Base", "[yellow]MISSING[/yellow]", "Run `forge kb sync`")
-
-    for bin_name in ["nmap", "masscan", "sherlock", "kiro-cli", "claude"]:
-        path = shutil.which(bin_name)
-        if path:
-            table.add_row(f"Binary: {bin_name}", "[green]OK[/green]", str(path))
-        else:
-            table.add_row(f"Binary: {bin_name}", "[yellow]MISSING[/yellow]", "Not found in PATH")
-
-    if cfg.shodan_key:
-        table.add_row("Shodan API", "[green]OK[/green]", "Configured")
-    else:
-        table.add_row("Shodan API", "[yellow]MISSING[/yellow]", "FORGE_SHODAN_API_KEY not set")
-
-    if cfg.github_token:
-        table.add_row("GitHub Token", "[green]OK[/green]", "Configured")
-    else:
-        table.add_row("GitHub Token", "[yellow]MISSING[/yellow]", "FORGE_GITHUB_TOKEN not set")
-
-    console.print(table)
-    console.print()
 @app.command("doctor")
 def doctor() -> None:
     """Proactive environment and dependency health check."""

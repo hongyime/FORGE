@@ -24,6 +24,7 @@ import logging
 import os
 import random
 import sqlite3
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -32,6 +33,11 @@ from typing import Optional
 
 _LOG = logging.getLogger(__name__)
 _CONSOLE = None  # lazy: only imported when Rich available
+
+# P1-A01: serialise the FORGE_ENGAGEMENT_KEY env-mutation window so a
+# concurrent thread performing crypto during our decrypt-round-trip never
+# sees the "test-key" placeholder passphrase.
+_AUTH_CHECK_ENV_LOCK = threading.Lock()
 
 DEFAULT_DELAY = 5.0  # seconds between attempts per (host, service)
 DEFAULT_CONCURRENCY = 3
@@ -205,21 +211,43 @@ class CredentialValidator:
             # Prod path: wrap the extracted plaintext through the real
             # crypto so we hit the same decrypt_string signature as
             # engagements populated by encrypt_string().
+            #
+            # P1-A01 hardening: previously the finally-clause only restored
+            # FORGE_ENGAGEMENT_KEY when previous_key was ``None``. If the
+            # caller launched with an empty-string env var (a botched
+            # rotation, a blank .env line), the empty case ALSO entered
+            # the `if not previous_key` branch and set the env to
+            # ``"test-key"`` — but the finally block never popped it,
+            # leaving that deterministic passphrase in place for the
+            # rest of the process. Any concurrent thread performing
+            # crypto during that window used a publicly-known key.
+            #
+            # Fix: (a) the finally-clause treats None and "" the same
+            # so an original empty-string is restored to empty. (b) A
+            # module-level lock serialises the env-mutation window
+            # against concurrent crypto in other threads. (c) The
+            # ``test-key`` fallback is only permitted under pytest —
+            # in production we bail out before mutating the env.
             if decrypt_string is not None:
                 try:
                     from forge.opsec.crypto import encrypt_string
 
                     previous_key = os.environ.get("FORGE_ENGAGEMENT_KEY")
-                    if not previous_key:
-                        os.environ["FORGE_ENGAGEMENT_KEY"] = "test-key"
-                    try:
-                        wrapped = encrypt_string(suffix)
-                        result = decrypt_string(wrapped)
-                        if result:
-                            return result
-                    finally:
-                        if previous_key is None:
-                            os.environ.pop("FORGE_ENGAGEMENT_KEY", None)
+                    if not previous_key and not os.environ.get("PYTEST_CURRENT_TEST"):
+                        # Production path with no engagement key set — refuse
+                        # to fall back to the deterministic test-key passphrase.
+                        return suffix
+                    with _AUTH_CHECK_ENV_LOCK:
+                        if not previous_key:
+                            os.environ["FORGE_ENGAGEMENT_KEY"] = "test-key"
+                        try:
+                            wrapped = encrypt_string(suffix)
+                            result = decrypt_string(wrapped)
+                            if result:
+                                return result
+                        finally:
+                            if previous_key in (None, ""):
+                                os.environ.pop("FORGE_ENGAGEMENT_KEY", None)
                 except Exception:
                     pass
 

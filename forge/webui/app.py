@@ -486,7 +486,13 @@ def create_app() -> Any:
 
     def _canonical_seed_value(seed_value: str, seed_type: str) -> str:
         value = str(seed_value or "").strip()
-        if str(seed_type or "").strip().lower() in {"url", "apk_url"}:
+        # Include cloud_ref so provider URL-form seeds get the same
+        # trailing-slash / casing normalisation as generic URL seeds.
+        # Otherwise submitting "https://xyz.supabase.co/" and
+        # "https://xyz.supabase.co" creates two distinct rows because
+        # the UNIQUE (engagement_id, seed_type, seed_value) constraint is
+        # case-sensitive and does not collapse trailing slashes.
+        if str(seed_type or "").strip().lower() in {"url", "apk_url", "cloud_ref"}:
             return _canonical_http_url_value(value) or value
         return value
 

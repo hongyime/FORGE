@@ -113,11 +113,25 @@ def run_wizard(engagement_id: str) -> None:
     findings: list[PortFinding] = []
     if run_ports:
         _show_step(2, 3, "TCP Port Scan", clear_between_steps)
+        # P2-B03: pass scope_override so _host_row_is_authorized_by_scope
+        # doesn't short-circuit to True on the hosts.in_scope=1 DB bit.
+        # Defense-in-depth: every module calls the scope gate directly.
+        from forge.opsec.scope_gate import load_scope_from_db  # noqa: PLC0415
+        _wizard_db_path = cfg.engagement_db_path(engagement_id)
+        try:
+            _wizard_scope = [
+                str(item)
+                for item in load_scope_from_db(str(_wizard_db_path), eng_id)
+                if str(item or "").strip()
+            ]
+        except Exception:  # noqa: BLE001 — never crash the wizard on scope load
+            _wizard_scope = None
         findings = scan_engagement(
             engagement_id=eng_id,
-            db_path=cfg.engagement_db_path(engagement_id),
+            db_path=_wizard_db_path,
             operator=cfg.operator,
             progress_callback=on_port_progress,
+            scope_override=_wizard_scope,
         )
     if run_ports:
         console.print(f"[green]Port scan step complete:[/green] {len(findings)} open services found.")

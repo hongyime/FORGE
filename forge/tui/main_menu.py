@@ -344,14 +344,23 @@ def _action_report_generate() -> None:
     _CONSOLE.print("[bold]Provider[/bold] — how to render the report:")
     _CONSOLE.print("  [cyan]template[/cyan]  fast (~2s), deterministic, no LLM  [dim](default)[/dim]")
     _CONSOLE.print("  [cyan]auto[/cyan]      cascade through installed LLM CLIs (Kiro/Claude/...)")
+    # P2-B01: build choices dynamically from _AUTO_CASCADE_DEFAULT_ORDER so
+    # bedrock_anthropic and openai_compatible don't fall out of the TUI menu
+    # when the cascade constant changes upstream.
+    from forge.phase6.report_synthesizer import _AUTO_CASCADE_DEFAULT_ORDER  # noqa: PLC0415
     _CONSOLE.print("  [cyan]kiro_cli[/cyan]  force Kiro CLI (best quality if installed)")
     _CONSOLE.print("  [cyan]claude_code[/cyan]  force Claude Code")
     _CONSOLE.print("  [cyan]llama_cpp[/cyan]  local Qwen 1.5B [dim](slow, often fails validation)[/dim]")
+    _cascade_choices: list[str] = ["template", "auto"] + [
+        name for name in _AUTO_CASCADE_DEFAULT_ORDER if name != "template"
+    ]
+    # de-duplicate while preserving order
+    _seen: set[str] = set()
+    _cascade_choices = [c for c in _cascade_choices if not (c in _seen or _seen.add(c))]
     provider = _prompt_or_back(
         "Provider",
         default="template",
-        choices=["template", "auto", "kiro_cli", "claude_code",
-                 "codex_cli", "gemini_cli", "llama_cpp"],
+        choices=_cascade_choices,
         show_default=True,
     )
     if provider is None:

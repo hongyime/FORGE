@@ -221,7 +221,12 @@ def extract_firebase_config(
     for cfg_item in found:
         project_id = cfg_item.get("project_id")
         api_key = cfg_item.get("api_key")
-        print(f"[FIREBASE] Found config: project_id={project_id} api_key={api_key[:10]}..." if api_key else
+        _api_key_str = str(api_key or "")
+        _api_key_disp = (
+            f"{_api_key_str[:4]}...{_api_key_str[-4:]}"
+            if len(_api_key_str) > 8 else "***"
+        )
+        print(f"[FIREBASE] Found config: project_id={project_id} api_key={_api_key_disp}" if api_key else
               f"[FIREBASE] Found config: project_id={project_id}", flush=True)
         sys.stdout.flush()
 

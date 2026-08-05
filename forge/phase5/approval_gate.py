@@ -105,9 +105,10 @@ def _audit(
 ) -> None:
     try:
         db.execute(
-            """INSERT INTO audit_log (engagement_id, action, detail, operator, timestamp)
-               VALUES (?, ?, ?, 'forge', datetime('now'))""",
-            (engagement_id, action_name, f"{description} [{result}]"),
+            """INSERT INTO audit_log
+               (engagement_id, phase, module, action, target, result, operator, logged_at)
+               VALUES (?, 'phase5', 'approval_gate', ?, ?, ?, 'forge', datetime('now'))""",
+            (engagement_id, action_name, description, result),
         )
         db.commit()
     except sqlite3.OperationalError:
