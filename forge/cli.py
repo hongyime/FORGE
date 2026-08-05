@@ -47,13 +47,11 @@ from typing import Any, Callable, Iterable, Optional, Sequence, cast
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-# P2/P3 audit fix: even at WARNING level, httpx can emit URLs (e.g. on 429
-# retry paths) that carry Shodan / GitHub / Azure SAS / AWS SigV4 secrets in
-# query params. Install a redaction filter on every HTTP-client logger so
-# nothing leaks through stdout, journalctl, or file handlers.
-from forge.utils.log_redaction import install_query_redaction_filter  # noqa: E402
-
-install_query_redaction_filter()
+# Note: install_query_redaction_filter() is invoked from forge/__init__.py
+# at package import so every entry point (CLI, webui, api, distributed
+# worker, TUI, migration scripts, provider subprocess) inherits the
+# filter. Left the setLevel calls here as belt-and-suspenders in case
+# a caller replaced the handlers.
 
 import typer
 from rich.console import Console
@@ -8860,7 +8858,7 @@ def kill_chain(
                     SELECT DISTINCT seed_value, seed_type
                     FROM engagement_seeds
                     WHERE engagement_id=?
-                      AND seed_type IN ('domain', 'subdomain', 'email', 'url', 'apk_url')
+                      AND seed_type IN ('domain', 'subdomain', 'email', 'url', 'apk_url', 'cloud_ref')
                     """,
                     (engagement_id,),
                 ).fetchall()

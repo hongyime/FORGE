@@ -1243,7 +1243,32 @@ def _rebuild_table(
     if not columns:
         return
 
-    temp_table = f"{table_name}__m0017_old"
+    # Parametrise the temp-table suffix so different migrations don't collide.
+    # A SIGKILL between RENAME and DROP used to leave `engagement_seeds__m0017_old`
+    # lying around, which then broke any later migration that also called
+    # `_rebuild_table("engagement_seeds", ...)` — the ALTER RENAME failed with
+    # "table already exists". We now scan sqlite_master for any leftover
+    # `{table}__m*_old` shells and drop them before the RENAME. This makes
+    # `_rebuild_table` idempotent under interrupted runs.
+    try:
+        stale_rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?",
+            (f"{table_name}\\_\\_m%\\_old",),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        stale_rows = []
+    for (stale_name,) in stale_rows:
+        try:
+            conn.execute(f"DROP TABLE {_quoted_identifier(str(stale_name))}")
+        except sqlite3.OperationalError:
+            continue
+
+    # Use a deterministic-per-migration suffix by hashing the create_table_sql —
+    # gives every migration a unique temp name so parallel _rebuild_table calls
+    # (should never happen but defensive) can't step on each other.
+    import hashlib as _hashlib  # noqa: PLC0415
+    _sql_digest = _hashlib.sha1(create_table_sql.encode("utf-8")).hexdigest()[:8]
+    temp_table = f"{table_name}__rebuild_{_sql_digest}"
     conn.execute(
         f"ALTER TABLE {_quoted_identifier(table_name)} RENAME TO {_quoted_identifier(temp_table)}"
     )

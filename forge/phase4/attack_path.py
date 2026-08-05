@@ -746,7 +746,7 @@ class AttackGraphBuilder:
             )
             self._add_node(node)
             self._seed_node_by_id[sid] = node_id
-            if seed_type_text in {"domain", "subdomain", "ipv4", "ipv6", "url", "apk_url"}:
+            if seed_type_text in {"domain", "subdomain", "ipv4", "ipv6", "url", "apk_url", "cloud_ref"}:
                 self._host_by_name[str(seed_value or "").lower()] = node_id
             if parent_seed_id is not None:
                 pending_parent_edges.append((int(parent_seed_id), sid, float(confidence or 0.5)))

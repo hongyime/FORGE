@@ -12980,7 +12980,7 @@ class EngagementSynthesisEngine:
         source_text = str(source_label or "").strip().lower()
         if anchor_type == "email":
             return 0.82
-        if anchor_type in {"domain", "subdomain", "url", "apk_url"}:
+        if anchor_type in {"domain", "subdomain", "url", "apk_url", "cloud_ref"}:
             return 0.74
         if anchor_type == "phone":
             return 0.73 if "phone" in source_text else 0.7
@@ -17032,7 +17032,10 @@ class EngagementSynthesisEngine:
         candidate = str(value or "").strip()
         if not candidate:
             return ""
-        if _classify_seed_value(candidate) in {"email", "phone", "url", "apk_url", "domain", "subdomain", "ip"}:
+        if _classify_seed_value(candidate) in {
+            "email", "phone", "url", "apk_url", "domain", "subdomain",
+            "ipv4", "ipv6", "cloud_ref",
+        }:
             return ""
         return candidate
 
