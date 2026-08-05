@@ -69,7 +69,7 @@ console = Console(stderr=True)
 
 _MOBILE_BUNDLE_SEED_SUFFIXES = (".apk", ".ipa", ".aab", ".apkm", ".apks", ".xapk")
 _WEB_FETCH_DEFAULT_REQUEST_DELAY_SECONDS = 0.0
-_IDENTITY_LOOKUP_DEFAULT_MAX_WORKERS = 1
+_IDENTITY_LOOKUP_DEFAULT_MAX_WORKERS = 2
 _VALIDATION_DEFAULT_MAX_WORKERS = 1
 _ARTIFACT_PROCESSOR_DEFAULT_MAX_WORKERS = 4
 _DNS_DEFAULT_MAX_WORKERS = 1
@@ -5059,8 +5059,8 @@ def kill_chain(
         help="Reuse persisted seed-run state and skip fan-outs already completed for this engagement.",
     ),
     max_iter: int = typer.Option(
-        7, "--max-iter",
-        help="Spider iterations (default 7). Loop breaks early on stable snapshot.",
+        15, "--max-iter",
+        help="Spider iterations (default 15, max 20). Loop breaks early on stable snapshot.",
     ),
     tor: bool = typer.Option(
         False, "--tor",
@@ -5103,9 +5103,9 @@ def kill_chain(
         help="Skip GitHub keyscan (protects FORGE_GITHUB_TOKEN quota).",
     ),
     parallel_fanout: int = typer.Option(
-        2,
+        4,
         "--parallel-fanout",
-        help="Maximum concurrent passive fan-out subprocesses per batch (default 2, max 4).",
+        help="Maximum concurrent passive fan-out subprocesses per batch (default 4, max 8).",
     ),
     report_provider: Optional[str] = typer.Option(
         None,
@@ -5127,11 +5127,23 @@ def kill_chain(
         ),
     ),
     auto_run_detected: bool = typer.Option(
-        False,
-        "--auto-run-detected",
+        True,
+        "--auto-run-detected/--no-auto-run-detected",
         help=(
             "After the main engagement run, automatically execute any runnable "
-            "detected follow-on modules instead of only listing or prompting for them."
+            "detected follow-on modules (default ON). Pass --no-auto-run-detected "
+            "to only list them without executing."
+        ),
+    ),
+    go_hard: bool = typer.Option(
+        False,
+        "--go-hard",
+        help=(
+            "Maximum aggression mode. Sets max-iter=20, parallel-fanout=8, "
+            "CommonCrawl indexes=5 (5000 URLs/index), identity workers=3, "
+            "auto-run=True, enables keyscan validation, and activates the "
+            "500-label deep subdomain wordlist. Use for thorough assessments "
+            "where you have explicit authorization and time budget."
         ),
     ),
     include_offensive_prereqs: bool = typer.Option(
@@ -5193,13 +5205,23 @@ def kill_chain(
     scope_manifest = str(scope_manifest or "").strip()
     skip_cloud = False if _is_typer_default(skip_cloud) else bool(skip_cloud)
     skip_keyscan = False if _is_typer_default(skip_keyscan) else bool(skip_keyscan)
-    parallel_fanout = 2 if _is_typer_default(parallel_fanout) else int(parallel_fanout)
+    parallel_fanout = 4 if _is_typer_default(parallel_fanout) else int(parallel_fanout)
     report_provider = None if _is_typer_default(report_provider) else report_provider
     report_max_loops = None if _is_typer_default(report_max_loops) else report_max_loops
-    auto_run_detected = False if _is_typer_default(auto_run_detected) else bool(auto_run_detected)
+    auto_run_detected = True if _is_typer_default(auto_run_detected) else bool(auto_run_detected)
     include_offensive_prereqs = (
         False if _is_typer_default(include_offensive_prereqs) else bool(include_offensive_prereqs)
     )
+
+    # ─── --go-hard: maximum aggression overrides ───────────────────────
+    if go_hard:
+        max_iter = 20
+        parallel_fanout = 8
+        auto_run_detected = True
+        os.environ.setdefault("FORGE_COMMONCRAWL_INDEX_LIMIT", "5")
+        os.environ.setdefault("FORGE_COMMONCRAWL_RESULTS_PER_INDEX", "5000")
+        os.environ.setdefault("FORGE_IDENTITY_LOOKUP_MAX_WORKERS", "3")
+
     # ─── Compatibility aliases for internal loop code (was 14 flags) ───
     # The kill-chain body still references the pre-consolidation names.
     # Rather than rewrite ~30 references, map them here once.
@@ -5229,7 +5251,7 @@ def kill_chain(
             "Use --dry-run to preview without live execution."
         )
     try:
-        parallel_workers = max(1, min(4, int(parallel_fanout or 2)))
+        parallel_workers = max(1, min(8, int(parallel_fanout or 4)))
     except (TypeError, ValueError):
         parallel_workers = 2
     module_timeout_seconds = _module_subprocess_timeout_seconds()
