@@ -116,10 +116,10 @@ class TestClassifySeedValue:
         assert _classify_seed_value("user@example.com") == "email"
 
     def test_phone_still_returns_phone(self) -> None:
-        assert _classify_seed_value("+6592348112") == "phone"
+        assert _classify_seed_value("+15551234567") == "phone"
 
     def test_username_still_returns_username(self) -> None:
-        assert _classify_seed_value("@bryanseah234") == "username"
+        assert _classify_seed_value("@operator") == "username"
 
     def test_ipv4_still_returns_ipv4(self) -> None:
         assert _classify_seed_value("10.0.0.5") == "ipv4"

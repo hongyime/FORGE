@@ -108,20 +108,20 @@ Seed can be any scoped identifier — kill-chain auto-detects the type and route
 
 | Seed | Example |
 |---|---|
-| Domain | `hong-yi.me` |
+| Domain | `target.example` |
 | IPv4 | `10.0.0.5` |
 | Email | `user@company.com` |
-| Phone (E.164) | `+6592348112` |
-| Username | `@bryanseah234` |
-| Full name (in quotes) | `"Bryan Seah"` |
+| Phone (E.164) | `+15551234567` |
+| Username | `@operator` |
+| Full name (in quotes) | `"FORGE Operator"` |
 
 Example:
 
 ```powershell
-forge kill-chain hong-yi.me --engagement 1001
-forge kill-chain bryanseah234@gmail.com --engagement 1002
-forge kill-chain +6592348112 --engagement 1003
-forge kill-chain @bryanseah234 --engagement 1004
+forge kill-chain target.example --engagement 1001
+forge kill-chain user@company.com --engagement 1002
+forge kill-chain +15551234567 --engagement 1003
+forge kill-chain @operator --engagement 1004
 ```
 
 Every run produces a Markdown report + Maltego workspace/GraphML artifacts + evidence DB.

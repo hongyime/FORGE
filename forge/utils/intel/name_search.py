@@ -1,6 +1,6 @@
 """Full-name OSINT (Module 2-N).
 
-Given a person's name (e.g. "Bryan Seah"), query public SearXNG
+Given a person's name (e.g. "FORGE Operator"), query public SearXNG
 instances for site-restricted searches on LinkedIn / GitHub / Twitter /
 Instagram / Facebook, regex-extract candidate profile URLs, and persist
 them to the engagement DB. Every request goes through the operator's

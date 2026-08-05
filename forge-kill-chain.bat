@@ -17,12 +17,12 @@ echo   FORGE Toolkit - Kill-Chain
 echo ============================================================================
 echo.
 echo  Seed types accepted:
-echo    - Domain          hong-yi.me
+echo    - Domain          target.example
 echo    - IPv4            10.0.0.5
 echo    - Email           user@company.com
-echo    - Phone (E.164)   +6592348112
-echo    - Username        @bryanseah234
-echo    - Full name       "Bryan Seah"     (quotes required)
+echo    - Phone (E.164)   +15551234567
+echo    - Username        @operator
+echo    - Full name       "FORGE Operator"     (quotes required)
 echo.
 
 set /p ENGAGEMENT="Engagement ID (leave BLANK for auto-derive): "

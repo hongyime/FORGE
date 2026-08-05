@@ -453,15 +453,15 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
   {
     id: '1013',
     slug: 'engagement-1013-bryan-seah',
-    name: 'Bryan Seah Identity Mapping',
+    name: 'FORGE Operator Identity Mapping',
     status: 'stabilized',
     operator: 'delta-one',
     tags: ['identity', 'executive', 'apac'],
     created_at: '2026-07-09 09:02:07',
     updated_at: '2026-07-09 09:43:28',
     latest_audit: '2026-07-09 09:43:28',
-    primary_seed: 'bryanseah234@gmail.com',
-    seeds: ['bryanseah234@gmail.com', '@bryanseah234'],
+    primary_seed: 'user@company.com',
+    seeds: ['user@company.com', '@operator'],
     counts: {
       hosts: 2,
       emails: 4,
@@ -498,7 +498,7 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
     detail_data: 'data/engagements/engagement-1013-bryan-seah.json',
     path: '.forge_data/engagements/1013.db',
     size_label: '412 KB',
-    scope: ['bryanseah234@gmail.com', '@bryanseah234'],
+    scope: ['user@company.com', '@operator'],
     artifacts: [
       {
         name: 'engagement_1013_report_20260709T014328.md',
@@ -562,8 +562,8 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
       critical_path_nodes: ['EMAIL::gmail', 'SOCIAL::github'],
       critical_path_weight: 7.2,
       nodes: [
-        { node_id: 'EMAIL::gmail', node_type: 'CREDENTIAL', label: 'bryanseah234@gmail.com', severity: 'LOW', source_table: 'engagement_seeds', source_id: 1, on_critical_path: true, metadata: { source: 'seed' } },
-        { node_id: 'USERNAME::handle', node_type: 'EXTERNAL', label: '@bryanseah234', severity: 'LOW', source_table: 'engagement_seeds', source_id: 2, metadata: { source: 'seed' } },
+        { node_id: 'EMAIL::gmail', node_type: 'CREDENTIAL', label: 'user@company.com', severity: 'LOW', source_table: 'engagement_seeds', source_id: 1, on_critical_path: true, metadata: { source: 'seed' } },
+        { node_id: 'USERNAME::handle', node_type: 'EXTERNAL', label: '@operator', severity: 'LOW', source_table: 'engagement_seeds', source_id: 2, metadata: { source: 'seed' } },
         { node_id: 'SOCIAL::github', node_type: 'HOST', label: 'github profile', severity: 'MEDIUM', source_table: 'social_profiles', source_id: 1, on_critical_path: true, metadata: { platform: 'github' } },
         { node_id: 'SOCIAL::linkedin', node_type: 'HOST', label: 'linkedin slug', severity: 'LOW', source_table: 'social_profiles', source_id: 2, metadata: { platform: 'linkedin' } },
       ],
@@ -577,7 +577,7 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
     sections: {
       hosts: [],
       emails: [
-        { Email: 'bryanseah234@gmail.com', Domain: 'gmail.com', Source: 'seed', Seen: '2026-07-09 09:02:07' },
+        { Email: 'user@company.com', Domain: 'gmail.com', Source: 'seed', Seen: '2026-07-09 09:02:07' },
       ],
       audit_log: [
         {
@@ -593,7 +593,7 @@ const SAMPLE_DETAIL: EngagementDetail[] = [
           Phase: 'phase2',
           Module: 'sherlock',
           Action: 'username_correlate',
-          Target: '@bryanseah234',
+          Target: '@operator',
           Result: '3 high-confidence matches',
         },
       ],

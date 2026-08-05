@@ -2337,7 +2337,7 @@ def osint_accounts(
 def osint_phone(
     engagement: str = typer.Option(..., "--engagement", "-e"),
     number: str = typer.Option(..., "--number", "-n",
-                                help="Phone number in E.164 format (+6592348112)."),
+                                help="Phone number in E.164 format (+15551234567)."),
     no_online: bool = typer.Option(False, "--no-online",
                                     help="Skip PhoneInfoga (offline parse only)."),
     max_dork_concurrency: int = typer.Option(
@@ -2437,7 +2437,7 @@ def osint_phone(
 def osint_name(
     engagement: str = typer.Option(..., "--engagement", "-e"),
     name: str = typer.Option(..., "--name", "-n",
-                              help="Full name in quotes, e.g. \"Bryan Seah\"."),
+                              help="Full name in quotes, e.g. \"FORGE Operator\"."),
     proxy: Optional[str] = typer.Option(
         None, "--proxy", envvar="FORGE_PROXY",
         help="HTTP/SOCKS proxy for the search queries (e.g. socks5://127.0.0.1:9050 for Tor).",
@@ -5060,10 +5060,10 @@ def clean(
 def kill_chain(
     seed: str = typer.Argument(
         ...,
-        help="ANY identifier: domain (hong-yi.me), IP (10.0.0.5), email "
-             "(user@x.com), phone (+6592348112), username (@handle), "
+        help="ANY identifier: domain (target.example), IP (10.0.0.5), email "
+             "(user@x.com), phone (+15551234567), username (@handle), "
              "company name (\"Acme Corp\"), or full name in quotes "
-             "(\"Bryan Seah\").",
+             "(\"FORGE Operator\").",
     ),
     related_seed: Optional[list[str]] = typer.Option(
         None,

@@ -28,12 +28,12 @@ forge kill-chain <seed> --engagement <N>
 
 | Type | Example |
 |---|---|
-| Domain | `hong-yi.me` |
+| Domain | `target.example` |
 | IPv4 | `10.0.0.5` |
 | Email | `admin@company.com` |
-| Phone | `+6592348112` |
-| Username | `@bryanseah234` |
-| Full name | `"Bryan Seah"` |
+| Phone | `+15551234567` |
+| Username | `@operator` |
+| Full name | `"FORGE Operator"` |
 
 kill-chain auto-detects the type and routes to the right initial fan-out.
 
@@ -60,22 +60,22 @@ forge kill-chain <seed>
 
 ```powershell
 # Fresh domain sweep
-forge kill-chain hong-yi.me -e 1001
+forge kill-chain target.example -e 1001
 
 # Chase an email
 forge kill-chain user@company.com -e 1002
 
 # Chase a phone number
-forge kill-chain +6592348112 -e 1003
+forge kill-chain +15551234567 -e 1003
 
 # Chase a handle
-forge kill-chain @bryanseah234 -e 1004
+forge kill-chain @operator -e 1004
 
 # Chase a full name (over Tor for exit-IP rotation)
-forge kill-chain "Bryan Seah" -e 1005 --tor
+forge kill-chain "FORGE Operator" -e 1005 --tor
 
 # Preview only, no outbound
-forge kill-chain hong-yi.me -e 9999 --dry-run
+forge kill-chain target.example -e 9999 --dry-run
 
 # Aggressive against your own vuln target
 forge kill-chain testphp.vulnweb.com -e 2007 --attack-mode --roe-id ROE-123 --scope-manifest .\roe-scope.json

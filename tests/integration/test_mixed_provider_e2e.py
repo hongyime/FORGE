@@ -185,7 +185,7 @@ class _MixedProviderClient:
         if "discord.com" in url:
             return _mock_response(200, {"id": "1", "username": "bot"})
         if "github.com" in url:
-            return _mock_response(200, {"id": 42, "slug": "test-app", "owner": {"login": "hongyime"}})
+            return _mock_response(200, {"id": 42, "slug": "test-app", "owner": {"login": "forge-org"}})
         if "core.windows.net" in url:
             resp = MagicMock()
             resp.status_code = 200

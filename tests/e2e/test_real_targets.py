@@ -5,12 +5,12 @@ minimum row counts per relevant table, and produces a Markdown report card
 at reports/real_target_test_YYYYMMDDTHHMMSS.md.
 
 Seeds tested:
-  2001  hong-yi.me                      (domain — should get many subs)
-  2002  bryanseah234@gmail.com          (email  — HIBP/xposed/holehe hits)
+  2001  target.example                      (domain — should get many subs)
+  2002  user@company.com          (email  — HIBP/xposed/holehe hits)
   2003  shotsbyseah234@gmail.com        (email  — same)
-  2004  @bryanseah234                   (username — Sherlock hits)
+  2004  @operator                   (username — Sherlock hits)
   2005  @shotsbyseah234                 (username — same)
-  2006  +6592348112                     (phone   — Singapore/SingTel/mobile)
+  2006  +15551234567                     (phone   — Singapore/SingTel/mobile)
   2007  testphp.vulnweb.com             (domain — deliberately vulnerable)
 
 Each engagement runs with --max-iter=2 --dry-run-keyscan (== --dry-run in
@@ -45,7 +45,7 @@ FORGE_EXE = REPO / ".venv" / "Scripts" / "forge.exe"
 TEST_MATRIX: list[dict[str, Any]] = [
     {
         "id": 2001,
-        "seed": "hong-yi.me",
+        "seed": "target.example",
         "type": "domain",
         "flags": ["--max-iter", "1", "--skip-keyscan"],
         "success": {"hosts": 5, "audit_log": 10},
@@ -53,7 +53,7 @@ TEST_MATRIX: list[dict[str, Any]] = [
     },
     {
         "id": 2002,
-        "seed": "bryanseah234@gmail.com",
+        "seed": "user@company.com",
         "type": "email",
         "flags": ["--max-iter", "1", "--skip-keyscan", "--skip-cloud"],
         "success": {"emails": 1, "audit_log": 5},
@@ -69,7 +69,7 @@ TEST_MATRIX: list[dict[str, Any]] = [
     },
     {
         "id": 2004,
-        "seed": "@bryanseah234",
+        "seed": "@operator",
         "type": "username",
         "flags": ["--max-iter", "1", "--skip-keyscan", "--skip-cloud"],
         "success": {"audit_log": 5},
@@ -85,7 +85,7 @@ TEST_MATRIX: list[dict[str, Any]] = [
     },
     {
         "id": 2006,
-        "seed": "+6592348112",
+        "seed": "+15551234567",
         "type": "phone",
         "flags": ["--max-iter", "1", "--skip-keyscan", "--skip-cloud"],
         "success": {"audit_log": 5},
