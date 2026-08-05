@@ -25,6 +25,7 @@ import base64
 import hashlib
 import json
 import logging
+import os
 import re
 import sqlite3
 import time
@@ -3304,21 +3305,27 @@ def run_key_scanner(
 
     # Mandatory operator confirmation before validation.
     if not no_validate:
-        try:
-            import questionary  # type: ignore[import]
+        # FORGE_KEYSCAN_ASSUME_YES=1 bypasses the OPSEC prompt so kill-chain
+        # attack-mode runs (non-TTY subprocesses) can proceed. Scope/ROE were
+        # already asserted upstream before this function was invoked.
+        if os.environ.get("FORGE_KEYSCAN_ASSUME_YES", "0").strip() == "1":
+            _LOG.info("[KEYSCAN] FORGE_KEYSCAN_ASSUME_YES=1 — skipping OPSEC prompt")
+        else:
+            try:
+                import questionary  # type: ignore[import]
 
-            ok = questionary.confirm(
-                f"\n[!] OPSEC WARNING: Validation calls will be made to provider APIs "
-                f"using discovered keys. These calls are logged by the provider and may "
-                f"trigger alerts in target environments.\n"
-                f"Validation proxy: {validation_proxy}\n"
-                "Confirm you wish to proceed with key validation?"
-            ).ask()
-            if not ok:
-                _LOG.info("Key validation aborted by operator.")
-                no_validate = True
-        except Exception:
-            pass
+                ok = questionary.confirm(
+                    f"\n[!] OPSEC WARNING: Validation calls will be made to provider APIs "
+                    f"using discovered keys. These calls are logged by the provider and may "
+                    f"trigger alerts in target environments.\n"
+                    f"Validation proxy: {validation_proxy}\n"
+                    "Confirm you wish to proceed with key validation?"
+                ).ask()
+                if not ok:
+                    _LOG.info("Key validation aborted by operator.")
+                    no_validate = True
+            except Exception:
+                pass
 
     patterns = load_key_patterns()
     github_token_pool = resolve_secret_pool(github_token, "FORGE_GITHUB_TOKEN")

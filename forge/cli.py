@@ -4894,13 +4894,19 @@ def post_lateral(
         target=target_host,
         seed_type="domain",
     )
-    import questionary  # noqa: PLC0415
+    # Kill-chain attack-mode auto-fire path: FORGE_POST_LATERAL_ASSUME_YES=1
+    # skips the interactive confirm. Scope was already asserted above via
+    # `_direct_cli_load_scope_lists`, and ROE is required by
+    # `_direct_cli_require_roe`, so the confirm is redundant when the operator
+    # already opted in via the outer `forge kill-chain --attack-mode` run.
+    if os.environ.get("FORGE_POST_LATERAL_ASSUME_YES", "0").strip() != "1":
+        import questionary  # noqa: PLC0415
 
-    confirmed = questionary.confirm(
-        f"CONFIRM: Lateral movement to {target_host!r} via {technique!r}. Proceed?"
-    ).ask()
-    if not confirmed:
-        raise typer.Exit()
+        confirmed = questionary.confirm(
+            f"CONFIRM: Lateral movement to {target_host!r} via {technique!r}. Proceed?"
+        ).ask()
+        if not confirmed:
+            raise typer.Exit()
 
     from forge.utils.post.remote_exec import run_lateral  # noqa: PLC0415
 
@@ -5209,9 +5215,21 @@ def kill_chain(
     report_provider = None if _is_typer_default(report_provider) else report_provider
     report_max_loops = None if _is_typer_default(report_max_loops) else report_max_loops
     auto_run_detected = True if _is_typer_default(auto_run_detected) else bool(auto_run_detected)
-    include_offensive_prereqs = (
-        False if _is_typer_default(include_offensive_prereqs) else bool(include_offensive_prereqs)
-    )
+    # `include_offensive_prereqs` auto-follows `attack_mode` when the operator
+    # didn't override it. With attack_mode default ON (with ROE/scope), Phase 3
+    # payload generation and Phase 5 post-exploitation prereqs become part of
+    # the runnable detected-prereq flow instead of manual hints. Passing
+    # `--no-attack-mode` or explicit `--include-offensive-prereqs=False` still
+    # suppresses them.
+    if _is_typer_default(include_offensive_prereqs):
+        include_offensive_prereqs = bool(attack_mode)
+    else:
+        include_offensive_prereqs = bool(include_offensive_prereqs)
+
+    # `go_hard` follows the same Typer default normalization so callers
+    # invoking `kill_chain()` directly (tests, other command paths) get
+    # a plain bool instead of a `typer.OptionInfo`.
+    go_hard = False if _is_typer_default(go_hard) else bool(go_hard)
 
     # ─── --go-hard: maximum aggression overrides ───────────────────────
     if go_hard:
@@ -5250,6 +5268,19 @@ def kill_chain(
             "FORGE_SCOPE_MANIFEST so live execution is bounded to explicit authorization. "
             "Use --dry-run to preview without live execution."
         )
+    # ─── Attack-mode auto-fire env vars ─────────────────────────────────
+    # When attack_mode is ON and we have a live launch with valid ROE +
+    # scope-manifest, prime the downstream automation bypasses so:
+    #   * Phase 5 approval_gate treats DESTRUCTIVE actions as ACTIVE (audit-logged)
+    #   * Phase 2 keyscan/secret_finder skip their questionary OPSEC prompt
+    #   * post-lateral CLI skips its questionary confirm
+    # `FORGE_SAFE_MODE=1` still wins — safe-mode overrides everything.
+    # Scope gates (`assert_in_scope`, `_direct_cli_load_scope_lists`) are NOT
+    # bypassed; every module still validates targets against the manifest.
+    if attack_mode and live_launch and roe_id and scope_manifest:
+        os.environ.setdefault("FORGE_ATTACK_MODE_AUTO", "1")
+        os.environ.setdefault("FORGE_KEYSCAN_ASSUME_YES", "1")
+        os.environ.setdefault("FORGE_POST_LATERAL_ASSUME_YES", "1")
     try:
         parallel_workers = max(1, min(8, int(parallel_fanout or 4)))
     except (TypeError, ValueError):
@@ -6084,6 +6115,54 @@ def kill_chain(
             _con_schema.close()
     except Exception:  # noqa: BLE001
         pass
+
+    # ─── Opportunistic KB freshness check (never blocks) ──────────────
+    # Skipped in test env and under offline strict mode. Any failure
+    # (offline, network, ETL exception) is swallowed silently.
+    if (
+        os.environ.get("FORGE_ENV", "").strip().lower() != "test"
+        and os.environ.get("FORGE_OFFLINE_STRICT", "").strip() != "1"
+    ):
+        try:
+            from forge.phase0.etl_runner import kb_sync_if_stale as _kb_sync_if_stale  # noqa: PLC0415
+
+            _kb_sync_if_stale(max_age_days=7)
+        except Exception:  # noqa: BLE001
+            pass
+
+    # ─── Config-snapshot audit event ──────────────────────────────────
+    # Records the resolved kill-chain configuration for this run so the
+    # audit chain shows exactly what was requested versus what actually
+    # executed. Never blocks the run on failure.
+    try:
+        _config_snapshot = json.dumps(
+            {
+                "max_iter": max_iterations,
+                "parallel_fanout": parallel_workers,
+                "attack_mode": attack_mode,
+                "auto_run_detected": auto_run_detected,
+                "go_hard": go_hard,
+                "identity_workers": identity_lookup_workers,
+                "dry_run": dry_run_all,
+                "roe_id": roe_id,
+                "scope_manifest_source": scope_manifest or "(env)",
+            },
+            sort_keys=True,
+        )
+        _cfg_snap_con = _sq.connect(str(db_path))
+        try:
+            _cfg_snap_con.execute(
+                "INSERT INTO audit_log "
+                "(engagement_id, phase, module, action, target, result, operator) "
+                "VALUES (?, 'config', 'kill_chain', 'config_snapshot', ?, ?, ?)",
+                (engagement_id, seed, _config_snapshot, cfg.operator),
+            )
+            _cfg_snap_con.commit()
+        finally:
+            _cfg_snap_con.close()
+    except Exception:  # noqa: BLE001
+        pass
+
     step_start = _time.time()
     _tor_prefix = [] if use_tor else ["--no-tor"]
     root_domains: list[str] = []
@@ -9706,6 +9785,42 @@ def kill_chain(
         progress_callback=_record_artifact_progress,
     )
     _record_artifact_cumulative_metrics(artifact_summary=artifact_summary)
+
+    # ─── Static artifact parsing (task 2 wiring) ──────────────────────
+    # After the artifact queue processor downloads/processes remote artifacts,
+    # run the 9 passive parsers on any local files it produced. Non-blocking:
+    # a parse failure never aborts the engagement.
+    try:
+        from forge.phase4.artifact_parsers import parse_artifact as _ap_parse  # noqa: PLC0415
+        from forge.db.direct_connect import direct_connect as _ap_dc  # noqa: PLC0415
+
+        _ap_con = _ap_dc(db_path)
+        try:
+            _ap_rows = _ap_con.execute(
+                "SELECT id, local_path FROM artifact_queue "
+                "WHERE engagement_id=? AND status='completed' AND local_path IS NOT NULL",
+                (engagement_id,),
+            ).fetchall()
+            _ap_parsed = 0
+            for _ap_row in _ap_rows:
+                _ap_path = Path(str(_ap_row[1]))
+                if not _ap_path.is_file():
+                    continue
+                _ap_meta = _ap_parse(_ap_path)
+                if _ap_meta:
+                    _ap_con.execute(
+                        "UPDATE artifact_queue SET metadata_json=? WHERE id=?",
+                        (json.dumps(_ap_meta.as_dict(), sort_keys=True)[:4000], _ap_row[0]),
+                    )
+                    _ap_parsed += 1
+            if _ap_parsed:
+                _ap_con.commit()
+                _log("artifact parse", f"[green]{_ap_parsed} artifact(s) metadata extracted[/green]")
+        finally:
+            _ap_con.close()
+    except Exception as _ap_exc:  # noqa: BLE001
+        logger.debug("artifact parser sweep skipped: %s", _ap_exc)
+
     if artifact_summary.processed or artifact_summary.skipped:
         _log(
             "artifact processing",
@@ -11257,16 +11372,28 @@ def kill_chain(
     ) -> dict[str, object]:
         query_domain = str(query_domain_value or target or "").strip()
         github_org = str(github_org_value or "").strip()
+        # Keyscan validation defaults ON when a validation proxy is configured
+        # (kill-chain OPSEC: routes live provider API calls through
+        # FORGE_VALIDATION_PROXY, e.g. SOCKS5 over Tor). If no proxy is set the
+        # CLI's OPSEC guard exits early, so we keep --no-validate as a fallback
+        # that preserves pattern-only findings without leaking the operator IP.
+        # FORGE_KEYSCAN_ASSUME_YES=1 (set by attack-mode kill-chain above)
+        # skips the interactive OPSEC confirmation inside the child scanner.
+        keyscan_base_args = [
+            "osint",
+            "keyscan",
+            "--engagement",
+            engagement_value,
+            "--domain",
+            query_domain,
+        ]
+        validation_proxy_configured = bool(
+            str(os.environ.get("FORGE_VALIDATION_PROXY", "") or "").strip()
+        )
+        if not validation_proxy_configured:
+            keyscan_base_args.append("--no-validate")
         keyscan_args = _append_scope_manifest_arg(
-            [
-                "osint",
-                "keyscan",
-                "--engagement",
-                engagement_value,
-                "--domain",
-                query_domain,
-                "--no-validate",
-            ],
+            keyscan_base_args,
             scope_manifest_value,
         )
         if github_org:
@@ -14828,6 +14955,30 @@ def kill_chain(
                 progress_label=f"{iteration}.D cloud+HTML fetch",
                 progress_callback=_record_batch_progress,
             )
+
+            # ─── Inline xray passive scan on fetched URLs ─────────────
+            # Best-effort passive HTTP fingerprint on each successfully
+            # fetched URL. Scope-gated inside the wrapper; every failure
+            # is swallowed so a single passive miss never aborts the
+            # spider loop.
+            try:
+                from forge.phase2.xray_runner import (  # noqa: PLC0415
+                    run_xray_passive as _run_xray_passive,
+                )
+                for _xr_index, _xr_payload in enumerate(html_results):
+                    if _xr_index >= len(fetch_specs) or not _xr_payload:
+                        continue
+                    _xr_url = str(fetch_specs[_xr_index].url or "").strip()
+                    if not _xr_url:
+                        continue
+                    _run_xray_passive(
+                        _xr_url,
+                        engagement_id=engagement_id,
+                        db_path=db_path,
+                    )
+            except Exception:  # noqa: BLE001
+                pass
+
             passive_text_results: list[Any] = []
             passive_text_urls: set[str] = set()
             html_surface_urls: set[str] = set()
@@ -19157,10 +19308,218 @@ def kill_chain(
                     f"cred validate ({svc})",
                 )
             )
+
+    # ─── Attack-mode Phase 3 & Phase 5 auto-fire ────────────────────────
+    # When attack_mode is on with valid ROE + scope-manifest, run Phase 3
+    # payload generation and Phase 5 post-exploitation payload builds as
+    # part of the deterministic finalization pipeline. Data-driven entries
+    # (vuln/auth/post-lateral) are appended by
+    # `_build_offensive_data_driven_specs` after credential validation so
+    # they see the fresh services + validated credentials rows. Every child
+    # command still runs scope_gate.assert_in_scope and _direct_cli_require_roe
+    # inside its own body; the outer ROE/scope-manifest was validated above.
+    offensive_finalization_specs: list[tuple[list[str], str]] = []
+    if attack_mode and not dry_run_all:
+        # Phase 3 — obfuscated payload generation (writes files under
+        # cfg.templates_dir(engagement)/phase3_*). No network I/O; no target.
+        offensive_finalization_specs.append(
+            (
+                _append_scope_manifest_arg(
+                    [
+                        "evasion",
+                        "generate",
+                        "--engagement",
+                        engagement,
+                        "--technique",
+                        os.environ.get("FORGE_KILLCHAIN_PHASE3_TECHNIQUE", "std"),
+                        "--os",
+                        os.environ.get("FORGE_KILLCHAIN_PHASE3_OS", "windows"),
+                    ],
+                    scope_manifest,
+                ),
+                "phase3 evasion generate",
+            )
+        )
+        # Phase 5 — reverse-shell payload build (writes payload file only).
+        # Defaults are safe placeholder LHOST/LPORT; operator can override
+        # via FORGE_LHOST / FORGE_LPORT if a real listener exists.
+        post_shell_args = [
+            "post",
+            "shell",
+            "--engagement",
+            engagement,
+            "--lhost",
+            os.environ.get("FORGE_LHOST", "127.0.0.1"),
+            "--lport",
+            os.environ.get("FORGE_LPORT", "443"),
+            "--roe-id",
+            roe_id,
+        ]
+        offensive_finalization_specs.append(
+            (
+                _append_scope_manifest_arg(post_shell_args, scope_manifest),
+                "phase5 post-shell payload",
+            )
+        )
+
+    def _build_offensive_data_driven_specs() -> list[tuple[list[str], str]]:
+        """Return Phase 4/5 specs that only run when the DB has inferable targets.
+
+        Called after cred-validate finalizers so `services` and `credentials`
+        rows reflect the freshest state. Each entry still runs its own
+        scope/ROE gates inside the child command.
+        """
+        specs: list[tuple[list[str], str]] = []
+        if not attack_mode or dry_run_all:
+            return specs
+        try:
+            _dd_con = direct_connect(
+                f"file:{db_path.as_posix()}?mode=ro", uri=True
+            )
+        except Exception:  # noqa: BLE001
+            return specs
+        try:
+            try:
+                web_row = _dd_con.execute(
+                    """
+                    SELECT h.ip, h.hostname, s.port
+                    FROM services s
+                    JOIN hosts h ON s.host_id = h.id
+                    WHERE h.engagement_id=?
+                      AND (
+                          s.service_name IN ('http', 'https')
+                          OR s.port IN (80, 443, 8080, 8443)
+                      )
+                    ORDER BY s.port DESC
+                    LIMIT 1
+                    """,
+                    (engagement_id,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                web_row = None
+            web_target: Optional[str] = None
+            if web_row:
+                host_value = str(web_row[1] or web_row[0] or "").strip()
+                port_value = int(web_row[2] or 0)
+                if host_value:
+                    scheme = "https" if port_value in (443, 8443) else "http"
+                    if port_value in (0, 80, 443):
+                        web_target = f"{scheme}://{host_value}/"
+                    else:
+                        web_target = f"{scheme}://{host_value}:{port_value}/"
+            if web_target:
+                specs.append(
+                    (
+                        _append_scope_manifest_arg(
+                            [
+                                "vuln",
+                                "idor",
+                                "--engagement",
+                                engagement,
+                                "--target",
+                                web_target,
+                                "--depth",
+                                "2",
+                                "--roe-id",
+                                roe_id,
+                            ],
+                            scope_manifest,
+                        ),
+                        f"phase4 vuln idor ({web_target})",
+                    )
+                )
+                specs.append(
+                    (
+                        _append_scope_manifest_arg(
+                            [
+                                "auth",
+                                "brute",
+                                "--engagement",
+                                engagement,
+                                "--target",
+                                web_target,
+                                "--max-attempts",
+                                "10",
+                                "--roe-id",
+                                roe_id,
+                            ],
+                            scope_manifest,
+                        ),
+                        f"phase4 auth brute ({web_target})",
+                    )
+                )
+                specs.append(
+                    (
+                        _append_scope_manifest_arg(
+                            [
+                                "auth",
+                                "bypass",
+                                "--engagement",
+                                engagement,
+                                "--target",
+                                web_target,
+                                "--roe-id",
+                                roe_id,
+                            ],
+                            scope_manifest,
+                        ),
+                        f"phase4 auth bypass ({web_target})",
+                    )
+                )
+            try:
+                lateral_row = _dd_con.execute(
+                    """
+                    SELECT h.ip, h.hostname
+                    FROM credentials c
+                    JOIN hosts h ON h.ip = c.validated_host
+                    WHERE c.engagement_id=? AND c.validated=1 AND c.validated_host != ''
+                    ORDER BY c.validated_at DESC
+                    LIMIT 1
+                    """,
+                    (engagement_id,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                lateral_row = None
+            if lateral_row:
+                lateral_target = str(lateral_row[1] or lateral_row[0] or "").strip()
+                if lateral_target:
+                    specs.append(
+                        (
+                            _append_scope_manifest_arg(
+                                [
+                                    "post",
+                                    "lateral",
+                                    "--engagement",
+                                    engagement,
+                                    "--target",
+                                    lateral_target,
+                                    "--technique",
+                                    "smb_exec",
+                                    "--roe-id",
+                                    roe_id,
+                                ],
+                                scope_manifest,
+                            ),
+                            f"phase5 post lateral ({lateral_target})",
+                        )
+                    )
+        finally:
+            _dd_con.close()
+        return specs
+
     network_capable_post_validation_specs: list[tuple[list[str], str]] = [
         (["vuln", "passive", "--engagement", engagement], "vuln passive fingerprint"),
         (["exploit", "correlate", "--engagement", engagement], "exploit correlate"),
     ]
+    # Phase 3 payload generation and Phase 5 post-shell run after HIBP/cred
+    # validation but before graph/report so their outputs (payload files, DB
+    # rows) appear in the final deterministic report artifact.
+    network_capable_post_validation_specs.extend(offensive_finalization_specs)
+    # Data-driven Phase 4/5 specs are appended at execution-time so they see
+    # the freshest services + validated_credentials rows after cred-validate.
+    data_driven_offensive_specs = _build_offensive_data_driven_specs()
+    if data_driven_offensive_specs:
+        network_capable_post_validation_specs.extend(data_driven_offensive_specs)
     sequential_post_validation_specs: list[tuple[list[str], str]] = [
         (
             [
@@ -19512,6 +19871,57 @@ def kill_chain(
         result=f"elapsed_s={total:.1f} emails_chained={len(emails) if emails else 0}",
     )
     final_pending_total = int(run_progress_state.get("pending_work_total") or 0)
+
+    # ─── Provider-key-validator sweep (task 1 wiring) ──────────────────
+    # Auto-validate any discovered credentials via the 9 strict validators.
+    # Non-destructive read-only probes; scope-gated by the discovery phase.
+    try:
+        from forge.phase4.provider_key_validators import try_validate as _pkv_try_validate  # noqa: PLC0415
+        from forge.db.direct_connect import direct_connect as _pkv_dc  # noqa: PLC0415
+
+        _pkv_con = _pkv_dc(db_path)
+        try:
+            _pkv_rows = _pkv_con.execute(
+                "SELECT id, raw_key FROM key_scanner_findings "
+                "WHERE engagement_id=? AND (validation_state IS NULL OR validation_state='')",
+                (engagement_id,),
+            ).fetchall()
+            _pkv_validated = 0
+            for _pkv_row in _pkv_rows:
+                _pkv_result = _pkv_try_validate(str(_pkv_row[1] or ""))
+                if _pkv_result:
+                    _pkv_con.execute(
+                        "UPDATE key_scanner_findings SET validation_state=?, validation_detail=? WHERE id=?",
+                        (
+                            _pkv_result.provider if _pkv_result.verified else "UNVERIFIED",
+                            _pkv_result.reason[:500],
+                            _pkv_row[0],
+                        ),
+                    )
+                    _pkv_validated += 1
+            if _pkv_validated:
+                _pkv_con.commit()
+                _log("key validation", f"[green]{_pkv_validated} credentials auto-validated via provider probes[/green]")
+        finally:
+            _pkv_con.close()
+    except Exception as _pkv_exc:  # noqa: BLE001
+        logger.debug("provider-key-validator sweep skipped: %s", _pkv_exc)
+
+    # ─── Aggregate stats (task 3 wiring) ──────────────────────────────
+    # Compute + persist stats JSON sidecar alongside the report.
+    try:
+        from forge.phase6.aggregate_stats import compute_stats as _as_compute, write_json_sidecar as _as_write  # noqa: PLC0415
+        from forge.db.direct_connect import direct_connect as _as_dc  # noqa: PLC0415
+
+        _as_con = _as_dc(db_path)
+        try:
+            _as_stats = _as_compute(_as_con, engagement_id, reports_dir=Path("reports"))
+            _as_write(_as_stats, Path("reports"))
+        finally:
+            _as_con.close()
+    except Exception as _as_exc:  # noqa: BLE001
+        logger.debug("aggregate stats computation skipped: %s", _as_exc)
+
     if report_artifact_path is None:
         console.print(
             f"\n[bold red]Kill-chain finalization failed[/bold red] in {total:.1f}s "

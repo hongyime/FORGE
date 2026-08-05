@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import sqlite3
 import sys
@@ -690,18 +691,24 @@ def run_keyscan(
         _LOG.warning("[KEYSCAN] No --validation-proxy set — validation calls will be direct")
 
     if not no_validate:
-        try:
-            import questionary
-            if not questionary.confirm(
-                f"[KEYSCAN OPSEC] Validation calls will be made to AWS/Stripe/GitHub/etc APIs.\n"
-                f"These calls are logged by the service and may trigger alerts.\n"
-                f"Proxy: {validation_proxy or 'NONE (direct)'}\n"
-                f"Proceed?"
-            ).ask():
-                print("[ABORTED] Key validation cancelled.")
-                no_validate = True
-        except ImportError:
-            pass
+        # FORGE_KEYSCAN_ASSUME_YES=1 bypasses the OPSEC prompt so kill-chain
+        # attack-mode runs (non-TTY subprocesses) can proceed. Requires the
+        # caller to have already asserted scope/ROE upstream.
+        if os.environ.get("FORGE_KEYSCAN_ASSUME_YES", "0").strip() == "1":
+            _LOG.info("[KEYSCAN] FORGE_KEYSCAN_ASSUME_YES=1 — skipping OPSEC prompt")
+        else:
+            try:
+                import questionary
+                if not questionary.confirm(
+                    f"[KEYSCAN OPSEC] Validation calls will be made to AWS/Stripe/GitHub/etc APIs.\n"
+                    f"These calls are logged by the service and may trigger alerts.\n"
+                    f"Proxy: {validation_proxy or 'NONE (direct)'}\n"
+                    f"Proceed?"
+                ).ask():
+                    print("[ABORTED] Key validation cancelled.")
+                    no_validate = True
+            except ImportError:
+                pass
 
     if dry_run:
         patterns = _load_patterns()

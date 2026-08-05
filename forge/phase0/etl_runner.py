@@ -505,6 +505,56 @@ def run_etl(
     console.rule("[bold green]Phase 0 ETL complete[/bold green]")
 
 
+def kb_sync_if_stale(
+    max_age_days: int = 7,
+    *,
+    cfg: Optional[ForgeConfig] = None,
+) -> bool:
+    """Opportunistically refresh the KB if any DB file is older than
+    ``max_age_days``.
+
+    Called by the kill-chain at engagement start as a best-effort
+    freshness check. Never raises: any failure (missing paths, offline
+    strict, network error, ETL exception) is caught and logged at DEBUG
+    so the kill-chain keeps moving.
+
+    :param max_age_days: Age threshold in days; DBs older than this
+        trigger a full ``run_etl(force=False)`` call.
+    :param cfg: Optional :class:`ForgeConfig`; loaded from env when None.
+    :returns: ``True`` if an ETL sync was attempted, ``False`` if the KB
+        was already fresh or the freshness check itself failed.
+    """
+    try:
+        if cfg is None:
+            cfg = ForgeConfig.load()
+        threshold_seconds = max(1, int(max_age_days)) * 86400
+        now = time.time()
+        candidates = (cfg.kb_path, cfg.nvd_path, cfg.exploitdb_path)
+        stale = False
+        for path in candidates:
+            try:
+                if not Path(path).exists():
+                    stale = True
+                    break
+                age_seconds = now - Path(path).stat().st_mtime
+                if age_seconds > threshold_seconds:
+                    stale = True
+                    break
+            except OSError:
+                stale = True
+                break
+        if not stale:
+            return False
+        try:
+            run_etl(force=False, cfg=cfg)
+        except Exception as exc:  # noqa: BLE001
+            _LOG.debug("kb_sync_if_stale: run_etl raised %s", exc)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        _LOG.debug("kb_sync_if_stale: skipped (%s)", exc)
+        return False
+
+
 def print_staleness_report(cfg: Optional[ForgeConfig] = None) -> None:
     """
     Print the staleness status table for all KB sources.

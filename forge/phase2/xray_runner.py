@@ -492,6 +492,48 @@ def run_passive_http_collection_for_engagement(
     return inserted
 
 
+def run_xray_passive(
+    url: str,
+    *,
+    engagement_id: int,
+    db_path: Path,
+    proxy: str | None = None,
+    timeout: float = 8.0,
+) -> int:
+    """Inline-safe passive HTTP fingerprint for a single URL.
+
+    Thin wrapper around :func:`run_passive_http_collection` intended for
+    opportunistic use inside the kill-chain spider loop:
+
+    * Loads the engagement scope from the DB and enforces the scope
+      gate. Out-of-scope URLs return ``0`` silently.
+    * Swallows every exception (network, sqlite, scope, unicode) so a
+      single failed passive scan never aborts the recon loop.
+
+    Returns the number of ``passive_vulns`` rows inserted (0 on any
+    failure or scope miss).
+    """
+    from forge.opsec.scope_gate import ScopeViolationError, load_scope_from_db  # noqa: PLC0415
+
+    try:
+        scope = load_scope_from_db(str(db_path), engagement_id)
+    except Exception:  # noqa: BLE001
+        return 0
+    try:
+        return run_passive_http_collection(
+            engagement_id,
+            db_path=db_path,
+            target_url=url,
+            proxy=proxy,
+            timeout=timeout,
+            scope_values=scope,
+        )
+    except ScopeViolationError:
+        return 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def mark_vuln_verified(db_path: Path, vuln_id: str) -> bool:
     con = get_engagement_db(db_path)
     try:
