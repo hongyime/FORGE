@@ -88,7 +88,12 @@ dev = [
     "pytest==8.3.5",
     "pytest-asyncio==0.25.3",
     "pytest-recording==0.13.2",
-    "vcrpy==6.0.2",
+    # vcrpy >=8.2.1 patches GHSA-rpj2-4hq8-938g (HIGH: arbitrary code
+    # execution via unsafe YAML deserialization of cassette files).
+    # Dev-only dep. FORGE has no direct `import vcr`; cassettes are
+    # consumed via pytest-recording. vcrpy 8.x drops Py 3.9 and
+    # urllib3<2 — both fine for FORGE (Py 3.11+ / urllib3 2.x).
+    "vcrpy>=8.2.1,<9.0",
     "pytest-cov==6.0.0",
     "pytest-mock==3.14.0",
     "responses==0.25.3",
