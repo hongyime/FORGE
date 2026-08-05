@@ -428,7 +428,7 @@ class ContextBuilder:
                 SELECT DISTINCT seed_value, source
                 FROM engagement_seeds
                 WHERE engagement_id=?
-                  AND seed_type IN ('domain', 'subdomain')
+                  AND seed_type IN ('domain', 'subdomain', 'cloud_ref')
                   AND COALESCE(status, 'pending') != 'failed'
                 """,
                 (self._eid,),

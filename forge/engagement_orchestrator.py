@@ -12611,7 +12611,7 @@ class EngagementSynthesisEngine:
             SELECT seed_type, seed_value, source, metadata_json
             FROM engagement_seeds
             WHERE engagement_id=?
-              AND seed_type IN ('domain','subdomain','url','apk_url')
+              AND seed_type IN ('domain','subdomain','url','apk_url','cloud_ref')
             """,
             (self._engagement_id,),
         ).fetchall()

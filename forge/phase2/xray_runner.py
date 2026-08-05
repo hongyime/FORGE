@@ -378,7 +378,7 @@ def _engagement_passive_targets(
                 SELECT seed_value
                 FROM engagement_seeds
                 WHERE engagement_id=?
-                  AND seed_type IN ('url', 'domain', 'subdomain')
+                  AND seed_type IN ('url', 'domain', 'subdomain', 'cloud_ref')
                 ORDER BY depth ASC, id DESC
                 """,
                 (engagement_id,),

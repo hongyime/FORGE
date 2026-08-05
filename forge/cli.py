@@ -491,7 +491,7 @@ def _validate_scope_manifest_seed_values(
             )
             continue
         candidate_targets = _scope_manifest_seed_targets(seed_value, seed_type)
-        if seed_type in {"url", "apk_url"} and list(manifest.get("urls") or []):
+        if seed_type in {"url", "apk_url", "cloud_ref"} and list(manifest.get("urls") or []):
             candidate_targets = [seed_value]
         matched_target = ""
         for target in candidate_targets:
@@ -8287,7 +8287,7 @@ def kill_chain(
                     SELECT seed_value
                     FROM engagement_seeds
                     WHERE engagement_id=?
-                      AND seed_type IN ('url', 'apk_url')
+                      AND seed_type IN ('url', 'apk_url', 'cloud_ref')
                     """,
                     (engagement_id,),
                 ).fetchall()
@@ -8446,7 +8446,7 @@ def kill_chain(
                     SELECT seed_value
                     FROM engagement_seeds
                     WHERE engagement_id=?
-                      AND seed_type IN ('url', 'apk_url')
+                      AND seed_type IN ('url', 'apk_url', 'cloud_ref')
                     """,
                     (engagement_id,),
                 ).fetchall()
@@ -9018,7 +9018,7 @@ def kill_chain(
                     SELECT seed_value, seed_type, metadata_json
                     FROM engagement_seeds
                     WHERE engagement_id=?
-                      AND seed_type IN ('url', 'apk_url')
+                      AND seed_type IN ('url', 'apk_url', 'cloud_ref')
                     """,
                     (engagement_id,),
                 ).fetchall()

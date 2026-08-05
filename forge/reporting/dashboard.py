@@ -405,7 +405,7 @@ def _seed_host_candidates(
         SELECT seed_value, seed_type, source, status, discovered_at, updated_at
         FROM engagement_seeds
         WHERE engagement_id=?
-          AND seed_type IN ('domain', 'subdomain')
+          AND seed_type IN ('domain', 'subdomain', 'cloud_ref')
           AND COALESCE(status, 'pending') != 'failed'
         ORDER BY depth ASC, id DESC
         """,

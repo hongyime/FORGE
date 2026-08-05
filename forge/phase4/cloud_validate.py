@@ -4288,7 +4288,7 @@ def validate_scope_manifest_entries(
             )
             continue
         candidate_targets = _validation_scope_seed_targets(seed_value, seed_type)
-        if seed_type in {"url", "apk_url"} and list(manifest.get("urls") or []):
+        if seed_type in {"url", "apk_url", "cloud_ref"} and list(manifest.get("urls") or []):
             candidate_targets = [seed_value]
         matched_target = ""
         for target in candidate_targets:
