@@ -5,6 +5,92 @@
 > `docs/end_goal.md`, `docs/deterministic_engagement_contract.md`, and
 > `docs/engagement_overhaul_tasklist.md`.
 
+---
+
+## Post-Audit Hardening (2026-08-04 → 2026-08-05)
+
+Rolling arc that lands 24 shipped tasks on top of the 2026-07-09 audit baseline
+(`0f3e4d7`..`ea57716` on `origin/main`). Every pre-audit P1 flagged in the
+2026-08-03 P1 table below is now RESOLVED in main; the 4 P1s marked ✅ FIXED
+were the last shipped before this arc, and the P2/P3 UX drift items 1–6 in the
+follow-up table below have been closed out inline during this arc.
+
+**Overall status:** all 4 pre-audit P1s RESOLVED, all P2/P3 UX drift items 1–6
+RESOLVED, cloud_ref seed support shipped (4-slice rollout), infra + CI +
+concurrency hardened, new operator surface (HTMX tabs) landed.
+
+### 2026-08-04 UX drift + follow-up closure (7 tasks)
+
+| # | Item | Fix landed | Commit |
+|---|---|---|---|
+| 1 | LLM cascade docstring drift (5 vs 8 links) | Cascade docstring synced to 8-stage canonical order | [`203ad86`](../../commit/203ad86) `feat: docs(cascade): sync LLM provider docstring with 8-stage canonical order` |
+| 2 | V-03 internal-IP warning noise on legit engagement hosts | Per-engagement CIDR allowlist for approved IPs | [`7c24b88`](../../commit/7c24b88) `feat(validator): V-03 per-engagement CIDR allowlist for approved IPs` |
+| 3 | `cloud supabase` vs `cloud firebase` flag drift (`--project-ref` vs `--project-id`) | `--project-id` alias added to supabase for cross-provider parity | [`498cf12`](../../commit/498cf12) `feat(cli): add --project-id alias to cloud supabase for cross-provider parity` |
+| 4 | Shodan `?key=` visible in httpx INFO logs | Redact secret query params from httpx/httpcore logs | [`c0e2cd5`](../../commit/c0e2cd5) `fix(logging): redact secret query params from httpx/httpcore logs` |
+| 5 | `recon subdomains` prints no stdout summary | Sample printed to stdout after enumeration | [`9a8de32`](../../commit/9a8de32) `feat(recon): print subdomain sample to stdout after enumeration` |
+| 6 | Mermaid graph oversize warning gives no hint | Warning mentions `--critical-path-only` | [`11d76b5`](../../commit/11d76b5) `feat(graph): mention --critical-path-only in oversize Mermaid warning` |
+| 7 | `port_scanner --basic` sequential blocking | Harmonised with `--enhanced` fan-out | [`a6ea92d`](../../commit/a6ea92d) `refactor(port-scanner): harmonise --basic and --enhanced fan-out` |
+
+### 2026-08-04 canonical handoff/audit doc promotion (1 task)
+
+| # | Item | Fix landed | Commit |
+|---|---|---|---|
+| 8 | Handoff/audit docs OneDrive-only, invisible on fresh clones | Force-add `.kiro/MACHINE_HANDOFF*.md`, `AUDIT_RESULTS.md`, `docs/cloud_ref_seed_plan.md` into tracked repo state | [`0f3e4d7`](../../commit/0f3e4d7) `docs: promote canonical handoff/audit docs into tracked repo state` |
+
+### 2026-08-05 security dependency + cloud_ref rollout (5 tasks)
+
+| # | Item | Fix landed | Commit |
+|---|---|---|---|
+| 9 | `python-jose` CVE-2024-33663 + CVE-2024-33664 exposure | Swapped for PyJWT with parity tests | [`b347cd8`](../../commit/b347cd8) `fix(security): swap python-jose for PyJWT to mitigate CVE-2024-33663 + CVE-2024-33664` |
+| 10 | Cloud refs persisted as `url`/`other`, no first-class `cloud_ref` seed type | Slice 1/6 — schema + classifier | [`582703b`](../../commit/582703b) `feat(cloud-ref): add cloud_ref seed type — slice 1/6 (schema + classifier)` |
+| 11 | Cloud_ref consumers still keyed on legacy seed_types | Slice 2/6 — consumer sweep across cli, phase4, phase6, reporting, provider_urls | [`9a53d68`](../../commit/9a53d68) `feat(cloud-ref): consumer sweep — slice 2/6` |
+| 12 | seed_type filter clauses miss cloud_ref | Slice 3/6 — filter clauses across cli, orchestrator, xray_runner, cloud_validate, report_synthesizer, dashboard | [`84b67a3`](../../commit/84b67a3) `feat(cloud-ref): include cloud_ref in seed_type filter clauses — slice 3/6` |
+| 13 | Round-trip regression missing | Slice 4/6 — e2e regression proves cloud_ref remains ROE/scope-gated | [`042c8db`](../../commit/042c8db) `test(cloud-ref): end-to-end round-trip regression — slice 4/6 (task 4 close)` |
+
+### 2026-08-05 CI + Dependabot + SAST posture (4 tasks)
+
+| # | Item | Fix landed | Commit |
+|---|---|---|---|
+| 14 | Bounded fan-out primitive missing for enricher parity | Bounded worker-pool primitive with deterministic ordering, scope gates, provider caps | [`208b8c5`](../../commit/208b8c5) `feat(concurrency): bounded worker-pool primitive for enricher fan-out` |
+| 15 | No Python SAST in CI | Bandit workflow added | [`9bf521d`](../../commit/9bf521d) `chore(ci): add bandit Python SAST workflow` |
+| 16 | No cross-language SAST in CI | Semgrep workflow added | [`90199d8`](../../commit/90199d8) `chore(ci): add semgrep SAST workflow` |
+| 17 | Dependabot noise / ecosystem drift | Explicit ecosystems + PR grouping | [`a1cd662`](../../commit/a1cd662) `fix(deps): stabilise Dependabot updates via explicit ecosystems + grouping (#1)` |
+
+### 2026-08-05 audit-pipeline hardening (3 tasks)
+
+| # | Item | Fix landed | Commit |
+|---|---|---|---|
+| 18 | 5 P1 findings from post-audit review pipeline | Fixed inline with regression coverage | [`2dbad66`](../../commit/2dbad66) `fix(hardening): 5 P1 findings from post-audit review pipeline` |
+| 19 | 2 P1 + 10 P2 + 1 P3 findings from audit pipeline | Fixed inline across cli, phase1, phase4, phase5 | [`51c17ad`](../../commit/51c17ad) `fix(hardening): ship 2 P1 + 10 P2 + 1 P3 findings from audit pipeline` |
+| 20 | Migrations misfire on stale rebuild tables | Python-side filter replaces SQL WHERE | [`83f85d4`](../../commit/83f85d4) `fix(migrations): use Python-side filter for stale rebuild tables` |
+
+### 2026-08-05 test-suite infrastructure (this iteration — 8 shipped tasks)
+
+| # | Item | Fix landed | Commit |
+|---|---|---|---|
+| 21 (task 12) | 134 bare `sqlite3.connect()` sites had no PRAGMA/timeout parity | Migrated to `direct_connect` helper (`forge/db/direct_connect.py`) | [`59a5a93`](../../commit/59a5a93) `feat(db): task 12 — migrate 134 bare sqlite3.connect() sites to direct_connect helper` |
+| 22 (task 17) | Slow synthesis-engine tests block agent command windows | 12 slowest marked `@pytest.mark.slow` | [`d5e0c0b`](../../commit/d5e0c0b) `test(phase1): task 17 — mark 12 slowest synthesis-engine tests @pytest.mark.slow` |
+| 23 (task 18) | Long-tail passive artifact formats not covered | 9 new artifact parsers (`forge/phase4/artifact_parsers.py`) | [`7c408a5`](../../commit/7c408a5) `feat(phase4): task 18 — 9 safe passive artifact parsers` |
+| 24 (task 19) | Long-tail provider key validators missing strict payload-shape checks | 9 provider key validators (`forge/phase4/provider_key_validators.py`) | [`896b1d8`](../../commit/896b1d8) `feat(phase4): task 19 — 9 provider key validators with strict payload-shape checks` |
+| 25 (task 20) | Identity enrichment lacked cross-provider normalization | 6 identity normalizers with aggressive dedup (`forge/utils/intel/identity_normalization.py`) | [`f1fcd8e`](../../commit/f1fcd8e) `feat(intel): task 20 — 6 identity normalizers with aggressive dedup` |
+| 26 (task 21) | Tasks 18/19/20 lacked combined regression | Mixed-provider e2e fixture (`tests/integration/test_mixed_provider_e2e.py`) | [`58e1965`](../../commit/58e1965) `test(integration): task 21 — mixed-provider e2e fixture combining tasks 18+19+20` |
+| 27 (task 22) | Aggregate stats sparse in MD + dashboard + JSON sidecar | Richer report aggregate stats (`forge/phase6/aggregate_stats.py`) | [`aa5bd3b`](../../commit/aa5bd3b) `feat(phase6): task 22 — richer report aggregate stats across MD + dashboard + JSON sidecar` |
+| 28 (task 23) | Detail page is sectioned, not literal tabs | HTMX server-rendered engagement detail tabs at `/engagements/{ref}/htmx` | [`8d0ece5`](../../commit/8d0ece5) + [`ea57716`](../../commit/ea57716) `feat(webui): task 23 — HTMX server-rendered engagement detail tabs` |
+
+Regression baseline this arc: 327 session tests green (webui HTMX 13, phase4
+parsers/validators, intel normalizers, phase6 aggregate stats, mixed-provider
+e2e). Nothing above breaks the deterministic gate chain in
+`docs/deterministic_engagement_contract.md`; every shipped item is passive,
+scope-gated, and audit-logged.
+
+**Pre-audit P1s (from the 2026-07-09 table below) — all RESOLVED as of
+2026-08-05:** malapi silent failure ✅, nvd URL param ✅, sherlock stderr ✅,
+ghunt utf-8 ✅ (verified 2026-08-03 against `d21116a`, unchanged through this
+arc).
+
+---
+
+
 **Date:** 2026-07-09
 **Operator:** prawn
 **Session duration:** ~3 hours

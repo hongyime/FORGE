@@ -359,3 +359,44 @@ Current baseline: **2,100+ passing** / 0 failing.
 3. **Auto-discover, don't hardcode.** OSINT modules auto-find their target credentials.
 4. **Standalone by default.** No cloud dependency required. Template fallback works with zero LLMs.
 5. **Chaos-tested durability.** Workflow engine survives Redis crashes, SQLite lock contention, plugin SIGKILL, disk-full — proven weekly in CI.
+
+---
+
+## Recent hardening (2026-08-05)
+
+The 2026-08-04 → 2026-08-05 arc added the following operator-facing surfaces
+and shared primitives. Details in `AUDIT_RESULTS.md` (top section) and
+`docs/engagement_overhaul_tasklist.md` `## Post-audit hardening milestones`.
+
+- **HTMX engagement detail tabs** at `GET /engagements/{ref}/htmx` — a
+  server-rendered parallel path to the React SPA. Six tabs
+  (overview/seeds/findings/graph/report/audit) load as HTMX fragments via
+  `GET /engagements/{ref}/tab/{name}` with fragment-vs-full-page rendering
+  keyed on the `HX-Request` header. Templates in
+  `forge/webui/templates/htmx/`.
+- **`forge/db/direct_connect.py`** — centralized SQLite connect helper with
+  uniform PRAGMA/timeout parity. 134 bare `sqlite3.connect()` sites migrated
+  to it (`59a5a93`).
+- **`forge/utils/bounded_worker_pool.py`** — bounded worker-pool primitive
+  for enricher fan-out. Preserves deterministic ordering, scope gates,
+  provider caps, pacing, and backoff.
+- **`forge/phase4/artifact_parsers.py`** — 9 safe passive artifact parsers.
+  Static, source-gated, non-executing.
+- **`forge/phase4/provider_key_validators.py`** — 9 provider key validators
+  with strict payload-shape checks. Each requires stable, non-placeholder
+  proof before returning `ACTIVE`.
+- **`forge/utils/intel/identity_normalization.py`** — 6 identity normalizers
+  with aggressive dedup across email, username, company, phone/name, and
+  public social-profile pivots.
+- **`forge/phase6/aggregate_stats.py`** — richer report aggregate stats
+  flowing through Markdown, dashboard, and JSON sidecar with parity.
+
+`cloud_ref` is now a first-class seed type — schema, classifier, consumers,
+filter clauses, and end-to-end round-trip regression all land on `origin/main`
+(4-slice rollout, `582703b` → `042c8db`). Cloud refs stay ROE/scope-gated and
+cannot bypass validation-before-reporting.
+
+SAST posture: Bandit (`9bf521d`) and Semgrep (`90199d8`) workflows run in CI.
+`python-jose` swapped for PyJWT (`b347cd8`) to mitigate CVE-2024-33663 and
+CVE-2024-33664. Dependabot ecosystems + grouping stabilised in `a1cd662`.
+
