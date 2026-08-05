@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Optional
 
 from forge.utils.ssl_hygiene import restore_default_ssl_context
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -365,7 +366,7 @@ def _audit_write(
     Command and truncated output stored; never the credentials used.
     """
     try:
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         try:
             audit_detail = (
                 f"target={target} technique={technique} success={success} output={output[:512]!r}"

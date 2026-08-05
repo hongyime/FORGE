@@ -30,6 +30,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Generator, Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ class BaseCollector(abc.ABC):
         record.metadata.validation_state = self._next_validation_state(record.metadata.validation_state)
         summary_payload = self._build_report_safe_summary(record.metadata)
         try:
-            con = sqlite3.connect(self._db_path)
+            con = direct_connect(self._db_path)
             con.execute(
                 """INSERT OR IGNORE INTO exfiltrated_data
                    (engagement_id, file_path, sha256, size_bytes, collected_at,

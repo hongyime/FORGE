@@ -20,6 +20,7 @@ from forge.utils.key_validation_gate import (
     linked_key_validation_reportability,
 )
 from forge.utils.validation_proof import parse_validated_detail
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 SEVERITY_ORDER = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
 
@@ -202,7 +203,7 @@ class DeterministicFindingEngine:
 
     def run(self) -> FindingSynthesisSummary:
         summary = FindingSynthesisSummary()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         con.row_factory = sqlite3.Row
         try:
             apply_schema(con)

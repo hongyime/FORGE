@@ -32,6 +32,7 @@ from typing import Iterator, Optional
 
 from forge.utils.intel.audit_log import insert_audit_log
 from forge.utils.intel.tool_paths import find_tool_binary
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -494,7 +495,7 @@ def run_handle_finder(
     ``backend`` can be ``"whatsmyname" | "maigret" | "sherlock"``. When None,
     the first available backend from that priority order is auto-selected.
     """
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.execute(_USERNAME_PROFILES_DDL)
     con.commit()
 

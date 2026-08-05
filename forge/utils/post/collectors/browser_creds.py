@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Generator, Optional
 
 from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollector, CollectedFile
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class BrowserCredCollector(BaseCollector):
         shutil.copy2(login_db, tmp_path)
 
         try:
-            con  = sqlite3.connect(tmp_path)
+            con  = direct_connect(tmp_path)
             rows = con.execute(
                 "SELECT origin_url, username_value, password_value FROM logins"
             ).fetchall()

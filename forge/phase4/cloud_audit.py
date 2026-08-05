@@ -44,6 +44,7 @@ from typing import Optional, Sequence
 import httpx
 
 from forge.config import resolve_secret_pool
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -340,7 +341,7 @@ class FirebaseAuditor:
             require_scope=require_scope,
         )
 
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         resolved_api_key = _resolve_firebase_api_key(
             con,
             self._engagement_id,

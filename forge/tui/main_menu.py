@@ -28,6 +28,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 # Menu rendering is on stdout so the operator sees the UI even when other
 # forge sub-commands emit their diagnostic Rich output to stderr.
@@ -158,7 +159,7 @@ def _engagement_row_counts(db_path: Path) -> dict[str, int]:
         return {}
     counts: dict[str, int] = {}
     try:
-        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
+        con = direct_connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
         try:
             cur = con.execute(
                 "SELECT name FROM sqlite_master "
@@ -193,7 +194,7 @@ def _engagement_target(db_path: Path) -> str:
     if not db_path.exists():
         return ""
     try:
-        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
+        con = direct_connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
         try:
             eid = db_path.stem
             try:

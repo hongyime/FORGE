@@ -38,6 +38,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from forge.phase3.obfuscator import ObfuscationCriterion, ObfuscationEngine
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -321,7 +322,7 @@ class PayloadBuilder:
 
         Returns the inserted row id.
         """
-        with sqlite3.connect(db_path) as conn:
+        with direct_connect(db_path) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             cur = conn.execute(
                 """

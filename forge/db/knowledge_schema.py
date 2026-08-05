@@ -4,6 +4,7 @@ Single knowledge.db consolidates: NVD CVEs, LOLBAS, GTFOBins, ExploitDB, ref cac
 Column names kept compatible with existing phase0 fetchers to minimise changes.
 """
 import sqlite3
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 KNOWLEDGE_SCHEMA = [
     # NVD CVE database — columns match nvd_fetcher._bulk_upsert
@@ -99,7 +100,7 @@ KNOWLEDGE_SCHEMA = [
 
 def init_knowledge_db(db_path: str) -> None:
     """Initialize knowledge.db with all schema tables."""
-    conn = sqlite3.connect(db_path)
+    conn = direct_connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     for stmt in KNOWLEDGE_SCHEMA:

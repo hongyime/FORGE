@@ -30,6 +30,7 @@ import time
 from datetime import datetime, time as dtime
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ def register_exfil_monitor(
     Called after confirmed upload. SHA-256 only — no content.
     """
     try:
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         for sha in sha256_list:
             con.execute(
                 """INSERT OR IGNORE INTO exfil_monitor_targets

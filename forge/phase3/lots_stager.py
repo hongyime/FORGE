@@ -44,6 +44,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 from forge.phase3.backoff import JitterMode, exponential_backoff
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -169,7 +170,7 @@ def _query_lots_sites(
     params.append(max_rank)
 
     try:
-        with sqlite3.connect(f"file:{kb_path}?mode=ro", uri=True) as conn:
+        with direct_connect(f"file:{kb_path}?mode=ro", uri=True) as conn:
             rows = conn.execute(query, params).fetchall()
     except sqlite3.OperationalError:
         # KB not yet initialised (test environments)

@@ -11,6 +11,7 @@ from typing import Optional
 import typer
 
 from forge.config import ForgeConfig
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 def register_audit_commands(audit_app: typer.Typer) -> None:
@@ -33,7 +34,7 @@ def _manifest_target(engagement: str, run_id: Optional[int]) -> tuple[Path, int,
     if run_id is not None:
         return db_path, engagement_id, int(run_id)
 
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         row = con.execute(
             """
@@ -70,7 +71,7 @@ def _manifest_verify(
     from forge.audit.manifest import verify_run_audit_manifest  # noqa: PLC0415
 
     db_path, engagement_id, selected_run_id = _manifest_target(engagement, run_id)
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.row_factory = sqlite3.Row
     try:
         result = verify_run_audit_manifest(
@@ -145,7 +146,7 @@ def _manifest_export(
 
     db_path, engagement_id, selected_run_id = _manifest_target(engagement, run_id)
     signing_key = _signing_key(sign=sign, env_name=signing_key_env)
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         try:
             bundle = export_run_audit_manifest_bundle(

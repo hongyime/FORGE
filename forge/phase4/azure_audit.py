@@ -30,6 +30,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 try:
     from azure.identity import DefaultAzureCredential, ClientSecretCredential
@@ -663,7 +664,7 @@ class AzureAuditor:
     def _store_findings(self) -> None:
         """Store findings in database."""
         try:
-            with sqlite3.connect(self._db_path) as con:
+            with direct_connect(self._db_path) as con:
                 apply_schema(con)
                 run_migrations(con)
                 for finding in self._findings:

@@ -37,6 +37,7 @@ from forge.utils.intel.social_profile_hosts import (
     epieos_profile_alias_host_matches as _shared_profile_alias_host_matches,
     epieos_stack_exchange_nested_user_payload as _shared_stack_exchange_nested_user_payload,
 )
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 try:
     from curl_cffi.requests import AsyncSession  # type: ignore[import]
@@ -5718,7 +5719,7 @@ def run_social_scraper(
     Query Epieos for each in-scope email; write results to social_profiles table.
     Returns count of rows upserted.
     """
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.execute(_SOCIAL_PROFILES_DDL)
     con.commit()
 

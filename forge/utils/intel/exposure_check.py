@@ -22,6 +22,7 @@ from typing import Optional
 
 from forge.opsec.scope_gate import email_address_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -194,7 +195,7 @@ def run_xposed(
     Query XposedOrNot for each in-scope email; upsert email_intelligence rows.
     Returns count of rows written.
     """
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.execute(_EMAIL_INTEL_DDL)
     con.commit()
 

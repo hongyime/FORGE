@@ -27,6 +27,7 @@ import sqlite3
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 # ---------------------------------------------------------------------------
 # Allowlist: validated before returning any string to a template caller
@@ -88,7 +89,7 @@ def _ro_conn(db_path: Path) -> sqlite3.Connection:
             f"KB database not found: {db_path}. Run `forge kb sync` first."
         )
     uri = db_path.as_uri() + "?mode=ro"
-    conn = sqlite3.connect(uri, uri=True, timeout=5.0)
+    conn = direct_connect(uri, uri=True, timeout=5.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA query_only = ON")
     return conn

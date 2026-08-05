@@ -40,6 +40,7 @@ from forge.utils.key_validation_gate import (
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 GRAPHML_NS = {"g": "http://graphml.graphdrawing.org/xmlns"}
 MALTEGO_NS = {"m": "http://maltego.paterva.com/xml/mtgx"}
@@ -335,7 +336,7 @@ def _crawl_source_summary(value: Any) -> str:
 
 def _connect_readonly(db_path: Path) -> sqlite3.Connection | None:
     try:
-        con = sqlite3.connect(
+        con = direct_connect(
             f"file:{db_path.as_posix()}?mode=ro",
             uri=True,
             timeout=2.0,

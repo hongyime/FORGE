@@ -32,6 +32,7 @@ from enum import Enum
 from forge.db.validation import _assert_safe_identifier
 from pathlib import Path
 from typing import Iterator, Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ class SQLiteBreachAdapter(BaseBreachAdapter):
             raise FileNotFoundError(f"Breach DB not found: {path}")
 
         # Warn on missing email index.
-        con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+        con = direct_connect(f"file:{self.path}?mode=ro", uri=True)
         idx = con.execute(
             "SELECT name FROM sqlite_master WHERE type='index' AND sql LIKE '%email%'"
         ).fetchone()
@@ -213,7 +214,7 @@ class SQLiteBreachAdapter(BaseBreachAdapter):
             select_parts.append(col_b)
         sel = ", ".join(select_parts)
 
-        con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+        con = direct_connect(f"file:{self.path}?mode=ro", uri=True)
         try:
             for email in target_emails:
                 rows = con.execute(
@@ -259,7 +260,7 @@ class BaseQueryAdapter(BaseBreachAdapter):
         self._validate_schema()
 
     def _validate_schema(self) -> None:
-        con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+        con = direct_connect(f"file:{self.path}?mode=ro", uri=True)
         try:
             cols = {row[1].lower() for row in con.execute(f"PRAGMA table_info({self._TABLE})")}
         except sqlite3.OperationalError as exc:
@@ -278,7 +279,7 @@ class BaseQueryAdapter(BaseBreachAdapter):
             )
 
     def records(self, target_emails: set[str]) -> Iterator[BreachRecord]:
-        con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+        con = direct_connect(f"file:{self.path}?mode=ro", uri=True)
         try:
             for email in target_emails:
                 rows = con.execute(

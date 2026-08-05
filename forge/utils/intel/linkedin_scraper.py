@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import unquote, unquote_plus
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 # ---------------------------------------------------------------------------
@@ -513,7 +514,7 @@ def persist_linkedin_findings(
     domain_clean = (domain or "").strip().lower().lstrip("@")
 
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
     except sqlite3.OperationalError:
         return counts
     try:

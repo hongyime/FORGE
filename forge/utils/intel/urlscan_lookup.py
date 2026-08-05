@@ -45,6 +45,7 @@ from urllib.parse import urlparse
 from forge.utils.intel.http_pacing import record_rate_limit_cooldown, sleep_rate_limit_cooldown
 from forge.utils.intel.provider_urls import persist_provider_url_candidate
 from forge.utils.intel.provider_urls import provider_url_in_scope
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 _URLSCAN_SEARCH = "https://urlscan.io/api/v1/search/"
@@ -464,7 +465,7 @@ def persist_urlscan_findings(
     summary["related_matched"] = related
 
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
     except sqlite3.OperationalError:
         return summary
 

@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 try:
@@ -385,7 +386,7 @@ def run_scavenger(
         def __str__(self):
             return "ScopeViolationError: " + super().__str__()
 
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.executescript(_SCAVENGER_DDL)
     con.commit()
 

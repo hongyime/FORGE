@@ -4,6 +4,7 @@ import os
 import sys
 
 from forge.db.knowledge_schema import init_knowledge_db
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 KNOWLEDGE_DB = ".forge_data/knowledge.db"
 
@@ -13,7 +14,7 @@ def migrate_nvd(old_path: str, new_conn: sqlite3.Connection) -> int:
     if not os.path.exists(old_path):
         print(f"[SKIP] {old_path} not found")
         return 0
-    old = sqlite3.connect(old_path)
+    old = direct_connect(old_path)
     old.row_factory = sqlite3.Row
     rows = old.execute(
         """SELECT c.cve_id, c.description, c.severity,
@@ -41,7 +42,7 @@ def migrate_lolbas(old_path: str, new_conn: sqlite3.Connection) -> int:
     if not os.path.exists(old_path):
         print(f"[SKIP] {old_path} not found")
         return 0
-    old = sqlite3.connect(old_path)
+    old = direct_connect(old_path)
     old.row_factory = sqlite3.Row
 
     # LOLBAS entries
@@ -78,7 +79,7 @@ def migrate_ref_cache(old_path: str, new_conn: sqlite3.Connection) -> int:
     if not os.path.exists(old_path):
         print(f"[SKIP] {old_path} not found")
         return 0
-    old = sqlite3.connect(old_path)
+    old = direct_connect(old_path)
     old.row_factory = sqlite3.Row
     try:
         rows = old.execute(
@@ -101,7 +102,7 @@ def migrate_ref_cache(old_path: str, new_conn: sqlite3.Connection) -> int:
 
 def migrate() -> None:
     init_knowledge_db(KNOWLEDGE_DB)
-    conn = sqlite3.connect(KNOWLEDGE_DB)
+    conn = direct_connect(KNOWLEDGE_DB)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
 

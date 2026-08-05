@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 PrerequisiteRecord = dict[str, object]
@@ -423,7 +424,7 @@ def _optional_count(
     default_on_error: int = 0,
 ) -> int:
     try:
-        con = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+        con = direct_connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
             return int((con.execute(sql, params).fetchone() or [default_on_error])[0] or 0)
         except sqlite3.OperationalError:

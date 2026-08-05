@@ -20,6 +20,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -160,7 +161,7 @@ class PasteMonitor(threading.Thread):
             _LOG.error("PasteMonitor: curl_cffi not installed — monitor disabled.")
             return
 
-        con = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        con = direct_connect(str(self.db_path), check_same_thread=False)
         con.execute(_PASTE_ALERTS_DDL)
         con.commit()
 

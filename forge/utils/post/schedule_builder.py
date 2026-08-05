@@ -38,6 +38,7 @@ import string
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -203,7 +204,7 @@ class PersistenceGenerator:
         """Query Phase 0 KB for a plausible existing task/service name."""
         table = "schtasks_legit_names" if target_os == "windows" else "cron_legit_names"
         try:
-            con = sqlite3.connect(f"file:{self._kb_db}?mode=ro", uri=True)
+            con = direct_connect(f"file:{self._kb_db}?mode=ro", uri=True)
             row = con.execute(
                 f"SELECT name FROM {table} ORDER BY RANDOM() LIMIT 1"
             ).fetchone()
@@ -311,7 +312,7 @@ class PersistenceGenerator:
 
     def _get_legit_cron_path(self) -> str:
         try:
-            con = sqlite3.connect(f"file:{self._kb_db}?mode=ro", uri=True)
+            con = direct_connect(f"file:{self._kb_db}?mode=ro", uri=True)
             row = con.execute(
                 "SELECT path FROM cron_legit_paths ORDER BY stealth_rank ASC, RANDOM() LIMIT 1"
             ).fetchone()
@@ -391,7 +392,7 @@ class PersistenceGenerator:
     def _persist_cleanup_cmd(self, artifact: PersistenceArtifact) -> None:
         if not self._eng_db or not artifact.cleanup_cmd:
             return
-        con = sqlite3.connect(self._eng_db)
+        con = direct_connect(self._eng_db)
         con.execute(
             """INSERT INTO persistence
                (engagement_id, technique, target_os, install_cmd, cleanup_cmd, lolbins_used, obfuscation_applied, created_at)

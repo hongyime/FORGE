@@ -38,6 +38,7 @@ from forge.config import resolve_secret_pool
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.opsec.scope_gate import assert_in_scope
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -792,7 +793,7 @@ class AWSAuditor:
     def _store_findings(self) -> None:
         """Store findings in database."""
         try:
-            with sqlite3.connect(self._db_path) as con:
+            with direct_connect(self._db_path) as con:
                 apply_schema(con)
                 run_migrations(con)
                 for finding in self._findings:

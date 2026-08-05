@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 
 from forge.utils.intel.http_pacing import identity_get
 from forge.utils.intel.tool_paths import find_tool_binary
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 _PHONE_DORK_SUPPLEMENTAL_PROFILE_SITES = (
@@ -592,7 +593,7 @@ def _persist_phone_findings(
     """
     counts = {"emails": 0, "social_profiles": 0}
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
     except sqlite3.OperationalError:
         return counts
 
@@ -773,7 +774,7 @@ def lookup_phone(
 
     # Persist as audit_log row (no dedicated phone table yet)
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
         try:
             payload = json.dumps({
                 "region": result["parse"].get("region"),

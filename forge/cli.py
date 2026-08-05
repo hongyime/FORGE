@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence, cast
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -1307,7 +1308,7 @@ def _cli_audit(
     """
     try:
         operator = os.environ.get("FORGE_OPERATOR", "unknown")
-        with sqlite3.connect(db_path) as con:
+        with direct_connect(db_path) as con:
             con.execute(
                 """
                 INSERT INTO audit_log
@@ -1950,7 +1951,7 @@ def osint_breach(
 
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
-    conn = sqlite3.connect(db_path)
+    conn = direct_connect(db_path)
     try:
         try:
             run_breach_query(
@@ -2202,7 +2203,7 @@ def osint_hibp(
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
 
-    with sqlite3.connect(db_path) as conn:
+    with direct_connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         scope = cfg.get_engagement_scope(int(engagement), conn) if hasattr(cfg, "get_engagement_scope") else []
         result = query_hibp(
@@ -3128,7 +3129,7 @@ def exploit_correlate(
         "correlate_start", target=host,
     )
 
-    with sqlite3.connect(db_path) as con:
+    with direct_connect(db_path) as con:
         try:
             con.execute(
                 "DELETE FROM exploit_suggestions WHERE engagement_id=?",
@@ -3159,7 +3160,7 @@ def exploit_correlate(
     try:
         suggestions = correlator.correlate_all()
         if host:
-            with sqlite3.connect(db_path) as con:
+            with direct_connect(db_path) as con:
                 try:
                     ids = con.execute(
                         """
@@ -4641,7 +4642,7 @@ def auth_brute(
         candidates = generate_dynamic_passwords(host, limit=attempts_limit)
     else:
         candidates = generate_dynamic_passwords(host, limit=attempts_limit)
-    conn = sqlite3.connect(db_path)
+    conn = direct_connect(db_path)
     success = 0
     tested = 0
     try:
@@ -11848,7 +11849,7 @@ def kill_chain(
         key = str(target.get("key") or "").strip()
         if bool(decision.get("allowed")):
             try:
-                with sqlite3.connect(db_path) as con:
+                with direct_connect(db_path) as con:
                     _promote_pending_cloud_targets(con, [cast(dict[str, Any], target)])
                     con.commit()
             except Exception:  # noqa: BLE001
@@ -18803,7 +18804,7 @@ def kill_chain(
                      "[dim]no new cloud refs to scan[/dim]")
             else:
                 try:
-                    with sqlite3.connect(db_path) as con:
+                    with direct_connect(db_path) as con:
                         _promote_pending_cloud_targets(con, pending_cloud_targets)
                         con.commit()
                 except Exception:  # noqa: BLE001
@@ -19707,7 +19708,7 @@ def doctor() -> None:
     db_path = cfg.kb_path
     if db_path.exists():
         try:
-            with sqlite3.connect(str(db_path)) as conn:
+            with direct_connect(str(db_path)) as conn:
                 count = conn.execute("SELECT count(*) FROM cve").fetchone()[0]
                 if count > 0:
                     table.add_row("Knowledge Base", "[green]OK[/green]", f"{count} CVEs loaded")

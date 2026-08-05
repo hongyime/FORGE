@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import httpx
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -157,7 +158,7 @@ class FirebaseExtractor:
         """
         if not projects:
             return 0
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         self._ensure_schema(con)
         count = 0
         seen: set[str] = set()
@@ -387,7 +388,7 @@ class FirebaseExtractor:
         from forge.db.migrations import run_migrations
         from forge.db.schema import apply_schema
 
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         apply_schema(con)
         run_migrations(con)
         count = 0

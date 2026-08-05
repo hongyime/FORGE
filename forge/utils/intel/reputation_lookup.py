@@ -25,6 +25,7 @@ from typing import Optional
 
 from forge.opsec.scope_gate import email_address_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 try:
@@ -202,7 +203,7 @@ def run_reputation_lookup(
     except ImportError:
         raise ImportError("curl_cffi required: pip install curl_cffi")
 
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.execute(_EMAIL_INTEL_DDL)
     con.commit()
     time_col = _find_time_column(con)
@@ -280,7 +281,7 @@ def run_reputation_lookup(
 
     # Optional paste monitoring.
     if monitor:
-        con2 = sqlite3.connect(db_path)
+        con2 = direct_connect(db_path)
         email_col = _find_email_column(con2)
         e_rows = con2.execute(
             f"SELECT {email_col} FROM emails WHERE engagement_id=?", (engagement_id,)

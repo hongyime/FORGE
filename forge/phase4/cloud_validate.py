@@ -38,6 +38,7 @@ from forge.utils.validation_identifiers import (
     looks_compound_placeholder_identifier as _looks_compound_placeholder_identifier,
 )
 from forge.utils.validation_proof import parse_provider_validation_identity
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -3916,7 +3917,7 @@ def _resolve_related_secret(
     """
     params: list[Any] = [engagement_id, service, pattern_name, *clause_params, source_url, repo_name, domain]
 
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         match = con.execute(query, tuple(params)).fetchone()
     finally:
@@ -4554,7 +4555,7 @@ def _run_direct_asset_validation(
             result.identifier = normalized_identifier
             result.provider_identifier = provider_identifier
 
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         apply_schema(con)
         run_migrations(con)
@@ -4882,7 +4883,7 @@ def run_cloud_asset_validate_batch(
         ]
 
     status_counts: dict[str, int] = {}
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         apply_schema(con)
         run_migrations(con)
@@ -5107,7 +5108,7 @@ def sweep_pending_cloud_validations(
         processed_results = denied_results + processed_results
 
     payload_results: list[dict[str, Any]] = []
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         apply_schema(con)
         run_migrations(con)
@@ -5259,7 +5260,7 @@ def sweep_pending_cloud_asset_validations(
     denied_status_counts: dict[str, int] = {}
     denied_payload_results: list[dict[str, Any]] = []
     if denied_results:
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -5334,7 +5335,7 @@ def run_cloud_validate(
 ) -> dict[str, Any]:
     """Validate a discovered cloud reference using deterministic, low-impact probes."""
     registry = CloudValidatorRegistry()
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.row_factory = sqlite3.Row
     try:
         apply_schema(con)

@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ class HashCredentialBridge:
     def __init__(self, db_path: Path, engagement_id: int) -> None:
         self._db_path       = db_path
         self._engagement_id = engagement_id
-        self._con           = sqlite3.connect(
+        self._con           = direct_connect(
             f"file:{db_path}?mode=ro", uri=True
         )
         self._con.row_factory = sqlite3.Row

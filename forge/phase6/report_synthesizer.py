@@ -71,6 +71,7 @@ from forge.utils.key_validation_gate import (
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 try:
     from llama_cpp import Llama  # type: ignore[import]
@@ -342,7 +343,7 @@ class ContextBuilder:
     # ------------------------------------------------------------------
 
     def build(self) -> ReportContext:
-        con = sqlite3.connect(self._db)
+        con = direct_connect(self._db)
         con.row_factory = sqlite3.Row
         try:
             eng  = self._load_engagement(con)
@@ -3507,7 +3508,7 @@ class ReportSynthesizer:
         telemetry: ValidationTelemetry,
     ) -> None:
         try:
-            con = sqlite3.connect(self._db_path)
+            con = direct_connect(self._db_path)
             try:
                 try:
                     apply_schema(con)
@@ -4314,7 +4315,7 @@ class ReportSynthesizer:
         table is empty or missing, returns a neutral placeholder line.
         """
         try:
-            con = sqlite3.connect(
+            con = direct_connect(
                 f"file:{self._db_path.as_posix()}?mode=ro", uri=True,
             )
             try:
@@ -4446,7 +4447,7 @@ class ReportSynthesizer:
             f"targets={json.dumps(targets, sort_keys=True)}"
         )
         try:
-            with sqlite3.connect(self._db_path) as con:
+            with direct_connect(self._db_path) as con:
                 con.execute(
                     """
                     INSERT INTO audit_log

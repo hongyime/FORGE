@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Callable, Sequence, TypeVar
 from urllib.parse import parse_qsl, quote, urlencode, unquote, unquote_to_bytes, urljoin, urlparse
 from xml.etree import ElementTree
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 try:
     import yaml
@@ -10906,7 +10907,7 @@ class SeedRunTracker:
         error: str = "abandoned before explicit completion",
     ) -> int:
         completed_at = self._now()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -10948,7 +10949,7 @@ class SeedRunTracker:
         if not seed_text:
             raise ValueError("seed_value must not be empty")
         started_at = self._now()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -11006,7 +11007,7 @@ class SeedRunTracker:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         completed_at = self._now()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -11127,7 +11128,7 @@ class EngagementRunTracker:
     @staticmethod
     def _abandon_run(db_path: Path, engagement_id: int, run_id: int) -> None:
         completed_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -11169,7 +11170,7 @@ class EngagementRunTracker:
         metadata: dict[str, Any] | None = None,
     ) -> EngagementRunHandle:
         started_at = self._now()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -11234,7 +11235,7 @@ class EngagementRunTracker:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         updated_at = self._now()
-        con = sqlite3.connect(self._db_path, timeout=0.2)
+        con = direct_connect(self._db_path, timeout=0.2)
         try:
             con.execute("PRAGMA busy_timeout=200")
             apply_schema(con)
@@ -11278,7 +11279,7 @@ class EngagementRunTracker:
     ) -> None:
         finalizer = getattr(handle, "_finalizer", None)
         completed_at = self._now()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -12348,7 +12349,7 @@ class EngagementSynthesisEngine:
 
     def run(self) -> SynthesisSummary:
         summary = SynthesisSummary()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -19111,7 +19112,7 @@ class ArtifactQueueProcessor:
 
     def ingest_local_artifacts(self, search_roots: list[Path] | None = None) -> int:
         roots = search_roots or default_local_artifact_roots()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -19240,7 +19241,7 @@ class ArtifactQueueProcessor:
         progress_callback: Callable[[str, dict[str, object]], None] | None = None,
     ) -> ArtifactProcessingSummary:
         summary = ArtifactProcessingSummary()
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             apply_schema(con)
             run_migrations(con)
@@ -35994,7 +35995,7 @@ class ArtifactQueueProcessor:
         if not path.exists():
             return []
         try:
-            con = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+            con = direct_connect(f"file:{path.as_posix()}?mode=ro", uri=True)
         except sqlite3.Error:
             return [(str(path), path.name, self._read_text(path))]
         try:
@@ -36019,7 +36020,7 @@ class ArtifactQueueProcessor:
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir) / f"artifact{suffix}"
                 temp_path.write_bytes(bounded)
-                con = sqlite3.connect(f"file:{temp_path.as_posix()}?mode=ro", uri=True)
+                con = direct_connect(f"file:{temp_path.as_posix()}?mode=ro", uri=True)
                 try:
                     payloads = self._extract_sqlite_connection_payloads(
                         con,
@@ -37897,7 +37898,7 @@ class ArtifactQueueProcessor:
             return []
         database_uri = f"file:{Path(job.database_path).as_posix()}?mode=ro"
         try:
-            con = sqlite3.connect(database_uri, uri=True)
+            con = direct_connect(database_uri, uri=True)
         except sqlite3.Error:
             return []
         try:

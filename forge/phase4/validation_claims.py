@@ -9,6 +9,7 @@ from typing import Any
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _ASSET_TYPE_ALIASES = {
     "azure_blob_storage": "azure_blob",
@@ -78,7 +79,7 @@ def claim_pending_cloud_key_rows(
     lease_modifier = f"+{_lease_seconds()} seconds"
     claimed_rows: list[dict[str, Any]] = []
     claimed_key_ids: list[int] = []
-    con = sqlite3.connect(db_path, timeout=30)
+    con = direct_connect(db_path, timeout=30)
     con.row_factory = sqlite3.Row
     try:
         apply_schema(con)
@@ -153,7 +154,7 @@ def claim_pending_cloud_asset_rows(
     lease_modifier = f"+{_lease_seconds()} seconds"
     claimed_rows: list[dict[str, Any]] = []
     claimed_assets: list[tuple[str, str]] = []
-    con = sqlite3.connect(db_path, timeout=30)
+    con = direct_connect(db_path, timeout=30)
     con.row_factory = sqlite3.Row
     try:
         apply_schema(con)
@@ -229,7 +230,7 @@ def release_validation_key_claims(
 ) -> None:
     if not key_ids:
         return
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         placeholders = ",".join("?" for _ in key_ids)
         con.execute(
@@ -256,7 +257,7 @@ def release_validation_asset_claims(
 ) -> None:
     if not assets:
         return
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         con.executemany(
             """

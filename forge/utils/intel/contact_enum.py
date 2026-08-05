@@ -33,6 +33,7 @@ from typing import Optional
 
 from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, load_scope_from_db
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -215,7 +216,7 @@ def run_contact_enum(
     Run theHarvester for domain; insert net-new emails into emails table.
     Returns count of new email rows inserted.
     """
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     scope = load_scope_from_db(str(db_path), engagement_id)
 
     # Scope gate before any subprocess invocation.

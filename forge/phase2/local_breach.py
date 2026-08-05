@@ -25,6 +25,7 @@ from forge.db.validation import _assert_safe_identifier
 from forge.opsec.crypto import encrypt_string
 from forge.opsec.resilience import _SHUTDOWN
 from forge.opsec.scope_gate import assert_in_scope
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class _SQLiteBreachAdapter(_BaseBreachAdapter):
         self.pass_col = pass_col
 
     def records(self) -> Iterator[tuple[str, str]]:
-        conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+        conn = direct_connect(f"file:{self.path}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         tbl = "credentials" if "credentials" in tables else next(iter(tables), None)
@@ -101,7 +102,7 @@ class _BaseQueryAdapter(_BaseBreachAdapter):
     def __init__(self, path: Path):
         self.path = path
         # Validate schema
-        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        conn = direct_connect(f"file:{path}?mode=ro", uri=True)
         try:
             conn.execute("SELECT email, password FROM data LIMIT 1")
         except sqlite3.OperationalError as e:
@@ -110,7 +111,7 @@ class _BaseQueryAdapter(_BaseBreachAdapter):
         conn.close()
 
     def records(self) -> Iterator[tuple[str, str]]:
-        conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+        conn = direct_connect(f"file:{self.path}?mode=ro", uri=True)
         try:
             for row in conn.execute("SELECT email, password FROM data"):
                 if _SHUTDOWN.is_set():

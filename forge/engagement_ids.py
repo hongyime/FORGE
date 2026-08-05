@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 def engagement_db_root(data_dir: str | Path) -> Path:
@@ -37,7 +38,7 @@ def allocate_engagement_id(data_dir: str | Path) -> int:
     """
     db_root = engagement_db_root(data_dir)
     sequence_db = db_root / "master.db"
-    con = sqlite3.connect(sequence_db, timeout=30.0, isolation_level=None)
+    con = direct_connect(sequence_db, timeout=30.0, isolation_level=None)
     try:
         con.execute("PRAGMA busy_timeout=30000")
         con.execute("BEGIN IMMEDIATE")

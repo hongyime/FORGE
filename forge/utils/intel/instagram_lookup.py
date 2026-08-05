@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from forge.utils.intel.http_pacing import identity_get
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 # --- regexes for bio mining -------------------------------------------------
@@ -289,7 +290,7 @@ def persist_instagram_findings(
         return counts
 
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
     except sqlite3.OperationalError:
         return counts
 

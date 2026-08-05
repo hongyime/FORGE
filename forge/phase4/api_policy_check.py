@@ -41,6 +41,7 @@ from urllib.parse import urlparse
 import httpx
 
 from forge.config import resolve_secret_pool, split_secret_values
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ class SupabaseScanner:
                 raise RuntimeError("Operator cancelled.")
 
         session = self._make_session(anon_key)
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         self._ensure_schema(con)
         anon_keys = self._merge_unique(anon_keys, self._load_stored_anon_keys(con, project_ref))
         if not anon_keys and auto_discover_enabled and not dry_run:

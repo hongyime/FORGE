@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -160,7 +161,7 @@ def populate_evasion_artifacts(
         merged[table] = combined
 
     counts: dict[str, int] = {}
-    with sqlite3.connect(str(db_path), timeout=10.0) as conn:
+    with direct_connect(str(db_path), timeout=10.0) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
         for table, columns in _TABLE_COLUMNS.items():
             if force_rebuild:

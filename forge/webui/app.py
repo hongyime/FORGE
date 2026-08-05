@@ -72,6 +72,7 @@ from forge.webui.automation_scope import (
 from forge.webui.cloud_assets import cloud_assets_payload
 from forge.webui.command_center import CommandCenterService
 from forge.webui.state import ProgressEvent, broker
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _VALID_ENGAGEMENT_STATUSES = {"PREP", "ACTIVE", "COMPLETE", "ARCHIVED"}
 _VALID_SEED_STATUSES = {"pending", "running", "completed", "failed", "ignored"}
@@ -245,7 +246,7 @@ def create_app() -> Any:
             return []
         snapshots: list[tuple[int, str, dict[str, Any]]] = []
         for db_file in _numeric_engagement_db_files():
-            con = sqlite3.connect(db_file)
+            con = direct_connect(db_file)
             con.row_factory = sqlite3.Row
             try:
                 if not _table_exists(con, "engagement_runs"):
@@ -1112,7 +1113,7 @@ def create_app() -> Any:
             return []
         items: list[dict[str, Any]] = []
         for db_file in _numeric_engagement_db_files():
-            con = sqlite3.connect(db_file)
+            con = direct_connect(db_file)
             con.row_factory = sqlite3.Row
             try:
                 rows = con.execute(
@@ -1134,7 +1135,7 @@ def create_app() -> Any:
             return None
         ref = engagement_ref.strip().lower()
         for db_file in _numeric_engagement_db_files():
-            con = sqlite3.connect(db_file)
+            con = direct_connect(db_file)
             con.row_factory = sqlite3.Row
             try:
                 rows = con.execute(
@@ -1158,7 +1159,7 @@ def create_app() -> Any:
         ref = engagement_ref.strip().lower()
         requested_name = Path(artifact_name).name
         for db_file in _numeric_engagement_db_files():
-            con = sqlite3.connect(db_file)
+            con = direct_connect(db_file)
             con.row_factory = sqlite3.Row
             try:
                 rows = con.execute(
@@ -1197,7 +1198,7 @@ def create_app() -> Any:
             return None
         ref = engagement_ref.strip().lower()
         for db_file in _numeric_engagement_db_files():
-            con = sqlite3.connect(db_file)
+            con = direct_connect(db_file)
             con.row_factory = sqlite3.Row
             try:
                 rows = con.execute(
@@ -1439,7 +1440,7 @@ def create_app() -> Any:
 
         engagement_id = _allocate_engagement_id()
         db_path = cfg.engagement_db_path(str(engagement_id))
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             apply_schema(con)
@@ -1505,7 +1506,7 @@ def create_app() -> Any:
         if resolved is None:
             raise HTTPException(status_code=404, detail="Engagement not found.")
         db_path, engagement_id = resolved
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             _ensure_engagement_metadata_column(con)
@@ -1579,7 +1580,7 @@ def create_app() -> Any:
         if resolved is None:
             raise HTTPException(status_code=404, detail="Engagement not found.")
         db_path, engagement_id = resolved
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             return {"items": _engagement_seed_rows(con, engagement_id)}
@@ -1606,7 +1607,7 @@ def create_app() -> Any:
         if not seed_value:
             raise HTTPException(status_code=400, detail="seed_value is required.")
 
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             try:
@@ -1648,7 +1649,7 @@ def create_app() -> Any:
         if resolved is None:
             raise HTTPException(status_code=404, detail="Engagement not found.")
         db_path, engagement_id = resolved
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             row = con.execute(
@@ -1727,7 +1728,7 @@ def create_app() -> Any:
         if resolved is None:
             raise HTTPException(status_code=404, detail="Engagement not found.")
         db_path, engagement_id = resolved
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             row = con.execute(
@@ -1829,7 +1830,7 @@ def create_app() -> Any:
         if resolved is None:
             raise HTTPException(status_code=404, detail="Engagement not found.")
         db_path, engagement_id = resolved
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             active_run = _latest_running_engagement_run(con, engagement_id)
@@ -2000,7 +2001,7 @@ def create_app() -> Any:
         if resolved is None:
             raise HTTPException(status_code=404, detail="Engagement not found.")
         db_path, engagement_id = resolved
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             return {
@@ -2064,7 +2065,7 @@ def create_app() -> Any:
         marker_path.write_text(json.dumps(marker_payload, sort_keys=True), encoding="utf-8")
 
         active_run_id: int | None = None
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
             row = _latest_running_engagement_run(con, engagement_id)

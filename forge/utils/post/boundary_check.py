@@ -30,6 +30,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class ScopeViolationError(RuntimeError):
 def _load_scope_entries(db_path: Path, engagement_id: int) -> list[str]:
     """Return raw scope strings from the engagements table."""
     try:
-        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        con = direct_connect(f"file:{db_path}?mode=ro", uri=True)
         rows = con.execute(
             "SELECT scope_entry FROM engagement_scope WHERE engagement_id=?",
             (engagement_id,),
@@ -54,7 +55,7 @@ def _load_scope_entries(db_path: Path, engagement_id: int) -> list[str]:
     except sqlite3.OperationalError:
         # Fallback: try scope column on engagements table (older schema)
         try:
-            con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            con = direct_connect(f"file:{db_path}?mode=ro", uri=True)
             columns = {
                 str(row[1])
                 for row in con.execute("PRAGMA table_info(engagements)").fetchall()
@@ -131,7 +132,7 @@ def _audit(
     in_scope: bool,
 ) -> None:
     try:
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         con.execute(
             """INSERT INTO audit_log (engagement_id, action, result, logged_at)
                VALUES (?, 'scope_check', ?, datetime('now'))""",

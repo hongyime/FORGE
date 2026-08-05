@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from forge.utils.intel.http_pacing import identity_get
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 def _email_hash(email: str) -> tuple[str, str]:
@@ -148,7 +149,7 @@ def persist_gravatar_findings(
         return 0
     written = 0
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
     except sqlite3.OperationalError:
         return 0
     try:

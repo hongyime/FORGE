@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from forge.utils.intel.tool_paths import find_tool_binary
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 def _ghunt_creds_path() -> Path:
@@ -350,7 +351,7 @@ def persist_google_findings(
 
     written = 0
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
     except sqlite3.OperationalError:
         return 0
     try:

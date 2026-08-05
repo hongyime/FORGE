@@ -58,6 +58,7 @@ from pydantic import BaseModel, HttpUrl, field_validator
 
 from forge.opsec.scope_gate import ScopeViolationError
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +250,7 @@ def _scope_check(url: str, engagement_id: int, db_path: Path) -> None:
 
     scope_entries: list[str] = []
     try:
-        con = sqlite3.connect(db_path)
+        con = direct_connect(db_path)
         try:
             rows = con.execute(
                 "SELECT scope_entry FROM engagement_scope WHERE engagement_id = ?",
@@ -267,7 +268,7 @@ def _scope_check(url: str, engagement_id: int, db_path: Path) -> None:
 
 def _audit(db_path: Path, engagement_id: int, action: str, detail: str) -> None:
     """Write a single row to audit_log."""
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     try:
         insert_audit_log(
             con,
@@ -1137,7 +1138,7 @@ class WebPanelTester:
             f"confidence={result.confidence}",
         )
 
-        con = sqlite3.connect(self._db)
+        con = direct_connect(self._db)
         try:
             con.execute(
                 """

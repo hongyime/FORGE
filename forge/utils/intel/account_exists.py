@@ -31,6 +31,7 @@ from typing import Optional
 from forge.opsec.scope_gate import email_address_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
 from forge.utils.intel.handle_finder import _find_tool  # venv-aware lookup
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -175,7 +176,7 @@ def run_holehe(
             "FORGE_HOLEHE_COMMAND."
         )
 
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.execute(_ACCOUNT_EXISTS_DDL)
     con.commit()
 

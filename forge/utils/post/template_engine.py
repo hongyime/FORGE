@@ -35,6 +35,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -291,7 +292,7 @@ class ReverseShellGenerator:
                 )
 
     def _persist_sha256(self, payload: ShellPayload) -> None:
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         chain: list[str] = []
         if payload.obfuscated:
             chain.append("obfuscated")

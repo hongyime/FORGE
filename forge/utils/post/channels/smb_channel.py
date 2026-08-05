@@ -25,6 +25,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import Optional, Tuple
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 try:
@@ -62,7 +63,7 @@ def _get_pipe_name(kb_db: Optional[Path] = None) -> str:
     """
     if kb_db and kb_db.exists():
         try:
-            con = sqlite3.connect(f"file:{kb_db}?mode=ro", uri=True)
+            con = direct_connect(f"file:{kb_db}?mode=ro", uri=True)
             row = con.execute(
                 "SELECT name FROM lolbas_pipe_names ORDER BY RANDOM() LIMIT 1"
             ).fetchone()

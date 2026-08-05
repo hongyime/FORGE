@@ -23,6 +23,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 # Rotation list of public SearXNG instances. Any that responds with
 # JSON gets used first. Updated 2026-07 - if these die, add more from
@@ -491,7 +492,7 @@ def search_name(
     # Persist findings to audit_log AND social_profiles table so fan-out
     # E5 in kill-chain picks up newly-discovered handles for Sherlock.
     try:
-        con = sqlite3.connect(str(db_path))
+        con = direct_connect(str(db_path))
         try:
             # Ensure social_profiles table exists (created lazily by scraper).
             try:

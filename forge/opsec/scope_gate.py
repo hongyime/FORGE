@@ -20,6 +20,7 @@ import ipaddress
 import json
 from typing import Callable, Optional
 from urllib.parse import urlparse
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 class ScopeViolationError(ValueError):
@@ -293,7 +294,7 @@ def load_scope_from_db(db_path: str, engagement_id: int) -> list[str]:
     import sqlite3
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with direct_connect(db_path) as conn:
             row = conn.execute(
                 "SELECT scope_json FROM engagements WHERE id = ?", (engagement_id,)
             ).fetchone()

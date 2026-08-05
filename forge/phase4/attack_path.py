@@ -38,6 +38,7 @@ from forge.utils.key_validation_gate import (
 )
 from forge.utils.validation_summary import safe_validation_summary as _safe_validation_summary
 from forge.utils.validation_proof import parse_validated_detail
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _MERMAID_CHAR_LIMIT = 4_000
 _DEFAULT_MAX_NODES = 150
@@ -298,7 +299,7 @@ class AttackGraphBuilder:
 
     def build(self) -> AttackGraph:
         self._reset()
-        con = sqlite3.connect(self.db_path, factory=_ForgeConnection)
+        con = direct_connect(self.db_path, factory=_ForgeConnection)
         try:
             con.execute("PRAGMA query_only=ON")
             engagement_name = self._load_engagement_name(con)
@@ -323,7 +324,7 @@ class AttackGraphBuilder:
         _assert_no_sensitive_data(graph_json)
         if not mermaid or len(mermaid) > _MERMAID_CHAR_LIMIT:
             mermaid = MermaidRenderer().render_bounded_preview(graph)
-        con = sqlite3.connect(self.db_path)
+        con = direct_connect(self.db_path)
         try:
             from forge.db.schema import apply_schema  # noqa: PLC0415
 

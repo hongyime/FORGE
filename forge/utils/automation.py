@@ -22,6 +22,7 @@ from forge.utils.playbooks import (
     has_required_roe_scope_context,
     inherit_roe_scope_context,
 )
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 
 EXECUTABLE_AUTOMATION_ACTIONS: dict[str, str] = {
@@ -78,7 +79,7 @@ class AutomationEngine:
     def _handle_task_done(self, engagement_id: int, task_key: str):
         # Check for chained next steps
         parent_context: dict[str, Any] = {}
-        with sqlite3.connect(self.db_path) as conn:
+        with direct_connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute("SELECT payload FROM distributed_tasks WHERE engagement_id=? AND task_key=?", (engagement_id, task_key)).fetchone()
             if row and row["payload"]:
@@ -140,7 +141,7 @@ class AutomationEngine:
         if task_key.startswith("osint:breach_check") or task_key.startswith("exploit:crack"):
             if not has_required_roe_scope_context(parent_context):
                 return
-            with sqlite3.connect(self.db_path) as conn:
+            with direct_connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 # Just get the latest credential id as a simplification for trigger
                 row = conn.execute("SELECT id FROM credentials ORDER BY id DESC LIMIT 1").fetchone()
@@ -167,7 +168,7 @@ class AutomationEngine:
         if task_key.startswith("vuln:passive") or task_key.startswith("recon:ports"):
             if not has_required_roe_scope_context(parent_context):
                 return
-            with sqlite3.connect(self.db_path) as conn:
+            with direct_connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 for row in _reportable_vulnerability_rows(conn, engagement_id):
                     severity = str(row["severity"] or "").strip().upper()
@@ -213,7 +214,7 @@ class AutomationEngine:
         task_key: str,
     ) -> dict[str, Any]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with direct_connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     """
@@ -249,7 +250,7 @@ class AutomationEngine:
             return []
 
         suggestions: list[Suggestion] = []
-        with sqlite3.connect(self.db_path) as conn:
+        with direct_connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             
             # 1. Recon: Ports and Crawls

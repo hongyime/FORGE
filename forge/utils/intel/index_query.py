@@ -26,6 +26,7 @@ from typing import Optional
 from forge.config import resolve_secret_pool
 from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_entries_from_payload
 from forge.utils.intel.audit_log import insert_audit_log
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 try:
@@ -227,7 +228,7 @@ def run_dehashed(
     Query DeHashed for query_value; store results in credentials table.
     Returns count of new rows inserted.
     """
-    con = sqlite3.connect(db_path)
+    con = direct_connect(db_path)
     con.execute(_SYNC_STATE_DDL)
     con.commit()
     scope_row = con.execute(

@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 _CONSOLE = None  # lazy: only imported when Rich available
@@ -155,7 +156,7 @@ class CredentialValidator:
         Bcrypt hashes are skipped (not crackable without spray).
         """
         rows: list[_CredRow] = []
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         cur = con.execute(
             """
             SELECT id, email, password_plaintext_enc
@@ -262,7 +263,7 @@ class CredentialValidator:
         return ciphertext
 
     def _load_hosts(self) -> list[str]:
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         try:
             rows = con.execute(
                 "SELECT DISTINCT ip FROM hosts WHERE engagement_id = ?",
@@ -290,7 +291,7 @@ class CredentialValidator:
         return max(0.001, random.gauss(base, base * 0.3))
 
     def _write_result(self, result: AttemptResult) -> None:
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         ts = result.attempted.isoformat()
         if result.success:
             con.execute(

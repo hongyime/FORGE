@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qs, urlencode, ParseResult
+from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
 _LOG = logging.getLogger(__name__)
 
@@ -208,7 +209,7 @@ class IDORScanner:
         visited: set[str] = set()
         queue: deque = deque([(target_url, 0)])
         findings: list[IdorFinding] = []
-        con = sqlite3.connect(self._db_path)
+        con = direct_connect(self._db_path)
         self._ensure_schema(con)
 
         while queue:
