@@ -85,8 +85,13 @@ graph = [
     "networkx>=3.0,<4.0",
 ]
 dev = [
-    "pytest==8.3.5",
-    "pytest-asyncio==0.25.3",
+    # pytest >=9.0.3 patches GHSA-6w46-j5rx-g56g (CVE-2025-71176 / medium):
+    # insecure /tmp/pytest-of-{user} handling can allow local users to
+    # cause DoS or gain privileges. Dev-only.
+    "pytest>=9.0.3,<10.0",
+    # pytest-asyncio >=1.0 required for pytest 9 compat (upstream matrix
+    # is pytest<10,>=8.4).
+    "pytest-asyncio>=1.0,<2.0",
     "pytest-recording==0.13.2",
     # vcrpy >=8.2.1 patches GHSA-rpj2-4hq8-938g (HIGH: arbitrary code
     # execution via unsafe YAML deserialization of cassette files).
