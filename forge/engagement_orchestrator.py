@@ -330,6 +330,77 @@ def _is_mobile_bundle_path(value: str | Path) -> bool:
     return Path(text).suffix.lower() in _MOBILE_BUNDLE_SEED_SUFFIXES
 
 
+# ---------------------------------------------------------------------------
+# Cloud provider hostname detection (used by the seed classifier)
+# ---------------------------------------------------------------------------
+#
+# A hostname whose suffix matches any of these is a cloud provider
+# reference and gets classified as ``cloud_ref`` instead of ``url`` /
+# ``domain``. Ordered by specificity; longer suffixes come first so
+# ``.s3.amazonaws.com`` doesn't fall through to a broader match.
+_CLOUD_REF_HOSTNAME_SUFFIXES: tuple[str, ...] = (
+    # Supabase
+    ".supabase.co",
+    ".supabase.in",
+    # Firebase / Google
+    ".firebaseio.com",
+    ".firebaseapp.com",
+    ".web.app",
+    ".appspot.com",
+    ".storage.googleapis.com",
+    # Amazon S3 + CloudFront + Amplify
+    ".s3.amazonaws.com",
+    ".s3-website.amazonaws.com",
+    ".amplifyapp.com",
+    ".cloudfront.net",
+    # Azure Storage
+    ".blob.core.windows.net",
+    ".dfs.core.windows.net",
+    ".file.core.windows.net",
+    ".queue.core.windows.net",
+    ".table.core.windows.net",
+    # DigitalOcean Spaces
+    ".digitaloceanspaces.com",
+    # Vercel / Netlify (serverless hosting refs)
+    ".vercel.app",
+    ".netlify.app",
+    ".netlify.com",
+    # Cloudflare Pages / Workers
+    ".pages.dev",
+    ".workers.dev",
+)
+
+# Regional S3/GCS/Firebase RTDB hostnames not covered by simple suffix
+# e.g. ``mybucket.s3.us-east-1.amazonaws.com`` or ``s3-us-west-2.amazonaws.com``.
+_CLOUD_REF_HOSTNAME_REGEXES: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^[a-z0-9][a-z0-9.\-]*\.s3[.-][a-z0-9\-]+\.amazonaws\.com$"),
+    re.compile(r"^s3[.-][a-z0-9\-]+\.amazonaws\.com$"),
+    re.compile(r"^[a-z0-9][a-z0-9.\-]*\.storage\.googleapis\.com$"),
+    re.compile(r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.firebasedatabase\.app$"),
+    re.compile(r"^storage\.cloud\.google\.com$"),
+)
+
+
+def _hostname_is_cloud_ref(hostname: str) -> bool:
+    """Return True when *hostname* looks like a cloud provider reference.
+
+    Comparison is case-insensitive; leading wildcards and dots are
+    stripped so ``*.myapp.supabase.co`` and ``myapp.supabase.co`` both
+    match.
+    """
+    host = hostname.strip().lower().lstrip("*").lstrip(".")
+    if not host:
+        return False
+    for suffix in _CLOUD_REF_HOSTNAME_SUFFIXES:
+        # `.suffix` match plus the bare-suffix hostname (e.g. "workers.dev" itself)
+        if host.endswith(suffix) or host == suffix.lstrip("."):
+            return True
+    for pattern in _CLOUD_REF_HOSTNAME_REGEXES:
+        if pattern.match(host):
+            return True
+    return False
+
+
 def _classify_seed_value(value: str) -> str:
     text = value.strip()
     if not text:
@@ -348,11 +419,20 @@ def _classify_seed_value(value: str) -> str:
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         if _is_mobile_bundle_url(text):
             return "apk_url"
+        # Check cloud_ref BEFORE returning generic url — cloud references get
+        # their own class so reporting, graph, and scope routing can single
+        # them out from long-tail HTTP crawl URLs.
+        if _hostname_is_cloud_ref(parsed.netloc):
+            return "cloud_ref"
         return "url"
     if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", text):
         return "email"
     if lowered.startswith("*."):
         lowered = lowered[2:]
+    # Bare cloud provider hostname (no scheme) is still a cloud_ref, not a
+    # generic domain — e.g. ``xyz.supabase.co`` or ``app.firebaseio.com``.
+    if _hostname_is_cloud_ref(lowered):
+        return "cloud_ref"
     if re.match(
         r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
         lowered,

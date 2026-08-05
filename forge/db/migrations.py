@@ -718,7 +718,8 @@ def _m0015_multi_seed_orchestration(conn: sqlite3.Connection) -> None:
             seed_type      TEXT    NOT NULL
                            CHECK (seed_type IN (
                                'domain','email','phone','username','ipv4','ipv6',
-                               'name','company','url','apk_url','subdomain','other'
+                               'name','company','url','apk_url','subdomain',
+                               'cloud_ref','other'
                            )),
             source         TEXT    NOT NULL DEFAULT 'operator'
                            CHECK (source IN ('operator','scope','discovered','artifact','cross_reference')),
@@ -1061,6 +1062,62 @@ def _m0025_artifact_queue_attempts(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _m0026_cloud_ref_seed_type(conn: sqlite3.Connection) -> None:
+    """Add ``cloud_ref`` to the ``engagement_seeds.seed_type`` CHECK constraint.
+
+    Prior schema constrained ``seed_type`` to twelve values; cloud provider
+    references (Supabase, Firebase, S3/GCS/Azure/DO buckets, Amplify,
+    Vercel, Netlify hostnames) fell into ``url`` or ``other`` and could
+    not be reported, graphed, or scoped as their own class. This migration
+    rewrites the table with the new CHECK, preserving every existing row
+    (including any legacy ``url``-typed cloud refs — those stay ``url``
+    and can be manually re-classified later without data loss).
+
+    Idempotent: skips the rewrite if the CHECK already contains
+    ``cloud_ref``.
+    """
+    expected_clause = "'cloud_ref'"
+
+    if _table_sql_contains(conn, "engagement_seeds", expected_clause):
+        return
+
+    _rebuild_table(
+        conn,
+        "engagement_seeds",
+        """
+        CREATE TABLE engagement_seeds (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+            seed_value    TEXT    NOT NULL,
+            seed_type     TEXT    NOT NULL
+                          CHECK (seed_type IN (
+                              'domain','email','phone','username','ipv4','ipv6',
+                              'name','company','url','apk_url','subdomain',
+                              'cloud_ref','other'
+                          )),
+            source        TEXT    NOT NULL DEFAULT 'operator'
+                          CHECK (source IN ('operator','scope','discovered','artifact','cross_reference')),
+            status        TEXT    NOT NULL DEFAULT 'pending'
+                          CHECK (status IN ('pending','running','completed','failed','ignored')),
+            depth         INTEGER NOT NULL DEFAULT 0,
+            confidence    REAL    NOT NULL DEFAULT 1.0,
+            parent_seed_id INTEGER REFERENCES engagement_seeds(id),
+            metadata_json TEXT    NOT NULL DEFAULT '{}',
+            discovered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (engagement_id, seed_type, seed_value)
+        )
+        """,
+        [
+            """
+            CREATE INDEX IF NOT EXISTS idx_engagement_seeds_engagement
+                ON engagement_seeds (engagement_id, status, depth)
+            """.strip(),
+        ],
+    )
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — ordered by version number
 # ---------------------------------------------------------------------------
@@ -1091,6 +1148,7 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (23, "distributed_task_attempts", _m0023_distributed_task_attempts),
     (24, "distributed_task_running_attempt_backfill", _m0024_distributed_task_running_attempt_backfill),
     (25, "artifact_queue_attempts", _m0025_artifact_queue_attempts),
+    (26, "cloud_ref_seed_type", _m0026_cloud_ref_seed_type),
 ]
 
 TARGET_VERSION: int = max(v for v, _, _ in _MIGRATIONS)

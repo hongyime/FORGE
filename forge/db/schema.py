@@ -53,7 +53,8 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         seed_type     TEXT    NOT NULL
                       CHECK (seed_type IN (
                           'domain','email','phone','username','ipv4','ipv6',
-                          'name','company','url','apk_url','subdomain','other'
+                          'name','company','url','apk_url','subdomain',
+                          'cloud_ref','other'
                       )),
         source        TEXT    NOT NULL DEFAULT 'operator'
                       CHECK (source IN ('operator','scope','discovered','artifact','cross_reference')),
