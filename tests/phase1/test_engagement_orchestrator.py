@@ -32,6 +32,74 @@ from urllib.parse import urlparse
 
 import pytest
 
+
+# ---------------------------------------------------------------------------
+# P2-B11 / Option A2: autouse permissive scope-manifest fixture for the
+# orchestrator test file. Unblocks the 46 pre-existing phase1 failures
+# that call kill_chain(dry_run=False) without roe_id/scope_manifest.
+#
+# Rationale (see docs/cloud_ref_seed_plan.md sibling audit reports):
+#   * kill_chain() reads FORGE_ROE_ID / FORGE_SCOPE_MANIFEST via env
+#     fallback at forge/cli.py:5120-5131 when args are Typer-default.
+#   * The manifest OMITS the ``roe_id`` key so the manifest↔arg match
+#     check at forge/cli.py:5551 is skipped — any test-supplied roe_id
+#     (env or kwarg) is accepted.
+#   * Tests that pass explicit ``scope_manifest=`` kwarg override this
+#     env entirely (unchanged behaviour for the 15 already-passing live
+#     tests).
+#   * Negative tests that ``monkeypatch.delenv("FORGE_ROE_ID")`` still
+#     fire the ROE check because their delenv runs AFTER this setenv.
+#
+# Does NOT weaken the CLI scope gate: forge/cli.py:5155-5167,
+# _validate_scope_manifest_seed_values, _load_scope_manifest are all
+# unchanged. Only affects test fixture inputs.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _phase1_permissive_scope_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """Grant a permissive ROE + scope manifest to every test in this file.
+
+    Uses the CLI's built-in env-fallback so no call sites need editing.
+    Tests that need to prove the gate FIRES on missing ROE call
+    ``monkeypatch.delenv("FORGE_ROE_ID")`` themselves; the delenv runs
+    after this autouse setenv so those tests continue to work.
+    """
+    manifest_dir = tmp_path_factory.mktemp("phase1_permissive_scope")
+    manifest_path = manifest_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            # Intentionally NO "roe_id" key — see docstring.
+            "domains": [
+                "acme.example", "*.acme.example",
+                "beta.example", "*.beta.example",
+                "gamma.example", "*.gamma.example",
+                "sequence-one.example",
+                "*.example",
+            ],
+            "urls": [
+                "https://portal.acme.example/",
+                "https://ops.acme.example/",
+                "https://acme.example/",
+            ],
+            "authorized_seeds": [
+                "acme.example",
+                "@rootuser", "@alicehandle", "@primeuser",
+                "+15559876543", "+15551230000", "+15550909090",
+                "+15553334444", "+15550001111", "+15550102030",
+                "+15550111222",
+                "Alice Example", "Acme Corp",
+                "security@acme.example", "alice.smith@acme.example",
+            ],
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FORGE_ROE_ID", "ROE-PHASE1-TEST-AUTOUSE")
+    monkeypatch.setenv("FORGE_SCOPE_MANIFEST", str(manifest_path))
+
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
 from forge.engagement_orchestrator import (
