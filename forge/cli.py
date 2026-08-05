@@ -5071,9 +5071,10 @@ def kill_chain(
         help="Log every intended action without executing outbound calls. Nothing hits the network.",
     ),
     attack_mode: bool = typer.Option(
-        False, "--attack-mode",
-        help="ACTIVE recon: adds port scan + credential validation "
-             "(SSH/SMB/RDP/FTP/HTTP). Trips IDS/WAF, requires signed ROE.",
+        True, "--attack-mode/--no-attack-mode",
+        help="ACTIVE recon (DEFAULT ON): port scan + credential validation "
+             "(SSH/SMB/RDP/FTP/HTTP). Pass --no-attack-mode for passive-only. "
+             "Requires --roe-id + --scope-manifest (or env vars) for any live run.",
     ),
     roe_id: Optional[str] = typer.Option(
         None,
@@ -5177,7 +5178,7 @@ def kill_chain(
         raise typer.BadParameter(str(exc)) from exc
     tor = False if _is_typer_default(tor) else bool(tor)
     dry_run = False if _is_typer_default(dry_run) else bool(dry_run)
-    attack_mode = False if _is_typer_default(attack_mode) else bool(attack_mode)
+    attack_mode = bool(attack_mode)
     roe_id = (
         os.environ.get("FORGE_ROE_ID", "")
         if _is_typer_default(roe_id) or roe_id is None

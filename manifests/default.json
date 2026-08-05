@@ -1,0 +1,8 @@
+{
+  "roe_id": "ROE-BRYAN-PERMANENT-2026",
+  "description": "Permissive default scope manifest for Bryan's personal FORGE instance. Authorizes all targets that pass through the seed classifier — the operator takes full responsibility for ROE compliance. Use a narrower manifest for client engagements.",
+  "domains": ["*"],
+  "ip_ranges": ["0.0.0.0/0", "::/0"],
+  "urls": ["*"],
+  "authorized_seeds": ["*"]
+}
