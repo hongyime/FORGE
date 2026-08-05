@@ -64,9 +64,9 @@ class TestUsernameNormalizer:
         return UsernameNormalizer().normalize(raw)
 
     def test_strips_at_prefix_and_lowercases(self) -> None:
-        r = self._n("@BryanSeah234")
+        r = self._n("@TestOperator")
         assert r is not None
-        assert r.canonical == "operator"
+        assert r.canonical == "testoperator"
 
     def test_collapses_homograph(self) -> None:
         # Cyrillic 'а' at position 1
@@ -157,7 +157,7 @@ class TestPersonNameNormalizer:
     def test_strips_dr_honorific(self) -> None:
         r = self._n("Dr. FORGE Operator")
         assert r is not None
-        assert r.canonical == "FORGE Operator"
+        assert r.canonical == "Forge Operator"
 
     def test_strips_trailing_honorific(self) -> None:
         r = self._n("John Smith PhD")
@@ -167,7 +167,7 @@ class TestPersonNameNormalizer:
     def test_provides_match_key(self) -> None:
         r = self._n("FORGE Operator")
         assert r is not None
-        assert r.metadata["match_key"] == "bryan seah"
+        assert r.metadata["match_key"] == "forge operator"
 
 
 class TestSocialProfileURLNormalizer:
@@ -175,14 +175,14 @@ class TestSocialProfileURLNormalizer:
         return SocialProfileURLNormalizer().normalize(raw)
 
     def test_normalises_twitter_to_x(self) -> None:
-        r = self._n("https://twitter.com/BryanSeah234")
+        r = self._n("https://twitter.com/TestUser")
         assert r is not None
-        assert r.canonical == "https://x.com/operator"
+        assert r.canonical == "https://x.com/testuser"
 
     def test_normalises_www_variants(self) -> None:
-        r = self._n("https://www.github.com/BryanSeah234/")
+        r = self._n("https://www.github.com/TestUser/")
         assert r is not None
-        assert r.canonical == "https://github.com/operator"
+        assert r.canonical == "https://github.com/testuser"
 
     def test_normalises_mobile_youtube(self) -> None:
         r = self._n("https://m.youtube.com/@channel/")

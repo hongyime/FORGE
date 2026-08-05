@@ -42,7 +42,7 @@ _audit_logs/
 *.log
 *_attack_graph.json
 engagement_*_report_*.md
-bryanseah234.txt
+testoperator.txt
 AUDIT_RESULTS.md
 .kiro/
 .claude/handoffs/*
