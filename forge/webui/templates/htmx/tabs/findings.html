@@ -1,0 +1,54 @@
+<section class="panel">
+  <h2>Findings</h2>
+  {% set sections = detail.sections or {} %}
+  {% set findings = sections.get('vulnerability_findings') or [] %}
+  <p><strong>Total findings:</strong> {{ findings | length }}</p>
+  {% if findings %}
+    <table class="mini-table">
+      <thead>
+        <tr><th>Severity</th><th>Type</th><th>Target</th><th>Title</th></tr>
+      </thead>
+      <tbody>
+        {% for f in findings[:50] %}
+          <tr>
+            <td>
+              <span class="severity-pill is-{{ (f.get('severity') or 'info') | lower }}">
+                {{ f.get('severity', '-') }}
+              </span>
+            </td>
+            <td>{{ f.get('vuln_type', '-') }}</td>
+            <td><code>{{ f.get('target_url', '-') }}</code></td>
+            <td>{{ f.get('title', '-') | truncate(80) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if findings | length > 50 %}
+      <p><em>Showing first 50 of {{ findings | length }} findings.</em></p>
+    {% endif %}
+  {% else %}
+    <p><em>No findings recorded yet.</em></p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Cloud Validation Results</h2>
+  {% set cvr = sections.get('cloud_validation_results') or [] %}
+  <p><strong>Total validation rows:</strong> {{ cvr | length }}</p>
+  {% if cvr %}
+    <table class="mini-table">
+      <thead>
+        <tr><th>Provider</th><th>Identifier</th><th>Validated</th></tr>
+      </thead>
+      <tbody>
+        {% for r in cvr[:30] %}
+          <tr>
+            <td>{{ r.get('cloud_provider', '-') }}</td>
+            <td><code>{{ r.get('identifier', '-') }}</code></td>
+            <td>{{ 'yes' if r.get('validated') else 'no' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>

@@ -1,0 +1,37 @@
+<section class="panel">
+  <h2>Latest Report</h2>
+  {% set previews = detail.report_previews or [] %}
+  {% if previews %}
+    {% set p = previews[0] %}
+    <table class="mini-table">
+      <tr><th>Generated at</th><td>{{ p.get('generated_at', '-') }}</td></tr>
+      <tr><th>Provider</th><td>{{ p.get('provider', '-') }}</td></tr>
+      <tr><th>Quality</th><td>{{ p.get('quality_score', '-') }}</td></tr>
+    </table>
+    <pre>{{ p.get('preview', '')[:2000] }}</pre>
+  {% else %}
+    <p><em>No report generated yet.</em></p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Report Artifacts</h2>
+  {% set report_artifacts = [] %}
+  {% for a in (detail.artifacts or []) %}
+    {% if a.get('kind') == 'report' %}
+      {% set _ = report_artifacts.append(a) %}
+    {% endif %}
+  {% endfor %}
+  {% if report_artifacts %}
+    <ul>
+      {% for a in report_artifacts %}
+        <li>
+          <a href="/artifacts/{{ a.get('id') }}">{{ a.get('name', a.get('path', 'download')) }}</a>
+          {% if a.get('size') %}<span class="mono-tag">{{ a.get('size') }} bytes</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p><em>No report exports yet.</em></p>
+  {% endif %}
+</section>

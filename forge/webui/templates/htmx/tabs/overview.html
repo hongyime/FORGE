@@ -1,0 +1,27 @@
+{% set run = detail.run_summary or {} %}
+{% set manifest = run.get('audit_manifest') or {} %}
+<section class="panel">
+  <h2>Overview</h2>
+  <div class="token-wrap">
+    {% for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] %}
+      <span class="severity-pill is-{{ sev | lower }}">
+        {{ sev }}: {{ (detail.severity_summary or {}).get(sev, 0) }}
+      </span>
+    {% endfor %}
+  </div>
+  <table class="mini-table">
+    <tr><th>Created</th><td>{{ detail.created_at or '-' }}</td></tr>
+    <tr><th>Updated</th><td>{{ detail.updated_at or '-' }}</td></tr>
+    <tr><th>Latest audit</th><td>{{ detail.latest_audit or '-' }}</td></tr>
+    <tr><th>Latest run</th><td>
+      {%- if run -%}
+        {{ run.get('run_kind', '-') }} &middot;
+        {{ run.get('status', '-') }}
+        ({{ run.get('current_iteration', 0) }}/{{ run.get('max_iterations', 0) }})
+      {%- else -%}-{%- endif -%}
+    </td></tr>
+    <tr><th>Audit manifest</th>
+      <td>{{ manifest.get('short_hash') or manifest.get('verification_status') or '-' }}</td></tr>
+    <tr><th>Database</th><td><code>{{ detail.path }}</code></td></tr>
+  </table>
+</section>

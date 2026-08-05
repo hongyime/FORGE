@@ -1,0 +1,11 @@
+<nav class="tab-strip" role="tablist" aria-label="Engagement sections">
+  {% for tab in tabs %}
+    <button
+      role="tab"
+      type="button"
+      aria-selected="{{ 'true' if tab == active_tab else 'false' }}"
+      data-tab-target="/engagements/{{ detail.slug }}/tab/{{ tab }}"
+      data-tab-name="{{ tab }}"
+    >{{ tab | capitalize }}</button>
+  {% endfor %}
+</nav>

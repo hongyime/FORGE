@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FORGE — {{ detail.name }}</title>
+  <style>
+    /* Minimal tab styling — matches SPA look-and-feel */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a; color: #e2e8f0; margin: 0; padding: 0;
+    }
+    header.masthead {
+      padding: 16px 24px; background: #1e293b; border-bottom: 1px solid #334155;
+      display: flex; align-items: center; gap: 16px;
+    }
+    header.masthead a { color: #94a3b8; text-decoration: none; font-size: 14px; }
+    header.masthead h1 { margin: 0; font-size: 20px; }
+    .mono-tag {
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 12px; color: #64748b; background: #0f172a;
+      padding: 4px 8px; border-radius: 4px;
+    }
+    .tab-strip {
+      display: flex; gap: 4px; padding: 0 16px;
+      border-bottom: 1px solid #334155; background: #1e293b;
+    }
+    .tab-strip button {
+      background: transparent; color: #94a3b8; border: 0;
+      padding: 12px 20px; cursor: pointer; font-weight: 500; font-size: 14px;
+      border-bottom: 2px solid transparent;
+    }
+    .tab-strip button[aria-selected="true"] {
+      color: #e2e8f0; border-bottom-color: #3b82f6;
+    }
+    .tab-strip button:hover { color: #e2e8f0; }
+    #tab-content { padding: 24px 16px; }
+    #tab-content.loading { opacity: 0.5; transition: opacity 150ms; }
+    .panel {
+      background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+      padding: 20px; margin-bottom: 16px;
+    }
+    .panel h2 { margin: 0 0 12px 0; color: #e2e8f0; font-size: 18px; }
+    .mini-table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    .mini-table th, .mini-table td {
+      text-align: left; padding: 8px 12px; border-bottom: 1px solid #334155;
+      font-size: 13px;
+    }
+    .mini-table th { color: #94a3b8; font-weight: 500; width: 30%; }
+    .mini-table td { color: #e2e8f0; }
+    .token-wrap { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .severity-pill {
+      font-size: 12px; padding: 4px 10px; border-radius: 12px;
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+    }
+    .severity-pill.is-critical { background: #7f1d1d; color: #fecaca; }
+    .severity-pill.is-high { background: #7c2d12; color: #fed7aa; }
+    .severity-pill.is-medium { background: #713f12; color: #fef3c7; }
+    .severity-pill.is-low { background: #14532d; color: #bbf7d0; }
+    .severity-pill.is-info { background: #1e3a8a; color: #dbeafe; }
+    pre, code { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 12px; }
+    pre { background: #0f172a; padding: 12px; border-radius: 4px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <a href="/">&larr; Back to dashboard</a>
+    <h1>{{ detail.name }}</h1>
+    <span class="mono-tag">{{ detail.slug }}</span>
+  </header>
+
+  {% include "_tab_strip.html" %}
+
+  <main id="tab-content">
+    {% include "tabs/" ~ active_tab ~ ".html" %}
+  </main>
+
+  <script>
+    // Minimal HTMX-style tab loader. Zero external deps.
+    (function() {
+      const content = document.getElementById('tab-content');
+      const buttons = document.querySelectorAll('.tab-strip button[data-tab-target]');
+      buttons.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const url = btn.getAttribute('data-tab-target');
+          const name = btn.getAttribute('data-tab-name');
+          content.classList.add('loading');
+          fetch(url, { headers: { 'HX-Request': 'true' } })
+            .then(function(resp) {
+              if (!resp.ok) throw new Error('http ' + resp.status);
+              return resp.text();
+            })
+            .then(function(html) {
+              content.innerHTML = html;
+              content.classList.remove('loading');
+              buttons.forEach(function(b) {
+                b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+              });
+              // Preserve URL for deep linking
+              window.history.pushState({ tab: name }, '', url);
+            })
+            .catch(function(err) {
+              content.classList.remove('loading');
+              content.innerHTML = '<div class="panel"><h2>Error</h2><p>Failed to load tab: ' + err.message + '</p></div>';
+            });
+        });
+      });
+      // Back-button support
+      window.addEventListener('popstate', function() { window.location.reload(); });
+    })();
+  </script>
+</body>
+</html>

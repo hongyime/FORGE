@@ -1,0 +1,43 @@
+<section class="panel">
+  <h2>Seeds</h2>
+  {% set seeds = detail.seeds or [] %}
+  <p><strong>Total seeds:</strong> {{ seeds | length }}</p>
+  {% if seeds %}
+    <table class="mini-table">
+      <thead>
+        <tr><th>Value</th><th>Type</th><th>Source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for seed in seeds[:50] %}
+          {% if seed is mapping %}
+            <tr>
+              <td><code>{{ seed.get('seed_value', '-') }}</code></td>
+              <td>{{ seed.get('seed_type', '-') }}</td>
+              <td>{{ seed.get('source', '-') }}</td>
+              <td>{{ seed.get('status', '-') }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4"><code>{{ seed }}</code></td></tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if seeds | length > 50 %}
+      <p><em>Showing first 50 of {{ seeds | length }} seeds.</em></p>
+    {% endif %}
+  {% else %}
+    <p><em>No seeds recorded yet.</em></p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Scope</h2>
+  {% set scope = detail.scope or [] %}
+  {% if scope %}
+    <ul>
+      {% for entry in scope %}<li><code>{{ entry }}</code></li>{% endfor %}
+    </ul>
+  {% else %}
+    <p><em>No scope entries.</em></p>
+  {% endif %}
+</section>

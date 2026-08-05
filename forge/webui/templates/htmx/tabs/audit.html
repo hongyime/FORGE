@@ -1,0 +1,45 @@
+<section class="panel">
+  <h2>Audit Log</h2>
+  {% set sections = detail.sections or {} %}
+  {% set audit_rows = sections.get('audit_log') or [] %}
+  <p><strong>Total rows:</strong> {{ audit_rows | length }}</p>
+  {% if audit_rows %}
+    <table class="mini-table">
+      <thead>
+        <tr><th>Timestamp</th><th>Phase</th><th>Action</th><th>Target</th><th>Operator</th></tr>
+      </thead>
+      <tbody>
+        {% for row in audit_rows[:100] %}
+          <tr>
+            <td><code>{{ row.get('logged_at', '-') }}</code></td>
+            <td>{{ row.get('phase', '-') }}</td>
+            <td>{{ row.get('action', '-') }}</td>
+            <td><code>{{ (row.get('target') or '-') | truncate(60) }}</code></td>
+            <td>{{ row.get('operator', '-') }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if audit_rows | length > 100 %}
+      <p><em>Showing latest 100 of {{ audit_rows | length }} audit rows.</em></p>
+    {% endif %}
+  {% else %}
+    <p><em>No audit rows recorded yet.</em></p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Audit Manifest</h2>
+  {% set run = detail.run_summary or {} %}
+  {% set manifest = run.get('audit_manifest') or {} %}
+  {% if manifest %}
+    <table class="mini-table">
+      <tr><th>Full hash</th><td><code>{{ manifest.get('hash', '-') }}</code></td></tr>
+      <tr><th>Short hash</th><td><code>{{ manifest.get('short_hash', '-') }}</code></td></tr>
+      <tr><th>Verification</th><td>{{ manifest.get('verification_status', '-') }}</td></tr>
+      <tr><th>Chain length</th><td>{{ manifest.get('chain_length', '-') }}</td></tr>
+    </table>
+  {% else %}
+    <p><em>No audit manifest yet.</em></p>
+  {% endif %}
+</section>

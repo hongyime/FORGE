@@ -1,0 +1,31 @@
+<section class="panel">
+  <h2>Attack Graph</h2>
+  {% set graph = detail.graph_payload or {} %}
+  {% set nodes = graph.get('nodes') or [] %}
+  {% set edges = graph.get('edges') or [] %}
+  <table class="mini-table">
+    <tr><th>Nodes</th><td>{{ nodes | length }}</td></tr>
+    <tr><th>Edges</th><td>{{ edges | length }}</td></tr>
+    <tr><th>Snapshot at</th><td>{{ detail.graph_snapshot_at or '-' }}</td></tr>
+    <tr><th>Summary</th><td>{{ detail.graph_summary or '-' }}</td></tr>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Graph Artifacts</h2>
+  {% set graph_artifacts = [] %}
+  {% for a in (detail.artifacts or []) %}
+    {% if a.get('kind') == 'graph' %}
+      {% set _ = graph_artifacts.append(a) %}
+    {% endif %}
+  {% endfor %}
+  {% if graph_artifacts %}
+    <ul>
+      {% for a in graph_artifacts %}
+        <li><a href="/artifacts/{{ a.get('id') }}">{{ a.get('name', a.get('path', 'download')) }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p><em>No graph artifacts yet. Run <code>forge graph build --engagement N</code>.</em></p>
+  {% endif %}
+</section>
