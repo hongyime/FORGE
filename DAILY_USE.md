@@ -133,3 +133,42 @@ forge report generate --engagement 1001 --yes
 | Cloud discovery misses SPA content | Verify Playwright installed: `.venv\Scripts\playwright install chromium` |
 
 Everything else: see `README.md`.
+
+---
+
+## OneDrive sync — handling 'malware detected' blocks
+
+OneDrive has a **server-side scanner** separate from Windows Defender. Even after
+adding exclusions in Windows Security, OneDrive may still block sync for files
+containing exploit patterns (Phase 3 payloads, Phase 5 post-ex code).
+
+### Fix options (pick one):
+
+**Option A — Password-protected archive (recommended for travel):**
+```powershell
+# Compress the flagged folders into a password-protected 7z
+7z a -p"YourPassword" forge-offensive.7z forge/phase3/ forge/phase5/
+# Delete the originals from OneDrive, keep only the archive
+# Decompress on the target machine when needed
+```
+
+**Option B — OneDrive selective sync exclusion:**
+1. OneDrive tray icon → Settings → Account → Choose folders
+2. Uncheck `forge/phase3` and `forge/phase5`
+3. These folders sync via `git push/pull` only (not OneDrive)
+
+**Option C — .gitattributes binary marking (already applied):**
+`.gitattributes` marks `forge/phase3/**` and `forge/phase5/**` as binary.
+This reduces (but may not eliminate) content-based scanning on upload.
+
+**Option D — Files On-Demand local-only:**
+1. Right-click `forge/phase3` → "Free up space" (removes from cloud)
+2. The folder stays local-only; OneDrive won't upload or scan it
+3. Backup via git push only
+
+### Windows Defender exclusions (still needed for local scanning):
+```powershell
+Add-MpPreference -ExclusionPath "C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\forge\phase3"
+Add-MpPreference -ExclusionPath "C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\forge\phase5"
+Add-MpPreference -ExclusionPath "C:\Users\bryan\OneDrive\01 TOOLKITS\forgetoolkit\.venv"
+```
