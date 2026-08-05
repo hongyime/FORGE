@@ -1506,6 +1506,7 @@ def test_synthesis_engine_parallelizes_seed_depth_rows_and_preserves_mapping(
     }
 
 
+@pytest.mark.slow
 def test_synthesis_engine_derives_social_profile_seeds_and_relations(tmp_path: Path) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path)
@@ -1774,6 +1775,7 @@ def test_synthesis_engine_derives_social_profile_seeds_and_relations(tmp_path: P
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_flattens_wrapped_social_profile_provider_payloads(
     tmp_path: Path,
 ) -> None:
@@ -2457,6 +2459,7 @@ def test_synthesis_engine_flattens_wrapped_social_profile_provider_payloads(
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_canonicalizes_spaced_social_provider_labels(
     tmp_path: Path,
 ) -> None:
@@ -2559,6 +2562,7 @@ def test_synthesis_engine_canonicalizes_spaced_social_provider_labels(
         assert (reserved_handle, "username") not in seed_rows
 
 
+@pytest.mark.slow
 def test_synthesis_engine_canonicalizes_spaced_brand_social_provider_labels(
     tmp_path: Path,
 ) -> None:
@@ -2656,6 +2660,7 @@ def test_synthesis_engine_canonicalizes_spaced_brand_social_provider_labels(
         assert (reserved_handle, "username") not in seed_rows
 
 
+@pytest.mark.slow
 def test_synthesis_engine_promotes_link_in_bio_profile_urls_to_username_seeds(
     tmp_path: Path,
 ) -> None:
@@ -2912,6 +2917,7 @@ def test_synthesis_engine_promotes_link_in_bio_profile_urls_to_username_seeds(
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_infers_social_profile_platforms_from_url_alias_fields(
     tmp_path: Path,
 ) -> None:
@@ -3092,6 +3098,7 @@ def test_synthesis_engine_infers_social_profile_platforms_from_url_alias_fields(
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_promotes_social_profile_anchor_seeds_before_pivot_relations(
     tmp_path: Path,
 ) -> None:
@@ -3309,6 +3316,7 @@ def test_synthesis_engine_social_profile_anchor_keeps_existing_at_username_paren
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_promotes_linkedin_school_and_showcase_profiles_as_company_pivots(
     tmp_path: Path,
 ) -> None:
@@ -3403,6 +3411,7 @@ def test_synthesis_engine_promotes_linkedin_school_and_showcase_profiles_as_comp
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_promotes_matrix_identity_ids_to_recursive_user_and_homeserver_seeds(
     tmp_path: Path,
 ) -> None:
@@ -3504,6 +3513,7 @@ def test_synthesis_engine_promotes_matrix_identity_ids_to_recursive_user_and_hom
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_promotes_federated_acct_ids_to_recursive_user_and_instance_seeds(
     tmp_path: Path,
 ) -> None:
@@ -3616,6 +3626,7 @@ def test_synthesis_engine_promotes_federated_acct_ids_to_recursive_user_and_inst
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_promotes_nostr_public_ids_to_recursive_identity_seeds(
     tmp_path: Path,
 ) -> None:
@@ -3758,6 +3769,7 @@ def test_synthesis_engine_skips_synthetic_rfc2544_ips_but_keeps_host_seeds(tmp_p
         con.close()
 
 
+@pytest.mark.slow
 def test_synthesis_engine_normalizes_epieos_lists_and_richer_gravatar_summary_payloads(
     tmp_path: Path,
 ) -> None:
