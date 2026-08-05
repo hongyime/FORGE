@@ -1248,20 +1248,28 @@ def _rebuild_table(
     # lying around, which then broke any later migration that also called
     # `_rebuild_table("engagement_seeds", ...)` — the ALTER RENAME failed with
     # "table already exists". We now scan sqlite_master for any leftover
-    # `{table}__m*_old` shells and drop them before the RENAME. This makes
+    # `{table}__*` shells and drop them before the RENAME. This makes
     # `_rebuild_table` idempotent under interrupted runs.
     try:
-        stale_rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?",
-            (f"{table_name}\\_\\_m%\\_old",),
-        ).fetchall()
+        all_names = [
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        ]
     except sqlite3.OperationalError:
-        stale_rows = []
-    for (stale_name,) in stale_rows:
-        try:
-            conn.execute(f"DROP TABLE {_quoted_identifier(str(stale_name))}")
-        except sqlite3.OperationalError:
+        all_names = []
+    prefix = f"{table_name}__"
+    for candidate in all_names:
+        # Match rebuild-generated shell tables: `{table}__m0017_old`
+        # (legacy pre-fix) and `{table}__rebuild_<sha>` (post-fix).
+        if candidate == table_name or not candidate.startswith(prefix):
             continue
+        if candidate.endswith("_old") or "__rebuild_" in candidate:
+            try:
+                conn.execute(f"DROP TABLE {_quoted_identifier(candidate)}")
+            except sqlite3.OperationalError:
+                continue
 
     # Use a deterministic-per-migration suffix by hashing the create_table_sql —
     # gives every migration a unique temp name so parallel _rebuild_table calls
