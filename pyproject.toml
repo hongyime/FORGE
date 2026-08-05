@@ -54,7 +54,11 @@ dependencies = [
     "redis==7.4.0",
     "aiosqlite==0.20.0",
     "uvicorn==0.43.0",
-    "PyJWT>=2.9.0,<3.0",
+    # PyJWT >=2.13.0 pulls in security fixes GHSA-xgmm-8j9v-c9wx (HIGH:
+    # HMAC/JWK algorithm confusion), GHSA-jq35-7prp-9v3f, GHSA-993g-76c3-p5m4,
+    # GHSA-w7vc-732c-9m39, GHSA-fhv5-28vv-h8m8. FORGE uses jwt.encode/decode
+    # with HS256/RS256 only; API stable across 2.9→2.13 minor bump.
+    "PyJWT>=2.13.0,<3.0",
     "phonenumbers>=8.13,<9.0",
 ]
 
