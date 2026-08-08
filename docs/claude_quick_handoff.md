@@ -11,19 +11,28 @@ test-data cleanup. Subagents are accelerators only; they do not redefine this
 goal.
 
 If asked for the end goal, answer this first, then point to `END_GOAL.md` and
-`docs/end_goal.md` as source-of-truth docs.
+`docs/engagement_overhaul_tasklist.md` as source-of-truth docs.
 
 Use this file first for short resume context, then verify current continuation
 order in `docs/engagement_overhaul_tasklist.md` -> `## Compact active backlog`;
 that section wins if task/status details differ. Goal lock:
-`FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`;
-root implementer spec: `SPEC.md`; compact workflow contract:
-`docs/deterministic_engagement_contract.md`; normative end goal:
-`docs/end_goal.md`; acceptance criteria:
+`FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Normative goal and fast entry point:
+`END_GOAL.md`; root implementer spec: `SPEC.md`; acceptance criteria:
 `docs/engagement_overhaul_tasklist.md` -> `## Canonical End Goal`.
 Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
+
+Latest checkpoint (2026-08-08): cross-platform local-operator runnable work
+landed in the working tree. macOS/Linux now have POSIX launcher parity for
+setup, menu, kill-chain prompts, status, report generation, hydration/local
+workspace verification, and the dev/evidence Docker stack. Windows
+`tools/forge-stack.ps1` now points at the actual
+`docker/docker-compose.dev.yml` path. Active goal docs now point to existing
+source-of-truth files only. Verification: focused launcher/setup/helper tests
+passed (`23 passed`), Ruff passed for touched Python files, shell syntax checks
+passed for all POSIX scripts, and `git diff --check` passed with only existing
+CRLF-normalization warnings.
 
 Latest checkpoint (2026-08-05): 24-task post-audit hardening arc landed on
 `origin/main` up to `ea57716`. 8 tasks shipped this iteration:

@@ -44,11 +44,9 @@ All implementation work must make that path more complete, more deterministic,
 more reviewable, or better tested. Anything else is out of scope for the current
 goal lock.
 
-This file is the fast entry point for the project goal. The compact execution
-contract is `docs/deterministic_engagement_contract.md`; the normative contract
-is `docs/end_goal.md`. If any checklist, handoff, agent plan, or implementation
-task conflicts with those files, update the conflicting material before
-continuing.
+This file is both the fast entry point and the normative project goal for this
+checkout. If any checklist, handoff, agent plan, or implementation task
+conflicts with this file, update the conflicting material before continuing.
 
 ## End Goal Snapshot
 
@@ -67,13 +65,13 @@ auditable for the next operator.
 
 There is one end goal, not several competing goals:
 
-- `docs/end_goal.md` is the normative contract.
-- This file is the required quick answer for operators and future agents.
+- `END_GOAL.md` is the normative contract and required quick answer for
+  operators and future agents.
 - `SPEC.md` is the root implementer spec that restates the goal as invariants
-  and task categories, but it must not override `docs/end_goal.md`.
-- `docs/deterministic_engagement_contract.md` is the compact gate checklist.
+  and task categories, but it must not override this file.
 - `docs/engagement_overhaul_tasklist.md` contains acceptance criteria and the
   current implementation backlog.
+- `docs/claude_quick_handoff.md` contains the latest short resume notes.
 
 The goal lock identifier above is the pinned release target. Do not create a
 replacement goal or reinterpret the project as UI-only, provider-count-only, or
@@ -209,11 +207,9 @@ advances and verify it with focused or mocked tests.
 Read next:
 
 1. `SPEC.md` for the compact root invariants and implementation task categories.
-2. `docs/deterministic_engagement_contract.md` for the compact workflow gates.
-3. `docs/end_goal.md` for the full normative contract.
-4. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
+2. `docs/engagement_overhaul_tasklist.md` under `## Canonical End Goal` for
    acceptance criteria. Unchecked boxes there are goal criteria, not current live
    status.
-5. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
+3. `docs/engagement_overhaul_tasklist.md` under `## Compact active backlog` for
    the current implementation continuation order.
-6. `docs/claude_quick_handoff.md` for the latest short resume notes.
+4. `docs/claude_quick_handoff.md` for the latest short resume notes.

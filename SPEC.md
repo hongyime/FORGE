@@ -9,7 +9,7 @@ engagement pipeline, not a UI-only dashboard, scanner collection, or provider
 count project.
 
 This file is the compact root spec for implementers. It does not replace the
-normative goal in `docs/end_goal.md`; it restates the contract as invariants and
+normative goal in `END_GOAL.md`; it restates the contract as invariants and
 execution tasks so agents can decide what to build next without moving the goal.
 
 ## G

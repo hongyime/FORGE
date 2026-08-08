@@ -20,7 +20,7 @@ section first, then choose the next task from `## Compact active backlog`.
 
 ## Operating model
 
-- Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Fast goal entry point: `END_GOAL.md`; root implementer spec: `SPEC.md`; compact workflow contract: `docs/deterministic_engagement_contract.md`; normative end-goal source: `docs/end_goal.md`. The `## Canonical End Goal` checklist below is acceptance criteria derived from that contract, not live completion status; if they conflict, update this checklist to match `docs/end_goal.md` before continuing. Current implementation order lives under `## Compact active backlog`.
+- Goal lock: `FORGE-DETERMINISTIC-ASM-PIPELINE-v1`. Normative goal and fast entry point: `END_GOAL.md`; root implementer spec: `SPEC.md`. The `## Canonical End Goal` checklist below is acceptance criteria derived from that contract, not live completion status; if they conflict, update this checklist to match `END_GOAL.md` before continuing. Current implementation order lives under `## Compact active backlog`.
 - Current workspace status: this checkout is a Git repository on `main` tracking `origin/main`. Deep historical entries that say commits were impossible because the workspace was not a Git repo are stale context only; continue making meaningful commits and pushes when changes are valid.
 - Historical backprop notes that say `No SPEC.md exists` are stale after
   2026-07-20. New goal, invariant, or bug-contract notes should update
@@ -38,7 +38,7 @@ FORGE is a comprehensive, deterministic, authorized attack-surface management an
 
 End-goal lock: the target is one reproducible authorized engagement pipeline,
 not a loose backlog of scanners, providers, or UI polish. Every active task must
-map to one of the deterministic acceptance stages in `docs/end_goal.md`:
+map to one of the deterministic acceptance stages in `END_GOAL.md`:
 intake, discovery, recursion, artifact analysis, validation, scoring, review,
 fallback, or testing/cleanup.
 
@@ -69,28 +69,38 @@ test engagement debris. It is only acceptable when focused local/mocked E2E
 tests prove the workflow and report generation still falls back to deterministic
 template/raw exports with no working LLM provider.
 
-Before editing, state which canonical acceptance checkbox or `docs/end_goal.md`
+Before editing, state which canonical acceptance checkbox or `END_GOAL.md`
 stage the task advances. If the answer is "none", do not edit code. Pick the
 smallest concrete kill-chain, validation, reporting fallback, dashboard review,
 or test/cleanup gap instead.
 
 If runtime `/goal` state, chat summaries, or historical handoffs disagree with
 this section, treat them as stale. The goal lock and source-of-truth chain in
-`END_GOAL.md`, `SPEC.md`, and `docs/end_goal.md` wins.
+`END_GOAL.md` and `SPEC.md` wins.
 
 ## Compact active backlog
 
-Use this as the canonical current continuation list. `docs/claude_continue_checklist.md` mirrors this for Claude handoff context, but this section wins if the two differ. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.
+Use this as the canonical current continuation list. `docs/claude_quick_handoff.md` provides short resume context, but this section wins if the two differ. Older unchecked "next audit target" breadcrumbs below are historical unless they map to one of these items.
 
-Mirror rule: update this section first. Then mirror only the active-current delta
-into `docs/claude_continue_checklist.md` and summarize the checkpoint in
-`docs/claude_quick_handoff.md`; do not create a second backlog.
+Mirror rule: update this section first. Then summarize only the active-current
+delta in `docs/claude_quick_handoff.md`; do not create a second backlog.
 
 Repo-status note: this checkout is now a Git repo on `main`; older completed
 checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Cross-platform local-operator runnable checkpoint:
+  macOS/Linux now have POSIX launcher parity for setup, top menu,
+  kill-chain prompts, status, report generation, local hydration verification,
+  and the dev/evidence Docker stack. Windows stack helper pathing now matches
+  the actual `docker/docker-compose.dev.yml` location. Active goal docs no
+  longer route future agents through missing source-of-truth files. Verification:
+  focused launcher/setup/helper tests passed (`23 passed`), Ruff passed for
+  touched Python files, shell syntax checks passed for all new POSIX scripts,
+  and `git diff --check` passed with only existing CRLF-normalization warnings.
+  Safety: setup creates only repo-local/user-home FORGE workspace directories
+  and does not disable host security controls or bypass scope/ROE gates.
 - [x] Legacy cloud-audit reportability checkpoint:
   Legacy `FIREBASE_MISCONFIG`, `FIREBASE_CREDENTIAL_STATUS`,
   `AWS_MISCONFIG`, and `AZURE_MISCONFIG` rows now fail closed across Phase 6

@@ -37,21 +37,18 @@ or testing/cleanup. If none applies, stop and choose a concrete release-gate gap
 instead.
 
 Do not replace this goal with a new project direction in a task handoff. If the
-goal needs clarification, update `docs/end_goal.md`, `END_GOAL.md`, `SPEC.md`,
-`docs/deterministic_engagement_contract.md`, and
+goal needs clarification, update `END_GOAL.md`, `SPEC.md`, and
 `docs/engagement_overhaul_tasklist.md` together so every agent sees the same
-locked target. Refresh `docs/claude_continue_checklist.md` and
-`docs/claude_quick_handoff.md` too when active continuation wording would
-mislead the next agent.
+locked target. Refresh `docs/claude_quick_handoff.md` too when active
+continuation wording would mislead the next agent.
 
 If runtime `/goal` text, chat summaries, or historical handoffs disagree with
 that chain, treat them as stale. Continue against the goal lock above and update
 the stale continuation note only when it would mislead the next agent.
 
 Fast project goal entry point: [END_GOAL.md](END_GOAL.md). Root implementer
-spec: [SPEC.md](SPEC.md). Compact deterministic workflow contract:
-[docs/deterministic_engagement_contract.md](docs/deterministic_engagement_contract.md).
-Normative project end goal: [docs/end_goal.md](docs/end_goal.md).
+spec: [SPEC.md](SPEC.md). Normative project end goal:
+[END_GOAL.md](END_GOAL.md).
 Execution-facing checklist:
 [engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md) ->
 `Canonical End Goal`.
@@ -60,16 +57,12 @@ Continuation order for future agents:
 
 1. Read [END_GOAL.md](END_GOAL.md) for the short goal.
 2. Read [SPEC.md](SPEC.md) for the invariant and task contract.
-3. Read
-   [docs/deterministic_engagement_contract.md](docs/deterministic_engagement_contract.md)
-   for the pipeline gates and stop rule.
-4. Treat [docs/end_goal.md](docs/end_goal.md) as the normative contract.
-5. Treat `## Canonical End Goal` in
+3. Treat `## Canonical End Goal` in
    [docs/engagement_overhaul_tasklist.md](docs/engagement_overhaul_tasklist.md)
    as acceptance criteria, not live progress.
-6. Use `## Compact active backlog` in that same task list as the current
+4. Use `## Compact active backlog` in that same task list as the current
    continuation order.
-7. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
+5. Use [docs/claude_quick_handoff.md](docs/claude_quick_handoff.md) for the
    latest short resume notes.
 
 ---
@@ -84,10 +77,10 @@ setup.bat        # picks safe/default or scoped active-assessment mode
 ```
 
 ```bash
-# POSIX
+# macOS / Linux
 git clone <repo> forge-toolkit
 cd forge-toolkit
-python3 bootstrap.py setup
+./setup.sh       # or: python3 bootstrap.py --venv-mode project setup
 ```
 
 Bootstrap creates `.venv` for FORGE runtime deps, installs external OSINT CLIs
@@ -96,11 +89,33 @@ runtime, and detects installed LLM CLIs (Kiro / Claude / Codex / Gemini) for
 the Phase 6 report. Per-tool OSINT venvs prevent GHunt, Maigret, and
 theHarvester dependency pins from colliding with the main runtime.
 
+Local workspace verification:
+
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_forge_windows_local.ps1
+```
+
+```bash
+# macOS / Linux
+./scripts/setup_forge_posix_local.sh
+```
+
+Dev/evidence stack:
+
+```powershell
+.\tools\forge-stack.ps1 up
+```
+
+```bash
+./tools/forge-stack.sh up
+```
+
 ---
 
 ## The one command you need
 
-```powershell
+```text
 forge kill-chain <seed> --engagement <N>
 ```
 
@@ -117,7 +132,7 @@ Seed can be any scoped identifier — kill-chain auto-detects the type and route
 
 Example:
 
-```powershell
+```text
 forge kill-chain target.example --engagement 1001
 forge kill-chain user@company.com --engagement 1002
 forge kill-chain +15551234567 --engagement 1003
@@ -322,7 +337,7 @@ Leave `FORGE_SUPABASE_ANON_KEY`, `FORGE_FIREBASE_API_KEY`, `FORGE_DEHASHED_*` **
 ## Testing
 
 ```powershell
-# Unit + integration (excludes chaos)
+# Windows: unit + integration (excludes chaos)
 pytest tests/ -m "not integration and not slow"
 
 # Full suite
@@ -330,6 +345,17 @@ pytest tests/
 
 # Chaos / fault-injection harness (needs redis-server)
 .venv\Scripts\python.exe tools\evidence_chaos.py
+```
+
+```bash
+# macOS / Linux: unit + integration (excludes chaos)
+.venv/bin/python -m pytest tests/ -m "not integration and not slow"
+
+# Full suite
+.venv/bin/python -m pytest tests/
+
+# Chaos / fault-injection harness (needs redis-server)
+.venv/bin/python tools/evidence_chaos.py
 ```
 
 Current baseline: **2,100+ passing** / 0 failing.
@@ -341,8 +367,6 @@ Current baseline: **2,100+ passing** / 0 failing.
 - `README.md` (this file) — main reference
 - `END_GOAL.md` — fast end-goal entry point for operators and future agents
 - `SPEC.md` — root implementer invariant and task contract
-- `docs/end_goal.md` — normative deterministic end-goal contract
-- `docs/deterministic_engagement_contract.md` — compact pipeline gate checklist
 - `docs/engagement_overhaul_tasklist.md` — canonical acceptance checklist and active backlog
 - `docs/claude_quick_handoff.md` — latest short resume notes
 - `DAILY_USE.md` — one-page operator cheatsheet

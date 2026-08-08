@@ -6,19 +6,19 @@
 #
 # Usage:
 #   # Bring everything up
-#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker/docker-compose.dev.yml up -d
 #
 #   # Bring up only Postgres (for state-store work)
-#   docker compose -f docker-compose.dev.yml up -d postgres
+#   docker compose -f docker/docker-compose.dev.yml up -d postgres
 #
 #   # Include Ollama (opt-in via profile - pulls a 400MB model)
-#   docker compose -f docker-compose.dev.yml --profile llm up -d
+#   docker compose -f docker/docker-compose.dev.yml --profile llm up -d
 #
 #   # Tear everything down (preserves volumes by default)
-#   docker compose -f docker-compose.dev.yml down
+#   docker compose -f docker/docker-compose.dev.yml down
 #
 #   # Tear down + wipe data
-#   docker compose -f docker-compose.dev.yml down -v
+#   docker compose -f docker/docker-compose.dev.yml down -v
 #
 # Each container uses a stable forge-* name so it shows up cleanly in
 # `docker ps` next to the production stack.

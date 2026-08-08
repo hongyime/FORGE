@@ -6,21 +6,21 @@ Single-page operator cheatsheet.
 
 ## Point-and-click
 
-| File | Action |
-|---|---|
-| `start_toolkit.bat` | Top menu (recommended) |
-| `forge-kill-chain.bat` | Interactive kill-chain (prompts for every option) |
-| `forge-menu.bat` | Direct TUI |
-| `forge-status.bat` | Health check |
-| `forge-report.bat` | Regenerate report on existing engagement |
+| Windows | macOS/Linux | Action |
+|---|---|---|
+| `start_toolkit.bat` | `./start_toolkit.sh` | Top menu (recommended) |
+| `forge-kill-chain.bat` | `./forge-kill-chain.sh` | Interactive kill-chain (prompts for every option) |
+| `forge-menu.bat` | `./forge-menu.sh` | Direct TUI |
+| `forge-status.bat` | `./forge-status.sh` | Health check |
+| `forge-report.bat` | `./forge-report.sh` | Regenerate report on existing engagement |
 
-All `.bat` files set `FORGE_NO_TOR=1` (skips Tor bootstrap — 10× speedup).
+All launcher files set `FORGE_NO_TOR=1` (skips Tor bootstrap — 10× speedup).
 
 ---
 
 ## The one command
 
-```powershell
+```text
 forge kill-chain <seed> --engagement <N>
 ```
 
@@ -41,7 +41,7 @@ kill-chain auto-detects the type and routes to the right initial fan-out.
 
 ## The 6 flags
 
-```powershell
+```text
 forge kill-chain <seed>
   --engagement N        # required
   --max-iter 7          # loop cap, default 7, breaks early on stable
@@ -49,7 +49,7 @@ forge kill-chain <seed>
   --dry-run             # log intended actions, no outbound calls
   --attack-mode         # ACTIVE: port scan + cred validate (requires ROE live)
   --roe-id ROE-123      # ROE / written-authorization reference
-  --scope-manifest .\roe-scope.json  # required for sensitive live execution
+  --scope-manifest ./roe-scope.json  # required for sensitive live execution
   --skip-cloud          # skip 7-service cloud discovery
   --skip-keyscan        # skip GitHub keyscan (protects token quota)
 ```
@@ -58,7 +58,7 @@ forge kill-chain <seed>
 
 ## Common one-liners
 
-```powershell
+```text
 # Fresh domain sweep
 forge kill-chain target.example -e 1001
 
@@ -103,13 +103,31 @@ forge report generate --engagement 1001 --yes
 .venv\Scripts\python.exe -m forge.audit.verifier --engagement 1001
 ```
 
+```bash
+.venv/bin/python -m forge.audit.verifier --engagement 1001
+```
+
+---
+
+## Local Setup Checks
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_forge_windows_local.ps1
+.\tools\forge-stack.ps1 status
+```
+
+```bash
+./scripts/setup_forge_posix_local.sh
+./tools/forge-stack.sh status
+```
+
 ---
 
 ## Where to look when things go wrong
 
 | Symptom | Try |
 |---|---|
-| Slow startup | Ensure `FORGE_NO_TOR=1` in `.env` or use `.bat` launchers |
+| Slow startup | Ensure `FORGE_NO_TOR=1` in `.env` or use the bundled launchers |
 | "seed cannot classify" | Wrap full names in quotes; use `+` prefix for phones; use `@` prefix for usernames |
 | Empty name-search results | Search engines are rate-limiting; retry with `--tor` |
 | Report generation fails | Check `FORGE_LLM_PROVIDER=auto` in `.env`; falls back to template automatically |
@@ -131,6 +149,7 @@ forge report generate --engagement 1001 --yes
 | Key/cloud validation hits 429 | Keep `FORGE_VALIDATION_MAX_WORKERS=1`, then increase `FORGE_KEY_VALIDATION_REQUEST_DELAY_SECONDS` and `FORGE_KEY_VALIDATION_RATE_LIMIT_BACKOFF_SECONDS` |
 | Artifact parsing is saturating CPU/disk | Lower `FORGE_ARTIFACT_PROCESSOR_MAX_WORKERS`; `--parallel-fanout` still caps the effective artifact worker count |
 | Cloud discovery misses SPA content | Verify Playwright installed: `.venv\Scripts\playwright install chromium` |
+| Cloud discovery misses SPA content on macOS/Linux | Verify Playwright installed: `.venv/bin/playwright install chromium` |
 
 Everything else: see `README.md`.
 

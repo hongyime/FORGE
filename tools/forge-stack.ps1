@@ -25,7 +25,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$composeFile = Join-Path $PSScriptRoot "..\docker-compose.dev.yml"
+$composeFile = Join-Path $PSScriptRoot "..\docker\docker-compose.dev.yml"
 if (-not (Test-Path $composeFile)) {
     Write-Error "docker-compose.dev.yml not found at $composeFile"
     exit 1

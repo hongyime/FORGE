@@ -26,3 +26,9 @@ def test_report_launcher_uses_windows_native_latest_report_listing() -> None:
     assert "| head" not in text
     assert ".venv\\scripts\\python.exe -c" in text
     assert "reports[:3]" in text
+
+
+def test_powershell_stack_helper_uses_docker_compose_dev_file() -> None:
+    text = (REPO_ROOT / "tools" / "forge-stack.ps1").read_text(encoding="utf-8").lower()
+    assert "..\\docker\\docker-compose.dev.yml" in text
+    assert "..\\docker-compose.dev.yml" not in text

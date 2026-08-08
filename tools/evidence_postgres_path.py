@@ -2,7 +2,7 @@
 tools/evidence_postgres_path.py - Real Postgres state-store evidence.
 
 NO MOCKS. Hits the live forge-postgres container brought up by
-``docker compose -f docker-compose.dev.yml up -d postgres``. Each scenario
+``docker compose -f docker/docker-compose.dev.yml up -d postgres``. Each scenario
 uses a fresh schema scoped via ``forge_schema=`` query param so probes
 cannot interfere with each other.
 
@@ -324,7 +324,7 @@ async def main() -> int:
     except psycopg.Error as exc:
         print(_ansi(
             f"\nFATAL: forge-postgres unreachable at {_PG_SYNC} ({exc}).\n"
-            f"Start the dev stack: docker compose -f docker-compose.dev.yml up -d postgres",
+            "Start the dev stack: docker compose -f docker/docker-compose.dev.yml up -d postgres",
             "91;1",
         ))
         return 2

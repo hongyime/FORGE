@@ -4,7 +4,7 @@ tests/conftest.py - Top-level pytest fixtures shared across the test suite.
 The default forge state-store backend is now Postgres (sprint #4). Tests
 that previously created a per-test SQLite file now get a per-test Postgres
 SCHEMA on the shared ``forge-postgres`` container brought up by
-``docker compose -f docker-compose.dev.yml up postgres``.
+``docker compose -f docker/docker-compose.dev.yml up postgres``.
 
 Schema isolation lets hundreds of tests run in parallel against one DB
 without interfering with each other - each test gets its own DDL namespace
@@ -12,7 +12,7 @@ and never sees another test's tables.
 
 The fixture skips gracefully when ``forge-postgres`` isn't reachable, so
 local dev that hasn't started the stack still gets a clean failure
-("docker compose -f docker-compose.dev.yml up -d postgres") rather than a
+("docker compose -f docker/docker-compose.dev.yml up -d postgres") rather than a
 mysterious connection error.
 """
 
@@ -91,7 +91,7 @@ def pg_base_url() -> str:
     if not _pg_reachable(host, port):
         pytest.skip(
             f"forge-postgres not reachable at {host}:{port}. "
-            "Run `docker compose -f docker-compose.dev.yml up -d postgres` "
+            "Run `docker compose -f docker/docker-compose.dev.yml up -d postgres` "
             "and retry."
         )
     return base
