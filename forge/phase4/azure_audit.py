@@ -79,6 +79,16 @@ def _azure_audit_evidence(finding: "AzureFinding") -> str:
     )
     return f"{proof}; detail={json.dumps(finding.evidence, sort_keys=True)}"[:512]
 
+
+def _ensure_engagement_row(con: sqlite3.Connection, engagement_id: int) -> None:
+    con.execute(
+        """
+        INSERT OR IGNORE INTO engagements (id, name, scope_json, status, operator)
+        VALUES (?, ?, '[]', 'ACTIVE', 'azure_audit')
+        """,
+        (engagement_id, f"auto:azure_audit:{engagement_id}"),
+    )
+
 # Azure Service severity mapping
 _AZURE_SEVERITY_MAP = {
     "RBAC_OVERPERMISSIVE": "CRITICAL",
@@ -667,6 +677,7 @@ class AzureAuditor:
             with direct_connect(self._db_path) as con:
                 apply_schema(con)
                 run_migrations(con)
+                _ensure_engagement_row(con, self._engagement_id)
                 for finding in self._findings:
                     con.execute("""
                         INSERT OR IGNORE INTO vulnerability_findings

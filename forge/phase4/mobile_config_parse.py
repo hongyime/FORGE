@@ -391,6 +391,7 @@ class FirebaseExtractor:
         con = direct_connect(db_path)
         apply_schema(con)
         run_migrations(con)
+        self._ensure_engagement_row(con, engagement_id)
         count = 0
         seen: set[tuple[str, str, str]] = set()
         config_entries = self._phase4_ordered_batch(
@@ -433,6 +434,16 @@ class FirebaseExtractor:
         con.close()
         _LOG.info("Stored %d Supabase config(s) to cloud_assets/key_scanner_findings", count)
         return count
+
+    @staticmethod
+    def _ensure_engagement_row(con: sqlite3.Connection, engagement_id: int) -> None:
+        con.execute(
+            """
+            INSERT OR IGNORE INTO engagements (id, name, scope_json, status, operator)
+            VALUES (?, ?, '[]', 'ACTIVE', 'mobile_config_parse')
+            """,
+            (engagement_id, f"auto:mobile_config_parse:{engagement_id}"),
+        )
 
     def _supabase_store_entry(self, config: SupabaseConfig) -> dict[str, str | None]:
         try:

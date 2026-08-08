@@ -68,6 +68,16 @@ def _aws_audit_evidence(finding: "AWSFinding") -> str:
     )
     return f"{proof}; detail={json.dumps(finding.evidence, sort_keys=True)}"[:512]
 
+
+def _ensure_engagement_row(con: sqlite3.Connection, engagement_id: int) -> None:
+    con.execute(
+        """
+        INSERT OR IGNORE INTO engagements (id, name, scope_json, status, operator)
+        VALUES (?, ?, '[]', 'ACTIVE', 'aws_audit')
+        """,
+        (engagement_id, f"auto:aws_audit:{engagement_id}"),
+    )
+
 # OPSEC-banned patterns that should not appear in findings
 _BANNED_PATTERNS = [
     r"AKIA[0-9A-Z]{16}",  # AWS Access Key ID pattern
@@ -796,6 +806,7 @@ class AWSAuditor:
             with direct_connect(self._db_path) as con:
                 apply_schema(con)
                 run_migrations(con)
+                _ensure_engagement_row(con, self._engagement_id)
                 for finding in self._findings:
                     con.execute("""
                         INSERT OR IGNORE INTO vulnerability_findings

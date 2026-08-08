@@ -282,10 +282,13 @@ class TestFirebaseApiKeyRedactionFirst4Last4:
     """P3-C02: Firebase api_key printed as first4...last4, not first-N chars."""
 
     def test_cli_source_no_longer_shows_first_12_chars(self) -> None:
-        text = Path("forge/cli.py").read_text(encoding="utf-8", errors="replace")
-        assert "api_key',''))[:12]" not in text
-        # And the redaction helper pattern is present
-        assert "[:4]" in text and "[-4:]" in text
+        # Cloud commands extracted to cli_cloud.py; check both files
+        cli_text = Path("forge/cli.py").read_text(encoding="utf-8", errors="replace")
+        cloud_text = Path("forge/cli_cloud.py").read_text(encoding="utf-8", errors="replace")
+        combined = cli_text + cloud_text
+        assert "api_key',''))[:12]" not in combined
+        # And the redaction helper pattern is present (in cli_cloud.py after extraction)
+        assert "[:4]" in combined and "[-4:]" in combined
 
     def test_firebase_extract_source_no_longer_shows_first_10_chars(self) -> None:
         text = Path("forge/phase4/firebase_extract.py").read_text(encoding="utf-8", errors="replace")

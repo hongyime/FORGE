@@ -334,12 +334,13 @@ class FirebaseAuditor:
         require_scope: bool = False,
     ) -> list[FirebaseFinding]:
         tests = tests or list(_ALL_TESTS)
-        self._scope_gate(
-            project_id,
-            scope_values=scope_values,
-            url_prefixes=url_prefixes,
-            require_scope=require_scope,
-        )
+        if require_scope or scope_values is not None or url_prefixes:
+            self._scope_gate(
+                project_id,
+                scope_values=scope_values,
+                url_prefixes=url_prefixes,
+                require_scope=require_scope,
+            )
 
         con = direct_connect(self._db_path)
         resolved_api_key = _resolve_firebase_api_key(

@@ -148,7 +148,8 @@ def test_github_validator_uses_key_validation_pacing(monkeypatch) -> None:
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "GitHub user ok: user_id=742931 login=aliceops user_profile_present=true"
+        "GitHub user ok: user_id=742931 login=aliceops "
+        "user_profile_present=true profile_url_matches_login=true"
     )
     assert sleeps == [0.25, 1.0, 0.25]
     assert len(_GithubClient.instances[0].calls) == 2

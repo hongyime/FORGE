@@ -455,6 +455,46 @@ def _name_search_dork_queries(name: str) -> list[str]:
     ]
 
 
+def _ensure_engagement_row(con: sqlite3.Connection, engagement_id: int) -> None:
+    columns = {
+        str(row[1])
+        for row in con.execute("PRAGMA table_info(engagements)").fetchall()
+        if len(row) > 1
+    }
+    if not columns:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS engagements (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                scope_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                operator TEXT NOT NULL DEFAULT 'name_search'
+            )
+        """)
+        columns = {
+            str(row[1])
+            for row in con.execute("PRAGMA table_info(engagements)").fetchall()
+            if len(row) > 1
+        }
+
+    defaults: dict[str, object] = {
+        "id": engagement_id,
+        "name": f"auto:name_search:{engagement_id}",
+        "scope_json": "[]",
+        "status": "ACTIVE",
+        "operator": "name_search",
+        "metadata_json": "{}",
+    }
+    insert_columns = [column for column in defaults if column in columns]
+    if "id" not in insert_columns:
+        return
+    placeholders = ", ".join("?" for _ in insert_columns)
+    con.execute(
+        f"INSERT OR IGNORE INTO engagements ({', '.join(insert_columns)}) VALUES ({placeholders})",
+        tuple(defaults[column] for column in insert_columns),
+    )
+
+
 def search_name(
     name: str,
     engagement_id: int,
@@ -494,6 +534,7 @@ def search_name(
     try:
         con = direct_connect(str(db_path))
         try:
+            _ensure_engagement_row(con, engagement_id)
             # Ensure social_profiles table exists (created lazily by scraper).
             try:
                 con.execute("""

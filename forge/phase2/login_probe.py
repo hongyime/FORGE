@@ -1015,13 +1015,6 @@ class WebPanelTester:
                 if form.password_field:
                     post_data[form.password_field] = password
 
-                _audit(
-                    self._db,
-                    self._eid,
-                    "login_probe_spray",
-                    f"url={target_url} user={username} password=***REDACTED***",
-                )
-
                 if self._dry_run:
                     logger.debug(
                         "[DRY-RUN] Would spray user=%s password=%s at %s",
@@ -1030,6 +1023,13 @@ class WebPanelTester:
                         target_url,
                     )
                     continue
+
+                _audit(
+                    self._db,
+                    self._eid,
+                    "login_probe_spray",
+                    f"url={target_url} user={username} password=***REDACTED***",
+                )
 
                 time.sleep(_jitter(self._delay))
 

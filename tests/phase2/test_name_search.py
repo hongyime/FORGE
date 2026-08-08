@@ -26,6 +26,7 @@ _DORK_COVERAGE_EXCLUDED_PROFILE_HOSTS = {
     "twitter.com",
     "x.com",
     # Protocol, redirect, or variant hosts covered by canonical profile dorks.
+    "accounts.google.com",
     "bsky.social",
     "gravatar.com",
     "matrix.to",
