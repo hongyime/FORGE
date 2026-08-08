@@ -175,6 +175,10 @@ Minimal scope manifest for sensitive live runs:
 }
 ```
 
+Live execution rejects global manifests such as `authorized_seeds: ["*"]`,
+`0.0.0.0/0`, and `::/0`. Treat `manifests/default.json` as a template:
+copy it per engagement and replace every value with the exact target scope.
+
 ---
 
 ## What kill-chain actually does

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import html as html_lib
+import ipaddress
 import json
 import logging
 import os
@@ -91,6 +92,8 @@ __all__ = [
     "_run_inprocess_batch",
     "_run_module_batch",
     "_run_ptr_lookup_batch",
+    "_reject_broad_scope_manifest_for_live",
+    "_scope_manifest_broad_reasons",
     "_scope_manifest_seed_targets",
     "_scope_manifest_values",
     "_sleep_provider_launch_delay",
@@ -515,6 +518,47 @@ def _load_scope_manifest(value: str) -> dict[str, Any]:
     }
 
 
+def _scope_manifest_broad_reasons(manifest: dict[str, Any]) -> list[str]:
+    """Return reasons a manifest authorizes an unbounded live surface."""
+    reasons: list[str] = []
+    wildcard_fields = {
+        "domains": list(manifest.get("domains") or []),
+        "urls": list(manifest.get("urls") or []),
+        "authorized_seeds": list(manifest.get("exact_seeds") or []),
+    }
+    for field_name, values in wildcard_fields.items():
+        for value in values:
+            normalized = " ".join(str(value or "").strip().split()).casefold()
+            if normalized in {"*", "*.*"}:
+                reasons.append(f"{field_name} contains wildcard {str(value)!r}")
+                break
+
+    for value in list(manifest.get("ip_ranges") or []):
+        text = " ".join(str(value or "").strip().split())
+        if not text:
+            continue
+        try:
+            network = ipaddress.ip_network(text, strict=False)
+        except ValueError:
+            continue
+        if network.prefixlen == 0:
+            reasons.append(f"ip_ranges contains unbounded CIDR {text!r}")
+
+    return reasons
+
+
+def _reject_broad_scope_manifest_for_live(manifest: dict[str, Any]) -> None:
+    reasons = _scope_manifest_broad_reasons(manifest)
+    if not reasons:
+        return
+    source = str(manifest.get("source") or "").strip() or "scope manifest"
+    preview = "; ".join(reasons[:4])
+    raise ValueError(
+        "scope manifest is too broad for live execution: "
+        f"{preview}. Create a target-specific manifest instead of using {source!r}."
+    )
+
+
 def _scope_manifest_seed_targets(seed_value: str, seed_type: str) -> list[str]:
     value = str(seed_value or "").strip()
     kind = str(seed_type or "").strip().lower()
@@ -665,6 +709,10 @@ def _direct_cli_load_scope_lists(
     manifest_ref = _direct_cli_scope_manifest_value(scope_manifest)
     if manifest_ref:
         manifest = _load_scope_manifest(manifest_ref)
+        try:
+            _reject_broad_scope_manifest_for_live(manifest)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
         if target:
             validation = _validate_scope_manifest_seed_values(
                 manifest,

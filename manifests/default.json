@@ -1,8 +1,8 @@
 {
-  "roe_id": "ROE-BRYAN-PERMANENT-2026",
-  "description": "Permissive default scope manifest. Authorizes all targets by listing broad CIDR ranges and using the authorized_seeds wildcard. The scope validator matches authorized_seeds entries as exact-match OR as suffix-match when prefixed with *. — so '*' here means 'accept everything'.",
-  "domains": [],
-  "ip_ranges": ["0.0.0.0/0", "::/0"],
-  "urls": [],
-  "authorized_seeds": ["*"]
+  "roe_id": "ROE-REPLACE-ME",
+  "description": "Safe template only. Copy this file for an engagement and replace every value with the exact domains, URL prefixes, IP ranges, and non-network seeds authorized by the written ROE. Wildcards that authorize everything are rejected for live execution.",
+  "domains": ["example.com", "*.example.com"],
+  "ip_ranges": ["203.0.113.0/24"],
+  "urls": ["https://portal.example.com/"],
+  "authorized_seeds": ["security@example.com", "+15551234567", "@authorized_handle"]
 }

@@ -84,6 +84,10 @@ forge kill-chain testphp.vulnweb.com -e 2007 --attack-mode --roe-id ROE-123 --sc
 forge report generate --engagement 1001 --yes
 ```
 
+For any live run, `roe-scope.json` must be target-specific. FORGE rejects
+global allowlists such as `authorized_seeds: ["*"]`, `0.0.0.0/0`, and `::/0`;
+use `manifests/default.json` only as a template.
+
 ---
 
 ## Where things land

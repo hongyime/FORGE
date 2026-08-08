@@ -23,13 +23,25 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint (2026-08-08): slow synthesis-test rewrite work landed in the
-working tree. Eight social-profile synthesis tests that were previously marked
-slow now assert candidate generation, metadata, reserved-handle filtering, and
-relation intent directly through `EngagementSynthesisEngine` helpers instead
-of bootstrapping SQLite engagements and running full synthesis. The old "6
-remaining slow synthesis-engine tests" handoff count is stale: four broad
-persistence/backfill synthesis integration guards remain marked slow on
+Latest checkpoint (2026-08-08): target-specific live-scope guard work landed in
+the working tree. Live kill-chain and direct target helpers now reject
+world-authorizing scope manifests before target matching or attack-mode
+automation env vars are set. Blocked patterns include `authorized_seeds:
+["*"]`, `0.0.0.0/0`, and `::/0`. `manifests/default.json` is now a safe
+template instead of a global allowlist, and README/daily-use docs tell
+operators to copy it per engagement. Verification: py_compile passed for
+`forge/cli.py` and `forge/cli_helpers.py`; the full direct live-scope module
+plus manifest-loader hardening tests passed (`40 passed`); Ruff passed for
+touched Python files; `git diff --check` passed with only existing
+CRLF-normalization warnings.
+
+Previous checkpoint (2026-08-08): slow synthesis-test rewrite work landed in
+the working tree. Eight social-profile synthesis tests that were previously
+marked slow now assert candidate generation, metadata, reserved-handle
+filtering, and relation intent directly through `EngagementSynthesisEngine`
+helpers instead of bootstrapping SQLite engagements and running full synthesis.
+The old "6 remaining slow synthesis-engine tests" handoff count is stale: four
+broad persistence/backfill synthesis integration guards remain marked slow on
 purpose. GitHub Dependabot alerts for `pytest<9.0.3` and `vcrpy<8.2.1` are
 reported fixed. Verification: py_compile for the touched phase1 test file
 passed; focused pytest node run for the eight rewritten tests passed

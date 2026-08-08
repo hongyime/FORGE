@@ -90,6 +90,17 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Target-specific live-scope guard checkpoint:
+  Live kill-chain and direct target helpers now reject world-authorizing scope
+  manifests before target matching or attack-mode automation env vars are set.
+  Blocked patterns include `authorized_seeds: ["*"]`, `0.0.0.0/0`, and `::/0`.
+  `manifests/default.json` is now a safe template instead of a global allowlist,
+  and README/daily-use docs tell operators to copy it per engagement. This makes
+  the local setup target-ready without relaxing ROE/scope gates. Verification:
+  py_compile passed for `forge/cli.py` and `forge/cli_helpers.py`; the full
+  direct live-scope module plus manifest-loader hardening tests passed
+  (`40 passed`); Ruff passed for touched Python files; `git diff --check`
+  passed with only existing CRLF-normalization warnings.
 - [x] Cross-platform local-operator runnable checkpoint:
   macOS/Linux now have POSIX launcher parity for setup, top menu,
   kill-chain prompts, status, report generation, local hydration verification,

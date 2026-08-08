@@ -138,6 +138,7 @@ from forge.cli_helpers import (  # noqa: F401, E402
     _run_inprocess_batch,
     _run_module_batch,
     _run_ptr_lookup_batch,
+    _reject_broad_scope_manifest_for_live,
     _scope_manifest_seed_targets,
     _scope_manifest_values,
     _sleep_provider_launch_delay,
@@ -1515,6 +1516,19 @@ def kill_chain(
             "FORGE_SCOPE_MANIFEST so live execution is bounded to explicit authorization. "
             "Use --dry-run to preview without live execution."
         )
+    scope_manifest_metadata: dict[str, Any] | None = None
+    if scope_manifest:
+        try:
+            scope_manifest_metadata = _load_scope_manifest(scope_manifest)
+            if live_launch:
+                _reject_broad_scope_manifest_for_live(scope_manifest_metadata)
+            manifest_roe_id = str(scope_manifest_metadata.get("roe_id") or "").strip()
+            if manifest_roe_id and roe_id and manifest_roe_id != roe_id:
+                raise ValueError(
+                    f"scope manifest roe_id {manifest_roe_id!r} does not match --roe-id {roe_id!r}"
+                )
+        except Exception as exc:  # noqa: BLE001
+            raise typer.BadParameter(f"invalid --scope-manifest: {exc}") from exc
     # ─── Attack-mode auto-fire env vars ─────────────────────────────────
     # When attack_mode is ON and we have a live launch with valid ROE +
     # scope-manifest, prime the downstream automation bypasses so:
@@ -1892,22 +1906,14 @@ def kill_chain(
         progress_label="initial seed routing prep",
     )
     additional_seed_routes = prepared_initial_seed_routes[1:]
-    scope_manifest_metadata: dict[str, Any] | None = None
     scope_manifest_validation: dict[str, Any] = {"authorized": [], "denied": []}
     if scope_manifest:
-        try:
-            scope_manifest_metadata = _load_scope_manifest(scope_manifest)
-            manifest_roe_id = str(scope_manifest_metadata.get("roe_id") or "").strip()
-            if manifest_roe_id and roe_id and manifest_roe_id != roe_id:
-                raise ValueError(
-                    f"scope manifest roe_id {manifest_roe_id!r} does not match --roe-id {roe_id!r}"
-                )
-            scope_manifest_validation = _validate_scope_manifest_seed_values(
-                scope_manifest_metadata,
-                classified_seeds,
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise typer.BadParameter(f"invalid --scope-manifest: {exc}") from exc
+        if scope_manifest_metadata is None:
+            raise typer.BadParameter("invalid --scope-manifest: manifest was not loaded")
+        scope_manifest_validation = _validate_scope_manifest_seed_values(
+            scope_manifest_metadata,
+            classified_seeds,
+        )
         denied_seed_values = [
             f"{item['seed_value']} ({item['seed_type']})"
             for item in scope_manifest_validation.get("denied", [])

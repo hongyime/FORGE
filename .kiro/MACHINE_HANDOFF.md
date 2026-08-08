@@ -329,12 +329,16 @@ hardening milestones (2026-08-05)`, and `docs/claude_quick_handoff.md`
 
 **Next-agent focus:**
 
-- Rewrite the 6 remaining slow synthesis-engine tests into narrow unit
-  tests so `-m "not slow"` becomes the operator default.
-- Close open Dependabot findings on `hongyime/FORGE`.
-- Keep expanding provider-specific validation depth for the remaining
-  long-tail providers.
+- Reduce the four remaining slow synthesis integration guards only if their
+  persistence/backfill assertions can be preserved as narrow unit coverage.
+- Keep expanding provider-specific validation depth only where a concrete
+  long-tail low-signal proof gap is found.
+- Continue safe passive parser coverage for concrete missing artifact/source
+  shapes.
+- Treat target-specific live scope setup as active policy: live runs must use a
+  narrow ROE manifest and must not use global `authorized_seeds: ["*"]`,
+  `0.0.0.0/0`, or `::/0` allowlists.
 
-**Repo state at handoff:** clean, on `main`, up-to-date with `origin/main`
-at `ea57716`. Latest post-arc commit added by this handoff:
-`docs: sync living-doc trail to reflect 24-task hardening arc`.
+**Repo state note:** this file is historical handoff context. The active
+checkout is on `main` tracking `origin/main`; use `git status` / `git log` for
+the exact current tip and continue making focused commits and pushes normally.
