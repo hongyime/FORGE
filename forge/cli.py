@@ -186,6 +186,7 @@ auth_app = _make_sub("auth", "Authentication Testing — Brute and Bypass")
 post_app = _make_sub("post", "Phase 5 — Advanced Operations")
 report_app = _make_sub("report", "Phase 6 — Reporting")
 audit_app = _make_sub("audit", "Audit Evidence — Manifest Verification")
+targets_app = _make_sub("targets", "Target feed import")
 
 # Public groups (visible in `forge --help`): kb, graph, report.
 # Internal groups (hidden but still functional): recon, osint, evasion,
@@ -203,6 +204,7 @@ app.add_typer(auth_app, hidden=True)
 app.add_typer(post_app, hidden=True)
 app.add_typer(report_app)
 app.add_typer(audit_app)
+app.add_typer(targets_app)
 
 from forge.audit.cli import register_audit_commands as _register_audit_commands  # noqa: E402
 
@@ -361,6 +363,85 @@ def web_status(
         console.print(f"[green]Web interface is running at http://{web_host}:{web_port}[/green]")
     else:
         console.print(f"[yellow]Web interface is not listening at {web_host}:{web_port}[/yellow]")
+
+
+@targets_app.command("import")
+def targets_import(
+    feed_url: Optional[str] = typer.Option(
+        None,
+        "--feed-url",
+        help="HTTP(S) target feed URL using schema target-feed.v1.",
+    ),
+    feed_file: Optional[Path] = typer.Option(
+        None,
+        "--feed-file",
+        help="Local target feed JSON file using schema target-feed.v1.",
+    ),
+    auth_header_env: Optional[str] = typer.Option(
+        None,
+        "--auth-header-env",
+        help="Environment variable containing the feed auth header value.",
+    ),
+    roe_id: Optional[str] = typer.Option(
+        None,
+        "--roe-id",
+        envvar="FORGE_ROE_ID",
+        help="Rules-of-engagement reference required with --start.",
+    ),
+    start: bool = typer.Option(
+        False,
+        "--start",
+        help="Start the passive kill-chain for each imported target.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Parse and dedupe the feed without writing engagement data or starting runs.",
+    ),
+    limit: Optional[int] = typer.Option(
+        None,
+        "--limit",
+        help="Maximum feed items to import after dedupe. Default 100, max 1000.",
+    ),
+    max_iter: int = typer.Option(
+        3,
+        "--max-iter",
+        help="Passive kill-chain max iterations when --start is used.",
+    ),
+) -> None:
+    """Import generic sanitized target feeds into one engagement per target."""
+    try:
+        from forge.targets_import import import_targets as _import_targets  # noqa: PLC0415
+
+        results = _import_targets(
+            feed_url=feed_url,
+            feed_file=feed_file,
+            auth_header_env=auth_header_env,
+            roe_id=roe_id,
+            start=start,
+            dry_run=dry_run,
+            limit=limit,
+            max_iter=max_iter,
+        )
+    except Exception as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    created = sum(1 for item in results if item.created)
+    reused = sum(1 for item in results if item.engagement_id is not None and not item.created)
+    started = sum(1 for item in results if item.started)
+    if dry_run:
+        console.print(f"[green]DRY RUN:[/green] {len(results)} target(s) parsed and deduped.")
+        return
+    console.print(
+        f"[green]Imported:[/green] {len(results)} target(s), "
+        f"created={created}, reused={reused}, started={started}"
+    )
+    for result in results:
+        console.print(
+            f"  engagement={result.engagement_id} "
+            f"target={result.target_type}:{result.target_value} "
+            f"manifest={result.scope_manifest}"
+        )
 
 
 @web_app.command("enqueue")
