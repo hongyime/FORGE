@@ -1,6 +1,6 @@
 # Engagement Overhaul Task List
 
-Last updated: 2026-07-25
+Last updated: 2026-08-08
 
 ## End Goal Quick Answer
 
@@ -101,6 +101,19 @@ sentences as historical notes only, not as current instructions.
   and `git diff --check` passed with only existing CRLF-normalization warnings.
   Safety: setup creates only repo-local/user-home FORGE workspace directories
   and does not disable host security controls or bypass scope/ROE gates.
+- [x] Slow synthesis-test rewrite checkpoint:
+  Eight social-profile synthesis tests that were previously marked slow now
+  assert candidate generation, metadata, reserved-handle filtering, and relation
+  intent directly through `EngagementSynthesisEngine` helper seams instead of
+  bootstrapping SQLite engagements and running full synthesis. This closes the
+  stale "6 remaining slow synthesis-engine tests" handoff item and leaves four
+  broad persistence/backfill integration guards intentionally marked slow.
+  GitHub Dependabot alerts for `pytest<9.0.3` and `vcrpy<8.2.1` are reported
+  fixed. Verification: py_compile for the touched phase1 test file passed;
+  focused pytest node run for the eight rewritten tests passed (`8 passed`).
+  Collection still imports the monolithic phase1 test file, so the focused run
+  remains slow at collection time even though the rewritten tests no longer do
+  full DB synthesis runs.
 - [x] Legacy cloud-audit reportability checkpoint:
   Legacy `FIREBASE_MISCONFIG`, `FIREBASE_CREDENTIAL_STATUS`,
   `AWS_MISCONFIG`, and `AZURE_MISCONFIG` rows now fail closed across Phase 6

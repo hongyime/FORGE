@@ -172,6 +172,45 @@ def _bootstrap_engagement(db_path: Path, engagement_id: int = 1001) -> None:
         con.close()
 
 
+def _social_profile_candidates_from_payload(
+    profile_data: Any,
+    *,
+    anchor: str = "security@acme.example",
+    source: str = "identity_provider:test",
+    seed_depths: dict[tuple[str, str], int] | None = None,
+) -> list[SeedCandidate]:
+    engine = EngagementSynthesisEngine(Path("unused-engagement.db"), 1001, depth_limit=3)
+    return engine._social_profile_candidates_from_rows(
+        [
+            {
+                "email": anchor,
+                "source": source,
+                "profile_data": json.dumps(profile_data),
+            }
+        ],
+        seed_depths or {},
+    )
+
+
+def _social_profile_candidate_map(
+    candidates: list[SeedCandidate],
+) -> dict[tuple[str, str], SeedCandidate]:
+    rows: dict[tuple[str, str], SeedCandidate] = {}
+    for candidate in candidates:
+        rows.setdefault((candidate.seed_value, candidate.seed_type), candidate)
+    return rows
+
+
+def _social_profile_candidate_relations(
+    candidates: list[SeedCandidate],
+) -> set[tuple[str | None, str, str]]:
+    return {
+        (candidate.parent_value, candidate.seed_value, candidate.relation_type)
+        for candidate in candidates
+        if candidate.parent_value
+    }
+
+
 def _tar_bytes(member_name: str, payload: bytes, *, mode: str = "w:gz") -> bytes:
     bundle = BytesIO()
     with tarfile.open(fileobj=bundle, mode=mode) as tf:
@@ -2459,13 +2498,7 @@ def test_synthesis_engine_flattens_wrapped_social_profile_provider_payloads(
         con.close()
 
 
-@pytest.mark.slow
-def test_synthesis_engine_canonicalizes_spaced_social_provider_labels(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
-
+def test_synthesis_engine_canonicalizes_spaced_social_provider_labels() -> None:
     provider_cases = [
         ("Angel List", "company", "angellistalias", "angellist"),
         ("Bio Link", "pricing", "biolinkalias", "biolink"),
@@ -2499,76 +2532,23 @@ def test_synthesis_engine_canonicalizes_spaced_social_provider_labels(
             for service, reserved_handle, valid_handle, _platform in provider_cases
         ]
     }
-
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'epieos',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
+    seed_rows = _social_profile_candidate_map(
+        _social_profile_candidates_from_payload(
+            payload,
+            source="identity_provider:spaced-labels",
         )
-        con.execute(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                1001,
-                "security@acme.example",
-                "identity_provider:spaced-labels",
-                json.dumps(payload),
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
-
-    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
-
-    assert summary.seeds_inserted >= len(provider_cases)
-
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        seed_rows = {
-            (str(row["seed_value"]), str(row["seed_type"])): json.loads(
-                str(row["metadata_json"] or "{}")
-            )
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type, metadata_json
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-    finally:
-        con.close()
+    )
 
     for _service, _reserved_handle, valid_handle, platform in provider_cases:
         assert (valid_handle, "username") in seed_rows
-        assert seed_rows[(valid_handle, "username")]["platform"] == platform
+        assert seed_rows[(valid_handle, "username")].metadata["platform"] == platform
 
     reserved_handles = {reserved_handle for _, reserved_handle, _, _ in provider_cases}
     for reserved_handle in reserved_handles:
         assert (reserved_handle, "username") not in seed_rows
 
 
-@pytest.mark.slow
-def test_synthesis_engine_canonicalizes_spaced_brand_social_provider_labels(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
-
+def test_synthesis_engine_canonicalizes_spaced_brand_social_provider_labels() -> None:
     provider_cases = [
         ("Dev To", "tags", "devtoalias2", "devto"),
         ("Npm Js", "package", "npmjsalias", "npm"),
@@ -2597,359 +2577,88 @@ def test_synthesis_engine_canonicalizes_spaced_brand_social_provider_labels(
             for service, reserved_handle, valid_handle, _platform in provider_cases
         ]
     }
-
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'epieos',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
+    seed_rows = _social_profile_candidate_map(
+        _social_profile_candidates_from_payload(
+            payload,
+            source="identity_provider:spaced-brand-labels",
         )
-        con.execute(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                1001,
-                "security@acme.example",
-                "identity_provider:spaced-brand-labels",
-                json.dumps(payload),
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
-
-    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
-
-    assert summary.seeds_inserted >= len(provider_cases)
-
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        seed_rows = {
-            (str(row["seed_value"]), str(row["seed_type"])): json.loads(
-                str(row["metadata_json"] or "{}")
-            )
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type, metadata_json
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-    finally:
-        con.close()
+    )
 
     for _service, _reserved_handle, valid_handle, platform in provider_cases:
         assert (valid_handle, "username") in seed_rows
-        assert seed_rows[(valid_handle, "username")]["platform"] == platform
+        assert seed_rows[(valid_handle, "username")].metadata["platform"] == platform
 
     reserved_handles = {reserved_handle for _, reserved_handle, _, _ in provider_cases}
     for reserved_handle in reserved_handles:
         assert (reserved_handle, "username") not in seed_rows
 
 
-@pytest.mark.slow
-def test_synthesis_engine_promotes_link_in_bio_profile_urls_to_username_seeds(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
+def test_synthesis_engine_promotes_link_in_bio_profile_urls_to_username_seeds() -> None:
+    payload = [
+        {"source": "epieos", "platform": "biolink", "profile_url": "https://bio.link/acmebio"},
+        {"source": "epieos", "platform": "lnkbio", "profile_url": "https://lnk.bio/acmelnk"},
+        {"source": "epieos", "platform": "biosite", "profile_url": "https://bio.site/acmebiosite"},
+        {
+            "source": "epieos",
+            "platform": "allmylinks",
+            "profile_url": "https://allmylinks.com/acmeaml",
+        },
+        {"source": "epieos", "platform": "soloto", "profile_url": "https://solo.to/acmesolo"},
+        {
+            "source": "epieos",
+            "platform": "campsite",
+            "profile_url": "https://campsite.bio/acmecamp",
+        },
+        {"source": "epieos", "platform": "bento", "profile_url": "https://bento.me/acmebento"},
+        {"source": "epieos", "platform": "hoobe", "profile_url": "https://hoo.be/acmehoo"},
+        {"source": "epieos", "platform": "biolink", "profile_url": "https://bio.link/pricing"},
+        {"source": "epieos", "platform": "biosite", "profile_url": "https://bio.site/login"},
+        {
+            "source": "epieos",
+            "platform": "allmylinks",
+            "profile_url": "https://allmylinks.com/settings",
+        },
+        {
+            "source": "epieos",
+            "platform": "campsite",
+            "profile_url": "https://campsite.bio/pricing",
+        },
+        {"source": "epieos", "platform": "bento", "profile_url": "https://bento.me/pricing"},
+        {"source": "epieos", "platform": "hoobe", "profile_url": "https://hoo.be/discover"},
+    ]
 
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'epieos',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
-        )
-        con.executemany(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            [
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:biolink:acmebio",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "biolink",
-                            "profile_url": "https://bio.link/acmebio",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:lnkbio:acmelnk",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "lnkbio",
-                            "profile_url": "https://lnk.bio/acmelnk",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:biosite:acmebiosite",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "biosite",
-                            "profile_url": "https://bio.site/acmebiosite",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:allmylinks:acmeaml",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "allmylinks",
-                            "profile_url": "https://allmylinks.com/acmeaml",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:soloto:acmesolo",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "soloto",
-                            "profile_url": "https://solo.to/acmesolo",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:campsite:acmecamp",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "campsite",
-                            "profile_url": "https://campsite.bio/acmecamp",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:bento:acmebento",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "bento",
-                            "profile_url": "https://bento.me/acmebento",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:hoobe:acmehoo",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "hoobe",
-                            "profile_url": "https://hoo.be/acmehoo",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:biolink:reserved",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "biolink",
-                            "profile_url": "https://bio.link/pricing",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:biosite:reserved",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "biosite",
-                            "profile_url": "https://bio.site/login",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:allmylinks:reserved",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "allmylinks",
-                            "profile_url": "https://allmylinks.com/settings",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:campsite:reserved",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "campsite",
-                            "profile_url": "https://campsite.bio/pricing",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:bento:reserved",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "bento",
-                            "profile_url": "https://bento.me/pricing",
-                        }
-                    ),
-                ),
-                (
-                    1001,
-                    "security@acme.example",
-                    "epieos:hoobe:reserved",
-                    json.dumps(
-                        {
-                            "source": "epieos",
-                            "platform": "hoobe",
-                            "profile_url": "https://hoo.be/discover",
-                        }
-                    ),
-                ),
-            ],
-        )
-        con.commit()
-    finally:
-        con.close()
+    candidates = _social_profile_candidates_from_payload(payload)
+    seed_rows = _social_profile_candidate_map(candidates)
+    seed_values = {seed_value for seed_value, seed_type in seed_rows if seed_type == "username"}
 
-    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+    assert {
+        "acmeaml",
+        "acmebento",
+        "acmebio",
+        "acmebiosite",
+        "acmecamp",
+        "acmehoo",
+        "acmelnk",
+        "acmesolo",
+    }.issubset(seed_values)
+    assert "login" not in seed_values
+    assert "pricing" not in seed_values
+    assert "settings" not in seed_values
+    assert "discover" not in seed_values
 
-    assert summary.seeds_inserted >= 8
-
-    con = sqlite3.connect(db_path)
-    try:
-        seed_rows = con.execute(
-            """
-            SELECT seed_value, seed_type
-            FROM engagement_seeds
-            WHERE engagement_id=1001
-              AND seed_type='username'
-            ORDER BY seed_value
-            """
-        ).fetchall()
-        seed_values = {str(row[0]) for row in seed_rows}
-        assert {
-            "acmeaml",
-            "acmebento",
-            "acmebio",
-            "acmebiosite",
-            "acmecamp",
-            "acmehoo",
-            "acmelnk",
-            "acmesolo",
-        }.issubset(seed_values)
-        assert "login" not in seed_values
-        assert "pricing" not in seed_values
-        assert "settings" not in seed_values
-        assert "discover" not in seed_values
-
-        relation_rows = con.execute(
-            """
-            SELECT dst.seed_value, sr.relation_type
-            FROM seed_relations sr
-            JOIN engagement_seeds src ON src.id=sr.source_seed_id
-            JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-            WHERE sr.engagement_id=1001
-              AND src.seed_value='security@acme.example'
-            ORDER BY dst.seed_value
-            """
-        ).fetchall()
-        relations = {(str(row[0]), str(row[1])) for row in relation_rows}
-        assert ("acmebio", "same_entity") in relations
-        assert ("acmeaml", "same_entity") in relations
-        assert ("acmebiosite", "same_entity") in relations
-        assert ("acmecamp", "same_entity") in relations
-        assert ("acmebento", "same_entity") in relations
-        assert ("acmehoo", "same_entity") in relations
-        assert ("acmelnk", "same_entity") in relations
-        assert ("acmesolo", "same_entity") in relations
-    finally:
-        con.close()
+    relations = _social_profile_candidate_relations(candidates)
+    assert ("security@acme.example", "acmebio", "same_entity") in relations
+    assert ("security@acme.example", "acmeaml", "same_entity") in relations
+    assert ("security@acme.example", "acmebiosite", "same_entity") in relations
+    assert ("security@acme.example", "acmecamp", "same_entity") in relations
+    assert ("security@acme.example", "acmebento", "same_entity") in relations
+    assert ("security@acme.example", "acmehoo", "same_entity") in relations
+    assert ("security@acme.example", "acmelnk", "same_entity") in relations
+    assert ("security@acme.example", "acmesolo", "same_entity") in relations
 
 
-@pytest.mark.slow
-def test_synthesis_engine_infers_social_profile_platforms_from_url_alias_fields(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
-
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'epieos',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
-        )
-        con.execute(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                1001,
-                "security@acme.example",
-                "epieos:alias-url-fields",
-                json.dumps(
-                    [
+def test_synthesis_engine_infers_social_profile_platforms_from_url_alias_fields() -> None:
+    payload = [
                         {
                             "source": "epieos",
                             "profileLink": "https://github.com/aliasdev",
@@ -3031,71 +2740,46 @@ def test_synthesis_engine_infers_social_profile_platforms_from_url_alias_fields(
                                 "https://www.linkedin.com/in/same-as-person",
                             ],
                         },
-                    ]
-                ),
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
+    ]
+    seed_rows = _social_profile_candidate_map(
+        _social_profile_candidates_from_payload(payload, source="epieos:alias-url-fields")
+    )
 
-    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
-
-    assert summary.seeds_inserted >= 3
-
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        seed_rows = {
-            (str(row["seed_value"]), str(row["seed_type"])): json.loads(
-                str(row["metadata_json"] or "{}")
-            )
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type, metadata_json
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-
-        assert seed_rows[("aliasdev", "username")]["platform"] == "github"
-        assert seed_rows[("aliassolo", "username")]["platform"] == "soloto"
-        assert seed_rows[("acmedesign", "username")]["platform"] == "figma"
-        assert seed_rows[("acmefounder", "username")]["platform"] == "indiehackers"
-        assert seed_rows[("acmeops", "username")]["platform"] == "polywork"
-        assert seed_rows[("acmeconsultant", "username")]["platform"] == "contra"
-        assert seed_rows[("acme-mentor", "username")]["platform"] == "adplist"
-        assert seed_rows[("schemelessdev", "username")]["platform"] == "github"
-        assert seed_rows[("schemelesslink", "username")]["platform"] == "linktree"
-        assert seed_rows[("publicurlops", "username")]["platform"] == "github"
-        assert seed_rows[("accounturlops", "username")]["platform"] == "linktree"
-        assert ("sameasdev", "username") in seed_rows
-        assert ("same-as-person", "username") in seed_rows
-        assert seed_rows[("Acme Alias Labs", "company")]["platform"] == "linkedin_company"
-        assert seed_rows[("Acme Alias Labs", "company")]["rule"] == "social_profile_company"
-        assert seed_rows[("Schemeless Labs", "company")]["platform"] == "linkedin_company"
-        assert seed_rows[("Schemeless Labs", "company")]["rule"] == "social_profile_company"
-        assert seed_rows[("Uri Labs", "company")]["platform"] == "linkedin_company"
-        assert seed_rows[("Uri Labs", "company")]["rule"] == "social_profile_company"
-        assert seed_rows[("Acme Docs", "company")]["platform"] == "gitbook"
-        assert seed_rows[("Acme Readme", "company")]["platform"] == "readmeio"
-        assert ("https://github.com/schemelessdev", "url") in seed_rows
-        assert ("https://www.linkedin.com/company/schemeless-labs", "url") in seed_rows
-        assert ("https://linktr.ee/schemelesslink", "url") in seed_rows
-        assert ("https://github.com/publicurlops", "url") in seed_rows
-        assert ("https://linktr.ee/accounturlops", "url") in seed_rows
-        assert ("https://www.linkedin.com/company/uri-labs", "url") in seed_rows
-        assert ("https://github.com/sameasdev", "url") in seed_rows
-        assert ("https://www.linkedin.com/in/same-as-person", "url") in seed_rows
-        assert ("acme-alias-labs", "username") not in seed_rows
-        assert ("security-guide", "username") not in seed_rows
-        assert ("reference", "username") not in seed_rows
-        assert ("123456", "username") not in seed_rows
-        assert ("design-system", "username") not in seed_rows
-        assert ("designers", "username") not in seed_rows
-    finally:
-        con.close()
+    assert seed_rows[("aliasdev", "username")].metadata["platform"] == "github"
+    assert seed_rows[("aliassolo", "username")].metadata["platform"] == "soloto"
+    assert seed_rows[("acmedesign", "username")].metadata["platform"] == "figma"
+    assert seed_rows[("acmefounder", "username")].metadata["platform"] == "indiehackers"
+    assert seed_rows[("acmeops", "username")].metadata["platform"] == "polywork"
+    assert seed_rows[("acmeconsultant", "username")].metadata["platform"] == "contra"
+    assert seed_rows[("acme-mentor", "username")].metadata["platform"] == "adplist"
+    assert seed_rows[("schemelessdev", "username")].metadata["platform"] == "github"
+    assert seed_rows[("schemelesslink", "username")].metadata["platform"] == "linktree"
+    assert seed_rows[("publicurlops", "username")].metadata["platform"] == "github"
+    assert seed_rows[("accounturlops", "username")].metadata["platform"] == "linktree"
+    assert ("sameasdev", "username") in seed_rows
+    assert ("same-as-person", "username") in seed_rows
+    assert seed_rows[("Acme Alias Labs", "company")].metadata["platform"] == "linkedin_company"
+    assert seed_rows[("Acme Alias Labs", "company")].metadata["rule"] == "social_profile_company"
+    assert seed_rows[("Schemeless Labs", "company")].metadata["platform"] == "linkedin_company"
+    assert seed_rows[("Schemeless Labs", "company")].metadata["rule"] == "social_profile_company"
+    assert seed_rows[("Uri Labs", "company")].metadata["platform"] == "linkedin_company"
+    assert seed_rows[("Uri Labs", "company")].metadata["rule"] == "social_profile_company"
+    assert seed_rows[("Acme Docs", "company")].metadata["platform"] == "gitbook"
+    assert seed_rows[("Acme Readme", "company")].metadata["platform"] == "readmeio"
+    assert ("https://github.com/schemelessdev", "url") in seed_rows
+    assert ("https://www.linkedin.com/company/schemeless-labs", "url") in seed_rows
+    assert ("https://linktr.ee/schemelesslink", "url") in seed_rows
+    assert ("https://github.com/publicurlops", "url") in seed_rows
+    assert ("https://linktr.ee/accounturlops", "url") in seed_rows
+    assert ("https://www.linkedin.com/company/uri-labs", "url") in seed_rows
+    assert ("https://github.com/sameasdev", "url") in seed_rows
+    assert ("https://www.linkedin.com/in/same-as-person", "url") in seed_rows
+    assert ("acme-alias-labs", "username") not in seed_rows
+    assert ("security-guide", "username") not in seed_rows
+    assert ("reference", "username") not in seed_rows
+    assert ("123456", "username") not in seed_rows
+    assert ("design-system", "username") not in seed_rows
+    assert ("designers", "username") not in seed_rows
 
 
 @pytest.mark.slow
@@ -3316,414 +3000,168 @@ def test_synthesis_engine_social_profile_anchor_keeps_existing_at_username_paren
         con.close()
 
 
-@pytest.mark.slow
-def test_synthesis_engine_promotes_linkedin_school_and_showcase_profiles_as_company_pivots(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
+def test_synthesis_engine_promotes_linkedin_school_and_showcase_profiles_as_company_pivots() -> None:
+    payload = [
+        {
+            "source": "name_search",
+            "profile_url": "https://www.linkedin.com/school/acme-academy/",
+            "external_url": "https://academy.acme.example/about",
+        },
+        {
+            "source": "name_search",
+            "profile_url": "https://www.linkedin.com/showcase/acme-labs/",
+            "external_url": "https://labs.acme.example",
+        },
+    ]
 
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'name_search',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
-        )
-        con.execute(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                1001,
-                "name:Alice Example",
-                "name_search:linkedin_org_aliases",
-                json.dumps(
-                    [
-                        {
-                            "source": "name_search",
-                            "profile_url": "https://www.linkedin.com/school/acme-academy/",
-                            "external_url": "https://academy.acme.example/about",
-                        },
-                        {
-                            "source": "name_search",
-                            "profile_url": "https://www.linkedin.com/showcase/acme-labs/",
-                            "external_url": "https://labs.acme.example",
-                        },
-                    ]
-                ),
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
+    candidates = _social_profile_candidates_from_payload(
+        payload,
+        anchor="name:Alice Example",
+        source="name_search:linkedin_org_aliases",
+    )
+    seed_rows = set(_social_profile_candidate_map(candidates))
+    relations = _social_profile_candidate_relations(candidates)
 
-    EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
-
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        seed_rows = {
-            (str(row["seed_value"]), str(row["seed_type"]))
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("Acme Academy", "company") in seed_rows
-        assert ("Acme Labs", "company") in seed_rows
-        assert ("acme-academy", "username") not in seed_rows
-        assert ("acme-labs", "username") not in seed_rows
-        assert ("https://academy.acme.example/about", "url") in seed_rows
-        assert ("https://labs.acme.example", "url") in seed_rows
-        assert ("academy.acme.example", "subdomain") in seed_rows
-        assert ("labs.acme.example", "subdomain") in seed_rows
-
-        relation_rows = {
-            (str(row[0]), str(row[1]), str(row[2]))
-            for row in con.execute(
-                """
-                SELECT src.seed_value, dst.seed_value, sr.relation_type
-                FROM seed_relations sr
-                JOIN engagement_seeds src ON src.id=sr.source_seed_id
-                JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-                WHERE sr.engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("Alice Example", "Acme Academy", "same_entity") in relation_rows
-        assert ("Alice Example", "Acme Labs", "same_entity") in relation_rows
-        assert ("Alice Example", "academy.acme.example", "related_asset") in relation_rows
-        assert ("Alice Example", "labs.acme.example", "related_asset") in relation_rows
-    finally:
-        con.close()
+    assert ("Acme Academy", "company") in seed_rows
+    assert ("Acme Labs", "company") in seed_rows
+    assert ("acme-academy", "username") not in seed_rows
+    assert ("acme-labs", "username") not in seed_rows
+    assert ("https://academy.acme.example/about", "url") in seed_rows
+    assert ("https://labs.acme.example", "url") in seed_rows
+    assert ("academy.acme.example", "subdomain") in seed_rows
+    assert ("labs.acme.example", "subdomain") in seed_rows
+    assert ("Alice Example", "Acme Academy", "same_entity") in relations
+    assert ("Alice Example", "Acme Labs", "same_entity") in relations
+    assert ("Alice Example", "academy.acme.example", "related_asset") in relations
+    assert ("Alice Example", "labs.acme.example", "related_asset") in relations
 
 
-@pytest.mark.slow
-def test_synthesis_engine_promotes_matrix_identity_ids_to_recursive_user_and_homeserver_seeds(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
+def test_synthesis_engine_promotes_matrix_identity_ids_to_recursive_user_and_homeserver_seeds() -> None:
+    payload = [
+        {
+            "platform": "matrix",
+            "username": "@matrixblue:matrix.acme.example",
+            "profile_url": "https://matrix.to/#/@matrixblue:matrix.acme.example",
+        },
+        {
+            "service": "Matrix.org",
+            "mxid": "@nestedblue:chat.acme.example",
+        },
+        {
+            "platform": "matrix",
+            "username": "users",
+            "profile_url": "https://matrix.to/#/#public-room:matrix.acme.example",
+        },
+    ]
 
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'epieos',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
-        )
-        con.execute(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                1001,
-                "security@acme.example",
-                "identity_provider:matrix",
-                json.dumps(
-                    [
-                        {
-                            "platform": "matrix",
-                            "username": "@matrixblue:matrix.acme.example",
-                            "profile_url": "https://matrix.to/#/@matrixblue:matrix.acme.example",
-                        },
-                        {
-                            "service": "Matrix.org",
-                            "mxid": "@nestedblue:chat.acme.example",
-                        },
-                        {
-                            "platform": "matrix",
-                            "username": "users",
-                            "profile_url": "https://matrix.to/#/#public-room:matrix.acme.example",
-                        },
-                    ]
-                ),
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
+    candidates = _social_profile_candidates_from_payload(
+        payload,
+        source="identity_provider:matrix",
+    )
+    seed_rows = _social_profile_candidate_map(candidates)
+    relations = _social_profile_candidate_relations(candidates)
 
-    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
-
-    assert summary.seeds_inserted >= 5
-
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        seed_rows = {
-            (str(row["seed_value"]), str(row["seed_type"])): json.loads(
-                str(row["metadata_json"] or "{}")
-            )
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type, metadata_json
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("matrixblue", "username") in seed_rows
-        assert ("nestedblue", "username") in seed_rows
-        assert ("users", "username") not in seed_rows
-        assert ("matrix.acme.example", "subdomain") in seed_rows
-        assert ("chat.acme.example", "subdomain") in seed_rows
-        assert seed_rows[("matrixblue", "username")]["platform"] == "matrix"
-        assert seed_rows[("matrix.acme.example", "subdomain")]["rule"] == "social_profile_matrix_homeserver"
-
-        relation_rows = {
-            (str(row[0]), str(row[1]), str(row[2]))
-            for row in con.execute(
-                """
-                SELECT src.seed_value, dst.seed_value, sr.relation_type
-                FROM seed_relations sr
-                JOIN engagement_seeds src ON src.id=sr.source_seed_id
-                JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-                WHERE sr.engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("security@acme.example", "matrixblue", "same_entity") in relation_rows
-        assert ("security@acme.example", "nestedblue", "same_entity") in relation_rows
-        assert ("security@acme.example", "matrix.acme.example", "related_asset") in relation_rows
-        assert ("security@acme.example", "chat.acme.example", "related_asset") in relation_rows
-    finally:
-        con.close()
+    assert ("matrixblue", "username") in seed_rows
+    assert ("nestedblue", "username") in seed_rows
+    assert ("users", "username") not in seed_rows
+    assert ("matrix.acme.example", "subdomain") in seed_rows
+    assert ("chat.acme.example", "subdomain") in seed_rows
+    assert seed_rows[("matrixblue", "username")].metadata["platform"] == "matrix"
+    assert seed_rows[("matrix.acme.example", "subdomain")].metadata["rule"] == (
+        "social_profile_matrix_homeserver"
+    )
+    assert ("security@acme.example", "matrixblue", "same_entity") in relations
+    assert ("security@acme.example", "nestedblue", "same_entity") in relations
+    assert ("security@acme.example", "matrix.acme.example", "related_asset") in relations
+    assert ("security@acme.example", "chat.acme.example", "related_asset") in relations
 
 
-@pytest.mark.slow
-def test_synthesis_engine_promotes_federated_acct_ids_to_recursive_user_and_instance_seeds(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
+def test_synthesis_engine_promotes_federated_acct_ids_to_recursive_user_and_instance_seeds() -> None:
+    payload = [
+        {
+            "platform": "mastodon",
+            "acct": "acct:fedblue@social.acme.example",
+            "profile_url": "https://social.acme.example/@fedblue",
+        },
+        {
+            "service": "ActivityPub",
+            "webfinger": "https://social.acme.example/.well-known/webfinger?resource=acct:nestedfed@mastodon.acme.example",
+        },
+        {
+            "platform": "mastodon",
+            "acct": "acct:publicuser@mastodon.social",
+        },
+        {
+            "platform": "mastodon",
+            "acct": "acct:octocat@github.com",
+        },
+        {
+            "platform": "mastodon",
+            "acct": "acct:about@social.acme.example",
+        },
+    ]
 
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'epieos',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
-        )
-        con.execute(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                1001,
-                "security@acme.example",
-                "identity_provider:activitypub",
-                json.dumps(
-                    [
-                        {
-                            "platform": "mastodon",
-                            "acct": "acct:fedblue@social.acme.example",
-                            "profile_url": "https://social.acme.example/@fedblue",
-                        },
-                        {
-                            "service": "ActivityPub",
-                            "webfinger": "https://social.acme.example/.well-known/webfinger?resource=acct:nestedfed@mastodon.acme.example",
-                        },
-                        {
-                            "platform": "mastodon",
-                            "acct": "acct:publicuser@mastodon.social",
-                        },
-                        {
-                            "platform": "mastodon",
-                            "acct": "acct:octocat@github.com",
-                        },
-                        {
-                            "platform": "mastodon",
-                            "acct": "acct:about@social.acme.example",
-                        },
-                    ]
-                ),
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
+    candidates = _social_profile_candidates_from_payload(
+        payload,
+        source="identity_provider:activitypub",
+    )
+    seed_rows = _social_profile_candidate_map(candidates)
+    relations = _social_profile_candidate_relations(candidates)
 
-    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
-
-    assert summary.seeds_inserted >= 5
-
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        seed_rows = {
-            (str(row["seed_value"]), str(row["seed_type"])): json.loads(
-                str(row["metadata_json"] or "{}")
-            )
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type, metadata_json
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("fedblue", "username") in seed_rows
-        assert ("nestedfed", "username") in seed_rows
-        assert ("publicuser", "username") in seed_rows
-        assert ("octocat", "username") not in seed_rows
-        assert ("about", "username") not in seed_rows
-        assert ("social.acme.example", "subdomain") in seed_rows
-        assert ("mastodon.acme.example", "subdomain") in seed_rows
-        assert ("mastodon.social", "domain") not in seed_rows
-        assert ("github.com", "domain") not in seed_rows
-        assert seed_rows[("fedblue", "username")]["platform"] == "mastodon"
-        assert seed_rows[("social.acme.example", "subdomain")]["rule"] == "social_profile_federated_instance"
-
-        relation_rows = {
-            (str(row[0]), str(row[1]), str(row[2]))
-            for row in con.execute(
-                """
-                SELECT src.seed_value, dst.seed_value, sr.relation_type
-                FROM seed_relations sr
-                JOIN engagement_seeds src ON src.id=sr.source_seed_id
-                JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-                WHERE sr.engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("security@acme.example", "fedblue", "same_entity") in relation_rows
-        assert ("security@acme.example", "nestedfed", "same_entity") in relation_rows
-        assert ("security@acme.example", "social.acme.example", "related_asset") in relation_rows
-        assert ("security@acme.example", "mastodon.acme.example", "related_asset") in relation_rows
-    finally:
-        con.close()
+    assert ("fedblue", "username") in seed_rows
+    assert ("nestedfed", "username") in seed_rows
+    assert ("publicuser", "username") in seed_rows
+    assert ("octocat", "username") not in seed_rows
+    assert ("about", "username") not in seed_rows
+    assert ("social.acme.example", "subdomain") in seed_rows
+    assert ("mastodon.acme.example", "subdomain") in seed_rows
+    assert ("mastodon.social", "domain") not in seed_rows
+    assert ("github.com", "domain") not in seed_rows
+    assert seed_rows[("fedblue", "username")].metadata["platform"] == "mastodon"
+    assert seed_rows[("social.acme.example", "subdomain")].metadata["rule"] == (
+        "social_profile_federated_instance"
+    )
+    assert ("security@acme.example", "fedblue", "same_entity") in relations
+    assert ("security@acme.example", "nestedfed", "same_entity") in relations
+    assert ("security@acme.example", "social.acme.example", "related_asset") in relations
+    assert ("security@acme.example", "mastodon.acme.example", "related_asset") in relations
 
 
-@pytest.mark.slow
-def test_synthesis_engine_promotes_nostr_public_ids_to_recursive_identity_seeds(
-    tmp_path: Path,
-) -> None:
-    db_path = tmp_path / "engagement.db"
-    _bootstrap_engagement(db_path)
+def test_synthesis_engine_promotes_nostr_public_ids_to_recursive_identity_seeds() -> None:
     npub_direct = "npub1" + "q" * 58
     npub_url = "npub1" + "p" * 58
 
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS social_profiles (
-                id INTEGER PRIMARY KEY,
-                engagement_id INTEGER NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT NOT NULL DEFAULT 'epieos',
-                profile_data TEXT,
-                queried_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(engagement_id, email, source)
-            )
-            """
-        )
-        con.execute(
-            """
-            INSERT INTO social_profiles (engagement_id, email, source, profile_data)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                1001,
-                "security@acme.example",
-                "identity_provider:nostr",
-                json.dumps(
-                    [
-                        {
-                            "platform": "nostr",
-                            "npub": npub_direct,
-                            "profile_url": f"nostr:{npub_direct}",
-                        },
-                        {
-                            "service": "Nostr Protocol",
-                            "profile_url": f"https://primal.net/p/{npub_url}",
-                        },
-                        {
-                            "platform": "nostr",
-                            "username": "settings",
-                            "profile_url": "https://primal.net/settings",
-                        },
-                    ]
-                ),
-            ),
-        )
-        con.commit()
-    finally:
-        con.close()
+    payload = [
+        {
+            "platform": "nostr",
+            "npub": npub_direct,
+            "profile_url": f"nostr:{npub_direct}",
+        },
+        {
+            "service": "Nostr Protocol",
+            "profile_url": f"https://primal.net/p/{npub_url}",
+        },
+        {
+            "platform": "nostr",
+            "username": "settings",
+            "profile_url": "https://primal.net/settings",
+        },
+    ]
 
-    summary = EngagementSynthesisEngine(db_path, 1001, depth_limit=3).run()
+    candidates = _social_profile_candidates_from_payload(
+        payload,
+        source="identity_provider:nostr",
+    )
+    seed_rows = _social_profile_candidate_map(candidates)
+    relations = _social_profile_candidate_relations(candidates)
 
-    assert summary.seeds_inserted >= 2
-
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        seed_rows = {
-            (str(row["seed_value"]), str(row["seed_type"])): json.loads(
-                str(row["metadata_json"] or "{}")
-            )
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type, metadata_json
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert (npub_direct, "username") in seed_rows
-        assert (npub_url, "username") in seed_rows
-        assert ("settings", "username") not in seed_rows
-        assert seed_rows[(npub_direct, "username")]["platform"] == "nostr"
-        assert seed_rows[(npub_direct, "username")]["rule"] == "social_profile_handle"
-
-        relation_rows = {
-            (str(row[0]), str(row[1]), str(row[2]))
-            for row in con.execute(
-                """
-                SELECT src.seed_value, dst.seed_value, sr.relation_type
-                FROM seed_relations sr
-                JOIN engagement_seeds src ON src.id=sr.source_seed_id
-                JOIN engagement_seeds dst ON dst.id=sr.target_seed_id
-                WHERE sr.engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("security@acme.example", npub_direct, "same_entity") in relation_rows
-        assert ("security@acme.example", npub_url, "same_entity") in relation_rows
-    finally:
-        con.close()
+    assert (npub_direct, "username") in seed_rows
+    assert (npub_url, "username") in seed_rows
+    assert ("settings", "username") not in seed_rows
+    assert seed_rows[(npub_direct, "username")].metadata["platform"] == "nostr"
+    assert seed_rows[(npub_direct, "username")].metadata["rule"] == "social_profile_handle"
+    assert ("security@acme.example", npub_direct, "same_entity") in relations
+    assert ("security@acme.example", npub_url, "same_entity") in relations
 
 
 def test_synthesis_engine_skips_synthetic_rfc2544_ips_but_keeps_host_seeds(tmp_path: Path) -> None:

@@ -1,6 +1,6 @@
 # Claude Quick Handoff
 
-Last updated: 2026-08-05
+Last updated: 2026-08-08
 
 End goal quick answer: FORGE must be one deterministic authorized engagement
 pipeline from scoped multi-seed intake through bounded recursive discovery,
@@ -23,7 +23,21 @@ Runtime `/goal` state, chat summaries, and old handoff notes are advisory only;
 if they conflict with those docs, keep the goal lock and correct the stale
 continuation note instead of redefining the project.
 
-Latest checkpoint (2026-08-08): cross-platform local-operator runnable work
+Latest checkpoint (2026-08-08): slow synthesis-test rewrite work landed in the
+working tree. Eight social-profile synthesis tests that were previously marked
+slow now assert candidate generation, metadata, reserved-handle filtering, and
+relation intent directly through `EngagementSynthesisEngine` helpers instead
+of bootstrapping SQLite engagements and running full synthesis. The old "6
+remaining slow synthesis-engine tests" handoff count is stale: four broad
+persistence/backfill synthesis integration guards remain marked slow on
+purpose. GitHub Dependabot alerts for `pytest<9.0.3` and `vcrpy<8.2.1` are
+reported fixed. Verification: py_compile for the touched phase1 test file
+passed; focused pytest node run for the eight rewritten tests passed
+(`8 passed`). Collection still imports the monolithic phase1 test file, so the
+focused run remains slow at collection time even though the rewritten tests no
+longer do full DB synthesis runs.
+
+Previous checkpoint (2026-08-08): cross-platform local-operator runnable work
 landed in the working tree. macOS/Linux now have POSIX launcher parity for
 setup, menu, kill-chain prompts, status, report generation, hydration/local
 workspace verification, and the dev/evidence Docker stack. Windows
@@ -82,12 +96,12 @@ P2/P3 UX drift items ([`203ad86`](../../commit/203ad86),
 [`c0e2cd5`](../../commit/c0e2cd5), [`9a8de32`](../../commit/9a8de32),
 [`11d76b5`](../../commit/11d76b5), [`a6ea92d`](../../commit/a6ea92d)).
 
-Next-agent focus: (a) rewrite the 6 remaining slow synthesis-engine tests
-into narrow unit tests to unlock a fast one-shot Phase 1 suite; (b) close open
-Dependabot findings on `hongyime/FORGE`; (c) keep expanding provider-specific
-validation depth for the remaining long-tail providers before considering any
-broader provider work. Older resume notes below remain accurate for
-pre-2026-08-05 context.
+Next-agent focus: (a) reduce the four remaining slow synthesis integration
+guards only if their persistence/backfill assertions can be preserved as narrow
+unit coverage; (b) keep expanding provider-specific validation depth only where
+a concrete long-tail low-signal proof gap is found; (c) continue safe passive
+parser coverage only for concrete missing artifact/source shapes. Older resume
+notes below remain accurate for pre-2026-08-05 context.
 
 ---
 
