@@ -5,7 +5,7 @@ param(
     [string]$TphEnvPath = "X:\01 REPOSITORIES\theprawnhunter\.env",
     [int]$EveryMinutes = 30,
     [ValidateSet("ImportOnly", "LowAndSlow", "Operator")]
-    [string]$Profile = "ImportOnly",
+    [string]$Profile = "Operator",
     [int]$Limit = 0,
     [int]$MaxIter = 0,
     [int]$StartLimit = 0,
