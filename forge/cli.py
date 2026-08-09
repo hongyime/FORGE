@@ -408,6 +408,11 @@ def targets_import(
         "--max-iter",
         help="Passive kill-chain max iterations when --start is used.",
     ),
+    start_limit: Optional[int] = typer.Option(
+        None,
+        "--start-limit",
+        help="Maximum new passive kill-chain runs to launch during this import.",
+    ),
 ) -> None:
     """Import generic sanitized target feeds into one engagement per target."""
     try:
@@ -422,6 +427,7 @@ def targets_import(
             dry_run=dry_run,
             limit=limit,
             max_iter=max_iter,
+            start_limit=start_limit,
         )
     except Exception as exc:
         raise typer.BadParameter(str(exc)) from exc

@@ -175,6 +175,94 @@ def test_start_launches_passive_kill_chain_with_scope_and_roe(
     assert "--auto-run-detected" not in command
 
 
+def test_start_limit_caps_passive_kill_chain_launches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+    calls: list[list[str]] = []
+
+    def _fake_run(command: list[str], *, check: bool) -> object:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=2,
+        max_iter=3,
+        start_limit=1,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert [result.started for result in results] == [True, False]
+    assert len(calls) == 1
+
+
+def test_start_skips_engagement_with_existing_kill_chain_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+    first = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=False,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+    db_path = cfg.engagement_db_path("1")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO engagement_runs
+                (engagement_id, run_kind, status, seed_value, seed_type)
+            VALUES (?, 'kill_chain', 'completed', ?, ?)
+            """,
+            (1, first[0].target_value, first[0].target_type),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "forge.targets_import.subprocess.run",
+        lambda command, *, check: calls.append(command),
+    )
+
+    second = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert second[0].created is False
+    assert second[0].started is False
+    assert calls == []
+
+
 def test_start_requires_roe_before_engagement_write(tmp_path: Path) -> None:
     feed_path = tmp_path / "feed.json"
     _write_feed(feed_path)

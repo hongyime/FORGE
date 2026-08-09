@@ -5,7 +5,9 @@ param(
     [string]$TphEnvPath = "X:\01 REPOSITORIES\theprawnhunter\.env",
     [int]$EveryMinutes = 30,
     [int]$Limit = 1000,
+    [int]$StartLimit = 3,
     [int]$WaitSeconds = 60,
+    [bool]$Start = $true,
     [switch]$DryRun,
     [switch]$Uninstall
 )
@@ -27,10 +29,11 @@ $interval = [Math]::Max(5, $EveryMinutes)
 $launcherDir = Join-Path $PSScriptRoot "scheduled"
 $launcher = Join-Path $launcherDir "forge_tph_import.cmd"
 $dryRunArg = if ($DryRun) { " -DryRun" } else { "" }
+$startArg = if ($Start) { " -Start" } else { "" }
 $launcherBody = @"
 @echo off
 setlocal
-call powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$runner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -WaitSeconds $WaitSeconds$dryRunArg
+call powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$runner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -StartLimit $StartLimit -WaitSeconds $WaitSeconds$startArg$dryRunArg
 set "RESULT=%ERRORLEVEL%"
 exit /b %RESULT%
 "@
@@ -42,8 +45,8 @@ $trigger = New-ScheduledTaskTrigger `
     -RepetitionInterval (New-TimeSpan -Minutes $interval) `
     -RepetitionDuration (New-TimeSpan -Days 3650)
 $action = New-ScheduledTaskAction `
-    -Execute $env:ComSpec `
-    -Argument "/d /c `"$launcher`"" `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`" -ApiUrl `"$ApiUrl`" -TphEnvPath `"$TphEnvPath`" -Limit $Limit -StartLimit $StartLimit -WaitSeconds $WaitSeconds$startArg$dryRunArg" `
     -WorkingDirectory $launcherDir
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
@@ -60,4 +63,5 @@ Register-ScheduledTask `
 
 Write-Host "Installed scheduled task: $TaskName"
 Write-Host "Runs every $interval minute(s) while Windows is running."
+Write-Host "Start enabled: $Start; max new passive runs per import: $StartLimit"
 Write-Host "Launcher: $launcher"

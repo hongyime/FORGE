@@ -92,6 +92,7 @@ def import_targets(
     dry_run: bool,
     limit: int | None,
     max_iter: int,
+    start_limit: int | None = None,
     config: ForgeConfig | None = None,
 ) -> list[TargetImportResult]:
     if start and not str(roe_id or "").strip():
@@ -104,6 +105,7 @@ def import_targets(
         limit=limit,
     )
     results: list[TargetImportResult] = []
+    starts_remaining = _normalize_start_limit(start_limit)
     for item in items:
         if dry_run:
             results.append(
@@ -123,7 +125,11 @@ def import_targets(
         engagement_id, created = _create_or_reuse_engagement(cfg, item)
         manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
         started = False
-        if start:
+        if (
+            start
+            and starts_remaining != 0
+            and not _has_passive_kill_chain_run(cfg, engagement_id, item.canonical_value)
+        ):
             _start_passive_kill_chain(
                 engagement_id=engagement_id,
                 seed=item.canonical_value,
@@ -132,6 +138,8 @@ def import_targets(
                 max_iter=max_iter,
             )
             started = True
+            if starts_remaining is not None:
+                starts_remaining -= 1
         results.append(
             TargetImportResult(
                 engagement_id=engagement_id,
@@ -185,6 +193,15 @@ def _normalize_limit(limit: int | None) -> int:
     if value <= 0:
         raise ValueError("--limit must be greater than zero")
     return min(value, 1_000)
+
+
+def _normalize_start_limit(start_limit: int | None) -> int | None:
+    if start_limit is None:
+        return None
+    value = int(start_limit)
+    if value <= 0:
+        raise ValueError("--start-limit must be greater than zero")
+    return value
 
 
 def _coerce_feed_item(raw_item: object) -> TargetFeedItem | None:
@@ -363,6 +380,31 @@ def _write_scope_manifest(
     }
     manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return manifest_path
+
+
+def _has_passive_kill_chain_run(cfg: ForgeConfig, engagement_id: int, seed: str) -> bool:
+    db_path = cfg.engagement_db_path(str(engagement_id))
+    if not db_path.exists():
+        return False
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM engagement_runs
+            WHERE engagement_id=?
+              AND run_kind='kill_chain'
+              AND seed_value=?
+              AND status IN ('running', 'completed')
+            LIMIT 1
+            """,
+            (engagement_id, seed),
+        ).fetchone()
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+    return row is not None
 
 
 def _start_passive_kill_chain(

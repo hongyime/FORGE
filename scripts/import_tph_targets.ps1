@@ -5,6 +5,7 @@ param(
     [string]$RoeId = "",
     [int]$Limit = 100,
     [int]$MaxIter = 3,
+    [int]$StartLimit = 3,
     [int]$WaitSeconds = 180,
     [switch]$DryRun,
     [switch]$Start
@@ -105,7 +106,8 @@ $args = @(
     "--feed-url", $feedUrl,
     "--auth-header-env", "TPH_MONITOR_KEY",
     "--limit", [string]$Limit,
-    "--max-iter", [string]$MaxIter
+    "--max-iter", [string]$MaxIter,
+    "--start-limit", [string]$StartLimit
 )
 if ($RoeId) {
     $args += @("--roe-id", $RoeId)
