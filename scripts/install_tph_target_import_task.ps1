@@ -5,8 +5,13 @@ param(
     [string]$TphEnvPath = "X:\01 REPOSITORIES\theprawnhunter\.env",
     [int]$EveryMinutes = 30,
     [int]$Limit = 1000,
-    [int]$StartLimit = 3,
+    [int]$MaxIter = 1,
+    [int]$StartLimit = 1,
     [int]$WaitSeconds = 60,
+    [int]$TimeoutMinutes = 25,
+    [int]$StopGraceSeconds = 60,
+    [int]$ModuleTimeoutSeconds = 240,
+    [int]$StaleRunMinutes = 90,
     [bool]$Start = $true,
     [switch]$DryRun,
     [switch]$Uninstall
@@ -24,6 +29,10 @@ $runner = Join-Path $PSScriptRoot "import_tph_targets.ps1"
 if (-not (Test-Path $runner)) {
     throw "import runner not found: $runner"
 }
+$taskRunner = Join-Path $PSScriptRoot "run_tph_target_import_task.ps1"
+if (-not (Test-Path $taskRunner)) {
+    throw "scheduled task runner not found: $taskRunner"
+}
 
 $interval = [Math]::Max(5, $EveryMinutes)
 $launcherDir = Join-Path $PSScriptRoot "scheduled"
@@ -33,7 +42,7 @@ $startArg = if ($Start) { " -Start" } else { "" }
 $launcherBody = @"
 @echo off
 setlocal
-call powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$runner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -StartLimit $StartLimit -WaitSeconds $WaitSeconds$startArg$dryRunArg
+call powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$taskRunner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg
 set "RESULT=%ERRORLEVEL%"
 exit /b %RESULT%
 "@
@@ -46,12 +55,12 @@ $trigger = New-ScheduledTaskTrigger `
     -RepetitionDuration (New-TimeSpan -Days 3650)
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runner`" -ApiUrl `"$ApiUrl`" -TphEnvPath `"$TphEnvPath`" -Limit $Limit -StartLimit $StartLimit -WaitSeconds $WaitSeconds$startArg$dryRunArg" `
+    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$taskRunner`" -ApiUrl `"$ApiUrl`" -TphEnvPath `"$TphEnvPath`" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg" `
     -WorkingDirectory $launcherDir
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 45) `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes ([Math]::Max($TimeoutMinutes + 5, 10))) `
     -MultipleInstances IgnoreNew
 
 Register-ScheduledTask `
@@ -63,5 +72,7 @@ Register-ScheduledTask `
 
 Write-Host "Installed scheduled task: $TaskName"
 Write-Host "Runs every $interval minute(s) while Windows is running."
-Write-Host "Start enabled: $Start; max new passive runs per import: $StartLimit"
+Write-Host "Start enabled: $Start; max new passive runs per import: $StartLimit; max iterations per run: $MaxIter"
+Write-Host "Watchdog timeout: $TimeoutMinutes minute(s)"
+Write-Host "Graceful stop window: $StopGraceSeconds second(s); module timeout: $ModuleTimeoutSeconds second(s)"
 Write-Host "Launcher: $launcher"

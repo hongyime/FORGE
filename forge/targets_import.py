@@ -106,6 +106,7 @@ def import_targets(
     )
     results: list[TargetImportResult] = []
     starts_remaining = _normalize_start_limit(start_limit)
+    existing_targets = _external_target_engagement_index(cfg)
     for item in items:
         if dry_run:
             results.append(
@@ -122,7 +123,7 @@ def import_targets(
             )
             continue
 
-        engagement_id, created = _create_or_reuse_engagement(cfg, item)
+        engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
         manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
         started = False
         if (
@@ -268,8 +269,9 @@ def _bounded_text(value: object, max_len: int) -> str:
 def _create_or_reuse_engagement(
     cfg: ForgeConfig,
     item: TargetFeedItem,
+    existing_targets: dict[str, int],
 ) -> tuple[int, bool]:
-    existing_id = _find_existing_engagement_id(cfg, item.target_key)
+    existing_id = existing_targets.get(item.target_key)
     if existing_id is not None:
         return existing_id, False
 
@@ -325,10 +327,12 @@ def _create_or_reuse_engagement(
         conn.commit()
     finally:
         conn.close()
+    existing_targets[item.target_key] = engagement_id
     return engagement_id, True
 
 
-def _find_existing_engagement_id(cfg: ForgeConfig, target_key: str) -> int | None:
+def _external_target_engagement_index(cfg: ForgeConfig) -> dict[str, int]:
+    targets: dict[str, int] = {}
     for db_path in numeric_engagement_db_files(cfg.data_dir):
         conn = sqlite3.connect(db_path)
         try:
@@ -345,9 +349,10 @@ def _find_existing_engagement_id(cfg: ForgeConfig, target_key: str) -> int | Non
             metadata = json.loads(str(row[1] or "{}"))
         except json.JSONDecodeError:
             metadata = {}
-        if isinstance(metadata, dict) and metadata.get("external_target_key") == target_key:
-            return int(row[0])
-    return None
+        target_key = metadata.get("external_target_key") if isinstance(metadata, dict) else None
+        if isinstance(target_key, str) and target_key:
+            targets[target_key] = int(row[0])
+    return targets
 
 
 def _scope_json_for_item(item: TargetFeedItem) -> dict[str, list[str]]:
