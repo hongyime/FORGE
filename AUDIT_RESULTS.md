@@ -124,7 +124,7 @@ silently degrades.
 | # | Fix | Status |
 |---|---|---|
 | P0 | Reverted `.env` `FORGE_LLM_PROVIDER` → `auto` | ✅ |
-| P1 | Updated `FORGE_GITHUB_TOKEN` in `.env` | ✅ verified as `bryanseah234`, 4911/5000 rate-limit remaining |
+| P1 | Updated `FORGE_GITHUB_TOKEN` in `.env` | ✅ verified as `theprawnorganisation`, 4911/5000 rate-limit remaining |
 | P2 | Added `FORGE_NVD_API_KEY` to `.env` | ✅ verified, 364,119 CVEs accessible |
 | P3 | Verified both keys with live GET | ✅ HTTP 200 |
 | P4 | Wired NVD API key into `nvd_fetcher.py:_http_get` | ✅ + FORGE_KB_USE_PROXY gate |
@@ -204,14 +204,14 @@ silently degrades.
 
 | Command | Status | Notes |
 |---|---|---|
-| `osint xposed` | ~~P1~~ **FIXED** | 1 real breach row on `bryanseah234@gmail.com` after scope fix |
+| `osint xposed` | ~~P1~~ **FIXED** | 1 real breach row on `contact@example.com` after scope fix |
 | `osint accounts` (holehe) | ~~P0~~ **FIXED** | 9 account-existence rows written after scope fix |
 | `osint hibp` | PASS | Domain-level check works |
 | `osint harvest` | PASS | theHarvester ran all 5 sources |
 | `osint breach` | ~~P0~~ **FIXED** | Clean skip when DB missing |
 | `osint social` (epieos) | ~~P0~~ **FIXED** | Runs; Epieos returns 403 upstream (their block) |
 | `osint usernames --backend sherlock` | P1 | Silent 0 rows; sherlock backend broken |
-| `osint phone +6592348112` | PASS | Full 4-tier: parse + PhoneInfoga + Telegram/WhatsApp + dork mining |
+| `osint phone 00000000` | PASS | Full 4-tier: parse + PhoneInfoga + Telegram/WhatsApp + dork mining |
 | `osint name "Bryan Seah"` | PASS | Zero hits (DDG rate-limit expected) |
 | `osint gravatar` | PASS | 5 social profiles written (Threads/X/LinkedIn/TikTok + summary) |
 | `osint keyscan --dry-run` | PASS | 12 patterns iterated |
@@ -220,7 +220,7 @@ silently degrades.
 
 | Command | Status | Notes |
 |---|---|---|
-| `osint google` (ghunt) | PASS | gaia_id + Maps/Meet services on `bryanseah234@gmail.com` |
+| `osint google` (ghunt) | PASS | gaia_id + Maps/Meet services on `contact@example.com` |
 | `osint linkedin` | PASS | DDG returned 0 results (rate-limited); code path clean |
 | `osint urlscan` | PASS | 8 scans, 5 IPs, 2 related domains |
 | `osint instagram` | DEGRADE | Instagram returned 429 (expected); clean MISS |
