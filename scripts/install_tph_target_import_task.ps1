@@ -4,7 +4,7 @@ param(
     [string]$ApiUrl = "http://127.0.0.1:8011/monitor/targets/export",
     [string]$TphEnvPath = "X:\01 REPOSITORIES\theprawnhunter\.env",
     [int]$EveryMinutes = 30,
-    [int]$Limit = 25,
+    [int]$Limit = 1000,
     [int]$WaitSeconds = 60,
     [switch]$DryRun,
     [switch]$Uninstall
@@ -48,7 +48,7 @@ $action = New-ScheduledTaskAction `
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 15) `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 45) `
     -MultipleInstances IgnoreNew
 
 Register-ScheduledTask `
