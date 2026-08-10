@@ -20,7 +20,9 @@ def test_client_config_structured_payloads_use_bounded_workers_and_preserve_orde
         return original_batch(self, materialized, worker, default_factory=default_factory)
 
     monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-    monkeypatch.setattr(orchestrator, "connection_client_config_artifact_label", lambda _: "winscp-config")
+    monkeypatch.setattr(
+        orchestrator, "connection_client_config_artifact_label", lambda _: "winscp-config"
+    )
     monkeypatch.setattr(
         orchestrator,
         "connection_client_host_candidates",
@@ -67,30 +69,46 @@ def test_client_config_structured_payloads_use_bounded_workers_and_preserve_orde
     monkeypatch.setattr(
         orchestrator,
         "framework_config_service_endpoint_candidates",
-        lambda _: ["redis://cache.acme.example", "REDIS://cache.acme.example", "amqp://mq.acme.example"],
+        lambda _: [
+            "redis://cache.acme.example",
+            "REDIS://cache.acme.example",
+            "amqp://mq.acme.example",
+        ],
     )
 
-    assert processor._connection_client_structured_payload_text("payload", source_hint="WinSCP.ini").splitlines() == [
+    assert processor._connection_client_structured_payload_text(
+        "payload", source_hint="WinSCP.ini"
+    ).splitlines() == [
         "ssh://alpha.acme.example",
         "ssh://beta.acme.example",
     ]
-    assert processor._database_client_structured_payload_text("payload", source_hint="data-sources.json").splitlines() == [
+    assert processor._database_client_structured_payload_text(
+        "payload", source_hint="data-sources.json"
+    ).splitlines() == [
         "postgres://Db.Acme.Example/prod",
         "mysql://mysql.acme.example/prod",
     ]
-    assert processor._storage_client_config_structured_payload_text("payload", source_hint=".s3cfg").splitlines() == [
+    assert processor._storage_client_config_structured_payload_text(
+        "payload", source_hint=".s3cfg"
+    ).splitlines() == [
         "s3://Acme-Bucket",
         "https://storage.acme.example",
     ]
-    assert processor._amplify_client_config_structured_payload_text("payload", source_hint="aws-exports.js").splitlines() == [
+    assert processor._amplify_client_config_structured_payload_text(
+        "payload", source_hint="aws-exports.js"
+    ).splitlines() == [
         "aws-cognito-user-pool://us-east-1_AbC",
         "https://api.acme.example/graphql",
     ]
-    assert processor._orm_config_structured_payload_text("payload", source_hint="schema.prisma").splitlines() == [
+    assert processor._orm_config_structured_payload_text(
+        "payload", source_hint="schema.prisma"
+    ).splitlines() == [
         "postgres://orm-one.acme.example",
         "postgres://orm-two.acme.example",
     ]
-    assert processor._framework_config_structured_payload_text("payload", source_hint="database.yml").splitlines() == [
+    assert processor._framework_config_structured_payload_text(
+        "payload", source_hint="database.yml"
+    ).splitlines() == [
         "postgres://fw-one.acme.example",
         "postgres://fw-two.acme.example",
         "redis://cache.acme.example",

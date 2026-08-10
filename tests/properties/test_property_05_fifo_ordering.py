@@ -113,9 +113,7 @@ def _message_sequences(draw: st.DrawFn) -> list[AgentMessage]:
 # ---------------------------------------------------------------------------
 
 
-async def _drain_inmemory_bus(
-    bus: InMemoryMessageBus, topic: str, n: int
-) -> list[AgentMessage]:
+async def _drain_inmemory_bus(bus: InMemoryMessageBus, topic: str, n: int) -> list[AgentMessage]:
     """Drain exactly ``n`` messages from ``bus`` on ``topic``.
 
     ``InMemoryMessageBus.subscribe`` is an async generator that loops on
@@ -174,9 +172,7 @@ async def _publish_through_mocked_redis(
 
         # Reconstruct the ordered sequence of (channel, payload_str) pairs
         # actually written to Redis.
-        return [
-            (call.args[0], call.args[1]) for call in mock_redis.publish.call_args_list
-        ]
+        return [(call.args[0], call.args[1]) for call in mock_redis.publish.call_args_list]
     finally:
         # Avoid invoking close() — it would touch the mocked client and is
         # unnecessary for an instance that never opened a real connection.
@@ -212,8 +208,7 @@ def test_property_5_inmemory_bus_preserves_fifo_per_topic(
     expected_ids = [m.correlation_id for m in messages]
     actual_ids = [m.correlation_id for m in received]
     assert actual_ids == expected_ids, (
-        f"FIFO violated on correlation_ids: expected {expected_ids!r}, "
-        f"got {actual_ids!r}"
+        f"FIFO violated on correlation_ids: expected {expected_ids!r}, got {actual_ids!r}"
     )
 
     # Position-for-position payload equality exercises every nested JSON value.
@@ -261,8 +256,7 @@ def test_property_5_redis_bus_publishes_in_fifo_order_with_mocked_client(
     expected_ids = [m.correlation_id for m in messages]
     actual_ids = [entry["correlation_id"] for entry in decoded_payloads]
     assert actual_ids == expected_ids, (
-        f"Redis FIFO violated on correlation_ids: expected {expected_ids!r}, "
-        f"got {actual_ids!r}"
+        f"Redis FIFO violated on correlation_ids: expected {expected_ids!r}, got {actual_ids!r}"
     )
 
     expected_payloads = [m.payload for m in messages]

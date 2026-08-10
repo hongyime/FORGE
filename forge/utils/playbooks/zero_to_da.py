@@ -9,6 +9,7 @@ Steps:
 
 OPSEC: Max 3 attempts/hour/user. Checks _SHUTDOWN per iteration.
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,7 +48,9 @@ def run_zero_to_da_playbook(
 
     # Step 1: Spray credentials
     spray_result = spray_credentials(
-        engagement_id, target_hosts, eng_db_conn,
+        engagement_id,
+        target_hosts,
+        eng_db_conn,
         protocols=protocols or ["ssh", "smb", "winrm"],
         dry_run=dry_run,
         roe_id=roe_id,
@@ -88,7 +91,11 @@ def run_zero_to_da_playbook(
                 da_achieved = True
 
     if _SHUTDOWN.is_set():
-        return {"da_achieved": da_achieved, "hosts_compromised": len(hits), "iterations": _iteration + 1}
+        return {
+            "da_achieved": da_achieved,
+            "hosts_compromised": len(hits),
+            "iterations": _iteration + 1,
+        }
 
     # Step 4: Loop with new credentials
     _interruptible_sleep(5.0)

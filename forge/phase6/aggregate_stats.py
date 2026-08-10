@@ -76,9 +76,7 @@ class EngagementAggregateStats:
             "severity_histogram": self.severity_histogram.as_dict(),
             "per_provider_findings": dict(self.per_provider_findings),
             "discovery_timeline": list(self.discovery_timeline),
-            "time_to_discovery": {
-                sev: asdict(ttd) for sev, ttd in self.time_to_discovery.items()
-            },
+            "time_to_discovery": {sev: asdict(ttd) for sev, ttd in self.time_to_discovery.items()},
             "scope_coverage_pct": self.scope_coverage_pct,
             "validation_rate_pct": self.validation_rate_pct,
             "report_family_export_status": dict(self.report_family_export_status),
@@ -107,9 +105,7 @@ def compute_stats(
         time_to_discovery=_time_to_discovery(conn, engagement_id),
         scope_coverage_pct=_scope_coverage_pct(conn, engagement_id),
         validation_rate_pct=_validation_rate_pct(conn, engagement_id),
-        report_family_export_status=_report_family_export_status(
-            engagement_id, reports_dir
-        ),
+        report_family_export_status=_report_family_export_status(engagement_id, reports_dir),
         deterministic_vs_llm_split=_deterministic_vs_llm_split(conn, engagement_id),
     )
 
@@ -119,8 +115,7 @@ def _severity_histogram(conn: sqlite3.Connection, eid: int) -> SeverityHistogram
     for table in ("vulnerability_findings", "passive_vulns"):
         try:
             rows = conn.execute(
-                f"SELECT severity, COUNT(*) FROM {table} "
-                f"WHERE engagement_id=? GROUP BY severity",
+                f"SELECT severity, COUNT(*) FROM {table} WHERE engagement_id=? GROUP BY severity",
                 (eid,),
             ).fetchall()
         except sqlite3.OperationalError:
@@ -149,9 +144,7 @@ def _per_provider_findings(conn: sqlite3.Connection, eid: int) -> dict[str, int]
     return result
 
 
-def _discovery_timeline(
-    conn: sqlite3.Connection, eid: int
-) -> list[dict[str, Any]]:
+def _discovery_timeline(conn: sqlite3.Connection, eid: int) -> list[dict[str, Any]]:
     """Histogram of finding-discovery timestamps bucketed by day."""
     result: list[dict[str, Any]] = []
     try:
@@ -166,17 +159,17 @@ def _discovery_timeline(
     for day, severity, count in rows:
         if not day:
             continue
-        result.append({
-            "day": str(day),
-            "severity": str(severity or "INFO").upper(),
-            "count": int(count or 0),
-        })
+        result.append(
+            {
+                "day": str(day),
+                "severity": str(severity or "INFO").upper(),
+                "count": int(count or 0),
+            }
+        )
     return result
 
 
-def _time_to_discovery(
-    conn: sqlite3.Connection, eid: int
-) -> dict[str, TimeToDiscovery]:
+def _time_to_discovery(conn: sqlite3.Connection, eid: int) -> dict[str, TimeToDiscovery]:
     """p50/p90/max seconds from engagement.created_at to first finding
     per severity bucket."""
     result = {sev: TimeToDiscovery() for sev in SEVERITY_ORDER}
@@ -259,8 +252,7 @@ def _scope_coverage_pct(conn: sqlite3.Connection, eid: int) -> float:
     if not probed_hosts:
         return 0.0
     matched = sum(
-        1 for d in domains
-        if any(host == d or host.endswith("." + d) for host in probed_hosts)
+        1 for d in domains if any(host == d or host.endswith("." + d) for host in probed_hosts)
     )
     return round(100.0 * matched / len(domains), 2)
 
@@ -286,9 +278,7 @@ def _validation_rate_pct(conn: sqlite3.Connection, eid: int) -> float:
     return round(100.0 * passed / total, 2)
 
 
-def _report_family_export_status(
-    engagement_id: int, reports_dir: Path | None
-) -> dict[str, bool]:
+def _report_family_export_status(engagement_id: int, reports_dir: Path | None) -> dict[str, bool]:
     """Which of MD/JSON/CSV/HTML landed on disk for this engagement."""
     if reports_dir is None:
         return {"markdown": False, "json": False, "csv": False, "html": False}
@@ -312,9 +302,7 @@ def _report_family_export_status(
     return result
 
 
-def _deterministic_vs_llm_split(
-    conn: sqlite3.Connection, eid: int
-) -> dict[str, float]:
+def _deterministic_vs_llm_split(conn: sqlite3.Connection, eid: int) -> dict[str, float]:
     """Split of report narrative source.
 
     Reads run_summary.report_provider and report_summary.render_backend
@@ -338,8 +326,15 @@ def _deterministic_vs_llm_split(
     render_backend = str(metadata.get("render_backend") or "").lower().strip()
     if render_backend == "template":
         return {"deterministic": 100.0, "llm": 0.0}
-    if render_backend in {"kiro_cli", "claude_code", "codex_cli", "gemini_cli",
-                           "bedrock_anthropic", "openai_compatible", "llama_cpp"}:
+    if render_backend in {
+        "kiro_cli",
+        "claude_code",
+        "codex_cli",
+        "gemini_cli",
+        "bedrock_anthropic",
+        "openai_compatible",
+        "llama_cpp",
+    }:
         # LLM-driven, but validators may have re-derived deterministic
         # portions. We don't have that breakdown from the run metadata
         # today; report 100% LLM for now — future task can split by
@@ -376,7 +371,7 @@ def render_markdown_block(stats: EngagementAggregateStats) -> str:
     hist = stats.severity_histogram.as_dict()
     labels = ", ".join(f'"{sev}"' for sev in SEVERITY_ORDER)
     values = ", ".join(str(hist[sev]) for sev in SEVERITY_ORDER)
-    lines.append(f'    x-axis [{labels}]')
+    lines.append(f"    x-axis [{labels}]")
     max_val = max(hist.values()) if hist.values() else 0
     lines.append(f'    y-axis "Count" 0 --> {max(max_val, 1)}')
     lines.append(f"    bar [{values}]")
@@ -388,9 +383,7 @@ def render_markdown_block(stats: EngagementAggregateStats) -> str:
         lines.append("")
         lines.append("| Provider | Count |")
         lines.append("|---|---|")
-        for provider, count in sorted(
-            stats.per_provider_findings.items(), key=lambda x: -x[1]
-        ):
+        for provider, count in sorted(stats.per_provider_findings.items(), key=lambda x: -x[1]):
             lines.append(f"| {provider} | {count} |")
         lines.append("")
 

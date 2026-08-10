@@ -178,11 +178,13 @@ class TwilioValidator:
         required = {"sid", "friendly_name", "status"}
         if not required.issubset(set(body.keys())):
             return ValidationResult(
-                False, self.provider,
+                False,
+                self.provider,
                 f"payload shape unexpected (keys: {sorted(body.keys())[:6]})",
             )
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "twilio account probe returned canonical fields",
             metadata={
                 "friendly_name": body.get("friendly_name"),
@@ -241,11 +243,13 @@ class SendGridValidator:
             return ValidationResult(False, self.provider, "non-JSON response")
         if "type" not in body or "reputation" not in body:
             return ValidationResult(
-                False, self.provider,
+                False,
+                self.provider,
                 f"payload shape unexpected (keys: {sorted(body.keys())[:6]})",
             )
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "sendgrid /user/account returned canonical fields",
             metadata={
                 "account_type": body.get("type"),
@@ -304,15 +308,19 @@ class SlackValidator:
         # Slack returns { "ok": true/false, "team_id": ..., "user_id": ... }
         if not body.get("ok"):
             return ValidationResult(
-                False, self.provider,
+                False,
+                self.provider,
                 f"slack rejected: {body.get('error', 'unknown')}",
             )
         if "team_id" not in body or "user_id" not in body:
             return ValidationResult(
-                False, self.provider, "auth.test missing team_id/user_id",
+                False,
+                self.provider,
+                "auth.test missing team_id/user_id",
             )
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "slack auth.test returned ok + team_id + user_id",
             metadata={
                 "team": body.get("team"),
@@ -371,11 +379,13 @@ class StripeValidator:
             return ValidationResult(False, self.provider, "non-JSON response")
         if body.get("object") != "account" or "id" not in body:
             return ValidationResult(
-                False, self.provider,
+                False,
+                self.provider,
                 "payload shape unexpected — expected object=account + id",
             )
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "stripe /v1/account returned account object",
             metadata={
                 "account_id": body.get("id"),
@@ -434,7 +444,9 @@ class MailchimpValidator:
         if "health_status" not in body:
             return ValidationResult(False, self.provider, "payload shape unexpected")
         return ValidationResult(
-            True, self.provider, "mailchimp /ping returned health_status",
+            True,
+            self.provider,
+            "mailchimp /ping returned health_status",
             metadata={
                 "datacenter": cred.material["datacenter"],
                 "health_status": body.get("health_status"),
@@ -451,9 +463,7 @@ class DiscordValidator:
     provider = "discord"
 
     # Discord bot tokens are three base64url segments separated by '.'
-    _TOKEN_RE = re.compile(
-        r"\b[MNOZ][A-Za-z0-9]{23,25}\.[A-Za-z0-9_\-]{6}\.[A-Za-z0-9_\-]{27,}\b"
-    )
+    _TOKEN_RE = re.compile(r"\b[MNOZ][A-Za-z0-9]{23,25}\.[A-Za-z0-9_\-]{6}\.[A-Za-z0-9_\-]{27,}\b")
 
     def matches(self, raw: str) -> bool:
         return bool(self._TOKEN_RE.search(raw or ""))
@@ -490,7 +500,9 @@ class DiscordValidator:
             # Rate limited — treat as UNVERIFIED and back off (don't retry
             # here; caller-level throttling handles that).
             return ValidationResult(
-                False, self.provider, "rate limited (429) — retry with backoff",
+                False,
+                self.provider,
+                "rate limited (429) — retry with backoff",
             )
         if r.status_code != 200:
             return ValidationResult(False, self.provider, f"http {r.status_code}")
@@ -501,7 +513,8 @@ class DiscordValidator:
         if "id" not in body or "username" not in body:
             return ValidationResult(False, self.provider, "payload shape unexpected")
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "discord /users/@me returned canonical fields",
             metadata={
                 "bot_id": body.get("id"),
@@ -550,7 +563,9 @@ class GitHubAppValidator:
     ) -> ValidationResult:
         if not cred.material.get("app_id"):
             return ValidationResult(
-                False, self.provider, "no paired app_id found in source text",
+                False,
+                self.provider,
+                "no paired app_id found in source text",
             )
         try:
             import jwt  # noqa: PLC0415
@@ -588,7 +603,8 @@ class GitHubAppValidator:
         if "id" not in body or "slug" not in body:
             return ValidationResult(False, self.provider, "payload shape unexpected")
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "github /app returned canonical app record",
             metadata={
                 "app_slug": body.get("slug"),
@@ -643,9 +659,7 @@ class AzureStorageConnectionStringValidator:
         url_path = f"/?comp=list&restype=container"
         canonical_headers = f"x-ms-date:{now}\nx-ms-version:2020-04-08"
         canonical_resource = f"/{account}/\ncomp:list\nrestype:container"
-        string_to_sign = (
-            f"GET\n\n\n\n\n\n\n\n\n\n\n\n{canonical_headers}\n{canonical_resource}"
-        )
+        string_to_sign = f"GET\n\n\n\n\n\n\n\n\n\n\n\n{canonical_headers}\n{canonical_resource}"
         try:
             decoded_key = base64.b64decode(key)
         except (ValueError, Exception):  # noqa: BLE001
@@ -669,7 +683,8 @@ class AzureStorageConnectionStringValidator:
         if "<EnumerationResults" not in r.text[:200]:
             return ValidationResult(False, self.provider, "payload shape unexpected")
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "azure list-containers returned canonical XML",
             metadata={"account": account},
         )
@@ -726,7 +741,8 @@ class AWSAccessKeyValidator:
             identity = sts.get_caller_identity()
         except ClientError as exc:
             return ValidationResult(
-                False, self.provider,
+                False,
+                self.provider,
                 f"sts get_caller_identity failed: {exc.response.get('Error', {}).get('Code', 'unknown')}",
             )
         except Exception as exc:  # noqa: BLE001
@@ -736,7 +752,8 @@ class AWSAccessKeyValidator:
         if not required.issubset(set(identity.keys())):
             return ValidationResult(False, self.provider, "identity payload malformed")
         return ValidationResult(
-            True, self.provider,
+            True,
+            self.provider,
             "sts get_caller_identity returned canonical fields",
             metadata={
                 "account": identity["Account"],

@@ -69,14 +69,10 @@ class _ExplodingAgent:
     def subscribed_topics(self) -> list[str]:
         return list(self._topics)
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         self._calls += 1
         if self._calls <= self._explode_count:
-            raise RuntimeError(
-                f"deliberate failure #{self._calls} from {self._role}"
-            )
+            raise RuntimeError(f"deliberate failure #{self._calls} from {self._role}")
         self.successful.append(message)
         return []
 
@@ -104,9 +100,7 @@ class _RecorderAgent:
     def subscribed_topics(self) -> list[str]:
         return list(self._topics)
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         self.received.append(message)
         return []
 
@@ -114,9 +108,7 @@ class _RecorderAgent:
         return {"role": self._role}
 
 
-async def _drive_loop_for(
-    loop: AgentLoop, duration_seconds: float
-) -> None:
+async def _drive_loop_for(loop: AgentLoop, duration_seconds: float) -> None:
     task = asyncio.create_task(loop.run())
     await asyncio.sleep(duration_seconds)
     await loop.shutdown()
@@ -152,15 +144,11 @@ class TestAgentExceptionIsolated:
         # Two messages: first triggers explosion, second succeeds.
         await bus.publish(
             "topic.x",
-            AgentMessage(
-                topic="topic.x", payload={"i": 1}, correlation_id="cid-1"
-            ),
+            AgentMessage(topic="topic.x", payload={"i": 1}, correlation_id="cid-1"),
         )
         await bus.publish(
             "topic.x",
-            AgentMessage(
-                topic="topic.x", payload={"i": 2}, correlation_id="cid-2"
-            ),
+            AgentMessage(topic="topic.x", payload={"i": 2}, correlation_id="cid-2"),
         )
 
         await _drive_loop_for(loop, 0.6)
@@ -187,25 +175,20 @@ class TestErrorAuditEntry:
 
         await bus.publish(
             "topic.x",
-            AgentMessage(
-                topic="topic.x", payload={}, correlation_id="cid-fail"
-            ),
+            AgentMessage(topic="topic.x", payload={}, correlation_id="cid-fail"),
         )
         await _drive_loop_for(loop, 0.4)
 
         errors = [
             e
             for e in audit.entries
-            if e.event_type == AuditEventType.ERROR
-            and e.correlation_id == "cid-fail"
+            if e.event_type == AuditEventType.ERROR and e.correlation_id == "cid-fail"
         ]
-        assert len(errors) >= 1, (
-            "Failed agent invocation must produce an ERROR audit entry"
-        )
+        assert len(errors) >= 1, "Failed agent invocation must produce an ERROR audit entry"
         # Error detail references RuntimeError (the exception we raised)
-        assert any(
-            "RuntimeError" in (e.error_detail or "") for e in errors
-        ), "ERROR entry must name the exception class"
+        assert any("RuntimeError" in (e.error_detail or "") for e in errors), (
+            "ERROR entry must name the exception class"
+        )
 
 
 class TestSiblingsUnaffected:
@@ -226,9 +209,7 @@ class TestSiblingsUnaffected:
 
         await bus.publish(
             "topic.x",
-            AgentMessage(
-                topic="topic.x", payload={}, correlation_id="cid-sib"
-            ),
+            AgentMessage(topic="topic.x", payload={}, correlation_id="cid-sib"),
         )
         await _drive_loop_for(loop, 0.4)
 

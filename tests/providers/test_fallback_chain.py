@@ -30,8 +30,11 @@ class _OkProvider:
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         self.complete_calls += 1
         return CompletionResponse(
-            text=self.name, model_id=self.name,
-            prompt_tokens=1, completion_tokens=1, latency_ms=0.1,
+            text=self.name,
+            model_id=self.name,
+            prompt_tokens=1,
+            completion_tokens=1,
+            latency_ms=0.1,
         )
 
     async def structured_output(
@@ -108,7 +111,8 @@ async def test_primary_serves_when_healthy() -> None:
     secondary = _OkProvider("secondary")
     chain = FallbackChainProvider(
         [("primary", primary), ("secondary", secondary)],
-        per_call_timeout=1.0, cooldown_seconds=0.0,
+        per_call_timeout=1.0,
+        cooldown_seconds=0.0,
     )
     resp = await chain.complete(CompletionRequest(prompt="x"))
     assert resp.model_id == "primary"
@@ -122,7 +126,8 @@ async def test_failover_on_unavailable() -> None:
     secondary = _OkProvider("secondary")
     chain = FallbackChainProvider(
         [("primary", primary), ("secondary", secondary)],
-        per_call_timeout=1.0, cooldown_seconds=0.0,
+        per_call_timeout=1.0,
+        cooldown_seconds=0.0,
     )
     resp = await chain.complete(CompletionRequest(prompt="x"))
     assert resp.model_id == "secondary"
@@ -136,7 +141,8 @@ async def test_failover_on_timeout() -> None:
     secondary = _OkProvider("secondary")
     chain = FallbackChainProvider(
         [("primary", primary), ("secondary", secondary)],
-        per_call_timeout=0.2, cooldown_seconds=0.0,
+        per_call_timeout=0.2,
+        cooldown_seconds=0.0,
     )
     resp = await chain.complete(CompletionRequest(prompt="x"))
     assert resp.model_id == "secondary"
@@ -225,7 +231,8 @@ async def test_non_recoverable_reraised() -> None:
     secondary = _OkProvider("secondary")
     chain = FallbackChainProvider(
         [("primary", primary), ("secondary", secondary)],
-        per_call_timeout=1.0, cooldown_seconds=0.0,
+        per_call_timeout=1.0,
+        cooldown_seconds=0.0,
     )
     with pytest.raises(RuntimeError, match="programming error"):
         await chain.complete(CompletionRequest(prompt="x"))
@@ -239,7 +246,8 @@ async def test_all_backends_failed_raises_summary() -> None:
     secondary = _OutageProvider("secondary")
     chain = FallbackChainProvider(
         [("primary", primary), ("secondary", secondary)],
-        per_call_timeout=1.0, cooldown_seconds=0.0,
+        per_call_timeout=1.0,
+        cooldown_seconds=0.0,
     )
     with pytest.raises(ProviderUnavailableError) as exc_info:
         await chain.complete(CompletionRequest(prompt="x"))
@@ -295,7 +303,8 @@ async def test_health_check_true_when_any_alive() -> None:
     secondary = _OkProvider("secondary")
     chain = FallbackChainProvider(
         [("primary", primary), ("secondary", secondary)],
-        per_call_timeout=1.0, cooldown_seconds=0.0,
+        per_call_timeout=1.0,
+        cooldown_seconds=0.0,
     )
     assert await chain.health_check() is True
 
@@ -306,6 +315,7 @@ async def test_health_check_false_when_all_dead() -> None:
     secondary = _OutageProvider("secondary")
     chain = FallbackChainProvider(
         [("primary", primary), ("secondary", secondary)],
-        per_call_timeout=1.0, cooldown_seconds=0.0,
+        per_call_timeout=1.0,
+        cooldown_seconds=0.0,
     )
     assert await chain.health_check() is False

@@ -53,13 +53,14 @@ def osint_breach(
                 operator=cfg.operator,
             )
         except FileNotFoundError as exc:
-            console.print(f"[yellow]Breach DB skipped:[/yellow] "
-                          f"{exc}. Drop a dump file at "
-                          "`.forge_data/breach/*.db` or `.forge_data/breach/*.csv` "
-                          "and re-run.")
+            console.print(
+                f"[yellow]Breach DB skipped:[/yellow] "
+                f"{exc}. Drop a dump file at "
+                "`.forge_data/breach/*.db` or `.forge_data/breach/*.csv` "
+                "and re-run."
+            )
         except RuntimeError as exc:
-            console.print(f"[yellow]Breach lookup skipped:[/yellow] "
-                          f"{str(exc)[:200]}")
+            console.print(f"[yellow]Breach lookup skipped:[/yellow] {str(exc)[:200]}")
     finally:
         conn.close()
 
@@ -191,11 +192,9 @@ def osint_dehashed(
     except RuntimeError as exc:
         # Missing FORGE_DEHASHED_* creds / scope violation / API error —
         # treat as clean SKIP so kill-chain doesn't abort.
-        console.print(f"[yellow]DeHashed skipped:[/yellow] "
-                      f"{str(exc)[:200]}")
+        console.print(f"[yellow]DeHashed skipped:[/yellow] {str(exc)[:200]}")
     except FileNotFoundError as exc:
-        console.print(f"[yellow]DeHashed skipped:[/yellow] "
-                      f"missing dependency: {exc}")
+        console.print(f"[yellow]DeHashed skipped:[/yellow] missing dependency: {exc}")
 
 
 @osint_app.command("xposed")
@@ -275,7 +274,9 @@ def osint_harvest(
 def osint_hibp(
     engagement: str = typer.Option(..., "--engagement", "-e"),
     api_key: Optional[str] = typer.Option(
-        None, "--api-key", envvar="FORGE_HIBP_API_KEY",
+        None,
+        "--api-key",
+        envvar="FORGE_HIBP_API_KEY",
         help="HIBP API key (optional — enables per-email lookup; domain search is always free).",
     ),
     dry_run: bool = typer.Option(False, "--dry-run"),
@@ -295,7 +296,11 @@ def osint_hibp(
 
     with direct_connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        scope = cfg.get_engagement_scope(int(engagement), conn) if hasattr(cfg, "get_engagement_scope") else []
+        scope = (
+            cfg.get_engagement_scope(int(engagement), conn)
+            if hasattr(cfg, "get_engagement_scope")
+            else []
+        )
         result = query_hibp(
             engagement_id=int(engagement),
             engagement_scope=scope,
@@ -303,9 +308,13 @@ def osint_hibp(
             api_key=api_key or None,
             dry_run=dry_run,
         )
-    console.print(f"[green]HIBP complete.[/green] Domains checked. Breaches found: {len(result.get('breaches_by_name', {}))}")
+    console.print(
+        f"[green]HIBP complete.[/green] Domains checked. Breaches found: {len(result.get('breaches_by_name', {}))}"
+    )
     for name, info in (result.get("breaches_by_name") or {}).items():
-        console.print(f"  [yellow]{name}[/yellow] — {info.get('pwn_count', 0):,} records | {info.get('breach_date', '?')}")
+        console.print(
+            f"  [yellow]{name}[/yellow] — {info.get('pwn_count', 0):,} records | {info.get('breach_date', '?')}"
+        )
 
 
 @osint_app.command("emailrep")
@@ -346,7 +355,8 @@ def osint_emailrep(
 def osint_accounts(
     engagement: str = typer.Option(..., "--engagement", "-e"),
     emails: Optional[str] = typer.Option(
-        None, "--emails",
+        None,
+        "--emails",
         help="Comma-separated email list. Defaults to emails from the engagement DB.",
     ),
     max_workers: int = typer.Option(
@@ -379,7 +389,10 @@ def osint_accounts(
 
     email_list = [e.strip() for e in emails.split(",")] if emails else None
     _cli_audit(
-        db_path, engagement_id, "phase2", "holehe",
+        db_path,
+        engagement_id,
+        "phase2",
+        "holehe",
         "accounts_start",
         target=",".join(email_list) if email_list else "<from-db>",
         result=f"dry_run={dry_run} proxy_configured={bool(proxy)}",
@@ -396,13 +409,21 @@ def osint_accounts(
         )
     except Exception as exc:
         _cli_audit(
-            db_path, engagement_id, "phase2", "holehe",
-            "accounts_failed", result=f"{type(exc).__name__}: {str(exc)[:180]}",
+            db_path,
+            engagement_id,
+            "phase2",
+            "holehe",
+            "accounts_failed",
+            result=f"{type(exc).__name__}: {str(exc)[:180]}",
         )
         raise
     _cli_audit(
-        db_path, engagement_id, "phase2", "holehe",
-        "accounts_complete", result=f"accounts_upserted={n}",
+        db_path,
+        engagement_id,
+        "phase2",
+        "holehe",
+        "accounts_complete",
+        result=f"accounts_upserted={n}",
     )
     console.print(f"[green]Holehe complete.[/green] Account-existence rows upserted: {n}")
 
@@ -410,10 +431,12 @@ def osint_accounts(
 @osint_app.command("phone")
 def osint_phone(
     engagement: str = typer.Option(..., "--engagement", "-e"),
-    number: str = typer.Option(..., "--number", "-n",
-                                help="Phone number in E.164 format (+15551234567)."),
-    no_online: bool = typer.Option(False, "--no-online",
-                                    help="Skip PhoneInfoga (offline parse only)."),
+    number: str = typer.Option(
+        ..., "--number", "-n", help="Phone number in E.164 format (+15551234567)."
+    ),
+    no_online: bool = typer.Option(
+        False, "--no-online", help="Skip PhoneInfoga (offline parse only)."
+    ),
     max_dork_concurrency: int = typer.Option(
         1,
         "--max-dork-concurrency",
@@ -478,42 +501,54 @@ def osint_phone(
             console.print(f"  [{colour}]{service:<12}[/{colour}] {status}")
 
     mined = result.get("dork_mining", {})
-    if mined and (mined.get("emails_found") or mined.get("usernames_found") or
-                  mined.get("sites_searched")):
+    if mined and (
+        mined.get("emails_found") or mined.get("usernames_found") or mined.get("sites_searched")
+    ):
         console.print(f"[bold]Dork mining (via DDG):[/bold]")
         sites = mined.get("sites_searched", [])
         if sites:
-            console.print(f"  sites queried: {', '.join(sites[:6])}"
-                          + (f"  (+{len(sites)-6} more)" if len(sites) > 6 else ""))
+            console.print(
+                f"  sites queried: {', '.join(sites[:6])}"
+                + (f"  (+{len(sites) - 6} more)" if len(sites) > 6 else "")
+            )
         emails = mined.get("emails_found", [])
         if emails:
-            console.print(f"  [green]emails discovered:[/green] "
-                          f"{', '.join(emails[:5])}"
-                          + (f"  (+{len(emails)-5} more)" if len(emails) > 5 else ""))
+            console.print(
+                f"  [green]emails discovered:[/green] "
+                f"{', '.join(emails[:5])}"
+                + (f"  (+{len(emails) - 5} more)" if len(emails) > 5 else "")
+            )
         else:
             console.print(f"  [dim]emails discovered:[/dim] none")
         unames = mined.get("usernames_found", [])
         if unames:
-            console.print(f"  [green]usernames discovered:[/green] "
-                          f"{', '.join(unames[:5])}"
-                          + (f"  (+{len(unames)-5} more)" if len(unames) > 5 else ""))
+            console.print(
+                f"  [green]usernames discovered:[/green] "
+                f"{', '.join(unames[:5])}"
+                + (f"  (+{len(unames) - 5} more)" if len(unames) > 5 else "")
+            )
         else:
             console.print(f"  [dim]usernames discovered:[/dim] none")
 
     persisted = result.get("persisted", {})
     if persisted:
-        console.print(f"[bold]Persisted to engagement DB:[/bold] "
-                      f"{persisted.get('emails', 0)} email(s), "
-                      f"{persisted.get('social_profiles', 0)} social profile(s)")
+        console.print(
+            f"[bold]Persisted to engagement DB:[/bold] "
+            f"{persisted.get('emails', 0)} email(s), "
+            f"{persisted.get('social_profiles', 0)} social profile(s)"
+        )
 
 
 @osint_app.command("name")
 def osint_name(
     engagement: str = typer.Option(..., "--engagement", "-e"),
-    name: str = typer.Option(..., "--name", "-n",
-                              help="Full name in quotes, e.g. \"FORGE Operator\"."),
+    name: str = typer.Option(
+        ..., "--name", "-n", help='Full name in quotes, e.g. "FORGE Operator".'
+    ),
     proxy: Optional[str] = typer.Option(
-        None, "--proxy", envvar="FORGE_PROXY",
+        None,
+        "--proxy",
+        envvar="FORGE_PROXY",
         help="HTTP/SOCKS proxy for the search queries (e.g. socks5://127.0.0.1:9050 for Tor).",
     ),
     max_concurrency: int = typer.Option(
@@ -546,15 +581,18 @@ def osint_name(
         console.print("  [dim]no profile candidates surfaced[/dim]")
     for platform, handles in profiles.items():
         if handles:
-            console.print(f"  [cyan]{platform}[/cyan]: {', '.join(handles[:5])}"
-                          + (f"  (+{len(handles)-5} more)" if len(handles) > 5 else ""))
+            console.print(
+                f"  [cyan]{platform}[/cyan]: {', '.join(handles[:5])}"
+                + (f"  (+{len(handles) - 5} more)" if len(handles) > 5 else "")
+            )
 
 
 @osint_app.command("gravatar")
 def osint_gravatar(
     engagement: str = typer.Option(..., "--engagement", "-e"),
     emails: Optional[str] = typer.Option(
-        None, "--emails",
+        None,
+        "--emails",
         help="Comma-separated email list. Defaults to emails already stored in the engagement DB.",
     ),
     proxy: Optional[str] = typer.Option(
@@ -576,14 +614,19 @@ def osint_gravatar(
     """
     from forge.config import ForgeConfig  # noqa: PLC0415
     from forge.utils.intel.gravatar_lookup import (  # noqa: PLC0415
-        lookup_gravatar, persist_gravatar_findings,
+        lookup_gravatar,
+        persist_gravatar_findings,
     )
     import sqlite3 as _sq3  # noqa: PLC0415
 
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     eng_id = int(engagement)
-    proxy_value = str(proxy).strip() if isinstance(proxy, str) else os.environ.get("FORGE_PROXY", "").strip() or None
+    proxy_value = (
+        str(proxy).strip()
+        if isinstance(proxy, str)
+        else os.environ.get("FORGE_PROXY", "").strip() or None
+    )
 
     # Determine email list
     if emails:
@@ -630,20 +673,25 @@ def osint_gravatar(
                 console.print(f"  location: {p['location']}")
             for acct in p.get("accounts", []):
                 v = "[green]OK[/green]" if acct.get("verified") else "[dim]?[/dim]"
-                console.print(f"  {v} {acct.get('domain', '?'):<14} "
-                              f"{acct.get('username', '?'):<20} "
-                              f"{acct.get('url', '')[:60]}")
+                console.print(
+                    f"  {v} {acct.get('domain', '?'):<14} "
+                    f"{acct.get('username', '?'):<20} "
+                    f"{acct.get('url', '')[:60]}"
+                )
         else:
             console.print(f"[dim]MISS {email}[/dim]")
-    console.print(f"\n[bold]Summary:[/bold] {total_hits}/{len(gravatar_inputs)} email(s) "
-                  f"have Gravatar profiles. {total_new_rows} social_profiles rows written.")
+    console.print(
+        f"\n[bold]Summary:[/bold] {total_hits}/{len(gravatar_inputs)} email(s) "
+        f"have Gravatar profiles. {total_new_rows} social_profiles rows written."
+    )
 
 
 @osint_app.command("google")
 def osint_google(
     engagement: str = typer.Option(..., "--engagement", "-e"),
     emails: Optional[str] = typer.Option(
-        None, "--emails",
+        None,
+        "--emails",
         help="Comma-separated emails. Defaults to emails in the engagement DB.",
     ),
     proxy: Optional[str] = typer.Option(
@@ -662,7 +710,8 @@ def osint_google(
     """
     from forge.config import ForgeConfig  # noqa: PLC0415
     from forge.utils.intel.google_account import (  # noqa: PLC0415
-        lookup_google_account, persist_google_findings,
+        lookup_google_account,
+        persist_google_findings,
         _ghunt_creds_available,
     )
     import sqlite3 as _sq3  # noqa: PLC0415
@@ -670,11 +719,17 @@ def osint_google(
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     eng_id = int(engagement)
-    proxy_value = str(proxy).strip() if isinstance(proxy, str) else os.environ.get("FORGE_PROXY", "").strip() or None
+    proxy_value = (
+        str(proxy).strip()
+        if isinstance(proxy, str)
+        else os.environ.get("FORGE_PROXY", "").strip() or None
+    )
 
     if not _ghunt_creds_available():
-        console.print("[yellow]Ghunt creds not found.[/yellow] Run `ghunt login` "
-                      "first, then paste base64 auth from the Companion extension.")
+        console.print(
+            "[yellow]Ghunt creds not found.[/yellow] Run `ghunt login` "
+            "first, then paste base64 auth from the Companion extension."
+        )
         return
 
     if emails:
@@ -729,10 +784,8 @@ def osint_google(
 @osint_app.command("linkedin")
 def osint_linkedin(
     engagement: str = typer.Option(..., "--engagement", "-e"),
-    domain: str = typer.Option(..., "--domain", "-d",
-                                help="Company domain (e.g. acme.com)."),
-    max_dorks: int = typer.Option(5, "--max-dorks",
-                                    help="Number of dork queries to run."),
+    domain: str = typer.Option(..., "--domain", "-d", help="Company domain (e.g. acme.com)."),
+    max_dorks: int = typer.Option(5, "--max-dorks", help="Number of dork queries to run."),
     max_concurrency: int = typer.Option(
         1,
         "--max-concurrency",
@@ -757,8 +810,10 @@ def osint_linkedin(
     """
     from forge.config import ForgeConfig  # noqa: PLC0415
     from forge.utils.intel.linkedin_scraper import (  # noqa: PLC0415
-        enumerate_linkedin_employees, persist_linkedin_findings,
+        enumerate_linkedin_employees,
+        persist_linkedin_findings,
     )
+
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     _direct_cli_load_scope_lists(
@@ -769,13 +824,17 @@ def osint_linkedin(
         seed_type="domain",
     )
     result = enumerate_linkedin_employees(
-        domain=domain, engagement_id=int(engagement),
-        db_path=db_path, max_dorks=max_dorks,
+        domain=domain,
+        engagement_id=int(engagement),
+        db_path=db_path,
+        max_dorks=max_dorks,
         max_concurrency=max_concurrency,
     )
     counts = persist_linkedin_findings(
-        domain=domain, engagement_id=int(engagement),
-        db_path=db_path, result=result,
+        domain=domain,
+        engagement_id=int(engagement),
+        db_path=db_path,
+        result=result,
     )
     console.print(f"[bold]LinkedIn scrape for {domain}:[/bold]")
     console.print(f"  raw dork hits:       {result.get('raw_hits', 0)}")
@@ -783,8 +842,10 @@ def osint_linkedin(
     console.print(f"  parsed names:        {len(result.get('names', []))}")
     console.print(f"  candidate emails:    {len(result.get('candidate_emails', []))}")
     console.print(f"  company_slugs:       {len(result.get('company_slugs', []))}")
-    console.print(f"  [dim]persisted -> emails: {counts.get('emails', 0)}, "
-                  f"social_profiles: {counts.get('social_profiles', 0)}[/dim]")
+    console.print(
+        f"  [dim]persisted -> emails: {counts.get('emails', 0)}, "
+        f"social_profiles: {counts.get('social_profiles', 0)}[/dim]"
+    )
     for slug in result.get("linkedin_slugs", [])[:5]:
         console.print(f"    [cyan]{slug}[/cyan]")
 
@@ -792,10 +853,10 @@ def osint_linkedin(
 @osint_app.command("urlscan")
 def osint_urlscan(
     engagement: str = typer.Option(..., "--engagement", "-e"),
-    hostname: str = typer.Option(..., "--hostname", "-H",
-                                   help="Domain or hostname to search."),
-    max_results: int = typer.Option(20, "--max-results",
-                                       help="Cap on urlscan search results returned."),
+    hostname: str = typer.Option(..., "--hostname", "-H", help="Domain or hostname to search."),
+    max_results: int = typer.Option(
+        20, "--max-results", help="Cap on urlscan search results returned."
+    ),
     scope_manifest: Optional[str] = typer.Option(
         None,
         "--scope-manifest",
@@ -810,8 +871,10 @@ def osint_urlscan(
     """
     from forge.config import ForgeConfig  # noqa: PLC0415
     from forge.utils.intel.urlscan_lookup import (  # noqa: PLC0415
-        search_urlscan, persist_urlscan_findings,
+        search_urlscan,
+        persist_urlscan_findings,
     )
+
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     _direct_cli_load_scope_lists(
@@ -821,8 +884,7 @@ def osint_urlscan(
         target=hostname,
         seed_type="domain",
     )
-    result = search_urlscan(hostname, int(engagement), db_path,
-                             max_results=max_results)
+    result = search_urlscan(hostname, int(engagement), db_path, max_results=max_results)
     counts = persist_urlscan_findings(hostname, int(engagement), db_path, result)
     console.print(f"[bold]URLScan.io for {hostname}:[/bold]")
     console.print(f"  scans returned:      {len(result.get('scans', []))}")
@@ -837,8 +899,7 @@ def osint_urlscan(
 @osint_app.command("instagram")
 def osint_instagram(
     engagement: str = typer.Option(..., "--engagement", "-e"),
-    username: str = typer.Option(..., "--username", "-u",
-                                    help="Instagram handle without @."),
+    username: str = typer.Option(..., "--username", "-u", help="Instagram handle without @."),
 ) -> None:
     """Instagram profile enrichment (Module 2-S).
 
@@ -849,8 +910,10 @@ def osint_instagram(
     """
     from forge.config import ForgeConfig  # noqa: PLC0415
     from forge.utils.intel.instagram_lookup import (  # noqa: PLC0415
-        lookup_instagram, persist_instagram_findings,
+        lookup_instagram,
+        persist_instagram_findings,
     )
+
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     result = lookup_instagram(username.lstrip("@"), int(engagement), db_path)
@@ -858,8 +921,7 @@ def osint_instagram(
         reason = result.get("error", "not found or blocked")
         console.print(f"[dim]MISS[/dim] @{username}  ({reason})")
         return
-    counts = persist_instagram_findings(username.lstrip("@"),
-                                          int(engagement), db_path, result)
+    counts = persist_instagram_findings(username.lstrip("@"), int(engagement), db_path, result)
     p = result.get("profile", {})
     console.print(f"[green]HIT[/green] @{username}")
     console.print(f"  full_name:      {p.get('full_name', '')}")
@@ -873,15 +935,16 @@ def osint_instagram(
     ems = p.get("emails_in_bio", [])
     if ems:
         console.print(f"  [green]emails discovered:[/green] {', '.join(ems)}")
-    console.print(f"  [dim]persisted -> emails: {counts.get('emails', 0)}, "
-                  f"social_profiles: {counts.get('social_profiles', 0)}[/dim]")
+    console.print(
+        f"  [dim]persisted -> emails: {counts.get('emails', 0)}, "
+        f"social_profiles: {counts.get('social_profiles', 0)}[/dim]"
+    )
 
 
 @osint_app.command("shodan")
 def osint_shodan(
     engagement: str = typer.Option(..., "--engagement", "-e"),
-    target: str = typer.Option(..., "--target", "-t",
-                                 help="IP address OR domain."),
+    target: str = typer.Option(..., "--target", "-t", help="IP address OR domain."),
     scope_manifest: Optional[str] = typer.Option(
         None,
         "--scope-manifest",
@@ -898,9 +961,12 @@ def osint_shodan(
     """
     from forge.config import ForgeConfig  # noqa: PLC0415
     from forge.utils.intel.shodan_lookup import (  # noqa: PLC0415
-        lookup_shodan_host, lookup_shodan_domain, persist_shodan_findings,
+        lookup_shodan_host,
+        lookup_shodan_domain,
+        persist_shodan_findings,
         _shodan_key,
     )
+
     if not _shodan_key():
         console.print("[yellow]No FORGE_SHODAN_API_KEY in env.[/yellow]")
         return
@@ -933,8 +999,7 @@ def osint_shodan(
         host_result = lookup_shodan_host(target, eng_id, db_path)
     else:
         domain_result = lookup_shodan_domain(target, eng_id, db_path)
-    counts = persist_shodan_findings(target, eng_id, db_path,
-                                       host_result, domain_result)
+    counts = persist_shodan_findings(target, eng_id, db_path, host_result, domain_result)
     console.print(f"[bold]Shodan for {target} ({'IP' if is_ip else 'domain'}):[/bold]")
     if is_ip and host_result.get("found"):
         h = host_result.get("host", {})
@@ -953,9 +1018,11 @@ def osint_shodan(
             console.print(f"    [cyan]{s}[/cyan]")
         recs = domain_result.get("records", []) or []
         console.print(f"  DNS records:           {len(recs)}")
-    console.print(f"  [dim]persisted -> hosts: {counts.get('hosts_inserted', 0)}, "
-                  f"services: {counts.get('services_inserted', 0)}, "
-                  f"CVEs: {len(counts.get('cves', []))}[/dim]")
+    console.print(
+        f"  [dim]persisted -> hosts: {counts.get('hosts_inserted', 0)}, "
+        f"services: {counts.get('services_inserted', 0)}, "
+        f"CVEs: {len(counts.get('cves', []))}[/dim]"
+    )
 
 
 @osint_app.command("social")
@@ -967,7 +1034,9 @@ def osint_social(
         help="Comma-separated email list. Defaults to emails already stored in the engagement DB.",
     ),
     proxy: Optional[str] = typer.Option(
-        None, "--proxy", envvar="FORGE_PROXY",
+        None,
+        "--proxy",
+        envvar="FORGE_PROXY",
         help="Optional HTTP/SOCKS proxy for Epieos requests.",
     ),
     max_concurrency: int = typer.Option(
@@ -994,7 +1063,10 @@ def osint_social(
 
     email_list = [e.strip() for e in emails.split(",")] if emails else None
     _cli_audit(
-        db_path, engagement_id, "phase2", "social_scraper",
+        db_path,
+        engagement_id,
+        "phase2",
+        "social_scraper",
         "social_start",
         target=",".join(email_list) if email_list else "<from-db>",
         result=f"dry_run={dry_run}",
@@ -1011,13 +1083,21 @@ def osint_social(
         )
     except Exception as exc:
         _cli_audit(
-            db_path, engagement_id, "phase2", "social_scraper",
-            "social_failed", result=f"{type(exc).__name__}: {str(exc)[:180]}",
+            db_path,
+            engagement_id,
+            "phase2",
+            "social_scraper",
+            "social_failed",
+            result=f"{type(exc).__name__}: {str(exc)[:180]}",
         )
         raise
     _cli_audit(
-        db_path, engagement_id, "phase2", "social_scraper",
-        "social_complete", result=f"profiles_written={n}",
+        db_path,
+        engagement_id,
+        "phase2",
+        "social_scraper",
+        "social_complete",
+        result=f"profiles_written={n}",
     )
     console.print(f"[green]Epieos complete.[/green] Social profiles upserted: {n}")
 
@@ -1026,19 +1106,24 @@ def osint_social(
 def osint_usernames(
     engagement: str = typer.Option(..., "--engagement", "-e"),
     username: Optional[str] = typer.Option(
-        None, "--username", "-u",
+        None,
+        "--username",
+        "-u",
         help="Single username to enumerate. Mutually inclusive with --usernames.",
     ),
     usernames: Optional[str] = typer.Option(
-        None, "--usernames",
+        None,
+        "--usernames",
         help="Comma-separated list of usernames.",
     ),
     backend: Optional[str] = typer.Option(
-        None, "--backend",
+        None,
+        "--backend",
         help="Backend preference: whatsmyname | maigret | sherlock. Default: auto-select.",
     ),
     proxy_file: Optional[str] = typer.Option(
-        None, "--proxy-file",
+        None,
+        "--proxy-file",
         help="Path to a newline-delimited proxy list for rotation.",
     ),
     proxy: Optional[str] = typer.Option(
@@ -1071,7 +1156,11 @@ def osint_usernames(
     cfg = ForgeConfig.load()
     db_path = cfg.engagement_db_path(engagement)
     engagement_id = int(engagement)
-    proxy_value = str(proxy).strip() if isinstance(proxy, str) else os.environ.get("FORGE_PROXY", "").strip() or None
+    proxy_value = (
+        str(proxy).strip()
+        if isinstance(proxy, str)
+        else os.environ.get("FORGE_PROXY", "").strip() or None
+    )
 
     name_list: list[str] = []
     if usernames:
@@ -1079,14 +1168,16 @@ def osint_usernames(
     if username:
         name_list.append(username)
     if not name_list:
-        console.print(
-            "[bold red]ERROR:[/bold red] specify --username and/or --usernames"
-        )
+        console.print("[bold red]ERROR:[/bold red] specify --username and/or --usernames")
         raise typer.Exit(code=2)
 
     _cli_audit(
-        db_path, engagement_id, "phase2", "handle_finder",
-        "usernames_start", target=",".join(name_list),
+        db_path,
+        engagement_id,
+        "phase2",
+        "handle_finder",
+        "usernames_start",
+        target=",".join(name_list),
         result=f"dry_run={dry_run} backend={backend or 'auto'} proxy_configured={bool(proxy_value)}",
     )
     try:
@@ -1114,13 +1205,20 @@ def osint_usernames(
         )
     except Exception as exc:
         _cli_audit(
-            db_path, engagement_id, "phase2", "handle_finder",
-            "usernames_failed", result=f"{type(exc).__name__}: {str(exc)[:180]}",
+            db_path,
+            engagement_id,
+            "phase2",
+            "handle_finder",
+            "usernames_failed",
+            result=f"{type(exc).__name__}: {str(exc)[:180]}",
         )
         raise
     _cli_audit(
-        db_path, engagement_id, "phase2", "handle_finder",
-        "usernames_complete", result=f"profiles_written={n}",
+        db_path,
+        engagement_id,
+        "phase2",
+        "handle_finder",
+        "usernames_complete",
+        result=f"profiles_written={n}",
     )
     console.print(f"[green]Username enum complete.[/green] Profiles upserted: {n}")
-

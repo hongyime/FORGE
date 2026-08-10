@@ -8,10 +8,10 @@ from xml.etree import ElementTree
 
 
 _ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
-_ANDROID_PACKAGE_RE = re.compile(
-    r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$"
+_ANDROID_PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
+_HOST_RE = re.compile(
+    r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"
 )
-_HOST_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$")
 
 
 def android_manifest_artifact_label(value: str | Path) -> str:
@@ -50,7 +50,7 @@ def android_manifest_urls(text: str) -> list[str]:
 
 def _xml_root(text: str) -> ElementTree.Element | None:
     try:
-        return ElementTree.fromstring(str(text or "")[:256 * 1024])
+        return ElementTree.fromstring(str(text or "")[: 256 * 1024])
     except Exception:  # noqa: BLE001
         return None
 
@@ -61,7 +61,9 @@ def _local_name(tag: object) -> str:
 
 
 def _android_attr(element: ElementTree.Element, name: str) -> str:
-    return str(element.attrib.get(f"{_ANDROID_NS}{name}") or element.attrib.get(f"android:{name}") or "").strip()
+    return str(
+        element.attrib.get(f"{_ANDROID_NS}{name}") or element.attrib.get(f"android:{name}") or ""
+    ).strip()
 
 
 def _valid_android_package(value: object) -> str:

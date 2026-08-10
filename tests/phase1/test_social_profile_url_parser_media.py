@@ -215,9 +215,7 @@ def test_social_profile_url_parser_supports_media_gaming_and_federated_routes() 
         == "acmeread"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://read.cv/jobs"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://read.cv/jobs")
         == ""
     )
     assert (
@@ -437,11 +435,15 @@ def test_social_profile_url_parser_supports_media_gaming_and_federated_routes() 
         == "acmeonline"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://mas.to/users/acmemas")
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
+            "https://mas.to/users/acmemas"
+        )
         == "acmemas"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://mstdn.party/web/acmeparty")
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
+            "https://mstdn.party/web/acmeparty"
+        )
         == "acmeparty"
     )
     assert (
@@ -451,6 +453,8 @@ def test_social_profile_url_parser_supports_media_gaming_and_federated_routes() 
         == ""
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://mastodon.online/about")
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
+            "https://mastodon.online/about"
+        )
         == ""
     )

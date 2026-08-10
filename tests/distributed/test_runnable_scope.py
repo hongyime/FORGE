@@ -492,8 +492,9 @@ def test_scheduled_url_bound_workflow_enforces_manifest_across_dispatchers(
     monkeypatch.setattr(
         runnable,
         "run_crawl_stealth",
-        lambda *args, **kwargs: stealth_calls.append({"args": args, "kwargs": kwargs})
-        or {"status": "success"},
+        lambda *args, **kwargs: (
+            stealth_calls.append({"args": args, "kwargs": kwargs}) or {"status": "success"}
+        ),
     )
     monkeypatch.setattr(
         runnable,
@@ -753,7 +754,9 @@ def test_scheduled_validate_requires_scope_manifest_before_provider_validation(
     _bootstrap_engagement(db_path, scope=["allowed.example"])
 
     def _fail_validate(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("scheduled validation without manifest must not reach provider validation")
+        raise AssertionError(
+            "scheduled validation without manifest must not reach provider validation"
+        )
 
     monkeypatch.setattr(runnable, "run_cloud_validate", _fail_validate)
 

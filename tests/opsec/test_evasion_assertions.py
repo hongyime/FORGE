@@ -24,6 +24,7 @@ Coverage requirement (PRD §15.1):
   This file must achieve 100% coverage.
   Each Phase 5 module must have ≥ 1 test asserting absence of a banned pattern.
 """
+
 from __future__ import annotations
 
 import re
@@ -57,9 +58,7 @@ RE_WGET_CURL: re.Pattern[str] = re.compile(r"\b(wget|curl)\b", re.IGNORECASE)
 RE_CMD_EXEC: re.Pattern[str] = re.compile(r"cmd\.exe\s+/c", re.IGNORECASE)
 
 #: Matches hardcoded RFC 1918 IP addresses (C2 template leakage guard).
-RE_RFC1918: re.Pattern[str] = re.compile(
-    r"(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2\d|3[01])\.)"
-)
+RE_RFC1918: re.Pattern[str] = re.compile(r"(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2\d|3[01])\.)")
 
 
 def _assert_no_pattern(pattern: re.Pattern[str], text: str, label: str) -> None:
@@ -75,13 +74,14 @@ def _assert_no_pattern(pattern: re.Pattern[str], text: str, label: str) -> None:
     assert match is None, (
         f"Banned pattern '{label}' found at position {match.start() if match else '?'} "
         f"in generated artifact. Evasion criterion FAILED.\n"
-        f"Context: ...{text[max(0, (match.start() if match else 0)-30):(match.start() if match else 0)+60]}..."
+        f"Context: ...{text[max(0, (match.start() if match else 0) - 30) : (match.start() if match else 0) + 60]}..."
     )
 
 
 # ===========================================================================
 # Module 5-F — Reverse Shell Generator
 # ===========================================================================
+
 
 class TestReverseShellEvasion:
     """Evasion assertions for Module 5-F (reverse_shell.py → template_engine.py)."""
@@ -122,9 +122,7 @@ class TestReverseShellEvasion:
         for shell_type in ("python", "powershell", "bash", "perl", "ruby", "netcat"):
             result = gen.generate(lhost="10.0.0.1", lport=443, shell_type=shell_type)
             combined = (result.raw_command or "") + (result.obfuscated_command or "")
-            _assert_no_pattern(
-                RE_PORT_4444, combined, f"port 4444 in {shell_type} shell output"
-            )
+            _assert_no_pattern(RE_PORT_4444, combined, f"port 4444 in {shell_type} shell output")
 
     def test_bash_shell_no_dev_tcp(self, tmp_kb_db: Path) -> None:
         """
@@ -190,6 +188,7 @@ class TestReverseShellEvasion:
 # Module 5-G — C2 Beacon Generator
 # ===========================================================================
 
+
 class TestC2BeaconEvasion:
     """Evasion assertions for Module 5-G (c2_generator.py → session_manager.py)."""
 
@@ -248,9 +247,7 @@ class TestC2BeaconEvasion:
         mean = statistics.mean(samples)
         stdev = statistics.stdev(samples)
 
-        assert abs(mean - 60) < 5, (
-            f"Gaussian sleep mean {mean:.1f} s is too far from target 60 s."
-        )
+        assert abs(mean - 60) < 5, f"Gaussian sleep mean {mean:.1f} s is too far from target 60 s."
         assert stdev > 5, (
             f"Gaussian sleep stdev {stdev:.1f} s is too low — distribution may be uniform."
         )
@@ -279,6 +276,7 @@ class TestC2BeaconEvasion:
 # ===========================================================================
 # Module 5-I — Persistence Generator
 # ===========================================================================
+
 
 class TestPersistenceEvasion:
     """Evasion assertions for Module 5-I (persistence.py → schedule_builder.py)."""
@@ -345,6 +343,7 @@ class TestPersistenceEvasion:
 # ===========================================================================
 # Module 5-J — Lateral Movement Executor
 # ===========================================================================
+
 
 class TestLateralMovementEvasion:
     """Evasion assertions for Module 5-J (lateral_movement.py → remote_exec.py)."""
@@ -426,6 +425,7 @@ class TestLateralMovementEvasion:
 # ===========================================================================
 # Cross-module: LateralMovementCredential security invariants
 # ===========================================================================
+
 
 class TestLateralMovementCredentialSecurity:
     """
@@ -523,6 +523,7 @@ class TestLateralMovementCredentialSecurity:
 # ===========================================================================
 # Conftest fixtures (inlined — no conftest.py dependency for portability)
 # ===========================================================================
+
 
 @pytest.fixture()
 def tmp_kb_db(tmp_path: Path) -> Path:

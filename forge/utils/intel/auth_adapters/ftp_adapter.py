@@ -5,6 +5,7 @@ Canonical: forge/phase2/auth_adapters/ftp_adapter.py
 FTP authentication adapter using stdlib ftplib.
 Passive mode only; no data connection or directory listing.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -14,7 +15,7 @@ from typing import Optional
 
 from forge.utils.intel.auth_adapters import BaseAuthAdapter
 
-_LOG     = logging.getLogger(__name__)
+_LOG = logging.getLogger(__name__)
 _TIMEOUT = 10
 
 

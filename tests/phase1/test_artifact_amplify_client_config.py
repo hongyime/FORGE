@@ -9,7 +9,9 @@ from forge.utils.artifact_amplify_client_config import (
 
 def test_amplify_client_config_labels_are_source_aware() -> None:
     assert amplify_client_config_artifact_label("aws-exports.js") == "amplify-client-config"
-    assert amplify_client_config_artifact_label("amplifyconfiguration.json") == "amplify-client-config"
+    assert (
+        amplify_client_config_artifact_label("amplifyconfiguration.json") == "amplify-client-config"
+    )
     assert amplify_client_config_artifact_label("amplify_outputs.yaml") == "amplify-client-config"
     assert amplify_client_config_artifact_label("not-aws-exports.js") == ""
 
@@ -64,18 +66,19 @@ def test_amplify_client_config_candidates_cover_nested_outputs() -> None:
 
 def test_amplify_client_config_candidates_skip_generic_documents() -> None:
     assert amplify_client_config_candidates({"region": "us-east-1"}) == []
-    assert amplify_client_config_candidates(
-        {
-            "userPoolId": "us-east-1_Generic",
-            "url": "https://example.com/?token=secret",
-            "bucket": "public-assets",
-        }
-    ) == []
+    assert (
+        amplify_client_config_candidates(
+            {
+                "userPoolId": "us-east-1_Generic",
+                "url": "https://example.com/?token=secret",
+                "bucket": "public-assets",
+            }
+        )
+        == []
+    )
     assert amplify_client_config_candidates({"storage": {"bucket_name": "public-assets"}}) == []
     assert amplify_client_config_candidates(
         {"storage": {"bucket_name": "public-assets"}},
         source_hint="amplify_outputs.json",
-    ) == [
-        "s3://public-assets"
-    ]
+    ) == ["s3://public-assets"]
     assert amplify_client_config_text_candidates('const config = { region: "us-east-1" };') == []

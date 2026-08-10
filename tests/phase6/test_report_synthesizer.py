@@ -24,6 +24,7 @@ Test categories:
  17. ReportSynthesizer   — operator cancel raises RuntimeError; no file written
  18. ReportSynthesizer   — report file written; content includes mandatory sections
 """
+
 from __future__ import annotations
 
 import json
@@ -354,6 +355,7 @@ def patch_confirm_deny(monkeypatch):
 
 # ── 1. Risk roll-up ───────────────────────────────────────────────────────────
 
+
 def test_risk_critical_if_any_critical():
     exploits = ExploitContext(cve_count=1, critical_count=1, high_count=0, medium_count=0)
     assert _derive_overall_risk(exploits) == "CRITICAL"
@@ -390,6 +392,7 @@ def test_critical_overrides_high():
 
 
 # ── 2. ContextBuilder ─────────────────────────────────────────────────────────
+
 
 def test_context_builder_loads_engagement(tmp_eng_db):
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
@@ -669,9 +672,7 @@ def test_context_builder_exports_long_tail_key_validation_proofs(
 
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
 
-    matching = [
-        item for item in ctx.key_findings if item["validation_method"] == method
-    ]
+    matching = [item for item in ctx.key_findings if item["validation_method"] == method]
     assert len(matching) == 1
     assert matching[0]["service"] == service
     assert matching[0]["validation_status"] == "VALIDATED"
@@ -723,10 +724,7 @@ def test_context_builder_excludes_unlinked_bot_token_validation_proofs(tmp_eng_d
                     ENGAGEMENT_ID,
                     "slack",
                     "slack_bot_token",
-                    (
-                        "VALIDATED:slack_auth_test:Slack auth ok: "
-                        "actor_id=U7A3C9K2 team_id=T9B2D6F4"
-                    ),
+                    ("VALIDATED:slack_auth_test:Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4"),
                 ),
                 (
                     ENGAGEMENT_ID,
@@ -746,9 +744,7 @@ def test_context_builder_excludes_unlinked_bot_token_validation_proofs(tmp_eng_d
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
 
     assert not [
-        item
-        for item in ctx.key_findings
-        if item["service"] in {"discord", "slack", "telegram"}
+        item for item in ctx.key_findings if item["service"] in {"discord", "slack", "telegram"}
     ]
     raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
     assert not [
@@ -1016,10 +1012,14 @@ def test_synthesizer_exports_artifact_cloud_asset_provenance(tmp_eng_db, tmp_pat
     payload = json.loads(report_path.with_suffix(".json").read_text(encoding="utf-8"))
     exported_asset = payload["context"]["cloud_asset_inventory"][0]
     assert exported_asset["artifact_source_seed_id"] == 42
-    assert exported_asset["artifact_source_url"] == "https://downloads.acme.local/app-config.json?ok=1"
+    assert (
+        exported_asset["artifact_source_url"] == "https://downloads.acme.local/app-config.json?ok=1"
+    )
     assert exported_asset["artifact_source_file"] == "https://downloads.acme.local/app-config.json"
     assert exported_asset["artifact_extract_rule"] == "artifact_text_extract"
-    assert "artifact_text_extract / json / https://downloads.acme.local/app-config.json" in report_text
+    assert (
+        "artifact_text_extract / json / https://downloads.acme.local/app-config.json" in report_text
+    )
     assert "must-not-export" not in json.dumps(payload, sort_keys=True)
     assert "user:pass" not in json.dumps(payload, sort_keys=True)
     assert "token=secret" not in report_text
@@ -1217,7 +1217,7 @@ def test_context_builder_never_loads_plaintext_credentials(tmp_eng_db, monkeypat
 
 def test_context_builder_derives_overall_risk(tmp_eng_db):
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
-    assert ctx.overall_risk == "CRITICAL"   # fixture has 1 CRITICAL vuln
+    assert ctx.overall_risk == "CRITICAL"  # fixture has 1 CRITICAL vuln
 
 
 def test_context_builder_summarizes_artifacts_by_family_and_type(tmp_eng_db: Path) -> None:
@@ -1307,34 +1307,35 @@ def test_context_builder_no_monitoring_when_table_absent(tmp_eng_db):
 
 # ── 3. PromptAssembler ────────────────────────────────────────────────────────
 
+
 def _make_minimal_context(overall_risk: str = "HIGH") -> ReportContext:
     return ReportContext(
-        engagement_id     = 1,
-        engagement_name   = "Test Engagement",
-        operator          = "analyst",
-        scope             = ["10.0.0.0/24"],
-        start_date        = "2025-01-06",
-        end_date          = "2025-01-17",
-        recon             = ReconContext(),
-        osint             = OsintContext(),
-        exploits          = ExploitContext(cve_count=1, high_count=1),
-        post_exploitation = PostExploitContext(),
-        overall_risk      = overall_risk,
+        engagement_id=1,
+        engagement_name="Test Engagement",
+        operator="analyst",
+        scope=["10.0.0.0/24"],
+        start_date="2025-01-06",
+        end_date="2025-01-17",
+        recon=ReconContext(),
+        osint=OsintContext(),
+        exploits=ExploitContext(cve_count=1, high_count=1),
+        post_exploitation=PostExploitContext(),
+        overall_risk=overall_risk,
     )
 
 
 def test_prompt_assembler_minimal_prompt_on_missing_template(tmp_path):
     """When template dir is empty, fall back to minimal inline prompt."""
     assembler = PromptAssembler(template_dir=tmp_path)
-    ctx       = _make_minimal_context()
-    prompt    = assembler.assemble(ctx)
+    ctx = _make_minimal_context()
+    prompt = assembler.assemble(ctx)
     assert len(prompt) > 50
     assert "HIGH" in prompt
 
 
 def test_prompt_assembler_credential_leak_guard_raises():
     assembler = PromptAssembler(template_dir=Path("/nonexistent"))
-    ctx       = _make_minimal_context()
+    ctx = _make_minimal_context()
     # Inject a fake credential via scope (normally impossible via ContextBuilder)
     ctx.scope = ["password=SuperSecret123"]
     with pytest.raises(ValueError, match="Credential leak"):
@@ -1343,8 +1344,8 @@ def test_prompt_assembler_credential_leak_guard_raises():
 
 def test_v12_prompt_assembler_contains_validation_boundary_section_list():
     assembler = PromptAssembler(template_dir=Path("/nonexistent"))
-    ctx       = _make_minimal_context()
-    prompt    = assembler.assemble(ctx)
+    ctx = _make_minimal_context()
+    prompt = assembler.assemble(ctx)
     for section_name in [
         "Executive Summary",
         "Reconnaissance Findings",
@@ -1369,7 +1370,7 @@ def test_v13_mandatory_sections_use_exposure_not_exploit_framing() -> None:
 def test_prompt_assembler_enforces_token_budget(monkeypatch):
     monkeypatch.setattr("forge.phase6.report_synthesizer.MAX_PROMPT_TOKENS", 8)
     assembler = PromptAssembler(template_dir=Path("/nonexistent"))
-    ctx       = _make_minimal_context()
+    ctx = _make_minimal_context()
     ctx.scope = ["10.0.0.0/24", "acme.example", "portal.acme.example"]
 
     with pytest.raises(PromptOverflowError, match="estimated prompt tokens"):
@@ -1416,6 +1417,7 @@ def test_synthesizer_prompt_overflow_falls_back_to_template_with_lineage(
 
 # ── 4–12. Validator rules V-01 through V-09 ───────────────────────────────────
 
+
 def test_v01_passes_with_all_mandatory_sections(full_report_text):
     result = validate_report(full_report_text, overall_risk="HIGH")
     v01_errors = [e for e in result.errors if "[V-01]" in e]
@@ -1423,17 +1425,20 @@ def test_v01_passes_with_all_mandatory_sections(full_report_text):
 
 
 def test_v01_fails_when_section_missing():
-    text   = "\n".join(s for s in MANDATORY_SECTIONS if s != MANDATORY_SECTIONS[2])
+    text = "\n".join(s for s in MANDATORY_SECTIONS if s != MANDATORY_SECTIONS[2])
     result = validate_report(text, overall_risk="HIGH")
     assert any("[V-01]" in e for e in result.errors)
 
 
 def test_v02_fails_when_risk_absent_from_exec_summary():
     body = " ".join(["word"] * 60)
-    text = "\n".join([
-        "## 1. Executive Summary",
-        body,   # no risk label
-    ] + MANDATORY_SECTIONS[1:])
+    text = "\n".join(
+        [
+            "## 1. Executive Summary",
+            body,  # no risk label
+        ]
+        + MANDATORY_SECTIONS[1:]
+    )
     result = validate_report(text, overall_risk="CRITICAL")
     assert any("[V-02]" in e for e in result.errors)
 
@@ -1445,19 +1450,19 @@ def test_v02_passes_when_risk_present(full_report_text):
 
 def test_v03_warns_on_unapproved_internal_ip(full_report_text):
     # Inject an internal IP into the text
-    text   = full_report_text + "\n\nNote: host at 192.168.1.50 was compromised."
+    text = full_report_text + "\n\nNote: host at 192.168.1.50 was compromised."
     result = validate_report(text, overall_risk="HIGH", approved_internal_ips=[])
     assert any("[V-03]" in w for w in result.warnings)
 
 
 def test_v03_no_warning_for_approved_ip(full_report_text):
-    text   = full_report_text + "\n\nNote: host at 192.168.1.50 was compromised."
+    text = full_report_text + "\n\nNote: host at 192.168.1.50 was compromised."
     result = validate_report(text, overall_risk="HIGH", approved_internal_ips=["192.168.1.50"])
     assert not any("[V-03]" in w for w in result.warnings)
 
 
 def test_v04_fails_on_credential_leak(full_report_text):
-    text   = full_report_text + "\npassword=SuperSecret123"
+    text = full_report_text + "\npassword=SuperSecret123"
     result = validate_report(text, overall_risk="HIGH")
     assert any("[V-04]" in e for e in result.errors)
 
@@ -1487,19 +1492,19 @@ def test_v06_warns_when_exec_summary_too_long():
 
 
 def test_v07_fails_on_paste_url(full_report_text):
-    text   = full_report_text + "\nSee: https://pastebin.com/abcd1234"
+    text = full_report_text + "\nSee: https://pastebin.com/abcd1234"
     result = validate_report(text, overall_risk="HIGH")
     assert any("[V-07]" in e for e in result.errors)
 
 
 def test_v08_fails_on_shellcode_sequence(full_report_text):
-    text   = full_report_text + "\nPayload: \\x90\\x90\\x90\\x90\\x90\\x90\\x90\\x90\\x31"
+    text = full_report_text + "\nPayload: \\x90\\x90\\x90\\x90\\x90\\x90\\x90\\x90\\x31"
     result = validate_report(text, overall_risk="HIGH")
     assert any("[V-08]" in e for e in result.errors)
 
 
 def test_v08_fails_on_msfvenom_string(full_report_text):
-    text   = full_report_text + "\nGenerated with msfvenom -p windows/x64/shell_reverse_tcp"
+    text = full_report_text + "\nGenerated with msfvenom -p windows/x64/shell_reverse_tcp"
     result = validate_report(text, overall_risk="HIGH")
     assert any("[V-08]" in e for e in result.errors)
 
@@ -1518,12 +1523,13 @@ def test_v09_no_warning_on_short_evidence(full_report_text):
 
 # ── 13. Validator V-10 ────────────────────────────────────────────────────────
 
+
 def test_v10_warns_when_exec_summary_lacks_monitoring_reference(full_report_text):
     ongoing = OngoingIntelligenceContext(
-        monitoring_enabled  = True,
-        new_findings_count  = 5,
-        high_severity_count = 2,
-        monitored_keywords  = ["acme.com"],
+        monitoring_enabled=True,
+        new_findings_count=5,
+        high_severity_count=2,
+        monitored_keywords=["acme.com"],
     )
     # full_report_text Executive Summary does not contain monitoring keywords
     result = validate_report(full_report_text, overall_risk="HIGH", ongoing_intel=ongoing)
@@ -1533,34 +1539,33 @@ def test_v10_warns_when_exec_summary_lacks_monitoring_reference(full_report_text
 def test_v10_passes_when_exec_summary_references_monitoring():
     body = " ".join(["text"] * 60)
     monitoring_ref = "Post-engagement monitoring identified ongoing intelligence findings."
-    exec_body  = f"The overall risk is HIGH. {monitoring_ref} {body}"
+    exec_body = f"The overall risk is HIGH. {monitoring_ref} {body}"
     lines = [f"## 1. Executive Summary", "", exec_body, ""]
     for section in MANDATORY_SECTIONS[1:]:
         lines += [section, "", " ".join(["word"] * 60), ""]
     text = "\n".join(lines)
-    ongoing = OngoingIntelligenceContext(
-        monitoring_enabled = True, new_findings_count = 3
-    )
+    ongoing = OngoingIntelligenceContext(monitoring_enabled=True, new_findings_count=3)
     result = validate_report(text, overall_risk="HIGH", ongoing_intel=ongoing)
     assert not any("[V-10]" in w for w in result.warnings)
 
 
 def test_v10_skipped_when_no_monitoring_findings(full_report_text):
     ongoing = OngoingIntelligenceContext(monitoring_enabled=True, new_findings_count=0)
-    result  = validate_report(full_report_text, overall_risk="HIGH", ongoing_intel=ongoing)
+    result = validate_report(full_report_text, overall_risk="HIGH", ongoing_intel=ongoing)
     assert not any("[V-10]" in w for w in result.warnings)
 
 
 def test_v10_skipped_when_monitoring_disabled(full_report_text):
     ongoing = OngoingIntelligenceContext(monitoring_enabled=False, new_findings_count=10)
-    result  = validate_report(full_report_text, overall_risk="HIGH", ongoing_intel=ongoing)
+    result = validate_report(full_report_text, overall_risk="HIGH", ongoing_intel=ongoing)
     assert not any("[V-10]" in w for w in result.warnings)
 
 
 # ── 14. Strict mode ───────────────────────────────────────────────────────────
 
+
 def test_strict_mode_promotes_warnings_to_errors(full_report_text):
-    text   = full_report_text + "\n\nHost at 192.168.1.50 was compromised."
+    text = full_report_text + "\n\nHost at 192.168.1.50 was compromised."
     result = validate_report(text, overall_risk="HIGH", strict=True)
     # V-03 is a warning in normal mode; error in strict
     assert any("[V-03]" in e for e in result.errors)
@@ -1568,13 +1573,14 @@ def test_strict_mode_promotes_warnings_to_errors(full_report_text):
 
 
 def test_non_strict_mode_warnings_do_not_fail(full_report_text):
-    text   = full_report_text + "\n\nHost at 192.168.1.50 was compromised."
+    text = full_report_text + "\n\nHost at 192.168.1.50 was compromised."
     result = validate_report(text, overall_risk="HIGH", strict=False)
     assert any("[V-03]" in w for w in result.warnings)
     assert result.passed is True
 
 
 # ── 15. ValidationResult contract ─────────────────────────────────────────────
+
 
 def test_validation_result_passed_property():
     r = ValidationResult()
@@ -1602,7 +1608,10 @@ def test_validation_result_summary_failed():
 
 # ── 16. ReportSynthesizer: model not found ────────────────────────────────────
 
-def test_synthesizer_falls_back_to_template_when_gguf_absent(tmp_eng_db, tmp_path, patch_confirm_approve):
+
+def test_synthesizer_falls_back_to_template_when_gguf_absent(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
     """When llama_cpp GGUF is missing and no cloud provider is set,
     the synthesizer falls through to deterministic template mode
     (2026-07-06: was previously ModelNotFoundError; now the pipeline
@@ -1610,9 +1619,9 @@ def test_synthesizer_falls_back_to_template_when_gguf_absent(tmp_eng_db, tmp_pat
     factual report from the engagement DB).
     """
     synth = ReportSynthesizer(
-        db_path    = tmp_eng_db,
-        model_path = tmp_path / "nonexistent.gguf",
-        output_dir = tmp_path,
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
     )
     out = synth.generate(ENGAGEMENT_ID)
     assert out.exists()
@@ -1627,10 +1636,10 @@ def test_synthesizer_template_mode_no_llm_needed(tmp_eng_db, tmp_path, patch_con
     """--provider template short-circuits before any LLM machinery even
     tries to load. Verifies the deterministic path is fully independent."""
     synth = ReportSynthesizer(
-        db_path    = tmp_eng_db,
-        model_path = tmp_path / "nonexistent.gguf",
-        output_dir = tmp_path,
-        provider   = "template",
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
+        provider="template",
     )
     out = synth.generate(ENGAGEMENT_ID)
     assert out.exists()
@@ -1789,10 +1798,7 @@ def test_synthesizer_template_and_raw_export_include_archive_url_provenance(
     assert "wayback" in content
     assert "commoncrawl" in content
 
-    archive_context = {
-        item["url"]: item
-        for item in payload["context"]["recon"]["archive_urls"]
-    }
+    archive_context = {item["url"]: item for item in payload["context"]["recon"]["archive_urls"]}
     assert archive_context["https://portal.acme.local/login"]["sources"] == ["wayback"]
     assert archive_context["https://archive.acme.local/config.js"]["sources"] == ["commoncrawl"]
 
@@ -1894,8 +1900,13 @@ def test_synthesizer_template_renders_detailed_finding_fields(
     assert "#### [CRITICAL] SMBv1 Remote Code Execution" in content
     assert "- **Provider**: firebase" in content
     assert "- **Asset**: https://firebaseio.example/.json" in content
-    assert "- **Description**: Deterministic validation confirmed public Firebase records." in content
-    assert "- **Recommendation**: Disable public access and rotate the exposed project configuration." in content
+    assert (
+        "- **Description**: Deterministic validation confirmed public Firebase records." in content
+    )
+    assert (
+        "- **Recommendation**: Disable public access and rotate the exposed project configuration."
+        in content
+    )
 
 
 def test_synthesizer_template_renders_cloud_validation_metadata(
@@ -1955,9 +1966,7 @@ def test_synthesizer_template_renders_cloud_validation_metadata(
 
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
     finding = next(
-        item
-        for item in ctx.exploits.exploited
-        if item.get("resource_id") == "validated-bucket"
+        item for item in ctx.exploits.exploited if item.get("resource_id") == "validated-bucket"
     )
     assert finding["validation_status"] == "VALIDATED"
     assert finding["validation_method"] == "s3_list_bucket"
@@ -2207,15 +2216,11 @@ def test_synthesizer_excludes_unverified_legacy_validation_inventory_rows(
 
     assert ctx.osint.key_findings_count == 0
     assert all(
-        item.get("title") != "Datadog validation inventory note"
-        for item in ctx.exploits.exploited
+        item.get("title") != "Datadog validation inventory note" for item in ctx.exploits.exploited
     )
 
     raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
-    assert all(
-        row.get("title") != "Datadog validation inventory note"
-        for row in raw_rows
-    )
+    assert all(row.get("title") != "Datadog validation inventory note" for row in raw_rows)
 
     synth = ReportSynthesizer(
         db_path=tmp_eng_db,
@@ -2235,10 +2240,7 @@ def test_synthesizer_excludes_unverified_legacy_validation_inventory_rows(
         item.get("title") != "Datadog validation inventory note"
         for item in payload["context"]["exploits"]["exploited"]
     )
-    assert all(
-        row.get("title") != "Datadog validation inventory note"
-        for row in csv_rows
-    )
+    assert all(row.get("title") != "Datadog validation inventory note" for row in csv_rows)
 
 
 def test_synthesizer_gates_legacy_cloud_audit_findings_by_receipt(
@@ -2305,9 +2307,7 @@ def test_synthesizer_gates_legacy_cloud_audit_findings_by_receipt(
 
     assert weak_title not in content
     assert strong_title in content
-    exported_titles = {
-        item.get("title") for item in payload["context"]["exploits"]["exploited"]
-    }
+    exported_titles = {item.get("title") for item in payload["context"]["exploits"]["exploited"]}
     assert weak_title not in exported_titles
     assert strong_title in exported_titles
     csv_titles = {row.get("title") for row in csv_rows}
@@ -2338,9 +2338,7 @@ def test_synthesizer_does_not_promote_unlabelled_embedded_validated_evidence(
 
     ctx = ContextBuilder(tmp_eng_db, ENGAGEMENT_ID).build()
     finding = next(
-        item
-        for item in ctx.exploits.exploited
-        if item.get("title") == "Unverified AWS key note"
+        item for item in ctx.exploits.exploited if item.get("title") == "Unverified AWS key note"
     )
 
     assert finding["validation_status"] == ""
@@ -2613,30 +2611,12 @@ def test_synthesizer_raw_export_fallback_removes_orphan_report_markdown(
     with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
         csv_rows = list(csv.DictReader(handle))
     assert csv_rows
-    assert {
-        row["findings_checksum"]
-        for row in csv_rows
-    } == {payload["findings_checksum"]}
-    assert {
-        row["report_requested_provider"]
-        for row in csv_rows
-    } == {"template"}
-    assert {
-        row["report_rendered_provider"]
-        for row in csv_rows
-    } == {"raw_export"}
-    assert {
-        row["report_render_backend"]
-        for row in csv_rows
-    } == {"template"}
-    assert {
-        row["report_render_path"]
-        for row in csv_rows
-    } == {"template -> raw_export"}
-    assert {
-        row["report_format"]
-        for row in csv_rows
-    } == {"raw_export"}
+    assert {row["findings_checksum"] for row in csv_rows} == {payload["findings_checksum"]}
+    assert {row["report_requested_provider"] for row in csv_rows} == {"template"}
+    assert {row["report_rendered_provider"] for row in csv_rows} == {"raw_export"}
+    assert {row["report_render_backend"] for row in csv_rows} == {"template"}
+    assert {row["report_render_path"] for row in csv_rows} == {"template -> raw_export"}
+    assert {row["report_format"] for row in csv_rows} == {"raw_export"}
     assert all("disk full" in row["fallback_reason"] for row in csv_rows)
     assert all("disk full" in row["report_write_error"] for row in csv_rows)
     with sqlite3.connect(tmp_eng_db) as con:
@@ -2781,26 +2761,11 @@ def test_synthesizer_runtime_provider_failure_falls_back_to_template(
     with out.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
         csv_rows = list(csv.DictReader(handle))
     assert csv_rows
-    assert {
-        row["findings_checksum"]
-        for row in csv_rows
-    } == {payload["findings_checksum"]}
-    assert {
-        row["report_requested_provider"]
-        for row in csv_rows
-    } == {"auto"}
-    assert {
-        row["report_rendered_provider"]
-        for row in csv_rows
-    } == {"template"}
-    assert {
-        row["report_render_backend"]
-        for row in csv_rows
-    } == {"template"}
-    assert {
-        row["report_render_path"]
-        for row in csv_rows
-    } == {"auto -> template"}
+    assert {row["findings_checksum"] for row in csv_rows} == {payload["findings_checksum"]}
+    assert {row["report_requested_provider"] for row in csv_rows} == {"auto"}
+    assert {row["report_rendered_provider"] for row in csv_rows} == {"template"}
+    assert {row["report_render_backend"] for row in csv_rows} == {"template"}
+    assert {row["report_render_path"] for row in csv_rows} == {"auto -> template"}
     assert all(row["fallback_reason"] == "quota exceeded" for row in csv_rows)
 
 
@@ -2867,9 +2832,7 @@ def test_synthesizer_loads_openai_compatible_provider_from_env(monkeypatch, tmp_
     assert synth._llm_provider.endpoint == "https://llm.acme.example/v1"
 
 
-def test_synthesizer_auto_chain_loads_openai_compatible_provider_from_env(
-    monkeypatch, tmp_path
-):
+def test_synthesizer_auto_chain_loads_openai_compatible_provider_from_env(monkeypatch, tmp_path):
     from forge.providers.fallback import FallbackChainProvider
 
     monkeypatch.setenv("FORGE_LLM_CASCADE_ORDER", "openai_compatible")
@@ -3022,9 +2985,7 @@ def test_synthesizer_auto_local_validation_fallback_preserves_provider_reason(
     assert payload["provider"] == "template"
     assert payload["requested_provider"] == "auto"
     assert "quota exceeded" in str(payload["fallback_reason"] or "")
-    assert "validation did not receive final approval" in str(
-        payload["fallback_reason"] or ""
-    )
+    assert "validation did not receive final approval" in str(payload["fallback_reason"] or "")
     assert payload["report_lineage"]["fallback_reason"] == payload["fallback_reason"]
 
 
@@ -3119,9 +3080,9 @@ def test_synthesizer_local_llama_timeout_falls_back_to_template(
 
 def test_synthesizer_dry_run_skips_llm(tmp_eng_db, tmp_path, patch_confirm_approve):
     synth = ReportSynthesizer(
-        db_path    = tmp_eng_db,
-        model_path = tmp_path / "nonexistent.gguf",
-        output_dir = tmp_path,
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
     )
     out = synth.generate(ENGAGEMENT_ID, dry_run=True)
     assert out.exists()
@@ -3129,11 +3090,13 @@ def test_synthesizer_dry_run_skips_llm(tmp_eng_db, tmp_path, patch_confirm_appro
     assert "Dry-run" in content or len(content) > 10
 
 
-def test_synthesizer_dry_run_file_contains_engagement_name(tmp_eng_db, tmp_path, patch_confirm_approve):
+def test_synthesizer_dry_run_file_contains_engagement_name(
+    tmp_eng_db, tmp_path, patch_confirm_approve
+):
     synth = ReportSynthesizer(
-        db_path    = tmp_eng_db,
-        model_path = tmp_path / "nonexistent.gguf",
-        output_dir = tmp_path,
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
     )
     out = synth.generate(ENGAGEMENT_ID, dry_run=True)
     assert "ACME Corp" in out.read_text()
@@ -3141,11 +3104,12 @@ def test_synthesizer_dry_run_file_contains_engagement_name(tmp_eng_db, tmp_path,
 
 # ── 17. Operator cancel ───────────────────────────────────────────────────────
 
+
 def test_synthesizer_operator_cancel_raises_no_file(tmp_eng_db, tmp_path, patch_confirm_deny):
     synth = ReportSynthesizer(
-        db_path    = tmp_eng_db,
-        model_path = tmp_path / "nonexistent.gguf",
-        output_dir = tmp_path,
+        db_path=tmp_eng_db,
+        model_path=tmp_path / "nonexistent.gguf",
+        output_dir=tmp_path,
     )
     with pytest.raises(RuntimeError, match="[Cc]ancell?ed"):
         synth.generate(ENGAGEMENT_ID, dry_run=True)
@@ -3156,16 +3120,14 @@ def test_synthesizer_operator_cancel_raises_no_file(tmp_eng_db, tmp_path, patch_
 
 # ── 18. Full LLM path (mocked llama_cpp) ─────────────────────────────────────
 
+
 def _build_valid_report(
     overall_risk: str = "HIGH",
     *,
     finding_severity: str = "CRITICAL",
 ) -> str:
     body = " ".join(["Professional assessment finding."] * 15)
-    finding_block = (
-        f"Authoritative finding: [{finding_severity}] "
-        "SMBv1 Remote Code Execution. "
-    )
+    finding_block = f"Authoritative finding: [{finding_severity}] SMBv1 Remote Code Execution. "
     lines = [
         "## 1. Executive Summary",
         "",
@@ -3180,7 +3142,7 @@ def _build_valid_report(
 
 def test_synthesizer_mocked_llm_writes_report(tmp_eng_db, tmp_path, patch_confirm_approve):
     fake_gguf = tmp_path / "fake.gguf"
-    fake_gguf.write_bytes(b"\x00" * 64)   # non-empty sentinel
+    fake_gguf.write_bytes(b"\x00" * 64)  # non-empty sentinel
 
     mock_llama_cls = mock.MagicMock()
     mock_llama_cls.return_value.create_chat_completion.return_value = {
@@ -3189,9 +3151,9 @@ def test_synthesizer_mocked_llm_writes_report(tmp_eng_db, tmp_path, patch_confir
 
     with mock.patch("forge.phase6.report_synthesizer.Llama", mock_llama_cls, create=True):
         synth = ReportSynthesizer(
-            db_path    = tmp_eng_db,
-            model_path = fake_gguf,
-            output_dir = tmp_path,
+            db_path=tmp_eng_db,
+            model_path=fake_gguf,
+            output_dir=tmp_path,
         )
         # Bypass lazy import guard
         synth._llm = mock_llama_cls.return_value
@@ -3211,7 +3173,9 @@ def test_synthesizer_llm_cannot_downgrade_authoritative_finding_severity(
     fake_gguf.write_bytes(b"\x00" * 64)
     mock_llama_cls = mock.MagicMock()
     mock_llama_cls.return_value.create_chat_completion.return_value = {
-        "choices": [{"message": {"content": _build_valid_report("CRITICAL", finding_severity="LOW")}}]
+        "choices": [
+            {"message": {"content": _build_valid_report("CRITICAL", finding_severity="LOW")}}
+        ]
     }
 
     with mock.patch("forge.phase6.report_synthesizer.Llama", mock_llama_cls, create=True):

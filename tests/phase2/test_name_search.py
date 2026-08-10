@@ -63,9 +63,7 @@ def _site_filters_from_name_dorks() -> set[str]:
 
 def _supported_public_profile_hosts_for_dork_coverage() -> set[str]:
     return {
-        host.lower()
-        for hosts in _EPIEOS_PLATFORM_PROFILE_HOSTS.values()
-        for host in hosts
+        host.lower() for hosts in _EPIEOS_PLATFORM_PROFILE_HOSTS.values() for host in hosts
     } - _DORK_COVERAGE_EXCLUDED_PROFILE_HOSTS
 
 
@@ -106,7 +104,10 @@ def test_name_search_dork_queries_cover_supported_recursive_profile_families() -
     )
     assert '"Alice Example" (site:zenodo.org/users OR site:figshare.com/authors)' in queries
     assert '"Alice Example" (site:behance.net OR site:dribbble.com OR site:figma.com/@)' in queries
-    assert '"Alice Example" (site:producthunt.com OR site:wellfound.com OR site:angel.co OR site:angellist.com)' in queries
+    assert (
+        '"Alice Example" (site:producthunt.com OR site:wellfound.com OR site:angel.co OR site:angellist.com)'
+        in queries
+    )
     assert (
         '"Alice Example" (site:indiehackers.com OR site:polywork.com OR site:contra.com OR site:adplist.org/mentors)'
         in queries
@@ -116,26 +117,56 @@ def test_name_search_dork_queries_cover_supported_recursive_profile_families() -
         '"Alice Example" (site:beacons.ai OR site:bio.link OR site:bio.site OR site:allmylinks.com OR site:lnk.bio OR site:solo.to)'
         in queries
     )
-    assert '"Alice Example" (site:campsite.bio OR site:bento.me OR site:hoo.be OR site:taplink.cc OR site:msha.ke)' in queries
-    assert '"Alice Example" (site:carrd.co OR site:muckrack.com OR site:open.spotify.com/user)' in queries
+    assert (
+        '"Alice Example" (site:campsite.bio OR site:bento.me OR site:hoo.be OR site:taplink.cc OR site:msha.ke)'
+        in queries
+    )
+    assert (
+        '"Alice Example" (site:carrd.co OR site:muckrack.com OR site:open.spotify.com/user)'
+        in queries
+    )
     assert '"Alice Example" (site:sr.ht OR site:huggingface.co)' in queries
-    assert '"Alice Example" (site:npmjs.com OR site:pypi.org OR site:stackoverflow.com/users)' in queries
+    assert (
+        '"Alice Example" (site:npmjs.com OR site:pypi.org OR site:stackoverflow.com/users)'
+        in queries
+    )
     assert '"Alice Example" (site:medium.com OR site:hashnode.com OR site:substack.com)' in queries
-    assert '"Alice Example" (site:kaggle.com OR site:speakerdeck.com OR site:slideshare.net)' in queries
+    assert (
+        '"Alice Example" (site:kaggle.com OR site:speakerdeck.com OR site:slideshare.net)'
+        in queries
+    )
     assert '"Alice Example" (site:launchpad.net/~ OR site:sourceforge.net/u)' in queries
-    assert '"Alice Example" (site:replit.com/@ OR site:codesandbox.io/u OR site:devpost.com OR site:read.cv)' in queries
-    assert '"Alice Example" (site:codepen.io OR site:hub.docker.com/u OR site:hub.docker.com/r)' in queries
+    assert (
+        '"Alice Example" (site:replit.com/@ OR site:codesandbox.io/u OR site:devpost.com OR site:read.cv)'
+        in queries
+    )
+    assert (
+        '"Alice Example" (site:codepen.io OR site:hub.docker.com/u OR site:hub.docker.com/r)'
+        in queries
+    )
     assert (
         '"Alice Example" (site:rubygems.org/profiles OR site:crates.io/users OR site:packagist.org/users)'
         in queries
     )
-    assert '"Alice Example" (site:nuget.org/profiles OR site:hex.pm/users OR site:steamcommunity.com/id)' in queries
-    assert '"Alice Example" (site:yeswehack.com/hunters OR site:opencollective.com OR site:liberapay.com)' in queries
-    assert '"Alice Example" (site:patreon.com OR site:ko-fi.com OR site:buymeacoffee.com)' in queries
+    assert (
+        '"Alice Example" (site:nuget.org/profiles OR site:hex.pm/users OR site:steamcommunity.com/id)'
+        in queries
+    )
+    assert (
+        '"Alice Example" (site:yeswehack.com/hunters OR site:opencollective.com OR site:liberapay.com)'
+        in queries
+    )
+    assert (
+        '"Alice Example" (site:patreon.com OR site:ko-fi.com OR site:buymeacoffee.com)' in queries
+    )
     assert '"Alice Example" (site:youtube.com OR site:tiktok.com OR site:twitch.tv)' in queries
-    assert '"Alice Example" (site:pinterest.com OR site:vimeo.com OR site:soundcloud.com)' in queries
+    assert (
+        '"Alice Example" (site:pinterest.com OR site:vimeo.com OR site:soundcloud.com)' in queries
+    )
     assert '"Alice Example" (site:flickr.com OR site:letterboxd.com OR site:last.fm)' in queries
-    assert '"Alice Example" (site:bandcamp.com OR site:mixcloud.com OR site:tryhackme.com)' in queries
+    assert (
+        '"Alice Example" (site:bandcamp.com OR site:mixcloud.com OR site:tryhackme.com)' in queries
+    )
     assert '"Alice Example" (site:strava.com/athletes OR site:strava.com/pros)' in queries
     assert '"Alice Example" site:quora.com/profile' in queries
     assert '"Alice Example" (site:unsplash.com/@ OR site:500px.com/p)' in queries
@@ -322,12 +353,10 @@ def test_search_name_media_profile_dorks_feed_recursive_profiles(
             "https://tryhackme.com/p/alicethm"
         ),
         '"Alice Example" (site:strava.com/athletes OR site:strava.com/pros)': (
-            "https://www.strava.com/athletes/12345678 "
-            "https://www.strava.com/clubs/acme-cycling"
+            "https://www.strava.com/athletes/12345678 https://www.strava.com/clubs/acme-cycling"
         ),
         '"Alice Example" site:quora.com/profile': (
-            "https://www.quora.com/profile/Alice-Example-1 "
-            "https://www.quora.com/What-is-OSINT"
+            "https://www.quora.com/profile/Alice-Example-1 https://www.quora.com/What-is-OSINT"
         ),
         '"Alice Example" (site:unsplash.com/@ OR site:500px.com/p)': (
             "https://unsplash.com/@alicephotos "
@@ -906,8 +935,7 @@ def test_search_name_persists_company_profile_rows_for_recursive_synthesis(
         )
         assert audit_payload["profile_hits"] == {}
         assert [
-            (hit["platform"], hit["company"])
-            for hit in audit_payload["company_profile_hits"]
+            (hit["platform"], hit["company"]) for hit in audit_payload["company_profile_hits"]
         ] == [
             ("linkedin_company", "Acme Research"),
             ("github", "Acme Red Team"),
@@ -988,10 +1016,16 @@ def test_search_name_company_profiles_feed_synthesis_company_fanout(
         assert seed_rows[("Acme Red Team", "company")]["source"] == "discovered"
         assert seed_rows[("Acme Foundry", "company")]["source"] == "discovered"
         assert seed_rows[("Acme Ventures", "company")]["source"] == "discovered"
-        assert seed_rows[("Acme Research", "company")]["metadata"]["rule"] == "social_profile_anchor"
-        assert seed_rows[("Acme Red Team", "company")]["metadata"]["rule"] == "social_profile_anchor"
+        assert (
+            seed_rows[("Acme Research", "company")]["metadata"]["rule"] == "social_profile_anchor"
+        )
+        assert (
+            seed_rows[("Acme Red Team", "company")]["metadata"]["rule"] == "social_profile_anchor"
+        )
         assert seed_rows[("Acme Foundry", "company")]["metadata"]["rule"] == "social_profile_anchor"
-        assert seed_rows[("Acme Ventures", "company")]["metadata"]["rule"] == "social_profile_anchor"
+        assert (
+            seed_rows[("Acme Ventures", "company")]["metadata"]["rule"] == "social_profile_anchor"
+        )
         assert summary.seeds_inserted >= 4
     finally:
         con.close()
@@ -1024,87 +1058,89 @@ def test_search_name_persists_broader_supported_profile_rows(
 
     monkeypatch.setattr(
         "forge.utils.intel.name_search._run_name_dork_batch",
-        lambda queries, **kwargs: [
-            (
-                " ".join(
-                    [
-                        "https://gitlab.com/aliceforge",
-                        "https://gist.github.com/alicegist/abcdef1234567890",
-                        "https://gist.github.com/discover",
-                        "https://bitbucket.org/alicebucket/platform-repo",
-                        "https://bsky.app/profile/alice.blue",
-                        "https://www.threads.net/@alicethread",
-                        "https://www.reddit.com/user/alicered/comments",
-                        "https://dev.to/alicedev/latest-post",
-                        "https://about.me/aliceabout",
-                        "https://www.facebook.com/people/Alice-Example/1000123456789/",
-                        "https://alicemedium.medium.com",
-                        "https://alicesubstack.substack.com",
-                        "https://calendly.com/alicecal/intro",
-                        "https://cal.com/alicebook/security",
-                        "https://beacons.ai/alicebeacon",
-                        "https://bio.link/alicebio",
-                        "https://bio.site/alicebiosite",
-                        "https://allmylinks.com/aliceaml",
-                        "https://lnk.bio/alicelnk",
-                        "https://solo.to/alicesolo",
-                        "https://campsite.bio/alicecamp",
-                        "https://bento.me/alicebento",
-                        "https://hoo.be/alicehoo",
-                        "https://taplink.cc/alicetap",
-                        "https://msha.ke/go.alicemilk",
-                        "https://alicecard.carrd.co",
-                        "https://muckrack.com/alicemuck",
-                        "https://open.spotify.com/user/alicespotify",
-                        "https://launchpad.net/~alicelp",
-                        "https://sourceforge.net/u/alicesf/profile/",
-                        "https://replit.com/@alicerepl/security-lab",
-                        "https://codesandbox.io/u/alicesandbox/sandboxes",
-                        "https://devpost.com/alicedevpost",
-                        "https://read.cv/aliceread",
-                        "https://yeswehack.com/hunters/aliceywh",
-                        "https://opencollective.com/alicecollective",
-                        "https://liberapay.com/alicelibera",
-                        "https://www.patreon.com/alicepatreon",
-                        "https://ko-fi.com/alicekofi",
-                        "https://www.buymeacoffee.com/alicecoffee",
-                        "https://www.producthunt.com/@alicebuilder",
-                        "https://www.producthunt.com/users/alicehunter",
-                        "https://wellfound.com/u/alicefounder",
-                        "https://angel.co/u/aliceangel",
-                        "https://orcid.org/0000-0002-1825-0097",
-                        "https://www.researchgate.net/profile/Alice-Example",
-                        "https://scholar.google.com/citations?user=qc6CJjYAAAAJ",
-                        "https://scholar.google.com/citations?view_op=search_authors",
-                        "https://www.academia.edu/AliceAcademic",
-                        "https://www.academia.edu/people/search",
-                        "https://www.semanticscholar.org/author/Alice-Example/123",
-                        "https://www.semanticscholar.org/paper/123",
-                        "https://zenodo.org/users/alicezenodo",
-                        "https://zenodo.org/records/123",
-                        "https://figshare.com/authors/Alice_Example/123456",
-                        "https://figshare.com/articles/dataset/example/123456",
-                        "https://www.credly.com/users/alice-ops/badges",
-                        "https://www.behance.net/aliceops",
-                        "https://dribbble.com/alicedesign",
-                        "https://bugcrowd.com/alicebug",
-                        "https://hackerone.com/alicehacker",
-                        "https://app.intigriti.com/researcher/profile/aliceinti/activity",
-                        "https://app.intigriti.com/programs/acme/detail",
-                        "https://www.openbugbounty.org/researchers/aliceobb/",
-                        "https://www.openbugbounty.org/faq/",
-                        "https://news.ycombinator.com/user?id=alicehn",
-                        "https://news.ycombinator.com/item?id=123456",
-                        "https://news.ycombinator.com/user?id=news",
-                        "https://stackoverflow.com/users/12345/alice-stack",
-                        "https://security.stackexchange.com/users/67890/alice-security",
-                        "https://stackoverflow.com/questions/12345/not-a-profile",
-                    ]
-                ),
-                False,
-            )
-        ]
-        + [("", False) for _ in queries[1:]],
+        lambda queries, **kwargs: (
+            [
+                (
+                    " ".join(
+                        [
+                            "https://gitlab.com/aliceforge",
+                            "https://gist.github.com/alicegist/abcdef1234567890",
+                            "https://gist.github.com/discover",
+                            "https://bitbucket.org/alicebucket/platform-repo",
+                            "https://bsky.app/profile/alice.blue",
+                            "https://www.threads.net/@alicethread",
+                            "https://www.reddit.com/user/alicered/comments",
+                            "https://dev.to/alicedev/latest-post",
+                            "https://about.me/aliceabout",
+                            "https://www.facebook.com/people/Alice-Example/1000123456789/",
+                            "https://alicemedium.medium.com",
+                            "https://alicesubstack.substack.com",
+                            "https://calendly.com/alicecal/intro",
+                            "https://cal.com/alicebook/security",
+                            "https://beacons.ai/alicebeacon",
+                            "https://bio.link/alicebio",
+                            "https://bio.site/alicebiosite",
+                            "https://allmylinks.com/aliceaml",
+                            "https://lnk.bio/alicelnk",
+                            "https://solo.to/alicesolo",
+                            "https://campsite.bio/alicecamp",
+                            "https://bento.me/alicebento",
+                            "https://hoo.be/alicehoo",
+                            "https://taplink.cc/alicetap",
+                            "https://msha.ke/go.alicemilk",
+                            "https://alicecard.carrd.co",
+                            "https://muckrack.com/alicemuck",
+                            "https://open.spotify.com/user/alicespotify",
+                            "https://launchpad.net/~alicelp",
+                            "https://sourceforge.net/u/alicesf/profile/",
+                            "https://replit.com/@alicerepl/security-lab",
+                            "https://codesandbox.io/u/alicesandbox/sandboxes",
+                            "https://devpost.com/alicedevpost",
+                            "https://read.cv/aliceread",
+                            "https://yeswehack.com/hunters/aliceywh",
+                            "https://opencollective.com/alicecollective",
+                            "https://liberapay.com/alicelibera",
+                            "https://www.patreon.com/alicepatreon",
+                            "https://ko-fi.com/alicekofi",
+                            "https://www.buymeacoffee.com/alicecoffee",
+                            "https://www.producthunt.com/@alicebuilder",
+                            "https://www.producthunt.com/users/alicehunter",
+                            "https://wellfound.com/u/alicefounder",
+                            "https://angel.co/u/aliceangel",
+                            "https://orcid.org/0000-0002-1825-0097",
+                            "https://www.researchgate.net/profile/Alice-Example",
+                            "https://scholar.google.com/citations?user=qc6CJjYAAAAJ",
+                            "https://scholar.google.com/citations?view_op=search_authors",
+                            "https://www.academia.edu/AliceAcademic",
+                            "https://www.academia.edu/people/search",
+                            "https://www.semanticscholar.org/author/Alice-Example/123",
+                            "https://www.semanticscholar.org/paper/123",
+                            "https://zenodo.org/users/alicezenodo",
+                            "https://zenodo.org/records/123",
+                            "https://figshare.com/authors/Alice_Example/123456",
+                            "https://figshare.com/articles/dataset/example/123456",
+                            "https://www.credly.com/users/alice-ops/badges",
+                            "https://www.behance.net/aliceops",
+                            "https://dribbble.com/alicedesign",
+                            "https://bugcrowd.com/alicebug",
+                            "https://hackerone.com/alicehacker",
+                            "https://app.intigriti.com/researcher/profile/aliceinti/activity",
+                            "https://app.intigriti.com/programs/acme/detail",
+                            "https://www.openbugbounty.org/researchers/aliceobb/",
+                            "https://www.openbugbounty.org/faq/",
+                            "https://news.ycombinator.com/user?id=alicehn",
+                            "https://news.ycombinator.com/item?id=123456",
+                            "https://news.ycombinator.com/user?id=news",
+                            "https://stackoverflow.com/users/12345/alice-stack",
+                            "https://security.stackexchange.com/users/67890/alice-security",
+                            "https://stackoverflow.com/questions/12345/not-a-profile",
+                        ]
+                    ),
+                    False,
+                )
+            ]
+            + [("", False) for _ in queries[1:]]
+        ),
     )
 
     result = search_name(

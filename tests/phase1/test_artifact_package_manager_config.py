@@ -101,33 +101,59 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
     assert _classify_remote_artifact_url("https://downloads.acme.example/mambarc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.yarnrc.yml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/poetry.toml") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/pypoetry/auth.toml") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/pypoetry/auth.toml")
+        == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/pixi.toml") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/environment.yml") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.nuget/NuGet.Config") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.cargo/credentials") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.cargo/config.toml") == "config"
-    assert _select_remote_artifact_filename(
-        76,
-        "https://downloads.acme.example/.nuget/NuGet.Config",
-        "config",
-    ) == "NuGet.Config"
-    assert _select_remote_artifact_filename(
-        77,
-        "https://downloads.acme.example/.cargo/credentials",
-        "config",
-    ) == "credentials.cargo-credentials"
-    assert _select_remote_artifact_filename(
-        78,
-        "https://downloads.acme.example/.cargo/config.toml",
-        "config",
-    ) == "config.toml.cargo-config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/environment.yml") == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.nuget/NuGet.Config")
+        == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.cargo/credentials")
+        == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.cargo/config.toml")
+        == "config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            76,
+            "https://downloads.acme.example/.nuget/NuGet.Config",
+            "config",
+        )
+        == "NuGet.Config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            77,
+            "https://downloads.acme.example/.cargo/credentials",
+            "config",
+        )
+        == "credentials.cargo-credentials"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            78,
+            "https://downloads.acme.example/.cargo/config.toml",
+            "config",
+        )
+        == "config.toml.cargo-config"
+    )
     assert package_manager_config_remote_filename(".condarc") == ".condarc"
     assert package_manager_config_remote_filename("mambarc") == "mambarc"
     assert package_manager_config_remote_filename("pixi.toml") == "pixi.toml"
     assert package_manager_config_remote_filename("environment.yml") == "environment.yml"
     assert package_manager_config_remote_filename(".nuget/NuGet.Config") == "NuGet.Config"
-    assert package_manager_config_remote_filename(".cargo/credentials") == "credentials.cargo-credentials"
+    assert (
+        package_manager_config_remote_filename(".cargo/credentials")
+        == "credentials.cargo-credentials"
+    )
     assert package_manager_config_remote_filename(".yarnrc.yml") == ".yarnrc.yml"
     assert package_manager_config_remote_filename("poetry.toml") == "poetry.toml"
     assert package_manager_config_remote_filename("pypoetry/auth.toml") == "auth.toml.poetry-auth"
@@ -277,7 +303,9 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         encoding="utf-8",
     )
     generic_credentials_path = artifact_root / "credentials"
-    generic_credentials_path.write_text("owner = generic-creds-owner@acme.example", encoding="utf-8")
+    generic_credentials_path.write_text(
+        "owner = generic-creds-owner@acme.example", encoding="utf-8"
+    )
     generic_config_path = artifact_root / "config.toml"
     generic_config_path.write_text("owner = generic-config-owner@acme.example", encoding="utf-8")
     nuget_dir = artifact_root / ".nuget"
@@ -323,16 +351,24 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         }
         assert artifact_meta[pip_conf_path.resolve().as_posix()]["format"] == "pip-config"
         assert artifact_meta[cargo_config_path.resolve().as_posix()]["format"] == "cargo-config"
-        assert artifact_meta[cargo_credentials_path.resolve().as_posix()]["format"] == "cargo-credentials"
+        assert (
+            artifact_meta[cargo_credentials_path.resolve().as_posix()]["format"]
+            == "cargo-credentials"
+        )
         assert artifact_meta[conda_config_path.resolve().as_posix()]["format"] == "conda-config"
         assert artifact_meta[mamba_config_path.resolve().as_posix()]["format"] == "mamba-config"
         assert artifact_meta[yarnrc_yml_path.resolve().as_posix()]["format"] == "yarnrc-yml"
         assert artifact_meta[poetry_config_path.resolve().as_posix()]["format"] == "poetry-config"
         assert artifact_meta[poetry_auth_path.resolve().as_posix()]["format"] == "poetry-auth"
         assert artifact_meta[pixi_manifest_path.resolve().as_posix()]["format"] == "pixi-manifest"
-        assert artifact_meta[conda_environment_path.resolve().as_posix()]["format"] == "conda-environment"
+        assert (
+            artifact_meta[conda_environment_path.resolve().as_posix()]["format"]
+            == "conda-environment"
+        )
         assert artifact_meta[nuget_config_path.resolve().as_posix()]["format"] == "nuget-config"
-        assert artifact_meta[generic_credentials_path.resolve().as_posix()]["format"] == "credentials"
+        assert (
+            artifact_meta[generic_credentials_path.resolve().as_posix()]["format"] == "credentials"
+        )
         assert artifact_meta[generic_config_path.resolve().as_posix()]["format"] == "toml"
 
         seeds = {

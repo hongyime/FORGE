@@ -85,8 +85,12 @@ def test_ads_txt_publisher_accounts_become_passive_inventory(tmp_path: Path) -> 
         "appnexus.com/12345",
         "artifact_app_ads_txt_publisher_account",
     ) in cloud_assets
-    assert not any(row[:2] == ("ad_publisher_account", "malformed domain/bad id") for row in cloud_assets)
-    assert not any(row[:2] == ("ad_publisher_account", "example.com/no relation") for row in cloud_assets)
+    assert not any(
+        row[:2] == ("ad_publisher_account", "malformed domain/bad id") for row in cloud_assets
+    )
+    assert not any(
+        row[:2] == ("ad_publisher_account", "example.com/no relation") for row in cloud_assets
+    )
 
 
 def test_sellers_json_entries_become_passive_inventory(tmp_path: Path) -> None:
@@ -184,5 +188,10 @@ def test_sellers_json_entries_become_passive_inventory(tmp_path: Path) -> None:
         "artifact_sellers_json_seller_account",
     ) in cloud_assets
     assert not any(row[:2] == ("ad_seller_account", "hidden-1") for row in cloud_assets)
-    assert not any(row[:2] == ("ad_seller_account", "seller.acme.example/bad id with spaces") for row in cloud_assets)
-    assert not any(row[:2] == ("ad_seller_account", "missing-id.acme.example") for row in cloud_assets)
+    assert not any(
+        row[:2] == ("ad_seller_account", "seller.acme.example/bad id with spaces")
+        for row in cloud_assets
+    )
+    assert not any(
+        row[:2] == ("ad_seller_account", "missing-id.acme.example") for row in cloud_assets
+    )

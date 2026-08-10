@@ -15,6 +15,7 @@ Test categories:
   8. CyberChef recipe     — emit_cyberchef_recipe writes valid JSON with AES op
   9. Staging paths        — never new top-level dirs; always existing writable paths
 """
+
 from __future__ import annotations
 
 import gzip
@@ -54,7 +55,7 @@ from forge.utils.post.transfer_util import (
     _check_time_window,
 )
 
-AES_KEY = "aa" * 32   # 32 bytes as hex
+AES_KEY = "aa" * 32  # 32 bytes as hex
 
 
 def _require_collected(record: CollectedFile | None) -> CollectedFile:
@@ -89,20 +90,26 @@ def test_direct_collector_requires_roe_before_discovery(
 
 # ── 1. FilesystemCollector ────────────────────────────────────────────────────
 
+
 def test_filesystem_collector_finds_matching_files(tmp_eng_db: Path, tmp_path: Path) -> None:
     # Create test files
     (tmp_path / "report.docx").write_bytes(b"docx content")
     (tmp_path / "data.xlsx").write_bytes(b"xlsx content")
     (tmp_path / "ignore.exe").write_bytes(b"binary")
 
-    collector = _authorized_collector(FilesystemCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        root=tmp_path, patterns=["*.docx", "*.xlsx"],
-        session_key=AES_KEY, staging_dir=tmp_path / "stage",
-    ))
+    collector = _authorized_collector(
+        FilesystemCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            root=tmp_path,
+            patterns=["*.docx", "*.xlsx"],
+            session_key=AES_KEY,
+            staging_dir=tmp_path / "stage",
+        )
+    )
     (tmp_path / "stage").mkdir()
 
-    with mock.patch("time.sleep"):   # suppress stagger delays
+    with mock.patch("time.sleep"):  # suppress stagger delays
         artifacts = list(collector.discover())
         results = [collector.collect(a) for a in artifacts if a]
 
@@ -118,12 +125,17 @@ def test_filesystem_collector_skips_oversized_files(tmp_eng_db: Path, tmp_path: 
 
     stage = tmp_path / "stage"
     stage.mkdir()
-    collector = _authorized_collector(FilesystemCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        root=tmp_path, patterns=["*.docx"],
-        max_size=50 * 1024 * 1024,
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        FilesystemCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            root=tmp_path,
+            patterns=["*.docx"],
+            max_size=50 * 1024 * 1024,
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     with mock.patch("time.sleep"):
         artifacts = list(collector.discover())
         results = [collector.collect(a) for a in artifacts if a]
@@ -135,11 +147,16 @@ def test_filesystem_collector_sha256_correct(tmp_eng_db: Path, tmp_path: Path) -
     (tmp_path / "test.txt").write_bytes(content)
     stage = tmp_path / "stage"
     stage.mkdir()
-    collector = _authorized_collector(FilesystemCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        root=tmp_path, patterns=["*.txt"],
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        FilesystemCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            root=tmp_path,
+            patterns=["*.txt"],
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     with mock.patch("time.sleep"):
         artifacts = list(collector.discover())
         results = [_require_collected(collector.collect(a)) for a in artifacts if a]
@@ -154,11 +171,16 @@ def test_filesystem_collector_staging_file_is_encrypted(tmp_eng_db: Path, tmp_pa
     (tmp_path / "secret.txt").write_bytes(content)
     stage = tmp_path / "stage"
     stage.mkdir()
-    collector = _authorized_collector(FilesystemCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        root=tmp_path, patterns=["*.txt"],
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        FilesystemCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            root=tmp_path,
+            patterns=["*.txt"],
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     with mock.patch("time.sleep"):
         artifacts = list(collector.discover())
         results = [_require_collected(collector.collect(a)) for a in artifacts if a]
@@ -173,20 +195,26 @@ def test_filesystem_collector_staging_file_is_encrypted(tmp_eng_db: Path, tmp_pa
 
 # ── 2. BaseCollector: metadata in DB, content never stored ───────────────────
 
+
 def test_metadata_persisted_to_db(tmp_eng_db: Path, tmp_path: Path) -> None:
     content = b"file content"
     (tmp_path / "creds.txt").write_bytes(content)
     stage = tmp_path / "stage"
     stage.mkdir()
-    collector = _authorized_collector(FilesystemCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        root=tmp_path, patterns=["*.txt"],
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        FilesystemCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            root=tmp_path,
+            patterns=["*.txt"],
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     with mock.patch("time.sleep"):
         artifacts = list(collector.discover())
         results = [_require_collected(collector.collect(a)) for a in artifacts if a]
-    con  = sqlite3.connect(tmp_eng_db)
+    con = sqlite3.connect(tmp_eng_db)
     rows = con.execute("SELECT sha256 FROM exfiltrated_data").fetchall()
     con.close()
     assert any(results[0].sha256 == r[0] for r in rows)
@@ -198,15 +226,20 @@ def test_content_never_stored_in_db(tmp_eng_db: Path, tmp_path: Path) -> None:
     (tmp_path / "env.txt").write_bytes(secret_content)
     stage = tmp_path / "stage"
     stage.mkdir()
-    collector = _authorized_collector(FilesystemCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        root=tmp_path, patterns=["*.txt"],
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        FilesystemCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            root=tmp_path,
+            patterns=["*.txt"],
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     with mock.patch("time.sleep"):
         artifacts = list(collector.discover())
         [collector.collect(a) for a in artifacts if a]
-    con      = sqlite3.connect(tmp_eng_db)
+    con = sqlite3.connect(tmp_eng_db)
     all_data = str(con.execute("SELECT * FROM exfiltrated_data").fetchall())
     con.close()
     assert b"SuperSecret123!" not in all_data.encode()
@@ -220,14 +253,16 @@ def test_collector_lifecycle_state_moves_from_discovered_to_collected_to_skipped
     (tmp_path / "notes.txt").write_text("hello")
     stage = tmp_path / "stage"
     stage.mkdir()
-    collector = _authorized_collector(FilesystemCollector(
-        db_path=tmp_eng_db,
-        engagement_id=1,
-        root=tmp_path,
-        patterns=["*.txt"],
-        session_key=AES_KEY,
-        staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        FilesystemCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            root=tmp_path,
+            patterns=["*.txt"],
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
 
     artifact = next(collector.discover())
     assert artifact.validation_state == "discovered"
@@ -241,6 +276,7 @@ def test_collector_lifecycle_state_moves_from_discovered_to_collected_to_skipped
 
 
 # ── 3. SshAwsKeyCollector ─────────────────────────────────────────────────────
+
 
 def test_ssh_key_collector_skips_pub_files(
     tmp_eng_db: Path,
@@ -257,10 +293,14 @@ def test_ssh_key_collector_skips_pub_files(
     # Point collector at our fake home dir
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
-    collector = _authorized_collector(SshAwsKeyCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        SshAwsKeyCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     with mock.patch("time.sleep"):
         artifacts = list(collector.discover())
         results = [collector.collect(a) for a in artifacts if a]
@@ -283,10 +323,14 @@ def test_aws_credentials_collected(
 
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
-    collector = _authorized_collector(SshAwsKeyCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        SshAwsKeyCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     with mock.patch("time.sleep"):
         artifacts = list(collector.discover())
         results = [collector.collect(a) for a in artifacts if a]
@@ -312,6 +356,7 @@ def test_registry_contains_legacy_and_new_collectors() -> None:
 
 # ── 4. EnvVarCollector ────────────────────────────────────────────────────────
 
+
 def test_env_var_collector_captures_secrets(
     tmp_eng_db: Path,
     tmp_path: Path,
@@ -322,14 +367,18 @@ def test_env_var_collector_captures_secrets(
     stage = tmp_path / "stage"
     stage.mkdir()
 
-    collector = _authorized_collector(EnvVarCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        EnvVarCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     artifacts = list(collector.discover())
     results = [_require_collected(collector.collect(a)) for a in artifacts if a]
     assert len(results) == 1
-    
+
     # Verify content in staging
     staged = (stage / f".{results[0].sha256[:16]}.env.tmp").read_bytes()
     # Staged is encrypted, we don't check plaintext here (OPSEC)
@@ -347,10 +396,14 @@ def test_env_var_collector_no_secret_vars_yields_nothing(
             monkeypatch.delenv(var, raising=False)
     stage = tmp_path / "stage"
     stage.mkdir()
-    collector = _authorized_collector(EnvVarCollector(
-        db_path=tmp_eng_db, engagement_id=1,
-        session_key=AES_KEY, staging_dir=stage,
-    ))
+    collector = _authorized_collector(
+        EnvVarCollector(
+            db_path=tmp_eng_db,
+            engagement_id=1,
+            session_key=AES_KEY,
+            staging_dir=stage,
+        )
+    )
     artifacts = list(collector.discover())
     results = [collector.collect(a) for a in artifacts if a]
     assert len(results) == 0
@@ -358,14 +411,19 @@ def test_env_var_collector_no_secret_vars_yields_nothing(
 
 # ── 5. ClipboardCollector ─────────────────────────────────────────────────────
 
+
 def test_clipboard_collector_captures_content(tmp_eng_db: Path, tmp_path: Path) -> None:
     with mock.patch("pyperclip.paste", return_value="clipboard content"):
         stage = tmp_path / "stage"
         stage.mkdir()
-        collector = _authorized_collector(ClipboardCollector(
-            db_path=tmp_eng_db, engagement_id=1,
-            session_key=AES_KEY, staging_dir=stage,
-        ))
+        collector = _authorized_collector(
+            ClipboardCollector(
+                db_path=tmp_eng_db,
+                engagement_id=1,
+                session_key=AES_KEY,
+                staging_dir=stage,
+            )
+        )
         artifacts = list(collector.discover())
         results = [_require_collected(collector.collect(a)) for a in artifacts if a]
         assert len(results) == 1
@@ -379,7 +437,7 @@ def test_clipboard_collector_handles_pyperclip_not_installed(
 ) -> None:
     stage = tmp_path / "stage"
     stage.mkdir()
-    
+
     # Use a safer way to mock missing module
     original_import = builtins.__import__
     _ = monkeypatch
@@ -390,10 +448,14 @@ def test_clipboard_collector_handles_pyperclip_not_installed(
         return original_import(name, *args, **kwargs)
 
     with mock.patch("builtins.__import__", side_effect=mocked_import):
-        collector = _authorized_collector(ClipboardCollector(
-            db_path=tmp_eng_db, engagement_id=1,
-            session_key=AES_KEY, staging_dir=stage,
-        ))
+        collector = _authorized_collector(
+            ClipboardCollector(
+                db_path=tmp_eng_db,
+                engagement_id=1,
+                session_key=AES_KEY,
+                staging_dir=stage,
+            )
+        )
         # Must not raise; yields nothing
         artifacts = list(collector.discover())
         results = [collector.collect(a) for a in artifacts if a]
@@ -401,6 +463,7 @@ def test_clipboard_collector_handles_pyperclip_not_installed(
 
 
 # ── 6. ThrottledUploader ──────────────────────────────────────────────────────
+
 
 def test_throttled_uploader_calls_channel_send(tmp_path: Path) -> None:
     mock_channel = mock.MagicMock()
@@ -419,7 +482,7 @@ def test_throttled_uploader_suppressed_in_offline_mode(
     monkeypatch.setenv("FORGE_OFFLINE_STRICT", "1")
     mock_channel = mock.MagicMock()
     uploader = ThrottledUploader(mock_channel)
-    result   = uploader.upload(b"data")
+    result = uploader.upload(b"data")
     assert result is False
     mock_channel.send.assert_not_called()
 
@@ -427,8 +490,9 @@ def test_throttled_uploader_suppressed_in_offline_mode(
 def test_throttled_uploader_retries_on_channel_failure() -> None:
     mock_channel = mock.MagicMock()
     mock_channel.send.side_effect = [False, False, True]  # fail twice, succeed third
-    uploader = ThrottledUploader(mock_channel, max_bytes_per_sec=10 * 1024 * 1024,
-                                  chunk_size=4096, max_retries=3)
+    uploader = ThrottledUploader(
+        mock_channel, max_bytes_per_sec=10 * 1024 * 1024, chunk_size=4096, max_retries=3
+    )
     with mock.patch("time.sleep"):
         result = uploader.upload(b"test data")
     assert result is True
@@ -436,6 +500,7 @@ def test_throttled_uploader_retries_on_channel_failure() -> None:
 
 
 # ── 7. Exfiltrator time-window gate ──────────────────────────────────────────
+
 
 def test_time_window_blocks_outside_hours() -> None:
     with mock.patch("forge.utils.post.transfer_util.datetime") as mock_dt:
@@ -487,9 +552,12 @@ def test_exfiltrator_operator_cancel_aborts(
     _ = patch_confirm_deny
     mock_channel = mock.MagicMock()
     exfil = Exfiltrator(
-        db_path=tmp_eng_db, engagement_id=1,
-        channel=mock_channel, session_key=AES_KEY,
-        window=None, dry_run=False,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        channel=mock_channel,
+        session_key=AES_KEY,
+        window=None,
+        dry_run=False,
         roe_id="ROE-TEST",
     )
     with pytest.raises(RuntimeError, match="[Cc]ancell?ed"):
@@ -528,19 +596,21 @@ def test_exfiltrator_uploads_staged_ext_suffixed_chunks(
 
 # ── 8. ExfilMonitor registration ─────────────────────────────────────────────
 
+
 def test_register_exfil_monitor_writes_to_db(tmp_eng_db: Path) -> None:
     hashes = ["abc123", "def456", "abc123"]  # duplicate should be ignored
     register_exfil_monitor(tmp_eng_db, engagement_id=1, sha256_list=hashes)
-    con  = sqlite3.connect(tmp_eng_db)
+    con = sqlite3.connect(tmp_eng_db)
     rows = con.execute("SELECT sha256 FROM exfil_monitor_targets").fetchall()
     con.close()
     stored = {r[0] for r in rows}
     assert "abc123" in stored
     assert "def456" in stored
-    assert len(stored) == 2   # duplicate ignored by UNIQUE constraint
+    assert len(stored) == 2  # duplicate ignored by UNIQUE constraint
 
 
 # ── 9. CyberChef recipe ───────────────────────────────────────────────────────
+
 
 def test_emit_cyberchef_recipe_writes_json(tmp_path: Path) -> None:
     recipe_path = tmp_path / "recipe.json"

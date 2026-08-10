@@ -20,6 +20,7 @@ dict — the kill-chain caller decides whether to skip.
 Non-fatal on every failure (missing binary, missing creds, timeout,
 subprocess crash, non-JSON output). Empty/error dict on any error.
 """
+
 from __future__ import annotations
 
 import json
@@ -144,10 +145,10 @@ def lookup_google_account(
     _ = engagement_id, db_path  # signature symmetry; unused in lookup
 
     result: dict[str, Any] = {
-        "email":     email.strip().lower(),
+        "email": email.strip().lower(),
         "available": False,
-        "found":     False,
-        "profile":   {},
+        "found": False,
+        "profile": {},
     }
 
     command = _ghunt_command()
@@ -166,7 +167,10 @@ def lookup_google_account(
     # subprocess can write to it on Windows (where a still-open handle
     # blocks re-open from another process).
     tmp = tempfile.NamedTemporaryFile(
-        prefix="ghunt-", suffix=".json", delete=False, mode="w",
+        prefix="ghunt-",
+        suffix=".json",
+        delete=False,
+        mode="w",
     )
     tmp.close()
     tmp_path = Path(tmp.name)
@@ -189,8 +193,8 @@ def lookup_google_account(
                 check=False,
             )
             # manually decode outputs
-            proc_stdout = proc.stdout.decode('utf-8', 'replace') if proc.stdout else ""
-            proc_stderr = proc.stderr.decode('utf-8', 'replace') if proc.stderr else ""
+            proc_stdout = proc.stdout.decode("utf-8", "replace") if proc.stdout else ""
+            proc_stderr = proc.stderr.decode("utf-8", "replace") if proc.stderr else ""
         except subprocess.TimeoutExpired:
             result["error"] = f"timeout after {timeout}s"
             return result
@@ -211,7 +215,8 @@ def lookup_google_account(
                 tail = proc_stdout.strip().splitlines()[-1] if proc_stdout.strip() else ""
             result["error"] = (
                 f"ghunt failed (exit {proc.returncode}): {tail[:200]}"
-                if tail else f"ghunt produced no output (exit {proc.returncode})"
+                if tail
+                else f"ghunt produced no output (exit {proc.returncode})"
             )
             return result
 
@@ -283,7 +288,7 @@ def lookup_google_account(
     if isinstance(reach, dict):
         for container_reach in reach.values():
             if isinstance(container_reach, dict):
-                for a in (_safe(container_reach, "apps", []) or []):
+                for a in _safe(container_reach, "apps", []) or []:
                     if isinstance(a, str) and a not in apps:
                         apps.append(a)
 
@@ -307,18 +312,18 @@ def lookup_google_account(
         youtube = _safe(services, "youtube")
 
     result["profile"] = {
-        "gaia_id":      str(gaia_id) if gaia_id else "",
-        "name":         name or "",
+        "gaia_id": str(gaia_id) if gaia_id else "",
+        "name": name or "",
         "display_name": name or "",
-        "profile_pic":  pic or "",
-        "custom_url":   custom_url or "",
-        "youtube":      youtube,
+        "profile_pic": pic or "",
+        "custom_url": custom_url or "",
+        "youtube": youtube,
         "maps_reviews": maps_reviews if isinstance(maps_reviews, list) else [],
-        "play_games":   play_games,
-        "calendar":     calendar,
-        "apps":         apps,
-        "last_edit":    last_edit,
-        "raw":          data,
+        "play_games": play_games,
+        "calendar": calendar,
+        "apps": apps,
+        "last_edit": last_edit,
+        "raw": data,
     }
     return result
 
@@ -373,18 +378,20 @@ def persist_google_findings(
         email_l = email.strip().lower()
 
         # -- Summary row --
-        summary = json.dumps({
-            "source":            "ghunt",
-            "gaia_id":           inner.get("gaia_id", ""),
-            "name":              inner.get("name", ""),
-            "custom_url":        inner.get("custom_url", ""),
-            "profile_pic":       inner.get("profile_pic", ""),
-            "has_youtube":       bool(inner.get("youtube")),
-            "has_playgames":     bool(inner.get("play_games")),
-            "has_calendar":      bool(inner.get("calendar")),
-            "maps_review_count": len(inner.get("maps_reviews", []) or []),
-            "handle":            inner.get("custom_url", "") or inner.get("name", ""),
-        })
+        summary = json.dumps(
+            {
+                "source": "ghunt",
+                "gaia_id": inner.get("gaia_id", ""),
+                "name": inner.get("name", ""),
+                "custom_url": inner.get("custom_url", ""),
+                "profile_pic": inner.get("profile_pic", ""),
+                "has_youtube": bool(inner.get("youtube")),
+                "has_playgames": bool(inner.get("play_games")),
+                "has_calendar": bool(inner.get("calendar")),
+                "maps_review_count": len(inner.get("maps_reviews", []) or []),
+                "handle": inner.get("custom_url", "") or inner.get("name", ""),
+            }
+        )
         try:
             con.execute(
                 "INSERT INTO social_profiles "
@@ -408,21 +415,21 @@ def persist_google_findings(
             )
             if yt_handle:
                 yt_handle_s = str(yt_handle).lstrip("@")
-                payload = json.dumps({
-                    "source":   "ghunt",
-                    "handle":   yt_handle_s,
-                    "platform": "youtube",
-                    "url":      yt.get("url", ""),
-                    "email":    email_l,
-                })
+                payload = json.dumps(
+                    {
+                        "source": "ghunt",
+                        "handle": yt_handle_s,
+                        "platform": "youtube",
+                        "url": yt.get("url", ""),
+                        "email": email_l,
+                    }
+                )
                 try:
                     con.execute(
                         "INSERT INTO social_profiles "
                         "(engagement_id, email, source, profile_data) "
                         "VALUES (?, ?, ?, ?)",
-                        (engagement_id, email_l,
-                         f"ghunt:youtube:{yt_handle_s[:32]}",
-                         payload),
+                        (engagement_id, email_l, f"ghunt:youtube:{yt_handle_s[:32]}", payload),
                     )
                     written += 1
                 except (sqlite3.OperationalError, sqlite3.IntegrityError):
@@ -438,13 +445,15 @@ def persist_google_findings(
                 or pg.get("name")
                 or ""
             )
-            payload = json.dumps({
-                "source":   "ghunt",
-                "handle":   str(pg_handle),
-                "platform": "play_games",
-                "avatar":   pg.get("avatar_url", "") or pg.get("avatar", ""),
-                "email":    email_l,
-            })
+            payload = json.dumps(
+                {
+                    "source": "ghunt",
+                    "handle": str(pg_handle),
+                    "platform": "play_games",
+                    "avatar": pg.get("avatar_url", "") or pg.get("avatar", ""),
+                    "email": email_l,
+                }
+            )
             try:
                 con.execute(
                     "INSERT INTO social_profiles "
@@ -468,22 +477,22 @@ def persist_google_findings(
                 else:
                     loc = rev.get("place_name") or rev.get("name") or ""
                 rev_id = rev.get("id") or rev.get("review_id") or idx
-                payload = json.dumps({
-                    "source":   "ghunt",
-                    "platform": "maps_review",
-                    "location": str(loc),
-                    "rating":   rev.get("rating"),
-                    "comment":  (rev.get("comment", "") or "")[:200],
-                    "email":    email_l,
-                })
+                payload = json.dumps(
+                    {
+                        "source": "ghunt",
+                        "platform": "maps_review",
+                        "location": str(loc),
+                        "rating": rev.get("rating"),
+                        "comment": (rev.get("comment", "") or "")[:200],
+                        "email": email_l,
+                    }
+                )
                 try:
                     con.execute(
                         "INSERT INTO social_profiles "
                         "(engagement_id, email, source, profile_data) "
                         "VALUES (?, ?, ?, ?)",
-                        (engagement_id, email_l,
-                         f"ghunt:maps:{str(rev_id)[:32]}",
-                         payload),
+                        (engagement_id, email_l, f"ghunt:maps:{str(rev_id)[:32]}", payload),
                     )
                     written += 1
                 except (sqlite3.OperationalError, sqlite3.IntegrityError):

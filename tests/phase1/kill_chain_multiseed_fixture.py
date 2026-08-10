@@ -100,7 +100,9 @@ def assert_dashboard_review_visibility(
         if node.get("source_table") == "vulnerability_findings"
     ]
     assert vuln_nodes
-    assert all((node.get("metadata") or {}).get("validation_status") == "VALIDATED" for node in vuln_nodes)
+    assert all(
+        (node.get("metadata") or {}).get("validation_status") == "VALIDATED" for node in vuln_nodes
+    )
     assert not any("dead-firebase-prod" in json.dumps(node, sort_keys=True) for node in vuln_nodes)
     assert "Maltego Workspace" in detail_html
     assert f"Fallback reason: {fallback_reason}" in detail_html
@@ -171,7 +173,9 @@ def install_remote_metadata_download_mock(monkeypatch: Any, tmp_path: Path) -> N
         sort_keys=True,
     )
 
-    def remote_artifact_download(self: ArtifactQueueProcessor, request: Any) -> ArtifactDownloadResult:
+    def remote_artifact_download(
+        self: ArtifactQueueProcessor, request: Any
+    ) -> ArtifactDownloadResult:
         del self
         if request.source_url == OPENID_URL:
             return _download_result(
@@ -196,7 +200,9 @@ def install_remote_metadata_download_mock(monkeypatch: Any, tmp_path: Path) -> N
             error="mock remote artifact unavailable",
         )
 
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifact_request", remote_artifact_download)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifact_request", remote_artifact_download
+    )
 
 
 def _download_result(
@@ -591,7 +597,12 @@ def _write_well_known_api_application_metadata(well_known_dir: Path) -> None:
     (well_known_dir / "api-catalog").write_text(
         json.dumps(
             {
-                "apis": [{"name": "public", "url": "https://api-catalog.acme.test/catalog?signature=hidden"}],
+                "apis": [
+                    {
+                        "name": "public",
+                        "url": "https://api-catalog.acme.test/catalog?signature=hidden",
+                    }
+                ],
                 "support": "apicatalog-e2e-owner@acme.test",
                 "firebase": "https://api-catalog-e2e-firebase.firebaseio.com",
                 "template": "https://api-catalog.acme.test/{workspace}/catalog",
@@ -603,7 +614,9 @@ def _write_well_known_api_application_metadata(well_known_dir: Path) -> None:
     (well_known_dir / "open-resource-discovery").write_text(
         json.dumps(
             {
-                "resources": ["https://resources.acme.test/.well-known/open-resource-discovery?token=hidden"],
+                "resources": [
+                    "https://resources.acme.test/.well-known/open-resource-discovery?token=hidden"
+                ],
                 "contact": "ord-e2e-owner@acme.test",
                 "supabase": "https://orde2evault.supabase.co",
                 "template": "https://resources.acme.test/{tenant}/open-resource-discovery",
@@ -711,7 +724,9 @@ def _write_json_feed(path: Path) -> None:
                         "id": "json-launch",
                         "url": "https://jsonfeed.acme.test/posts/launch?sig=hidden&view=public",
                         "external_url": "https://cdn-json.acme.test/downloads/app.apk?signature=hidden",
-                        "attachments": [{"url": "https://media-json.acme.test/podcast.mp3#ignored"}],
+                        "attachments": [
+                            {"url": "https://media-json.acme.test/podcast.mp3#ignored"}
+                        ],
                     }
                 ],
             },

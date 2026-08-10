@@ -215,8 +215,7 @@ def test_barcode_cloud_assets_preserve_artifact_payload_provenance(
     firebase_node = next(
         node
         for node in graph.nodes
-        if node.source_table == "cloud_assets"
-        and node.metadata["identifier"] == "barcode-firebase"
+        if node.source_table == "cloud_assets" and node.metadata["identifier"] == "barcode-firebase"
     )
     assert firebase_node.metadata["barcode_payload_count"] == 1
     assert firebase_node.metadata["artifact_source_seed_id"] == source_seed_id
@@ -378,9 +377,7 @@ def test_artifact_cloud_assets_preserve_source_artifact_provenance_for_validatio
     assert firebase_node["metadata"]["source_url"] == source_url
     assert firebase_node["metadata"]["extract_rule"] == "artifact_text_extract"
 
-    secret_source_url = (
-        "https://user:pass@downloads.acme.example/app-config.json?token=secret&ok=1"
-    )
+    secret_source_url = "https://user:pass@downloads.acme.example/app-config.json?token=secret&ok=1"
     safe_source_url = "https://downloads.acme.example/app-config.json?ok=1"
     firebase_metadata["source_url"] = secret_source_url
     firebase_metadata["apiKey"] = "AIzaSyDUMMYPROVENANCEKEY0000000000000000"

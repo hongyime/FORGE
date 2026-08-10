@@ -79,9 +79,7 @@ class SafeModeEnforcer:
 
     # ------------------------------------------------------------------ env
     @classmethod
-    def from_env(
-        cls, audit_logger: "AuditLogger | None" = None
-    ) -> "SafeModeEnforcer":
+    def from_env(cls, audit_logger: "AuditLogger | None" = None) -> "SafeModeEnforcer":
         """Build a :class:`SafeModeEnforcer` from ``FORGE_SAFE_MODE``.
 
         Reads :class:`PlatformSettings` to honour the canonical platform
@@ -118,9 +116,7 @@ class SafeModeEnforcer:
         allowed = self.is_allowed(plugin)
         self._emit_decision(plugin, allowed, correlation_id)
         if not allowed:
-            disallowed = sorted(
-                set(plugin.metadata.capabilities) - self.ALLOWED_CAPABILITIES
-            )
+            disallowed = sorted(set(plugin.metadata.capabilities) - self.ALLOWED_CAPABILITIES)
             raise GovernanceDeniedError(
                 f"safe-mode denied plugin {plugin.metadata.name!r}: "
                 f"capabilities not in allow-list: {disallowed}"

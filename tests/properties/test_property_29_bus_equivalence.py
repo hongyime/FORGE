@@ -210,9 +210,7 @@ async def _consume_n_inmem(
     return received
 
 
-async def _consume_n_redis(
-    bus: RedisMessageBus, topics: list[str], n: int
-) -> list[AgentMessage]:
+async def _consume_n_redis(bus: RedisMessageBus, topics: list[str], n: int) -> list[AgentMessage]:
     """Drain exactly ``n`` messages from a RedisMessageBus (mocked transport)."""
     received: list[AgentMessage] = []
     if n == 0:
@@ -244,9 +242,7 @@ def _group_by_topic(
     must group by the routing topic, which we recover by matching on
     ``correlation_id`` (uniqueness is enforced by the strategy).
     """
-    routing_for_id: dict[str, str] = {
-        msg.correlation_id: topic for topic, msg in publish_order
-    }
+    routing_for_id: dict[str, str] = {msg.correlation_id: topic for topic, msg in publish_order}
     grouped: dict[str, list[AgentMessage]] = {t: [] for t in _ROUTING_TOPICS}
     for msg in received:
         topic = routing_for_id.get(msg.correlation_id)
@@ -286,8 +282,7 @@ async def _run_through_redis(
             # Sanity: the mocked client absorbed every publish and nothing
             # was diverted to the disconnected-buffer path.
             assert bus.buffer_size == 0, (
-                "RedisMessageBus unexpectedly buffered messages with a "
-                "healthy mock client"
+                "RedisMessageBus unexpectedly buffered messages with a healthy mock client"
             )
             assert len(fake.published) == len(ops)
 
@@ -319,12 +314,10 @@ def test_property_29_message_bus_semantic_equivalence(
     # 1. Cardinality — neither bus dropped or duplicated messages.
     # ------------------------------------------------------------------
     assert len(inmem_received) == len(ops), (
-        f"InMemoryMessageBus delivered {len(inmem_received)} messages, "
-        f"expected {len(ops)}"
+        f"InMemoryMessageBus delivered {len(inmem_received)} messages, expected {len(ops)}"
     )
     assert len(redis_received) == len(ops), (
-        f"RedisMessageBus delivered {len(redis_received)} messages, "
-        f"expected {len(ops)}"
+        f"RedisMessageBus delivered {len(redis_received)} messages, expected {len(ops)}"
     )
 
     # ------------------------------------------------------------------
@@ -369,9 +362,7 @@ def test_property_29_message_bus_semantic_equivalence(
         assert in_seq == expected, (
             f"InMemoryMessageBus delivered different content on topic={topic!r}"
         )
-        assert re_seq == expected, (
-            f"RedisMessageBus delivered different content on topic={topic!r}"
-        )
+        assert re_seq == expected, f"RedisMessageBus delivered different content on topic={topic!r}"
 
         # Cross-bus equivalence on this topic.
         assert in_seq == re_seq, (
@@ -388,41 +379,56 @@ def test_property_29_message_bus_semantic_equivalence(
 def test_property_29_concrete_interleaved_sequence() -> None:
     """Pin the cross-bus equivalence contract with a deterministic sequence."""
     messages = [
-        ("alpha", AgentMessage(
-            topic="env",
-            payload={"i": 0, "p": "a"},
-            correlation_id="corr-0000",
-            source_agent="probe",
-            retry_count=0,
-        )),
-        ("beta", AgentMessage(
-            topic="env",
-            payload={"i": 1, "p": "b"},
-            correlation_id="corr-0001",
-            source_agent="probe",
-            retry_count=1,
-        )),
-        ("alpha", AgentMessage(
-            topic="env",
-            payload={"i": 2, "p": "a"},
-            correlation_id="corr-0002",
-            source_agent="probe",
-            retry_count=0,
-        )),
-        ("gamma", AgentMessage(
-            topic="env",
-            payload={"i": 3, "p": "g"},
-            correlation_id="corr-0003",
-            source_agent=None,
-            retry_count=2,
-        )),
-        ("beta", AgentMessage(
-            topic="env",
-            payload={"i": 4, "p": "b"},
-            correlation_id="corr-0004",
-            source_agent="probe",
-            retry_count=0,
-        )),
+        (
+            "alpha",
+            AgentMessage(
+                topic="env",
+                payload={"i": 0, "p": "a"},
+                correlation_id="corr-0000",
+                source_agent="probe",
+                retry_count=0,
+            ),
+        ),
+        (
+            "beta",
+            AgentMessage(
+                topic="env",
+                payload={"i": 1, "p": "b"},
+                correlation_id="corr-0001",
+                source_agent="probe",
+                retry_count=1,
+            ),
+        ),
+        (
+            "alpha",
+            AgentMessage(
+                topic="env",
+                payload={"i": 2, "p": "a"},
+                correlation_id="corr-0002",
+                source_agent="probe",
+                retry_count=0,
+            ),
+        ),
+        (
+            "gamma",
+            AgentMessage(
+                topic="env",
+                payload={"i": 3, "p": "g"},
+                correlation_id="corr-0003",
+                source_agent=None,
+                retry_count=2,
+            ),
+        ),
+        (
+            "beta",
+            AgentMessage(
+                topic="env",
+                payload={"i": 4, "p": "b"},
+                correlation_id="corr-0004",
+                source_agent="probe",
+                retry_count=0,
+            ),
+        ),
     ]
 
     inmem_received = asyncio.run(_run_through_inmem(messages))
@@ -444,9 +450,13 @@ def test_property_29_concrete_interleaved_sequence() -> None:
         assert inmem_per_topic[topic] == redis_per_topic[topic]
 
     # Wire-format invariant: identical JSON envelope shape.
-    payload = json.loads(json.dumps({
-        "topic": "alpha",
-        "payload": messages[0][1].model_dump(),
-    }))
+    payload = json.loads(
+        json.dumps(
+            {
+                "topic": "alpha",
+                "payload": messages[0][1].model_dump(),
+            }
+        )
+    )
     assert set(payload.keys()) == {"topic", "payload"}
     assert payload["payload"]["correlation_id"] == "corr-0000"

@@ -13,6 +13,7 @@ OPSEC:
     Windows Event Log 4625. The caller's lockout_tracker must enforce
     the 3-failure threshold per (host, username) tuple.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -55,7 +56,7 @@ class SMBAdapter(BaseAuthAdapter):
         def _sync_attempt() -> tuple[bool, Optional[str]]:
             try:
                 import smbprotocol.connection as smbconn  # type: ignore[import]
-                import smbprotocol.session as smbsess     # type: ignore[import]
+                import smbprotocol.session as smbsess  # type: ignore[import]
                 import uuid as _uuid
             except ImportError:
                 return False, "smbprotocol not installed: pip install smbprotocol"

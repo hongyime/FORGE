@@ -139,9 +139,7 @@ class DiscoveryAgent:
         """Topics consumed by the discovery agent."""
         return [INBOUND_TOPIC]
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         """Run the configured plugins and emit one completion message.
 
         Args:
@@ -274,8 +272,7 @@ class DiscoveryAgent:
                 allowed = self._scope.is_in_scope(target)
             except Exception:  # noqa: BLE001 - defensive isolation
                 _LOG.warning(
-                    "DiscoveryAgent[%s]: ScopeGate raised on target %r; "
-                    "treating as out-of-scope",
+                    "DiscoveryAgent[%s]: ScopeGate raised on target %r; treating as out-of-scope",
                     correlation_id,
                     target,
                     exc_info=True,
@@ -325,9 +322,7 @@ class DiscoveryAgent:
         params: dict[str, object] = {**extra_params, "targets": list(targets)}
         sub_cid = f"{correlation_id}:{plugin_name}:{uuid.uuid4().hex[:8]}"
         try:
-            result = await self._executor.execute(
-                plugin, params=params, correlation_id=sub_cid
-            )
+            result = await self._executor.execute(plugin, params=params, correlation_id=sub_cid)
         except Exception as exc:  # noqa: BLE001 - never abort discovery
             coverage_gaps.append(
                 {
@@ -399,9 +394,7 @@ class DiscoveryAgent:
         if extras:
             per_plugin[plugin_name] = extras
 
-    async def _record_warning(
-        self, *, tool_name: str, reason: str, correlation_id: str
-    ) -> None:
+    async def _record_warning(self, *, tool_name: str, reason: str, correlation_id: str) -> None:
         """Emit a WARNING audit entry for a plugin-level failure."""
         await self._audit.log(
             AuditEntry(

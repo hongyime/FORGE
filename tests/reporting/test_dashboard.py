@@ -864,8 +864,13 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     overview_payload_json = json.dumps(overview_payload, sort_keys=True)
     assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in overview_payload_json
     assert "scope_manifest" not in overview_payload_json
-    assert overview_payload["items"][0]["detail_route"] == "engagements/engagement-1001-acme-example/"
-    assert overview_payload["items"][0]["detail_data"] == "data/engagements/engagement-1001-acme-example.json"
+    assert (
+        overview_payload["items"][0]["detail_route"] == "engagements/engagement-1001-acme-example/"
+    )
+    assert (
+        overview_payload["items"][0]["detail_data"]
+        == "data/engagements/engagement-1001-acme-example.json"
+    )
     assert overview_payload["items"][0]["tags"] == ["external", "priority-high"]
     assert overview_payload["items"][0]["highest_severity"] == "HIGH"
     assert overview_payload["items"][0]["severity_summary"]["HIGH"] == 1
@@ -893,10 +898,18 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert overview_payload["items"][0]["counts"]["account_existence"] == 2
     assert overview_payload["items"][0]["run_summary"]["status"] == "completed"
     assert overview_payload["items"][0]["run_summary"]["metadata"]["phase"] == "completed"
-    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["verification_status"] == "verified"
+    assert (
+        overview_payload["items"][0]["run_summary"]["audit_manifest"]["verification_status"]
+        == "verified"
+    )
     assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["verified"] is True
-    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["short_hash"] == manifest_hash[:12]
-    assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["artifact_available"] is True
+    assert (
+        overview_payload["items"][0]["run_summary"]["audit_manifest"]["short_hash"]
+        == manifest_hash[:12]
+    )
+    assert (
+        overview_payload["items"][0]["run_summary"]["audit_manifest"]["artifact_available"] is True
+    )
     assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["artifact_count"] >= 1
     assert overview_payload["items"][0]["run_summary"]["audit_manifest"]["artifact_name"].endswith(
         f"{manifest_hash[:12]}.json"
@@ -924,7 +937,9 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_payload_json
     assert '"scope_manifest":' not in detail_payload_json
     assert detail_payload["tags"] == ["external", "priority-high"]
-    assert detail_payload["report_previews"][0]["name"] == "engagement_1001_report_20260709T014412.md"
+    assert (
+        detail_payload["report_previews"][0]["name"] == "engagement_1001_report_20260709T014412.md"
+    )
     assert detail_payload["report_summary"]["provider"] == "template"
     assert detail_payload["report_summary"]["requested_provider"] == "auto"
     assert detail_payload["report_summary"]["render_backend"] == "template"
@@ -949,12 +964,12 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert detail_payload["severity_summary"]["HIGH"] == 1
     assert detail_payload["graph_snapshot_at"] == "2026-07-09T09:40:01"
     assert detail_payload["graph_payload"]["nodes"][0]["label"] == "app.acme.example"
-    snapshot_nodes = {
-        node["node_id"]: node
-        for node in detail_payload["graph_payload"]["nodes"]
-    }
+    snapshot_nodes = {node["node_id"]: node for node in detail_payload["graph_payload"]["nodes"]}
     assert snapshot_nodes["CLOUD::bucket"]["metadata"]["validation_status"] == "VALIDATED"
-    assert snapshot_nodes["CLOUD::bucket"]["metadata"]["validation_method"] == "firebase_database_shallow_read"
+    assert (
+        snapshot_nodes["CLOUD::bucket"]["metadata"]["validation_method"]
+        == "firebase_database_shallow_read"
+    )
     assert snapshot_nodes["VULN::firebase"]["source_table"] == "vulnerability_findings"
     assert snapshot_nodes["VULN::firebase"]["source_id"] == 1
     assert snapshot_nodes["VULN::firebase"]["metadata"]["resource_id"] == "acme-firebase-prod"
@@ -1029,9 +1044,14 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     assert "payload_count=3" in artifact_relation["Evidence"]
     assert "sources=wayback, commoncrawl" in artifact_relation["Evidence"]
     assert "root=acme.example" in artifact_relation["Evidence"]
-    assert detail_payload["sections"]["artifact_queue"][0]["Meta"] == "fmt=docx payloads=5 meta=3 rels=1"
+    assert (
+        detail_payload["sections"]["artifact_queue"][0]["Meta"]
+        == "fmt=docx payloads=5 meta=3 rels=1"
+    )
     assert detail_payload["sections"]["artifact_queue"][0]["Origin"] == "local_filesystem"
-    assert detail_payload["sections"]["artifact_queue"][0]["Local"] == "C:/cache/engagement-notes.docx"
+    assert (
+        detail_payload["sections"]["artifact_queue"][0]["Local"] == "C:/cache/engagement-notes.docx"
+    )
     assert detail_payload["sections"]["email_intelligence"][0]["Source"] == "emailrep"
     assert "rep=low" in detail_payload["sections"]["email_intelligence"][0]["Signals"]
     assert detail_payload["sections"]["account_existence"][0]["Service"] == "twitter.com"
@@ -1063,13 +1083,23 @@ def test_generate_dashboard_emits_slug_routes_and_json_contract(tmp_path: Path) 
     )
     assert audit_artifact["kind"] == "audit"
     assert audit_artifact["name"].endswith(f"{manifest_hash[:12]}.json")
-    assert detail_payload["run_summary"]["audit_manifest"]["artifact_name"] == audit_artifact["name"]
-    assert detail_payload["run_summary"]["audit_manifest"]["artifact_href"] == audit_artifact["href"]
-    audit_artifact_payload = json.loads((reports_dir / audit_artifact["name"]).read_text(encoding="utf-8"))
+    assert (
+        detail_payload["run_summary"]["audit_manifest"]["artifact_name"] == audit_artifact["name"]
+    )
+    assert (
+        detail_payload["run_summary"]["audit_manifest"]["artifact_href"] == audit_artifact["href"]
+    )
+    audit_artifact_payload = json.loads(
+        (reports_dir / audit_artifact["name"]).read_text(encoding="utf-8")
+    )
     assert audit_artifact_payload["manifest_hash"] == manifest_hash
     assert audit_artifact_payload["verification_status"] == "verified"
     assert "manifest_json" not in audit_artifact_payload
-    assert {artifact["kind"] for artifact in detail_payload["artifacts"]} == {"audit", "graph", "report"}
+    assert {artifact["kind"] for artifact in detail_payload["artifacts"]} == {
+        "audit",
+        "graph",
+        "report",
+    }
 
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Maltego Workspace" in detail_html
@@ -1124,7 +1154,9 @@ def test_generate_dashboard_excludes_report_prefix_collisions(tmp_path: Path) ->
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     artifact_names = {artifact["name"] for artifact in detail_payload["artifacts"]}
     preview_names = {preview["name"] for preview in detail_payload["report_previews"]}
@@ -1155,7 +1187,9 @@ def test_generate_dashboard_excludes_noncanonical_graph_artifacts(tmp_path: Path
     (reports_dir / "1001_attack_graph.json").write_text(
         json.dumps(
             {
-                "nodes": [{"node_id": "canonical", "label": "canonical graph", "entity_type": "HOST"}],
+                "nodes": [
+                    {"node_id": "canonical", "label": "canonical graph", "entity_type": "HOST"}
+                ],
                 "edges": [],
             },
             sort_keys=True,
@@ -1179,7 +1213,9 @@ def test_generate_dashboard_excludes_noncanonical_graph_artifacts(tmp_path: Path
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     artifact_names = {artifact["name"] for artifact in detail_payload["artifacts"]}
 
@@ -1276,13 +1312,12 @@ def test_generate_dashboard_surfaces_compiled_artifact_review_metadata(
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
-    artifact_rows = {
-        row["Artifact"]: row
-        for row in detail_payload["sections"]["artifact_queue"]
-    }
+    artifact_rows = {row["Artifact"]: row for row in detail_payload["sections"]["artifact_queue"]}
     compiled_artifact = artifact_rows["https://downloads.acme.example/opaque?id=42"]
     assert compiled_artifact["Type"] == "document"
     assert compiled_artifact["Status"] == "parsed"
@@ -1293,10 +1328,7 @@ def test_generate_dashboard_surfaces_compiled_artifact_review_metadata(
     assert "type=application/x-dex" in compiled_artifact["Meta"]
     assert "file=1001-opaque.dex" in compiled_artifact["Meta"]
 
-    seed_values = {
-        row["Seed"]
-        for row in detail_payload["sections"]["engagement_seeds"]
-    }
+    seed_values = {row["Seed"] for row in detail_payload["sections"]["engagement_seeds"]}
     assert "remote-dex@acme.example" in seed_values
     assert "https://remote-dex.acme.example/api" in seed_values
 
@@ -1379,7 +1411,10 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
     assert detail_payload["report_summary"]["render_backend"] == "template"
     assert detail_payload["report_summary"]["rendered_provider"] == "raw_export"
     assert detail_payload["report_summary"]["upstream_provider"] == "template"
-    assert detail_payload["report_summary"]["report_write_error"] == "RuntimeError: report write failed"
+    assert (
+        detail_payload["report_summary"]["report_write_error"]
+        == "RuntimeError: report write failed"
+    )
     assert detail_payload["report_summary"]["raw_export"] is True
     assert detail_payload["report_summary"]["export_count"] == 2
     assert [item["label"] for item in detail_payload["report_summary"]["available_exports"]] == [
@@ -1409,7 +1444,9 @@ def test_generate_dashboard_surfaces_raw_export_report_family(tmp_path: Path) ->
     assert "data-report-prior='1'" in site_html
 
 
-def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(tmp_path: Path) -> None:
+def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(
+    tmp_path: Path,
+) -> None:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"
     db_root = data_dir / "engagements"
@@ -1436,7 +1473,9 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
                     "provider": "template",
                     "requested_provider": "auto",
                     "format": "markdown",
-                    "generated_at": "2026-07-09T09:44:12+00:00" if stem == newer_stem else "2026-07-08T23:00:00+00:00",
+                    "generated_at": "2026-07-09T09:44:12+00:00"
+                    if stem == newer_stem
+                    else "2026-07-08T23:00:00+00:00",
                     "fallback_reason": fallback_reason,
                     "report_write_error": "older disk warning" if stem == older_stem else "",
                     "findings_checksum": f"sha256:{stem}",
@@ -1502,7 +1541,10 @@ def test_generate_dashboard_prefers_latest_report_family_and_preserves_history(t
     detail_html = detail_page.read_text(encoding="utf-8")
     assert "Report History" in detail_html
     assert '<span class="k">Report generations</span><span class="v">2</span>' in detail_html
-    assert f'<span class="k">Latest family</span><span class="v mono">{newer_stem}</span>' in detail_html
+    assert (
+        f'<span class="k">Latest family</span><span class="v mono">{newer_stem}</span>'
+        in detail_html
+    )
     multi_site_html = (site_root / "index.html").read_text(encoding="utf-8")
     assert "template · 4 exports · 2 families" in multi_site_html
     assert "data-report-prior='1'" in multi_site_html
@@ -1602,7 +1644,9 @@ def test_generate_dashboard_parses_graphml_into_detail_graph_payload(tmp_path: P
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["graph_summary"]["source"] == "1001_attack_graph.graphml"
@@ -1696,7 +1740,9 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["graph_summary"]["source"] == "1001_attack_graph.mtgx"
@@ -1710,7 +1756,9 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
     assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_detail"] == (
         "VALIDATED:firebase_database_shallow_read:Firebase project reference responded with non-empty data."
     )
-    assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_status"] == "VALIDATED"
+    assert (
+        detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_status"] == "VALIDATED"
+    )
     assert detail_payload["graph_payload"]["nodes"][0]["metadata"]["validation_method"] == (
         "firebase_database_shallow_read"
     )
@@ -1721,7 +1769,9 @@ def test_generate_dashboard_parses_mtgx_into_detail_graph_payload_when_graphml_m
     assert detail_payload["graph_payload"]["edges"][0]["edge_type"] == "exposes"
     assert detail_payload["graph_payload"]["edges"][0]["weight"] == 55.0
     assert detail_payload["graph_payload"]["edges"][0]["metadata"]["rule"] == "validated_cloud_edge"
-    assert detail_payload["graph_payload"]["edges"][0]["metadata"]["validation_status"] == "VALIDATED"
+    assert (
+        detail_payload["graph_payload"]["edges"][0]["metadata"]["validation_status"] == "VALIDATED"
+    )
     assert "key_enc" not in detail_payload["graph_payload"]["edges"][0]["metadata"]
     assert any(
         artifact["name"] == "1001_attack_graph.mtgx" and artifact["kind"] == "graph"
@@ -1855,7 +1905,9 @@ def test_generate_dashboard_prefers_graph_json_artifact_over_graphml_when_snapsh
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
     index_json = reports_dir / "dashboard" / "data" / "engagements.json"
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     overview_payload = json.loads(index_json.read_text(encoding="utf-8"))
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
@@ -2055,16 +2107,26 @@ def test_generate_dashboard_surfaces_provider_matrix_artifacts_and_validation_ev
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["graph_summary"]["source"] == "attack_graph_snapshot"
     graph_nodes = {node["node_id"]: node for node in detail_payload["graph_payload"]["nodes"]}
     assert graph_nodes["HOST::shodan-api"]["metadata"]["provider_sources"] == ["shodan", "urlscan"]
     assert graph_nodes["CLOUD::provider-firebase"]["metadata"]["validation_status"] == "VALIDATED"
-    assert graph_nodes["CLOUD::provider-firebase"]["metadata"]["validation_evidence"].startswith("HTTP 200")
-    assert detail_payload["report_summary"]["artifact_name"] == "engagement_1001_kill_chain_provider_matrix.json"
-    assert detail_payload["report_summary"]["findings_checksum"] == "sha256:provider-matrix-static-fixture"
+    assert graph_nodes["CLOUD::provider-firebase"]["metadata"]["validation_evidence"].startswith(
+        "HTTP 200"
+    )
+    assert (
+        detail_payload["report_summary"]["artifact_name"]
+        == "engagement_1001_kill_chain_provider_matrix.json"
+    )
+    assert (
+        detail_payload["report_summary"]["findings_checksum"]
+        == "sha256:provider-matrix-static-fixture"
+    )
     assert {artifact["name"] for artifact in detail_payload["artifacts"]} >= {
         "engagement_1001_kill_chain_provider_matrix.md",
         "engagement_1001_kill_chain_provider_matrix.json",
@@ -2129,7 +2191,9 @@ def test_generate_dashboard_seed_fallback_graph_refreshes_cloud_validation_metad
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     assert detail_payload["graph_payload"]["source"] == "engagement_seed_graph"
     graph_nodes = {node["node_id"]: node for node in detail_payload["graph_payload"]["nodes"]}
@@ -2200,7 +2264,9 @@ def test_generate_dashboard_orders_cloud_validation_results_by_latest_checked_at
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     validation_rows = detail_payload["sections"]["cloud_validation_results"]
 
@@ -2294,7 +2360,9 @@ def test_generate_dashboard_cloud_assets_use_latest_validation_result(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     asset_rows = detail_payload["sections"]["cloud_assets"]
 
@@ -2372,10 +2440,14 @@ def test_generate_dashboard_cloud_assets_join_validation_across_asset_type_alias
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     asset_row = next(
-        row for row in detail_payload["sections"]["cloud_assets"] if row["Asset"] == "AliasAssetsExact"
+        row
+        for row in detail_payload["sections"]["cloud_assets"]
+        if row["Asset"] == "AliasAssetsExact"
     )
 
     assert asset_row["Type"] == "aws_s3"
@@ -2436,7 +2508,9 @@ def test_generate_dashboard_surfaces_slack_validation_proof_on_finding_rows(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     finding_rows = {
         row["Title"]: row for row in detail_payload["sections"]["vulnerability_findings"]
@@ -2501,7 +2575,9 @@ def test_generate_dashboard_surfaces_validated_key_provider_inventory(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     validation_rows = {
         row["Asset"]: row for row in detail_payload["sections"]["cloud_validation_results"]
@@ -2583,13 +2659,13 @@ def test_generate_dashboard_filters_unknown_method_deterministic_cloud_rows(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["severity_summary"]["HIGH"] == 1
-    finding_titles = {
-        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
-    }
+    finding_titles = {row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]}
     assert "Manual note public S3 bucket exposure" not in finding_titles
     validation_rows = {
         row["Asset"]: row for row in detail_payload["sections"]["cloud_validation_results"]
@@ -2709,11 +2785,11 @@ def test_generate_dashboard_gates_legacy_cloud_audit_rows_and_graph_nodes(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
-    finding_titles = {
-        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
-    }
+    finding_titles = {row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]}
     assert "CloudTrail legacy note without proof" not in finding_titles
     assert "Azure storage authenticated audit finding" in finding_titles
     assert detail_payload["severity_summary"]["HIGH"] == 2
@@ -2839,7 +2915,9 @@ def test_generate_dashboard_filters_unknown_method_graph_snapshot_vuln_nodes(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     graph_payload = detail_payload["graph_payload"]
     node_ids = {node["node_id"] for node in graph_payload["nodes"]}
@@ -3007,11 +3085,11 @@ def test_generate_dashboard_filters_malformed_deterministic_cloud_findings(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
-    finding_titles = {
-        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
-    }
+    finding_titles = {row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]}
     graph_payload = detail_payload["graph_payload"]
     node_ids = {node["node_id"] for node in graph_payload["nodes"]}
 
@@ -3022,8 +3100,7 @@ def test_generate_dashboard_filters_malformed_deterministic_cloud_findings(
     assert "VULN::malformed-cloud" not in node_ids
     assert "VULN::malformed-cloud" not in graph_payload["critical_path_nodes"]
     assert all(
-        "VULN::malformed-cloud"
-        not in {edge["source_node_id"], edge["target_node_id"]}
+        "VULN::malformed-cloud" not in {edge["source_node_id"], edge["target_node_id"]}
         for edge in graph_payload["edges"]
     )
 
@@ -3225,18 +3302,25 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["graph_summary"]["source"] == "attack_graph_snapshot"
     graph_nodes = {node["node_id"]: node for node in detail_payload["graph_payload"]["nodes"]}
     assert graph_nodes["CLOUD::s3-public-assets"]["metadata"]["service"] == "aws_s3"
     assert graph_nodes["CLOUD::s3-public-assets"]["metadata"]["validation_status"] == "VALIDATED"
-    assert graph_nodes["CLOUD::gcs-public-assets"]["metadata"]["validation_method"] == "gcs_list_bucket"
+    assert (
+        graph_nodes["CLOUD::gcs-public-assets"]["metadata"]["validation_method"]
+        == "gcs_list_bucket"
+    )
     assert graph_nodes["CLOUD::azure-metadata-only"]["metadata"]["validation_status"] == (
         "ACCESSIBLE_BUT_NO_DATA"
     )
-    assert graph_nodes["CLOUD::do-space"]["metadata"]["validation_method"] == "do_spaces_list_bucket"
+    assert (
+        graph_nodes["CLOUD::do-space"]["metadata"]["validation_method"] == "do_spaces_list_bucket"
+    )
 
     validation_rows = {
         (row["Type"], row["Asset"]): row
@@ -3247,9 +3331,10 @@ def test_generate_dashboard_surfaces_storage_validation_evidence_in_detail_graph
     assert validation_rows[("azure_blob", "acmeblob/public")]["Status"] == (
         "ACCESSIBLE_BUT_NO_DATA"
     )
-    assert "honeypot heuristics passed" in validation_rows[
-        ("do_spaces", "nyc3/acme-space-public")
-    ]["Notes"]
+    assert (
+        "honeypot heuristics passed"
+        in validation_rows[("do_spaces", "nyc3/acme-space-public")]["Notes"]
+    )
 
 
 def test_generate_dashboard_surfaces_archive_url_source_in_crawl_rows(tmp_path: Path) -> None:
@@ -3348,22 +3433,20 @@ def test_generate_dashboard_surfaces_archive_url_source_in_crawl_rows(tmp_path: 
     finally:
         con.close()
 
-    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=reports_dir / "dashboard.html")
+    generate_dashboard(
+        data_dir=data_dir, reports_dir=reports_dir, output_path=reports_dir / "dashboard.html"
+    )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
-    crawl_rows = {
-        row["URL"]: row
-        for row in detail_payload["sections"]["crawl_results"]
-    }
+    crawl_rows = {row["URL"]: row for row in detail_payload["sections"]["crawl_results"]}
 
     assert crawl_rows["https://portal.acme.example/login"]["Source"] == "wayback"
     assert crawl_rows["https://archive.acme.example/config.js"]["Source"] == "commoncrawl"
     assert "archive_sources" in crawl_rows["https://archive.acme.example/config.js"]["Tech"]
-    artifact_rows = {
-        row["Artifact"]: row
-        for row in detail_payload["sections"]["artifact_queue"]
-    }
+    artifact_rows = {row["Artifact"]: row for row in detail_payload["sections"]["artifact_queue"]}
     assert artifact_rows["https://archive.acme.example/config.js"]["Source"] == "commoncrawl"
 
 
@@ -3391,7 +3474,9 @@ def test_generate_dashboard_surfaces_key_validation_proof_rows(tmp_path: Path) -
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     key_row = detail_payload["sections"]["key_scanner_findings"][0]
 
@@ -3442,7 +3527,9 @@ def test_generate_dashboard_downgrades_stale_key_validation_proof_rows(tmp_path:
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["counts"]["key_scanner_findings"] == 0
@@ -3496,10 +3583,7 @@ def test_generate_dashboard_excludes_unlinked_bot_token_validation_proof_rows(
                 '2026-07-15T09:25:00'
             )
             """,
-            (
-                "VALIDATED:slack_auth_test:Slack auth ok: "
-                "actor_id=U7A3C9K2 team_id=T9B2D6F4",
-            ),
+            ("VALIDATED:slack_auth_test:Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4",),
         )
         con.commit()
     finally:
@@ -3508,7 +3592,9 @@ def test_generate_dashboard_excludes_unlinked_bot_token_validation_proof_rows(
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["counts"]["key_scanner_findings"] == 0
@@ -3560,14 +3646,14 @@ def test_generate_dashboard_filters_unverified_validation_inventory_from_finding
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     assert detail_payload["counts"]["key_scanner_findings"] == 0
     assert detail_payload["sections"]["key_scanner_findings"] == []
     assert detail_payload["counts"]["vulnerability_findings"] == 1
-    finding_titles = {
-        row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]
-    }
+    finding_titles = {row["Title"] for row in detail_payload["sections"]["vulnerability_findings"]}
     assert finding_titles == {"Validated Firebase data exposure"}
     assert detail_payload["severity_summary"]["LOW"] == 0
     assert "Datadog validation inventory note" not in json.dumps(detail_payload)
@@ -3576,15 +3662,12 @@ def test_generate_dashboard_filters_unverified_validation_inventory_from_finding
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     try:
-        reportable_titles = {
-            row["title"] for row in _reportable_vulnerability_rows(con, 1001)
-        }
+        reportable_titles = {row["title"] for row in _reportable_vulnerability_rows(con, 1001)}
         assert reportable_titles == {"Validated Firebase data exposure"}
     finally:
         con.close()
-    assert (
-        "Datadog API key valid: site=datadoghq.eu proof=valid_true"
-        not in json.dumps(detail_payload)
+    assert "Datadog API key valid: site=datadoghq.eu proof=valid_true" not in json.dumps(
+        detail_payload
     )
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
@@ -3659,7 +3742,9 @@ def test_generate_dashboard_filters_stale_api_key_graph_snapshot_nodes(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     graph_payload = detail_payload["graph_payload"]
     node_ids = {node["node_id"] for node in graph_payload["nodes"]}
@@ -3740,7 +3825,9 @@ def test_generate_dashboard_filters_unlinked_bot_token_graph_snapshot_nodes(
         output_path=reports_dir / "dashboard.html",
     )
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     graph_payload = detail_payload["graph_payload"]
     node_ids = {node["node_id"] for node in graph_payload["nodes"]}
@@ -3773,7 +3860,9 @@ def test_generate_dashboard_downgrades_bare_legacy_key_validation_proof_rows(
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["counts"]["key_scanner_findings"] == 0
@@ -3782,7 +3871,9 @@ def test_generate_dashboard_downgrades_bare_legacy_key_validation_proof_rows(
     assert "encrypted-secret-never-render" not in json.dumps(detail_payload)
 
 
-def test_generate_dashboard_falls_back_to_seed_graph_payload_when_no_graph_artifact_exists(tmp_path: Path) -> None:
+def test_generate_dashboard_falls_back_to_seed_graph_payload_when_no_graph_artifact_exists(
+    tmp_path: Path,
+) -> None:
     data_dir = tmp_path / ".forge_data"
     reports_dir = tmp_path / "reports"
     db_root = data_dir / "engagements"
@@ -3834,13 +3925,21 @@ def test_generate_dashboard_falls_back_to_seed_graph_payload_when_no_graph_artif
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
 
     assert detail_payload["graph_summary"]["source"] == "engagement_seed_graph"
     assert detail_payload["graph_payload"]["source"] == "engagement_seed_graph"
     labels = {node["label"] for node in detail_payload["graph_payload"]["nodes"]}
-    assert {"Acme Example", "acme.example", "security@acme.example", "press@acme.example", "vpn.acme.example"} <= labels
+    assert {
+        "Acme Example",
+        "acme.example",
+        "security@acme.example",
+        "press@acme.example",
+        "vpn.acme.example",
+    } <= labels
     provider_node = next(
         node
         for node in detail_payload["graph_payload"]["nodes"]

@@ -28,6 +28,7 @@ Run locally with containers:
 These tests are EXCLUDED from the default test run.  They are gated by
 the ``integration`` marker and run only in the CI ``test-phase2`` job.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -49,11 +50,12 @@ _SMB_PORT = int(os.environ.get("MOCK_SMB_PORT", "4445"))
 
 _CORRECT_USER = "testuser"
 _CORRECT_PASS = "testpass"
-_WRONG_PASS   = "incorrectpassword1!"
+_WRONG_PASS = "incorrectpassword1!"
 
 
 def _ssh_reachable() -> bool:
     import socket
+
     try:
         with socket.create_connection((_SSH_HOST, _SSH_PORT), timeout=3):
             return True
@@ -63,6 +65,7 @@ def _ssh_reachable() -> bool:
 
 def _smb_reachable() -> bool:
     import socket
+
     try:
         with socket.create_connection((_SMB_HOST, _SMB_PORT), timeout=3):
             return True
@@ -81,6 +84,7 @@ require_smb = pytest.mark.skipif(
 
 
 # ─── shared fixture ───────────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def engagement_db(tmp_path: Path) -> Path:
@@ -123,10 +127,13 @@ def engagement_db(tmp_path: Path) -> Path:
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
+
 def _make_validator(engagement_db: Path, dry_run: bool = False):
     from forge.utils.intel.auth_check import CredentialValidator
+
     # Override decrypt to return raw value (ENC:xxx → xxx)
     import forge.utils.intel.auth_check as mod
+
     orig = mod.decrypt_string
     mod.decrypt_string = lambda s: s.removeprefix("ENC:")
     v = CredentialValidator(
@@ -142,12 +149,14 @@ def _make_validator(engagement_db: Path, dry_run: bool = False):
 
 def _restore_decrypt(v) -> None:
     import forge.utils.intel.auth_check as mod
+
     mod.decrypt_string = v._orig_decrypt
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SSH integration
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @require_ssh
 class TestSSHIntegration:
@@ -159,8 +168,7 @@ class TestSSHIntegration:
             with patch("questionary.text") as mock_q:
                 mock_q.return_value.ask.return_value = "YES"
                 results = asyncio.run(
-                    v.validate_all(["ssh"], [_SSH_HOST],
-                                   override_port={"ssh": _SSH_PORT})
+                    v.validate_all(["ssh"], [_SSH_HOST], override_port={"ssh": _SSH_PORT})
                 )
         finally:
             _restore_decrypt(v)
@@ -182,8 +190,7 @@ class TestSSHIntegration:
             with patch("questionary.text") as mock_q:
                 mock_q.return_value.ask.return_value = "YES"
                 results = asyncio.run(
-                    v.validate_all(["ssh"], [_SSH_HOST],
-                                   override_port={"ssh": _SSH_PORT})
+                    v.validate_all(["ssh"], [_SSH_HOST], override_port={"ssh": _SSH_PORT})
                 )
         finally:
             _restore_decrypt(v)
@@ -198,17 +205,13 @@ class TestSSHIntegration:
         try:
             with patch("questionary.text") as mock_q:
                 mock_q.return_value.ask.return_value = "YES"
-                asyncio.run(
-                    v.validate_all(["ssh"], [_SSH_HOST],
-                                   override_port={"ssh": _SSH_PORT})
-                )
+                asyncio.run(v.validate_all(["ssh"], [_SSH_HOST], override_port={"ssh": _SSH_PORT}))
         finally:
             _restore_decrypt(v)
 
-        con  = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         rows = con.execute(
-            "SELECT validated, validated_service, validated_host "
-            "FROM credentials WHERE validated=1"
+            "SELECT validated, validated_service, validated_host FROM credentials WHERE validated=1"
         ).fetchall()
         con.close()
         assert len(rows) >= 1
@@ -236,8 +239,7 @@ class TestSSHIntegration:
             with patch("questionary.text") as mock_q:
                 mock_q.return_value.ask.return_value = "YES"
                 results = asyncio.run(
-                    v.validate_all(["ssh"], [_SSH_HOST],
-                                   override_port={"ssh": _SSH_PORT})
+                    v.validate_all(["ssh"], [_SSH_HOST], override_port={"ssh": _SSH_PORT})
                 )
         finally:
             _restore_decrypt(v)
@@ -263,13 +265,14 @@ class TestSSHIntegration:
 
         v = _make_validator(engagement_db)
         try:
-            with patch("asyncssh.connect", side_effect=tracking_connect), \
-                 patch("questionary.text") as mock_q:
+            with (
+                patch("asyncssh.connect", side_effect=tracking_connect),
+                patch("questionary.text") as mock_q,
+            ):
                 mock_q.return_value.ask.return_value = "YES"
                 try:
                     asyncio.run(
-                        v.validate_all(["ssh"], [_SSH_HOST],
-                                       override_port={"ssh": _SSH_PORT})
+                        v.validate_all(["ssh"], [_SSH_HOST], override_port={"ssh": _SSH_PORT})
                     )
                 except Exception:
                     pass
@@ -286,28 +289,26 @@ class TestSSHIntegration:
         try:
             with patch("questionary.text") as mock_q:
                 mock_q.return_value.ask.return_value = "YES"
-                asyncio.run(
-                    v.validate_all(["ssh"], [_SSH_HOST],
-                                   override_port={"ssh": _SSH_PORT})
-                )
+                asyncio.run(v.validate_all(["ssh"], [_SSH_HOST], override_port={"ssh": _SSH_PORT}))
         finally:
             _restore_decrypt(v)
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
-        rows  = con.execute("SELECT result FROM audit_log").fetchall()
+        rows = con.execute("SELECT result FROM audit_log").fetchall()
         con.close()
 
         assert count >= 1
         detail_str = " ".join(r[0] for r in rows if r[0]).lower()
         # Passwords must never appear in audit_log
         assert _CORRECT_PASS not in detail_str
-        assert _WRONG_PASS   not in detail_str
+        assert _WRONG_PASS not in detail_str
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SMB integration
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @require_smb
 class TestSMBIntegration:
@@ -319,8 +320,7 @@ class TestSMBIntegration:
             with patch("questionary.text") as mock_q:
                 mock_q.return_value.ask.return_value = "YES"
                 results = asyncio.run(
-                    v.validate_all(["smb"], [_SMB_HOST],
-                                   override_port={"smb": _SMB_PORT})
+                    v.validate_all(["smb"], [_SMB_HOST], override_port={"smb": _SMB_PORT})
                 )
         finally:
             _restore_decrypt(v)
@@ -341,8 +341,7 @@ class TestSMBIntegration:
             with patch("questionary.text") as mock_q:
                 mock_q.return_value.ask.return_value = "YES"
                 results = asyncio.run(
-                    v.validate_all(["smb"], [_SMB_HOST],
-                                   override_port={"smb": _SMB_PORT})
+                    v.validate_all(["smb"], [_SMB_HOST], override_port={"smb": _SMB_PORT})
                 )
         finally:
             _restore_decrypt(v)
@@ -361,11 +360,11 @@ class TestSMBIntegration:
         mock_session = MagicMock()
         mock_session.connect.side_effect = Exception("STATUS_ACCOUNT_LOCKED_OUT")
 
-        with patch("smbprotocol.connection.Connection", return_value=mock_session), \
-             pytest.raises(SMBLockoutError):
-            asyncio.run(
-                adapter.authenticate(_SMB_HOST, _CORRECT_USER, "any", port=_SMB_PORT)
-            )
+        with (
+            patch("smbprotocol.connection.Connection", return_value=mock_session),
+            pytest.raises(SMBLockoutError),
+        ):
+            asyncio.run(adapter.authenticate(_SMB_HOST, _CORRECT_USER, "any", port=_SMB_PORT))
 
     def test_smb_does_not_list_shares(self, engagement_db):
         """SMB probe is auth-only. No share enumeration must occur."""
@@ -378,8 +377,7 @@ class TestSMBIntegration:
                     mock_q.return_value.ask.return_value = "YES"
                     try:
                         asyncio.run(
-                            v.validate_all(["smb"], [_SMB_HOST],
-                                           override_port={"smb": _SMB_PORT})
+                            v.validate_all(["smb"], [_SMB_HOST], override_port={"smb": _SMB_PORT})
                         )
                     except Exception:
                         pass
@@ -393,6 +391,7 @@ class TestSMBIntegration:
 # ═══════════════════════════════════════════════════════════════════════════
 # Cross-service correlation (SSH → SMB)
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.skipif(
     not (_ssh_reachable() and _smb_reachable()),
@@ -446,7 +445,7 @@ class TestCrossServiceCorrelation:
         finally:
             _restore_decrypt(v)
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
         con.close()
         # Original 2 credential rows, no phantom insertions

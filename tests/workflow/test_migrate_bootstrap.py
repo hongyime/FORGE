@@ -21,9 +21,7 @@ from forge.workflow.migrate_bootstrap import (
 def _list_tables(db_path: Path) -> set[str]:
     conn = sqlite3.connect(db_path)
     try:
-        cur = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         return {row[0] for row in cur.fetchall()}
     finally:
         conn.close()
@@ -33,8 +31,7 @@ def _alembic_version(db_path: Path) -> str | None:
     conn = sqlite3.connect(db_path)
     try:
         cur = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name='alembic_version'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
         )
         if cur.fetchone() is None:
             return None
@@ -56,7 +53,9 @@ def test_fresh_db_runs_full_chain(tmp_path: Path) -> None:
     assert result.from_revision is None
     assert result.to_revision == "0002_add_workflow_history"
     assert _list_tables(db) >= {
-        "workflow_state", "agent_loop_heartbeat", "workflow_history",
+        "workflow_state",
+        "agent_loop_heartbeat",
+        "workflow_history",
         "alembic_version",
     }
     assert _alembic_version(db) == "0002_add_workflow_history"

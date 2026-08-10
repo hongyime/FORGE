@@ -108,9 +108,7 @@ def test_artifact_queue_processor_extracts_oci_layer_member_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "oci-layer-owner@acme.example" in emails
         assert "skip@acme.example" not in emails
@@ -227,9 +225,7 @@ def test_artifact_queue_processor_extracts_docker_save_layer_member_static_artif
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "docker-save-owner@acme.example" in emails
         assert "docker-config-owner@acme.example" in emails

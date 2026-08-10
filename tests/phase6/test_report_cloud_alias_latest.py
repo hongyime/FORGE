@@ -146,16 +146,11 @@ def test_canonical_latest_validation_wins_over_older_alias_rows(
     }
     assert set(inventory) == {("aws_s3", "alias-latest-bucket")}
     assert inventory[("aws_s3", "alias-latest-bucket")]["validation_status"] == "VALIDATED"
-    assert (
-        inventory[("aws_s3", "alias-latest-bucket")]["provider_identifier"]
-        == "AliasLatestExact"
-    )
+    assert inventory[("aws_s3", "alias-latest-bucket")]["provider_identifier"] == "AliasLatestExact"
 
     csv_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
     finding_rows = [row for row in csv_rows if row["record_type"] == "finding"]
-    validation_rows = [
-        row for row in csv_rows if row["record_type"] == "cloud_validation"
-    ]
+    validation_rows = [row for row in csv_rows if row["record_type"] == "cloud_validation"]
     assert {row["title"] for row in finding_rows} == {EXPECTED_TITLE}
     assert len(validation_rows) == 1
     assert validation_rows[0]["cloud_asset_type"] == "aws_s3"

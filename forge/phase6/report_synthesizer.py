@@ -24,6 +24,7 @@ OPSEC invariants:
   - Generated report written to output_dir; never stdout-dumped.
   - Operator must confirm before report is written to disk.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -82,14 +83,14 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-MODEL_FILENAME     = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
-DEFAULT_MODEL_DIR  = Path.home() / ".cache" / "forge" / "models"
-TEMPLATE_DIR       = Path(__file__).parent / "templates"
-PROMPT_TEMPLATE    = "report_prompt.j2"
-REPORT_TEMPLATE    = "report_template.md"
+MODEL_FILENAME = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+DEFAULT_MODEL_DIR = Path.home() / ".cache" / "forge" / "models"
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+PROMPT_TEMPLATE = "report_prompt.j2"
+REPORT_TEMPLATE = "report_template.md"
 
 # Token budget: 1.5B context window is 4096; reserve 512 for completion.
-MAX_PROMPT_TOKENS  = 3584
+MAX_PROMPT_TOKENS = 3584
 MAX_COMPLETION_TOK = 2048
 MAX_CORRECTION_LOOPS = 5
 MIN_QUALITY_SCORE = 0.75
@@ -102,9 +103,9 @@ QUALITY_WEIGHTS = {
 
 # Risk roll-up thresholds (rule-based; never LLM-derived)
 RISK_THRESHOLDS = {
-    "CRITICAL": 1,   # any CRITICAL vuln → CRITICAL overall
-    "HIGH":     1,   # any HIGH vuln → HIGH overall (if no CRITICAL)
-    "MEDIUM":   3,   # ≥3 MEDIUMs with no HIGH/CRITICAL → HIGH overall
+    "CRITICAL": 1,  # any CRITICAL vuln → CRITICAL overall
+    "HIGH": 1,  # any HIGH vuln → HIGH overall (if no CRITICAL)
+    "MEDIUM": 3,  # ≥3 MEDIUMs with no HIGH/CRITICAL → HIGH overall
 }
 
 
@@ -199,6 +200,7 @@ def _scope_entries_as_ip_ranges(scope_entries: Iterable[str] | None) -> list[str
 
 # ── Exceptions ─────────────────────────────────────────────────────────────────
 
+
 class ModelNotFoundError(FileNotFoundError):
     """GGUF model file absent from disk."""
 
@@ -213,19 +215,20 @@ class ReportGenerationError(RuntimeError):
 
 # ── Data models ────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ReconContext:
-    hosts:      list[dict[str, Any]] = field(default_factory=list)
-    subdomains: list[str]            = field(default_factory=list)
+    hosts: list[dict[str, Any]] = field(default_factory=list)
+    subdomains: list[str] = field(default_factory=list)
     open_ports: list[dict[str, Any]] = field(default_factory=list)
     archive_urls: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class OsintContext:
-    emails_found:        int  = 0
-    credential_hashes:   int  = 0   # count only; never plaintext
-    breach_sources:      list[str] = field(default_factory=list)
+    emails_found: int = 0
+    credential_hashes: int = 0  # count only; never plaintext
+    breach_sources: list[str] = field(default_factory=list)
     email_intelligence_records: int = 0
     intelligence_sources: list[str] = field(default_factory=list)
     account_existence_records: int = 0
@@ -235,7 +238,7 @@ class OsintContext:
     breached_email_count: int = 0
     reputation_alert_count: int = 0
     paste_alert_count: int = 0
-    key_findings_count:  int  = 0
+    key_findings_count: int = 0
 
 
 @dataclass
@@ -248,58 +251,58 @@ class SeedSummaryContext:
 
 @dataclass
 class ExploitContext:
-    finding_count:      int  = 0
-    cve_count:         int  = 0
-    critical_count:    int  = 0
-    high_count:        int  = 0
-    medium_count:      int  = 0
-    exploited:         list[dict[str, Any]] = field(default_factory=list)
+    finding_count: int = 0
+    cve_count: int = 0
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    exploited: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class PostExploitContext:
-    shells_spawned:      int = 0
-    persistence_count:   int = 0
-    lateral_hosts:       int = 0
-    data_collected_gb:   float = 0.0
-    techniques:          list[str] = field(default_factory=list)
-    artifact_summary:    dict[str, int] = field(default_factory=dict)
+    shells_spawned: int = 0
+    persistence_count: int = 0
+    lateral_hosts: int = 0
+    data_collected_gb: float = 0.0
+    techniques: list[str] = field(default_factory=list)
+    artifact_summary: dict[str, int] = field(default_factory=dict)
     artifact_type_summary: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass
 class OngoingIntelligenceContext:
-    monitoring_enabled:       bool  = False
-    monitored_keywords:       list[str] = field(default_factory=list)
-    monitoring_window_start:  datetime | None = None
-    monitoring_window_end:    datetime | None = None
-    new_findings_count:       int   = 0
-    high_severity_count:      int   = 0
-    new_breach_sources:       list[str] = field(default_factory=list)
-    summary_narrative:        str   = ""
+    monitoring_enabled: bool = False
+    monitored_keywords: list[str] = field(default_factory=list)
+    monitoring_window_start: datetime | None = None
+    monitoring_window_end: datetime | None = None
+    new_findings_count: int = 0
+    high_severity_count: int = 0
+    new_breach_sources: list[str] = field(default_factory=list)
+    summary_narrative: str = ""
 
 
 @dataclass
 class ReportContext:
-    engagement_id:       int
-    engagement_name:     str
-    operator:            str
-    scope:               list[str]
-    start_date:          str
-    end_date:            str
-    recon:               ReconContext
-    osint:               OsintContext
-    exploits:            ExploitContext
-    post_exploitation:   PostExploitContext
-    artifact_inventory:  list[dict[str, Any]] = field(default_factory=list)
+    engagement_id: int
+    engagement_name: str
+    operator: str
+    scope: list[str]
+    start_date: str
+    end_date: str
+    recon: ReconContext
+    osint: OsintContext
+    exploits: ExploitContext
+    post_exploitation: PostExploitContext
+    artifact_inventory: list[dict[str, Any]] = field(default_factory=list)
     cloud_asset_inventory: list[dict[str, Any]] = field(default_factory=list)
     cloud_validation_inventory: list[dict[str, Any]] = field(default_factory=list)
-    key_findings:        list[dict[str, Any]] = field(default_factory=list)
-    seed_summary:        SeedSummaryContext = field(default_factory=SeedSummaryContext)
+    key_findings: list[dict[str, Any]] = field(default_factory=list)
+    seed_summary: SeedSummaryContext = field(default_factory=SeedSummaryContext)
     ongoing_intelligence: OngoingIntelligenceContext = field(
         default_factory=OngoingIntelligenceContext
     )
-    overall_risk:        str = "UNKNOWN"
+    overall_risk: str = "UNKNOWN"
 
 
 @dataclass
@@ -317,6 +320,7 @@ class ValidationTelemetry:
 
 
 # ── Context builder ────────────────────────────────────────────────────────────
+
 
 class ContextBuilder:
     """
@@ -336,9 +340,9 @@ class ContextBuilder:
         engagement_id: int,
         clean_text: bool = False,
     ) -> None:
-        self._db      = db_path
-        self._eid     = engagement_id
-        self._clean   = clean_text
+        self._db = db_path
+        self._eid = engagement_id
+        self._clean = clean_text
 
     # ------------------------------------------------------------------
 
@@ -346,24 +350,24 @@ class ContextBuilder:
         con = direct_connect(self._db)
         con.row_factory = sqlite3.Row
         try:
-            eng  = self._load_engagement(con)
-            ctx  = ReportContext(
-                engagement_id       = self._eid,
-                engagement_name     = eng["name"],
-                operator            = self._row_get(eng, "operator", "Unknown"),
-                scope               = self._load_scope(con),
-                start_date          = self._row_get(eng, "start_date", ""),
-                end_date            = self._row_get(eng, "end_date", ""),
-                recon               = self._load_recon(con),
-                osint               = self._load_osint(con),
-                exploits            = self._load_exploits(con),
-                post_exploitation   = self._load_post_exploit(con),
-                artifact_inventory  = load_artifact_inventory(con, self._eid),
+            eng = self._load_engagement(con)
+            ctx = ReportContext(
+                engagement_id=self._eid,
+                engagement_name=eng["name"],
+                operator=self._row_get(eng, "operator", "Unknown"),
+                scope=self._load_scope(con),
+                start_date=self._row_get(eng, "start_date", ""),
+                end_date=self._row_get(eng, "end_date", ""),
+                recon=self._load_recon(con),
+                osint=self._load_osint(con),
+                exploits=self._load_exploits(con),
+                post_exploitation=self._load_post_exploit(con),
+                artifact_inventory=load_artifact_inventory(con, self._eid),
                 cloud_asset_inventory=self._cloud_asset_inventory(con),
                 cloud_validation_inventory=self._cloud_validation_inventory(con),
-                key_findings        = self._load_key_findings(con),
-                seed_summary        = self._load_seed_summary(con),
-                ongoing_intelligence= self._load_ongoing_intel(con),
+                key_findings=self._load_key_findings(con),
+                seed_summary=self._load_seed_summary(con),
+                ongoing_intelligence=self._load_ongoing_intel(con),
             )
             ctx.overall_risk = _derive_overall_risk(ctx.exploits)
         finally:
@@ -377,9 +381,7 @@ class ContextBuilder:
     # ------------------------------------------------------------------
 
     def _load_engagement(self, con: sqlite3.Connection) -> sqlite3.Row:
-        row = con.execute(
-            "SELECT * FROM engagements WHERE id=?", (self._eid,)
-        ).fetchone()
+        row = con.execute("SELECT * FROM engagements WHERE id=?", (self._eid,)).fetchone()
         if not row:
             raise ValueError(f"Engagement {self._eid} not found in DB.")
         return row
@@ -391,10 +393,7 @@ class ContextBuilder:
     @staticmethod
     def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
         try:
-            return {
-                row[1]
-                for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()
-            }
+            return {row[1] for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()}
         except sqlite3.OperationalError:
             return set()
 
@@ -720,7 +719,9 @@ class ContextBuilder:
             "id" if "id" in columns else "0 AS id",
             "asset_type",
             "identifier",
-            "provider_identifier" if "provider_identifier" in columns else "identifier AS provider_identifier",
+            "provider_identifier"
+            if "provider_identifier" in columns
+            else "identifier AS provider_identifier",
             "validation_status",
             "validation_method" if "validation_method" in columns else "NULL AS validation_method",
             "http_status" if "http_status" in columns else "NULL AS http_status",
@@ -764,7 +765,9 @@ class ContextBuilder:
             )
             metadata[(asset_type, identifier)] = {
                 "validation_asset_type": asset_type,
-                "provider_identifier": str(row["provider_identifier"] or row["identifier"] or "").strip(),
+                "provider_identifier": str(
+                    row["provider_identifier"] or row["identifier"] or ""
+                ).strip(),
                 "stored_validation_status": stored_status,
                 "validation_status": effective_validation_status(
                     asset_type,
@@ -855,7 +858,9 @@ class ContextBuilder:
                     "asset_type": asset_type,
                     "stored_asset_type": stored_type,
                     "identifier": identifier,
-                    "provider_identifier": str(row["provider_identifier"] or row["identifier"] or "").strip(),
+                    "provider_identifier": str(
+                        row["provider_identifier"] or row["identifier"] or ""
+                    ).strip(),
                     "source": str(row["source"] or "").strip(),
                     "discovered_at": str(row["discovered_at"] or "").strip(),
                     "metadata": metadata,
@@ -899,7 +904,9 @@ class ContextBuilder:
         if parameter:
             _add_asset_type(parameter.split(":", 1)[0])
 
-        cloud_provider = str(row["cloud_provider"] or "").strip() if "cloud_provider" in row.keys() else ""
+        cloud_provider = (
+            str(row["cloud_provider"] or "").strip() if "cloud_provider" in row.keys() else ""
+        )
         for asset_type in self._validation_asset_types_for_provider(cloud_provider):
             _add_asset_type(asset_type)
 
@@ -1117,9 +1124,13 @@ class ContextBuilder:
                 relations.append(
                     {
                         "source_type": source_type,
-                        "source_value": self._safe_seed_display_value(source_value_raw, source_type),
+                        "source_value": self._safe_seed_display_value(
+                            source_value_raw, source_type
+                        ),
                         "target_type": target_type,
-                        "target_value": self._safe_seed_display_value(target_value_raw, target_type),
+                        "target_value": self._safe_seed_display_value(
+                            target_value_raw, target_type
+                        ),
                         "relation_type": str(row["relation_type"] or "related_asset"),
                         "confidence": round(float(row["confidence"] or 0.0), 2),
                         "evidence": self._relation_evidence_summary(evidence_metadata),
@@ -1206,9 +1217,7 @@ class ContextBuilder:
             except sqlite3.OperationalError:
                 subs = []
         sub_seen = {
-            str(r["fqdn"] or "").strip().lower()
-            for r in subs
-            if str(r["fqdn"] or "").strip()
+            str(r["fqdn"] or "").strip().lower() for r in subs if str(r["fqdn"] or "").strip()
         }
         for hostname in seed_hosts:
             if hostname not in sub_seen:
@@ -1229,10 +1238,10 @@ class ContextBuilder:
             except sqlite3.OperationalError:
                 ports = []
         return ReconContext(
-            hosts      = [dict(r) for r in hosts],
-            subdomains = [r["fqdn"] for r in subs],
-            open_ports = [dict(r) for r in ports],
-            archive_urls = self._load_archive_urls(con),
+            hosts=[dict(r) for r in hosts],
+            subdomains=[r["fqdn"] for r in subs],
+            open_ports=[dict(r) for r in ports],
+            archive_urls=self._load_archive_urls(con),
         )
 
     def _load_osint(self, con: sqlite3.Connection) -> OsintContext:
@@ -1243,9 +1252,7 @@ class ContextBuilder:
         except sqlite3.OperationalError:
             email_rows = []
         email_values = {
-            str(row[0]).strip().lower()
-            for row in email_rows
-            if row[0] and "@" in str(row[0])
+            str(row[0]).strip().lower() for row in email_rows if row[0] and "@" in str(row[0])
         }
         email_values.update(self._seed_email_values(con))
         email_count = len(email_values)
@@ -1289,9 +1296,7 @@ class ContextBuilder:
             except sqlite3.OperationalError:
                 intel_rows = []
         breach_sources = {
-            str(row[0] or "").strip()
-            for row in breach_rows
-            if str(row[0] or "").strip()
+            str(row[0] or "").strip() for row in breach_rows if str(row[0] or "").strip()
         }
         intelligence_sources = sorted(
             {
@@ -1304,8 +1309,12 @@ class ContextBuilder:
         account_columns = self._table_columns(con, "account_existence")
         if account_columns and {"email", "service"}.issubset(account_columns):
             exists_expr = "exists_flag" if "exists_flag" in account_columns else "1 AS exists_flag"
-            rate_limited_expr = "rate_limited" if "rate_limited" in account_columns else "0 AS rate_limited"
-            source_tool_expr = "source_tool" if "source_tool" in account_columns else "'holehe' AS source_tool"
+            rate_limited_expr = (
+                "rate_limited" if "rate_limited" in account_columns else "0 AS rate_limited"
+            )
+            source_tool_expr = (
+                "source_tool" if "source_tool" in account_columns else "'holehe' AS source_tool"
+            )
             try:
                 account_rows = con.execute(
                     f"""
@@ -1333,8 +1342,12 @@ class ContextBuilder:
                 if int(row["exists_flag"] or 0) == 1 and str(row["service"] or "").strip()
             }
         )
-        registered_account_count = sum(1 for row in account_rows if int(row["exists_flag"] or 0) == 1)
-        account_existence_rate_limited = sum(1 for row in account_rows if int(row["rate_limited"] or 0) == 1)
+        registered_account_count = sum(
+            1 for row in account_rows if int(row["exists_flag"] or 0) == 1
+        )
+        account_existence_rate_limited = sum(
+            1 for row in account_rows if int(row["rate_limited"] or 0) == 1
+        )
         breached_emails: set[str] = set()
         reputation_alerts: set[str] = set()
         paste_alerts: set[str] = set()
@@ -1359,19 +1372,19 @@ class ContextBuilder:
         except sqlite3.OperationalError:
             key_count = 0
         return OsintContext(
-            emails_found       = email_count,
-            credential_hashes  = hash_count,
-            breach_sources     = sorted(breach_sources),
-            email_intelligence_records = len(intel_rows),
-            intelligence_sources = intelligence_sources,
-            account_existence_records = len(account_rows),
-            registered_account_count = registered_account_count,
-            registered_account_services = registered_account_services,
-            account_existence_rate_limited = account_existence_rate_limited,
-            breached_email_count = len(breached_emails),
-            reputation_alert_count = len(reputation_alerts),
-            paste_alert_count = len(paste_alerts),
-            key_findings_count = key_count,
+            emails_found=email_count,
+            credential_hashes=hash_count,
+            breach_sources=sorted(breach_sources),
+            email_intelligence_records=len(intel_rows),
+            intelligence_sources=intelligence_sources,
+            account_existence_records=len(account_rows),
+            registered_account_count=registered_account_count,
+            registered_account_services=registered_account_services,
+            account_existence_rate_limited=account_existence_rate_limited,
+            breached_email_count=len(breached_emails),
+            reputation_alert_count=len(reputation_alerts),
+            paste_alert_count=len(paste_alerts),
+            key_findings_count=key_count,
         )
 
     def _reportable_key_findings_count(self, con: sqlite3.Connection) -> int:
@@ -1396,7 +1409,7 @@ class ContextBuilder:
         ]
         rows = con.execute(
             f"""
-            SELECT {', '.join(select_parts)}
+            SELECT {", ".join(select_parts)}
             FROM key_scanner_findings
             WHERE engagement_id=? AND validation_state='ACTIVE'
             ORDER BY id DESC
@@ -1501,12 +1514,12 @@ class ContextBuilder:
         exploited = []
         validation_metadata = self._cloud_validation_metadata_index(con)
         for r in rows:
-            evidence = (r["evidence"] or "")[:512]   # V-09: evidence capped at 512 chars
+            evidence = (r["evidence"] or "")[:512]  # V-09: evidence capped at 512 chars
             finding = {
                 "vuln_type": r["vuln_type"],
-                "cve_id":   r["cve_id"],
+                "cve_id": r["cve_id"],
                 "severity": r["severity"],
-                "title":    r["title"],
+                "title": r["title"],
                 "evidence": evidence,
                 "target_url": r["target_url"],
                 "parameter": r["parameter"],
@@ -1577,12 +1590,12 @@ class ContextBuilder:
         }
         sev = lambda s: sum(1 for e in exploited if e["severity"] == s)  # noqa: E731
         return ExploitContext(
-            finding_count  = len(exploited),
-            cve_count      = len(distinct_cves),
-            critical_count = sev("CRITICAL"),
-            high_count     = sev("HIGH"),
-            medium_count   = sev("MEDIUM"),
-            exploited      = exploited,
+            finding_count=len(exploited),
+            cve_count=len(distinct_cves),
+            critical_count=sev("CRITICAL"),
+            high_count=sev("HIGH"),
+            medium_count=sev("MEDIUM"),
+            exploited=exploited,
         )
 
     @staticmethod
@@ -1680,8 +1693,7 @@ class ContextBuilder:
             lateral_hosts = 0
         try:
             exfil = con.execute(
-                "SELECT COALESCE(SUM(size_bytes),0) FROM exfiltrated_data "
-                "WHERE engagement_id=?",
+                "SELECT COALESCE(SUM(size_bytes),0) FROM exfiltrated_data WHERE engagement_id=?",
                 (self._eid,),
             ).fetchone()[0]
         except sqlite3.OperationalError:
@@ -1718,13 +1730,13 @@ class ContextBuilder:
             pass
 
         return PostExploitContext(
-            shells_spawned    = shells,
-            persistence_count = persist,
-            lateral_hosts     = lateral_hosts,
-            data_collected_gb = round(exfil / (1024 ** 3), 3) if exfil else 0.0,
-            techniques        = [r[0] for r in techniques_rows],
-            artifact_summary  = artifact_summary,
-            artifact_type_summary = artifact_type_summary,
+            shells_spawned=shells,
+            persistence_count=persist,
+            lateral_hosts=lateral_hosts,
+            data_collected_gb=round(exfil / (1024**3), 3) if exfil else 0.0,
+            techniques=[r[0] for r in techniques_rows],
+            artifact_summary=artifact_summary,
+            artifact_type_summary=artifact_type_summary,
         )
 
     def _load_ongoing_intel(self, con: sqlite3.Connection) -> OngoingIntelligenceContext:
@@ -1735,7 +1747,7 @@ class ContextBuilder:
                 (self._eid,),
             ).fetchone()
         except sqlite3.OperationalError:
-            return OngoingIntelligenceContext()   # table absent — monitoring not configured
+            return OngoingIntelligenceContext()  # table absent — monitoring not configured
 
         if not row or not row["enabled"]:
             return OngoingIntelligenceContext()
@@ -1771,22 +1783,21 @@ class ContextBuilder:
             )
 
         return OngoingIntelligenceContext(
-            monitoring_enabled      = True,
-            monitored_keywords      = keywords,
-            monitoring_window_start = window_start,
-            monitoring_window_end   = window_end,
-            new_findings_count      = len(findings),
-            high_severity_count     = high_count,
-            summary_narrative       = narrative,
+            monitoring_enabled=True,
+            monitored_keywords=keywords,
+            monitoring_window_start=window_start,
+            monitoring_window_end=window_end,
+            new_findings_count=len(findings),
+            high_severity_count=high_count,
+            summary_narrative=narrative,
         )
 
     def _apply_text_cleaning(self, ctx: ReportContext) -> ReportContext:
         """Stub for --clean-text integration (forge/phase6/cleaner.py)."""
         try:
             from forge.phase6.cleaner import clean_context_fields, CleaningConfig
-            cleaned = clean_context_fields(
-                ctx.__dict__, config=CleaningConfig.default()
-            )
+
+            cleaned = clean_context_fields(ctx.__dict__, config=CleaningConfig.default())
             logger.info("Text cleaning applied to report context.")
         except ImportError:
             logger.debug("forge.phase6.cleaner not available; skipping text cleaning.")
@@ -1794,6 +1805,7 @@ class ContextBuilder:
 
 
 # ── Risk roll-up ───────────────────────────────────────────────────────────────
+
 
 def _derive_overall_risk(exploits: ExploitContext) -> str:
     """
@@ -1815,6 +1827,7 @@ def _derive_overall_risk(exploits: ExploitContext) -> str:
 
 
 # ── Prompt assembler ───────────────────────────────────────────────────────────
+
 
 class PromptAssembler:
     """
@@ -1842,18 +1855,18 @@ class PromptAssembler:
             return prompt
 
         prompt = tmpl.render(
-            engagement_name        = ctx.engagement_name,
-            operator               = ctx.operator,
-            scope                  = ctx.scope,
-            start_date             = ctx.start_date,
-            end_date               = ctx.end_date,
-            overall_risk           = ctx.overall_risk,
-            recon                  = ctx.recon,
-            osint                  = ctx.osint,
-            exploits               = ctx.exploits,
-            post_exploitation      = ctx.post_exploitation,
-            ongoing_intelligence   = ctx.ongoing_intelligence,
-            mandatory_sections     = MANDATORY_SECTIONS,
+            engagement_name=ctx.engagement_name,
+            operator=ctx.operator,
+            scope=ctx.scope,
+            start_date=ctx.start_date,
+            end_date=ctx.end_date,
+            overall_risk=ctx.overall_risk,
+            recon=ctx.recon,
+            osint=ctx.osint,
+            exploits=ctx.exploits,
+            post_exploitation=ctx.post_exploitation,
+            ongoing_intelligence=ctx.ongoing_intelligence,
+            mandatory_sections=MANDATORY_SECTIONS,
         )
 
         self._assert_no_credential_leak(prompt)
@@ -1952,9 +1965,7 @@ class PromptAssembler:
             f"{ctx.exploits.high_count} high / "
             f"{ctx.exploits.medium_count} medium, "
             f"{ctx.exploits.cve_count} CVE reference(s) across "
-            f"{len(ctx.exploits.exploited)} validated finding(s)."
-            + findings_block
-            + "\n\n"
+            f"{len(ctx.exploits.exploited)} validated finding(s)." + findings_block + "\n\n"
             "Evidence handling — "
             f"{len(ctx.post_exploitation.artifact_summary)} artifact family bucket(s), "
             f"{sum(len(rows) for rows in ctx.post_exploitation.artifact_type_summary.values())} "
@@ -1973,6 +1984,7 @@ class PromptAssembler:
 
 
 # ── Main synthesizer ───────────────────────────────────────────────────────────
+
 
 class ReportSynthesizer:
     """
@@ -1995,31 +2007,33 @@ class ReportSynthesizer:
 
     def __init__(
         self,
-        db_path:     Path,
-        model_path:  Path | None = None,
-        output_dir:  Path        = Path("."),
-        n_ctx:       int         = 4096,
-        n_threads:   int         = 4,
-        temperature: float       = 0.3,
-        clean_text:  bool        = False,
-        assume_yes:  bool        = False,
-        provider:    str | None  = None,
+        db_path: Path,
+        model_path: Path | None = None,
+        output_dir: Path = Path("."),
+        n_ctx: int = 4096,
+        n_threads: int = 4,
+        temperature: float = 0.3,
+        clean_text: bool = False,
+        assume_yes: bool = False,
+        provider: str | None = None,
         max_correction_loops: int | None = None,
     ) -> None:
-        self._db_path     = Path(db_path)
-        self._model_path  = model_path or (DEFAULT_MODEL_DIR / MODEL_FILENAME)
-        self._output_dir  = Path(output_dir)
-        self._n_ctx       = n_ctx
-        self._n_threads   = n_threads
+        self._db_path = Path(db_path)
+        self._model_path = model_path or (DEFAULT_MODEL_DIR / MODEL_FILENAME)
+        self._output_dir = Path(output_dir)
+        self._n_ctx = n_ctx
+        self._n_threads = n_threads
         self._temperature = temperature
-        self._clean_text  = clean_text
-        self._assume_yes  = assume_yes
+        self._clean_text = clean_text
+        self._assume_yes = assume_yes
         self._requested_provider = (provider or "llama_cpp").lower()
         self._provider_name = self._requested_provider
-        self._max_loops   = max_correction_loops if max_correction_loops is not None else MAX_CORRECTION_LOOPS
+        self._max_loops = (
+            max_correction_loops if max_correction_loops is not None else MAX_CORRECTION_LOOPS
+        )
         self._local_llama_timeout = self._configured_local_llama_timeout()
-        self._llm         = None         # loaded lazily (llama_cpp path)
-        self._llm_provider = None        # loaded lazily (registry path)
+        self._llm = None  # loaded lazily (llama_cpp path)
+        self._llm_provider = None  # loaded lazily (registry path)
         self._render_backend = self._provider_name
         self._fallback_reason = ""
 
@@ -2061,7 +2075,15 @@ class ReportSynthesizer:
             return "gemini_cli"
         if token in {"bedrock", "bedrock_anthropic", "aws_bedrock"}:
             return "bedrock_anthropic"
-        if token in {"local", "local_llama", "llama", "llama_cpp", "ollama", "lm_studio", "lmstudio"}:
+        if token in {
+            "local",
+            "local_llama",
+            "llama",
+            "llama_cpp",
+            "ollama",
+            "lm_studio",
+            "lmstudio",
+        }:
             return "llama_cpp"
         if token == "template":
             return "template"
@@ -2070,9 +2092,7 @@ class ReportSynthesizer:
     @classmethod
     def _configured_auto_cascade_order(cls) -> list[str]:
         configured = (
-            os.environ.get("FORGE_LLM_CASCADE_ORDER")
-            or os.environ.get("LLM_CASCADE_ORDER")
-            or ""
+            os.environ.get("FORGE_LLM_CASCADE_ORDER") or os.environ.get("LLM_CASCADE_ORDER") or ""
         ).strip()
         if not configured:
             return list(_AUTO_CASCADE_DEFAULT_ORDER)
@@ -2136,9 +2156,7 @@ class ReportSynthesizer:
         """
         # 1. Build context
         logger.info("Building report context for engagement %d...", engagement_id)
-        ctx = ContextBuilder(
-            self._db_path, engagement_id, clean_text=self._clean_text
-        ).build()
+        ctx = ContextBuilder(self._db_path, engagement_id, clean_text=self._clean_text).build()
 
         if not include_monitoring:
             ctx.ongoing_intelligence = OngoingIntelligenceContext()
@@ -2151,9 +2169,7 @@ class ReportSynthesizer:
             self._set_render_backend("template")
             return self._persist_report_with_fallback(
                 ctx,
-                raw_text=self._render_fallback_report(
-                    ctx, "Template mode selected explicitly."
-                ),
+                raw_text=self._render_fallback_report(ctx, "Template mode selected explicitly."),
                 dry_run=False,
             )
 
@@ -2191,8 +2207,8 @@ class ReportSynthesizer:
         except (ModelNotFoundError, ImportError) as exc:
             if self._provider_name in (None, "llama_cpp"):
                 logger.warning(
-                    "llama_cpp model unavailable (%s); falling back to "
-                    "template mode.", exc,
+                    "llama_cpp model unavailable (%s); falling back to template mode.",
+                    exc,
                 )
                 self._set_render_backend("template", fallback_reason=str(exc))
                 return self._persist_report_with_fallback(
@@ -2237,6 +2253,7 @@ class ReportSynthesizer:
 
         # 4. Generate and iteratively self-correct
         from forge.phase6.llm_validator import validate_report
+
         logger.info("Running inference (this may take 30–60 s on CPU)...")
         response_text = ""
         telemetry = ValidationTelemetry(
@@ -2253,7 +2270,9 @@ class ReportSynthesizer:
         )
 
         revision_prompt = prompt
-        if not (self._provider_name == "auto" and self._llm_provider is None and self._llm is not None):
+        if not (
+            self._provider_name == "auto" and self._llm_provider is None and self._llm is not None
+        ):
             self._set_render_backend(self._provider_name)
         for attempt in range(self._max_loops + 1):
             t0 = time.monotonic()
@@ -2362,9 +2381,8 @@ class ReportSynthesizer:
                 response_text,
             )
             if integrity_failures:
-                reason = (
-                    "LLM output failed authoritative finding integrity check: "
-                    + "; ".join(integrity_failures[:5])
+                reason = "LLM output failed authoritative finding integrity check: " + "; ".join(
+                    integrity_failures[:5]
                 )
                 logger.warning("%s", reason)
                 self._set_render_backend("template", fallback_reason=reason)
@@ -2387,7 +2405,9 @@ class ReportSynthesizer:
                 raw_text=response_text,
                 overall_risk=ctx.overall_risk,
                 ongoing_intel=ctx.ongoing_intelligence,
-                approved_internal_ips=[h.get("ip_address") for h in ctx.recon.hosts if h.get("ip_address")],
+                approved_internal_ips=[
+                    h.get("ip_address") for h in ctx.recon.hosts if h.get("ip_address")
+                ],
                 approved_ip_ranges=_scope_entries_as_ip_ranges(ctx.scope),
             )
             telemetry = self._build_validation_telemetry(
@@ -2424,11 +2444,7 @@ class ReportSynthesizer:
                 "falling back to deterministic template."
             )
             prior_reason = str(self._fallback_reason or "").strip()
-            reason = (
-                f"{prior_reason} | {validation_reason}"
-                if prior_reason
-                else validation_reason
-            )
+            reason = f"{prior_reason} | {validation_reason}" if prior_reason else validation_reason
             logger.warning("%s", reason)
             self._set_render_backend("template", fallback_reason=reason)
             response_text = self._render_fallback_report(ctx, reason)
@@ -2497,7 +2513,9 @@ class ReportSynthesizer:
 
     @staticmethod
     def _score_narrative_coherence(report_text: str) -> float:
-        section_coverage = sum(1 for section in MANDATORY_SECTIONS if section in report_text) / len(MANDATORY_SECTIONS)
+        section_coverage = sum(1 for section in MANDATORY_SECTIONS if section in report_text) / len(
+            MANDATORY_SECTIONS
+        )
         word_count = len(report_text.split())
         density_score = min(1.0, word_count / 700.0)
         return min(1.0, 0.65 * section_coverage + 0.35 * density_score)
@@ -2512,9 +2530,7 @@ class ReportSynthesizer:
         exploited_findings: list[dict[str, Any]],
     ) -> tuple[float, float]:
         known_cves = {
-            str(item.get("cve_id", "")).upper()
-            for item in exploited_findings
-            if item.get("cve_id")
+            str(item.get("cve_id", "")).upper() for item in exploited_findings if item.get("cve_id")
         }
         mentioned_cves = {cve.upper() for cve in self._extract_cves(report_text)}
         if not known_cves and not mentioned_cves:
@@ -2546,12 +2562,10 @@ class ReportSynthesizer:
                 continue
             if not severity:
                 continue
-            window = report_lower[
-                max(0, title_pos - 240): title_pos + len(title_lower) + 240
-            ]
+            window = report_lower[max(0, title_pos - 240) : title_pos + len(title_lower) + 240]
             labels = ("critical", "high", "medium", "low", "info")
-            prefix = report_lower[max(0, title_pos - 120): title_pos]
-            suffix = report_lower[title_pos + len(title_lower): title_pos + len(title_lower) + 80]
+            prefix = report_lower[max(0, title_pos - 120) : title_pos]
+            suffix = report_lower[title_pos + len(title_lower) : title_pos + len(title_lower) + 80]
             prefix_matches = [
                 (len(prefix) - match.end(), label)
                 for label in labels
@@ -2587,7 +2601,9 @@ class ReportSynthesizer:
 
     @staticmethod
     def _score_engagement_relevance(report_text: str, ctx: ReportContext) -> float:
-        section_coverage = sum(1 for section in MANDATORY_SECTIONS if section in report_text) / len(MANDATORY_SECTIONS)
+        section_coverage = sum(1 for section in MANDATORY_SECTIONS if section in report_text) / len(
+            MANDATORY_SECTIONS
+        )
         has_risk_reference = ctx.overall_risk.lower() in report_text.lower()
         return min(1.0, (0.7 * section_coverage) + (0.3 if has_risk_reference else 0.0))
 
@@ -2652,8 +2668,12 @@ class ReportSynthesizer:
         format_name: str = "markdown",
         write_error: str | None = None,
     ) -> dict[str, Any]:
-        rendered_provider = str(provider or self._render_backend or self._provider_name or "").strip()
-        render_backend = str(self._render_backend or rendered_provider or self._provider_name or "").strip()
+        rendered_provider = str(
+            provider or self._render_backend or self._provider_name or ""
+        ).strip()
+        render_backend = str(
+            self._render_backend or rendered_provider or self._provider_name or ""
+        ).strip()
         render_path_parts = [
             str(self._requested_provider or "").strip(),
             render_backend,
@@ -2697,11 +2717,7 @@ class ReportSynthesizer:
         )
 
     def _render_fallback_report(self, ctx: ReportContext, reason: str) -> str:
-        return (
-            f"{self._render_skeleton(ctx).rstrip()}\n\n"
-            "---\n\n"
-            f"_LLM fallback engaged: {reason}_\n"
-        )
+        return f"{self._render_skeleton(ctx).rstrip()}\n\n---\n\n_LLM fallback engaged: {reason}_\n"
 
     def _decorate_report(self, ctx: ReportContext, raw_text: str, dry_run: bool) -> str:
         lines = [raw_text.rstrip(), "", "---", ""]
@@ -2780,7 +2796,7 @@ class ReportSynthesizer:
             wrapped_lines.extend(wrapped or [""])
         lines_per_page = 48
         pages = [
-            wrapped_lines[index:index + lines_per_page]
+            wrapped_lines[index : index + lines_per_page]
             for index in range(0, max(len(wrapped_lines), 1), lines_per_page)
         ]
         if not pages:
@@ -2806,9 +2822,7 @@ class ReportSynthesizer:
             content_lines.append("ET")
             stream = "\n".join(content_lines).encode("latin-1", errors="replace")
             objects[content_id] = (
-                f"<< /Length {len(stream)} >>\nstream\n".encode("ascii")
-                + stream
-                + b"\nendstream"
+                f"<< /Length {len(stream)} >>\nstream\n".encode("ascii") + stream + b"\nendstream"
             )
             objects[page_id] = (
                 f"<< /Type /Page /Parent {pages_id} 0 R "
@@ -2854,9 +2868,9 @@ class ReportSynthesizer:
         escaped_body = html_lib.escape(markdown_text)
         html_text = (
             "<!doctype html>\n"
-            "<html lang=\"en\">\n"
+            '<html lang="en">\n'
             "<head>\n"
-            "  <meta charset=\"utf-8\">\n"
+            '  <meta charset="utf-8">\n'
             f"  <title>{escaped_title}</title>\n"
             "  <style>"
             "body{font-family:ui-sans-serif,system-ui,sans-serif;margin:2rem;line-height:1.55;color:#18212f;}"
@@ -2932,7 +2946,9 @@ class ReportSynthesizer:
             "report_format": str(metadata.get("format") or ""),
             "report_generated_at": str(metadata.get("generated_at") or ""),
             "fallback_reason": str(metadata.get("fallback_reason") or ""),
-            "report_write_error": str(metadata.get("write_error") or metadata.get("report_write_error") or ""),
+            "report_write_error": str(
+                metadata.get("write_error") or metadata.get("report_write_error") or ""
+            ),
         }
 
     @staticmethod
@@ -2993,9 +3009,7 @@ class ReportSynthesizer:
                     "stored_validation_status": str(
                         validation.get("stored_validation_status") or ""
                     ),
-                    "validation_reportable": str(
-                        validation.get("validation_reportable") is True
-                    ),
+                    "validation_reportable": str(validation.get("validation_reportable") is True),
                     "validation_method": str(validation.get("method") or ""),
                     "validation_http_status": str(validation.get("http_status") or ""),
                     "validation_proof": str(
@@ -3003,14 +3017,10 @@ class ReportSynthesizer:
                     ),
                     "cloud_asset_type": str(validation.get("asset_type") or ""),
                     "cloud_identifier": str(validation.get("identifier") or ""),
-                    "cloud_provider_identifier": str(
-                        validation.get("provider_identifier") or ""
-                    ),
+                    "cloud_provider_identifier": str(validation.get("provider_identifier") or ""),
                     "validation_checked_at": str(validation.get("checked_at") or ""),
                     "validation_notes": str(validation.get("notes") or ""),
-                    "validation_evidence_summary": str(
-                        validation.get("evidence_summary") or ""
-                    ),
+                    "validation_evidence_summary": str(validation.get("evidence_summary") or ""),
                     "emails_found": ctx.osint.emails_found,
                     "hosts_found": len(ctx.recon.hosts),
                     "subdomains_found": len(ctx.recon.subdomains),
@@ -3029,35 +3039,23 @@ class ReportSynthesizer:
                     "stored_validation_status": str(
                         asset.get("stored_validation_status") or "UNVALIDATED"
                     ),
-                    "validation_reportable": str(
-                        asset.get("validation_reportable") is True
-                    ),
+                    "validation_reportable": str(asset.get("validation_reportable") is True),
                     "validation_method": str(asset.get("method") or ""),
                     "validation_proof": str(
                         asset.get("validation_proof") or asset.get("proof") or ""
                     ),
                     "cloud_asset_type": str(asset.get("asset_type") or ""),
                     "cloud_identifier": str(asset.get("identifier") or ""),
-                    "cloud_provider_identifier": str(
-                        asset.get("provider_identifier") or ""
-                    ),
+                    "cloud_provider_identifier": str(asset.get("provider_identifier") or ""),
                     "cloud_source": str(asset.get("source") or ""),
                     "cloud_discovered_at": str(asset.get("discovered_at") or ""),
-                    "cloud_artifact_provenance": str(
-                        asset.get("artifact_provenance") is True
-                    ),
+                    "cloud_artifact_provenance": str(asset.get("artifact_provenance") is True),
                     "cloud_artifact_source_seed_id": str(
                         asset.get("artifact_source_seed_id") or ""
                     ),
-                    "cloud_artifact_source_url": str(
-                        asset.get("artifact_source_url") or ""
-                    ),
-                    "cloud_artifact_source_file": str(
-                        asset.get("artifact_source_file") or ""
-                    ),
-                    "cloud_artifact_extract_rule": str(
-                        asset.get("artifact_extract_rule") or ""
-                    ),
+                    "cloud_artifact_source_url": str(asset.get("artifact_source_url") or ""),
+                    "cloud_artifact_source_file": str(asset.get("artifact_source_file") or ""),
+                    "cloud_artifact_extract_rule": str(asset.get("artifact_extract_rule") or ""),
                     "cloud_artifact_format": str(asset.get("artifact_format") or ""),
                     "cloud_metadata_json": json.dumps(
                         asset.get("metadata") if isinstance(asset.get("metadata"), dict) else {},
@@ -3065,9 +3063,7 @@ class ReportSynthesizer:
                     ),
                     "validation_checked_at": str(asset.get("checked_at") or ""),
                     "validation_notes": str(asset.get("notes") or ""),
-                    "validation_evidence_summary": str(
-                        asset.get("evidence_summary") or ""
-                    ),
+                    "validation_evidence_summary": str(asset.get("evidence_summary") or ""),
                     "emails_found": ctx.osint.emails_found,
                     "hosts_found": len(ctx.recon.hosts),
                     "subdomains_found": len(ctx.recon.subdomains),
@@ -3234,7 +3230,9 @@ class ReportSynthesizer:
                     "relation_confidence": "",
                     "relation_evidence": "",
                     "archive_url": str(archive_url.get("url") or ""),
-                    "archive_sources": ",".join(str(source) for source in archive_url.get("sources", []) or []),
+                    "archive_sources": ",".join(
+                        str(source) for source in archive_url.get("sources", []) or []
+                    ),
                     "archive_root_domain": str(archive_url.get("root_domain") or ""),
                     "archive_discovered_from": str(archive_url.get("discovered_from") or ""),
                     "emails_found": ctx.osint.emails_found,
@@ -3594,15 +3592,29 @@ class ReportSynthesizer:
             )
             """
         )
-        self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN correction_loops INTEGER DEFAULT 0")
+        self._safe_add_column(
+            con, "ALTER TABLE llm_feedback ADD COLUMN correction_loops INTEGER DEFAULT 0"
+        )
         self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN feedback_text TEXT")
-        self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN narrative_coherence_score REAL")
-        self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN opsec_violation_count INTEGER DEFAULT 0")
+        self._safe_add_column(
+            con, "ALTER TABLE llm_feedback ADD COLUMN narrative_coherence_score REAL"
+        )
+        self._safe_add_column(
+            con, "ALTER TABLE llm_feedback ADD COLUMN opsec_violation_count INTEGER DEFAULT 0"
+        )
         self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN hallucination_score REAL")
-        self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN factual_accuracy_score REAL")
-        self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN engagement_context_relevance REAL")
-        self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN final_approval BOOLEAN DEFAULT FALSE")
-        self._safe_add_column(con, "ALTER TABLE llm_feedback ADD COLUMN validation_timestamp TIMESTAMP")
+        self._safe_add_column(
+            con, "ALTER TABLE llm_feedback ADD COLUMN factual_accuracy_score REAL"
+        )
+        self._safe_add_column(
+            con, "ALTER TABLE llm_feedback ADD COLUMN engagement_context_relevance REAL"
+        )
+        self._safe_add_column(
+            con, "ALTER TABLE llm_feedback ADD COLUMN final_approval BOOLEAN DEFAULT FALSE"
+        )
+        self._safe_add_column(
+            con, "ALTER TABLE llm_feedback ADD COLUMN validation_timestamp TIMESTAMP"
+        )
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS llm_validation_rules (
@@ -3625,11 +3637,7 @@ class ReportSynthesizer:
     def _ensure_model_loaded(self, *, allow_auto_local: bool = False) -> None:
         # Provider path: skip llama_cpp entirely if a non-llama_cpp provider
         # was requested. Provider is loaded on first inference.
-        if (
-            self._provider_name
-            and self._provider_name != "llama_cpp"
-            and not allow_auto_local
-        ):
+        if self._provider_name and self._provider_name != "llama_cpp" and not allow_auto_local:
             return
 
         if self._llm is not None:
@@ -3646,16 +3654,15 @@ class ReportSynthesizer:
         llama_cls = Llama
         if llama_cls is None:
             raise ImportError(
-                "llama-cpp-python is not installed. "
-                "Run: pip install llama-cpp-python==0.3.8"
+                "llama-cpp-python is not installed. Run: pip install llama-cpp-python==0.3.8"
             )
 
         logger.info("Loading model from %s ...", self._model_path)
         self._llm = llama_cls(
-            model_path = str(self._model_path),
-            n_ctx      = self._n_ctx,
-            n_threads  = self._n_threads,
-            verbose    = False,
+            model_path=str(self._model_path),
+            n_ctx=self._n_ctx,
+            n_threads=self._n_threads,
+            verbose=False,
         )
         logger.info("Model loaded.")
 
@@ -3695,22 +3702,28 @@ class ReportSynthesizer:
         try:
             if name == "kiro_cli":
                 from forge.providers.kiro_cli import KiroCliProvider  # noqa: PLC0415
+
                 self._llm_provider = KiroCliProvider()
             elif name == "claude_code":
                 from forge.providers.claude_code import ClaudeCodeProvider  # noqa: PLC0415
+
                 self._llm_provider = ClaudeCodeProvider()
             elif name == "codex_cli":
                 from forge.providers.codex_cli import CodexCliProvider  # noqa: PLC0415
+
                 self._llm_provider = CodexCliProvider()
             elif name == "gemini_cli":
                 from forge.providers.gemini_cli import GeminiCliProvider  # noqa: PLC0415
+
                 self._llm_provider = GeminiCliProvider()
             elif name == "bedrock_anthropic":
                 from forge.providers.bedrock_anthropic import BedrockAnthropicProvider  # noqa: PLC0415
+
                 self._llm_provider = BedrockAnthropicProvider()
             elif name == "openai_compatible":
                 import os as _os  # noqa: PLC0415
                 from forge.providers.openai_compatible import OpenAICompatibleProvider  # noqa: PLC0415
+
                 base_url = _os.environ.get("FORGE_OPENAI_BASE_URL")
                 model = _os.environ.get("FORGE_OPENAI_MODEL")
                 api_key = _os.environ.get("FORGE_OPENAI_API_KEY")
@@ -3732,8 +3745,7 @@ class ReportSynthesizer:
                 )
         except ImportError as exc:
             raise ImportError(
-                f"Provider '{name}' import failed: {exc}. "
-                f"Ensure its dependencies are installed."
+                f"Provider '{name}' import failed: {exc}. Ensure its dependencies are installed."
             ) from exc
         logger.info("LLM provider loaded: %s", name)
 
@@ -3758,16 +3770,22 @@ class ReportSynthesizer:
                     if not (_sh.which("kiro-cli") or _sh.which("kiro-cli.exe")):
                         continue
                     from forge.providers.kiro_cli import KiroCliProvider  # noqa: PLC0415
+
                     chain.append(("kiro_cli", KiroCliProvider()))
                 elif provider_name == "claude_code":
                     if not (_sh.which("claude") or _sh.which("claude.cmd")):
                         continue
                     from forge.providers.claude_code import ClaudeCodeProvider  # noqa: PLC0415
+
                     chain.append(("claude_code", ClaudeCodeProvider()))
                 elif provider_name == "openai_compatible":
-                    if not (os.environ.get("FORGE_OPENAI_BASE_URL") and os.environ.get("FORGE_OPENAI_MODEL")):
+                    if not (
+                        os.environ.get("FORGE_OPENAI_BASE_URL")
+                        and os.environ.get("FORGE_OPENAI_MODEL")
+                    ):
                         continue
                     from forge.providers.openai_compatible import OpenAICompatibleProvider  # noqa: PLC0415
+
                     chain.append(
                         (
                             "openai_compatible",
@@ -3782,16 +3800,19 @@ class ReportSynthesizer:
                     if not (_sh.which("codex") or _sh.which("codex.cmd")):
                         continue
                     from forge.providers.codex_cli import CodexCliProvider  # noqa: PLC0415
+
                     chain.append(("codex_cli", CodexCliProvider()))
                 elif provider_name == "gemini_cli":
                     if not (_sh.which("gemini") or _sh.which("gemini.cmd")):
                         continue
                     from forge.providers.gemini_cli import GeminiCliProvider  # noqa: PLC0415
+
                     chain.append(("gemini_cli", GeminiCliProvider()))
                 elif provider_name == "bedrock_anthropic":
                     if not (os.environ.get("AWS_REGION") or os.environ.get("AWS_PROFILE")):
                         continue
                     from forge.providers.bedrock_anthropic import BedrockAnthropicProvider  # noqa: PLC0415
+
                     chain.append(("bedrock_anthropic", BedrockAnthropicProvider()))
             except Exception as exc:  # noqa: BLE001
                 logger.debug("%s skipped: %s", provider_name, exc)
@@ -3811,7 +3832,9 @@ class ReportSynthesizer:
         # Wide per-call timeout: an LLM CLI can take 60-120s for a long
         # report. Circuit breaker: 60s cooldown after a hard failure.
         return FallbackChainProvider(
-            chain, per_call_timeout=300.0, cooldown_seconds=60.0,
+            chain,
+            per_call_timeout=300.0,
+            cooldown_seconds=60.0,
         )
 
     def _infer(self, prompt: str) -> str:
@@ -3871,7 +3894,7 @@ class ReportSynthesizer:
         kwargs = {
             "messages": [
                 {"role": "system", "content": SYSTEM_DIRECTIVE},
-                {"role": "user",   "content": prompt},
+                {"role": "user", "content": prompt},
             ],
             "max_tokens": MAX_COMPLETION_TOK,
             "temperature": self._temperature,
@@ -3978,8 +4001,7 @@ class ReportSynthesizer:
             )
         seed_table = (
             "| Type | Value | Source | Status | Depth | Confidence |\n"
-            "|---|---|---|---|---|---|\n"
-            + "\n".join(seed_rows)
+            "|---|---|---|---|---|---|\n" + "\n".join(seed_rows)
             if seed_rows
             else "_No engagement seeds were recorded in this reporting window._"
         )
@@ -4000,8 +4022,7 @@ class ReportSynthesizer:
             )
         relation_table = (
             "| Source | Relation | Target | Confidence | Evidence |\n"
-            "|---|---|---|---|---|\n"
-            + "\n".join(relation_rows)
+            "|---|---|---|---|---|\n" + "\n".join(relation_rows)
             if relation_rows
             else "_No seed cross-reference examples were recorded in this reporting window._"
         )
@@ -4012,7 +4033,9 @@ class ReportSynthesizer:
                 + " | ".join(
                     [
                         f"`{_md_cell(item.get('url'))}`",
-                        _md_cell(", ".join(str(source) for source in item.get("sources", []) or [])),
+                        _md_cell(
+                            ", ".join(str(source) for source in item.get("sources", []) or [])
+                        ),
                         _md_cell(item.get("root_domain")),
                         _md_cell(item.get("title")),
                     ]
@@ -4020,9 +4043,7 @@ class ReportSynthesizer:
                 + " |"
             )
         archive_table = (
-            "| URL | Source | Root domain | Title |\n"
-            "|---|---|---|---|\n"
-            + "\n".join(archive_rows)
+            "| URL | Source | Root domain | Title |\n|---|---|---|---|\n" + "\n".join(archive_rows)
             if archive_rows
             else "_No archive URL provenance was recorded in this reporting window._"
         )
@@ -4031,7 +4052,9 @@ class ReportSynthesizer:
             provenance_bits = [
                 str(asset.get("artifact_extract_rule") or "").strip(),
                 str(asset.get("artifact_format") or "").strip(),
-                str(asset.get("artifact_source_file") or asset.get("artifact_source_url") or "").strip(),
+                str(
+                    asset.get("artifact_source_file") or asset.get("artifact_source_url") or ""
+                ).strip(),
             ]
             provenance = " / ".join(bit for bit in provenance_bits if bit)
             cloud_asset_rows.append(
@@ -4050,8 +4073,7 @@ class ReportSynthesizer:
             )
         cloud_asset_table = (
             "| Type | Identifier | Source | Provenance | Validation | Reportable |\n"
-            "|---|---|---|---|---|---|\n"
-            + "\n".join(cloud_asset_rows)
+            "|---|---|---|---|---|---|\n" + "\n".join(cloud_asset_rows)
             if cloud_asset_rows
             else "_No cloud asset inventory was recorded in this reporting window._"
         )
@@ -4068,14 +4090,13 @@ class ReportSynthesizer:
                 title = finding.get("title") or "—"
                 rows.append(f"| {cve} | {sev} | {title} |")
             exploits_section = (
-                "| CVE | Severity | Title |\n"
-                "|---|---|---|\n"
-                + "\n".join(rows)
-                + "\n"
+                "| CVE | Severity | Title |\n|---|---|---|\n" + "\n".join(rows) + "\n"
             )
             detail_blocks = []
             for finding in ctx.exploits.exploited:
-                title = str(finding.get("title") or finding.get("cve_id") or "Validated finding").strip()
+                title = str(
+                    finding.get("title") or finding.get("cve_id") or "Validated finding"
+                ).strip()
                 severity = str(finding.get("severity") or "UNKNOWN").strip()
                 asset = (
                     str(finding.get("target_url") or "").strip()
@@ -4106,19 +4127,13 @@ class ReportSynthesizer:
                 if validation_http_status:
                     validation_parts.append(f"HTTP {validation_http_status}")
                 validation_line = (
-                    f"- **Validation**: {' '.join(validation_parts)}"
-                    if validation_parts
-                    else ""
+                    f"- **Validation**: {' '.join(validation_parts)}" if validation_parts else ""
                 )
                 validation_notes_line = (
-                    f"- **Validation notes**: {validation_notes}"
-                    if validation_notes
-                    else ""
+                    f"- **Validation notes**: {validation_notes}" if validation_notes else ""
                 )
                 optional_validation_lines = [
-                    line
-                    for line in (validation_line, validation_notes_line)
-                    if line
+                    line for line in (validation_line, validation_notes_line) if line
                 ]
                 detail_blocks.append(
                     "\n".join(
@@ -4143,169 +4158,171 @@ class ReportSynthesizer:
         pex = ctx.post_exploitation
         evidence_categories = ", ".join(sorted(pex.artifact_summary)[:6]) or "none"
 
-        return "\n".join([
-            "# Authorized Security Assessment Report",
-            "",
-            f"**Engagement:** {ctx.engagement_name} (ID {ctx.engagement_id})",
-            f"**Operator:** {ctx.operator}",
-            f"**Overall risk:** {ctx.overall_risk}",
-            f"**Generated (template mode, no LLM):** {ts}",
-            "",
-            "---",
-            "",
-            "## 1. Executive Summary",
-            "",
-            f"This engagement was conducted within the authorised scope "
-            f"`{', '.join(ctx.scope) if ctx.scope else '<none>'}`. "
-            f"Reconnaissance identified {len(ctx.recon.hosts)} live host(s) "
-            f"exposing {len(ctx.recon.open_ports)} open service(s) and "
-            f"{len(ctx.recon.subdomains)} subdomain(s). Open-source "
-            f"intelligence yielded {ctx.osint.emails_found} email address(es), "
-            f"{ctx.osint.credential_hashes} credential hash(es), "
-            f"{ctx.osint.email_intelligence_records} email-intelligence record(s), "
-            f"{ctx.osint.registered_account_count} registered-account hit(s), "
-            f"{len(ctx.osint.breach_sources)} breach-corpus reference(s), and "
-            f"{ctx.osint.reputation_alert_count} reputation alert(s). "
-            f"Vulnerability and exposure correlation produced "
-            f"{ctx.exploits.critical_count} critical, {ctx.exploits.high_count} "
-            f"high, and {ctx.exploits.medium_count} medium-severity finding(s) "
-            f"across {ctx.exploits.finding_count} validated finding(s) and "
-            f"{ctx.exploits.cve_count} distinct CVE reference(s). "
-            "Evidence handling remained bounded to scoped discovery, static "
-            "artifact analysis, and non-destructive validation records.",
-            "",
-            "## 2. Engagement Scope & Methodology",
-            "",
-            f"**Scope:** {', '.join(ctx.scope) if ctx.scope else '<undefined>'}",
-            f"**Start:** {ctx.start_date or '<not recorded>'}",
-            f"**End:** {ctx.end_date or '<not recorded>'}",
-            f"**Operator:** {ctx.operator}",
-            "",
-            "The engagement followed the standard FORGE Toolkit phased "
-            "methodology: Phase 0 (knowledge-base ETL), Phase 1 "
-            "(reconnaissance), Phase 2 (OSINT + credential intelligence), "
-            "Phase 3 (scope and validation preparation), Phase 4 "
-            "(vulnerability and exposure correlation), and Phase 6 "
-            "(deterministic reporting).",
-            "",
-            "## 3. Reconnaissance Findings",
-            "",
-            f"**Hosts discovered:** {len(ctx.recon.hosts)}  \n"
-            f"**Open services:** {len(ctx.recon.open_ports)}  \n"
-            f"**Subdomains enumerated:** {len(ctx.recon.subdomains)}",
-            "",
-            "### 3.1 Host operating-system distribution",
-            "",
-            "| OS family | Host count |",
-            "|---|---|",
-            os_table,
-            "",
-            "### 3.2 Service class distribution",
-            "",
-            "| Service | Instance count |",
-            "|---|---|",
-            svc_table,
-            "",
-            "_Per-host identifiers, port assignments and version indicators "
-            "are retained in the engagement's controlled operational records "
-            "and are not reproduced in this document._",
-            "",
-            "### 3.3 Passive archive URL provenance",
-            "",
-            archive_table,
-            "",
-            "## 4. OSINT & Credential Intelligence",
-            "",
-            f"**Emails harvested:** {ctx.osint.emails_found}  \n"
-            f"**Credential hashes:** {ctx.osint.credential_hashes} "
-            "(count only; plaintext never reproduced)  \n"
-            f"**Email-intelligence records:** {ctx.osint.email_intelligence_records}  \n"
-            f"**Registered-account hits:** {ctx.osint.registered_account_count} "
-            f"across {len(ctx.osint.registered_account_services)} service(s)  \n"
-            f"**Account-existence rate limits:** {ctx.osint.account_existence_rate_limited}  \n"
-            f"**Intelligence sources:** "
-            f"{', '.join(ctx.osint.intelligence_sources) if ctx.osint.intelligence_sources else 'None'}  \n"
-            f"**Breached emails:** {ctx.osint.breached_email_count}  \n"
-            f"**Reputation alerts:** {ctx.osint.reputation_alert_count}  \n"
-            f"**Paste alerts:** {ctx.osint.paste_alert_count}  \n"
-            f"**Breach corpora referenced:** "
-            f"{len(ctx.osint.breach_sources)}  \n"
-            f"**Exposed-key findings:** {ctx.osint.key_findings_count}",
-            "",
-            "### 4.1 Engagement Seeds & Entity Summary",
-            "",
-            f"**Tracked seeds:** {len(ctx.seed_summary.seeds)}  \n"
-            f"**Seed types:** {seed_type_summary}  \n"
-            f"**Cross-reference relations:** {ctx.seed_summary.relation_count}",
-            "",
-            seed_table,
-            "",
-            "#### Recursive Discovery & Cross-Reference Evidence",
-            "",
-            relation_table,
-            "",
-            "## 5. Vulnerability & Exposure Correlation",
-            "",
-            f"**Critical:** {ctx.exploits.critical_count}  \n"
-            f"**High:** {ctx.exploits.high_count}  \n"
-            f"**Medium:** {ctx.exploits.medium_count}  \n"
-            f"**Validated findings:** {ctx.exploits.finding_count}  \n"
-            f"**Distinct CVE references:** {ctx.exploits.cve_count}",
-            "",
-            "### 5.0 Cloud Asset Inventory (Not Findings)",
-            "",
-            cloud_asset_table,
-            "",
-            "### 5.1 Validated findings",
-            "",
-            exploits_section,
-            "### 5.2 Finding details",
-            "",
-            detailed_findings_section or "_No detailed validated findings in this window._",
-            "",
-            "",
-            "## 6. Validation Boundaries & Evidence Handling",
-            "",
-            f"**Controlled evidence categories:** {evidence_categories}  \n"
-            f"**Artifact family buckets:** {len(pex.artifact_summary)}  \n"
-            f"**Artifact type buckets:** {sum(len(rows) for rows in pex.artifact_type_summary.values())}  \n"
-            "**Validation boundary:** Reported findings are limited to scoped discovery, "
-            "static artifact analysis, and non-destructive proof records. "
-            "Unvalidated, dead, placeholder, or low-signal evidence remains analyst "
-            "inventory unless deterministic report gates classify it as reportable.",
-            "",
-            "## 7. Risk Ratings & Remediation Recommendations",
-            "",
-            f"**Overall engagement risk:** {ctx.overall_risk}",
-            "",
-            "**General recommendations (priority-ranked):**",
-            "",
-            "1. Patch every CVE identified in Section 5 above, "
-            "starting with critical-severity items.",
-            "2. Enforce network segmentation between administrative and "
-            "user-facing service classes (see Section 3.2).",
-            "3. Review authentication surface for any service classes "
-            "exposing administrative capability (SSH, RDP, SMB, "
-            "management web UIs) — enforce MFA where practical.",
-            "4. Schedule an authenticated vulnerability assessment to "
-            "surface patch-level exposures not visible through "
-            "unauthenticated reconnaissance.",
-            "5. If deeper active validation is required, document separate "
-            "rules of engagement, scope limits, pacing, and approval evidence "
-            "before expanding beyond the current non-destructive workflow.",
-            "",
-            "---",
-            "",
-            "## 8. Timeline of Operator Actions",
-            "",
-            self._render_audit_timeline(ctx),
-            "",
-            "---",
-            "",
-            f"_Report generated by FORGE Toolkit template renderer "
-            f"(no LLM). Engagement DB: `{self._db_path.name}`._",
-            "",
-        ])
+        return "\n".join(
+            [
+                "# Authorized Security Assessment Report",
+                "",
+                f"**Engagement:** {ctx.engagement_name} (ID {ctx.engagement_id})",
+                f"**Operator:** {ctx.operator}",
+                f"**Overall risk:** {ctx.overall_risk}",
+                f"**Generated (template mode, no LLM):** {ts}",
+                "",
+                "---",
+                "",
+                "## 1. Executive Summary",
+                "",
+                f"This engagement was conducted within the authorised scope "
+                f"`{', '.join(ctx.scope) if ctx.scope else '<none>'}`. "
+                f"Reconnaissance identified {len(ctx.recon.hosts)} live host(s) "
+                f"exposing {len(ctx.recon.open_ports)} open service(s) and "
+                f"{len(ctx.recon.subdomains)} subdomain(s). Open-source "
+                f"intelligence yielded {ctx.osint.emails_found} email address(es), "
+                f"{ctx.osint.credential_hashes} credential hash(es), "
+                f"{ctx.osint.email_intelligence_records} email-intelligence record(s), "
+                f"{ctx.osint.registered_account_count} registered-account hit(s), "
+                f"{len(ctx.osint.breach_sources)} breach-corpus reference(s), and "
+                f"{ctx.osint.reputation_alert_count} reputation alert(s). "
+                f"Vulnerability and exposure correlation produced "
+                f"{ctx.exploits.critical_count} critical, {ctx.exploits.high_count} "
+                f"high, and {ctx.exploits.medium_count} medium-severity finding(s) "
+                f"across {ctx.exploits.finding_count} validated finding(s) and "
+                f"{ctx.exploits.cve_count} distinct CVE reference(s). "
+                "Evidence handling remained bounded to scoped discovery, static "
+                "artifact analysis, and non-destructive validation records.",
+                "",
+                "## 2. Engagement Scope & Methodology",
+                "",
+                f"**Scope:** {', '.join(ctx.scope) if ctx.scope else '<undefined>'}",
+                f"**Start:** {ctx.start_date or '<not recorded>'}",
+                f"**End:** {ctx.end_date or '<not recorded>'}",
+                f"**Operator:** {ctx.operator}",
+                "",
+                "The engagement followed the standard FORGE Toolkit phased "
+                "methodology: Phase 0 (knowledge-base ETL), Phase 1 "
+                "(reconnaissance), Phase 2 (OSINT + credential intelligence), "
+                "Phase 3 (scope and validation preparation), Phase 4 "
+                "(vulnerability and exposure correlation), and Phase 6 "
+                "(deterministic reporting).",
+                "",
+                "## 3. Reconnaissance Findings",
+                "",
+                f"**Hosts discovered:** {len(ctx.recon.hosts)}  \n"
+                f"**Open services:** {len(ctx.recon.open_ports)}  \n"
+                f"**Subdomains enumerated:** {len(ctx.recon.subdomains)}",
+                "",
+                "### 3.1 Host operating-system distribution",
+                "",
+                "| OS family | Host count |",
+                "|---|---|",
+                os_table,
+                "",
+                "### 3.2 Service class distribution",
+                "",
+                "| Service | Instance count |",
+                "|---|---|",
+                svc_table,
+                "",
+                "_Per-host identifiers, port assignments and version indicators "
+                "are retained in the engagement's controlled operational records "
+                "and are not reproduced in this document._",
+                "",
+                "### 3.3 Passive archive URL provenance",
+                "",
+                archive_table,
+                "",
+                "## 4. OSINT & Credential Intelligence",
+                "",
+                f"**Emails harvested:** {ctx.osint.emails_found}  \n"
+                f"**Credential hashes:** {ctx.osint.credential_hashes} "
+                "(count only; plaintext never reproduced)  \n"
+                f"**Email-intelligence records:** {ctx.osint.email_intelligence_records}  \n"
+                f"**Registered-account hits:** {ctx.osint.registered_account_count} "
+                f"across {len(ctx.osint.registered_account_services)} service(s)  \n"
+                f"**Account-existence rate limits:** {ctx.osint.account_existence_rate_limited}  \n"
+                f"**Intelligence sources:** "
+                f"{', '.join(ctx.osint.intelligence_sources) if ctx.osint.intelligence_sources else 'None'}  \n"
+                f"**Breached emails:** {ctx.osint.breached_email_count}  \n"
+                f"**Reputation alerts:** {ctx.osint.reputation_alert_count}  \n"
+                f"**Paste alerts:** {ctx.osint.paste_alert_count}  \n"
+                f"**Breach corpora referenced:** "
+                f"{len(ctx.osint.breach_sources)}  \n"
+                f"**Exposed-key findings:** {ctx.osint.key_findings_count}",
+                "",
+                "### 4.1 Engagement Seeds & Entity Summary",
+                "",
+                f"**Tracked seeds:** {len(ctx.seed_summary.seeds)}  \n"
+                f"**Seed types:** {seed_type_summary}  \n"
+                f"**Cross-reference relations:** {ctx.seed_summary.relation_count}",
+                "",
+                seed_table,
+                "",
+                "#### Recursive Discovery & Cross-Reference Evidence",
+                "",
+                relation_table,
+                "",
+                "## 5. Vulnerability & Exposure Correlation",
+                "",
+                f"**Critical:** {ctx.exploits.critical_count}  \n"
+                f"**High:** {ctx.exploits.high_count}  \n"
+                f"**Medium:** {ctx.exploits.medium_count}  \n"
+                f"**Validated findings:** {ctx.exploits.finding_count}  \n"
+                f"**Distinct CVE references:** {ctx.exploits.cve_count}",
+                "",
+                "### 5.0 Cloud Asset Inventory (Not Findings)",
+                "",
+                cloud_asset_table,
+                "",
+                "### 5.1 Validated findings",
+                "",
+                exploits_section,
+                "### 5.2 Finding details",
+                "",
+                detailed_findings_section or "_No detailed validated findings in this window._",
+                "",
+                "",
+                "## 6. Validation Boundaries & Evidence Handling",
+                "",
+                f"**Controlled evidence categories:** {evidence_categories}  \n"
+                f"**Artifact family buckets:** {len(pex.artifact_summary)}  \n"
+                f"**Artifact type buckets:** {sum(len(rows) for rows in pex.artifact_type_summary.values())}  \n"
+                "**Validation boundary:** Reported findings are limited to scoped discovery, "
+                "static artifact analysis, and non-destructive proof records. "
+                "Unvalidated, dead, placeholder, or low-signal evidence remains analyst "
+                "inventory unless deterministic report gates classify it as reportable.",
+                "",
+                "## 7. Risk Ratings & Remediation Recommendations",
+                "",
+                f"**Overall engagement risk:** {ctx.overall_risk}",
+                "",
+                "**General recommendations (priority-ranked):**",
+                "",
+                "1. Patch every CVE identified in Section 5 above, "
+                "starting with critical-severity items.",
+                "2. Enforce network segmentation between administrative and "
+                "user-facing service classes (see Section 3.2).",
+                "3. Review authentication surface for any service classes "
+                "exposing administrative capability (SSH, RDP, SMB, "
+                "management web UIs) — enforce MFA where practical.",
+                "4. Schedule an authenticated vulnerability assessment to "
+                "surface patch-level exposures not visible through "
+                "unauthenticated reconnaissance.",
+                "5. If deeper active validation is required, document separate "
+                "rules of engagement, scope limits, pacing, and approval evidence "
+                "before expanding beyond the current non-destructive workflow.",
+                "",
+                "---",
+                "",
+                "## 8. Timeline of Operator Actions",
+                "",
+                self._render_audit_timeline(ctx),
+                "",
+                "---",
+                "",
+                f"_Report generated by FORGE Toolkit template renderer "
+                f"(no LLM). Engagement DB: `{self._db_path.name}`._",
+                "",
+            ]
+        )
 
     def _render_audit_timeline(self, ctx: ReportContext) -> str:
         """Render engagement audit_log rows as a chronological timeline.
@@ -4316,7 +4333,8 @@ class ReportSynthesizer:
         """
         try:
             con = direct_connect(
-                f"file:{self._db_path.as_posix()}?mode=ro", uri=True,
+                f"file:{self._db_path.as_posix()}?mode=ro",
+                uri=True,
             )
             try:
                 rows = con.execute(
@@ -4378,13 +4396,11 @@ class ReportSynthesizer:
             )
         return "\n".join(lines)
 
-    def _write_report(
-        self, ctx: ReportContext, raw_text: str, dry_run: bool = False
-    ) -> Path:
+    def _write_report(self, ctx: ReportContext, raw_text: str, dry_run: bool = False) -> Path:
         self._output_dir.mkdir(parents=True, exist_ok=True)
-        ts      = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S")
-        stem    = f"engagement_{ctx.engagement_id}_report_{ts}"
-        out     = self._output_dir / f"{stem}.md"
+        ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S")
+        stem = f"engagement_{ctx.engagement_id}_report_{ts}"
+        out = self._output_dir / f"{stem}.md"
 
         # Skip the interactive confirm when the caller opted in via
         # assume_yes OR when we detect no attached terminal. The prompt_toolkit
@@ -4395,7 +4411,9 @@ class ReportSynthesizer:
         if skip_confirm:
             logger.info(
                 "Auto-confirming write to %s (assume_yes=%s, stdin_isatty=%s)",
-                out, self._assume_yes, sys.stdin.isatty(),
+                out,
+                self._assume_yes,
+                sys.stdin.isatty(),
             )
         else:
             confirmed_prompt = questionary.confirm(f"Write report to {out}?")
@@ -4484,7 +4502,9 @@ def synthesise(
     output_dir = (
         output_target
         if output_target and output_target.suffix == ""
-        else output_target.parent if output_target else Path(".")
+        else output_target.parent
+        if output_target
+        else Path(".")
     )
 
     synthesizer = ReportSynthesizer(
@@ -4517,10 +4537,7 @@ def synthesise(
                 generated_family[".csv"] = sibling_csv
 
         target_root = output_target.with_suffix("")
-        target_family = {
-            suffix: target_root.with_suffix(suffix)
-            for suffix in generated_family
-        }
+        target_family = {suffix: target_root.with_suffix(suffix) for suffix in generated_family}
         for suffix, source_path in generated_family.items():
             if not source_path.exists():
                 continue
@@ -4528,7 +4545,10 @@ def synthesise(
             if source_path.resolve() == destination.resolve():
                 continue
             shutil.copyfile(source_path, destination)
-        if ".md" in generated_family and generated_family[".md"].resolve() != target_family[".md"].resolve():
+        if (
+            ".md" in generated_family
+            and generated_family[".md"].resolve() != target_family[".md"].resolve()
+        ):
             for source_path in generated_family.values():
                 source_path.unlink(missing_ok=True)
         requested_suffix = output_target.suffix.lower()

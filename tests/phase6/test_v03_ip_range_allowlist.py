@@ -49,9 +49,7 @@ def test_v03_range_covers_broad_scope() -> None:
         approved_ips=[],
         approved_ip_ranges=["10.0.0.0/8"],
     )
-    assert result.warnings == [], (
-        f"10.0.0.0/8 must exempt every 10.x.y.z IP; got {result.warnings}"
-    )
+    assert result.warnings == [], f"10.0.0.0/8 must exempt every 10.x.y.z IP; got {result.warnings}"
 
 
 def test_v03_still_flags_ip_outside_range() -> None:

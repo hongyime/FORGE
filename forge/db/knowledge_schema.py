@@ -3,6 +3,7 @@
 Single knowledge.db consolidates: NVD CVEs, LOLBAS, GTFOBins, ExploitDB, ref cache.
 Column names kept compatible with existing phase0 fetchers to minimise changes.
 """
+
 import sqlite3
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
 
@@ -25,7 +26,6 @@ KNOWLEDGE_SCHEMA = [
     CREATE VIRTUAL TABLE IF NOT EXISTS nvd_cves_fts
     USING fts5(cve_id, description, cpe_matches, content=nvd_cves)
     """,
-
     # LOLBAS — columns match lolbas_fetcher._bulk_insert
     """
     CREATE TABLE IF NOT EXISTS lolbas_entries (
@@ -41,7 +41,6 @@ KNOWLEDGE_SCHEMA = [
         synced_at       TEXT
     )
     """,
-
     # GTFOBins — columns match gtfobins_fetcher._bulk_insert
     """
     CREATE TABLE IF NOT EXISTS gtfobins_entries (
@@ -52,7 +51,6 @@ KNOWLEDGE_SCHEMA = [
         synced_at   TEXT
     )
     """,
-
     # ExploitDB entries — migrated from files_exploits.csv
     """
     CREATE TABLE IF NOT EXISTS exploitdb_entries (
@@ -72,7 +70,6 @@ KNOWLEDGE_SCHEMA = [
     CREATE VIRTUAL TABLE IF NOT EXISTS exploitdb_fts
     USING fts5(title, cve_id, platform, content=exploitdb_entries)
     """,
-
     # Reference cache for web content
     """
     CREATE TABLE IF NOT EXISTS ref_cache (
@@ -83,7 +80,6 @@ KNOWLEDGE_SCHEMA = [
         expires_at   TEXT
     )
     """,
-
     # Sync log to track dataset updates
     """
     CREATE TABLE IF NOT EXISTS kb_sync_log (

@@ -13,6 +13,7 @@ when ``--tor`` was set for the parent kill-chain).
 
 Zero API keys. Zero signup. Zero LinkedIn cookies.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,29 +34,34 @@ from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-confi
 # ---------------------------------------------------------------------------
 _HEADERS_ROTATION = [
     {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/120.0.0.0 Safari/537.36"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
         "Accept-Language": "en-US,en;q=0.9",
     },
     {
-        "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                       "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                       "Version/17.0 Safari/605.1.15"),
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "Version/17.0 Safari/605.1.15"
+        ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
         "Accept-Language": "en-US,en;q=0.9",
     },
     {
-        "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64; rv:121.0) "
-                       "Gecko/20100101 Firefox/121.0"),
+        "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0"),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
         "Accept-Language": "en-US,en;q=0.5",
     },
     {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+        ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
         "Accept-Language": "en-GB,en;q=0.9",
     },
@@ -66,6 +72,7 @@ def _pick_headers() -> dict[str, str]:
     """Rotate UA/Accept-Language combos. Non-random-secure; just enough
     entropy to hit different fingerprints across bounded requests."""
     import random as _rand
+
     return dict(_HEADERS_ROTATION[_rand.randrange(len(_HEADERS_ROTATION))])
 
 
@@ -135,9 +142,22 @@ _SLUG_ID_TAIL = re.compile(r"^[0-9a-f]{4,}$", re.IGNORECASE)
 
 # Slugs that are clearly not people (company/help pages that slip into /in/).
 _SLUG_BLOCKLIST = {
-    "login", "signup", "help", "search", "feed", "jobs", "learning",
-    "premium", "sales", "recruiter", "notifications", "messaging",
-    "checkpoint", "unavailable", "authwall", "public-profile",
+    "login",
+    "signup",
+    "help",
+    "search",
+    "feed",
+    "jobs",
+    "learning",
+    "premium",
+    "sales",
+    "recruiter",
+    "notifications",
+    "messaging",
+    "checkpoint",
+    "unavailable",
+    "authwall",
+    "public-profile",
 }
 
 # Non-name single tokens we'll skip when parsing.
@@ -188,8 +208,7 @@ def _slug_to_name(slug: str) -> Optional[tuple[str, str]]:
     firstname = parts[0]
     lastname = parts[-1]
     # Reject if either half is all digits or has no letters
-    if not re.search(r"[a-zA-Z]", firstname) or not re.search(r"[a-zA-Z]",
-                                                              lastname):
+    if not re.search(r"[a-zA-Z]", firstname) or not re.search(r"[a-zA-Z]", lastname):
         return None
     if len(firstname) < 2 or len(lastname) < 2:
         return None
@@ -200,8 +219,8 @@ def _slug_to_name(slug: str) -> Optional[tuple[str, str]]:
 # Email pattern generation
 # ---------------------------------------------------------------------------
 
-def _generate_email_candidates(firstname: str, lastname: str,
-                               domain: str) -> list[str]:
+
+def _generate_email_candidates(firstname: str, lastname: str, domain: str) -> list[str]:
     """Produce common corporate email patterns for a name+domain pair.
 
     Patterns are intentionally broad; the caller can score/validate later
@@ -215,20 +234,20 @@ def _generate_email_candidates(firstname: str, lastname: str,
     fi = f[0]
     li = l[0]
     patterns = [
-        f"{f}.{l}@{d}",         # firstname.lastname
-        f"{f}{l}@{d}",          # firstnamelastname
-        f"{f}_{l}@{d}",         # firstname_lastname
-        f"{f}-{l}@{d}",         # firstname-lastname
-        f"{fi}{l}@{d}",         # flast
-        f"{fi}.{l}@{d}",        # f.last
-        f"{f}{li}@{d}",         # firstl
-        f"{f}.{li}@{d}",        # first.l
-        f"{fi}{li}@{d}",        # fl (initials)
-        f"{f}@{d}",             # firstname
-        f"{l}@{d}",             # lastname
-        f"{l}.{f}@{d}",         # lastname.firstname
-        f"{l}{f}@{d}",          # lastnamefirstname
-        f"{l}{fi}@{d}",         # lastnamef
+        f"{f}.{l}@{d}",  # firstname.lastname
+        f"{f}{l}@{d}",  # firstnamelastname
+        f"{f}_{l}@{d}",  # firstname_lastname
+        f"{f}-{l}@{d}",  # firstname-lastname
+        f"{fi}{l}@{d}",  # flast
+        f"{fi}.{l}@{d}",  # f.last
+        f"{f}{li}@{d}",  # firstl
+        f"{f}.{li}@{d}",  # first.l
+        f"{fi}{li}@{d}",  # fl (initials)
+        f"{f}@{d}",  # firstname
+        f"{l}@{d}",  # lastname
+        f"{l}.{f}@{d}",  # lastname.firstname
+        f"{l}{f}@{d}",  # lastnamefirstname
+        f"{l}{fi}@{d}",  # lastnamef
     ]
     # Dedupe preserving order
     seen: set[str] = set()
@@ -246,8 +265,8 @@ def _generate_email_candidates(firstname: str, lastname: str,
 # standalone (no cross-import that could break if name_search.py changes).
 # ---------------------------------------------------------------------------
 
-def _ddg_html_search(query: str, proxy: Optional[str] = None,
-                     timeout: float = 15.0) -> str:
+
+def _ddg_html_search(query: str, proxy: Optional[str] = None, timeout: float = 15.0) -> str:
     """DuckDuckGo HTML search with uddg-redirect decoding."""
     try:
         import httpx
@@ -276,8 +295,7 @@ def _ddg_html_search(query: str, proxy: Optional[str] = None,
     return "\n".join(decoded_parts) + "\n" + html
 
 
-def _bing_html_search(query: str, proxy: Optional[str] = None,
-                      timeout: float = 15.0) -> str:
+def _bing_html_search(query: str, proxy: Optional[str] = None, timeout: float = 15.0) -> str:
     """Bing HTML search - second-tier fallback."""
     try:
         import httpx
@@ -291,8 +309,7 @@ def _bing_html_search(query: str, proxy: Optional[str] = None,
             headers=_pick_headers(),
             verify=False,  # noqa: S501
         ) as c:
-            r = c.get("https://www.bing.com/search",
-                      params={"q": query, "count": "50"})
+            r = c.get("https://www.bing.com/search", params={"q": query, "count": "50"})
             if r.status_code in (200, 202):
                 return r.text or ""
     except Exception:  # noqa: BLE001
@@ -300,8 +317,7 @@ def _bing_html_search(query: str, proxy: Optional[str] = None,
     return ""
 
 
-def _startpage_search(query: str, proxy: Optional[str] = None,
-                      timeout: float = 15.0) -> str:
+def _startpage_search(query: str, proxy: Optional[str] = None, timeout: float = 15.0) -> str:
     """Startpage HTML - Google-backed tertiary fallback."""
     try:
         import httpx
@@ -315,8 +331,7 @@ def _startpage_search(query: str, proxy: Optional[str] = None,
             headers=_pick_headers(),
             verify=False,  # noqa: S501
         ) as c:
-            r = c.get("https://www.startpage.com/do/search",
-                      params={"query": query, "cat": "web"})
+            r = c.get("https://www.startpage.com/do/search", params={"query": query, "cat": "web"})
             if r.status_code in (200, 202):
                 return r.text or ""
     except Exception:  # noqa: BLE001
@@ -324,8 +339,7 @@ def _startpage_search(query: str, proxy: Optional[str] = None,
     return ""
 
 
-def _run_dork(query: str, proxy: Optional[str] = None,
-              timeout: float = 15.0) -> str:
+def _run_dork(query: str, proxy: Optional[str] = None, timeout: float = 15.0) -> str:
     """DDG-first, Bing-fallback, Startpage-tertiary. Returns concatenated
     blob when any layer produces >500 chars of usable text."""
     request_delay = _search_dork_request_delay_seconds()
@@ -379,6 +393,7 @@ def _run_dork_batch(
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def enumerate_linkedin_employees(
     domain: str,
@@ -471,13 +486,14 @@ def enumerate_linkedin_employees(
         if not parsed:
             continue
         firstname, lastname = parsed
-        names_ordered.append({
-            "slug":      slug,
-            "firstname": firstname,
-            "lastname":  lastname,
-        })
-        for candidate in _generate_email_candidates(firstname, lastname,
-                                                    domain_clean):
+        names_ordered.append(
+            {
+                "slug": slug,
+                "firstname": firstname,
+                "lastname": lastname,
+            }
+        )
+        for candidate in _generate_email_candidates(firstname, lastname, domain_clean):
             if candidate in email_seen:
                 continue
             email_seen.add(candidate)
@@ -567,23 +583,28 @@ def persist_linkedin_findings(
             if not slug_str:
                 continue
             name_row = names_by_slug.get(slug_str) or {}
-            profile_data = json.dumps({
-                "source":     "crosslinked",
-                "platform":   "linkedin",
-                "slug":       slug_str,
-                "url":        f"https://www.linkedin.com/in/{slug_str}",
-                "domain":     domain_clean,
-                "firstname":  name_row.get("firstname", ""),
-                "lastname":   name_row.get("lastname", ""),
-            })
+            profile_data = json.dumps(
+                {
+                    "source": "crosslinked",
+                    "platform": "linkedin",
+                    "slug": slug_str,
+                    "url": f"https://www.linkedin.com/in/{slug_str}",
+                    "domain": domain_clean,
+                    "firstname": name_row.get("firstname", ""),
+                    "lastname": name_row.get("lastname", ""),
+                }
+            )
             try:
                 con.execute(
                     "INSERT INTO social_profiles "
                     "(engagement_id, email, source, profile_data) "
                     "VALUES (?, ?, ?, ?)",
-                    (engagement_id, domain_key,
-                     f"crosslinked:linkedin:{slug_str[:48]}",
-                     profile_data),
+                    (
+                        engagement_id,
+                        domain_key,
+                        f"crosslinked:linkedin:{slug_str[:48]}",
+                        profile_data,
+                    ),
                 )
                 counts["social_profiles"] += 1
             except (sqlite3.OperationalError, sqlite3.IntegrityError):
@@ -594,37 +615,44 @@ def persist_linkedin_findings(
             cslug_str = str(cslug).strip()
             if not cslug_str:
                 continue
-            profile_data = json.dumps({
-                "source":   "crosslinked",
-                "platform": "linkedin_company",
-                "slug":     cslug_str,
-                "url":      f"https://www.linkedin.com/company/{cslug_str}",
-                "domain":   domain_clean,
-            })
+            profile_data = json.dumps(
+                {
+                    "source": "crosslinked",
+                    "platform": "linkedin_company",
+                    "slug": cslug_str,
+                    "url": f"https://www.linkedin.com/company/{cslug_str}",
+                    "domain": domain_clean,
+                }
+            )
             try:
                 con.execute(
                     "INSERT INTO social_profiles "
                     "(engagement_id, email, source, profile_data) "
                     "VALUES (?, ?, ?, ?)",
-                    (engagement_id, domain_key,
-                     f"crosslinked:linkedin_company:{cslug_str[:48]}",
-                     profile_data),
+                    (
+                        engagement_id,
+                        domain_key,
+                        f"crosslinked:linkedin_company:{cslug_str[:48]}",
+                        profile_data,
+                    ),
                 )
                 counts["social_profiles"] += 1
             except (sqlite3.OperationalError, sqlite3.IntegrityError):
                 pass
 
         # Audit-log summary
-        summary = json.dumps({
-            "source":            "crosslinked",
-            "domain":            domain_clean,
-            "raw_hits":          int(result.get("raw_hits", 0) or 0),
-            "linkedin_slugs":    len(result.get("linkedin_slugs", []) or []),
-            "candidate_emails":  len(result.get("candidate_emails", []) or []),
-            "company_slugs":     len(result.get("company_slugs", []) or []),
-            "sample_emails":     (result.get("candidate_emails") or [])[:5],
-            "sample_slugs":      (result.get("linkedin_slugs") or [])[:5],
-        })
+        summary = json.dumps(
+            {
+                "source": "crosslinked",
+                "domain": domain_clean,
+                "raw_hits": int(result.get("raw_hits", 0) or 0),
+                "linkedin_slugs": len(result.get("linkedin_slugs", []) or []),
+                "candidate_emails": len(result.get("candidate_emails", []) or []),
+                "company_slugs": len(result.get("company_slugs", []) or []),
+                "sample_emails": (result.get("candidate_emails") or [])[:5],
+                "sample_slugs": (result.get("linkedin_slugs") or [])[:5],
+            }
+        )
         try:
             con.execute(
                 "INSERT INTO audit_log "

@@ -374,9 +374,7 @@ def test_manifest_verifier_detects_engagement_metadata_tamper(tmp_path: Path) ->
 
     con = sqlite3.connect(db_path)
     try:
-        con.execute(
-            "UPDATE engagements SET scope_json='[\"evil.example\"]' WHERE id=1001"
-        )
+        con.execute("UPDATE engagements SET scope_json='[\"evil.example\"]' WHERE id=1001")
         con.commit()
         result = verify_run_audit_manifest(
             con,

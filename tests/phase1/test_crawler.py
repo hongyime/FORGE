@@ -168,7 +168,9 @@ def test_crawl_http_canonicalizes_fragment_variants_before_queueing(monkeypatch)
 
     monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
 
-    result = crawler.asyncio.run(crawler._crawl_http("HTTPS://ACME.EXAMPLE/#root", depth=1, timeout=1.0))
+    result = crawler.asyncio.run(
+        crawler._crawl_http("HTTPS://ACME.EXAMPLE/#root", depth=1, timeout=1.0)
+    )
 
     assert calls == ["https://acme.example/", "https://acme.example/app"]
     assert [row[0] for row in result] == ["https://acme.example/", "https://acme.example/app"]
@@ -205,7 +207,9 @@ def test_crawl_http_canonicalizes_default_ports_before_origin_check(monkeypatch)
 
     monkeypatch.setattr(crawler, "httpx", types.SimpleNamespace(AsyncClient=_Client, Headers=dict))
 
-    result = crawler.asyncio.run(crawler._crawl_http("https://acme.example:443/", depth=1, timeout=1.0))
+    result = crawler.asyncio.run(
+        crawler._crawl_http("https://acme.example:443/", depth=1, timeout=1.0)
+    )
 
     assert calls == ["https://acme.example/", "https://acme.example/app"]
     assert [row[0] for row in result] == ["https://acme.example/", "https://acme.example/app"]
@@ -392,7 +396,9 @@ def test_crawl_target_screenshot_aborts_out_of_scope_browser_redirect(
         async def __aexit__(self, *_args: object) -> None:
             return None
 
-    async def _fake_crawl_http(*_args: object, **_kwargs: object) -> list[tuple[str, str, dict[str, str]]]:
+    async def _fake_crawl_http(
+        *_args: object, **_kwargs: object
+    ) -> list[tuple[str, str, dict[str, str]]]:
         return [("https://acme.example/", "<html><title>Root</title></html>", {})]
 
     playwright_pkg = types.ModuleType("playwright")

@@ -77,9 +77,7 @@ class TestJsonlPersistence:
         assert recovered.event_type == AuditEventType.MESSAGE_RECEIVED
 
     @pytest.mark.asyncio
-    async def test_multiple_entries_appended_in_order(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_multiple_entries_appended_in_order(self, tmp_path: Path) -> None:
         log_path = tmp_path / "ordered.jsonl"
         logger = AuditLogger(log_path=log_path)
         for i in range(5):
@@ -87,13 +85,8 @@ class TestJsonlPersistence:
         await logger.close()
 
         with open(log_path, encoding="utf-8") as fh:
-            entries = [
-                AuditEntry.model_validate(json.loads(ln)["entry"])
-                for ln in fh
-            ]
-        assert [e.correlation_id for e in entries] == [
-            f"cid-{i}" for i in range(5)
-        ]
+            entries = [AuditEntry.model_validate(json.loads(ln)["entry"]) for ln in fh]
+        assert [e.correlation_id for e in entries] == [f"cid-{i}" for i in range(5)]
         # Sequence numbers are strictly monotonic per process.
         seqs = [e.sequence_number for e in entries]
         assert seqs == sorted(seqs)
@@ -124,32 +117,20 @@ class TestRecursiveRedaction:
 
     def test_redact_dict_in_list(self) -> None:
         logger = AuditLogger()
-        out = logger.redact_secrets(
-            {"args": [{"password": "hunter2", "ok": True}]}
-        )
+        out = logger.redact_secrets({"args": [{"password": "hunter2", "ok": True}]})
         # P1-3: list contents are recursed into.
         assert out["args"][0]["password"] == "[REDACTED]"
         assert out["args"][0]["ok"] is True
 
     def test_redact_tuple_coerced_to_list(self) -> None:
         logger = AuditLogger()
-        out = logger.redact_secrets(
-            {"creds": ({"api_key": "k1"}, {"api_key": "k2"})}
-        )
+        out = logger.redact_secrets({"creds": ({"api_key": "k1"}, {"api_key": "k2"})})
         assert isinstance(out["creds"], list)
         assert all(c["api_key"] == "[REDACTED]" for c in out["creds"])
 
     def test_redact_deeply_nested(self) -> None:
         logger = AuditLogger()
-        out = logger.redact_secrets(
-            {
-                "outer": {
-                    "middle": [
-                        {"inner": {"token": "secret-t"}}
-                    ]
-                }
-            }
-        )
+        out = logger.redact_secrets({"outer": {"middle": [{"inner": {"token": "secret-t"}}]}})
         assert out["outer"]["middle"][0]["inner"]["token"] == "[REDACTED]"
 
     def test_redact_json_encoded_string_value(self) -> None:
@@ -171,19 +152,20 @@ class TestRecursiveRedaction:
 class TestValuePatternRedaction:
     """Secret-shape values redacted even under innocuous key names."""
 
-    @pytest.mark.parametrize("value", [
-        "sk-1234567890abcdefghij1234567890abcdef",
-        "AKIAABCDEFGHIJKLMNOP",
-        "ASIAABCDEFGHIJKLMNOP",
-        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.sig",
-        "ghp_abcdefghijklmnopqrstuvwxyz123456",
-        "gho_abcdefghijklmnopqrstuvwxyz123456",
-        "glpat-abcdefghijklmnopqrstuvwxyz",
-        "-----BEGIN RSA PRIVATE KEY-----",
-    ])
-    def test_value_pattern_detected_under_innocuous_key(
-        self, value: str
-    ) -> None:
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "sk-1234567890abcdefghij1234567890abcdef",
+            "AKIAABCDEFGHIJKLMNOP",
+            "ASIAABCDEFGHIJKLMNOP",
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.sig",
+            "ghp_abcdefghijklmnopqrstuvwxyz123456",
+            "gho_abcdefghijklmnopqrstuvwxyz123456",
+            "glpat-abcdefghijklmnopqrstuvwxyz",
+            "-----BEGIN RSA PRIVATE KEY-----",
+        ],
+    )
+    def test_value_pattern_detected_under_innocuous_key(self, value: str) -> None:
         logger = AuditLogger()
         out = logger.redact_secrets({"data": value})
         # The KEY 'data' would not normally trigger redaction; the VALUE
@@ -231,12 +213,8 @@ class TestEntryValidators:
             )
 
     def test_sequence_number_strictly_increasing(self) -> None:
-        a = AuditEntry(
-            correlation_id="a", event_type=AuditEventType.MESSAGE_RECEIVED
-        )
-        b = AuditEntry(
-            correlation_id="b", event_type=AuditEventType.MESSAGE_RECEIVED
-        )
+        a = AuditEntry(correlation_id="a", event_type=AuditEventType.MESSAGE_RECEIVED)
+        b = AuditEntry(correlation_id="b", event_type=AuditEventType.MESSAGE_RECEIVED)
         assert b.sequence_number > a.sequence_number
 
 
@@ -248,9 +226,7 @@ class TestEntryValidators:
 class TestFromEnv:
     """from_env honours FORGE_AUDIT_LOG_DISABLE."""
 
-    def test_disable_yields_in_memory_only(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_disable_yields_in_memory_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("FORGE_AUDIT_LOG_DISABLE", "1")
         logger = AuditLogger.from_env()
         assert logger.log_path is None

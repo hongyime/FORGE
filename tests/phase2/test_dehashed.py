@@ -13,6 +13,7 @@ VCR cassette directory: tests/cassettes/dehashed/
   empty_result.yaml           — {"entries": [], "total": 0}
   incremental_skip.yaml       — not used (logic tested without HTTP)
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -30,6 +31,7 @@ from forge.utils.intel.index_query import (
 
 
 # ─── fixtures ────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def engagement_db(tmp_path: Path) -> Path:
@@ -71,6 +73,7 @@ def client() -> DeHashedClient:
 
 # ─── mock API response helpers ───────────────────────────────────────────────
 
+
 def _make_response(entries: list[dict], total: int, status: int = 200) -> MagicMock:
     m = MagicMock()
     m.status_code = status
@@ -81,11 +84,11 @@ def _make_response(entries: list[dict], total: int, status: int = 200) -> MagicM
 
 def _sample_entry(n: int = 1) -> dict:
     return {
-        "id":         f"id{n}",
-        "email":      f"user{n}@example.com",
-        "password":   "P@ssw0rd!" if n % 2 == 0 else None,
+        "id": f"id{n}",
+        "email": f"user{n}@example.com",
+        "password": "P@ssw0rd!" if n % 2 == 0 else None,
         "hashed_password": "5f4dcc3b5aa765d61d8327deb882cf99" if n % 2 != 0 else None,
-        "name":       f"Breach{n}",
+        "name": f"Breach{n}",
         "database_name": f"Breach{n}",
     }
 
@@ -94,9 +97,11 @@ def _sample_entry(n: int = 1) -> dict:
 # DeHashedClient — authentication header
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDeHashedClientAuth:
     def test_basic_auth_header_format(self, client):
         import base64
+
         expected_b64 = base64.b64encode(b"operator@example.com:deadbeef1234").decode()
         headers = client._auth_headers()
         assert headers["Authorization"] == f"Basic {expected_b64}"
@@ -114,6 +119,7 @@ class TestDeHashedClientAuth:
 # Pagination
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPagination:
     def test_fetches_all_pages(self, client):
         """Two pages of 2 entries each → 4 total records yielded."""
@@ -128,10 +134,8 @@ class TestPagination:
     def test_stops_at_max_pages(self, client):
         page = _make_response([_sample_entry(1)], total=100)
         with patch.object(client, "_get", return_value=page):
-            results = list(
-                client.search("domain", "example.com", max_pages=2)
-            )
-        assert len(results) == 2   # 1 result × 2 pages max
+            results = list(client.search("domain", "example.com", max_pages=2))
+        assert len(results) == 2  # 1 result × 2 pages max
 
     def test_empty_result_returns_empty(self, client):
         empty = _make_response([], total=0)
@@ -160,6 +164,7 @@ class TestPagination:
 # Rate limiting & 429 backoff
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRateLimiting:
     def test_rate_is_one_per_second(self):
         assert _TOKEN_BUCKET_RATE == 1.0
@@ -169,8 +174,12 @@ class TestRateLimiting:
         rate_limited.headers = {"X-RateLimit-Reset": str(int(time.time()) + 1)}
         ok = _make_response([_sample_entry(1)], total=1)
 
-        with patch.object(client, "_get", side_effect=[rate_limited, ok, _make_response([], total=1)]), \
-             patch("time.sleep") as mock_sleep:
+        with (
+            patch.object(
+                client, "_get", side_effect=[rate_limited, ok, _make_response([], total=1)]
+            ),
+            patch("time.sleep") as mock_sleep,
+        ):
             list(client.search("domain", "example.com"))
         # sleep must have been called with a positive duration
         assert any(call.args[0] > 0 for call in mock_sleep.call_args_list)
@@ -181,8 +190,10 @@ class TestRateLimiting:
         always_429.headers = {}
 
         delays: list[float] = []
-        with patch.object(client, "_get", return_value=always_429), \
-             patch("time.sleep", side_effect=lambda d: delays.append(d)):
+        with (
+            patch.object(client, "_get", return_value=always_429),
+            patch("time.sleep", side_effect=lambda d: delays.append(d)),
+        ):
             try:
                 list(client.search("domain", "example.com", max_retries=6))
             except Exception:
@@ -193,6 +204,7 @@ class TestRateLimiting:
 # ═══════════════════════════════════════════════════════════════════════════
 # Incremental sync / TTL skip
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestIncrementalSync:
     def test_skips_query_within_ttl(self, engagement_db):
@@ -205,8 +217,12 @@ class TestIncrementalSync:
 
         with patch("forge.utils.intel.index_query.DeHashedClient.search") as mock_search:
             run_dehashed_query(
-                engagement_db, 1, "domain", "example.com",
-                api_email="op@x.com", api_key="key",
+                engagement_db,
+                1,
+                "domain",
+                "example.com",
+                api_email="op@x.com",
+                api_key="key",
                 cache_ttl_hours=24,
             )
             mock_search.assert_not_called()
@@ -222,8 +238,12 @@ class TestIncrementalSync:
 
         with patch("forge.utils.intel.index_query.DeHashedClient.search", return_value=iter([])):
             run_dehashed_query(
-                engagement_db, 1, "domain", "example.com",
-                api_email="op@x.com", api_key="key",
+                engagement_db,
+                1,
+                "domain",
+                "example.com",
+                api_email="op@x.com",
+                api_key="key",
                 cache_ttl_hours=24,
             )
 
@@ -233,12 +253,16 @@ class TestIncrementalSync:
             return_value=iter([_sample_entry(1)]),
         ):
             run_dehashed_query(
-                engagement_db, 1, "domain", "example.com",
-                api_email="op@x.com", api_key="key",
+                engagement_db,
+                1,
+                "domain",
+                "example.com",
+                api_email="op@x.com",
+                api_key="key",
                 cache_ttl_hours=24,
             )
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         state = con.execute(
             "SELECT total_count FROM dehashed_sync_state "
             "WHERE query_type='domain' AND query_value='example.com'"
@@ -251,33 +275,45 @@ class TestIncrementalSync:
 # Credential normalisation & storage
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestCredentialStorage:
     def test_plaintext_encrypted_before_write(self, engagement_db):
-        entry = _sample_entry(2)   # even index → has password
-        with patch(
-            "forge.utils.intel.index_query.DeHashedClient.search",
-            return_value=iter([entry]),
-        ), patch(
-            "forge.utils.intel.index_query.encrypt_string",
-            return_value="ENC:encrypted_value",
-        ) as mock_enc:
+        entry = _sample_entry(2)  # even index → has password
+        with (
+            patch(
+                "forge.utils.intel.index_query.DeHashedClient.search",
+                return_value=iter([entry]),
+            ),
+            patch(
+                "forge.utils.intel.index_query.encrypt_string",
+                return_value="ENC:encrypted_value",
+            ) as mock_enc,
+        ):
             run_dehashed_query(
-                engagement_db, 1, "domain", "example.com",
-                api_email="op@x.com", api_key="key",
+                engagement_db,
+                1,
+                "domain",
+                "example.com",
+                api_email="op@x.com",
+                api_key="key",
             )
         mock_enc.assert_called()
 
     def test_hash_stored_without_encryption(self, engagement_db):
-        entry = _sample_entry(1)   # odd → has hashed_password, no plaintext
+        entry = _sample_entry(1)  # odd → has hashed_password, no plaintext
         with patch(
             "forge.utils.intel.index_query.DeHashedClient.search",
             return_value=iter([entry]),
         ):
             run_dehashed_query(
-                engagement_db, 1, "domain", "example.com",
-                api_email="op@x.com", api_key="key",
+                engagement_db,
+                1,
+                "domain",
+                "example.com",
+                api_email="op@x.com",
+                api_key="key",
             )
-        con  = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         rows = con.execute(
             "SELECT password_hash FROM credentials WHERE email=?",
             (entry["email"],),
@@ -291,22 +327,29 @@ class TestCredentialStorage:
             "forge.utils.intel.index_query.DeHashedClient.search",
             return_value=iter([entry]),
         ):
-            run_dehashed_query(engagement_db, 1, "domain", "example.com",
-                               api_email="op@x.com", api_key="key")
-            run_dehashed_query(engagement_db, 1, "domain", "example.com",
-                               api_email="op@x.com", api_key="key")
+            run_dehashed_query(
+                engagement_db, 1, "domain", "example.com", api_email="op@x.com", api_key="key"
+            )
+            run_dehashed_query(
+                engagement_db, 1, "domain", "example.com", api_email="op@x.com", api_key="key"
+            )
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
         con.close()
         assert count == 1
 
     def test_scope_gate_enforced(self, engagement_db):
         from forge.opsec.scope_gate import ScopeViolationError
+
         with pytest.raises(ScopeViolationError):
             run_dehashed_query(
-                engagement_db, 1, "domain", "out-of-scope.io",
-                api_email="op@x.com", api_key="key",
+                engagement_db,
+                1,
+                "domain",
+                "out-of-scope.io",
+                api_email="op@x.com",
+                api_key="key",
             )
 
     def test_audit_log_written(self, engagement_db):
@@ -314,10 +357,11 @@ class TestCredentialStorage:
             "forge.utils.intel.index_query.DeHashedClient.search",
             return_value=iter([]),
         ):
-            run_dehashed_query(engagement_db, 1, "domain", "example.com",
-                               api_email="op@x.com", api_key="key")
+            run_dehashed_query(
+                engagement_db, 1, "domain", "example.com", api_email="op@x.com", api_key="key"
+            )
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
         con.close()
         assert count >= 1
@@ -329,10 +373,15 @@ class TestCredentialStorage:
             return_value=iter([entry]),
         ):
             run_dehashed_query(
-                engagement_db, 1, "domain", "example.com",
-                api_email="op@x.com", api_key="key", dry_run=True,
+                engagement_db,
+                1,
+                "domain",
+                "example.com",
+                api_email="op@x.com",
+                api_key="key",
+                dry_run=True,
             )
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
         con.close()
         assert count == 0

@@ -7,6 +7,7 @@ Temp files registered with cleanup.py and deleted immediately after parse.
 Authorization: All queries target public sources only.
 Scope gate enforced before subprocess invocation.
 """
+
 from __future__ import annotations
 
 import json

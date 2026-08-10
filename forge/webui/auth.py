@@ -36,13 +36,14 @@ def _is_dev_profile() -> bool:
 
 def _secret() -> str:
     from forge.config import ForgeConfig
+
     key = ForgeConfig.load().web_secret_key
     if not key:
         raise RuntimeError(
             "FORGE_WEB_SECRET_KEY must be set to a non-empty value. "
             "Empty HMAC keys are refused in every profile — an empty key "
             "makes HS256 tokens trivially forgeable. Set the env var, or "
-            "run `python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
+            'run `python -c "import secrets; print(secrets.token_urlsafe(48))"` '
             "to generate one."
         )
     return key

@@ -200,14 +200,9 @@ class KubernetesExecutor(BaseExecutor):
                 cmd = ["kubectl", "--kubeconfig", str(kubeconfig)] + cmd[1:]
 
             _LOG.info("KubernetesExecutor: executing %s", " ".join(cmd))
-            
+
             # Execute with timeout
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode == 0:
                 return True, f"KubernetesExec success: {result.stdout[:512]}"
@@ -378,10 +373,15 @@ def _audit_write(
                 (engagement_id, target, audit_detail),
             )
             lateral_columns = {
-                row[1]
-                for row in con.execute("PRAGMA table_info(lateral_movement)").fetchall()
+                row[1] for row in con.execute("PRAGMA table_info(lateral_movement)").fetchall()
             }
-            if {"source_host_id", "target_host_id", "credential_id", "scope_verified", "operator_confirmed"} <= lateral_columns:
+            if {
+                "source_host_id",
+                "target_host_id",
+                "credential_id",
+                "scope_verified",
+                "operator_confirmed",
+            } <= lateral_columns:
                 row = con.execute(
                     """SELECT id
                        FROM hosts

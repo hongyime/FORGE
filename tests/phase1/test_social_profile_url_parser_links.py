@@ -53,9 +53,7 @@ def test_social_profile_url_parser_supports_link_in_bio_and_marketplace_routes()
         == "acmebiosite"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://bio.site/login"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://bio.site/login")
         == ""
     )
     assert (
@@ -131,9 +129,7 @@ def test_social_profile_url_parser_supports_link_in_bio_and_marketplace_routes()
         == "acmekofi"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://ko-fi.com/home"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://ko-fi.com/home")
         == ""
     )
     assert (
@@ -185,9 +181,7 @@ def test_social_profile_url_parser_supports_link_in_bio_and_marketplace_routes()
         == "acmeops"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://cal.com/apps"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://cal.com/apps")
         == ""
     )
     assert (
@@ -397,15 +391,11 @@ def test_social_profile_url_parser_supports_link_in_bio_and_marketplace_routes()
         == "hoobe"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://hoo.be/acmehoo"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://hoo.be/acmehoo")
         == "acmehoo"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://hoo.be/discover"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://hoo.be/discover")
         == ""
     )
     assert (
@@ -415,9 +405,7 @@ def test_social_profile_url_parser_supports_link_in_bio_and_marketplace_routes()
         == "acmebio"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://lnk.bio/acmelnk"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://lnk.bio/acmelnk")
         == "acmelnk"
     )
     assert (
@@ -487,9 +475,7 @@ def test_social_profile_url_parser_supports_link_in_bio_and_marketplace_routes()
         == "go.milkshake"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://msha.ke/login"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://msha.ke/login")
         == ""
     )
     assert (

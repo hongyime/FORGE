@@ -108,7 +108,10 @@ def _apply_pragmas(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError as exc:
             logger.debug(
                 "direct_connect: PRAGMA %s=%s failed on %r: %s",
-                pragma, value, conn, exc,
+                pragma,
+                value,
+                conn,
+                exc,
             )
 
 

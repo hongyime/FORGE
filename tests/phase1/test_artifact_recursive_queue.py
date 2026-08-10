@@ -168,7 +168,12 @@ def test_artifact_text_queue_preserves_existing_remote_artifact_rows(
 
     assert summary.processed == 1
     assert artifact_rows == [
-        ("parsed", str(local_path), "engagement_seed", json.dumps({"existing": True}, sort_keys=True))
+        (
+            "parsed",
+            str(local_path),
+            "engagement_seed",
+            json.dumps({"existing": True}, sort_keys=True),
+        )
     ]
     assert seed_row == ("url",)
 

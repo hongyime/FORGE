@@ -18,9 +18,7 @@ def test_multi_seed_tables_are_canonical_on_fresh_db(tmp_path: Path) -> None:
 
         tables = {
             row[0]
-            for row in con.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         assert {
             "engagement_seeds",
@@ -35,8 +33,7 @@ def test_multi_seed_tables_are_canonical_on_fresh_db(tmp_path: Path) -> None:
         version = con.execute("SELECT MAX(version) FROM _schema_version").fetchone()[0]
         assert int(version) == TARGET_VERSION
         cloud_asset_columns = {
-            str(row[1])
-            for row in con.execute("PRAGMA table_info(cloud_assets)").fetchall()
+            str(row[1]) for row in con.execute("PRAGMA table_info(cloud_assets)").fetchall()
         }
         validation_columns = {
             str(row[1])
@@ -259,13 +256,10 @@ def test_engagement_metadata_migration_adds_metadata_json_column(tmp_path: Path)
         validate_canonical_schema(con)
 
         engagement_columns = {
-            str(row[1])
-            for row in con.execute("PRAGMA table_info(engagements)").fetchall()
+            str(row[1]) for row in con.execute("PRAGMA table_info(engagements)").fetchall()
         }
         assert "metadata_json" in engagement_columns
-        row = con.execute(
-            "SELECT metadata_json FROM engagements WHERE id=1"
-        ).fetchone()
+        row = con.execute("SELECT metadata_json FROM engagements WHERE id=1").fetchone()
         assert row is not None
         assert str(row[0]) == "{}"
     finally:

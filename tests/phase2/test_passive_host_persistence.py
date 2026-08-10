@@ -646,10 +646,7 @@ def test_persist_urlscan_findings_marks_synthetic_placeholder_rows_explicitly(
     assert ("https://outside.example/ignore?asset=1", "url") not in seed_rows
     assert seed_rows[("https://portal.acme.example", "url")]["provider_sources"] == ["urlscan"]
     assert seed_rows[("https://portal.acme.example", "url")]["url_role"] == "page"
-    assert (
-        seed_rows[("https://portal.acme.example/login?view=public", "url")]["url_role"]
-        == "task"
-    )
+    assert seed_rows[("https://portal.acme.example/login?view=public", "url")]["url_role"] == "task"
     assert (
         seed_rows[("https://cdn.acme.example/static/app.js?asset=1", "url")]["url_role"]
         == "observed"

@@ -32,7 +32,9 @@ def test_parallel_remote_artifact_download_preserves_scope_skip_attribution(
     ]
     denied: list[tuple[str, str]] = []
 
-    def _fake_download(self: ArtifactQueueProcessor, request: ArtifactDownloadRequest) -> ArtifactDownloadResult:
+    def _fake_download(
+        self: ArtifactQueueProcessor, request: ArtifactDownloadRequest
+    ) -> ArtifactDownloadResult:
         del self
         if request.source_url.endswith("/fail.apk"):
             raise RuntimeError("synthetic downloader failure")
@@ -61,9 +63,7 @@ def test_parallel_remote_artifact_download_preserves_scope_skip_attribution(
     results = processor._download_remote_artifacts(requests)
     by_url = {result.source_url: result for result in results}
 
-    assert denied == [
-        ("https://blocked.example/app.apk", "scope_manifest_denied_remote_artifact")
-    ]
+    assert denied == [("https://blocked.example/app.apk", "scope_manifest_denied_remote_artifact")]
     assert by_url["https://blocked.example/app.apk"].artifact_id == 10
     assert by_url["https://blocked.example/app.apk"].error == (
         "scope_manifest_denied_remote_artifact"

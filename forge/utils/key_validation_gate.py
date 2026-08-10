@@ -52,7 +52,9 @@ def key_validation_detail_is_reportable(service: str, validation_detail: object)
 def _bot_proof_identifier(provider: str, validation_detail: object) -> str:
     proof = _proof_text(validation_detail)
     if provider == "slack":
-        actor_match = re.search(r"\b(?:actor_id|user_id|bot_id)=([A-Z0-9]+)\b", proof, re.IGNORECASE)
+        actor_match = re.search(
+            r"\b(?:actor_id|user_id|bot_id)=([A-Z0-9]+)\b", proof, re.IGNORECASE
+        )
         team_match = re.search(r"\bteam_id=([A-Z0-9]+)\b", proof, re.IGNORECASE)
         actor = str(actor_match.group(1) if actor_match else "").strip().upper()
         team = str(team_match.group(1) if team_match else "").strip().upper()

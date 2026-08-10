@@ -141,9 +141,7 @@ def _make_agent(
 
 
 def _msg(payload: dict, cid: str = "cid-disc") -> AgentMessage:
-    return AgentMessage(
-        topic=INBOUND_TOPIC, payload=payload, correlation_id=cid
-    )
+    return AgentMessage(topic=INBOUND_TOPIC, payload=payload, correlation_id=cid)
 
 
 # ---------------------------------------------------------------------------
@@ -181,9 +179,7 @@ class TestProperty37InventoryStructure:
 
     @pytest.mark.asyncio
     async def test_empty_run_still_produces_complete_inventory(self) -> None:
-        agent, _ = _make_agent(
-            plugins={}, scope_targets=["example.com"]
-        )
+        agent, _ = _make_agent(plugins={}, scope_targets=["example.com"])
         outputs = await agent.receive_message(
             _msg(
                 {
@@ -208,9 +204,7 @@ class TestProperty37InventoryStructure:
                 "services": [{"name": "ssh", "port": 22}],
             },
         )
-        agent, _ = _make_agent(
-            plugins={"host_scanner": plugin}, scope_targets=["example.com"]
-        )
+        agent, _ = _make_agent(plugins={"host_scanner": plugin}, scope_targets=["example.com"])
         outputs = await agent.receive_message(
             _msg(
                 {
@@ -275,9 +269,7 @@ class TestProperty36FaultTolerance:
     @pytest.mark.asyncio
     async def test_plugin_resolution_failure_recorded_as_gap(self) -> None:
         """Asking for a non-existent plugin yields a coverage gap, not a crash."""
-        agent, _ = _make_agent(
-            plugins={}, scope_targets=["example.com"]
-        )
+        agent, _ = _make_agent(plugins={}, scope_targets=["example.com"])
         outputs = await agent.receive_message(
             _msg(
                 {
@@ -294,12 +286,8 @@ class TestProperty36FaultTolerance:
     @pytest.mark.asyncio
     async def test_out_of_scope_target_recorded_as_gap(self) -> None:
         """Targets outside the EngagementScope are not dispatched."""
-        plugin = _StaticPlugin(
-            "scanner", output={"hosts": [{"ip": "10.0.0.1"}]}
-        )
-        agent, _ = _make_agent(
-            plugins={"scanner": plugin}, scope_targets=["example.com"]
-        )
+        plugin = _StaticPlugin("scanner", output={"hosts": [{"ip": "10.0.0.1"}]})
+        agent, _ = _make_agent(plugins={"scanner": plugin}, scope_targets=["example.com"])
         outputs = await agent.receive_message(
             _msg(
                 {

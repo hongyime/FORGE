@@ -56,10 +56,42 @@ def test_sweep_pending_cloud_asset_validations_skips_alias_assets_with_normalize
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (ENGAGEMENT_ID, "aws_s3", "legacy-s3-assets", "UNVERIFIED", "scope_manifest", "denied", "done"),
-                (ENGAGEMENT_ID, "do_spaces", "nyc3/legacy-space", "UNVERIFIED", "scope_manifest", "denied", "done"),
-                (ENGAGEMENT_ID, "gcs", "legacy-gcs-assets", "UNVERIFIED", "scope_manifest", "denied", "done"),
-                (ENGAGEMENT_ID, "azure_blob", "legacyblob/public", "UNVERIFIED", "scope_manifest", "denied", "done"),
+                (
+                    ENGAGEMENT_ID,
+                    "aws_s3",
+                    "legacy-s3-assets",
+                    "UNVERIFIED",
+                    "scope_manifest",
+                    "denied",
+                    "done",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "do_spaces",
+                    "nyc3/legacy-space",
+                    "UNVERIFIED",
+                    "scope_manifest",
+                    "denied",
+                    "done",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "gcs",
+                    "legacy-gcs-assets",
+                    "UNVERIFIED",
+                    "scope_manifest",
+                    "denied",
+                    "done",
+                ),
+                (
+                    ENGAGEMENT_ID,
+                    "azure_blob",
+                    "legacyblob/public",
+                    "UNVERIFIED",
+                    "scope_manifest",
+                    "denied",
+                    "done",
+                ),
             ],
         )
         con.commit()

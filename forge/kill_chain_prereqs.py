@@ -258,7 +258,9 @@ def detect_kill_chain_prerequisites(
             }
         )
 
-    _add_safe_prereqs(add, engagement=engagement, domain=domain, cwd=effective_cwd, env=effective_env)
+    _add_safe_prereqs(
+        add, engagement=engagement, domain=domain, cwd=effective_cwd, env=effective_env
+    )
     if include_offensive_prereqs:
         _add_offensive_prereqs(
             add,

@@ -105,9 +105,7 @@ def test_artifact_queue_processor_extracts_image_qr_payloads(
         )
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         seeds = {
             (row[0], row[1])

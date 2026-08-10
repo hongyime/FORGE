@@ -31,8 +31,7 @@ def test_twilio_validator_non_active_account_status_stays_unconfirmed(
     response = MagicMock()
     response.status_code = 200
     response.text = (
-        '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",'
-        f'"status":"{status}","type":"Full"}}'
+        f'{{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3","status":"{status}","type":"Full"}}'
     )
     fake_requests = types.SimpleNamespace(Session=_SessionFactory())
     monkeypatch.setitem(sys.modules, "curl_cffi", types.SimpleNamespace(requests=fake_requests))

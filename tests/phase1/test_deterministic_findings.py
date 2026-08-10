@@ -825,9 +825,24 @@ def test_deterministic_findings_support_additional_storage_providers(tmp_path: P
             ORDER BY title
             """
         ).fetchall()
-        assert ("HIGH", "Validated public DigitalOcean Spaces bucket listing exposure", "digitalocean", "nyc3/acme-space-public") in findings
-        assert ("HIGH", "Validated public Google Cloud Storage bucket listing exposure", "gcp", "acme-gcs-public") in findings
-        assert ("HIGH", "Validated public S3 bucket listing exposure", "aws", "acme-public-assets") in findings
+        assert (
+            "HIGH",
+            "Validated public DigitalOcean Spaces bucket listing exposure",
+            "digitalocean",
+            "nyc3/acme-space-public",
+        ) in findings
+        assert (
+            "HIGH",
+            "Validated public Google Cloud Storage bucket listing exposure",
+            "gcp",
+            "acme-gcs-public",
+        ) in findings
+        assert (
+            "HIGH",
+            "Validated public S3 bucket listing exposure",
+            "aws",
+            "acme-public-assets",
+        ) in findings
         assert ("azure", "acmeblob/public") not in {(row[2], row[3]) for row in findings}
         validation_rows = con.execute(
             """

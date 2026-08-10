@@ -77,9 +77,7 @@ class _ValidAgent:
     def subscribed_topics(self) -> list[str]:
         return list(self._topics)
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         return []
 
     async def report_status(self) -> dict[str, object]:
@@ -176,11 +174,7 @@ class TestProtocolShape:
     def test_protocol_members(self) -> None:
         # @runtime_checkable Protocol exposes its required members via
         # the __annotations__ + the methods defined on the class.
-        public = {
-            n
-            for n in dir(Agent)
-            if not n.startswith("_")
-        }
+        public = {n for n in dir(Agent) if not n.startswith("_")}
         # Filter to only those that originate from the Protocol body
         # (excludes inherited typing.Protocol bookkeeping).
         required = {
@@ -209,9 +203,7 @@ class TestConformantAcceptance:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    def test_register_and_retrieve(
-        self, role: str, topics: list[str]
-    ) -> None:
+    def test_register_and_retrieve(self, role: str, topics: list[str]) -> None:
         registry = AgentRegistry()
         agent = _ValidAgent(role=role, topics=topics)
         registry.register(agent)
@@ -236,9 +228,7 @@ class TestNonConformantRejection:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    def test_missing_protocol_member_rejected(
-        self, broken_cls: type
-    ) -> None:
+    def test_missing_protocol_member_rejected(self, broken_cls: type) -> None:
         registry = AgentRegistry()
         with pytest.raises(ValueError) as exc_info:
             registry.register(broken_cls())  # type: ignore[arg-type]
@@ -294,9 +284,7 @@ class TestTopicIndex:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    def test_topic_index_correctness(
-        self, topic_a: str, topic_b: str
-    ) -> None:
+    def test_topic_index_correctness(self, topic_a: str, topic_b: str) -> None:
         if topic_a == topic_b:
             return  # need distinct topics
         registry = AgentRegistry()
@@ -370,15 +358,11 @@ class TestAuditOnRejection:
 
         # Allow scheduled audit task to run
         import asyncio
+
         await asyncio.sleep(0)
 
-        warnings = [
-            e for e in audit.entries if e.event_type == AuditEventType.WARNING
-        ]
-        assert any(
-            (w.output_summary or "").startswith("agent_rejected:")
-            for w in warnings
-        )
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
+        assert any((w.output_summary or "").startswith("agent_rejected:") for w in warnings)
 
     @pytest.mark.asyncio
     async def test_registration_emits_state_transition(self) -> None:
@@ -387,14 +371,8 @@ class TestAuditOnRejection:
         registry.register(_ValidAgent(role="planner", topics=["plan.task"]))
 
         import asyncio
+
         await asyncio.sleep(0)
 
-        loads = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.STATE_TRANSITION
-        ]
-        assert any(
-            (e.output_summary or "").startswith("agent_registered:planner")
-            for e in loads
-        )
+        loads = [e for e in audit.entries if e.event_type == AuditEventType.STATE_TRANSITION]
+        assert any((e.output_summary or "").startswith("agent_registered:planner") for e in loads)

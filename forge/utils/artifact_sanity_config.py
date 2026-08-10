@@ -86,7 +86,7 @@ def sanity_env_urls(env_map: Mapping[str, object]) -> list[str]:
 
 
 def _project_ids(text: str) -> list[str]:
-    raw_text = str(text or "")[:128 * 1024]
+    raw_text = str(text or "")[: 128 * 1024]
     ids: list[str] = []
     seen: set[str] = set()
     for value in _document_project_ids(raw_text):
@@ -100,7 +100,7 @@ def _project_ids(text: str) -> list[str]:
 
 def _datasets(text: str) -> list[str]:
     datasets: list[str] = []
-    for match in _DATASET_RE.finditer(str(text or "")[:128 * 1024]):
+    for match in _DATASET_RE.finditer(str(text or "")[: 128 * 1024]):
         value = str(match.group("value") or "").strip()
         if value and value not in datasets:
             datasets.append(value)
@@ -131,7 +131,9 @@ def _node_project_ids(value: Any) -> list[str]:
     if isinstance(value, dict):
         values: list[str] = []
         for key, child in list(value.items())[:512]:
-            if _key_fingerprint(str(key or "")) in _PROJECT_ID_KEYS and isinstance(child, (str, int, float)):
+            if _key_fingerprint(str(key or "")) in _PROJECT_ID_KEYS and isinstance(
+                child, (str, int, float)
+            ):
                 values.append(str(child))
             values.extend(_node_project_ids(child))
         return values

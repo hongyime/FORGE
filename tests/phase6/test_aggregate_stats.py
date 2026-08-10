@@ -105,8 +105,8 @@ class TestComputeStats:
         # findings + passive_vulns
         assert hist["CRITICAL"] == 1
         assert hist["HIGH"] == 2
-        assert hist["MEDIUM"] == 2   # 1 vuln + 1 passive
-        assert hist["LOW"] == 2      # 1 vuln + 1 passive
+        assert hist["MEDIUM"] == 2  # 1 vuln + 1 passive
+        assert hist["LOW"] == 2  # 1 vuln + 1 passive
         assert hist["INFO"] == 1
 
     def test_per_provider_findings(self, stats_db: sqlite3.Connection) -> None:
@@ -184,9 +184,7 @@ class TestRenderMarkdownBlock:
         assert "aws" in rendered
         assert "firebase" in rendered
 
-    def test_reports_scope_coverage_and_validation_rate(
-        self, stats_db: sqlite3.Connection
-    ) -> None:
+    def test_reports_scope_coverage_and_validation_rate(self, stats_db: sqlite3.Connection) -> None:
         stats = compute_stats(stats_db, 1001)
         rendered = render_markdown_block(stats)
         assert "Scope coverage" in rendered
@@ -222,9 +220,7 @@ class TestWriteJsonSidecar:
 
 
 class TestDashboardPayload:
-    def test_payload_is_json_serialisable(
-        self, stats_db: sqlite3.Connection
-    ) -> None:
+    def test_payload_is_json_serialisable(self, stats_db: sqlite3.Connection) -> None:
         stats = compute_stats(stats_db, 1001)
         payload = dashboard_payload(stats)
         # Must round-trip through json without raising

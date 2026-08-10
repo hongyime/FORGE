@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -10,10 +9,11 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class SmtpCollector(BaseCollector):
     """
     Collect SMTP and email client configuration.
-    
+
     Targets:
       - ~/.msmtprc
       - ~/.muttrc
@@ -23,12 +23,8 @@ class SmtpCollector(BaseCollector):
 
     def discover(self) -> Generator[ArtifactMetadata, None, None]:
         # 1. Simple client configs
-        smtp_files = [
-            (".msmtprc", "msmtp"),
-            (".muttrc", "mutt"),
-            (".mailrc", "mailrc")
-        ]
-        
+        smtp_files = [(".msmtprc", "msmtp"), (".muttrc", "mutt"), (".mailrc", "mailrc")]
+
         for f, client_type in smtp_files:
             p = Path.home() / f
             if p.exists():
@@ -41,9 +37,13 @@ class SmtpCollector(BaseCollector):
                 )
 
         # 2. Thunderbird profile discovery
-        tb_dir = Path.home() / ".thunderbird" if os.name != 'nt' else Path(os.environ.get("APPDATA", "")) / "Thunderbird" / "Profiles"
+        tb_dir = (
+            Path.home() / ".thunderbird"
+            if os.name != "nt"
+            else Path(os.environ.get("APPDATA", "")) / "Thunderbird" / "Profiles"
+        )
         if tb_dir.exists():
-             yield ArtifactMetadata(
+            yield ArtifactMetadata(
                 artifact_family="smtp_config",
                 artifact_subtype="thunderbird_profile",
                 source_path=str(tb_dir),

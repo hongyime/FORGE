@@ -212,16 +212,10 @@ class TestValidateAndAudit:
 
     def test_audit_entry_emitted_on_allow(self) -> None:
         logger = AuditLogger()
-        gate = ScopeGate(
-            EngagementScope(domains=["example.com"]), audit_logger=logger
-        )
+        gate = ScopeGate(EngagementScope(domains=["example.com"]), audit_logger=logger)
         gate.validate("example.com", correlation_id="corr-allow")
 
-        scope_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.SCOPE_DECISION
-        ]
+        scope_entries = [e for e in logger.entries if e.event_type == AuditEventType.SCOPE_DECISION]
         assert len(scope_entries) == 1
         entry = scope_entries[0]
         assert entry.correlation_id == "corr-allow"
@@ -231,17 +225,11 @@ class TestValidateAndAudit:
 
     def test_audit_entry_emitted_on_deny(self) -> None:
         logger = AuditLogger()
-        gate = ScopeGate(
-            EngagementScope(domains=["example.com"]), audit_logger=logger
-        )
+        gate = ScopeGate(EngagementScope(domains=["example.com"]), audit_logger=logger)
         with pytest.raises(ScopeViolationError):
             gate.validate("evil.com", correlation_id="corr-deny")
 
-        scope_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.SCOPE_DECISION
-        ]
+        scope_entries = [e for e in logger.entries if e.event_type == AuditEventType.SCOPE_DECISION]
         assert len(scope_entries) == 1
         entry = scope_entries[0]
         assert entry.correlation_id == "corr-deny"
@@ -252,9 +240,7 @@ class TestValidateAndAudit:
     def test_audit_emission_inside_event_loop(self) -> None:
         """validate() called from a running loop schedules the audit log."""
         logger = AuditLogger()
-        gate = ScopeGate(
-            EngagementScope(domains=["example.com"]), audit_logger=logger
-        )
+        gate = ScopeGate(EngagementScope(domains=["example.com"]), audit_logger=logger)
 
         async def _drive() -> None:
             gate.validate("example.com", correlation_id="corr-loop")
@@ -262,11 +248,7 @@ class TestValidateAndAudit:
             await asyncio.sleep(0)
 
         asyncio.run(_drive())
-        scope_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.SCOPE_DECISION
-        ]
+        scope_entries = [e for e in logger.entries if e.event_type == AuditEventType.SCOPE_DECISION]
         assert any(e.correlation_id == "corr-loop" for e in scope_entries)
 
     def test_audit_disabled_when_no_logger(self) -> None:

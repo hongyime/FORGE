@@ -8,6 +8,7 @@ Steps:
 
 Checks _SHUTDOWN at top of every step.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,8 +23,15 @@ _LOG = logging.getLogger(__name__)
 
 # WAF signatures to detect
 _WAF_SIGNATURES = [
-    "cloudflare", "akamai", "sucuri", "incapsula", "imperva",
-    "barracuda", "fortiweb", "__cf_bm", "x-sucuri-id",
+    "cloudflare",
+    "akamai",
+    "sucuri",
+    "incapsula",
+    "imperva",
+    "barracuda",
+    "fortiweb",
+    "__cf_bm",
+    "x-sucuri-id",
 ]
 
 _STEALTH_RATE_LIMITER = AdaptiveRateLimiter(
@@ -62,7 +70,10 @@ def run_waf_evasion_playbook(
         return {"waf_detected": waf_name, "evasion_succeeded": False, "passive_results": []}
 
     evasion_succeeded = _attempt_evasion(target_domain, use_tor)
-    print(f"[WAF-EVASION] Step 2: active evasion {'succeeded' if evasion_succeeded else 'failed'}", flush=True)
+    print(
+        f"[WAF-EVASION] Step 2: active evasion {'succeeded' if evasion_succeeded else 'failed'}",
+        flush=True,
+    )
     sys.stdout.flush()
 
     # --- Step 3: Passive fallback ---
@@ -108,6 +119,7 @@ def _attempt_evasion(target_domain: str, use_tor: bool) -> bool:
     if use_tor:
         try:
             from forge.opsec.tor import TorManager
+
             tor = TorManager()
             _LOG.info("WAF evasion: using Tor circuit")
         except ImportError:
@@ -116,6 +128,7 @@ def _attempt_evasion(target_domain: str, use_tor: bool) -> bool:
     # Try Playwright with stealth
     try:
         from playwright.sync_api import sync_playwright
+
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
@@ -126,7 +139,9 @@ def _attempt_evasion(target_domain: str, use_tor: bool) -> bool:
             resp = page.goto(url, timeout=30000, wait_until="domcontentloaded")
             success = resp is not None and resp.status < 400
             browser.close()
-            _STEALTH_RATE_LIMITER.record_success(url) if success else _STEALTH_RATE_LIMITER.record_failure(url, 403)
+            _STEALTH_RATE_LIMITER.record_success(
+                url
+            ) if success else _STEALTH_RATE_LIMITER.record_failure(url, 403)
             return success
     except Exception as e:
         _LOG.debug("Stealth evasion failed: %s", e)
@@ -143,13 +158,20 @@ def _passive_recon(target_domain: str, searxng_url: Optional[str]) -> list[dict]
     if searxng_url:
         try:
             import urllib.request, urllib.parse, json
+
             query = urllib.parse.quote(f"site:{target_domain}")
             url = f"{searxng_url}/search?q={query}&format=json"
             _STEALTH_RATE_LIMITER.wait(url)
             with urllib.request.urlopen(url, timeout=15) as r:
                 data = json.loads(r.read())
                 for item in data.get("results", [])[:20]:
-                    results.append({"source": "searxng", "url": item.get("url", ""), "title": item.get("title", "")})
+                    results.append(
+                        {
+                            "source": "searxng",
+                            "url": item.get("url", ""),
+                            "title": item.get("title", ""),
+                        }
+                    )
             _STEALTH_RATE_LIMITER.record_success(url)
         except Exception as e:
             _LOG.debug("SearxNG query failed: %s", e)

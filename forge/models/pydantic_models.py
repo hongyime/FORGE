@@ -13,6 +13,7 @@ Anti-patterns avoided (PRD §16):
   - Untyped `dict` for credential passing replaced by LateralMovementCredential
   - SecretStr serialised only via explicit .get_secret_value(); never logged
 """
+
 from __future__ import annotations
 
 import re
@@ -36,62 +37,63 @@ from pydantic import (
 # Shared enumerations
 # ===========================================================================
 
+
 class BreachSource(str, Enum):
-    LOCAL    = "local_breach"
+    LOCAL = "local_breach"
     DEHASHED = "dehashed"
-    XPOSED   = "xposedornot"
-    HIBP     = "hibp"
-    MANUAL   = "manual"
+    XPOSED = "xposedornot"
+    HIBP = "hibp"
+    MANUAL = "manual"
 
 
 class ValidationService(str, Enum):
-    SSH   = "ssh"
-    HTTP  = "http"
-    RDP   = "rdp"
-    SMB   = "smb"
-    FTP   = "ftp"
-    DBMS  = "dbms"
+    SSH = "ssh"
+    HTTP = "http"
+    RDP = "rdp"
+    SMB = "smb"
+    FTP = "ftp"
+    DBMS = "dbms"
 
 
 class EngagementStatus(str, Enum):
-    PREP     = "PREP"
-    ACTIVE   = "ACTIVE"
+    PREP = "PREP"
+    ACTIVE = "ACTIVE"
     COMPLETE = "COMPLETE"
     ARCHIVED = "ARCHIVED"
 
 
 class OsFamily(str, Enum):
     WINDOWS = "windows"
-    LINUX   = "linux"
-    MACOS   = "macos"
+    LINUX = "linux"
+    MACOS = "macos"
     UNKNOWN = "unknown"
 
 
 class Severity(str, Enum):
     CRITICAL = "CRITICAL"
-    HIGH     = "HIGH"
-    MEDIUM   = "MEDIUM"
-    LOW      = "LOW"
-    INFO     = "INFO"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    INFO = "INFO"
 
 
 class VulnType(str, Enum):
-    IDOR              = "IDOR"
+    IDOR = "IDOR"
     FIREBASE_MISCONFIG = "FIREBASE_MISCONFIG"
-    SUPABASE_RLS      = "SUPABASE_RLS"
+    SUPABASE_RLS = "SUPABASE_RLS"
 
 
 class KeyValidationState(str, Enum):
-    ACTIVE      = "ACTIVE"
-    INVALID     = "INVALID"
+    ACTIVE = "ACTIVE"
+    INVALID = "INVALID"
     UNVALIDATED = "UNVALIDATED"
-    ERROR       = "ERROR"
+    ERROR = "ERROR"
 
 
 class C2Channel(str, Enum):
     HTTP = "http"
-    DNS  = "dns"
-    SMB  = "smb"
+    DNS = "dns"
+    SMB = "smb"
     ICMP = "icmp"
 
 
@@ -196,73 +198,80 @@ class SentryConfigModel(BaseModel):
 # Phase 0 — Knowledge Base
 # ===========================================================================
 
+
 class LolbinRecord(BaseModel):
     """Normalised record from the LOLBAS/GTFOBins knowledge base."""
+
     model_config = ConfigDict(extra="forbid")
 
-    name:         str
-    os_family:    OsFamily
-    category:     str
-    description:  str
-    commands:     list[str]
-    mitre_ids:    list[str] = Field(default_factory=list)
-    stealth_rank: int       = Field(default=5, ge=1, le=10)
-    source:       str       = "lolbas"
+    name: str
+    os_family: OsFamily
+    category: str
+    description: str
+    commands: list[str]
+    mitre_ids: list[str] = Field(default_factory=list)
+    stealth_rank: int = Field(default=5, ge=1, le=10)
+    source: str = "lolbas"
 
 
 class ExploitRecord(BaseModel):
     """Exploit-DB record, post-normalisation by exploitdb_ingestor."""
+
     model_config = ConfigDict(extra="forbid")
 
-    exploit_id:  int
-    title:       str
-    author:      str
-    platform:    str
-    type_:       str = Field(alias="type")
-    date_pub:    Optional[datetime] = None
-    cve_ids:     list[str]          = Field(default_factory=list)
-    path:        Optional[str]      = None
+    exploit_id: int
+    title: str
+    author: str
+    platform: str
+    type_: str = Field(alias="type")
+    date_pub: Optional[datetime] = None
+    cve_ids: list[str] = Field(default_factory=list)
+    path: Optional[str] = None
 
 
 class CveRecord(BaseModel):
     """NVD CVE record, post-normalisation by nvd_fetcher."""
+
     model_config = ConfigDict(extra="forbid")
 
-    cve_id:       str
-    description:  str
-    cvss_v3:      Optional[float] = None
-    cvss_v2:      Optional[float] = None
-    severity:     Optional[str]   = None
+    cve_id: str
+    description: str
+    cvss_v3: Optional[float] = None
+    cvss_v2: Optional[float] = None
+    severity: Optional[str] = None
     published_at: Optional[datetime] = None
-    modified_at:  Optional[datetime] = None
-    cpe_matches:  list[str]           = Field(default_factory=list)
+    modified_at: Optional[datetime] = None
+    cpe_matches: list[str] = Field(default_factory=list)
 
 
 # ===========================================================================
 # Phase 1 — Reconnaissance
 # ===========================================================================
 
+
 class SubdomainResult(BaseModel):
     """Single subdomain discovered during enumeration."""
+
     model_config = ConfigDict(extra="forbid")
 
     engagement_id: int
-    domain:        str
-    ip_addresses:  list[str] = Field(default_factory=list)
-    source:        str       = "crt_sh"
-    discovered_at: datetime  = Field(default_factory=datetime.utcnow)
+    domain: str
+    ip_addresses: list[str] = Field(default_factory=list)
+    source: str = "crt_sh"
+    discovered_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ServiceBanner(BaseModel):
     """Port scan result with optional banner grab."""
+
     model_config = ConfigDict(extra="forbid")
 
-    host_id:      int
-    port:         int
-    protocol:     str     = "tcp"
+    host_id: int
+    port: int
+    protocol: str = "tcp"
     service_name: Optional[str] = None
-    banner:       Optional[str] = None
-    version:      Optional[str] = None
+    banner: Optional[str] = None
+    version: Optional[str] = None
 
 
 class HostContext(BaseModel):
@@ -272,20 +281,22 @@ class HostContext(BaseModel):
     All fields are optional — populated incrementally as recon tasks complete.
     Stored as JSON in hosts.host_context.
     """
+
     model_config = ConfigDict(extra="allow")
 
-    os_family:        Optional[OsFamily]   = None
-    web_server:       Optional[str]        = None
-    detected_cdns:    list[str]            = Field(default_factory=list)
-    trusted_domains:  list[str]            = Field(default_factory=list)
-    user_agent_hint:  Optional[str]        = None
-    scheduled_tasks:  list[str]            = Field(default_factory=list)
-    beacon_interval_hint: Optional[int]    = None
+    os_family: Optional[OsFamily] = None
+    web_server: Optional[str] = None
+    detected_cdns: list[str] = Field(default_factory=list)
+    trusted_domains: list[str] = Field(default_factory=list)
+    user_agent_hint: Optional[str] = None
+    scheduled_tasks: list[str] = Field(default_factory=list)
+    beacon_interval_hint: Optional[int] = None
 
 
 # ===========================================================================
 # Phase 2 — OSINT & Credential Intelligence
 # ===========================================================================
+
 
 class BreachRecord(BaseModel):
     """
@@ -295,39 +306,42 @@ class BreachRecord(BaseModel):
     before any DB write. Never pass to logging, str.format, or JSON
     serialisation without explicit .get_secret_value() + immediate del.
     """
+
     model_config = ConfigDict(extra="forbid")
 
-    email:              str
+    email: str
     password_plaintext: Optional[SecretStr] = None
-    password_hash:      Optional[str]       = None
-    hash_type:          Optional[str]       = None
-    breach_name:        str
-    source:             BreachSource        = BreachSource.LOCAL
-    confidence:         Literal["confirmed", "likely", "possible"] = "possible"
+    password_hash: Optional[str] = None
+    hash_type: Optional[str] = None
+    breach_name: str
+    source: BreachSource = BreachSource.LOCAL
+    confidence: Literal["confirmed", "likely", "possible"] = "possible"
 
 
 class CredentialValidationResult(BaseModel):
     """Result of a single credential validation attempt (Module 2-B)."""
+
     model_config = ConfigDict(extra="forbid")
 
-    credential_id:     int
-    service:           ValidationService
-    host:              str
-    success:           bool
-    error:             Optional[str]      = None
-    validated_at:      datetime           = Field(default_factory=datetime.utcnow)
+    credential_id: int
+    service: ValidationService
+    host: str
+    success: bool
+    error: Optional[str] = None
+    validated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class DehashedResult(BaseModel):
     """Raw result from DeHashed API, pre-normalisation (Module 2-C)."""
+
     model_config = ConfigDict(extra="allow")
 
-    id:           Optional[str] = None
-    email:        Optional[str] = None
-    username:     Optional[str] = None
-    password:     Optional[str] = None
+    id: Optional[str] = None
+    email: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
     hashed_password: Optional[str] = None
-    database_name:   Optional[str] = None
+    database_name: Optional[str] = None
 
 
 class KeyScannerFinding(BaseModel):
@@ -338,17 +352,18 @@ class KeyScannerFinding(BaseModel):
     The key_prefix (first 8 chars) is stored unencrypted for identification.
     Full key value is NEVER written to audit_log — only key_prefix.
     """
+
     model_config = ConfigDict(extra="forbid")
 
-    engagement_id:    int
-    service:          str
-    key_value:        SecretStr
-    key_prefix:       str        = ""          # set by model_validator
-    source_url:       Optional[str]  = None
-    repo_name:        Optional[str]  = None
-    pattern_name:     Optional[str]  = None
+    engagement_id: int
+    service: str
+    key_value: SecretStr
+    key_prefix: str = ""  # set by model_validator
+    source_url: Optional[str] = None
+    repo_name: Optional[str] = None
+    pattern_name: Optional[str] = None
     validation_state: KeyValidationState = KeyValidationState.UNVALIDATED
-    found_at:         datetime         = Field(default_factory=datetime.utcnow)
+    found_at: datetime = Field(default_factory=datetime.utcnow)
 
     @model_validator(mode="after")
     def set_key_prefix(self) -> "KeyScannerFinding":
@@ -362,18 +377,20 @@ class KeyScannerFinding(BaseModel):
 # Phase 3 — Evasion & Payload Generation
 # ===========================================================================
 
+
 class PayloadSpec(BaseModel):
     """Specification for a payload to be generated by Phase 3."""
+
     model_config = ConfigDict(extra="forbid")
 
-    engagement_id:     int
-    payload_type:      Literal["reverse_shell", "c2_beacon", "dropper", "stager"]
-    target_os:         OsFamily
-    technique:         str
-    lhost:             str
-    lport:             int   = Field(..., ge=1, le=65535)
+    engagement_id: int
+    payload_type: Literal["reverse_shell", "c2_beacon", "dropper", "stager"]
+    target_os: OsFamily
+    technique: str
+    lhost: str
+    lport: int = Field(..., ge=1, le=65535)
     obfuscation_chain: list[str] = Field(default_factory=list)
-    lots_host:         Optional[str] = None
+    lots_host: Optional[str] = None
     metadata_stripped: bool = True
 
     @field_validator("lport")
@@ -382,6 +399,7 @@ class PayloadSpec(BaseModel):
         """PRD §12.4: prefer 443, 80, or 8443 for egress evasion."""
         if v not in {80, 443, 8443}:
             import warnings  # noqa: PLC0415
+
             warnings.warn(
                 f"Non-standard port {v} selected. Prefer 443/80/8443 to avoid "
                 "egress filtering (PRD §12.4).",
@@ -392,64 +410,70 @@ class PayloadSpec(BaseModel):
 
 class ObfuscationResult(BaseModel):
     """Output of a single obfuscation pass."""
+
     model_config = ConfigDict(extra="forbid")
 
-    criterion:      str           # e.g. 'base64_encode', 'xor_key', 'ps_concat'
-    input_hash:     str           # SHA256 of input bytes
-    output_hash:    str           # SHA256 of output bytes
-    applied_at:     datetime = Field(default_factory=datetime.utcnow)
+    criterion: str  # e.g. 'base64_encode', 'xor_key', 'ps_concat'
+    input_hash: str  # SHA256 of input bytes
+    output_hash: str  # SHA256 of output bytes
+    applied_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 # ===========================================================================
 # Phase 4 — Exploit Correlation & Vulnerability Discovery
 # ===========================================================================
 
+
 class VersionMatch(BaseModel):
     """Version string extracted from a service banner and parsed by Phase 4."""
+
     model_config = ConfigDict(extra="forbid")
 
-    host_id:      int
-    port:         int
-    product:      str
-    version:      str
-    cpe:          Optional[str] = None
+    host_id: int
+    port: int
+    product: str
+    version: str
+    cpe: Optional[str] = None
 
 
 class ExploitCorrelation(BaseModel):
     """Result of correlating a VersionMatch against Exploit-DB + NVD."""
+
     model_config = ConfigDict(extra="forbid")
 
-    version_match:  VersionMatch
-    exploit_ids:    list[int]    = Field(default_factory=list)
-    cve_ids:        list[str]    = Field(default_factory=list)
-    max_cvss:       Optional[float] = None
-    severity:       Optional[Severity] = None
+    version_match: VersionMatch
+    exploit_ids: list[int] = Field(default_factory=list)
+    cve_ids: list[str] = Field(default_factory=list)
+    max_cvss: Optional[float] = None
+    severity: Optional[Severity] = None
 
 
 class VulnerabilityFinding(BaseModel):
     """Vulnerability discovered by Modules 4-D, 4-E, or 4-G."""
+
     model_config = ConfigDict(extra="forbid")
 
     engagement_id: int
-    vuln_type:     VulnType
-    target_url:    str
-    parameter:     Optional[str] = None
-    severity:      Severity
-    title:         str
-    description:   Optional[str] = None
-    evidence:      Optional[str] = Field(None, max_length=512)
-    cvss_score:    Optional[float] = None
-    found_at:      datetime = Field(default_factory=datetime.utcnow)
+    vuln_type: VulnType
+    target_url: str
+    parameter: Optional[str] = None
+    severity: Severity
+    title: str
+    description: Optional[str] = None
+    evidence: Optional[str] = Field(None, max_length=512)
+    cvss_score: Optional[float] = None
+    found_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class CloudAsset(BaseModel):
     """Cloud resource discovered by Modules 4-E, 4-F, or 4-G."""
+
     model_config = ConfigDict(extra="forbid")
 
     engagement_id: int
-    asset_type:    Literal["firebase", "supabase"]
-    identifier:    str
-    source:        str
+    asset_type: Literal["firebase", "supabase"]
+    identifier: str
+    source: str
     discovered_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -457,39 +481,41 @@ class CloudAsset(BaseModel):
 # Phase 5 — Post-Exploitation
 # ===========================================================================
 
+
 class C2BeaconConfig(BaseModel):
     """
     C2 beacon configuration (Module 5-G).
 
     c2_urls must be HTTPS only; HTTP is rejected at the validator.
     Format: 'https://host[:port][/path]' OR 'host.domain' (bare CDN alias).
-    
+
     SMB/ICMP specific fields:
     - smb_pipe_name: Named pipe for SMB communication (auto-selected if not provided)
     - smb_fallback_timeout: Timeout for SMB fallback attempts (seconds)
     - icmp_target_ip: Target IP for ICMP channel
     - icmp_packet_interval: Base interval between ICMP packets (seconds)
     """
+
     model_config = ConfigDict(extra="forbid")
 
-    engagement_id:   int
-    host_id:         Optional[int]    = None
-    beacon_interval: int              = Field(default=30, ge=5, le=3600)
-    jitter_pct:      int              = Field(default=15, ge=0, le=50)
-    c2_urls:         list[str]        = Field(..., min_length=1)
-    channel:         C2Channel        = C2Channel.HTTP
-    sleep_mask:      bool             = True
-    
+    engagement_id: int
+    host_id: Optional[int] = None
+    beacon_interval: int = Field(default=30, ge=5, le=3600)
+    jitter_pct: int = Field(default=15, ge=0, le=50)
+    c2_urls: list[str] = Field(..., min_length=1)
+    channel: C2Channel = C2Channel.HTTP
+    sleep_mask: bool = True
+
     # SMB-specific configuration
-    smb_pipe_name:         Optional[str]  = None
-    smb_fallback_timeout:  int            = Field(default=30, ge=10, le=300)
-    smb_username:          Optional[str]  = None
-    smb_domain:            Optional[str]  = None
-    
-    # ICMP-specific configuration  
-    icmp_target_ip:        Optional[str]  = None
-    icmp_packet_interval:  int            = Field(default=180, ge=30, le=600)
-    icmp_max_payload_size: int            = Field(default=64, ge=32, le=128)
+    smb_pipe_name: Optional[str] = None
+    smb_fallback_timeout: int = Field(default=30, ge=10, le=300)
+    smb_username: Optional[str] = None
+    smb_domain: Optional[str] = None
+
+    # ICMP-specific configuration
+    icmp_target_ip: Optional[str] = None
+    icmp_packet_interval: int = Field(default=180, ge=30, le=600)
+    icmp_max_payload_size: int = Field(default=64, ge=32, le=128)
 
     @field_validator("c2_urls")
     @classmethod
@@ -499,45 +525,47 @@ class C2BeaconConfig(BaseModel):
             if not pattern.match(url):
                 raise ValueError(f"Invalid C2 URL: {url!r}")
         return v
-    
+
     @field_validator("smb_pipe_name")
     @classmethod
     def validate_smb_pipe_name(cls, v: Optional[str]) -> Optional[str]:
         """Validate SMB pipe names against OPSEC constraints."""
         if v is None:
             return v
-        
+
         # Banned pipe names that trigger security alerts
         banned_pipes = {"svcctl", "ROUTER", "epmapper"}
         if v.lower() in banned_pipes:
             raise ValueError(f"SMB pipe name '{v}' is banned for OPSEC reasons")
-        
+
         # Allowed legitimate pipe names
         allowed_pipes = {"atsvc", "winreg", "lsarpc", "browser", "netlogon"}
         if v.lower() not in allowed_pipes:
             import warnings
+
             warnings.warn(
                 f"SMB pipe name '{v}' not in recommended list {allowed_pipes}. "
                 "Use at your own risk for OPSEC compliance.",
                 stacklevel=3,
             )
         return v
-    
+
     @field_validator("icmp_target_ip")
     @classmethod
     def validate_icmp_target_ip(cls, v: Optional[str]) -> Optional[str]:
         """Validate ICMP target IP format."""
         if v is None:
             return v
-        
+
         # Basic IPv4 validation
         import ipaddress
+
         try:
             ipaddress.IPv4Address(v)
         except ipaddress.AddressValueError:
             raise ValueError(f"Invalid IPv4 address for ICMP target: {v}")
         return v
-    
+
     @model_validator(mode="after")
     def validate_channel_specific_fields(self) -> "C2BeaconConfig":
         """Validate channel-specific required fields."""
@@ -545,28 +573,30 @@ class C2BeaconConfig(BaseModel):
             if not self.smb_pipe_name:
                 # Auto-select a legitimate pipe name if not provided
                 import random
+
                 allowed_pipes = ["atsvc", "winreg", "lsarpc", "browser", "netlogon"]
                 object.__setattr__(self, "smb_pipe_name", random.choice(allowed_pipes))
-        
+
         elif self.channel == C2Channel.ICMP:
             if not self.icmp_target_ip:
                 raise ValueError("ICMP channel requires icmp_target_ip field")
-        
+
         return self
 
 
 class PersistenceSpec(BaseModel):
     """Persistence technique specification for Module 5-I."""
+
     model_config = ConfigDict(extra="forbid")
 
-    engagement_id:       int
-    host_id:             Optional[int] = None
-    technique:           str
-    target_os:           OsFamily
-    install_cmd:         str
-    cleanup_cmd:         Optional[str] = None
-    lolbins_used:        list[str]     = Field(default_factory=list)
-    obfuscation_applied: bool          = False
+    engagement_id: int
+    host_id: Optional[int] = None
+    technique: str
+    target_os: OsFamily
+    install_cmd: str
+    cleanup_cmd: Optional[str] = None
+    lolbins_used: list[str] = Field(default_factory=list)
+    obfuscation_applied: bool = False
 
 
 class LateralMovementCredential(BaseModel):
@@ -585,17 +615,18 @@ class LateralMovementCredential(BaseModel):
         and cleaned up via `forge clean --engagement <id>`.
       - Call `del password` immediately after passing to auth adapter.
     """
+
     model_config = ConfigDict(extra="forbid")
 
     credential_id: int
-    username:      str
-    domain:        Optional[str] = None
+    username: str
+    domain: Optional[str] = None
 
     # Auth material — exactly one group must be populated (validated below).
-    password:    Optional[SecretStr] = None          # 'password' auth
-    ccache_path: Optional[Path]      = None          # 'kerberos' PTT
-    cert_path:   Optional[Path]      = None          # 'certificate' PKINIT
-    key_path:    Optional[Path]      = None          # 'certificate' private key
+    password: Optional[SecretStr] = None  # 'password' auth
+    ccache_path: Optional[Path] = None  # 'kerberos' PTT
+    cert_path: Optional[Path] = None  # 'certificate' PKINIT
+    key_path: Optional[Path] = None  # 'certificate' private key
 
     auth_type: Literal["password", "kerberos", "certificate"] = "password"
 
@@ -636,31 +667,34 @@ class LateralMovementCredential(BaseModel):
 
 class LateralMovementResult(BaseModel):
     """Result of a lateral movement execution attempt (Module 5-J)."""
+
     model_config = ConfigDict(extra="forbid")
 
-    engagement_id:      int
-    source_host_id:     Optional[int]
-    target_host_id:     int
-    technique:          str
-    credential_id:      Optional[int]
-    command:            str
-    success:            Optional[bool] = None
-    output:             Optional[str]  = Field(None, max_length=65_536)  # 64 KB cap §16
-    scope_verified:     bool           = False
-    operator_confirmed: bool           = False
-    executed_at:        datetime       = Field(default_factory=datetime.utcnow)
+    engagement_id: int
+    source_host_id: Optional[int]
+    target_host_id: int
+    technique: str
+    credential_id: Optional[int]
+    command: str
+    success: Optional[bool] = None
+    output: Optional[str] = Field(None, max_length=65_536)  # 64 KB cap §16
+    scope_verified: bool = False
+    operator_confirmed: bool = False
+    executed_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 # ===========================================================================
 # Phase 6 — LLM-Assisted Reporting
 # ===========================================================================
 
+
 class LlmReportRequest(BaseModel):
     """Input to the Phase 6 report synthesiser."""
+
     model_config = ConfigDict(extra="forbid")
 
     engagement_id: int
-    sections:      list[str] = Field(
+    sections: list[str] = Field(
         default_factory=lambda: [
             "executive_summary",
             "attack_narrative",
@@ -668,22 +702,23 @@ class LlmReportRequest(BaseModel):
             "remediation",
         ]
     )
-    max_tokens:    int       = Field(default=4096, ge=256, le=8192)
-    model:         str       = "qwen2.5-1.5b"
+    max_tokens: int = Field(default=4096, ge=256, le=8192)
+    model: str = "qwen2.5-1.5b"
 
 
 class LlmReportResult(BaseModel):
     """Output from the Phase 6 report synthesiser."""
+
     model_config = ConfigDict(extra="forbid")
 
     engagement_id: int
-    content:       str
+    content: str
     quality_score: Optional[float] = None
-    validator_ok:  bool            = False
-    generated_at:  datetime        = Field(default_factory=datetime.utcnow)
-    model:         str             = "qwen2.5-1.5b"
-    prompt_hash:   Optional[str]   = None
-    response_hash: Optional[str]   = None
+    validator_ok: bool = False
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    model: str = "qwen2.5-1.5b"
+    prompt_hash: Optional[str] = None
+    response_hash: Optional[str] = None
 
 
 # ===========================================================================
@@ -691,24 +726,27 @@ class LlmReportResult(BaseModel):
 # internally by the hashcat correlator)
 # ===========================================================================
 
+
 @dataclass
 class HashCredential:
     """Single hash-bearing credential row, loaded from DB by Phase 4-C."""
-    credential_id:     int
-    email:             str
-    hash_type:         str
-    password_hash:     str
-    hash_plaintext:    Optional[str] = None   # populated if cracked; in-memory only
-    hash_crack_source: Optional[str] = None   # 'hashbuster_online' | 'hashcat_offline'
+
+    credential_id: int
+    email: str
+    hash_type: str
+    password_hash: str
+    hash_plaintext: Optional[str] = None  # populated if cracked; in-memory only
+    hash_crack_source: Optional[str] = None  # 'hashbuster_online' | 'hashcat_offline'
     validated_service: Optional[str] = None
 
 
 @dataclass
 class HashCredentialSet:
     """Aggregated hash credential context for a single host, consumed by Phase 4."""
-    host_ip:       str
-    all_hashes:    list[HashCredential] = field(default_factory=list)
-    cracked:       list[HashCredential] = field(default_factory=list)
+
+    host_ip: str
+    all_hashes: list[HashCredential] = field(default_factory=list)
+    cracked: list[HashCredential] = field(default_factory=list)
     pending_crack: list[HashCredential] = field(default_factory=list)
 
     @property

@@ -50,9 +50,7 @@ class TestErrorHierarchy:
             CheckpointCorruptedError,
         ],
     )
-    def test_can_be_raised_and_caught_as_forge_error(
-        self, error_cls: type[ForgeError]
-    ) -> None:
+    def test_can_be_raised_and_caught_as_forge_error(self, error_cls: type[ForgeError]) -> None:
         """Errors can be caught with a ForgeError handler."""
         with pytest.raises(ForgeError):
             raise error_cls("test message")

@@ -70,9 +70,7 @@ def _emails(db_path: Path) -> set[str]:
     try:
         return {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
     finally:
         con.close()

@@ -8,7 +8,9 @@ from forge.utils.intel.secret_finder import GithubPatValidator, ValidationState
 
 
 class _Response:
-    def __init__(self, status_code: int, payload: dict | None = None, headers: dict | None = None) -> None:
+    def __init__(
+        self, status_code: int, payload: dict | None = None, headers: dict | None = None
+    ) -> None:
         self.status_code = status_code
         self._payload = payload or {}
         self.headers = headers or {}

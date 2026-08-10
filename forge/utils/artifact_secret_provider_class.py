@@ -16,7 +16,9 @@ _FIELD_RE = re.compile(
     ["']?(?P<value>[^"'\r\n#]+)["']?\s*$""",
     re.VERBOSE,
 )
-_GCP_SECRET_RE = re.compile(r"^projects/(?P<project>[a-z0-9][a-z0-9-]{3,63})/secrets/(?P<secret>[^/\s]+)")
+_GCP_SECRET_RE = re.compile(
+    r"^projects/(?P<project>[a-z0-9][a-z0-9-]{3,63})/secrets/(?P<secret>[^/\s]+)"
+)
 _AWS_SECRETS_ARN_RE = re.compile(r"^(arn:aws[a-z-]*:secretsmanager:[^:\s]+:\d{12}:secret:[^:\s]+)")
 _AZURE_VAULT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,22}[a-z0-9]$")
 
@@ -62,7 +64,9 @@ def secret_provider_class_candidates(mapping: Mapping[str, Any]) -> list[str]:
     return candidates
 
 
-def _azure_candidates(params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any) -> None:
+def _azure_candidates(
+    params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any
+) -> None:
     vault = str(_ref(params, "keyvaultName", "keyVaultName", "vaultName") or "").strip().lower()
     if not _AZURE_VAULT_RE.fullmatch(vault):
         return
@@ -80,7 +84,9 @@ def _azure_candidates(params: Mapping[str, Any], records: Sequence[Mapping[str, 
         append(f"https://{vault}.vault.azure.net/{family}/{name}")
 
 
-def _aws_candidates(params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any) -> None:
+def _aws_candidates(
+    params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any
+) -> None:
     region = _segment(_ref(params, "region"))
     for record in records:
         name = str(record.get("objectname") or record.get("secretpath") or "").strip()
@@ -93,11 +99,17 @@ def _aws_candidates(params: Mapping[str, Any], records: Sequence[Mapping[str, st
         encoded = _segment(name)
         if not encoded:
             continue
-        family = "aws-parameterstore" if "parameter" in _fingerprint(record.get("objecttype")) else "aws-secretsmanager"
+        family = (
+            "aws-parameterstore"
+            if "parameter" in _fingerprint(record.get("objecttype"))
+            else "aws-secretsmanager"
+        )
         append(f"{family}://{region}/{encoded}" if region else f"{family}://{encoded}")
 
 
-def _gcp_candidates(params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any) -> None:
+def _gcp_candidates(
+    params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any
+) -> None:
     project = _segment(_ref(params, "projectID", "projectId", "project", "project_id"))
     if project:
         append(f"gcp-secretmanager://{project}")
@@ -106,14 +118,18 @@ def _gcp_candidates(params: Mapping[str, Any], records: Sequence[Mapping[str, st
         match = _GCP_SECRET_RE.match(resource)
         if match:
             append(f"gcp-secretmanager://{match.group('project')}")
-            append(f"gcp-secretmanager://{match.group('project')}/{_segment(match.group('secret'))}")
+            append(
+                f"gcp-secretmanager://{match.group('project')}/{_segment(match.group('secret'))}"
+            )
         elif project:
             secret = _segment(resource)
             if secret:
                 append(f"gcp-secretmanager://{project}/{secret}")
 
 
-def _vault_candidates(params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any) -> None:
+def _vault_candidates(
+    params: Mapping[str, Any], records: Sequence[Mapping[str, str]], append: Any
+) -> None:
     address = _url(_ref(params, "vaultAddress", "vault_addr", "server", "url", "address"))
     if not address:
         return
@@ -133,7 +149,8 @@ def _object_records(value: Any) -> list[dict[str, str]]:
         record = {
             _fingerprint(key): str(item).strip().strip("\"'")
             for key, item in value.items()
-            if _fingerprint(key) in {"objectname", "objecttype", "resourcename", "secretpath", "path"}
+            if _fingerprint(key)
+            in {"objectname", "objecttype", "resourcename", "secretpath", "path"}
             and isinstance(item, (str, int, float))
         }
         records = [record] if record else []

@@ -22,51 +22,57 @@ from forge.engagement_orchestrator import (
 class TestHostnameIsCloudRef:
     """Every provider hostname the plan doc lists must round-trip to True."""
 
-    @pytest.mark.parametrize("host", [
-        # Supabase
-        "myapp.supabase.co",
-        "myapp.supabase.in",
-        # Firebase / Google
-        "myapp.firebaseio.com",
-        "myapp.firebaseapp.com",
-        "myapp.web.app",
-        "myapp.appspot.com",
-        "bucket.storage.googleapis.com",
-        "storage.cloud.google.com",
-        # S3
-        "mybucket.s3.amazonaws.com",
-        "mybucket.s3-website.amazonaws.com",
-        "mybucket.s3.us-east-1.amazonaws.com",
-        "mybucket.s3.eu-west-2.amazonaws.com",
-        "s3-us-west-2.amazonaws.com",
-        # CloudFront + Amplify
-        "d123abc.cloudfront.net",
-        "main.d123abc.amplifyapp.com",
-        # Azure
-        "myacct.blob.core.windows.net",
-        "myacct.dfs.core.windows.net",
-        "myacct.file.core.windows.net",
-        # DO
-        "mybucket.nyc3.digitaloceanspaces.com",
-        # Vercel / Netlify / CF Pages
-        "myapp.vercel.app",
-        "myapp.netlify.app",
-        "myapp.pages.dev",
-        "myapp.workers.dev",
-        # Firebase RTDB regional
-        "myapp.europe-west1.firebasedatabase.app",
-    ])
+    @pytest.mark.parametrize(
+        "host",
+        [
+            # Supabase
+            "myapp.supabase.co",
+            "myapp.supabase.in",
+            # Firebase / Google
+            "myapp.firebaseio.com",
+            "myapp.firebaseapp.com",
+            "myapp.web.app",
+            "myapp.appspot.com",
+            "bucket.storage.googleapis.com",
+            "storage.cloud.google.com",
+            # S3
+            "mybucket.s3.amazonaws.com",
+            "mybucket.s3-website.amazonaws.com",
+            "mybucket.s3.us-east-1.amazonaws.com",
+            "mybucket.s3.eu-west-2.amazonaws.com",
+            "s3-us-west-2.amazonaws.com",
+            # CloudFront + Amplify
+            "d123abc.cloudfront.net",
+            "main.d123abc.amplifyapp.com",
+            # Azure
+            "myacct.blob.core.windows.net",
+            "myacct.dfs.core.windows.net",
+            "myacct.file.core.windows.net",
+            # DO
+            "mybucket.nyc3.digitaloceanspaces.com",
+            # Vercel / Netlify / CF Pages
+            "myapp.vercel.app",
+            "myapp.netlify.app",
+            "myapp.pages.dev",
+            "myapp.workers.dev",
+            # Firebase RTDB regional
+            "myapp.europe-west1.firebasedatabase.app",
+        ],
+    )
     def test_matches_provider_hostname(self, host: str) -> None:
         assert _hostname_is_cloud_ref(host), f"expected cloud_ref match for {host!r}"
 
-    @pytest.mark.parametrize("host", [
-        "example.com",
-        "portal.example.com",
-        "acme.co",
-        "www.google.com",
-        "some-other-domain.io",
-        "",
-    ])
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "example.com",
+            "portal.example.com",
+            "acme.co",
+            "www.google.com",
+            "some-other-domain.io",
+            "",
+        ],
+    )
     def test_rejects_non_provider_hostname(self, host: str) -> None:
         assert not _hostname_is_cloud_ref(host), (
             f"expected non-match for {host!r} (must not be cloud_ref)"
@@ -108,9 +114,7 @@ class TestClassifySeedValue:
     def test_apk_url_still_beats_cloud_ref_on_bundle_suffix(self) -> None:
         # A .apk hosted on cloudfront is more importantly a mobile bundle;
         # apk_url still wins.
-        assert (
-            _classify_seed_value("https://d123abc.cloudfront.net/build.apk") == "apk_url"
-        )
+        assert _classify_seed_value("https://d123abc.cloudfront.net/build.apk") == "apk_url"
 
     def test_email_still_returns_email(self) -> None:
         assert _classify_seed_value("user@example.com") == "email"
@@ -142,9 +146,19 @@ class TestSchemaAcceptsCloudRef:
             )
             # Insert every seed_type from the CHECK list to prove none regressed.
             for seed_type in (
-                "domain", "email", "phone", "username", "ipv4", "ipv6",
-                "name", "company", "url", "apk_url", "subdomain",
-                "cloud_ref", "other",
+                "domain",
+                "email",
+                "phone",
+                "username",
+                "ipv4",
+                "ipv6",
+                "name",
+                "company",
+                "url",
+                "apk_url",
+                "subdomain",
+                "cloud_ref",
+                "other",
             ):
                 conn.execute(
                     """

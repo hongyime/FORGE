@@ -143,7 +143,7 @@ EXECUTOR_PATTERNS: list[re.Pattern[str]] = [
 # available. Tuned against late-2025 published rates: $0.80/M (Haiku) is
 # clearly executor; $3/M (Sonnet) is clearly planner.
 PRICE_EXECUTOR_CEILING = 1.0  # $/M input tokens
-PRICE_PLANNER_FLOOR = 3.0     # $/M input tokens
+PRICE_PLANNER_FLOOR = 3.0  # $/M input tokens
 
 # Parameter-count thresholds for local models (Ollama / LM Studio / vLLM).
 PARAMS_EXECUTOR_CEILING_B = 13.0
@@ -161,7 +161,8 @@ def _default_override_path() -> Path:
         return Path(explicit)
     config_root = Path(
         os.environ.get(
-            "XDG_CONFIG_HOME", str(Path.home() / ".config"),
+            "XDG_CONFIG_HOME",
+            str(Path.home() / ".config"),
         )
     )
     return config_root / "forge" / "model_tiers.toml"
@@ -197,7 +198,8 @@ def load_overrides(path: Path | None = None) -> dict[str, str]:
     except Exception as exc:  # noqa: BLE001 - any parse error
         _LOG.warning(
             "forge.cost_table: failed to parse %s: %s; ignoring overrides.",
-            target, exc,
+            target,
+            exc,
         )
         return {}
     raw = data.get("overrides", {}) or {}
@@ -216,7 +218,9 @@ def load_overrides(path: Path | None = None) -> dict[str, str]:
         if v_norm not in valid_values:
             _LOG.warning(
                 "forge.cost_table: override %r=%r ignored (allowed: %s)",
-                k, v, sorted(valid_values),
+                k,
+                v,
+                sorted(valid_values),
             )
             continue
         out[k] = v_norm
@@ -319,9 +323,7 @@ def classify_model(
         return _both(
             primary=Tier.EXECUTOR,
             reason="price_mid",
-            summary=(
-                f"${info.input_per_m:.2f}/M between executor and planner thresholds → both"
-            ),
+            summary=(f"${info.input_per_m:.2f}/M between executor and planner thresholds → both"),
             model_id=mid,
         )
 
@@ -361,9 +363,7 @@ def classify_model(
         return _both(
             primary=Tier.EXECUTOR,
             reason="param_count",
-            summary=(
-                f"{info.parameter_count_b:.0f}B params (mid) → both, executor-preferred"
-            ),
+            summary=(f"{info.parameter_count_b:.0f}B params (mid) → both, executor-preferred"),
             model_id=mid,
         )
 

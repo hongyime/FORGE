@@ -48,9 +48,7 @@ class _StubProvider:
             latency_ms=0.1,
         )
 
-    async def structured_output(
-        self, request: CompletionRequest, schema: dict
-    ) -> dict:
+    async def structured_output(self, request: CompletionRequest, schema: dict) -> dict:
         return {"prompt": request.prompt, "schema_keys": list(schema.keys())}
 
     async def embed(self, text: str) -> list[float]:
@@ -66,9 +64,7 @@ class _PartialProvider:
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         raise NotImplementedError
 
-    async def structured_output(
-        self, request: CompletionRequest, schema: dict
-    ) -> dict:
+    async def structured_output(self, request: CompletionRequest, schema: dict) -> dict:
         raise NotImplementedError
 
     async def health_check(self) -> bool:
@@ -180,9 +176,7 @@ class TestProviderResolution:
         await asyncio.sleep(0)
 
         rejected = [
-            e
-            for e in audit.entries
-            if (e.output_summary or "").startswith("provider_rejected:")
+            e for e in audit.entries if (e.output_summary or "").startswith("provider_rejected:")
         ]
         assert rejected, "Rejection should be recorded in the audit log"
         assert rejected[0].success is False

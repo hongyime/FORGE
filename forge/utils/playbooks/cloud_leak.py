@@ -9,6 +9,7 @@ Steps:
 OPSEC: Strict rate limiting. Proxy mandatory for validation calls.
 Checks _SHUTDOWN at top of every step.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,12 @@ import sys
 from typing import Any, Optional
 
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
-from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet, with_internet_retry
+from forge.opsec.resilience import (
+    _SHUTDOWN,
+    _interruptible_sleep,
+    wait_for_internet,
+    with_internet_retry,
+)
 from forge.phase5.approval_gate import ActionClassification, request_approval
 from forge.utils.cloud_exposure_gate import (
     latest_cloud_validation_reportability_index,
@@ -108,7 +114,9 @@ def run_cloud_leak_playbook(
 
     service, key_enc, validation_state, domain, validation_detail = row
 
-    print(f"[CLOUD LEAK] Playbook starting for {service} key in finding {key_finding_id}", flush=True)
+    print(
+        f"[CLOUD LEAK] Playbook starting for {service} key in finding {key_finding_id}", flush=True
+    )
     sys.stdout.flush()
 
     # --- Step 1: Validation ---
@@ -122,7 +130,10 @@ def run_cloud_leak_playbook(
         domain,
         validation_detail,
     ):
-        print("[CLOUD LEAK] Key ACTIVE state lacks deterministic proof — playbook stopped.", flush=True)
+        print(
+            "[CLOUD LEAK] Key ACTIVE state lacks deterministic proof — playbook stopped.",
+            flush=True,
+        )
         return _empty_result()
 
     if validation_state != "ACTIVE":
@@ -183,6 +194,7 @@ def _validate_key(service: str, key_enc: Optional[str], proxy: Optional[str]) ->
     _RATE_LIMITER.wait(f"https://validation.{service}.com")
     try:
         from forge.opsec.crypto import decrypt_string
+
         key = decrypt_string(key_enc)
     except Exception:
         return False
@@ -192,10 +204,12 @@ def _validate_key(service: str, key_enc: Optional[str], proxy: Optional[str]) ->
         return _validate_aws(key, proxy)
     if service == "github":
         from forge.phase2.key_scanner import GithubPatValidator, ValidationState
+
         result = GithubPatValidator().validate(key, proxy=proxy)
         return result.state == ValidationState.ACTIVE
     if service == "stripe":
         from forge.phase2.key_scanner import StripeKeyValidator, ValidationState
+
         result = StripeKeyValidator().validate(key, proxy=proxy)
         return result.state == ValidationState.ACTIVE
     return False
@@ -205,7 +219,9 @@ def _validate_aws(key: str, proxy: Optional[str]) -> bool:
     return False  # AWS requires key+secret pair — UNCONFIRMED by default
 
 
-def _enumerate_resources(service: str, key_enc: Optional[str], proxy: Optional[str], dry_run: bool) -> list[dict]:
+def _enumerate_resources(
+    service: str, key_enc: Optional[str], proxy: Optional[str], dry_run: bool
+) -> list[dict]:
     if dry_run:
         return [{"name": f"[dry-run-{service}-bucket]", "type": "storage"}]
     if service == "aws":
@@ -219,8 +235,11 @@ def _enumerate_aws_buckets(key_enc: Optional[str], proxy: Optional[str]) -> list
     return []  # requires boto3 or signed requests — stub
 
 
-def _scan_storage(service: str, key_enc: Optional[str], resource: dict, proxy: Optional[str]) -> list[str]:
+def _scan_storage(
+    service: str, key_enc: Optional[str], resource: dict, proxy: Optional[str]
+) -> list[str]:
     from forge.phase5.exfiltration import PRIORITY_PATTERNS
+
     return []  # stub — real impl fetches file listing and matches PRIORITY_PATTERNS
 
 

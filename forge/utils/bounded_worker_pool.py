@@ -89,7 +89,9 @@ def resolve_max_workers(
     try:
         parsed = int(raw)
     except ValueError:
-        logger.debug("bounded_worker_pool: bad env var %s=%r; using default %d", env_var, raw, default)
+        logger.debug(
+            "bounded_worker_pool: bad env var %s=%r; using default %d", env_var, raw, default
+        )
         return max(1, min(cap, default))
     return max(1, min(cap, parsed))
 
@@ -127,7 +129,10 @@ def run_bounded(
     items: list[I] = list(inputs)
     if not items:
         return WorkerPoolOutcome[I, O](
-            results=[], effective_workers=0, failed_count=0, succeeded_count=0,
+            results=[],
+            effective_workers=0,
+            failed_count=0,
+            succeeded_count=0,
         )
 
     effective = max(1, min(_ABSOLUTE_WORKER_CAP, int(max_workers or 1)))
@@ -146,7 +151,10 @@ def run_bounded(
             duration = _time.time() - started
             logger.debug(
                 "%s: item %d failed: %s: %s",
-                logger_prefix, index, type(exc).__name__, exc,
+                logger_prefix,
+                index,
+                type(exc).__name__,
+                exc,
             )
             return index, None, f"{type(exc).__name__}: {exc}", duration
         duration = _time.time() - started

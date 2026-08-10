@@ -232,7 +232,12 @@ class TestNormalizeDispatch:
 
     def test_registry_has_6_kinds(self) -> None:
         assert set(NORMALIZERS.keys()) == {
-            "email", "username", "phone", "company", "person_name", "social_profile_url"
+            "email",
+            "username",
+            "phone",
+            "company",
+            "person_name",
+            "social_profile_url",
         }
 
     def test_dispatch_delegates(self) -> None:

@@ -26,7 +26,9 @@ from forge.db.direct_connect import direct_connect
 @cloud_app.command("firebase")
 def cloud_firebase(
     engagement: str = typer.Option(..., "--engagement", "-e"),
-    project_id: str = typer.Option(..., "--project-id", "--project-ref", help="Firebase project ID."),
+    project_id: str = typer.Option(
+        ..., "--project-id", "--project-ref", help="Firebase project ID."
+    ),
     api_key: Optional[str] = typer.Option(
         None,
         "--api-key",
@@ -119,7 +121,9 @@ def cloud_aws(
         "--services",
         help="Comma-separated AWS services to audit: iam,s3,rds,ec2,lambda,cloudtrail (default: all).",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview planned audit without API calls."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview planned audit without API calls."
+    ),
     output_format: str = typer.Option(
         "json",
         "--output-format",
@@ -157,13 +161,17 @@ def cloud_aws(
     services_value = services
     if services == "all" and cfg.cloud_aws_services:
         services_value = ",".join(cfg.cloud_aws_services)
-    regions_list = [item.strip() for item in regions_value.split(",") if item.strip()] if regions_value else None
+    regions_list = (
+        [item.strip() for item in regions_value.split(",") if item.strip()]
+        if regions_value
+        else None
+    )
     services_list = (
         [item.strip() for item in services_value.split(",") if item.strip()]
         if services_value != "all"
         else None
     )
-    
+
     console.print(f"[bold blue]AWS Security Audit[/bold blue]")
     console.print(f"  Engagement: {engagement}")
     console.print(f"  Profile: {profile_value or 'default'}")
@@ -182,7 +190,7 @@ def cloud_aws(
             ).ask()
             if not proceed:
                 raise typer.Exit()
-    
+
     try:
         findings = run_aws_audit(
             db_path=db_path,
@@ -198,7 +206,13 @@ def cloud_aws(
         output_target = (
             Path(output_path)
             if output_path
-            else (cfg.data_dir / "engagements" / str(engagement) / "reports" / f"aws_audit.{default_ext}")
+            else (
+                cfg.data_dir
+                / "engagements"
+                / str(engagement)
+                / "reports"
+                / f"aws_audit.{default_ext}"
+            )
         )
         _write_cloud_output(
             findings=findings_payload,
@@ -208,7 +222,7 @@ def cloud_aws(
         )
         console.print(f"[green]✓ AWS audit completed: {len(findings)} findings[/green]")
         console.print(f"[green]✓ Output written:[/green] {output_target}")
-        
+
     except Exception as exc:
         console.print(f"[red]✗ AWS audit failed: {exc}[/red]")
         raise typer.Exit(1)
@@ -243,7 +257,9 @@ def cloud_azure(
         "--services",
         help="Comma-separated Azure services to audit: rbac,storage,sql,keyvault,appservice (default: all).",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview planned audit without API calls."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview planned audit without API calls."
+    ),
     output_format: str = typer.Option(
         "json",
         "--output-format",
@@ -285,7 +301,7 @@ def cloud_azure(
         if services_value != "all"
         else None
     )
-    
+
     console.print(f"[bold blue]Azure Security Audit[/bold blue]")
     console.print(f"  Engagement: {engagement}")
     console.print(f"  Subscription: {subscription_value or 'auto-detect'}")
@@ -303,7 +319,7 @@ def cloud_azure(
             ).ask()
             if not proceed:
                 raise typer.Exit()
-    
+
     try:
         findings = run_azure_audit(
             db_path=db_path,
@@ -321,7 +337,13 @@ def cloud_azure(
         output_target = (
             Path(output_path)
             if output_path
-            else (cfg.data_dir / "engagements" / str(engagement) / "reports" / f"azure_audit.{default_ext}")
+            else (
+                cfg.data_dir
+                / "engagements"
+                / str(engagement)
+                / "reports"
+                / f"azure_audit.{default_ext}"
+            )
         )
         _write_cloud_output(
             findings=findings_payload,
@@ -331,7 +353,7 @@ def cloud_azure(
         )
         console.print(f"[green]✓ Azure audit completed: {len(findings)} findings[/green]")
         console.print(f"[green]✓ Output written:[/green] {output_target}")
-        
+
     except Exception as exc:
         console.print(f"[red]✗ Azure audit failed: {exc}[/red]")
         raise typer.Exit(1)
@@ -340,10 +362,14 @@ def cloud_azure(
 @cloud_app.command("firebase-extract")
 def cloud_firebase_extract(
     engagement: Optional[str] = typer.Option(None, "--engagement", "-e"),
-    apk: Optional[str] = typer.Option(None, "--apk", help="Path to Android APK, AAB, XAPK, APKM, or APKS file."),
+    apk: Optional[str] = typer.Option(
+        None, "--apk", help="Path to Android APK, AAB, XAPK, APKM, or APKS file."
+    ),
     ipa: Optional[str] = typer.Option(None, "--ipa", help="Path to iOS IPA file."),
     target_url: Optional[str] = typer.Option(
-        None, "--target-url", "-u",
+        None,
+        "--target-url",
+        "-u",
         help="Web app URL to crawl for embedded Firebase config (auto-discovery).",
     ),
     output_json: Optional[str] = typer.Option(
@@ -379,6 +405,7 @@ def cloud_firebase_extract(
     # --- Web auto-discovery (new) ---
     if target_url:
         from forge.phase4.firebase_extract import extract_firebase_config  # noqa: PLC0415
+
         if not dry_run and not engagement:
             raise typer.BadParameter("--engagement is required for live --target-url extraction.")
         if engagement and db_path:
@@ -402,25 +429,29 @@ def cloud_firebase_extract(
             cfg=cfg,
             dry_run=dry_run,
         )
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         if not found:
             console.print("[yellow]No Firebase config found in web app.[/yellow]")
         for c in found:
-            _api_key_raw = str(c.get('api_key','') or '')
+            _api_key_raw = str(c.get("api_key", "") or "")
             _api_key_disp = (
-                f"{_api_key_raw[:4]}...{_api_key_raw[-4:]}"
-                if len(_api_key_raw) > 8 else "***"
+                f"{_api_key_raw[:4]}...{_api_key_raw[-4:]}" if len(_api_key_raw) > 8 else "***"
             )
-            console.print(f"  [green]Found:[/green] project_id={c.get('project_id')}  api_key={_api_key_disp}")
+            console.print(
+                f"  [green]Found:[/green] project_id={c.get('project_id')}  api_key={_api_key_disp}"
+            )
             console.print(f"  [dim]→ forge cloud firebase --project-id {c.get('project_id')}[/dim]")
         if output_json and found:
             import json as _json
+
             _Path(output_json).write_text(_json.dumps(found, indent=2))
             console.print(f"JSON written to {output_json}")
         return
 
     # --- Mobile bundle extraction (existing) ---
     from forge.phase4.mobile_config_parse import FirebaseExtractor  # noqa: PLC0415
+
     extractor = FirebaseExtractor(age_pubkey=None)
     projects = []
     supabase_configs = []
@@ -439,8 +470,12 @@ def cloud_firebase_extract(
         console.print(f"  [green]Firebase:[/green] {p.project_id}  (source: {p.source_file})")
         console.print(f"  [dim]→ forge cloud firebase --project-id {p.project_id}[/dim]")
     for config in supabase_configs:
-        console.print(f"  [green]Supabase:[/green] {config.project_ref}  (source: {config.source_file})")
-        console.print(f"  [dim]→ forge cloud supabase --engagement {engagement or '-'} --project-ref {config.project_ref}[/dim]")
+        console.print(
+            f"  [green]Supabase:[/green] {config.project_ref}  (source: {config.source_file})"
+        )
+        console.print(
+            f"  [dim]→ forge cloud supabase --engagement {engagement or '-'} --project-ref {config.project_ref}[/dim]"
+        )
 
     if engagement and db_path:
         written = extractor.store(projects, db_path, engagement_id=int(engagement))
@@ -449,7 +484,9 @@ def cloud_firebase_extract(
             db_path,
             engagement_id=int(engagement),
         )
-        console.print(f"Stored {written} Firebase project(s) and {supabase_written} Supabase config(s) in engagement evidence.")
+        console.print(
+            f"Stored {written} Firebase project(s) and {supabase_written} Supabase config(s) in engagement evidence."
+        )
 
     if output_json:
         if supabase_configs:
@@ -553,5 +590,3 @@ def cloud_supabase(
         url_prefixes=url_prefixes,
         require_scope=not dry_run,
     )
-
-

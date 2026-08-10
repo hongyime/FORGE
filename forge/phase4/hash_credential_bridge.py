@@ -15,6 +15,7 @@ Design constraints:
     unencrypted output path.
   - Returns typed dataclasses; callers must not access sqlite3.Row directly.
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,38 +32,67 @@ _LOG = logging.getLogger(__name__)
 
 # ── Hash attack class taxonomy ─────────────────────────────────────────────────
 
+
 class HashAttackClass(str, Enum):
-    NTLM_RELAY     = "NTLM_RELAY"
-    PASS_THE_HASH  = "PASS_THE_HASH"
-    KERBEROAST     = "KERBEROAST"
+    NTLM_RELAY = "NTLM_RELAY"
+    PASS_THE_HASH = "PASS_THE_HASH"
+    KERBEROAST = "KERBEROAST"
     HASH_INJECTION = "HASH_INJECTION"
 
 
-_NTLM_RELAY_KW: frozenset[str] = frozenset({
-    "ntlm relay", "ntlmrelayx", "smb relay", "responder",
-    "llmnr", "nbt-ns", "mdns poisoning",
-})
-_PTH_KW: frozenset[str] = frozenset({
-    "pass-the-hash", "pass the hash", "pth", "psexec",
-    "wmiexec", "smbexec", "atexec", "impacket",
-    "overpass-the-hash", "opth",
-})
-_KERBEROAST_KW: frozenset[str] = frozenset({
-    "kerberoast", "kerberos tgs", "spn", "rc4 ticket",
-    "hashcat 13100", "tgs-rep", "service ticket",
-})
-_HASH_INJ_KW: frozenset[str] = frozenset({
-    "token impersonation", "hash injection", "lsa secrets",
-    "sekurlsa", "mimikatz logonpasswords",
-})
+_NTLM_RELAY_KW: frozenset[str] = frozenset(
+    {
+        "ntlm relay",
+        "ntlmrelayx",
+        "smb relay",
+        "responder",
+        "llmnr",
+        "nbt-ns",
+        "mdns poisoning",
+    }
+)
+_PTH_KW: frozenset[str] = frozenset(
+    {
+        "pass-the-hash",
+        "pass the hash",
+        "pth",
+        "psexec",
+        "wmiexec",
+        "smbexec",
+        "atexec",
+        "impacket",
+        "overpass-the-hash",
+        "opth",
+    }
+)
+_KERBEROAST_KW: frozenset[str] = frozenset(
+    {
+        "kerberoast",
+        "kerberos tgs",
+        "spn",
+        "rc4 ticket",
+        "hashcat 13100",
+        "tgs-rep",
+        "service ticket",
+    }
+)
+_HASH_INJ_KW: frozenset[str] = frozenset(
+    {
+        "token impersonation",
+        "hash injection",
+        "lsa secrets",
+        "sekurlsa",
+        "mimikatz logonpasswords",
+    }
+)
 
 # SMB/WMI/RPC ports that elevate NTLM attack likelihood
 _NTLM_PORTS: frozenset[int] = frozenset({139, 445, 135, 593})
 
 
 def classify_hash_attack_from_exploit(
-    exploit:  sqlite3.Row,
-    port:     Optional[int] = None,
+    exploit: sqlite3.Row,
+    port: Optional[int] = None,
 ) -> Optional[str]:
     """
     Classify an exploit row as a hash-based attack type, or return None.
@@ -72,15 +102,13 @@ def classify_hash_attack_from_exploit(
     Priority: NTLM_RELAY > PASS_THE_HASH > KERBEROAST > HASH_INJECTION
     """
     description = exploit["description"] if "description" in exploit.keys() else ""
-    title_desc = (
-        (exploit["title"] or "") + " " + (description or "")
-    ).lower()
+    title_desc = ((exploit["title"] or "") + " " + (description or "")).lower()
 
     def _matches(kws: frozenset[str]) -> bool:
         return any(kw in title_desc for kw in kws)
 
     port_is_ntlm = port is not None and port in _NTLM_PORTS
-    is_windows   = "windows" in (exploit["platform"] or "").lower()
+    is_windows = "windows" in (exploit["platform"] or "").lower()
 
     if _matches(_NTLM_RELAY_KW) or (port_is_ntlm and is_windows):
         return HashAttackClass.NTLM_RELAY.value
@@ -95,14 +123,15 @@ def classify_hash_attack_from_exploit(
 
 # ── Data models ────────────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class HashCredential:
-    credential_id:     int
-    email:             str
-    hash_type:         str                    # 'NTLM' | 'MD5' | 'SHA1' | 'KRB5TGS' ...
-    password_hash:     str                    # raw hash — in-memory only; never log
-    hash_plaintext:    Optional[str] = None   # populated if cracked
-    hash_crack_source: Optional[str] = None   # 'hashbuster_online' | 'hashcat_offline'
+    credential_id: int
+    email: str
+    hash_type: str  # 'NTLM' | 'MD5' | 'SHA1' | 'KRB5TGS' ...
+    password_hash: str  # raw hash — in-memory only; never log
+    hash_plaintext: Optional[str] = None  # populated if cracked
+    hash_crack_source: Optional[str] = None  # 'hashbuster_online' | 'hashcat_offline'
 
 
 @dataclass
@@ -111,6 +140,7 @@ class HashCredentialSet:
     Aggregated hash credential context for a single host.
     Consumed by ExploitCorrelator._score() as an optional bonus signal.
     """
+
     credentials: list[HashCredential] = field(default_factory=list)
 
     @property
@@ -123,9 +153,7 @@ class HashCredentialSet:
 
     @property
     def crack_pending(self) -> bool:
-        return any(
-            c.hash_plaintext is None for c in self.credentials
-        )
+        return any(c.hash_plaintext is None for c in self.credentials)
 
     @property
     def all_hash_ids(self) -> list[int]:
@@ -142,12 +170,13 @@ class HashCredentialSet:
     def summary(self) -> dict:
         return {
             "total_hashes": len(self.credentials),
-            "cracked":      len(self.cracked_ids),
-            "pending":      len(self.pending_ids),
+            "cracked": len(self.cracked_ids),
+            "pending": len(self.pending_ids),
         }
 
 
 # ── Bridge ─────────────────────────────────────────────────────────────────────
+
 
 class HashCredentialBridge:
     """
@@ -158,11 +187,9 @@ class HashCredentialBridge:
     """
 
     def __init__(self, db_path: Path, engagement_id: int) -> None:
-        self._db_path       = db_path
+        self._db_path = db_path
         self._engagement_id = engagement_id
-        self._con           = direct_connect(
-            f"file:{db_path}?mode=ro", uri=True
-        )
+        self._con = direct_connect(f"file:{db_path}?mode=ro", uri=True)
         self._con.row_factory = sqlite3.Row
 
     # ── Public API ─────────────────────────────────────────────────────────────
@@ -192,14 +219,16 @@ class HashCredentialBridge:
         creds = []
         for row in rows:
             plaintext = self._safe_decrypt(row["hash_plaintext"])
-            creds.append(HashCredential(
-                credential_id     = row["id"],
-                email             = row["email"] or "",
-                hash_type         = row["hash_type"] or "UNKNOWN",
-                password_hash     = row["password_hash"],
-                hash_plaintext    = plaintext,
-                hash_crack_source = row["hash_crack_source"],
-            ))
+            creds.append(
+                HashCredential(
+                    credential_id=row["id"],
+                    email=row["email"] or "",
+                    hash_type=row["hash_type"] or "UNKNOWN",
+                    password_hash=row["password_hash"],
+                    hash_plaintext=plaintext,
+                    hash_crack_source=row["hash_crack_source"],
+                )
+            )
 
         return HashCredentialSet(credentials=creds)
 
@@ -221,8 +250,8 @@ class HashCredentialBridge:
             return {"total_hashes": 0, "cracked": 0, "pending": 0}
         return {
             "total_hashes": row["total_hashes"] or 0,
-            "cracked":      row["cracked"]       or 0,
-            "pending":      row["pending"]        or 0,
+            "cracked": row["cracked"] or 0,
+            "pending": row["pending"] or 0,
         }
 
     def get_pending_for_crack(self) -> list[HashCredential]:
@@ -245,6 +274,7 @@ class HashCredentialBridge:
             return None
         try:
             from forge.opsec.crypto import decrypt_string
+
             return decrypt_string(ciphertext)
         except Exception:
             return None

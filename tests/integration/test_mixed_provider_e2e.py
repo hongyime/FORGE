@@ -60,8 +60,8 @@ from forge.utils.intel.identity_normalization import (
 
 def _synth_msi(path: Path) -> None:
     header = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 16
-    header += struct.pack("<HH", 0x003e, 0x0003)
-    header += struct.pack("<H", 0xfffe)
+    header += struct.pack("<HH", 0x003E, 0x0003)
+    header += struct.pack("<H", 0xFFFE)
     header += struct.pack("<H", 9)
     header += struct.pack("<H", 6)
     header += b"\x00" * 6
@@ -185,7 +185,9 @@ class _MixedProviderClient:
         if "discord.com" in url:
             return _mock_response(200, {"id": "1", "username": "bot"})
         if "github.com" in url:
-            return _mock_response(200, {"id": 42, "slug": "test-app", "owner": {"login": "forge-org"}})
+            return _mock_response(
+                200, {"id": 42, "slug": "test-app", "owner": {"login": "forge-org"}}
+            )
         if "core.windows.net" in url:
             resp = MagicMock()
             resp.status_code = 200
@@ -196,7 +198,9 @@ class _MixedProviderClient:
     def post(self, url: str, **kwargs) -> MagicMock:  # noqa: ANN003
         self.call_log.append(("POST", url))
         if "slack.com" in url:
-            return _mock_response(200, {"ok": True, "team_id": "T1", "user_id": "U1", "team": "acme"})
+            return _mock_response(
+                200, {"ok": True, "team_id": "T1", "user_id": "U1", "team": "acme"}
+            )
         return _mock_response(404)
 
 
@@ -233,7 +237,12 @@ class TestMixedProviderE2E:
         # Verify all kinds represented in output
         kinds_seen = {r.kind for r in results if r is not None}
         assert kinds_seen == {
-            "email", "username", "phone", "company", "person_name", "social_profile_url",
+            "email",
+            "username",
+            "phone",
+            "company",
+            "person_name",
+            "social_profile_url",
         }
         # Twitter normalizes to x.com
         assert any("x.com" in c for c in canonicals)
@@ -259,7 +268,10 @@ class TestMixedProviderE2E:
                 "DefaultEndpointsProtocol=https;AccountName=myacct;"
                 "AccountKey=dGVzdEtleUJhc2U2NEVuY29kZWQxMjM0NTY3ODkwPT" + "0=;"
             ),
-            "aws_access_key": "AKIA" + "IOSFODNN7EXAMPLE" + " " + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "aws_access_key": "AKIA"
+            + "IOSFODNN7EXAMPLE"
+            + " "
+            + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
         }
         results = {}
         for provider, raw in raw_texts.items():
@@ -277,8 +289,14 @@ class TestMixedProviderE2E:
 
         # Slack, Stripe, SendGrid, Mailchimp, Discord, Azure return canonical shapes
         # in our mock — should be VERIFIED.
-        for provider in ("slack", "stripe", "sendgrid", "mailchimp", "discord",
-                          "azure_storage_conn_str"):
+        for provider in (
+            "slack",
+            "stripe",
+            "sendgrid",
+            "mailchimp",
+            "discord",
+            "azure_storage_conn_str",
+        ):
             assert results[provider].verified is True, (
                 f"{provider} should be VERIFIED given canonical mock payload"
             )
@@ -353,4 +371,5 @@ class TestMixedProviderE2E:
         assert len(VALIDATORS) == 9
         assert len(NORMALIZERS) == 6
         from forge.phase4.artifact_parsers import PARSERS
+
         assert len(PARSERS) == 9

@@ -39,11 +39,14 @@ def test_web_manifest_urls_resolve_source_gated_relative_fields() -> None:
         "https://portal.acme.example/icons/app.png",
         "https://portal.acme.example/screenshots/desktop.png",
     ]
-    assert web_manifest_urls(
-        payload,
-        source_label="json",
-        base_url="https://portal.acme.example/generic.json",
-    ) == []
+    assert (
+        web_manifest_urls(
+            payload,
+            source_label="json",
+            base_url="https://portal.acme.example/generic.json",
+        )
+        == []
+    )
 
 
 def test_web_manifest_related_applications_become_passive_inventory(tmp_path: Path) -> None:

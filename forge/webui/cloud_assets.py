@@ -16,6 +16,7 @@ from forge.utils.cloud_exposure_gate import (
     normalize_cloud_exposure_asset_type,
 )
 
+
 def _cloud_asset_row(row: sqlite3.Row) -> dict[str, Any]:
     stored_type = str(row["asset_type"] or "").strip().lower()
     asset_type = normalize_cloud_exposure_asset_type(stored_type)
@@ -79,7 +80,9 @@ def cloud_assets_payload(
         else "ca.identifier AS display_identifier"
     )
     source_expr = "ca.source" if "source" in cloud_columns else "NULL AS source"
-    metadata_expr = "ca.metadata_json" if "metadata_json" in cloud_columns else "'{}' AS metadata_json"
+    metadata_expr = (
+        "ca.metadata_json" if "metadata_json" in cloud_columns else "'{}' AS metadata_json"
+    )
     discovered_expr = (
         "CAST(ca.discovered_at AS TEXT) AS discovered_at"
         if "discovered_at" in cloud_columns

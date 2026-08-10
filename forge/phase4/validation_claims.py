@@ -1,4 +1,5 @@
 """Short-lived SQLite claims for cloud validation sweep workers."""
+
 from __future__ import annotations
 
 import os

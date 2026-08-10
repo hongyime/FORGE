@@ -19,7 +19,11 @@ def ads_txt_publisher_account_assets(
 ) -> list[tuple[str, str, str]]:
     """Extract passive ad seller account inventory from ads.txt style files."""
 
-    source = "artifact_app_ads_txt_publisher_account" if app_ads else "artifact_ads_txt_publisher_account"
+    source = (
+        "artifact_app_ads_txt_publisher_account"
+        if app_ads
+        else "artifact_ads_txt_publisher_account"
+    )
     assets: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for line in str(text or "").splitlines():
@@ -44,11 +48,7 @@ def _publisher_account_from_line(line: str) -> str:
     ad_system = _normalize_ad_system_domain(parts[0])
     publisher_account_id = _normalize_publisher_account_id(parts[1])
     relationship = parts[2].lower()
-    if (
-        not ad_system
-        or not publisher_account_id
-        or relationship not in _AUTHORIZED_RELATIONSHIPS
-    ):
+    if not ad_system or not publisher_account_id or relationship not in _AUTHORIZED_RELATIONSHIPS:
         return ""
     return f"{ad_system}/{publisher_account_id}"
 

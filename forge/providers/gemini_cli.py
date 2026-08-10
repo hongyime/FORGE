@@ -69,8 +69,8 @@ class GeminiCliProvider(SubprocessProvider):
         """
         return {
             "TERM": "xterm-256color",
-            "FORCE_COLOR": None,   # unset
-            "NO_COLOR": "1",        # gemini honours this once FORCE_COLOR is gone
+            "FORCE_COLOR": None,  # unset
+            "NO_COLOR": "1",  # gemini honours this once FORCE_COLOR is gone
         }
 
     def _format_prompt(self, request):  # type: ignore[override]

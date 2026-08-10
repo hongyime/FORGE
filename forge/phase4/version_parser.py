@@ -24,6 +24,7 @@ Supported banner formats:
   - SMB:                SMB 3.1.1, dialect 0x0311
   - Generic X/Y.Z.W:   product/X.Y.Z
 """
+
 from __future__ import annotations
 
 import re
@@ -33,14 +34,15 @@ from typing import Optional
 
 # ── Version token ──────────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class ParsedVersion:
-    product:    str
-    major:      int
-    minor:      int
-    patch:      int
+    product: str
+    major: int
+    minor: int
+    patch: int
     prerelease: Optional[str] = None
-    raw:        str           = ""
+    raw: str = ""
 
     def as_tuple(self) -> tuple[int, int, int]:
         return (self.major, self.minor, self.patch)
@@ -63,7 +65,7 @@ class ParsedVersion:
 # ── Compiled patterns ──────────────────────────────────────────────────────────
 
 # Generic  product/X.Y.Z  or  product X.Y.Z
-_SLASH_VER  = re.compile(
+_SLASH_VER = re.compile(
     r"(?P<product>[A-Za-z][A-Za-z0-9_\-\.]+)"
     r"[/ ]"
     r"(?P<major>\d+)\.(?P<minor>\d+)(?:\.(?P<patch>\d+))?"
@@ -103,6 +105,7 @@ _MYSQL = re.compile(
 
 
 # ── Parser ─────────────────────────────────────────────────────────────────────
+
 
 class VersionParser:
     """
@@ -145,11 +148,11 @@ class VersionParser:
         if not m:
             return None
         return ParsedVersion(
-            product    = "openssh",
-            major      = int(m.group("major")),
-            minor      = int(m.group("minor")),
-            patch      = int(m.group("patch") or 0),
-            raw        = banner,
+            product="openssh",
+            major=int(m.group("major")),
+            minor=int(m.group("minor")),
+            patch=int(m.group("patch") or 0),
+            raw=banner,
         )
 
     def _try_smb(self, banner: str) -> Optional[ParsedVersion]:
@@ -157,11 +160,11 @@ class VersionParser:
         if not m:
             return None
         return ParsedVersion(
-            product = "smb",
-            major   = int(m.group("major")),
-            minor   = int(m.group("minor")),
-            patch   = int(m.group("patch") or 0),
-            raw     = banner,
+            product="smb",
+            major=int(m.group("major")),
+            minor=int(m.group("minor")),
+            patch=int(m.group("patch") or 0),
+            raw=banner,
         )
 
     def _try_mariadb(self, banner: str) -> Optional[ParsedVersion]:
@@ -169,11 +172,11 @@ class VersionParser:
         if not m:
             return None
         return ParsedVersion(
-            product = "mariadb",
-            major   = int(m.group("major")),
-            minor   = int(m.group("minor")),
-            patch   = int(m.group("patch")),
-            raw     = banner,
+            product="mariadb",
+            major=int(m.group("major")),
+            minor=int(m.group("minor")),
+            patch=int(m.group("patch")),
+            raw=banner,
         )
 
     def _try_mysql(self, banner: str) -> Optional[ParsedVersion]:
@@ -181,11 +184,11 @@ class VersionParser:
         if not m:
             return None
         return ParsedVersion(
-            product = "mysql",
-            major   = int(m.group("major")),
-            minor   = int(m.group("minor")),
-            patch   = int(m.group("patch")),
-            raw     = banner,
+            product="mysql",
+            major=int(m.group("major")),
+            minor=int(m.group("minor")),
+            patch=int(m.group("patch")),
+            raw=banner,
         )
 
     def _try_slash_product(self, banner: str) -> Optional[ParsedVersion]:
@@ -193,12 +196,12 @@ class VersionParser:
         if not m:
             return None
         return ParsedVersion(
-            product    = m.group("product"),
-            major      = int(m.group("major")),
-            minor      = int(m.group("minor")),
-            patch      = int(m.group("patch") or 0),
-            prerelease = m.group("pre"),
-            raw        = banner,
+            product=m.group("product"),
+            major=int(m.group("major")),
+            minor=int(m.group("minor")),
+            patch=int(m.group("patch") or 0),
+            prerelease=m.group("pre"),
+            raw=banner,
         )
 
     def _try_semver(self, banner: str) -> Optional[ParsedVersion]:
@@ -209,27 +212,28 @@ class VersionParser:
         prefix = banner[: m.start()].strip().rstrip("/- ")
         product = re.sub(r"\s+", "_", prefix.split()[-1]) if prefix else "unknown"
         return ParsedVersion(
-            product    = product,
-            major      = int(m.group("major")),
-            minor      = int(m.group("minor")),
-            patch      = int(m.group("patch")),
-            prerelease = m.group("pre"),
-            raw        = banner,
+            product=product,
+            major=int(m.group("major")),
+            minor=int(m.group("minor")),
+            patch=int(m.group("patch")),
+            prerelease=m.group("pre"),
+            raw=banner,
         )
 
     # ── Range matching ─────────────────────────────────────────────────────────
 
     @staticmethod
     def in_range(
-        pv:       ParsedVersion,
-        min_ver:  Optional[str] = None,
-        max_ver:  Optional[str] = None,
+        pv: ParsedVersion,
+        min_ver: Optional[str] = None,
+        max_ver: Optional[str] = None,
     ) -> bool:
         """
         Return True if pv falls within [min_ver, max_ver] (inclusive).
         Accepts dotted version strings (e.g. "2.4.0").
         Either bound may be None (open-ended).
         """
+
         def _t(s: str) -> tuple[int, ...]:
             parts = s.split(".")
             return tuple(int(p) for p in parts if p.isdigit())

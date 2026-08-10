@@ -296,8 +296,14 @@ def test_artifact_queue_processor_extracts_connection_client_configs(
         )
 
     assert _classify_remote_artifact_url("https://downloads.acme.example/WinSCP.ini") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/SecureCRT/Sessions/prod.ini") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/FileZilla/sitemanager.xml") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/SecureCRT/Sessions/prod.ini")
+        == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/FileZilla/sitemanager.xml")
+        == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/prod.remmina") == "config"
     assert _artifact_format_label(winscp_path) == "winscp-config"
     assert _artifact_format_label(putty_path) == "putty-config"
@@ -344,9 +350,7 @@ def test_artifact_queue_processor_extracts_connection_client_configs(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "winscp-owner@acme.example" in emails
         assert "putty-owner@acme.example" in emails

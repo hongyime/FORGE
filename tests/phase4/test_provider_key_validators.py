@@ -114,11 +114,7 @@ class TestDiscordParse:
 
 
 class TestGitHubAppParse:
-    _PEM = (
-        "-----BEGIN RSA PRIVATE KEY-----\n"
-        "MIIEowIBAAKCAQEA1234\n"
-        "-----END RSA PRIVATE KEY-----"
-    )
+    _PEM = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA1234\n-----END RSA PRIVATE KEY-----"
 
     def test_matches_pem(self) -> None:
         v = GitHubAppValidator()
@@ -211,11 +207,14 @@ class TestStrictPayloadValidation:
             material={"secret_key": "sk_live_x", "mode": "live"},
         )
         client = MagicMock()
-        client.get.return_value = _mock_response(200, {
-            "object": "account",
-            "id": "acct_1ABC",
-            "country": "SG",
-        })
+        client.get.return_value = _mock_response(
+            200,
+            {
+                "object": "account",
+                "id": "acct_1ABC",
+                "country": "SG",
+            },
+        )
         result = v.probe(cred, client=client)
         assert result.verified
         assert result.metadata["account_id"] == "acct_1ABC"
@@ -223,7 +222,8 @@ class TestStrictPayloadValidation:
     def test_slack_rejects_ok_false(self) -> None:
         v = SlackValidator()
         cred = ProviderCredential(
-            provider="slack", identifier="xoxb...abcd",
+            provider="slack",
+            identifier="xoxb...abcd",
             material={"token": "xoxb-1-abc"},
         )
         client = MagicMock()
@@ -235,16 +235,20 @@ class TestStrictPayloadValidation:
     def test_slack_accepts_ok_true(self) -> None:
         v = SlackValidator()
         cred = ProviderCredential(
-            provider="slack", identifier="xoxb...wxyz",
+            provider="slack",
+            identifier="xoxb...wxyz",
             material={"token": "xoxb-1-abc"},
         )
         client = MagicMock()
-        client.post.return_value = _mock_response(200, {
-            "ok": True,
-            "team_id": "T1",
-            "user_id": "U1",
-            "team": "example",
-        })
+        client.post.return_value = _mock_response(
+            200,
+            {
+                "ok": True,
+                "team_id": "T1",
+                "user_id": "U1",
+                "team": "example",
+            },
+        )
         result = v.probe(cred, client=client)
         assert result.verified
         assert result.metadata["team_id"] == "T1"
@@ -252,9 +256,12 @@ class TestStrictPayloadValidation:
     def test_twilio_rejects_missing_status(self) -> None:
         v = TwilioValidator()
         cred = ProviderCredential(
-            provider="twilio", identifier="AC01...cdef",
-            material={"account_sid": "AC1234567890abcdef1234567890abcdef",
-                       "auth_token": "1234567890abcdef1234567890abcdef"},
+            provider="twilio",
+            identifier="AC01...cdef",
+            material={
+                "account_sid": "AC1234567890abcdef1234567890abcdef",
+                "auth_token": "1234567890abcdef1234567890abcdef",
+            },
         )
         client = MagicMock()
         client.get.return_value = _mock_response(200, {"sid": "AC1"})
@@ -264,7 +271,8 @@ class TestStrictPayloadValidation:
     def test_discord_ratelimit_marked_unverified(self) -> None:
         v = DiscordValidator()
         cred = ProviderCredential(
-            provider="discord", identifier="M...",
+            provider="discord",
+            identifier="M...",
             material={"token": "MTk0..."},
         )
         client = MagicMock()
@@ -276,7 +284,8 @@ class TestStrictPayloadValidation:
     def test_sendgrid_rejects_missing_shape(self) -> None:
         v = SendGridValidator()
         cred = ProviderCredential(
-            provider="sendgrid", identifier="SG....",
+            provider="sendgrid",
+            identifier="SG....",
             material={"api_key": "SG.foo.bar"},
         )
         client = MagicMock()
@@ -292,8 +301,15 @@ class TestTryValidateFallthrough:
     def test_registry_has_9_providers(self) -> None:
         assert len(VALIDATORS) == 9
         expected = {
-            "twilio", "sendgrid", "slack", "stripe", "mailchimp",
-            "discord", "github_app", "azure_storage_conn_str", "aws_access_key",
+            "twilio",
+            "sendgrid",
+            "slack",
+            "stripe",
+            "mailchimp",
+            "discord",
+            "github_app",
+            "azure_storage_conn_str",
+            "aws_access_key",
         }
         assert set(VALIDATORS.keys()) == expected
 

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -127,10 +126,7 @@ class KubernetesCollector(BaseCollector):
                 (role.metadata.namespace, role.metadata.name): role
                 for role in rbac_v1.list_role_for_all_namespaces().items
             }
-            cluster_roles = {
-                role.metadata.name: role
-                for role in rbac_v1.list_cluster_role().items
-            }
+            cluster_roles = {role.metadata.name: role for role in rbac_v1.list_cluster_role().items}
             service_account_permissions: dict[str, set[str]] = {}
 
             for binding in rbac_v1.list_role_binding_for_all_namespaces().items:
@@ -138,7 +134,9 @@ class KubernetesCollector(BaseCollector):
                     if subject.kind != "ServiceAccount":
                         continue
                     service_account_name = f"{binding.metadata.namespace}/{subject.name}"
-                    permissions = service_account_permissions.setdefault(service_account_name, set())
+                    permissions = service_account_permissions.setdefault(
+                        service_account_name, set()
+                    )
                     role = roles.get((binding.metadata.namespace, binding.role_ref.name))
                     if role is None:
                         continue
@@ -149,7 +147,9 @@ class KubernetesCollector(BaseCollector):
                     if subject.kind != "ServiceAccount":
                         continue
                     service_account_name = f"{subject.namespace}/{subject.name}"
-                    permissions = service_account_permissions.setdefault(service_account_name, set())
+                    permissions = service_account_permissions.setdefault(
+                        service_account_name, set()
+                    )
                     role = cluster_roles.get(binding.role_ref.name)
                     if role is None:
                         continue
@@ -168,7 +168,9 @@ class KubernetesCollector(BaseCollector):
             secret_count_by_namespace: dict[str, int] = {}
             for secret in core_v1.list_secret_for_all_namespaces().items:
                 namespace = secret.metadata.namespace or "default"
-                secret_count_by_namespace[namespace] = secret_count_by_namespace.get(namespace, 0) + 1
+                secret_count_by_namespace[namespace] = (
+                    secret_count_by_namespace.get(namespace, 0) + 1
+                )
 
             for service_account_name, permissions in sorted(service_account_permissions.items()):
                 risky_permissions = sorted(_RISKY_PERMISSIONS.intersection(permissions))
@@ -209,9 +211,7 @@ class KubernetesCollector(BaseCollector):
         workflows: list[str] = []
         for target in targets:
             namespace, _, pod_name = target.partition("/")
-            workflows.append(
-                f"kubectl exec -n {namespace} {pod_name} -- /bin/sh"
-            )
+            workflows.append(f"kubectl exec -n {namespace} {pod_name} -- /bin/sh")
         return workflows
 
     def _discover_inventory(self) -> Generator[ArtifactMetadata, None, None]:

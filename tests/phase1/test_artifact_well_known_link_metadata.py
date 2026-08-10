@@ -20,7 +20,10 @@ def test_well_known_json_link_relative_hrefs_become_recursive_url_seeds(tmp_path
             {
                 "links": [
                     {"rel": "http://nodeinfo.diaspora.software/ns/schema/2.1", "href": "./2.1"},
-                    {"rel": "http://nodeinfo.diaspora.software/ns/schema/2.0", "href": "../nodeinfo/2.0"},
+                    {
+                        "rel": "http://nodeinfo.diaspora.software/ns/schema/2.0",
+                        "href": "../nodeinfo/2.0",
+                    },
                     {"rel": "template", "href": "https://social.acme.example/nodeinfo/{version}"},
                 ]
             }

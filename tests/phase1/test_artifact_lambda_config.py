@@ -16,7 +16,9 @@ def _lambda_config() -> dict[str, object]:
         "FunctionUrl": "https://abcde.lambda-url.us-east-1.on.aws/",
         "Code": {"ImageUri": "123456789012.dkr.ecr.us-east-1.amazonaws.com/portal:2026-07-19"},
         "Layers": [{"Arn": "arn:aws:lambda:us-east-1:123456789012:layer:shared:3"}],
-        "FileSystemConfigs": [{"Arn": "arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-123"}],
+        "FileSystemConfigs": [
+            {"Arn": "arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-123"}
+        ],
         "DeadLetterConfig": {"TargetArn": "arn:aws:sqs:us-east-1:123456789012:portal-dlq"},
         "Environment": {
             "Variables": {
@@ -31,8 +33,14 @@ def _lambda_config() -> dict[str, object]:
 
 
 def test_lambda_config_labels_are_source_aware() -> None:
-    assert lambda_config_artifact_label("lambda-function-configuration.json") == "lambda-function-configuration"
-    assert lambda_config_artifact_label("function-configuration.yaml") == "lambda-function-configuration"
+    assert (
+        lambda_config_artifact_label("lambda-function-configuration.json")
+        == "lambda-function-configuration"
+    )
+    assert (
+        lambda_config_artifact_label("function-configuration.yaml")
+        == "lambda-function-configuration"
+    )
     assert lambda_config_artifact_label("lambda-functions.json") == "lambda-function-configuration"
     assert lambda_config_artifact_label("function-url-config.yml") == "lambda-function-url-config"
     assert lambda_config_artifact_label("cache.lambda-config") == "lambda-function-configuration"
@@ -65,7 +73,9 @@ def test_lambda_config_candidates_support_wrapped_exports_and_skip_templates() -
     assert lambda_config_candidates({"Functions": [_lambda_config()]})[:1] == [
         "aws-lambda-function://arn:aws:lambda:us-east-1:123456789012:function:portal"
     ]
-    assert lambda_config_candidates({"FunctionName": "portal", "FunctionUrl": "https://lambda.example/"}) == [
+    assert lambda_config_candidates(
+        {"FunctionName": "portal", "FunctionUrl": "https://lambda.example/"}
+    ) == [
         "aws-lambda-function://portal",
         "https://lambda.example/",
     ]

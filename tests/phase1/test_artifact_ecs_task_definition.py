@@ -49,7 +49,9 @@ def test_ecs_task_definition_labels_are_source_aware() -> None:
     assert ecs_task_definition_artifact_label("ecs-task-definition.yaml") == "ecs-task-definition"
     assert ecs_task_definition_artifact_label("task-definition.json") == "ecs-task-definition"
     assert ecs_task_definition_artifact_label("task-definition.yml") == "ecs-task-definition"
-    assert ecs_task_definition_artifact_label("service.task-definition.json") == "ecs-task-definition"
+    assert (
+        ecs_task_definition_artifact_label("service.task-definition.json") == "ecs-task-definition"
+    )
     assert ecs_task_definition_artifact_label("cache.ecs-task-definition") == "ecs-task-definition"
     assert ecs_task_definition_artifact_label("definition.json") == ""
 
@@ -74,5 +76,7 @@ def test_ecs_task_definition_candidates_support_wrapped_exports_and_skip_templat
         "aws-ecs-task-definition://arn:aws:ecs:us-east-1:123456789012:task-definition/portal:7",
         "https://123456789012.dkr.ecr.us-east-1.amazonaws.com/portal",
     ]
-    assert ecs_task_definition_candidates({"family": "{{ family }}", "containerDefinitions": []}) == []
+    assert (
+        ecs_task_definition_candidates({"family": "{{ family }}", "containerDefinitions": []}) == []
+    )
     assert ecs_task_definition_candidates({"family": "portal"}) == []

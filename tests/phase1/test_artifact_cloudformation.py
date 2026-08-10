@@ -55,7 +55,9 @@ Outputs:
     Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
 """.strip()
 
-    assert cloudformation_template_artifact_label("cloudformation/template.yaml") == "cloudformation"
+    assert (
+        cloudformation_template_artifact_label("cloudformation/template.yaml") == "cloudformation"
+    )
     assert cloudformation_template_artifact_label("sam/template.yaml") == "sam-template"
     assert cloudformation_template_candidates(payload, source_hint="notes/template.yaml") == []
     assert cloudformation_template_candidates(

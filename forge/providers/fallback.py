@@ -103,8 +103,7 @@ class FallbackChainProvider:
     async def structured_output(
         self, request: CompletionRequest, schema: dict[str, object]
     ) -> dict[str, object]:
-        return cast(dict[str, object],
-                    await self._dispatch("structured_output", request, schema))
+        return cast(dict[str, object], await self._dispatch("structured_output", request, schema))
 
     async def embed(self, text: str) -> list[float]:
         return cast(list[float], await self._dispatch("embed", text))
@@ -116,9 +115,7 @@ class FallbackChainProvider:
             if state.cooldown_until > now:
                 continue
             try:
-                ok = await asyncio.wait_for(
-                    state.provider.health_check(), timeout=self._timeout
-                )
+                ok = await asyncio.wait_for(state.provider.health_check(), timeout=self._timeout)
                 if ok:
                     return True
             except Exception:  # noqa: BLE001 - any error means unhealthy
@@ -140,9 +137,7 @@ class FallbackChainProvider:
 
         for state in self._states:
             if state.cooldown_until > now:
-                attempts.append(
-                    (state.name, f"in cooldown for {state.cooldown_until - now:.1f}s")
-                )
+                attempts.append((state.name, f"in cooldown for {state.cooldown_until - now:.1f}s"))
                 continue
 
             method = getattr(state.provider, method_name)

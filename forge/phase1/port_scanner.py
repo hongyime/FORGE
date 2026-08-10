@@ -107,7 +107,9 @@ def _is_synthetic_host_row(ip: str, host_context_json: str | None = None) -> boo
     return isinstance(context, dict) and bool(context.get("synthetic_ip"))
 
 
-def _host_row_is_authorized_by_scope(ip: str, hostname: str | None, scope: Sequence[str] | None) -> bool:
+def _host_row_is_authorized_by_scope(
+    ip: str, hostname: str | None, scope: Sequence[str] | None
+) -> bool:
     if scope is None:
         return True
     scoped_values = [str(item) for item in scope if str(item or "").strip()]
@@ -286,14 +288,10 @@ async def _scan_host_async(
     port_delay: float | None = None,
 ) -> list[int]:
     concurrency = (
-        _port_scan_port_concurrency()
-        if max_concurrency is None
-        else max(1, int(max_concurrency))
+        _port_scan_port_concurrency() if max_concurrency is None else max(1, int(max_concurrency))
     )
     delay_seconds = (
-        _port_scan_port_delay_seconds()
-        if port_delay is None
-        else max(0.0, float(port_delay))
+        _port_scan_port_delay_seconds() if port_delay is None else max(0.0, float(port_delay))
     )
     semaphore = asyncio.Semaphore(min(concurrency, max(1, len(ports))))
 
@@ -345,9 +343,7 @@ def _scan_host_ports_sync(
     def _run_in_thread() -> list[int]:
         return asyncio.run(_scan_host_async(ip, list(ports), timeout))
 
-    with _cf.ThreadPoolExecutor(
-        max_workers=1, thread_name_prefix="port-scan-sync-bridge"
-    ) as pool:
+    with _cf.ThreadPoolExecutor(max_workers=1, thread_name_prefix="port-scan-sync-bridge") as pool:
         return pool.submit(_run_in_thread).result()
 
 

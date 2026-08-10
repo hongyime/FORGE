@@ -494,7 +494,12 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert items[0]["run_summary"]["tool_execution_allowed"] is True
         assert items[0]["run_summary"]["destructive_actions_allowed"] is False
         assert items[0]["run_summary"]["post_exploitation_allowed"] is False
-        assert items[0]["seeds"] == ["acme.example", "+15551234567", "security@acme.example", "mail.acme.example"]
+        assert items[0]["seeds"] == [
+            "acme.example",
+            "+15551234567",
+            "security@acme.example",
+            "mail.acme.example",
+        ]
 
         detail_resp = client.get("/api/engagements/engagement-1001-acme-example", headers=headers)
         assert detail_resp.status_code == 200, detail_resp.text
@@ -550,9 +555,9 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
             "/api/engagements/engagement-1001-acme-example/artifacts/"
             "engagement_1001_report_20260709T014412.html"
         ) in {artifact["href"] for artifact in detail["artifacts"]}
-        assert (
-            "/api/engagements/engagement-1001-acme-example/artifacts/"
-        ) + audit_artifact["name"] in {artifact["href"] for artifact in detail["artifacts"]}
+        assert ("/api/engagements/engagement-1001-acme-example/artifacts/") + audit_artifact[
+            "name"
+        ] in {artifact["href"] for artifact in detail["artifacts"]}
         assert detail["sections"]["hosts"][0]["Host"] == "app.acme.example"
         assert detail["sections"]["cloud_validation_results"][0]["Asset"] == "acme-firebase-prod"
         assert detail["sections"]["email_intelligence"][0]["Source"] == "emailrep"
@@ -562,7 +567,9 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
             "security@acme.example",
             "+15551234567",
         }
-        domain_seed = next(row for row in detail["sections"]["engagement_seeds"] if row["Seed"] == "acme.example")
+        domain_seed = next(
+            row for row in detail["sections"]["engagement_seeds"] if row["Seed"] == "acme.example"
+        )
         assert domain_seed["Band"] == "confirmed"
         assert domain_seed["Relations"] == "2"
         assert detail["sections"]["seed_relations"][0]["Relation"] == "related_asset"
@@ -572,7 +579,10 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert detail["sections"]["engagement_runs"][0]["Manifest"] == list_manifest["short_hash"]
         assert detail["sections"]["engagement_runs"][0]["Manifest OK"] == "yes"
         assert detail["sections"]["engagement_runs"][0]["ROE"] == "ROE-ACME-2026-07"
-        assert detail["sections"]["engagement_runs"][0]["Live"] == "probe=yes tools=yes active=no creds=no"
+        assert (
+            detail["sections"]["engagement_runs"][0]["Live"]
+            == "probe=yes tools=yes active=no creds=no"
+        )
         assert detail["sections"]["engagement_runs"][0]["Destructive"] == "no"
         assert detail["sections"]["engagement_runs"][0]["Post-Ex"] == "no"
         assert detail["counts"]["distributed_tasks"] == 1
@@ -612,7 +622,9 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         assert id_resp.status_code == 200, id_resp.text
         assert id_resp.json()["slug"] == detail["slug"]
 
-        runs_resp = client.get("/api/engagements/engagement-1001-acme-example/runs", headers=headers)
+        runs_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/runs", headers=headers
+        )
         assert runs_resp.status_code == 200, runs_resp.text
         runs = runs_resp.json()["items"]
         assert runs[0]["audit_manifest"]["verification_status"] == "verified"
@@ -623,7 +635,10 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
             headers=headers,
         )
         assert unverified_runs_resp.status_code == 200, unverified_runs_resp.text
-        assert unverified_runs_resp.json()["items"][0]["audit_manifest"]["verification_status"] == "not_checked"
+        assert (
+            unverified_runs_resp.json()["items"][0]["audit_manifest"]["verification_status"]
+            == "not_checked"
+        )
 
         artifact_resp = client.get(
             "/api/engagements/engagement-1001-acme-example/artifacts/"
@@ -660,7 +675,9 @@ def test_engagement_list_and_detail_routes(tmp_path: Path, monkeypatch) -> None:
         create_mobile_seed = client.post(
             "/api/engagements/engagement-1001-acme-example/seeds",
             headers=headers,
-            json={"seed_value": "https://downloads.acme.example/mobile/acme-client.xapk?download=1"},
+            json={
+                "seed_value": "https://downloads.acme.example/mobile/acme-client.xapk?download=1"
+            },
         )
         assert create_mobile_seed.status_code == 200, create_mobile_seed.text
         assert create_mobile_seed.json()["seed"]["seed_type"] == "apk_url"
@@ -689,8 +706,7 @@ def test_engagement_detail_surfaces_old_scope_denials_without_scope_payload(
     assert "DO-NOT-LEAK-SCOPE-SENTINEL" not in detail_payload_json
     assert '"scope_manifest":' not in detail_payload_json
     assert not any(
-        row["Action"] == "scheduled_task_scope_denied"
-        for row in detail["sections"]["audit_log"]
+        row["Action"] == "scheduled_task_scope_denied" for row in detail["sections"]["audit_log"]
     )
     scope_denials = detail["sections"]["scope_denials"]
     denial_actions = {row["Action"] for row in scope_denials}
@@ -854,13 +870,11 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         status = str(item.get("validation_status") or "UNKNOWN").upper()
         status_summary[status] = status_summary.get(status, 0) + 1
 
-    generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=reports_dir / "dashboard.html")
+    generate_dashboard(
+        data_dir=data_dir, reports_dir=reports_dir, output_path=reports_dir / "dashboard.html"
+    )
     detail_json = (
-        reports_dir
-        / "dashboard"
-        / "data"
-        / "engagements"
-        / "engagement-1001-acme-example.json"
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
     )
     dashboard_detail = json.loads(detail_json.read_text(encoding="utf-8"))
     dashboard_summary = dashboard_detail["report_summary"]
@@ -899,21 +913,26 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         assert api_summary["rendered_provider"] == dashboard_summary["rendered_provider"]
         assert api_summary["render_path"] == dashboard_summary["render_path"]
         assert api_summary["findings_checksum"] == dashboard_summary["findings_checksum"]
-        assert api_summary["cloud_validation_inventory_count"] == dashboard_summary[
-            "cloud_validation_inventory_count"
-        ]
-        assert api_summary["cloud_asset_inventory_count"] == dashboard_summary[
-            "cloud_asset_inventory_count"
-        ]
-        assert api_summary["reportable_validation_count"] == dashboard_summary[
-            "reportable_validation_count"
-        ]
-        assert api_summary["unreportable_validation_count"] == dashboard_summary[
-            "unreportable_validation_count"
-        ]
-        assert api_summary["validation_status_summary"] == dashboard_summary[
-            "validation_status_summary"
-        ]
+        assert (
+            api_summary["cloud_validation_inventory_count"]
+            == dashboard_summary["cloud_validation_inventory_count"]
+        )
+        assert (
+            api_summary["cloud_asset_inventory_count"]
+            == dashboard_summary["cloud_asset_inventory_count"]
+        )
+        assert (
+            api_summary["reportable_validation_count"]
+            == dashboard_summary["reportable_validation_count"]
+        )
+        assert (
+            api_summary["unreportable_validation_count"]
+            == dashboard_summary["unreportable_validation_count"]
+        )
+        assert (
+            api_summary["validation_status_summary"]
+            == dashboard_summary["validation_status_summary"]
+        )
 
         json_resp = client.get(
             f"/api/engagements/engagement-1001-acme-example/artifacts/{report_json_path.name}",
@@ -922,13 +941,18 @@ def test_phase6_report_lineage_agrees_across_dashboard_api_and_downloads(
         assert json_resp.status_code == 200, json_resp.text
         downloaded_json = json_resp.json()
         assert downloaded_json["findings_checksum"] == api_summary["findings_checksum"]
-        assert downloaded_json["report_lineage"]["rendered_provider"] == api_summary["rendered_provider"]
-        assert len(downloaded_json["context"]["cloud_validation_inventory"]) == api_summary[
-            "cloud_validation_inventory_count"
-        ]
-        assert len(downloaded_json["context"]["cloud_asset_inventory"]) == api_summary[
-            "cloud_asset_inventory_count"
-        ]
+        assert (
+            downloaded_json["report_lineage"]["rendered_provider"]
+            == api_summary["rendered_provider"]
+        )
+        assert (
+            len(downloaded_json["context"]["cloud_validation_inventory"])
+            == api_summary["cloud_validation_inventory_count"]
+        )
+        assert (
+            len(downloaded_json["context"]["cloud_asset_inventory"])
+            == api_summary["cloud_asset_inventory_count"]
+        )
         html_resp = client.get(
             f"/api/engagements/engagement-1001-acme-example/artifacts/{report_html_path.name}",
             headers=headers,
@@ -981,14 +1005,14 @@ def test_phase6_raw_export_lineage_agrees_across_dashboard_api_and_downloads(
     assert report_payload["report_lineage"]["rendered_provider"] == "raw_export"
     assert "lineage disk full" in report_payload["report_write_error"]
 
-    generate_dashboard(data_dir=tmp_path / ".forge_data", reports_dir=reports_dir, output_path=reports_dir / "dashboard.html")
+    generate_dashboard(
+        data_dir=tmp_path / ".forge_data",
+        reports_dir=reports_dir,
+        output_path=reports_dir / "dashboard.html",
+    )
     dashboard_detail = json.loads(
         (
-            reports_dir
-            / "dashboard"
-            / "data"
-            / "engagements"
-            / "engagement-1001-acme-example.json"
+            reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
         ).read_text(encoding="utf-8")
     )
     dashboard_summary = dashboard_detail["report_summary"]
@@ -1014,7 +1038,10 @@ def test_phase6_raw_export_lineage_agrees_across_dashboard_api_and_downloads(
             headers=headers,
         )
         assert json_resp.status_code == 200, json_resp.text
-        assert json_resp.json()["report_lineage"]["write_error"] == report_payload["report_lineage"]["write_error"]
+        assert (
+            json_resp.json()["report_lineage"]["write_error"]
+            == report_payload["report_lineage"]["write_error"]
+        )
         csv_resp = client.get(
             f"/api/engagements/engagement-1001-acme-example/artifacts/{report_csv_path.name}",
             headers=headers,
@@ -1024,7 +1051,9 @@ def test_phase6_raw_export_lineage_agrees_across_dashboard_api_and_downloads(
         assert "lineage disk full" in csv_resp.text
 
 
-def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tmp_path: Path, monkeypatch) -> None:
+def test_engagement_detail_prefers_latest_report_family_and_preserves_history(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
@@ -1082,10 +1111,19 @@ def test_engagement_detail_prefers_latest_report_family_and_preserves_history(tm
         assert detail["latest_report_family"] == "engagement_1001_report_20260709T014412"
         assert detail["latest_report_export_count"] == 4
         assert detail["has_prior_report_generations"] is True
-        assert detail["report_summary"]["artifact_name"] == "engagement_1001_report_20260709T014412.json"
+        assert (
+            detail["report_summary"]["artifact_name"]
+            == "engagement_1001_report_20260709T014412.json"
+        )
         assert detail["report_previews"][0]["name"] == "engagement_1001_report_20260709T014412.md"
-        assert detail["report_history"][0]["artifact_name"] == "engagement_1001_report_20260709T014412.json"
-        assert detail["report_history"][1]["artifact_name"] == "engagement_1001_report_20260708T230000.json"
+        assert (
+            detail["report_history"][0]["artifact_name"]
+            == "engagement_1001_report_20260709T014412.json"
+        )
+        assert (
+            detail["report_history"][1]["artifact_name"]
+            == "engagement_1001_report_20260708T230000.json"
+        )
         assert detail["report_history"][1]["fallback_reason"] == "older generation"
         assert detail["report_history"][1]["report_write_error"] == "older disk warning"
         assert detail["report_history"][1]["findings_checksum"] == "sha256:older-report-family"
@@ -1188,7 +1226,9 @@ def test_engagement_detail_api_excludes_noncanonical_graph_artifacts(
     (reports_dir / "1001_attack_graph.json").write_text(
         json.dumps(
             {
-                "nodes": [{"node_id": "canonical", "label": "canonical graph", "entity_type": "HOST"}],
+                "nodes": [
+                    {"node_id": "canonical", "label": "canonical graph", "entity_type": "HOST"}
+                ],
                 "edges": [],
             },
             sort_keys=True,
@@ -1582,15 +1622,50 @@ def test_engagement_api_prefers_snapshot_graph_over_report_artifacts(
                 "critical_path_nodes": ["HOST::json-app", "VULN::json-firebase"],
                 "critical_path_weight": 8.7,
                 "nodes": [
-                    {"node_id": "HOST::json-app", "label": "json-app.acme.example", "node_type": "HOST", "severity": "LOW"},
-                    {"node_id": "VULN::json-firebase", "label": "JSON Firebase exposure", "node_type": "VULN", "severity": "HIGH"},
-                    {"node_id": "CLOUD::json-bucket", "label": "json bucket", "node_type": "CLOUD", "severity": "MEDIUM"},
-                    {"node_id": "EXTERNAL::json-root", "label": "Acme Example", "node_type": "EXTERNAL", "severity": "INFO"},
+                    {
+                        "node_id": "HOST::json-app",
+                        "label": "json-app.acme.example",
+                        "node_type": "HOST",
+                        "severity": "LOW",
+                    },
+                    {
+                        "node_id": "VULN::json-firebase",
+                        "label": "JSON Firebase exposure",
+                        "node_type": "VULN",
+                        "severity": "HIGH",
+                    },
+                    {
+                        "node_id": "CLOUD::json-bucket",
+                        "label": "json bucket",
+                        "node_type": "CLOUD",
+                        "severity": "MEDIUM",
+                    },
+                    {
+                        "node_id": "EXTERNAL::json-root",
+                        "label": "Acme Example",
+                        "node_type": "EXTERNAL",
+                        "severity": "INFO",
+                    },
                 ],
                 "edges": [
-                    {"source_node_id": "EXTERNAL::json-root", "target_node_id": "HOST::json-app", "edge_type": "entry", "weight": 10.0},
-                    {"source_node_id": "HOST::json-app", "target_node_id": "VULN::json-firebase", "edge_type": "vuln_found", "weight": 40.0},
-                    {"source_node_id": "VULN::json-firebase", "target_node_id": "CLOUD::json-bucket", "edge_type": "cloud_misconfig", "weight": 35.0},
+                    {
+                        "source_node_id": "EXTERNAL::json-root",
+                        "target_node_id": "HOST::json-app",
+                        "edge_type": "entry",
+                        "weight": 10.0,
+                    },
+                    {
+                        "source_node_id": "HOST::json-app",
+                        "target_node_id": "VULN::json-firebase",
+                        "edge_type": "vuln_found",
+                        "weight": 40.0,
+                    },
+                    {
+                        "source_node_id": "VULN::json-firebase",
+                        "target_node_id": "CLOUD::json-bucket",
+                        "edge_type": "cloud_misconfig",
+                        "weight": 35.0,
+                    },
                 ],
             }
         ),
@@ -1624,12 +1699,12 @@ def test_engagement_api_prefers_snapshot_graph_over_report_artifacts(
         assert detail["graph_payload"]["source"] == "attack_graph_snapshot"
         assert detail["graph_summary"]["nodes"] == 3
         assert detail["graph_payload"]["nodes"][0]["label"] == "app.acme.example"
-        snapshot_nodes = {
-            node["node_id"]: node
-            for node in detail["graph_payload"]["nodes"]
-        }
+        snapshot_nodes = {node["node_id"]: node for node in detail["graph_payload"]["nodes"]}
         assert snapshot_nodes["CLOUD::bucket"]["metadata"]["validation_status"] == "VALIDATED"
-        assert snapshot_nodes["CLOUD::bucket"]["metadata"]["validation_method"] == "firebase_database_shallow_read"
+        assert (
+            snapshot_nodes["CLOUD::bucket"]["metadata"]["validation_method"]
+            == "firebase_database_shallow_read"
+        )
         assert snapshot_nodes["VULN::firebase"]["source_table"] == "vulnerability_findings"
         assert snapshot_nodes["VULN::firebase"]["source_id"] == 1
         assert snapshot_nodes["VULN::firebase"]["metadata"]["resource_id"] == "acme-firebase-prod"
@@ -1705,7 +1780,11 @@ def test_engagement_detail_surfaces_provider_matrix_outputs_for_dashboard_review
                 "weight": 90.0,
             },
         ],
-        "critical_path_nodes": ["HOST::shodan-api", "VULN::provider-firebase", "CLOUD::provider-firebase"],
+        "critical_path_nodes": [
+            "HOST::shodan-api",
+            "VULN::provider-firebase",
+            "CLOUD::provider-firebase",
+        ],
         "critical_path_weight": 16.0,
     }
 
@@ -1890,13 +1969,26 @@ def test_engagement_detail_surfaces_provider_matrix_outputs_for_dashboard_review
         assert detail["graph_summary"]["source"] == "attack_graph_snapshot"
         assert detail["graph_payload"]["source"] == "attack_graph_snapshot"
         graph_nodes = {node["node_id"]: node for node in detail["graph_payload"]["nodes"]}
-        assert graph_nodes["HOST::shodan-api"]["metadata"]["provider_sources"] == ["shodan", "urlscan"]
+        assert graph_nodes["HOST::shodan-api"]["metadata"]["provider_sources"] == [
+            "shodan",
+            "urlscan",
+        ]
         assert graph_nodes["HOST::shodan-api"]["metadata"]["provider_cap_observed"] == 1
-        assert graph_nodes["CLOUD::provider-firebase"]["metadata"]["validation_status"] == "VALIDATED"
-        assert graph_nodes["CLOUD::provider-firebase"]["metadata"]["validation_evidence"].startswith("HTTP 200")
-        assert graph_nodes["VULN::provider-firebase"]["metadata"]["validation_method"] == "firebase_database_shallow_read"
+        assert (
+            graph_nodes["CLOUD::provider-firebase"]["metadata"]["validation_status"] == "VALIDATED"
+        )
+        assert graph_nodes["CLOUD::provider-firebase"]["metadata"][
+            "validation_evidence"
+        ].startswith("HTTP 200")
+        assert (
+            graph_nodes["VULN::provider-firebase"]["metadata"]["validation_method"]
+            == "firebase_database_shallow_read"
+        )
 
-        assert detail["report_summary"]["artifact_name"] == "engagement_1001_kill_chain_provider_matrix.json"
+        assert (
+            detail["report_summary"]["artifact_name"]
+            == "engagement_1001_kill_chain_provider_matrix.json"
+        )
         assert detail["report_summary"]["findings_checksum"] == "sha256:provider-matrix-fixture"
         assert {artifact["name"] for artifact in detail["artifacts"]} >= {
             "engagement_1001_kill_chain_provider_matrix.md",
@@ -1922,7 +2014,12 @@ def test_engagement_detail_surfaces_provider_matrix_outputs_for_dashboard_review
             "fanout_i_commoncrawl",
         } <= seed_run_loops
         audit_modules = {row["Module"] for row in detail["sections"]["audit_log"]}
-        assert {"shodan_lookup", "urlscan_lookup", "wayback_lookup", "commoncrawl_lookup"} <= audit_modules
+        assert {
+            "shodan_lookup",
+            "urlscan_lookup",
+            "wayback_lookup",
+            "commoncrawl_lookup",
+        } <= audit_modules
 
 
 def test_engagement_detail_api_orders_cloud_validation_results_by_latest_checked_at(
@@ -2190,9 +2287,7 @@ def test_engagement_detail_api_surfaces_slack_validation_proof_on_finding_rows(
         assert detail_resp.status_code == 200, detail_resp.text
         detail = detail_resp.json()
 
-    finding_rows = {
-        row["Title"]: row for row in detail["sections"]["vulnerability_findings"]
-    }
+    finding_rows = {row["Title"]: row for row in detail["sections"]["vulnerability_findings"]}
     slack_row = finding_rows["Validated exposed slack credential reference"]
     assert slack_row["Validation Status"] == "VALIDATED"
     assert slack_row["Validation Method"] == "slack_auth_test"
@@ -2237,9 +2332,7 @@ def test_engagement_detail_api_surfaces_validated_key_provider_inventory(
         assert detail_resp.status_code == 200, detail_resp.text
         detail = detail_resp.json()
 
-    validation_rows = {
-        row["Asset"]: row for row in detail["sections"]["cloud_validation_results"]
-    }
+    validation_rows = {row["Asset"]: row for row in detail["sections"]["cloud_validation_results"]}
     assert validation_rows["742931608514"]["Status"] == "VALIDATED"
     assert validation_rows["742931608514"]["Stored Status"] == "VALIDATED"
     assert validation_rows["742931608514"]["Reportable"] == "no"
@@ -2327,7 +2420,9 @@ def test_engagement_vuln_summary_api_uses_reportable_cloud_gate(
     )
     assert "datadog_api_key_validate" not in json.dumps(detail)
     assert assets["passive_vulns"] == []
-    assert all("findings" not in item and "severity" not in item for item in asset_tree_payload["items"])
+    assert all(
+        "findings" not in item and "severity" not in item for item in asset_tree_payload["items"]
+    )
     graph_nodes = {node["node_id"]: node for node in detail["graph_payload"]["nodes"]}
     cloud_metadata = graph_nodes["CLOUD::bucket"]["metadata"]
     assert cloud_metadata["validation_status"] == "UNVERIFIED"
@@ -2492,9 +2587,7 @@ def test_engagement_detail_api_filters_malformed_deterministic_cloud_findings(
         assert summary_resp.status_code == 200, summary_resp.text
         summary = summary_resp.json()
 
-    finding_titles = {
-        row["Title"] for row in detail["sections"]["vulnerability_findings"]
-    }
+    finding_titles = {row["Title"] for row in detail["sections"]["vulnerability_findings"]}
     node_ids = {node["node_id"] for node in detail["graph_payload"]["nodes"]}
 
     assert detail["severity_summary"]["HIGH"] == 1
@@ -2525,14 +2618,16 @@ def test_web_root_serves_react_console_and_generated_data(tmp_path: Path, monkey
 
     data_root = tmp_path / "reports" / "dashboard" / "data"
     data_root.mkdir(parents=True)
-    (data_root / "engagements.json").write_text('{"generated_at":"2026-07-09 10:00:00","items":[]}', encoding="utf-8")
+    (data_root / "engagements.json").write_text(
+        '{"generated_at":"2026-07-09 10:00:00","items":[]}', encoding="utf-8"
+    )
 
     app = create_app()
     with TestClient(app) as client:
         root_resp = client.get("/")
         assert root_resp.status_code == 200, root_resp.text
         assert '<div id="root"></div>' in root_resp.text
-        assert '/assets/' in root_resp.text
+        assert "/assets/" in root_resp.text
 
         slug_resp = client.get("/engagements/engagement-1001-acme-example")
         assert slug_resp.status_code == 200, slug_resp.text
@@ -2591,10 +2686,15 @@ def test_engagement_create_and_seed_crud_routes(tmp_path: Path, monkeypatch) -> 
         assert created_summary["counts"]["engagement_seeds"] == 2
         assert created_summary["tags"] == ["external", "beta", "priority-medium"]
 
-        seeds_resp = client.get("/api/engagements/engagement-1002-beta-example/seeds", headers=headers)
+        seeds_resp = client.get(
+            "/api/engagements/engagement-1002-beta-example/seeds", headers=headers
+        )
         assert seeds_resp.status_code == 200, seeds_resp.text
         seed_items = seeds_resp.json()["items"]
-        assert [item["seed_value"] for item in seed_items] == ["beta.example", "security@beta.example"]
+        assert [item["seed_value"] for item in seed_items] == [
+            "beta.example",
+            "security@beta.example",
+        ]
 
         add_resp = client.post(
             "/api/engagements/engagement-1002-beta-example/seeds",
@@ -2657,7 +2757,9 @@ def test_engagement_create_and_seed_crud_routes(tmp_path: Path, monkeypatch) -> 
         remaining = delete_resp.json()["items"]
         assert all(item["id"] != phone_seed_id for item in remaining)
 
-        final_detail = client.get("/api/engagements/engagement-1002-beta-example-updated", headers=headers).json()
+        final_detail = client.get(
+            "/api/engagements/engagement-1002-beta-example-updated", headers=headers
+        ).json()
         assert "+15550002222" not in final_detail["seeds"]
         assert final_detail["counts"]["engagement_seeds"] == 2
         assert final_detail["tags"] == ["priority-high", "beta-expanded"]
@@ -2694,7 +2796,9 @@ def test_engagement_seed_routes_canonicalize_url_variants(
         assert create_resp.status_code == 200, create_resp.text
         assert create_resp.json()["counts"]["engagement_seeds"] == 2
 
-        seeds_resp = client.get("/api/engagements/engagement-1002-gamma-urls/seeds", headers=headers)
+        seeds_resp = client.get(
+            "/api/engagements/engagement-1002-gamma-urls/seeds", headers=headers
+        )
         assert seeds_resp.status_code == 200, seeds_resp.text
         seeds = seeds_resp.json()["items"]
         assert [(item["seed_value"], item["seed_type"]) for item in seeds] == [
@@ -2786,9 +2890,7 @@ def test_engagement_create_uses_monotonic_sequence_after_deleted_db(
 
         with sqlite3.connect(db_root / "master.db") as con:
             max_sequence_id = int(
-                con.execute(
-                    "SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence"
-                ).fetchone()[0]
+                con.execute("SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence").fetchone()[0]
             )
         assert max_sequence_id == 1003
 
@@ -2799,9 +2901,7 @@ def test_engagement_create_uses_monotonic_sequence_after_deleted_db(
         ]
         with sqlite3.connect(db_root / "master.db") as con:
             preserved_max_sequence_id = int(
-                con.execute(
-                    "SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence"
-                ).fetchone()[0]
+                con.execute("SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence").fetchone()[0]
             )
         assert preserved_max_sequence_id == 1003
 
@@ -3207,7 +3307,9 @@ def test_launch_engagement_kill_chain_route_rejects_live_without_scope_manifest_
         assert launched is False
 
 
-def test_restart_engagement_kill_chain_route_publishes_progress_event(tmp_path: Path, monkeypatch) -> None:
+def test_restart_engagement_kill_chain_route_publishes_progress_event(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
@@ -3225,7 +3327,9 @@ def test_restart_engagement_kill_chain_route_publishes_progress_event(tmp_path: 
 
     monkeypatch.setattr("forge.webui.app.subprocess.Popen", _FakePopen)
     published_events: list[object] = []
-    monkeypatch.setattr("forge.webui.app.broker.publish_sync", lambda event: published_events.append(event))
+    monkeypatch.setattr(
+        "forge.webui.app.broker.publish_sync", lambda event: published_events.append(event)
+    )
 
     app = create_app()
     with TestClient(app) as client:
@@ -3587,13 +3691,22 @@ def test_run_progress_bridge_republishes_when_queue_metrics_change_without_step_
     assert progress_events[0].payload["queue_metrics"]["artifact_queue"]["queued"] == 1
     assert progress_events[-1].payload["queue_metrics"]["artifact_queue"]["parsed"] == 1
     assert progress_events[-1].payload["queue_metrics"]["artifact_processor"]["completed"] == 1
-    assert progress_events[-1].payload["queue_metrics"]["artifact_processor_cumulative"]["processed"] == 1
+    assert (
+        progress_events[-1].payload["queue_metrics"]["artifact_processor_cumulative"]["processed"]
+        == 1
+    )
     assert progress_events[-1].payload["queue_metrics"]["validation_batch"]["completed"] == 1
     assert progress_events[-1].payload["queue_metrics"]["finalization_batch"]["completed"] == 1
     assert progress_events[-1].payload["queue_metrics"]["fanout_batch"]["completed"] == 1
     assert progress_events[-1].payload["active_batch_label"] == "1.K artifact processing"
-    assert progress_events[-1].payload["active_artifact_stage_label"] == "1.K artifact processing / parse"
-    assert progress_events[-1].payload["active_validation_stage_label"] == "1.K3.5 cloud asset validation"
+    assert (
+        progress_events[-1].payload["active_artifact_stage_label"]
+        == "1.K artifact processing / parse"
+    )
+    assert (
+        progress_events[-1].payload["active_validation_stage_label"]
+        == "1.K3.5 cloud asset validation"
+    )
     assert progress_events[-1].payload["active_finalization_stage_label"] == "report generate"
 
 
@@ -3632,13 +3745,17 @@ def test_engagement_run_log_and_stop_routes(tmp_path: Path, monkeypatch) -> None
     with TestClient(app) as client:
         headers = {"Authorization": f"Bearer {mint_token('operator-web')}"}
 
-        runs_resp = client.get("/api/engagements/engagement-1001-acme-example/runs", headers=headers)
+        runs_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/runs", headers=headers
+        )
         assert runs_resp.status_code == 200, runs_resp.text
         runs = runs_resp.json()["items"]
         assert runs[0]["status"] == "running"
         assert runs[0]["current_iteration"] == 2
 
-        logs_resp = client.get("/api/engagements/engagement-1001-acme-example/logs", headers=headers)
+        logs_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/logs", headers=headers
+        )
         assert logs_resp.status_code == 200, logs_resp.text
         logs = logs_resp.json()["items"]
         assert logs[0]["name"] == log_path.name
@@ -3711,7 +3828,9 @@ def test_pause_route_publishes_progress_event(tmp_path: Path, monkeypatch) -> No
         con.close()
 
     published_events: list[object] = []
-    monkeypatch.setattr("forge.webui.app.broker.publish_sync", lambda event: published_events.append(event))
+    monkeypatch.setattr(
+        "forge.webui.app.broker.publish_sync", lambda event: published_events.append(event)
+    )
 
     app = create_app()
     with TestClient(app) as client:
@@ -3774,7 +3893,9 @@ def test_engagement_pause_and_resume_routes(tmp_path: Path, monkeypatch) -> None
         assert pause_payload["active_run_id"] is not None
         assert Path(pause_payload["marker_path"]).exists()
 
-        runs_resp = client.get("/api/engagements/engagement-1001-acme-example/runs", headers=headers)
+        runs_resp = client.get(
+            "/api/engagements/engagement-1001-acme-example/runs", headers=headers
+        )
         assert runs_resp.status_code == 200, runs_resp.text
         assert runs_resp.json()["items"][0]["status"] == "pausing"
 
@@ -3832,7 +3953,9 @@ def test_engagement_pause_and_resume_routes(tmp_path: Path, monkeypatch) -> None
         assert "--skip-keyscan" in command
 
 
-def test_launch_route_rejects_overlapping_running_engagement_run(tmp_path: Path, monkeypatch) -> None:
+def test_launch_route_rejects_overlapping_running_engagement_run(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")

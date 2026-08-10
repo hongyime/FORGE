@@ -33,6 +33,7 @@ Test categories:
   26. _scope_check()      — wildcard and exact hostname matching
   27. Evasion assertion   — payload never appears verbatim in audit_log entries
 """
+
 from __future__ import annotations
 
 import json
@@ -68,7 +69,7 @@ from forge.phase2.login_probe import (
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
 ENGAGEMENT_ID = 1
-TARGET_URL    = "http://admin.acme.local/login"
+TARGET_URL = "http://admin.acme.local/login"
 
 
 @pytest.fixture()
@@ -196,8 +197,9 @@ MULTI_FORM_HTML = """
 
 # ── 1. FormParser — basic parsing ─────────────────────────────────────────────
 
+
 def test_form_parser_extracts_action_and_fields():
-    fp   = FormParser()
+    fp = FormParser()
     form = fp.parse(SIMPLE_LOGIN_HTML, "http://admin.acme.local/login")
     assert form is not None
     assert "/auth/login" in form.action_url
@@ -207,14 +209,14 @@ def test_form_parser_extracts_action_and_fields():
 
 
 def test_form_parser_extracts_hidden_fields():
-    fp   = FormParser()
+    fp = FormParser()
     form = fp.parse(SIMPLE_LOGIN_HTML, "http://admin.acme.local/login")
     assert form is not None
     assert form.hidden_fields.get("_csrf") == "tok123"
 
 
 def test_form_parser_detects_email_field_as_username():
-    fp   = FormParser()
+    fp = FormParser()
     form = fp.parse(EMAIL_LOGIN_HTML, "http://admin.acme.local/")
     assert form is not None
     assert form.username_field == "email"
@@ -222,7 +224,7 @@ def test_form_parser_detects_email_field_as_username():
 
 
 def test_form_parser_resolves_relative_action():
-    fp   = FormParser()
+    fp = FormParser()
     form = fp.parse(SIMPLE_LOGIN_HTML, "http://admin.acme.local/login")
     assert form is not None
     assert form.action_url.startswith("http://admin.acme.local")
@@ -230,7 +232,7 @@ def test_form_parser_resolves_relative_action():
 
 
 def test_form_parser_selects_login_form_from_multi_form():
-    fp   = FormParser()
+    fp = FormParser()
     form = fp.parse(MULTI_FORM_HTML, "http://admin.acme.local/")
     assert form is not None
     # Must select the form with a password field
@@ -239,16 +241,17 @@ def test_form_parser_selects_login_form_from_multi_form():
 
 # ── 2. FormParser — edge cases ────────────────────────────────────────────────
 
+
 def test_form_parser_returns_none_when_no_form():
-    fp   = FormParser()
+    fp = FormParser()
     form = fp.parse(NO_FORM_HTML, "http://admin.acme.local/")
     assert form is None
 
 
 def test_form_parser_uses_page_url_when_action_absent():
-    fp    = FormParser()
-    page  = "http://admin.acme.local/login"
-    form  = fp.parse(NO_ACTION_HTML, page)
+    fp = FormParser()
+    page = "http://admin.acme.local/login"
+    form = fp.parse(NO_ACTION_HTML, page)
     assert form is not None
     assert form.action_url == page
 
@@ -266,8 +269,9 @@ def test_form_parser_method_normalised_to_uppercase():
 
 # ── 3. DbkerDiscriminator — status-code gate ──────────────────────────────────
 
+
 def test_dbker_success_on_2xx_status_change():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=True)
     success, confidence, name = disc.discriminate(baseline, "dashboard", 302)
     # 302 → redirect after login counts as status change to non-200;
@@ -276,7 +280,8 @@ def test_dbker_success_on_2xx_status_change():
     # Retest with explicit 2xx path:
     success2, conf2, name2 = disc.discriminate(
         BaselineResponse(body_length=500, status_code=401, has_failure_kw=True),
-        "Welcome to the admin dashboard", 200
+        "Welcome to the admin dashboard",
+        200,
     )
     assert success2 is True
     assert conf2 == "HIGH"
@@ -284,7 +289,7 @@ def test_dbker_success_on_2xx_status_change():
 
 
 def test_dbker_failure_on_4xx_status():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=True)
     success, confidence, name = disc.discriminate(baseline, "Invalid credentials", 401)
     assert success is False
@@ -292,29 +297,30 @@ def test_dbker_failure_on_4xx_status():
 
 # ── 4. DbkerDiscriminator — EL + keyword gate ─────────────────────────────────
 
+
 def test_dbker_success_on_success_keyword_with_length_change():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=True)
     # Probe body is significantly longer AND contains success keyword
-    probe_body = "Welcome to the admin dashboard. " * 20   # >> 500 chars, has "welcome"
+    probe_body = "Welcome to the admin dashboard. " * 20  # >> 500 chars, has "welcome"
     success, confidence, name = disc.discriminate(baseline, probe_body, 200)
     assert success is True
     assert name == "dbker_keyword"
 
 
 def test_dbker_failure_on_failure_keyword_no_length_change():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=True)
     # Probe body is same length, contains failure keyword
-    probe_body = "Invalid login credentials." + " " * 475   # ~500 chars total
+    probe_body = "Invalid login credentials." + " " * 475  # ~500 chars total
     success, confidence, name = disc.discriminate(baseline, probe_body, 200)
     assert success is False
 
 
 def test_dbker_medium_confidence_on_success_keyword_no_length_change():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=False)
-    probe_body = "Welcome back!" + " " * 487   # ~500 chars — no length change
+    probe_body = "Welcome back!" + " " * 487  # ~500 chars — no length change
     success, confidence, name = disc.discriminate(baseline, probe_body, 200)
     assert success is True
     assert confidence == "MEDIUM"
@@ -322,17 +328,16 @@ def test_dbker_medium_confidence_on_success_keyword_no_length_change():
 
 # ── 5. DbkerDiscriminator — Recheck gate ──────────────────────────────────────
 
+
 def test_dbker_recheck_fires_on_ambiguous_response():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=False)
-    probe_body = "Some page content with no clear signal." + " " * 461   # ~500 chars
+    probe_body = "Some page content with no clear signal." + " " * 461  # ~500 chars
 
     # Recheck returns a very short body → probe is substantially different → SUCCESS
-    recheck_fn = lambda: ("err", 200)   # noqa: E731 — very short response
+    recheck_fn = lambda: ("err", 200)  # noqa: E731 — very short response
 
-    success, confidence, name = disc.discriminate(
-        baseline, probe_body, 200, recheck_fn=recheck_fn
-    )
+    success, confidence, name = disc.discriminate(baseline, probe_body, 200, recheck_fn=recheck_fn)
     assert success is True
     assert name == "dbker_recheck"
     assert confidence == "MEDIUM"
@@ -345,7 +350,7 @@ def test_dbker_recheck_budget_limits_calls():
 
     def recheck_fn():
         call_count["n"] += 1
-        return ("x" * 490, 200)   # similar length — won't trigger success
+        return ("x" * 490, 200)  # similar length — won't trigger success
 
     probe_body = "neutral content" + " " * 485
 
@@ -358,8 +363,9 @@ def test_dbker_recheck_budget_limits_calls():
 
 # ── 6. DbkerDiscriminator — baseline ─────────────────────────────────────────
 
+
 def test_dbker_baseline_establishes_body_length():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = disc.establish_baseline("Login failed. Invalid password.", 200)
     assert baseline.body_length == len("Login failed. Invalid password.")
     assert baseline.status_code == 200
@@ -367,15 +373,16 @@ def test_dbker_baseline_establishes_body_length():
 
 
 def test_dbker_baseline_detects_no_failure_keyword():
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = disc.establish_baseline("Please enter your credentials.", 200)
     assert baseline.has_failure_kw is False
 
 
 # ── 7. PcfgDictGenerator — token extraction ───────────────────────────────────
 
+
 def test_pcfg_extracts_tokens_from_simple_fqdn():
-    gen    = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     tokens = gen._extract_tokens("admin.acme.local")
     assert "acme" in tokens
     assert "admin" in tokens
@@ -384,7 +391,7 @@ def test_pcfg_extracts_tokens_from_simple_fqdn():
 
 
 def test_pcfg_extracts_tokens_from_hyphenated_domain():
-    gen    = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     tokens = gen._extract_tokens("acme-corp.co.uk")
     assert "acme" in tokens
     assert "corp" in tokens
@@ -393,22 +400,23 @@ def test_pcfg_extracts_tokens_from_hyphenated_domain():
 
 
 def test_pcfg_discards_short_tokens():
-    gen    = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     tokens = gen._extract_tokens("ab.acme.io")
     # "ab" is below min_token_length=3 — should be discarded
     assert "ab" not in tokens
 
 
 def test_pcfg_discards_common_tlds():
-    gen    = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     tokens = gen._extract_tokens("acme.com")
     assert "com" not in tokens
 
 
 # ── 8. PcfgDictGenerator — candidate generation ──────────────────────────────
 
+
 def test_pcfg_generates_year_appended_candidates():
-    gen        = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     candidates = gen.generate("http://admin.acme.local/login")
     # Should include "acme2024", "Acme2024!", etc.
     years = [str(y) for y in range(2020, 2027)]
@@ -417,49 +425,52 @@ def test_pcfg_generates_year_appended_candidates():
 
 
 def test_pcfg_generates_title_case_variants():
-    gen        = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     candidates = gen.generate("http://admin.acme.local/login")
     assert any(c.startswith("Acme") for c in candidates)
 
 
 def test_pcfg_generates_leet_variants():
-    gen        = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     candidates = gen.generate("http://admin.acme.local/login")
     # 'a' → '@': "acme" → "@cme"
     assert any("@cme" in c or "@" in c for c in candidates)
 
 
 def test_pcfg_generates_candidates_with_special_suffix():
-    gen        = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     candidates = gen.generate("http://corp.example.com/admin")
     assert any(c.endswith("!") for c in candidates)
 
 
 def test_pcfg_generates_common_prefix_variants():
-    gen        = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     candidates = gen.generate("http://admin.acme.local/login")
     assert any(c.startswith("admin") or c.startswith("Admin") for c in candidates)
 
 
 # ── 9. PcfgDictGenerator — max_candidates cap ────────────────────────────────
 
+
 def test_pcfg_max_candidates_cap_enforced():
-    gen        = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     candidates = gen.generate("http://admin.verylongdomainname.acmecorporation.local/login")
-    rules      = json.loads(_PCFG_RULES_F.read_text())
-    max_c      = rules["max_candidates"]["value"]
+    rules = json.loads(_PCFG_RULES_F.read_text())
+    max_c = rules["max_candidates"]["value"]
     assert len(candidates) <= max_c
 
 
 # ── 10. PcfgDictGenerator — deduplication ────────────────────────────────────
 
+
 def test_pcfg_candidates_are_deduplicated():
-    gen        = PcfgDictGenerator()
+    gen = PcfgDictGenerator()
     candidates = gen.generate("http://admin.acme.local/login")
     assert len(candidates) == len(set(candidates)), "Duplicate candidates found"
 
 
 # ── 11. SqliProber — payload loading ─────────────────────────────────────────
+
 
 def test_sqli_payload_file_contains_no_blank_lines():
     payloads = SqliProber._load_payloads(_PAYLOADS_F)
@@ -483,56 +494,58 @@ def test_sqli_classic_bypass_payload_present():
 
 # ── 12. SqliProber — dry_run makes zero HTTP calls ────────────────────────────
 
+
 def test_sqli_dry_run_zero_http_calls():
     prober = SqliProber()
-    form   = ParsedForm(
-        action_url     = "http://admin.acme.local/auth",
-        method         = "POST",
-        username_field = "username",
-        password_field = "password",
+    form = ParsedForm(
+        action_url="http://admin.acme.local/auth",
+        method="POST",
+        username_field="username",
+        password_field="password",
     )
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=True)
 
     with mock.patch("curl_cffi.requests.Session.request") as mock_req:
         result = prober.probe(
-            session       = mock.MagicMock(),
-            form          = form,
-            discriminator = disc,
-            baseline      = baseline,
-            dry_run       = True,
+            session=mock.MagicMock(),
+            form=form,
+            discriminator=disc,
+            baseline=baseline,
+            dry_run=True,
         )
     mock_req.assert_not_called()
-    assert result is None   # dry_run always returns None
+    assert result is None  # dry_run always returns None
 
 
 # ── 13. SqliProber — returns ProbeResult on discriminated success ─────────────
 
+
 def test_sqli_returns_probe_result_on_success():
     prober = SqliProber()
-    form   = ParsedForm(
-        action_url     = "http://admin.acme.local/auth",
-        method         = "POST",
-        username_field = "username",
-        password_field = "password",
+    form = ParsedForm(
+        action_url="http://admin.acme.local/auth",
+        method="POST",
+        username_field="username",
+        password_field="password",
     )
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=500, status_code=200, has_failure_kw=True)
 
     # Mock session: first request returns a "success" page (welcome keyword, status 200 → 200 but bigger)
     mock_session = mock.MagicMock()
-    mock_resp    = mock.MagicMock()
-    mock_resp.text        = "Welcome to the admin dashboard. " * 30   # long + success keyword
+    mock_resp = mock.MagicMock()
+    mock_resp.text = "Welcome to the admin dashboard. " * 30  # long + success keyword
     mock_resp.status_code = 200
     mock_session.request.return_value = mock_resp
 
     with mock.patch("time.sleep"):
         result = prober.probe(
-            session       = mock_session,
-            form          = form,
-            discriminator = disc,
-            baseline      = baseline,
-            dry_run       = False,
+            session=mock_session,
+            form=form,
+            discriminator=disc,
+            baseline=baseline,
+            dry_run=False,
         )
 
     assert result is not None
@@ -542,31 +555,32 @@ def test_sqli_returns_probe_result_on_success():
 
 # ── 14. SqliProber — returns None when all payloads fail ─────────────────────
 
+
 def test_sqli_returns_none_when_all_payloads_fail():
     prober = SqliProber()
-    form   = ParsedForm(
-        action_url     = "http://admin.acme.local/auth",
-        method         = "POST",
-        username_field = "username",
-        password_field = "password",
+    form = ParsedForm(
+        action_url="http://admin.acme.local/auth",
+        method="POST",
+        username_field="username",
+        password_field="password",
     )
-    disc     = DbkerDiscriminator()
+    disc = DbkerDiscriminator()
     baseline = BaselineResponse(body_length=300, status_code=200, has_failure_kw=True)
 
     # Mock session always returns same-length body with failure keyword → FAILURE
-    mock_session  = mock.MagicMock()
-    mock_resp     = mock.MagicMock()
-    mock_resp.text        = "Invalid credentials. " + " " * 279   # same length as baseline
+    mock_session = mock.MagicMock()
+    mock_resp = mock.MagicMock()
+    mock_resp.text = "Invalid credentials. " + " " * 279  # same length as baseline
     mock_resp.status_code = 200
     mock_session.request.return_value = mock_resp
 
     with mock.patch("time.sleep"):
         result = prober.probe(
-            session       = mock_session,
-            form          = form,
-            discriminator = disc,
-            baseline      = baseline,
-            dry_run       = False,
+            session=mock_session,
+            form=form,
+            discriminator=disc,
+            baseline=baseline,
+            dry_run=False,
         )
 
     assert result is None
@@ -574,11 +588,12 @@ def test_sqli_returns_none_when_all_payloads_fail():
 
 # ── 15. WebPanelTester — scope gate ──────────────────────────────────────────
 
+
 def test_web_panel_scope_gate_rejects_out_of_scope(tmp_eng_db):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = True,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=True,
     )
     with pytest.raises(ScopeViolationError):
         tester.run("http://outofscope.evil.com/admin")
@@ -586,27 +601,28 @@ def test_web_panel_scope_gate_rejects_out_of_scope(tmp_eng_db):
 
 def test_web_panel_scope_gate_passes_in_scope(tmp_eng_db):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = True,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=True,
     )
     with mock.patch("curl_cffi.requests.Session.get") as mock_get:
-        mock_resp      = mock.MagicMock()
+        mock_resp = mock.MagicMock()
         mock_resp.text = NO_FORM_HTML
-        mock_resp.url  = TARGET_URL
+        mock_resp.url = TARGET_URL
         mock_get.return_value = mock_resp
         # No exception raised — scope passes
         findings = tester.run(TARGET_URL)
-    assert findings == []   # no form → no findings
+    assert findings == []  # no form → no findings
 
 
 # ── 16. WebPanelTester — FORGE_OFFLINE_STRICT ────────────────────────────────
 
+
 def test_web_panel_offline_strict_blocks_live_run(tmp_eng_db, offline_env):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = False,   # live mode
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=False,  # live mode
     )
     with pytest.raises(OfflineStrictError):
         tester.run(TARGET_URL)
@@ -614,14 +630,14 @@ def test_web_panel_offline_strict_blocks_live_run(tmp_eng_db, offline_env):
 
 def test_web_panel_offline_strict_permits_dry_run(tmp_eng_db, offline_env):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = True,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=True,
     )
     with mock.patch("curl_cffi.requests.Session.get") as mock_get:
         mock_resp = mock.MagicMock()
         mock_resp.text = NO_FORM_HTML
-        mock_resp.url  = TARGET_URL
+        mock_resp.url = TARGET_URL
         mock_get.return_value = mock_resp
         findings = tester.run(TARGET_URL)
     assert findings == []
@@ -629,11 +645,12 @@ def test_web_panel_offline_strict_permits_dry_run(tmp_eng_db, offline_env):
 
 # ── 17. WebPanelTester — operator cancel ─────────────────────────────────────
 
+
 def test_web_panel_operator_cancel_raises(tmp_eng_db, patch_confirm_deny, online_env):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = False,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=False,
     )
     with pytest.raises(LoginProbeAborted):
         tester.run(TARGET_URL)
@@ -641,18 +658,20 @@ def test_web_panel_operator_cancel_raises(tmp_eng_db, patch_confirm_deny, online
 
 # ── 18. WebPanelTester — dry_run zero submissions ────────────────────────────
 
+
 def test_web_panel_dry_run_makes_no_form_submissions(tmp_eng_db):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = True,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=True,
     )
-    with mock.patch("curl_cffi.requests.Session.get") as mock_get, \
-         mock.patch("curl_cffi.requests.Session.request") as mock_req:
-
+    with (
+        mock.patch("curl_cffi.requests.Session.get") as mock_get,
+        mock.patch("curl_cffi.requests.Session.request") as mock_req,
+    ):
         mock_resp = mock.MagicMock()
         mock_resp.text = SIMPLE_LOGIN_HTML
-        mock_resp.url  = TARGET_URL
+        mock_resp.url = TARGET_URL
         mock_get.return_value = mock_resp
 
         findings = tester.run(TARGET_URL)
@@ -663,37 +682,36 @@ def test_web_panel_dry_run_makes_no_form_submissions(tmp_eng_db):
 
 # ── 19. WebPanelTester — SQLi finding stored correctly ───────────────────────
 
+
 def test_web_panel_sqli_finding_stored_in_db(tmp_eng_db, patch_confirm_approve, online_env):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = False,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=False,
     )
     # Craft a mock HTTP session that returns:
     #   GET  → SIMPLE_LOGIN_HTML (form detection)
     #   POST (baseline) → failure page
     #   POST (sqli)     → success page (dashboard keyword + longer body)
 
-    get_resp  = mock.MagicMock()
+    get_resp = mock.MagicMock()
     get_resp.text = SIMPLE_LOGIN_HTML
-    get_resp.url  = TARGET_URL
+    get_resp.url = TARGET_URL
 
     fail_resp = mock.MagicMock()
-    fail_resp.text        = "Invalid credentials. " + " " * 479
+    fail_resp.text = "Invalid credentials. " + " " * 479
     fail_resp.status_code = 200
 
     success_resp = mock.MagicMock()
-    success_resp.text        = "Welcome to the dashboard! " * 30
+    success_resp.text = "Welcome to the dashboard! " * 30
     success_resp.status_code = 200
 
     call_order = [fail_resp, success_resp]
 
-    with mock.patch("curl_cffi.requests.Session") as mock_session_cls, \
-         mock.patch("time.sleep"):
-
-        mock_session  = mock.MagicMock()
+    with mock.patch("curl_cffi.requests.Session") as mock_session_cls, mock.patch("time.sleep"):
+        mock_session = mock.MagicMock()
         mock_session.__enter__ = mock.MagicMock(return_value=mock_session)
-        mock_session.__exit__  = mock.MagicMock(return_value=False)
+        mock_session.__exit__ = mock.MagicMock(return_value=False)
         mock_session.get.return_value = get_resp
         mock_session.request.side_effect = call_order
         mock_session_cls.return_value = mock_session
@@ -712,74 +730,82 @@ def test_web_panel_sqli_finding_stored_in_db(tmp_eng_db, patch_confirm_approve, 
     # Payload must be redacted in DB
     for row in rows:
         redacted = row[1]
-        assert "OR" not in redacted or "..." in redacted, \
+        assert "OR" not in redacted or "..." in redacted, (
             "Raw SQLi payload stored unredacted in login_probe_findings"
+        )
 
 
-def test_web_panel_payload_not_in_audit_log_plaintext(tmp_eng_db, patch_confirm_approve, online_env):
+def test_web_panel_payload_not_in_audit_log_plaintext(
+    tmp_eng_db, patch_confirm_approve, online_env
+):
     """
     Evasion assertion: audit_log must never contain the raw SQLi payload verbatim.
     """
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = False,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=False,
     )
     get_resp = mock.MagicMock()
     get_resp.text = SIMPLE_LOGIN_HTML
-    get_resp.url  = TARGET_URL
+    get_resp.url = TARGET_URL
 
     fail_resp = mock.MagicMock()
-    fail_resp.text        = "Invalid creds " + " " * 486
+    fail_resp.text = "Invalid creds " + " " * 486
     fail_resp.status_code = 200
 
     success_resp = mock.MagicMock()
-    success_resp.text        = "Welcome " * 70
+    success_resp.text = "Welcome " * 70
     success_resp.status_code = 200
 
-    with mock.patch("curl_cffi.requests.Session") as mock_session_cls, \
-         mock.patch("time.sleep"):
-
+    with mock.patch("curl_cffi.requests.Session") as mock_session_cls, mock.patch("time.sleep"):
         mock_session = mock.MagicMock()
         mock_session.__enter__ = mock.MagicMock(return_value=mock_session)
-        mock_session.__exit__  = mock.MagicMock(return_value=False)
+        mock_session.__exit__ = mock.MagicMock(return_value=False)
         mock_session.get.return_value = get_resp
         mock_session.request.side_effect = [fail_resp, success_resp]
         mock_session_cls.return_value = mock_session
 
         tester.run(TARGET_URL)
 
-    con    = sqlite3.connect(tmp_eng_db)
-    rows   = con.execute("SELECT result FROM audit_log WHERE engagement_id=?", (ENGAGEMENT_ID,)).fetchall()
+    con = sqlite3.connect(tmp_eng_db)
+    rows = con.execute(
+        "SELECT result FROM audit_log WHERE engagement_id=?", (ENGAGEMENT_ID,)
+    ).fetchall()
     con.close()
 
     audit_details = " ".join(r[0] for r in rows)
     # The classic payload "' OR '1'='1" must NOT appear verbatim in audit detail
-    assert "' OR '1'='1" not in audit_details, \
+    assert "' OR '1'='1" not in audit_details, (
         "Raw SQLi payload found verbatim in audit_log — OPSEC violation"
+    )
     # REDACTED marker should be present instead
     assert "REDACTED" in audit_details or "***" in audit_details or "..." in audit_details
 
 
 # ── 20. WebPanelTester — payload_enc is not plaintext ────────────────────────
 
+
 def test_finding_payload_enc_is_not_plaintext():
     """payload_enc must not equal the raw payload."""
     from forge.opsec.crypto import encrypt_string, is_encrypted
 
     raw_payload = "' OR '1'='1"
-    payload_enc = encrypt_string(raw_payload, passphrase="AGE-SECRET-KEY-1TESTTESTTESTTESTTESTTESTTESTTEST")
+    payload_enc = encrypt_string(
+        raw_payload, passphrase="AGE-SECRET-KEY-1TESTTESTTESTTESTTESTTESTTESTTEST"
+    )
     assert is_encrypted(payload_enc)
     assert raw_payload not in payload_enc
 
 
 # ── 21. WebPanelTester — lockout counter ─────────────────────────────────────
 
+
 def test_lockout_counter_increments_on_failure(tmp_eng_db):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = True,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=True,
     )
     key = (TARGET_URL, "admin")
     tester._lockout_counter[key] = 2
@@ -790,22 +816,24 @@ def test_lockout_counter_increments_on_failure(tmp_eng_db):
 
 # ── 22. WebPanelTester — no form → empty findings ────────────────────────────
 
+
 def test_web_panel_no_form_returns_empty(tmp_eng_db):
     tester = WebPanelTester(
-        db_path       = tmp_eng_db,
-        engagement_id = ENGAGEMENT_ID,
-        dry_run       = True,
+        db_path=tmp_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        dry_run=True,
     )
     with mock.patch("curl_cffi.requests.Session.get") as mock_get:
         mock_resp = mock.MagicMock()
         mock_resp.text = NO_FORM_HTML
-        mock_resp.url  = TARGET_URL
+        mock_resp.url = TARGET_URL
         mock_get.return_value = mock_resp
         findings = tester.run(TARGET_URL)
     assert findings == []
 
 
 # ── 23. Payload file integrity ────────────────────────────────────────────────
+
 
 def test_payload_file_no_blank_lines_or_comments_in_loader():
     """Cross-validates _load_payloads against the actual file on disk."""
@@ -817,13 +845,21 @@ def test_payload_file_no_blank_lines_or_comments_in_loader():
 
 # ── 24. PCFG rules JSON structure ────────────────────────────────────────────
 
+
 def test_pcfg_rules_json_required_keys():
     rules = json.loads(_PCFG_RULES_F.read_text())
     required_keys = [
-        "year_range", "numeric_suffixes", "special_suffixes",
-        "common_suffixes", "common_prefixes", "case_transforms",
-        "leet_substitutions", "separator_chars",
-        "domain_component_extraction", "max_candidates", "dedup",
+        "year_range",
+        "numeric_suffixes",
+        "special_suffixes",
+        "common_suffixes",
+        "common_prefixes",
+        "case_transforms",
+        "leet_substitutions",
+        "separator_chars",
+        "domain_component_extraction",
+        "max_candidates",
+        "dedup",
     ]
     for key in required_keys:
         assert key in rules, f"Required PCFG rules key missing: '{key}'"
@@ -843,9 +879,10 @@ def test_pcfg_rules_json_max_candidates_positive_int():
 
 # ── 25. _redact() ─────────────────────────────────────────────────────────────
 
+
 def test_redact_short_string_returns_masked():
     assert _redact("abc") == "****"
-    assert _redact("abcdefg") == "****"    # ≤8 chars
+    assert _redact("abcdefg") == "****"  # ≤8 chars
 
 
 def test_redact_long_string_returns_first4_last4():
@@ -855,11 +892,12 @@ def test_redact_long_string_returns_first4_last4():
 
 
 def test_redact_exactly_nine_chars():
-    result = _redact("123456789")   # 9 chars → first4...last4
+    result = _redact("123456789")  # 9 chars → first4...last4
     assert result == "1234...6789"
 
 
 # ── 26. _scope_check() ───────────────────────────────────────────────────────
+
 
 def test_scope_check_exact_hostname_passes(tmp_eng_db):
     # Add exact hostname scope entry
@@ -911,6 +949,7 @@ def test_scope_check_rejects_url_prefix_path_drift(tmp_eng_db):
 
 # ── 27. Evasion assertion — payload not in audit_log ─────────────────────────
 
+
 def test_evasion_assertion_spray_password_never_in_audit_log(tmp_eng_db):
     """
     Core OPSEC invariant: raw spray passwords must NEVER appear in audit_log.result.
@@ -918,15 +957,20 @@ def test_evasion_assertion_spray_password_never_in_audit_log(tmp_eng_db):
     from forge.phase2.login_probe import _audit
 
     raw_password = "Acme2024!"
-    _audit(tmp_eng_db, ENGAGEMENT_ID, "login_probe_spray",
-           f"url={TARGET_URL} user=admin password=***REDACTED***")
+    _audit(
+        tmp_eng_db,
+        ENGAGEMENT_ID,
+        "login_probe_spray",
+        f"url={TARGET_URL} user=admin password=***REDACTED***",
+    )
 
-    con  = sqlite3.connect(tmp_eng_db)
+    con = sqlite3.connect(tmp_eng_db)
     rows = con.execute(
         "SELECT result FROM audit_log WHERE engagement_id=?", (ENGAGEMENT_ID,)
     ).fetchall()
     con.close()
 
     audit_text = " ".join(r[0] for r in rows)
-    assert raw_password not in audit_text, \
+    assert raw_password not in audit_text, (
         f"Raw password '{raw_password}' found verbatim in audit_log — OPSEC violation"
+    )

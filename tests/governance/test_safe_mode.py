@@ -61,9 +61,7 @@ class TestDisabledEnforcer:
 
     def test_allows_offensive_plugin(self) -> None:
         enforcer = SafeModeEnforcer(enabled=False)
-        assert (
-            enforcer.is_allowed(_plugin("exploit", ["exploit", "write"])) is True
-        )
+        assert enforcer.is_allowed(_plugin("exploit", ["exploit", "write"])) is True
 
     def test_allows_plugin_with_empty_capabilities(self) -> None:
         enforcer = SafeModeEnforcer(enabled=False)
@@ -103,10 +101,7 @@ class TestEnabledEnforcer:
     def test_denies_mixed_list_with_one_disallowed_entry(self) -> None:
         """One bad capability poisons the entire plugin."""
         enforcer = SafeModeEnforcer(enabled=True)
-        assert (
-            enforcer.is_allowed(_plugin("mixed", ["read", "query", "exploit"]))
-            is False
-        )
+        assert enforcer.is_allowed(_plugin("mixed", ["read", "query", "exploit"])) is False
 
 
 # ── enforce() raises and audits ────────────────────────────────────────────
@@ -144,9 +139,7 @@ class TestAuditEmission:
             correlation_id="corr-allow",
         )
         gov_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in logger.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 1
         entry = gov_entries[0]
@@ -168,9 +161,7 @@ class TestAuditEmission:
                 correlation_id="corr-deny",
             )
         gov_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in logger.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 1
         entry = gov_entries[0]
@@ -189,9 +180,7 @@ class TestAuditEmission:
             correlation_id="corr-off",
         )
         gov_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in logger.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 1
         entry = gov_entries[0]
@@ -216,8 +205,7 @@ class TestAuditEmission:
 
         asyncio.run(_drive())
         assert any(
-            e.correlation_id == "corr-loop"
-            and e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e.correlation_id == "corr-loop" and e.event_type == AuditEventType.GOVERNANCE_DECISION
             for e in logger.entries
         )
 
@@ -235,25 +223,19 @@ class TestAuditEmission:
 class TestFromEnv:
     """SafeModeEnforcer.from_env reads PlatformSettings.safe_mode."""
 
-    def test_safe_mode_unset_yields_disabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_safe_mode_unset_yields_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("FORGE_SAFE_MODE", raising=False)
         enforcer = SafeModeEnforcer.from_env()
         assert enforcer.enabled is False
         # Disabled enforcer permits everything.
         assert enforcer.is_allowed(_plugin("exploit", ["exploit"])) is True
 
-    def test_safe_mode_zero_yields_disabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_safe_mode_zero_yields_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("FORGE_SAFE_MODE", "0")
         enforcer = SafeModeEnforcer.from_env()
         assert enforcer.enabled is False
 
-    def test_safe_mode_one_yields_enabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_safe_mode_one_yields_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("FORGE_SAFE_MODE", "1")
         enforcer = SafeModeEnforcer.from_env()
         assert enforcer.enabled is True

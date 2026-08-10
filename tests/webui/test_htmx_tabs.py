@@ -49,6 +49,7 @@ def htmx_client(htmx_engagement_db: Path):
     except ImportError:
         pytest.skip("fastapi TestClient not available")
     from forge.webui.app import create_app
+
     app = create_app()
     with TestClient(app) as client:
         yield client
@@ -78,9 +79,7 @@ class TestHtmxRoutes:
         # But should have the section markup
         assert "Findings" in r.text
 
-    @pytest.mark.parametrize(
-        "tab", ["overview", "seeds", "findings", "graph", "report", "audit"]
-    )
+    @pytest.mark.parametrize("tab", ["overview", "seeds", "findings", "graph", "report", "audit"])
     def test_every_tab_renders(self, htmx_client, tab: str) -> None:
         r = htmx_client.get(
             f"/engagements/1001/tab/{tab}",

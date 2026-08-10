@@ -129,9 +129,7 @@ async def test_structured_output_delegates_to_chain() -> None:
     router = _build_router(planner, executor)
     adapter = RouterAsProvider(router, tier=Tier.EXECUTOR)
 
-    out = await adapter.structured_output(
-        CompletionRequest(prompt="extract"), {"type": "object"}
-    )
+    out = await adapter.structured_output(CompletionRequest(prompt="extract"), {"type": "object"})
     assert out == {"by": "executor1"}
 
 
@@ -160,7 +158,9 @@ class _FailingProvider:
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         raise ProviderUnavailableError("forced fail")
 
-    async def structured_output(self, request: CompletionRequest, schema: object) -> dict[str, object]:
+    async def structured_output(
+        self, request: CompletionRequest, schema: object
+    ) -> dict[str, object]:
         raise ProviderUnavailableError("forced fail")
 
     async def embed(self, text: str) -> list[float]:

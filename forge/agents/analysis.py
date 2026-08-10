@@ -125,9 +125,7 @@ class AnalysisAgent:
         """Topics consumed by the analysis agent."""
         return [INBOUND_TOPIC]
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         """Run the analysis pipeline and emit a completion message."""
         payload = message.payload or {}
 
@@ -236,9 +234,7 @@ class AnalysisAgent:
         params: dict[str, object] = {**extra_params, "asset_inventory": inventory}
         sub_cid = f"{correlation_id}:{plugin_name}:{uuid.uuid4().hex[:8]}"
         try:
-            result = await self._executor.execute(
-                plugin, params=params, correlation_id=sub_cid
-            )
+            result = await self._executor.execute(plugin, params=params, correlation_id=sub_cid)
         except Exception as exc:  # noqa: BLE001 - never abort analysis
             coverage_gaps.append(
                 {
@@ -376,6 +372,7 @@ class AnalysisAgent:
         tier_label = ""
         backend_label = ""
         from forge.providers.router import RouterAsProvider  # noqa: PLC0415
+
         if isinstance(self._llm, RouterAsProvider):
             last = self._llm.last_result
             if last is not None:
@@ -408,16 +405,9 @@ class AnalysisAgent:
         for f in findings:
             sev = str(f.get("severity", "info"))
             tally[sev] = tally.get(sev, 0) + 1
-        parts = [
-            f"{tally[tier]} {tier}"
-            for tier in _SEVERITY_TIERS
-            if tally.get(tier, 0) > 0
-        ]
+        parts = [f"{tally[tier]} {tier}" for tier in _SEVERITY_TIERS if tally.get(tier, 0) > 0]
         joined = ", ".join(parts) if parts else f"{len(findings)} findings"
-        return (
-            f"Analysis produced {len(findings)} findings across severity tiers: "
-            f"{joined}."
-        )
+        return f"Analysis produced {len(findings)} findings across severity tiers: {joined}."
 
     @staticmethod
     def _build_llm_prompt(findings: list[dict[str, object]]) -> str:

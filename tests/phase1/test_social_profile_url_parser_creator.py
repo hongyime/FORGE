@@ -107,9 +107,7 @@ def test_social_profile_url_parser_supports_creator_and_publishing_routes() -> N
         == "acmeops"
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://miro.medium.com"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://miro.medium.com")
         == ""
     )
     assert (

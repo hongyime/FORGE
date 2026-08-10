@@ -55,9 +55,7 @@ class _StubLlama:
         **kwargs: Any,
     ) -> None:
         self.chat_response = chat_response or {
-            "choices": [
-                {"message": {"role": "assistant", "content": "stub answer"}}
-            ],
+            "choices": [{"message": {"role": "assistant", "content": "stub answer"}}],
             "usage": {"prompt_tokens": 7, "completion_tokens": 3},
         }
         self.embedding_response = (
@@ -124,13 +122,9 @@ def stub_llama() -> _StubLlama:
 class TestProtocolConformance:
     """Verify LlamaCppProvider satisfies the LLMProvider protocol (Req 3.3)."""
 
-    def test_provider_satisfies_llm_provider_protocol(
-        self, stub_llama: _StubLlama
-    ) -> None:
+    def test_provider_satisfies_llm_provider_protocol(self, stub_llama: _StubLlama) -> None:
         with _patch_llama(lambda **_: stub_llama):
-            provider = LlamaCppProvider(
-                model_path="/fake/model.gguf", timeout=5.0
-            )
+            provider = LlamaCppProvider(model_path="/fake/model.gguf", timeout=5.0)
 
         assert isinstance(provider, LLMProvider)
 
@@ -142,9 +136,7 @@ class TestProtocolConformance:
 
     def test_model_id_defaults_to_path_stem(self, stub_llama: _StubLlama) -> None:
         with _patch_llama(lambda **_: stub_llama):
-            provider = LlamaCppProvider(
-                model_path="/fake/qwen2.5-coder-7b-q4.gguf"
-            )
+            provider = LlamaCppProvider(model_path="/fake/qwen2.5-coder-7b-q4.gguf")
 
         assert provider.model_id == "qwen2.5-coder-7b-q4"
 
@@ -219,11 +211,7 @@ class TestComplete:
 
         await provider.complete(CompletionRequest(prompt="hello"))
 
-        entries = [
-            e
-            for e in audit_logger.entries
-            if e.event_type == AuditEventType.LLM_INFERENCE
-        ]
+        entries = [e for e in audit_logger.entries if e.event_type == AuditEventType.LLM_INFERENCE]
         assert len(entries) == 1
         entry = entries[0]
         assert entry.success is True
@@ -247,9 +235,7 @@ class TestComplete:
         assert summary["latency_ms"] >= 0.0
 
     @pytest.mark.asyncio
-    async def test_complete_forwards_system_and_stop(
-        self, stub_llama: _StubLlama
-    ) -> None:
+    async def test_complete_forwards_system_and_stop(self, stub_llama: _StubLlama) -> None:
         with _patch_llama(lambda **_: stub_llama):
             provider = LlamaCppProvider(model_path="/fake/model.gguf")
 
@@ -281,15 +267,11 @@ class TestStructuredOutput:
     """Verify structured (JSON) output and schema forwarding."""
 
     @pytest.mark.asyncio
-    async def test_structured_output_returns_parsed_dict(
-        self, audit_logger: AuditLogger
-    ) -> None:
+    async def test_structured_output_returns_parsed_dict(self, audit_logger: AuditLogger) -> None:
         payload = {"verdict": "approve", "score": 0.91}
         stub = _StubLlama(
             chat_response={
-                "choices": [
-                    {"message": {"role": "assistant", "content": json.dumps(payload)}}
-                ],
+                "choices": [{"message": {"role": "assistant", "content": json.dumps(payload)}}],
                 "usage": {"prompt_tokens": 5, "completion_tokens": 11},
             }
         )
@@ -312,45 +294,29 @@ class TestStructuredOutput:
         assert call["response_format"]["type"] == "json_object"
         assert call["response_format"]["schema"] == schema
 
-        entries = [
-            e
-            for e in audit_logger.entries
-            if e.event_type == AuditEventType.LLM_INFERENCE
-        ]
+        entries = [e for e in audit_logger.entries if e.event_type == AuditEventType.LLM_INFERENCE]
         assert len(entries) == 1
         assert entries[0].output_summary is not None
         summary = json.loads(entries[0].output_summary)
         assert summary["completion_tokens"] == 11
 
     @pytest.mark.asyncio
-    async def test_structured_output_invalid_json_raises(
-        self, audit_logger: AuditLogger
-    ) -> None:
+    async def test_structured_output_invalid_json_raises(self, audit_logger: AuditLogger) -> None:
         stub = _StubLlama(
             chat_response={
-                "choices": [
-                    {"message": {"role": "assistant", "content": "not json"}}
-                ],
+                "choices": [{"message": {"role": "assistant", "content": "not json"}}],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1},
             }
         )
 
         with _patch_llama(lambda **_: stub):
-            provider = LlamaCppProvider(
-                model_path="/fake/model.gguf", audit_logger=audit_logger
-            )
+            provider = LlamaCppProvider(model_path="/fake/model.gguf", audit_logger=audit_logger)
 
         with pytest.raises(ProviderUnavailableError, match="non-JSON"):
-            await provider.structured_output(
-                CompletionRequest(prompt="bad"), schema={}
-            )
+            await provider.structured_output(CompletionRequest(prompt="bad"), schema={})
 
         # Failure path still emits an audit entry
-        entries = [
-            e
-            for e in audit_logger.entries
-            if e.event_type == AuditEventType.LLM_INFERENCE
-        ]
+        entries = [e for e in audit_logger.entries if e.event_type == AuditEventType.LLM_INFERENCE]
         assert len(entries) == 1
         assert entries[0].success is False
 
@@ -377,11 +343,7 @@ class TestEmbed:
         assert vector == [0.1, 0.2, 0.3]
         assert len(stub_llama.embed_calls) == 1
 
-        entries = [
-            e
-            for e in audit_logger.entries
-            if e.event_type == AuditEventType.LLM_INFERENCE
-        ]
+        entries = [e for e in audit_logger.entries if e.event_type == AuditEventType.LLM_INFERENCE]
         assert len(entries) == 1
         params = entries[0].input_params
         assert params is not None
@@ -412,11 +374,7 @@ class TestTimeoutEnforcement:
         with pytest.raises(ProviderUnavailableError, match="timeout"):
             await provider.complete(CompletionRequest(prompt="slow"))
 
-        entries = [
-            e
-            for e in audit_logger.entries
-            if e.event_type == AuditEventType.LLM_INFERENCE
-        ]
+        entries = [e for e in audit_logger.entries if e.event_type == AuditEventType.LLM_INFERENCE]
         assert len(entries) == 1
         assert entries[0].success is False
         assert entries[0].error_detail is not None
@@ -437,9 +395,7 @@ class TestTimeoutEnforcement:
             await provider.embed("slow")
 
     @pytest.mark.asyncio
-    async def test_backend_exception_normalised(
-        self, audit_logger: AuditLogger
-    ) -> None:
+    async def test_backend_exception_normalised(self, audit_logger: AuditLogger) -> None:
         stub = _StubLlama(raise_on_call=RuntimeError("backend kaput"))
 
         with _patch_llama(lambda **_: stub):
@@ -457,9 +413,7 @@ class TestTimeoutEnforcement:
 
 class TestHealthCheck:
     @pytest.mark.asyncio
-    async def test_health_check_true_on_success(
-        self, stub_llama: _StubLlama
-    ) -> None:
+    async def test_health_check_true_on_success(self, stub_llama: _StubLlama) -> None:
         with _patch_llama(lambda **_: stub_llama):
             provider = LlamaCppProvider(model_path="/fake/model.gguf")
 

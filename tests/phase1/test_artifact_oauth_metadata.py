@@ -38,11 +38,14 @@ def test_oauth_metadata_urls_resolve_relative_endpoint_fields_source_aware() -> 
         "https://login.acme.example/.well-known/introspect?view=public",
     ]
     assert "https://login.acme.example/.well-known/introspect?token=hidden&view=public" not in urls
-    assert oauth_metadata_urls(
-        payload,
-        source_label="json",
-        base_url="https://login.acme.example/metadata.json",
-    ) == []
+    assert (
+        oauth_metadata_urls(
+            payload,
+            source_label="json",
+            base_url="https://login.acme.example/metadata.json",
+        )
+        == []
+    )
 
 
 def test_artifact_url_family_routes_oauth_metadata_without_generic_json_noise(

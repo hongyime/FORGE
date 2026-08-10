@@ -5,6 +5,7 @@ Canonical: forge/phase2/auth_adapters/http_adapter.py
 HTTP Basic-Auth and form-based authentication adapter using curl_cffi.
 Impersonates Chrome TLS fingerprint; never uses python-requests UA.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -66,7 +67,7 @@ class HTTPAdapter(BaseAuthAdapter):
         await asyncio.sleep(max(0.1, random.gauss(2.0, 0.6)))
 
         target_port = port or self.default_port
-        base_url    = f"{scheme}://{host}:{target_port}"
+        base_url = f"{scheme}://{host}:{target_port}"
 
         try:
             from curl_cffi.requests import AsyncSession  # type: ignore[import]
@@ -86,7 +87,7 @@ class HTTPAdapter(BaseAuthAdapter):
                 if r.status_code == 200:
                     return True, None
                 if r.status_code == 401:
-                    pass   # fall through to form spray
+                    pass  # fall through to form spray
                 elif r.status_code == 403:
                     return False, "403 Forbidden"
             except Exception as exc:

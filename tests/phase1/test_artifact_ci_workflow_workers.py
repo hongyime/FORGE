@@ -158,9 +158,7 @@ def test_ci_container_walkers_use_ordered_worker_path_and_preserve_order(
         "definitions": {"services": {"scanner": {"image": "registry.gitlab.com/acme/scanner:2"}}},
     }
     gitlab = {
-        "default": {
-            "services": [{"name": "registry.gitlab.com/acme/postgres:14"}]
-        },
+        "default": {"services": [{"name": "registry.gitlab.com/acme/postgres:14"}]},
         "deploy": {"services": ["registry.gitlab.com/acme/redis:7"]},
     }
 

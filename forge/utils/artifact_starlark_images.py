@@ -82,10 +82,4 @@ def _string_literals(body: str) -> list[str]:
 
 
 def _unescape_string(value: str) -> str:
-    return (
-        str(value or "")
-        .replace(r"\/", "/")
-        .replace(r"\"", '"')
-        .replace(r"\'", "'")
-        .strip()
-    )
+    return str(value or "").replace(r"\/", "/").replace(r"\"", '"').replace(r"\'", "'").strip()

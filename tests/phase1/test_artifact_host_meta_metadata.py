@@ -76,5 +76,8 @@ def test_host_meta_relative_link_hrefs_become_recursive_url_seeds(tmp_path: Path
 
     assert ("https://social.acme.example/.well-known/profile", "url") in seeds
     assert ("https://social.acme.example/users/alice", "url") in seeds
-    assert ("https://profiles.acme.example/.well-known/webfinger?resource=%7Buri", "url") not in seeds
+    assert (
+        "https://profiles.acme.example/.well-known/webfinger?resource=%7Buri",
+        "url",
+    ) not in seeds
     assert ("https://social.acme.example/.well-known/generic-profile", "url") not in seeds

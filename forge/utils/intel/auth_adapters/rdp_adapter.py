@@ -12,6 +12,7 @@ OPSEC:
   - Exit code 0 = auth success; non-zero = failure.
   - stderr suppressed; stdout captured only for version check.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +25,7 @@ from forge.utils.intel.auth_adapters import BaseAuthAdapter
 _LOG = logging.getLogger(__name__)
 
 _MIN_XFREERDP_VERSION = (2, 10, 0)
-_TIMEOUT              = 20   # seconds
+_TIMEOUT = 20  # seconds
 
 
 class RDPAdapter(BaseAuthAdapter):

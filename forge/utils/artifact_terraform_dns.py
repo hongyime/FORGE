@@ -21,16 +21,12 @@ _DNS_RESOURCE_TYPES = {
     "dnsimple_record",
     "google_dns_record_set",
 }
-_BLOCK_START_RE = re.compile(
-    r'^\s*resource\s+"(?P<type>[A-Za-z0-9_]+)"\s+"[^"\r\n]+"\s*\{'
-)
+_BLOCK_START_RE = re.compile(r'^\s*resource\s+"(?P<type>[A-Za-z0-9_]+)"\s+"[^"\r\n]+"\s*\{')
 _ASSIGNMENT_RE = re.compile(
     r"^\s*(?P<key>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>[^\r\n#]{1,2048})"
 )
 _QUOTED_VALUE_RE = re.compile(r"""["'](?P<value>[^"'\r\n]{1,1024})["']""")
-_HOST_RE = re.compile(
-    r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$"
-)
+_HOST_RE = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$")
 _NAME_KEYS = {"fqdn", "hostname", "name"}
 _TARGET_KEYS = {
     "alias_name",

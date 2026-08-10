@@ -63,8 +63,7 @@ class SubprocessProvider:
         resolved = shutil.which(binary_name) or shutil.which(f"{binary_name}.cmd")
         if not resolved:
             raise ProviderUnavailableError(
-                f"{self.backend_name}: binary not found on PATH "
-                f"(looked for {binary_name!r})"
+                f"{self.backend_name}: binary not found on PATH (looked for {binary_name!r})"
             )
         self._binary = resolved
         self._timeout = float(timeout)
@@ -121,6 +120,7 @@ class SubprocessProvider:
 
         # Compose environment: start from parent, apply subclass overrides.
         import os as _os  # noqa: PLC0415
+
         env = _os.environ.copy()
         for k, v in self._extra_env().items():
             if v is None:
@@ -212,14 +212,13 @@ class SubprocessProvider:
             ) from exc
 
     async def embed(self, text: str) -> list[float]:
-        raise ProviderUnavailableError(
-            f"{self.backend_name}: embeddings not supported via the CLI"
-        )
+        raise ProviderUnavailableError(f"{self.backend_name}: embeddings not supported via the CLI")
 
     async def health_check(self) -> bool:
         try:
             proc = await asyncio.create_subprocess_exec(
-                self._binary, *self.version_args,
+                self._binary,
+                *self.version_args,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

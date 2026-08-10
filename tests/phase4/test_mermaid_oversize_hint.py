@@ -75,6 +75,4 @@ def test_oversize_mermaid_warning_mentions_critical_path_flag() -> None:
     assert "--critical-path-only" in combined, (
         f"warning should mention the CLI escape hatch; got: {combined!r}"
     )
-    assert "forge graph build" in combined, (
-        "warning should mention the concrete CLI command"
-    )
+    assert "forge graph build" in combined, "warning should mention the concrete CLI command"

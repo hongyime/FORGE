@@ -28,7 +28,10 @@ def _app_runner_doc() -> dict[str, object]:
         "run": {
             "env": [
                 {"name": "SUPPORT_EMAIL", "value": "apprunner-owner@acme.example"},
-                {"name": "PUBLIC_URL", "value": "https://apprunner.acme.example/api?token=secret&view=ops"},
+                {
+                    "name": "PUBLIC_URL",
+                    "value": "https://apprunner.acme.example/api?token=secret&view=ops",
+                },
                 {"name": "FIREBASE_PROJECT_ID", "value": "apprunnerfirebase"},
                 {"name": "NEXT_PUBLIC_SUPABASE_PROJECT_REF", "value": "apprunnervault"},
                 {"name": "AWS_S3_BUCKET", "value": "apprunner-s3-bucket"},
@@ -58,12 +61,18 @@ def _copilot_doc() -> dict[str, object]:
 def test_aws_app_runner_labels_are_source_aware() -> None:
     assert aws_app_runner_artifact_label("apprunner.yaml") == "aws-app-runner-config"
     assert aws_app_runner_artifact_label("copilot/api/manifest.yml") == "aws-copilot-manifest"
-    assert aws_app_runner_artifact_label("workspace/copilot/api/manifest.yml") == "aws-copilot-manifest"
+    assert (
+        aws_app_runner_artifact_label("workspace/copilot/api/manifest.yml")
+        == "aws-copilot-manifest"
+    )
     assert aws_app_runner_artifact_label("manifest.yml") == ""
     assert aws_app_runner_artifact_label("docs/copilot/manifest.yml") == ""
     assert _artifact_format_label("copilot/api/manifest.yml") == "aws-copilot-manifest"
     assert _classify_remote_artifact_url("https://repo.acme.example/apprunner.yaml") == "config"
-    assert _classify_remote_artifact_url("https://repo.acme.example/copilot/api/manifest.yml") == "config"
+    assert (
+        _classify_remote_artifact_url("https://repo.acme.example/copilot/api/manifest.yml")
+        == "config"
+    )
 
 
 def test_aws_app_runner_candidates_extract_static_refs_only() -> None:
@@ -77,20 +86,23 @@ def test_aws_app_runner_candidates_extract_static_refs_only() -> None:
         "s3://apprunner-s3-bucket",
         "aws-iam-role://arn:aws:iam::742931608514:role/apprunner-access",
     ]
-    assert aws_app_runner_candidates(
-        {
-            "version": "1.0",
-            "runtime": "nodejs22",
-            "run": {
-                "env": [
-                    {"name": "PUBLIC_URL", "value": "${URL}"},
-                    {"name": "PRIVATE_URL", "value": "https://user:pass@example.com/api"},
-                    {"name": "PASSWORD", "value": "not-an-email@localhost"},
-                ]
+    assert (
+        aws_app_runner_candidates(
+            {
+                "version": "1.0",
+                "runtime": "nodejs22",
+                "run": {
+                    "env": [
+                        {"name": "PUBLIC_URL", "value": "${URL}"},
+                        {"name": "PRIVATE_URL", "value": "https://user:pass@example.com/api"},
+                        {"name": "PASSWORD", "value": "not-an-email@localhost"},
+                    ]
+                },
             },
-        },
-        source_hint="apprunner.yaml",
-    ) == []
+            source_hint="apprunner.yaml",
+        )
+        == []
+    )
 
 
 def test_copilot_candidates_extract_aliases_images_and_env_refs() -> None:

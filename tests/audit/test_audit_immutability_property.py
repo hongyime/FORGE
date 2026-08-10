@@ -78,6 +78,7 @@ audit_entries = st.builds(
 
 # ── P1: No public modify/delete API ───────────────────────────────────────────
 
+
 class TestPublicApiSurface:
     """Property 23.P1 — surface-level immutability contract."""
 
@@ -152,14 +153,13 @@ class TestPublicApiSurface:
 
 # ── P2: Defensive copy ────────────────────────────────────────────────────────
 
+
 class TestDefensiveCopy:
     """Property 23.P2 — ``.entries`` returns an isolated snapshot."""
 
     @settings(max_examples=50, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(entries=st.lists(audit_entries, max_size=8))
-    def test_mutating_returned_list_does_not_affect_logger(
-        self, entries: list[AuditEntry]
-    ) -> None:
+    def test_mutating_returned_list_does_not_affect_logger(self, entries: list[AuditEntry]) -> None:
         async def run() -> None:
             logger = AuditLogger()
             for e in entries:
@@ -170,12 +170,8 @@ class TestDefensiveCopy:
 
             # Try every common in-place mutation on the snapshot.
             snapshot.clear()
-            snapshot.append(
-                AuditEntry(correlation_id="poison", event_type=AuditEventType.ERROR)
-            )
-            snapshot.extend(
-                [AuditEntry(correlation_id="poison2", event_type=AuditEventType.ERROR)]
-            )
+            snapshot.append(AuditEntry(correlation_id="poison", event_type=AuditEventType.ERROR))
+            snapshot.extend([AuditEntry(correlation_id="poison2", event_type=AuditEventType.ERROR)])
             snapshot.reverse()
             try:
                 snapshot.pop()
@@ -203,14 +199,13 @@ class TestDefensiveCopy:
 
 # ── P3: Monotonic growth ──────────────────────────────────────────────────────
 
+
 class TestMonotonicGrowth:
     """Property 23.P3 — every successful ``log()`` increases length by 1."""
 
     @settings(max_examples=50, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(entries=st.lists(audit_entries, max_size=12))
-    def test_length_strictly_increases_per_successful_log(
-        self, entries: list[AuditEntry]
-    ) -> None:
+    def test_length_strictly_increases_per_successful_log(self, entries: list[AuditEntry]) -> None:
         async def run() -> None:
             logger = AuditLogger()
             assert logger.entries == []
@@ -219,12 +214,10 @@ class TestMonotonicGrowth:
                 await logger.log(e)
                 curr = len(logger.entries)
                 assert curr >= prev, (
-                    f"len(entries) decreased after log() call #{i}: "
-                    f"{prev} -> {curr}"
+                    f"len(entries) decreased after log() call #{i}: {prev} -> {curr}"
                 )
                 assert curr == i, (
-                    f"len(entries) == {curr} after {i} successful log() calls; "
-                    f"expected {i}."
+                    f"len(entries) == {curr} after {i} successful log() calls; expected {i}."
                 )
                 prev = curr
             assert len(logger.entries) == len(entries)
@@ -257,9 +250,7 @@ class TestContentPreservation:
 
     @settings(max_examples=50, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(entries=st.lists(audit_entries, min_size=1, max_size=8))
-    def test_logged_entries_appear_in_order_and_unchanged(
-        self, entries: list[AuditEntry]
-    ) -> None:
+    def test_logged_entries_appear_in_order_and_unchanged(self, entries: list[AuditEntry]) -> None:
         async def run() -> None:
             logger = AuditLogger()
             for e in entries:
@@ -285,9 +276,7 @@ class TestContentPreservation:
 
     @settings(max_examples=30, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(entries=st.lists(audit_entries, min_size=1, max_size=6))
-    def test_earlier_entries_remain_after_more_logs(
-        self, entries: list[AuditEntry]
-    ) -> None:
+    def test_earlier_entries_remain_after_more_logs(self, entries: list[AuditEntry]) -> None:
         """Appending new entries does not perturb earlier ones."""
 
         async def run() -> None:

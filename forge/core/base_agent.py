@@ -61,9 +61,7 @@ class Agent(Protocol):
         """Message-bus topics this agent consumes."""
         ...
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         """Process ``message`` and return output messages to publish.
 
         Returning an empty list is allowed. Exceptions raised here propagate

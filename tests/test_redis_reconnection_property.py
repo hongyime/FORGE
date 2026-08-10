@@ -125,8 +125,7 @@ def test_reconnect_backoff_within_bounds(num_failures: int) -> None:
         assert captured_sleeps, "expected at least one reconnection sleep"
         for s in captured_sleeps:
             assert _INITIAL_BACKOFF_S <= s <= _MAX_BACKOFF_S, (
-                f"sleep duration {s} outside "
-                f"[{_INITIAL_BACKOFF_S}, {_MAX_BACKOFF_S}]"
+                f"sleep duration {s} outside [{_INITIAL_BACKOFF_S}, {_MAX_BACKOFF_S}]"
             )
 
         # The first sleep must start at the initial backoff.
@@ -136,8 +135,7 @@ def test_reconnect_backoff_within_bounds(num_failures: int) -> None:
         for prev, nxt in zip(captured_sleeps, captured_sleeps[1:]):
             expected = min(prev * _BACKOFF_MULTIPLIER, _MAX_BACKOFF_S)
             assert nxt == expected, (
-                f"backoff progression violated: {prev} -> {nxt}, "
-                f"expected {expected}"
+                f"backoff progression violated: {prev} -> {nxt}, expected {expected}"
             )
 
         # The bus eventually reconnected and reset its backoff to the initial.
@@ -182,10 +180,7 @@ def test_buffered_messages_flushed_in_fifo_order(n: int) -> None:
         assert mock_redis.publish.call_count == n
 
         # Calls preserve FIFO order with respect to the original buffer.
-        actual_calls = [
-            (call.args[0], call.args[1])
-            for call in mock_redis.publish.call_args_list
-        ]
+        actual_calls = [(call.args[0], call.args[1]) for call in mock_redis.publish.call_args_list]
         assert actual_calls == expected_calls
 
         # Buffer drained, bus reports connected.

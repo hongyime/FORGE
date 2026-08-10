@@ -92,16 +92,19 @@ def test_secret_provider_class_candidates_cover_azure_aws_gcp_and_vault() -> Non
 
 def test_secret_provider_class_candidates_ignore_non_csi_manifests_and_templates() -> None:
     assert secret_provider_class_candidates({"kind": "Secret", "metadata": {"name": "plain"}}) == []
-    assert secret_provider_class_candidates(
-        {
-            "kind": "SecretProviderClass",
-            "metadata": {"name": "{{ template }}"},
-            "spec": {
-                "provider": "azure",
-                "parameters": {
-                    "keyvaultName": "{{ vault }}",
-                    "objects": "objectName: {{ secret }}\nobjectType: secret",
+    assert (
+        secret_provider_class_candidates(
+            {
+                "kind": "SecretProviderClass",
+                "metadata": {"name": "{{ template }}"},
+                "spec": {
+                    "provider": "azure",
+                    "parameters": {
+                        "keyvaultName": "{{ vault }}",
+                        "objects": "objectName: {{ secret }}\nobjectType: secret",
+                    },
                 },
-            },
-        }
-    ) == []
+            }
+        )
+        == []
+    )

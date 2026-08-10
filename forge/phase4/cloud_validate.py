@@ -7,6 +7,7 @@ destructive access. It only performs low-impact reachability and
 structure checks, then records an explicit validation status for later
 report gating.
 """
+
 from __future__ import annotations
 
 import base64
@@ -228,7 +229,11 @@ def _has_sequential_numeric_identifier_token(value: object) -> bool:
     candidate = str(value or "").strip().lower()
     compact = re.sub(r"[^0-9]+", "", candidate)
     alnum_compact = re.sub(r"[^a-z0-9]+", "", candidate)
-    if alnum_compact and alnum_compact.isdigit() and _looks_sequential_numeric_identifier(alnum_compact):
+    if (
+        alnum_compact
+        and alnum_compact.isdigit()
+        and _looks_sequential_numeric_identifier(alnum_compact)
+    ):
         return True
     if compact and compact == alnum_compact and _looks_sequential_numeric_identifier(compact):
         return True
@@ -417,7 +422,7 @@ def _stable_slack_identifier(value: object, prefixes: tuple[str, ...]) -> str | 
     prefix = next((item.upper() for item in prefixes if normalized.startswith(item.upper())), "")
     if not prefix or not re.fullmatch(rf"{prefix}[A-Z0-9]{{5,32}}", normalized):
         return None
-    suffix = normalized[len(prefix):]
+    suffix = normalized[len(prefix) :]
     if len(set(suffix)) == 1:
         return None
     if suffix.isdigit() and _looks_sequential_numeric_identifier(suffix):
@@ -670,9 +675,7 @@ class BaseCloudValidator:
             "demo",
         )
         placeholder_hits = sum(
-            1
-            for value in normalized
-            if any(marker in value for marker in placeholder_markers)
+            1 for value in normalized if any(marker in value for marker in placeholder_markers)
         )
         unique_values = set(normalized)
         if placeholder_hits >= 2:
@@ -732,9 +735,7 @@ class BaseCloudValidator:
         )
         normalized = [value.strip().lower() for value in values if value.strip()]
         marker_hits = sum(
-            1
-            for value in normalized
-            if any(marker in value for marker in suspicious_markers)
+            1 for value in normalized if any(marker in value for marker in suspicious_markers)
         )
         if len(normalized) == 1:
             value = normalized[0]
@@ -945,7 +946,10 @@ class BaseCloudValidator:
             re.compile(r"^build\.gradle(?:\.kts)?$", re.IGNORECASE),
             re.compile(r"^settings\.gradle(?:\.kts)?$", re.IGNORECASE),
             re.compile(r"^tsconfig[\w.-]*\.json$", re.IGNORECASE),
-            re.compile(r"^(?:vite|vitest|next|nuxt|astro|svelte|tailwind|postcss|babel|jest|webpack|rollup)\.config\.[cm]?[jt]s$", re.IGNORECASE),
+            re.compile(
+                r"^(?:vite|vitest|next|nuxt|astro|svelte|tailwind|postcss|babel|jest|webpack|rollup)\.config\.[cm]?[jt]s$",
+                re.IGNORECASE,
+            ),
         )
         return any(pattern.fullmatch(normalized) for pattern in metadata_patterns)
 
@@ -985,9 +989,17 @@ class BaseCloudValidator:
             return True
         api_doc_patterns = (
             re.compile(r"^[\w.-]+\.postman_collection\.json$", re.IGNORECASE),
-            re.compile(r"^(?:openapi|swagger|asyncapi)[-_.]v?\d+(?:[-_.]\d+)?\.(?:json|ya?ml)$", re.IGNORECASE),
-            re.compile(r"^(?:graphql[-_.])?(?:schema|introspection)\.(?:gql|graphql|json)$", re.IGNORECASE),
-            re.compile(r"^(?:redoc|swagger-ui)(?:[-_.][\w.-]+)?\.(?:css|html|js|map|png|svg)$", re.IGNORECASE),
+            re.compile(
+                r"^(?:openapi|swagger|asyncapi)[-_.]v?\d+(?:[-_.]\d+)?\.(?:json|ya?ml)$",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"^(?:graphql[-_.])?(?:schema|introspection)\.(?:gql|graphql|json)$", re.IGNORECASE
+            ),
+            re.compile(
+                r"^(?:redoc|swagger-ui)(?:[-_.][\w.-]+)?\.(?:css|html|js|map|png|svg)$",
+                re.IGNORECASE,
+            ),
             re.compile(r"^[\w.-]+\.(?:wadl|wsdl)$", re.IGNORECASE),
         )
         if any(pattern.fullmatch(normalized) for pattern in api_doc_patterns):
@@ -1191,9 +1203,18 @@ class BaseCloudValidator:
             return True
 
         plain_asset_patterns = (
-            re.compile(r"^(?:app|bundle|index|main|runtime|site|styles?|vendor|worker|sw)(?:[-._][\w-]+)?\.(?:js|css|map)$", re.IGNORECASE),
-            re.compile(r"^(?:logo|icon|favicon|apple-touch-icon|android-chrome)(?:[-._]?\d+x\d+)?\.(?:png|jpg|jpeg|svg|webp|ico)$", re.IGNORECASE),
-            re.compile(r"^(?:fontawesome|inter|roboto|opensans|lato|montserrat|poppins)[-._\w]*\.(?:woff2?|ttf|eot)$", re.IGNORECASE),
+            re.compile(
+                r"^(?:app|bundle|index|main|runtime|site|styles?|vendor|worker|sw)(?:[-._][\w-]+)?\.(?:js|css|map)$",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"^(?:logo|icon|favicon|apple-touch-icon|android-chrome)(?:[-._]?\d+x\d+)?\.(?:png|jpg|jpeg|svg|webp|ico)$",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"^(?:fontawesome|inter|roboto|opensans|lato|montserrat|poppins)[-._\w]*\.(?:woff2?|ttf|eot)$",
+                re.IGNORECASE,
+            ),
         )
         if any(pattern.fullmatch(normalized) for pattern in plain_asset_patterns):
             return True
@@ -1208,7 +1229,10 @@ class BaseCloudValidator:
             return True
 
         generated_index_patterns = (
-            re.compile(r"^(?:post|page|category|tag|author|news|video|image|product|wp)-sitemap(?:\d+)?\.xml$", re.IGNORECASE),
+            re.compile(
+                r"^(?:post|page|category|tag|author|news|video|image|product|wp)-sitemap(?:\d+)?\.xml$",
+                re.IGNORECASE,
+            ),
             re.compile(r"^sitemap(?:[-_]\d+|[-_][a-z0-9-]+)?\.xml$", re.IGNORECASE),
             re.compile(r"^(?:feed|rss|atom)(?:[-_][a-z0-9-]+)?\.xml$", re.IGNORECASE),
         )
@@ -1216,7 +1240,10 @@ class BaseCloudValidator:
             return True
 
         icon_patterns = (
-            re.compile(r"^(?:android-chrome|apple-touch-icon|mstile)-\d+x\d+\.(?:png|jpg|jpeg)$", re.IGNORECASE),
+            re.compile(
+                r"^(?:android-chrome|apple-touch-icon|mstile)-\d+x\d+\.(?:png|jpg|jpeg)$",
+                re.IGNORECASE,
+            ),
             re.compile(r"^apple-touch-icon(?:-precomposed)?\.(?:png|jpg|jpeg)$", re.IGNORECASE),
             re.compile(r"^logo\d{2,4}\.(?:png|jpg|jpeg|svg|webp)$", re.IGNORECASE),
         )
@@ -1304,7 +1331,9 @@ class ManagedHostingReachabilityValidator(BaseCloudValidator):
     hosting endpoint is useful review evidence, but it is not a data exposure.
     """
 
-    def __init__(self, asset_type: str, host_suffix: str, *, require_qualified_identifier: bool = False) -> None:
+    def __init__(
+        self, asset_type: str, host_suffix: str, *, require_qualified_identifier: bool = False
+    ) -> None:
         self.asset_type = asset_type
         self._host_suffix = host_suffix
         self._require_qualified_identifier = require_qualified_identifier
@@ -1386,7 +1415,9 @@ class ManagedHostingReachabilityValidator(BaseCloudValidator):
         body = self._response_text(resp)
         headers = getattr(resp, "headers", {}) or {}
         try:
-            content_type = str(headers.get("content-type") or headers.get("Content-Type") or "").strip()
+            content_type = str(
+                headers.get("content-type") or headers.get("Content-Type") or ""
+            ).strip()
         except Exception:  # noqa: BLE001
             content_type = ""
         evidence = f"url={url} status={status_code} content_type={content_type}".strip()
@@ -1809,21 +1840,15 @@ class FirebaseValidator(BaseCloudValidator):
             return False
         low_signal_keys = FirebaseValidator._firebase_low_signal_root_keys()
         normalized_keys = {
-            str(key or "").strip().lower()
-            for key in payload.keys()
-            if str(key or "").strip()
+            str(key or "").strip().lower() for key in payload.keys() if str(key or "").strip()
         }
         if not normalized_keys:
             return False
         if not all(
-            key in low_signal_keys or key.startswith((".", "__"))
-            for key in normalized_keys
+            key in low_signal_keys or key.startswith((".", "__")) for key in normalized_keys
         ):
             return False
-        return all(
-            value in (None, "", [], {}, False, True, 0, 1)
-            for value in payload.values()
-        )
+        return all(value in (None, "", [], {}, False, True, 0, 1) for value in payload.values())
 
     @staticmethod
     def _extract_firebase_shallow_candidate_keys(text: str) -> list[str]:
@@ -1835,11 +1860,7 @@ class FirebaseValidator(BaseCloudValidator):
         for key in payload.keys():
             key_text = str(key or "").strip()
             normalized = key_text.lower()
-            if (
-                not key_text
-                or normalized in low_signal_keys
-                or normalized.startswith((".", "__"))
-            ):
+            if not key_text or normalized in low_signal_keys or normalized.startswith((".", "__")):
                 continue
             candidates.append(key_text)
         return candidates
@@ -1874,9 +1895,7 @@ class FirebaseValidator(BaseCloudValidator):
             if FirebaseValidator._requires_firebase_child_probe(text):
                 return False
             return any(
-                (
-                    isinstance(value, (dict, list)) and bool(value)
-                )
+                (isinstance(value, (dict, list)) and bool(value))
                 or (
                     not isinstance(value, (dict, list))
                     and str(value).strip().lower() not in {"", "false", "none", "null"}
@@ -1924,7 +1943,9 @@ class FirebaseValidator(BaseCloudValidator):
                             evidence=body,
                             notes="Firebase endpoint returned unexpected non-JSON content.",
                         )
-                    structured_error = self._classify_structured_error_payload(body, auth_status="UNVERIFIED")
+                    structured_error = self._classify_structured_error_payload(
+                        body, auth_status="UNVERIFIED"
+                    )
                     if structured_error is not None:
                         validation_status, notes = structured_error
                         return CloudValidationResult(
@@ -1980,7 +2001,10 @@ class FirebaseValidator(BaseCloudValidator):
                             return result
                         accessible_result = result
                         continue
-                    if method == "firebase_database_shallow_read" and self._requires_firebase_child_probe(body):
+                    if (
+                        method == "firebase_database_shallow_read"
+                        and self._requires_firebase_child_probe(body)
+                    ):
                         child_keys = self._extract_firebase_shallow_candidate_keys(body)[:3]
                         for child_key in child_keys:
                             child_url = (
@@ -2146,11 +2170,7 @@ class SupabaseValidator(BaseCloudValidator):
         payload = BaseCloudValidator._parse_json_payload(text)
         if not isinstance(payload, dict):
             return False
-        keys = {
-            str(key or "").strip().lower()
-            for key in payload.keys()
-            if str(key or "").strip()
-        }
+        keys = {str(key or "").strip().lower() for key in payload.keys() if str(key or "").strip()}
         if not keys:
             return False
         schema_keys = {
@@ -2182,11 +2202,7 @@ class SupabaseValidator(BaseCloudValidator):
         payload = BaseCloudValidator._parse_json_payload(text)
         if not isinstance(payload, dict):
             return False
-        keys = {
-            str(key or "").strip().lower()
-            for key in payload.keys()
-            if str(key or "").strip()
-        }
+        keys = {str(key or "").strip().lower() for key in payload.keys() if str(key or "").strip()}
         if not keys:
             return False
         metadata_keys = {
@@ -2235,11 +2251,7 @@ class SupabaseValidator(BaseCloudValidator):
         for item in payload:
             if not isinstance(item, dict) or not item:
                 return False
-            keys = {
-                str(key or "").strip().lower()
-                for key in item.keys()
-                if str(key or "").strip()
-            }
+            keys = {str(key or "").strip().lower() for key in item.keys() if str(key or "").strip()}
             if not keys or not keys.issubset(catalog_keys):
                 return False
             saw_catalog_shape = True
@@ -2293,26 +2305,28 @@ class SupabaseValidator(BaseCloudValidator):
             "jane doe",
         )
         marker_hits = sum(
-            1
-            for value in signal_values
-            if any(marker in value for marker in synthetic_markers)
+            1 for value in signal_values if any(marker in value for marker in synthetic_markers)
         )
         if marker_hits == len(signal_values):
             return True
         if marker_hits >= 2 and marker_hits / max(1, len(signal_values)) >= 0.5:
             return True
-        return len(signal_values) <= 2 and marker_hits >= 1 and any(
-            marker in value
-            for value in signal_values
-            for marker in (
-                "example.com",
-                "example.net",
-                "example.org",
-                "example.test",
-                "example.invalid",
-                "localhost",
-                "127.0.0.1",
-                "honeypot",
+        return (
+            len(signal_values) <= 2
+            and marker_hits >= 1
+            and any(
+                marker in value
+                for value in signal_values
+                for marker in (
+                    "example.com",
+                    "example.net",
+                    "example.org",
+                    "example.test",
+                    "example.invalid",
+                    "localhost",
+                    "127.0.0.1",
+                    "honeypot",
+                )
             )
         )
 
@@ -2451,7 +2465,9 @@ class SupabaseValidator(BaseCloudValidator):
                 return True
             if re.fullmatch(r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:[/:?#].*)?", value_text):
                 return True
-            if re.search(r"\b(?:sk|pk|sb|ghp|xox[baprs]|sg|api)[_-][A-Za-z0-9_-]{12,}\b", value_text):
+            if re.search(
+                r"\b(?:sk|pk|sb|ghp|xox[baprs]|sg|api)[_-][A-Za-z0-9_-]{12,}\b", value_text
+            ):
                 return True
             return False
 
@@ -2525,9 +2541,7 @@ class SupabaseValidator(BaseCloudValidator):
         if SupabaseValidator._looks_supabase_rest_low_signal_row_payload(text):
             return False
         return any(
-            (
-                isinstance(value, (dict, list)) and bool(value)
-            )
+            (isinstance(value, (dict, list)) and bool(value))
             or (
                 not isinstance(value, (dict, list))
                 and str(value).strip().lower() not in {"", "false", "none", "null"}
@@ -2564,7 +2578,9 @@ class SupabaseValidator(BaseCloudValidator):
                             evidence=body,
                             notes="Supabase endpoint returned unexpected non-JSON content.",
                         )
-                    structured_error = self._classify_structured_error_payload(body, auth_status="UNVERIFIED")
+                    structured_error = self._classify_structured_error_payload(
+                        body, auth_status="UNVERIFIED"
+                    )
                     if structured_error is not None:
                         validation_status, notes = structured_error
                         return CloudValidationResult(
@@ -3037,7 +3053,14 @@ class GCSValidator(BaseCloudValidator):
                     break
                 if item.get("name") and any(
                     key in item
-                    for key in ("bucket", "generation", "metageneration", "contentType", "storageClass", "size")
+                    for key in (
+                        "bucket",
+                        "generation",
+                        "metageneration",
+                        "contentType",
+                        "storageClass",
+                        "size",
+                    )
                 ):
                     looks_like_listing = True
                     break
@@ -3404,7 +3427,9 @@ class CloudValidatorRegistry:
             ),
             "github_pages": ManagedHostingReachabilityValidator("github_pages", "github.io"),
             "gitlab_pages": ManagedHostingReachabilityValidator("gitlab_pages", "gitlab.io"),
-            "cloudflare_pages": ManagedHostingReachabilityValidator("cloudflare_pages", "pages.dev"),
+            "cloudflare_pages": ManagedHostingReachabilityValidator(
+                "cloudflare_pages", "pages.dev"
+            ),
             "cloudflare_worker": ManagedHostingReachabilityValidator(
                 "cloudflare_worker",
                 "workers.dev",
@@ -3513,10 +3538,7 @@ def _run_ordered_validation_local_batch(
         return [worker(item) for item in items]
     results: list[Any | None] = [None] * len(items)
     with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-        future_map = {
-            executor.submit(worker, item): index
-            for index, item in enumerate(items)
-        }
+        future_map = {executor.submit(worker, item): index for index, item in enumerate(items)}
         for future in as_completed(future_map):
             results[future_map[future]] = future.result()
     return list(results)
@@ -3555,7 +3577,9 @@ def _supabase_project_ref_from_secret(value: str | None) -> str:
     return project_ref
 
 
-def _extract_identifier(service: str, row: sqlite3.Row | dict[str, Any], *, secret: str | None = None) -> str | None:
+def _extract_identifier(
+    service: str, row: sqlite3.Row | dict[str, Any], *, secret: str | None = None
+) -> str | None:
     domain_value = str(row["domain"] or "").strip().lower()
     if service == "firebase" and re.fullmatch(r"[a-z0-9\-]{4,64}", domain_value):
         return domain_value
@@ -3571,9 +3595,17 @@ def _extract_identifier(service: str, row: sqlite3.Row | dict[str, Any], *, secr
         parsed = urlparse(domain_value)
         if parsed.hostname and parsed.hostname.endswith(".s3.amazonaws.com"):
             return parsed.hostname.split(".s3.amazonaws.com", 1)[0].lower()
-        if parsed.hostname and ".s3-website" in parsed.hostname and parsed.hostname.endswith(".amazonaws.com"):
+        if (
+            parsed.hostname
+            and ".s3-website" in parsed.hostname
+            and parsed.hostname.endswith(".amazonaws.com")
+        ):
             return parsed.hostname.split(".s3-website", 1)[0].lower()
-        if parsed.hostname and parsed.hostname.startswith("s3-website") and parsed.hostname.endswith(".amazonaws.com"):
+        if (
+            parsed.hostname
+            and parsed.hostname.startswith("s3-website")
+            and parsed.hostname.endswith(".amazonaws.com")
+        ):
             parts = [part for part in parsed.path.split("/") if part]
             if parts:
                 return parts[0].lower()
@@ -3620,7 +3652,9 @@ def _extract_identifier(service: str, row: sqlite3.Row | dict[str, Any], *, secr
             account = parsed.hostname.split(".", 1)[0].lower()
             if account:
                 return f"{account}/$web"
-        if parsed.hostname and parsed.hostname.endswith((".blob.core.windows.net", ".dfs.core.windows.net")):
+        if parsed.hostname and parsed.hostname.endswith(
+            (".blob.core.windows.net", ".dfs.core.windows.net")
+        ):
             parts = [part for part in parsed.path.split("/") if part]
             if parts:
                 account = parsed.hostname.split(".", 1)[0].lower()
@@ -3687,10 +3721,19 @@ def _extract_identifier(service: str, row: sqlite3.Row | dict[str, Any], *, secr
                 return f"{region}/{bucket}"
     if service in {"gcs", "google_cloud_storage"}:
         patterns = (
-            re.compile(r"https?://storage\.googleapis\.com/([a-z0-9._\-]{3,222})(?:/|$)", re.IGNORECASE),
-            re.compile(r"https?://([a-z0-9._\-]{3,222})\.storage\.googleapis\.com(?:/|$)", re.IGNORECASE),
-            re.compile(r"https?://storage\.cloud\.google\.com/([a-z0-9._\-]{3,222})(?:/|$)", re.IGNORECASE),
-            re.compile(r"https?://firebasestorage\.googleapis\.com/(?:v0/)?b/([a-z0-9._\-]{3,222})/o(?:[/?#]|$)", re.IGNORECASE),
+            re.compile(
+                r"https?://storage\.googleapis\.com/([a-z0-9._\-]{3,222})(?:/|$)", re.IGNORECASE
+            ),
+            re.compile(
+                r"https?://([a-z0-9._\-]{3,222})\.storage\.googleapis\.com(?:/|$)", re.IGNORECASE
+            ),
+            re.compile(
+                r"https?://storage\.cloud\.google\.com/([a-z0-9._\-]{3,222})(?:/|$)", re.IGNORECASE
+            ),
+            re.compile(
+                r"https?://firebasestorage\.googleapis\.com/(?:v0/)?b/([a-z0-9._\-]{3,222})/o(?:[/?#]|$)",
+                re.IGNORECASE,
+            ),
             re.compile(r"gs://([a-z0-9._\-]{3,222})(?:/|$)", re.IGNORECASE),
         )
         for pattern in patterns:
@@ -3744,10 +3787,7 @@ def _update_key_validation_state(
 
 def _profile_hash_is_stable(text: str) -> bool:
     hash_match = re.search(r"\bprofile_hash=([a-f0-9]{16,64})\b", text, re.IGNORECASE)
-    return bool(
-        hash_match
-        and not _looks_repeated_compact_identifier(hash_match.group(1))
-    )
+    return bool(hash_match and not _looks_repeated_compact_identifier(hash_match.group(1)))
 
 
 def _validated_identifier_from_detail(service: str, detail: str | None) -> str | None:
@@ -3907,7 +3947,7 @@ def _resolve_related_secret(
         WHERE engagement_id=?
           AND service=?
           AND pattern_name=?
-          AND ({' OR '.join(clauses)})
+          AND ({" OR ".join(clauses)})
         ORDER BY
           CASE WHEN COALESCE(source_url, '') = ? THEN 0 ELSE 1 END,
           CASE WHEN COALESCE(repo_name, '') = ? THEN 0 ELSE 1 END,
@@ -3915,7 +3955,15 @@ def _resolve_related_secret(
           id ASC
         LIMIT 1
     """
-    params: list[Any] = [engagement_id, service, pattern_name, *clause_params, source_url, repo_name, domain]
+    params: list[Any] = [
+        engagement_id,
+        service,
+        pattern_name,
+        *clause_params,
+        source_url,
+        repo_name,
+        domain,
+    ]
 
     con = direct_connect(db_path)
     try:
@@ -3953,7 +4001,9 @@ def _validate_existing_key_service(
         ),
         None,
     )
-    validator_cls = validator_class_by_name(pattern.validation_method if pattern is not None else None)
+    validator_cls = validator_class_by_name(
+        pattern.validation_method if pattern is not None else None
+    )
     validation_method = str(getattr(validator_cls, "result_validation_method", "") or "").strip()
     if validator_cls is None or not validation_method:
         return None
@@ -4037,7 +4087,8 @@ def _validate_existing_key_service(
             validation_status="DEAD",
             validation_method=validation_method,
             evidence=detail[:512],
-            notes=detail or "Existing secret validator confirmed the credential was revoked or unauthorized.",
+            notes=detail
+            or "Existing secret validator confirmed the credential was revoked or unauthorized.",
         )
     if state == ValidationState.UNCONFIRMED:
         return CloudValidationResult(
@@ -4211,7 +4262,9 @@ def load_cloud_validation_scope_manifest(value: str | dict[str, Any]) -> dict[st
     )
     return {
         "source": source,
-        "roe_id": " ".join(str(payload.get("roe_id") or payload.get("roe") or "").strip().split())[:160],
+        "roe_id": " ".join(str(payload.get("roe_id") or payload.get("roe") or "").strip().split())[
+            :160
+        ],
         "domains": _validation_scope_values(payload, "domains", "domain_allowlist"),
         "ip_ranges": _validation_scope_values(payload, "ip_ranges", "cidrs", "cidr_ranges"),
         "urls": _validation_scope_values(payload, "urls", "url_prefixes"),
@@ -4373,7 +4426,12 @@ def cloud_asset_scope_decision(
     if not raw_ref:
         return {"allowed": False, "reason": "empty", "service": service_name}
     if not (isinstance(manifest, dict) and manifest):
-        return {"allowed": True, "reason": "no_scope_manifest", "service": service_name, "ref": raw_ref}
+        return {
+            "allowed": True,
+            "reason": "no_scope_manifest",
+            "service": service_name,
+            "ref": raw_ref,
+        }
     entries = cloud_asset_scope_entries(service_name, raw_ref)
     if not entries:
         return {
@@ -4793,11 +4851,7 @@ def run_cloud_asset_validate_batch(
             started_at=started_at,
         )
     if not normalized_assets:
-        results = [
-            result
-            for result in result_slots
-            if result is not None
-        ]
+        results = [result for result in result_slots if result is not None]
     elif bounded_workers == 1:
         results: list[CloudValidationResult] = []
         failed = 0
@@ -4825,7 +4879,7 @@ def run_cloud_asset_validate_batch(
                 completed=index,
                 failed=failed,
                 started_at=started_at,
-                )
+            )
     else:
         results: list[CloudValidationResult] = [
             CloudValidationResult(
@@ -4876,11 +4930,7 @@ def run_cloud_asset_validate_batch(
     if normalized_assets:
         for slot_index, result in zip(allowed_indices, results, strict=False):
             result_slots[slot_index] = result
-        results = [
-            result
-            for result in result_slots
-            if result is not None
-        ]
+        results = [result for result in result_slots if result is not None]
 
     status_counts: dict[str, int] = {}
     con = direct_connect(db_path)
@@ -4938,7 +4988,9 @@ def sweep_pending_cloud_validations(
         for pattern in load_validatable_primary_patterns()
         if pattern.service.lower() not in _CLOUD_SECRET_BACKED_SERVICES
     ]
-    pattern_clause = " OR ".join("(service=? AND pattern_name=?)" for _ in validatable_patterns) or "0"
+    pattern_clause = (
+        " OR ".join("(service=? AND pattern_name=?)" for _ in validatable_patterns) or "0"
+    )
     cloud_service_placeholders = ",".join("?" for _ in _CLOUD_SECRET_BACKED_SERVICES)
     rows, claim_owner, claimed_key_ids = claim_pending_cloud_key_rows(
         engagement_id,
@@ -5080,8 +5132,7 @@ def sweep_pending_cloud_validations(
         failed_items = 0
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
             future_map = {
-                executor.submit(_worker, row): index
-                for index, row in enumerate(allowed_rows)
+                executor.submit(_worker, row): index for index, row in enumerate(allowed_rows)
             }
             for future in as_completed(future_map):
                 index = future_map[future]
@@ -5099,11 +5150,7 @@ def sweep_pending_cloud_validations(
                     failed=failed_items,
                     started_at=started_at,
                 )
-        processed_results = [
-            result
-            for result in processed_results
-            if result is not None
-        ]
+        processed_results = [result for result in processed_results if result is not None]
     if allowed_rows and denied_results:
         processed_results = denied_results + processed_results
 
@@ -5133,7 +5180,9 @@ def sweep_pending_cloud_validations(
             else:
                 summary.succeeded += 1
             validation_status = str(result.validation_status or "UNKNOWN").upper()
-            summary.status_counts[validation_status] = summary.status_counts.get(validation_status, 0) + 1
+            summary.status_counts[validation_status] = (
+                summary.status_counts.get(validation_status, 0) + 1
+            )
             payload = result.to_api_dict()
             payload["key_id"] = key_id
             payload_results.append(payload)
@@ -5267,7 +5316,9 @@ def sweep_pending_cloud_asset_validations(
             for result in denied_results:
                 _persist_validation_result(con, engagement_id, result)
                 validation_status = str(result.validation_status or "UNKNOWN").upper()
-                denied_status_counts[validation_status] = denied_status_counts.get(validation_status, 0) + 1
+                denied_status_counts[validation_status] = (
+                    denied_status_counts.get(validation_status, 0) + 1
+                )
                 payload = result.to_api_dict()
                 payload["engagement_id"] = engagement_id
                 denied_payload_results.append(payload)

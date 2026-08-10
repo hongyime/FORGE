@@ -116,9 +116,16 @@ def test_replay_endpoint_returns_timeline_with_elapsed(client: TestClient) -> No
     assert all(e["elapsed_seconds_since_start"] >= 0 for e in timeline)
     # Entries have the documented shape.
     expected_keys = {
-        "id", "timestamp", "elapsed_seconds_since_start", "event_type",
-        "from_stage_index", "to_stage_index", "from_version", "to_version",
-        "actor", "detail",
+        "id",
+        "timestamp",
+        "elapsed_seconds_since_start",
+        "event_type",
+        "from_stage_index",
+        "to_stage_index",
+        "from_version",
+        "to_version",
+        "actor",
+        "detail",
     }
     for e in timeline:
         assert expected_keys <= set(e.keys()), f"missing keys: {e}"

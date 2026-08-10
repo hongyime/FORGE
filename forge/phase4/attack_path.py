@@ -101,12 +101,7 @@ class _AttackGraph(AttackGraph):
 def _mermaid_escape(value: str | None) -> str:
     if value is None:
         return ""
-    return (
-        value.replace(":", "-")
-        .replace('"', "'")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return value.replace(":", "-").replace('"', "'").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _apc_to_severity(attack_path_class: str | None) -> Severity:
@@ -152,11 +147,14 @@ def _assert_no_sensitive_data(graph_json: str) -> None:
         current = stack.pop()
         if isinstance(current, dict):
             for key, value in current.items():
-                if key in _FORBIDDEN_KEYS or _metadata_key_fingerprint(key) in forbidden_fingerprints:
+                if (
+                    key in _FORBIDDEN_KEYS
+                    or _metadata_key_fingerprint(key) in forbidden_fingerprints
+                ):
                     raise ValueError(f"Sensitive key detected in graph output: {key}")
                 stack.append(value)
         elif isinstance(current, list):
-                stack.extend(current)
+            stack.extend(current)
 
 
 def _scrub_graph_metadata(value: Any) -> dict[str, Any]:
@@ -221,7 +219,14 @@ def _host_context_graph_metadata(raw_context: Any) -> dict[str, Any]:
             metadata[key] = context[key]
 
     provider_sources: list[str] = []
-    for key in ("fixture_provider", "provider", "source_backend", "source_provider", "source", "discovery"):
+    for key in (
+        "fixture_provider",
+        "provider",
+        "source_backend",
+        "source_provider",
+        "source",
+        "discovery",
+    ):
         _append_unique_provider_sources(provider_sources, context.get(key))
     if provider_sources:
         metadata["provider_sources"] = provider_sources
@@ -509,7 +514,11 @@ class AttackGraphBuilder:
             metadata: dict[str, Any] = {
                 "provider_identifier": str(provider_identifier or identifier or ""),
                 "validation_asset_type": svc,
-                **({"validation_asset_type_original": raw_svc} if raw_svc and raw_svc != svc else {}),
+                **(
+                    {"validation_asset_type_original": raw_svc}
+                    if raw_svc and raw_svc != svc
+                    else {}
+                ),
                 "validation_status": str(status or ""),
                 "validation_method": str(method or ""),
                 "validation_reportable": is_reportable_cloud_validation(
@@ -603,11 +612,7 @@ class AttackGraphBuilder:
             if "provider_identifier" in columns
             else "identifier AS provider_identifier"
         )
-        metadata_expr = (
-            "metadata_json"
-            if "metadata_json" in columns
-            else "NULL AS metadata_json"
-        )
+        metadata_expr = "metadata_json" if "metadata_json" in columns else "NULL AS metadata_json"
         rows = con.execute(
             f"""
             SELECT id, asset_type, identifier, {provider_expr}, source, {metadata_expr}
@@ -650,11 +655,7 @@ class AttackGraphBuilder:
                     if candidate and candidate != svc:
                         original_types.add(candidate)
                 existing_node.metadata.update(
-                    {
-                        key: value
-                        for key, value in metadata.items()
-                        if value not in (None, "")
-                    }
+                    {key: value for key, value in metadata.items() if value not in (None, "")}
                 )
                 if original_types:
                     existing_node.metadata["asset_type_aliases"] = sorted(original_types)
@@ -708,7 +709,17 @@ class AttackGraphBuilder:
         ).fetchall()
         ext_id = f"EXT::engagement-{self.engagement_id}"
         pending_parent_edges: list[tuple[int, int, float]] = []
-        for seed_id, seed_value, seed_type, source, status, depth, confidence, parent_seed_id, metadata_json in rows:
+        for (
+            seed_id,
+            seed_value,
+            seed_type,
+            source,
+            status,
+            depth,
+            confidence,
+            parent_seed_id,
+            metadata_json,
+        ) in rows:
             sid = int(seed_id)
             seed_type_text = str(seed_type or "other").lower()
             label = _safe_node_label(str(seed_value or ""))
@@ -731,7 +742,9 @@ class AttackGraphBuilder:
                         if isinstance(parsed_metadata.get("synthesis"), dict)
                         else {}
                     )
-                    confidence_band = parsed_metadata.get("confidence_band") or synthesis.get("confidence_band")
+                    confidence_band = parsed_metadata.get("confidence_band") or synthesis.get(
+                        "confidence_band"
+                    )
                     if confidence_band:
                         metadata["confidence_band"] = str(confidence_band)
                     metadata.update(_seed_graph_metadata(parsed_metadata))
@@ -747,7 +760,15 @@ class AttackGraphBuilder:
             )
             self._add_node(node)
             self._seed_node_by_id[sid] = node_id
-            if seed_type_text in {"domain", "subdomain", "ipv4", "ipv6", "url", "apk_url", "cloud_ref"}:
+            if seed_type_text in {
+                "domain",
+                "subdomain",
+                "ipv4",
+                "ipv6",
+                "url",
+                "apk_url",
+                "cloud_ref",
+            }:
                 self._host_by_name[str(seed_value or "").lower()] = node_id
             if parent_seed_id is not None:
                 pending_parent_edges.append((int(parent_seed_id), sid, float(confidence or 0.5)))
@@ -996,16 +1017,17 @@ class AttackGraphBuilder:
 
     @staticmethod
     def _vuln_is_deterministic_key_exposure(vuln_type: str, title: str) -> bool:
-        return (
-            str(vuln_type or "").strip().upper() == "DETERMINISTIC_KEY_EXPOSURE"
-            or str(title or "").strip().lower().startswith("active exposed ")
-        )
+        return str(vuln_type or "").strip().upper() == "DETERMINISTIC_KEY_EXPOSURE" or str(
+            title or ""
+        ).strip().lower().startswith("active exposed ")
 
     def _load_vulns(self, con: sqlite3.Connection) -> None:
         if not _table_exists(con, "vulnerability_findings"):
             return
         columns = _table_columns(con, "vulnerability_findings")
-        cloud_provider_expr = "cloud_provider" if "cloud_provider" in columns else "NULL AS cloud_provider"
+        cloud_provider_expr = (
+            "cloud_provider" if "cloud_provider" in columns else "NULL AS cloud_provider"
+        )
         resource_id_expr = "resource_id" if "resource_id" in columns else "NULL AS resource_id"
         evidence_expr = "evidence" if "evidence" in columns else "NULL AS evidence"
         rows = con.execute(
@@ -1067,14 +1089,11 @@ class AttackGraphBuilder:
                     if validation_lookup_service and resource_id_str:
                         self._node_for_cloud(validation_lookup_service, resource_id_str)
                     continue
-            if (
-                self._vuln_is_deterministic_cloud_exposure(
-                    vuln_type_str,
-                    str(title or ""),
-                    validation_lookup_service,
-                )
-                and not self._cloud_exposure_is_validated(validation_metadata)
-            ):
+            if self._vuln_is_deterministic_cloud_exposure(
+                vuln_type_str,
+                str(title or ""),
+                validation_lookup_service,
+            ) and not self._cloud_exposure_is_validated(validation_metadata):
                 if validation_lookup_service and resource_id_str:
                     self._node_for_cloud(validation_lookup_service, resource_id_str)
                 continue
@@ -1143,7 +1162,9 @@ class AttackGraphBuilder:
                     )
                 )
             elif vuln_type_str in {"FIREBASE_MISCONFIG", "SUPABASE_RLS"}:
-                service, identifier = self._vuln_cloud_identity(vuln_type_str, str(target_url or ""))
+                service, identifier = self._vuln_cloud_identity(
+                    vuln_type_str, str(target_url or "")
+                )
                 cloud_id = self._node_for_cloud(service, identifier)
                 self._add_edge(
                     AttackEdge(
@@ -1377,7 +1398,9 @@ class AttackGraphBuilder:
 
     def _to_graph_model(self, engagement_name: str) -> AttackGraph:
         nodes = [payload["data"] for _, payload in self._g.nodes(data=True) if payload.get("data")]
-        edges = [payload["data"] for _, _, payload in self._g.edges(data=True) if payload.get("data")]
+        edges = [
+            payload["data"] for _, _, payload in self._g.edges(data=True) if payload.get("data")
+        ]
         return _AttackGraph(
             engagement_id=self.engagement_id,
             engagement_name=engagement_name,
@@ -1410,7 +1433,9 @@ class MermaidRenderer:
             )
         return output
 
-    def render_bounded_preview(self, graph: AttackGraph, max_chars: int = _MERMAID_CHAR_LIMIT) -> str:
+    def render_bounded_preview(
+        self, graph: AttackGraph, max_chars: int = _MERMAID_CHAR_LIMIT
+    ) -> str:
         """Return a valid Mermaid preview that never silently truncates large graphs."""
         full = self._render_full(graph)
         if len(full) <= max_chars:
@@ -1477,11 +1502,12 @@ class MermaidRenderer:
             "    S --> F[Full graph preserved in JSON GraphML MTGX and DOT artifacts]",
         ]
         if graph.pruned:
-            lines.append(f"    S --> P[Builder pruned graph: {_mermaid_escape(graph.prune_reason)}]")
+            lines.append(
+                f"    S --> P[Builder pruned graph: {_mermaid_escape(graph.prune_reason)}]"
+            )
         if critical_path:
             lines.append(
-                "    S --> C[Critical path: "
-                f"{_mermaid_escape(' -> '.join(critical_path))}]"
+                f"    S --> C[Critical path: {_mermaid_escape(' -> '.join(critical_path))}]"
             )
         for index, (node_type, count) in enumerate(sorted(node_type_counts.items())):
             lines.append(f"    S --> T{index}[{_mermaid_escape(node_type)} nodes: {count}]")
@@ -1543,7 +1569,7 @@ class DotRenderer:
             dst = node_alias.get(edge.target_node_id)
             if not src or not dst:
                 continue
-            attrs = [f'weight={edge.weight:.1f}']
+            attrs = [f"weight={edge.weight:.1f}"]
             if edge.label:
                 attrs.append(f'label="{edge.label.replace(chr(34), chr(39))}"')
             if edge.on_critical_path:

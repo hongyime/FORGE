@@ -109,9 +109,7 @@ async def test_health_check_returns_true(plugin: Plugin) -> None:
 @pytest.mark.parametrize("plugin", ALL_PLUGINS, ids=lambda p: p.metadata.name)
 async def test_execute_returns_plugin_result_on_success(plugin: Plugin) -> None:
     """When the phase module is stubbed, execute() must yield success=True."""
-    with patch(
-        "forge.plugins.migrated._adapter.importlib.import_module"
-    ) as mock_import:
+    with patch("forge.plugins.migrated._adapter.importlib.import_module") as mock_import:
 
         class _StubModule:
             @staticmethod
@@ -130,9 +128,7 @@ async def test_execute_returns_plugin_result_on_success(plugin: Plugin) -> None:
 @pytest.mark.parametrize("plugin", ALL_PLUGINS, ids=lambda p: p.metadata.name)
 async def test_execute_converts_exceptions(plugin: Plugin) -> None:
     """Exceptions raised inside the phase module must surface as failures."""
-    with patch(
-        "forge.plugins.migrated._adapter.importlib.import_module"
-    ) as mock_import:
+    with patch("forge.plugins.migrated._adapter.importlib.import_module") as mock_import:
 
         class _BoomModule:
             @staticmethod
@@ -156,9 +152,7 @@ async def test_execute_converts_exceptions(plugin: Plugin) -> None:
 async def test_execute_returns_stub_when_no_entry_point() -> None:
     """If the wrapped module exposes no candidate function, return a stub."""
     plugin = ALL_PLUGINS[0]
-    with patch(
-        "forge.plugins.migrated._adapter.importlib.import_module"
-    ) as mock_import:
+    with patch("forge.plugins.migrated._adapter.importlib.import_module") as mock_import:
 
         class _EmptyModule:
             pass
@@ -187,10 +181,7 @@ async def test_execute_handles_import_failure() -> None:
 async def test_execute_handles_signature_mismatch() -> None:
     """If kwargs are rejected, the adapter retries with a no-arg call."""
     plugin = ALL_PLUGINS[0]
-    with patch(
-        "forge.plugins.migrated._adapter.importlib.import_module"
-    ) as mock_import:
-
+    with patch("forge.plugins.migrated._adapter.importlib.import_module") as mock_import:
         calls: list[tuple] = []
 
         def _run(*args: object, **kwargs: object) -> dict:

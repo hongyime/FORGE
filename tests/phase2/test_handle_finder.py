@@ -6,6 +6,7 @@ Coverage target: 80%  (PRD §15.1)
 All subprocess and HTTP calls mocked.
 OPSEC invariant: CONFIRMED-only results forwarded; proxy rotation verified.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ from forge.utils.intel.handle_finder import (
 
 
 # ─── fixtures ────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def clean_social_tool_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -67,9 +69,7 @@ def engagement_db(tmp_path: Path) -> Path:
 def proxy_list(tmp_path: Path) -> Path:
     f = tmp_path / "proxies.txt"
     f.write_text(
-        "socks5://127.0.0.1:9050\n"
-        "http://proxy1.example.com:8080\n"
-        "http://proxy2.example.com:8080\n"
+        "socks5://127.0.0.1:9050\nhttp://proxy1.example.com:8080\nhttp://proxy2.example.com:8080\n"
     )
     return f
 
@@ -77,20 +77,20 @@ def proxy_list(tmp_path: Path) -> Path:
 def _wmn_hit(username: str = "aliceexample") -> dict:
     """Simulate a whatsmyname result row."""
     return {
-        "name":       "GitHub",
-        "uri_check":  f"https://github.com/{username}",
+        "name": "GitHub",
+        "uri_check": f"https://github.com/{username}",
         "account_existence_code": 200,
         "account_existence_string": "",
-        "found":      True,
-        "status":     "CONFIRMED",
+        "found": True,
+        "status": "CONFIRMED",
     }
 
 
 def _wmn_miss() -> dict:
     return {
-        "name":   "Reddit",
+        "name": "Reddit",
         "uri_check": "https://reddit.com/user/aliceexample",
-        "found":  False,
+        "found": False,
         "status": "UNCONFIRMED",
     }
 
@@ -98,6 +98,7 @@ def _wmn_miss() -> dict:
 # ═══════════════════════════════════════════════════════════════════════════
 # Backend selection
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBackendSelection:
     def test_command_env_takes_precedence_over_path(self, monkeypatch):
@@ -120,9 +121,7 @@ class TestBackendSelection:
             r"C:\Tools\maigret\.venv\Scripts\maigret.exe",
         )
         with patch("forge.utils.intel.handle_finder._find_tool") as mock_find:
-            assert _tool_command("maigret") == [
-                r"C:\Tools\maigret\.venv\Scripts\maigret.exe"
-            ]
+            assert _tool_command("maigret") == [r"C:\Tools\maigret\.venv\Scripts\maigret.exe"]
         mock_find.assert_not_called()
 
     def test_select_backend_honors_configured_maigret_without_path(self, monkeypatch):
@@ -131,26 +130,29 @@ class TestBackendSelection:
             assert _select_backend() == "maigret"
 
     def test_prefers_whatsmyname_if_available(self):
-        with patch("forge.utils.intel.handle_finder._find_tool",
-                   return_value="/usr/bin/whatsmyname"):
+        with patch(
+            "forge.utils.intel.handle_finder._find_tool", return_value="/usr/bin/whatsmyname"
+        ):
             backend = _select_backend()
         assert backend == "whatsmyname"
 
     def test_falls_back_to_maigret(self):
         """When whatsmyname is unavailable, prefer maigret over sherlock (2026-07-06)."""
+
         def find_tool(name):
             return None if name in ("whatsmyname", "wmn") else f"/usr/bin/{name}"
-        with patch("forge.utils.intel.handle_finder._find_tool",
-                   side_effect=find_tool):
+
+        with patch("forge.utils.intel.handle_finder._find_tool", side_effect=find_tool):
             backend = _select_backend()
         assert backend == "maigret"
 
     def test_falls_back_to_sherlock(self):
         """Only reached when whatsmyname AND maigret are both unavailable."""
+
         def find_tool(name):
             return None if name in ("whatsmyname", "wmn", "maigret") else "/usr/bin/sherlock"
-        with patch("forge.utils.intel.handle_finder._find_tool",
-                   side_effect=find_tool):
+
+        with patch("forge.utils.intel.handle_finder._find_tool", side_effect=find_tool):
             backend = _select_backend()
         assert backend == "sherlock"
 
@@ -161,8 +163,7 @@ class TestBackendSelection:
         # tool-integration test report), shutil.which is no longer the sole
         # lookup path, so patching it alone doesn't guarantee both backends
         # are absent.
-        with patch("forge.utils.intel.handle_finder._find_tool",
-                   return_value=None):
+        with patch("forge.utils.intel.handle_finder._find_tool", return_value=None):
             with pytest.raises(RuntimeError, match="whatsmyname|sherlock"):
                 _select_backend()
 
@@ -171,16 +172,18 @@ class TestBackendSelection:
 # ProfileStatus semantics
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestProfileStatus:
     def test_confirmed_and_unconfirmed_are_distinct(self):
-        assert ProfileStatus.CONFIRMED   != ProfileStatus.UNCONFIRMED
-        assert ProfileStatus.CONFIRMED   == "CONFIRMED"
+        assert ProfileStatus.CONFIRMED != ProfileStatus.UNCONFIRMED
+        assert ProfileStatus.CONFIRMED == "CONFIRMED"
         assert ProfileStatus.UNCONFIRMED == "UNCONFIRMED"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HandleFinder — result parsing
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHandleFinder:
     def test_whatsmyname_uses_configured_command_prefix(self, monkeypatch):
@@ -201,9 +204,7 @@ class TestHandleFinder:
         rows = finder._run_whatsmyname("alice")
 
         assert rows == [_wmn_hit("alice")]
-        assert observed_commands == [
-            ["python", "-m", "whatsmyname", "-u", "alice", "-json"]
-        ]
+        assert observed_commands == [["python", "-m", "whatsmyname", "-u", "alice", "-json"]]
 
     def test_whatsmyname_uses_proxy_env_and_preserves_environment(self, monkeypatch):
         monkeypatch.setenv("FORGE_WHATSMYNAME_COMMAND", "python -m whatsmyname")
@@ -237,12 +238,16 @@ class TestHandleFinder:
             del kwargs
             observed_commands.append(list(cmd))
             json_path = Path(cmd[cmd.index("--json") + 1])
-            json_path.write_text(json.dumps({
-                "GitHub": {
-                    "url": "https://github.com/alice",
-                    "status": "Claimed",
-                }
-            }))
+            json_path.write_text(
+                json.dumps(
+                    {
+                        "GitHub": {
+                            "url": "https://github.com/alice",
+                            "status": "Claimed",
+                        }
+                    }
+                )
+            )
             m = MagicMock()
             m.returncode = 0
             m.stdout = ""
@@ -357,15 +362,19 @@ class TestHandleFinder:
     def test_only_confirmed_forwarded_to_report(self):
         finder = HandleFinder(backend="whatsmyname")
         results = [_wmn_hit(), _wmn_miss(), _wmn_hit("aliceexample")]
-        confirmed = [p for p in finder._parse_results("aliceexample", results)
-                     if p.status == ProfileStatus.CONFIRMED]
+        confirmed = [
+            p
+            for p in finder._parse_results("aliceexample", results)
+            if p.status == ProfileStatus.CONFIRMED
+        ]
         assert len(confirmed) == 2
 
     def test_jitter_within_bounds(self):
         import statistics
-        finder  = HandleFinder(backend="whatsmyname", base_delay=2.0)
+
+        finder = HandleFinder(backend="whatsmyname", base_delay=2.0)
         samples = [finder._jittered_delay() for _ in range(300)]
-        assert all(s >= 0.5 for s in samples)   # hard floor 500 ms
+        assert all(s >= 0.5 for s in samples)  # hard floor 500 ms
         assert abs(statistics.mean(samples) - 2.0) < 0.8
 
     def test_jitter_never_below_hard_floor(self):
@@ -378,13 +387,14 @@ class TestHandleFinder:
 # Proxy rotation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestProxyRotation:
     def test_proxies_loaded_from_file(self, proxy_list):
         finder = HandleFinder(backend="whatsmyname", proxy_file=proxy_list)
         assert len(finder._proxies) == 3
 
     def test_proxy_rotates_across_requests(self, proxy_list):
-        finder     = HandleFinder(backend="whatsmyname", proxy_file=proxy_list)
+        finder = HandleFinder(backend="whatsmyname", proxy_file=proxy_list)
         used_proxies: list[str] = []
 
         def fake_run(cmd, **kw):
@@ -392,14 +402,16 @@ class TestProxyRotation:
             if proxy:
                 used_proxies.append(proxy)
             finder._rotate_proxy()
-            m = MagicMock(); m.returncode = 0; m.stdout = "[]"
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = "[]"
             return m
 
         with (
             patch("forge.utils.intel.handle_finder._find_tool", return_value="whatsmyname"),
             patch("subprocess.run", side_effect=fake_run),
         ):
-            for _ in range(6):   # 2 full rotations
+            for _ in range(6):  # 2 full rotations
                 finder._run_whatsmyname("testuser", proxy=finder._current_proxy())
                 finder._rotate_proxy()
 
@@ -416,6 +428,7 @@ class TestProxyRotation:
 # run_handle_finder — DB integration
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRunHandleFinder:
     def _patch_finder(self, profiles: list[UsernameProfile]):
         return patch(
@@ -425,49 +438,65 @@ class TestRunHandleFinder:
 
     def test_confirmed_profiles_written_to_db(self, engagement_db):
         profiles = [
-            UsernameProfile(username="alice",  platform="github",
-                            profile_url="https://github.com/alice",
-                            status=ProfileStatus.CONFIRMED,  source_tool="whatsmyname"),
-            UsernameProfile(username="alice",  platform="twitter",
-                            profile_url="https://twitter.com/alice",
-                            status=ProfileStatus.UNCONFIRMED, source_tool="whatsmyname"),
+            UsernameProfile(
+                username="alice",
+                platform="github",
+                profile_url="https://github.com/alice",
+                status=ProfileStatus.CONFIRMED,
+                source_tool="whatsmyname",
+            ),
+            UsernameProfile(
+                username="alice",
+                platform="twitter",
+                profile_url="https://twitter.com/alice",
+                status=ProfileStatus.UNCONFIRMED,
+                source_tool="whatsmyname",
+            ),
         ]
         with self._patch_finder(profiles):
             run_handle_finder(engagement_db, 1, usernames=["alice"])
 
-        con  = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         rows = con.execute("SELECT status FROM username_profiles").fetchall()
         con.close()
         # Both statuses stored; report layer filters CONFIRMED only
         statuses = {r[0] for r in rows}
-        assert "CONFIRMED"   in statuses
+        assert "CONFIRMED" in statuses
         assert "UNCONFIRMED" in statuses
 
     def test_dedup_no_double_insert(self, engagement_db):
         profiles = [
-            UsernameProfile(username="alice", platform="github",
-                            profile_url="https://github.com/alice",
-                            status=ProfileStatus.CONFIRMED, source_tool="whatsmyname"),
+            UsernameProfile(
+                username="alice",
+                platform="github",
+                profile_url="https://github.com/alice",
+                status=ProfileStatus.CONFIRMED,
+                source_tool="whatsmyname",
+            ),
         ]
         with self._patch_finder(profiles):
             run_handle_finder(engagement_db, 1, usernames=["alice"])
             run_handle_finder(engagement_db, 1, usernames=["alice"])
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM username_profiles").fetchone()[0]
         con.close()
         assert count == 1
 
     def test_dry_run_no_write(self, engagement_db):
         profiles = [
-            UsernameProfile(username="alice", platform="github",
-                            profile_url="https://github.com/alice",
-                            status=ProfileStatus.CONFIRMED, source_tool="whatsmyname"),
+            UsernameProfile(
+                username="alice",
+                platform="github",
+                profile_url="https://github.com/alice",
+                status=ProfileStatus.CONFIRMED,
+                source_tool="whatsmyname",
+            ),
         ]
         with self._patch_finder(profiles):
             run_handle_finder(engagement_db, 1, usernames=["alice"], dry_run=True)
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM username_profiles").fetchone()[0]
         con.close()
         assert count == 0
@@ -504,7 +533,7 @@ class TestRunHandleFinder:
         with self._patch_finder([]):
             run_handle_finder(engagement_db, 1, usernames=["alice"])
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
         con.close()
         assert count >= 1

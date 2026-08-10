@@ -64,11 +64,14 @@ def test_artifact_vault_config_payload_uses_structured_worker_family(
 
     assert _artifact_format_label("config.hcl") == "hcl"
     assert _artifact_format_label("vault/config.hcl") == "hashicorp-vault-config"
-    assert processor._build_structured_discovery_payload_fragment(
-        "hashicorp_config_text",
-        text=payload,
-        extract_path="notes/config.hcl",
-    ) == ""
+    assert (
+        processor._build_structured_discovery_payload_fragment(
+            "hashicorp_config_text",
+            text=payload,
+            extract_path="notes/config.hcl",
+        )
+        == ""
+    )
 
     jobs = processor._structured_discovery_jobs_for_payload(
         ("https://static.acme.example/vault/config.hcl", "vault/config.hcl", payload)
@@ -79,6 +82,4 @@ def test_artifact_vault_config_payload_uses_structured_worker_family(
         job_payload
         for _source_file, job_payload in jobs
         if job_payload.startswith("https://vault-")
-    ] == [
-        "https://vault-api.acme.example:8200\nhttps://vault-cluster.acme.example:8201"
-    ]
+    ] == ["https://vault-api.acme.example:8200\nhttps://vault-cluster.acme.example:8201"]

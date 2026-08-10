@@ -115,9 +115,7 @@ class AuditEntry(BaseModel):
 
     @field_validator("input_params")
     @classmethod
-    def _input_params_size_limit(
-        cls, v: dict[str, object] | None
-    ) -> dict[str, object] | None:
+    def _input_params_size_limit(cls, v: dict[str, object] | None) -> dict[str, object] | None:
         """Reject input_params that would exceed MAX_INPUT_PARAMS_BYTES.
 
         Encodes via ``json.dumps(default=str)`` so non-JSON-native objects

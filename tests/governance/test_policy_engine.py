@@ -38,25 +38,16 @@ class TestDefaultDecisions:
 
     def test_no_rules_medium_requires_review(self) -> None:
         engine = PolicyEngine([])
-        assert (
-            engine.evaluate("tool_x", {}, risk_level="medium")
-            is PolicyDecision.REQUIRE_REVIEW
-        )
+        assert engine.evaluate("tool_x", {}, risk_level="medium") is PolicyDecision.REQUIRE_REVIEW
 
     def test_no_rules_high_denies(self) -> None:
         engine = PolicyEngine([])
-        assert (
-            engine.evaluate("tool_x", {}, risk_level="high")
-            is PolicyDecision.DENY
-        )
+        assert engine.evaluate("tool_x", {}, risk_level="high") is PolicyDecision.DENY
 
     def test_no_rules_unknown_risk_approves(self) -> None:
         engine = PolicyEngine([])
         assert engine.evaluate("tool_x", {}, risk_level=None) is PolicyDecision.APPROVE
-        assert (
-            engine.evaluate("tool_x", {}, risk_level="bogus")
-            is PolicyDecision.APPROVE
-        )
+        assert engine.evaluate("tool_x", {}, risk_level="bogus") is PolicyDecision.APPROVE
 
 
 # ── Rule matching: regex + first-wins ────────────────────────────────────────
@@ -70,10 +61,7 @@ class TestRuleMatching:
             action="deny",
         )
         engine = PolicyEngine([rule])
-        assert (
-            engine.evaluate("nmap_scan", {}, risk_level="high")
-            is PolicyDecision.DENY
-        )
+        assert engine.evaluate("nmap_scan", {}, risk_level="high") is PolicyDecision.DENY
         # Pattern does not match: falls back to default for high → DENY.
         # Use medium so we can distinguish "rule didn't match" from "rule matched".
         rule_medium = PolicyRule(
@@ -103,10 +91,7 @@ class TestRuleMatching:
         ]
         engine = PolicyEngine(rules)
         # Although the second rule would deny, the first one matches first.
-        assert (
-            engine.evaluate("scan_aggressive", {}, risk_level="medium")
-            is PolicyDecision.APPROVE
-        )
+        assert engine.evaluate("scan_aggressive", {}, risk_level="medium") is PolicyDecision.APPROVE
 
     def test_risk_level_must_match_when_supplied(self) -> None:
         rule = PolicyRule(
@@ -116,15 +101,9 @@ class TestRuleMatching:
         )
         engine = PolicyEngine([rule])
         # Caller asserts low risk → rule does not match → default for low = APPROVE.
-        assert (
-            engine.evaluate("exploit", {}, risk_level="low")
-            is PolicyDecision.APPROVE
-        )
+        assert engine.evaluate("exploit", {}, risk_level="low") is PolicyDecision.APPROVE
         # Caller asserts high risk → rule matches → DENY.
-        assert (
-            engine.evaluate("exploit", {}, risk_level="high")
-            is PolicyDecision.DENY
-        )
+        assert engine.evaluate("exploit", {}, risk_level="high") is PolicyDecision.DENY
 
     def test_risk_level_ignored_when_not_supplied(self) -> None:
         rule = PolicyRule(
@@ -133,9 +112,7 @@ class TestRuleMatching:
             action="deny",
         )
         engine = PolicyEngine([rule])
-        assert (
-            engine.evaluate("exploit", {}, risk_level=None) is PolicyDecision.DENY
-        )
+        assert engine.evaluate("exploit", {}, risk_level=None) is PolicyDecision.DENY
 
     def test_conditions_must_match(self) -> None:
         rule = PolicyRule(
@@ -186,10 +163,7 @@ class TestRuleMatching:
         )
         engine = PolicyEngine([bad_rule, good_rule])
         # Bad rule is skipped silently; good rule still matches.
-        assert (
-            engine.evaluate("safe_tool", {}, risk_level="low")
-            is PolicyDecision.APPROVE
-        )
+        assert engine.evaluate("safe_tool", {}, risk_level="low") is PolicyDecision.APPROVE
 
     def test_require_review_action(self) -> None:
         rule = PolicyRule(
@@ -198,10 +172,7 @@ class TestRuleMatching:
             action="require_review",
         )
         engine = PolicyEngine([rule])
-        assert (
-            engine.evaluate("audit", {}, risk_level="medium")
-            is PolicyDecision.REQUIRE_REVIEW
-        )
+        assert engine.evaluate("audit", {}, risk_level="medium") is PolicyDecision.REQUIRE_REVIEW
 
 
 # ── from_file / from_env ─────────────────────────────────────────────────────
@@ -229,14 +200,8 @@ class TestLoading:
         )
         engine = PolicyEngine.from_file(rules_path)
         assert len(engine.rules) == 2
-        assert (
-            engine.evaluate("danger_run", {}, risk_level="high")
-            is PolicyDecision.DENY
-        )
-        assert (
-            engine.evaluate("safe_check", {}, risk_level="low")
-            is PolicyDecision.APPROVE
-        )
+        assert engine.evaluate("danger_run", {}, risk_level="high") is PolicyDecision.DENY
+        assert engine.evaluate("safe_check", {}, risk_level="low") is PolicyDecision.APPROVE
 
     def test_from_file_rejects_non_array(self, tmp_path: Path) -> None:
         rules_path = tmp_path / "bad.json"
@@ -262,16 +227,12 @@ class TestLoading:
         with pytest.raises(Exception):  # Pydantic ValidationError
             PolicyEngine.from_file(rules_path)
 
-    def test_from_env_unset_returns_empty_engine(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_from_env_unset_returns_empty_engine(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("FORGE_GOVERNANCE_RULES", raising=False)
         engine = PolicyEngine.from_env()
         assert engine.rules == []
 
-    def test_from_env_loads_path(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_from_env_loads_path(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         rules_path = tmp_path / "rules.json"
         rules_path.write_text(
             json.dumps(
@@ -302,9 +263,7 @@ class TestEvaluateOrRaise:
         )
         engine = PolicyEngine([rule])
         with pytest.raises(GovernanceDeniedError):
-            asyncio.run(
-                engine.evaluate_or_raise("bad", {}, risk_level="high")
-            )
+            asyncio.run(engine.evaluate_or_raise("bad", {}, risk_level="high"))
 
     def test_returns_decision_on_approve(self) -> None:
         rule = PolicyRule(
@@ -313,9 +272,7 @@ class TestEvaluateOrRaise:
             action="approve",
         )
         engine = PolicyEngine([rule])
-        decision = asyncio.run(
-            engine.evaluate_or_raise("ok", {}, risk_level="low")
-        )
+        decision = asyncio.run(engine.evaluate_or_raise("ok", {}, risk_level="low"))
         assert decision is PolicyDecision.APPROVE
 
     def test_returns_decision_on_require_review(self) -> None:
@@ -325,9 +282,7 @@ class TestEvaluateOrRaise:
             action="require_review",
         )
         engine = PolicyEngine([rule])
-        decision = asyncio.run(
-            engine.evaluate_or_raise("review", {}, risk_level="medium")
-        )
+        decision = asyncio.run(engine.evaluate_or_raise("review", {}, risk_level="medium"))
         assert decision is PolicyDecision.REQUIRE_REVIEW
 
 
@@ -343,15 +298,11 @@ class TestAuditEmission:
             action="approve",
         )
         engine = PolicyEngine([rule], audit_logger=logger)
-        decision = engine.evaluate(
-            "safe", {"x": 1}, risk_level="low", correlation_id="corr-ok"
-        )
+        decision = engine.evaluate("safe", {"x": 1}, risk_level="low", correlation_id="corr-ok")
         assert decision is PolicyDecision.APPROVE
 
         gov_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in logger.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 1
         entry = gov_entries[0]
@@ -369,15 +320,11 @@ class TestAuditEmission:
             action="deny",
         )
         engine = PolicyEngine([rule], audit_logger=logger)
-        decision = engine.evaluate(
-            "bad", {}, risk_level="high", correlation_id="corr-deny"
-        )
+        decision = engine.evaluate("bad", {}, risk_level="high", correlation_id="corr-deny")
         assert decision is PolicyDecision.DENY
 
         gov_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in logger.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 1
         entry = gov_entries[0]
@@ -392,17 +339,13 @@ class TestAuditEmission:
         engine = PolicyEngine([], audit_logger=logger)
 
         async def _drive() -> None:
-            engine.evaluate(
-                "any_tool", {}, risk_level="low", correlation_id="corr-loop"
-            )
+            engine.evaluate("any_tool", {}, risk_level="low", correlation_id="corr-loop")
             # Yield so the scheduled task can execute.
             await asyncio.sleep(0)
 
         asyncio.run(_drive())
         gov_entries = [
-            e
-            for e in logger.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in logger.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert any(e.correlation_id == "corr-loop" for e in gov_entries)
 
@@ -416,11 +359,7 @@ class TestAuditEmission:
             risk_level="low",
             correlation_id="corr-redact",
         )
-        entries = [
-            e
-            for e in logger.entries
-            if e.correlation_id == "corr-redact"
-        ]
+        entries = [e for e in logger.entries if e.correlation_id == "corr-redact"]
         assert len(entries) == 1
         params = entries[0].input_params or {}
         assert params.get("password") == "[REDACTED]"
@@ -430,6 +369,4 @@ class TestAuditEmission:
         """Engine works fine without an audit logger."""
         engine = PolicyEngine([])
         # Must not raise.
-        assert (
-            engine.evaluate("x", {}, risk_level="low") is PolicyDecision.APPROVE
-        )
+        assert engine.evaluate("x", {}, risk_level="low") is PolicyDecision.APPROVE

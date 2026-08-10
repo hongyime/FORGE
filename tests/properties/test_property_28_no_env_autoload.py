@@ -91,9 +91,7 @@ def _env_key(draw: st.DrawFn) -> str:
 
 
 # Printable values without quoting peculiarities or line terminators.
-_VALUE_ALPHABET = "".join(
-    ch for ch in string.printable if ch not in "\r\n\x0b\x0c"
-)
+_VALUE_ALPHABET = "".join(ch for ch in string.printable if ch not in "\r\n\x0b\x0c")
 _env_value = st.text(alphabet=_VALUE_ALPHABET, min_size=0, max_size=64)
 
 
@@ -119,7 +117,7 @@ def _serialize_env_file(pairs: list[tuple[str, str]]) -> str:
     """
     lines: list[str] = []
     for key, value in pairs:
-        if any(ch in value for ch in (' ', '\t', '=', '#', '"', "'")):
+        if any(ch in value for ch in (" ", "\t", "=", "#", '"', "'")):
             escaped = value.replace("\\", "\\\\").replace('"', '\\"')
             lines.append(f'{key}="{escaped}"')
         else:
@@ -265,9 +263,7 @@ def test_property_28_environ_takes_precedence_over_dotenv(
     ]
 
     work_dir: Path = tmp_path_factory.mktemp("env_autoload_precedence")
-    (work_dir / ".env").write_text(
-        _serialize_env_file(pairs_with_conflict), encoding="utf-8"
-    )
+    (work_dir / ".env").write_text(_serialize_env_file(pairs_with_conflict), encoding="utf-8")
 
     # Skip degenerate inputs where the explicit env-var equals the sentinel,
     # which would make the precedence assertion vacuous.

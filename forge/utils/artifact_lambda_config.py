@@ -70,7 +70,10 @@ def lambda_config_candidates(document: Any) -> list[str]:
         candidates.append(candidate)
 
     for config in _function_mappings(document):
-        identifier = _segment(_ref(config, "FunctionArn", "function_arn") or _ref(config, "FunctionName", "function_name"))
+        identifier = _segment(
+            _ref(config, "FunctionArn", "function_arn")
+            or _ref(config, "FunctionName", "function_name")
+        )
         if identifier:
             append(f"aws-lambda-function://{identifier}")
         _append_function_config_refs(config, append)
@@ -109,7 +112,10 @@ def _append_function_config_refs(config: Mapping[str, Any], append: Any) -> None
         _append_ref(_ref(layer, "Arn", "arn"), append)
     for fs_config in _list(config, "FileSystemConfigs", "file_system_configs"):
         _append_ref(_ref(fs_config, "Arn", "arn"), append)
-    _append_ref(_ref(_child(config, "DeadLetterConfig", "dead_letter_config"), "TargetArn", "target_arn"), append)
+    _append_ref(
+        _ref(_child(config, "DeadLetterConfig", "dead_letter_config"), "TargetArn", "target_arn"),
+        append,
+    )
     env_vars = _child(_child(config, "Environment", "environment"), "Variables", "variables")
     for value in env_vars.values():
         if isinstance(value, (str, int, float)):
@@ -173,7 +179,11 @@ def _child(mapping: Mapping[str, Any], *keys: str) -> Mapping[str, Any]:
 def _list(mapping: Mapping[str, Any], *keys: str) -> list[Any]:
     wanted = {_fingerprint(key) for key in keys}
     for key, value in mapping.items():
-        if _fingerprint(key) in wanted and isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        if (
+            _fingerprint(key) in wanted
+            and isinstance(value, Sequence)
+            and not isinstance(value, (str, bytes, bytearray))
+        ):
             return list(value)
     return []
 

@@ -361,13 +361,17 @@ def run_etl(
 
         try:
             count = fetch_lolbas(lolbas_conn, cfg)
-            lolbas_meta.setdefault("lolbas", {})["last_synced"] = datetime.now(timezone.utc).isoformat()
+            lolbas_meta.setdefault("lolbas", {})["last_synced"] = datetime.now(
+                timezone.utc
+            ).isoformat()
             results["lolbas"] = {"rows": count, "status": "OK"}
             console.print(f"  [green]LOLBAS:[/green] {count} records ingested.")
         except Exception as _exc:  # noqa: BLE001
             results["lolbas"] = {"rows": 0, "status": "FAIL", "error": str(_exc)[:200]}
-            console.print(f"  [yellow]LOLBAS:[/yellow] fetch failed "
-                          f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing.")
+            console.print(
+                f"  [yellow]LOLBAS:[/yellow] fetch failed "
+                f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing."
+            )
     else:
         results["lolbas"] = {"rows": 0, "status": "SKIP"}
 
@@ -386,11 +390,12 @@ def run_etl(
             # Non-fatal: log and continue with the next source. Common
             # causes: GitHub API rate-limit (60/hr anon), network hiccup,
             # 403 from missing FORGE_GITHUB_TOKEN.
-            results["gtfobins"] = {"rows": 0, "status": "FAIL",
-                                    "error": str(_exc)[:200]}
-            console.print(f"  [yellow]GTFOBins:[/yellow] fetch failed "
-                          f"({type(_exc).__name__}: {str(_exc)[:80]}). "
-                          "Continuing with other sources.")
+            results["gtfobins"] = {"rows": 0, "status": "FAIL", "error": str(_exc)[:200]}
+            console.print(
+                f"  [yellow]GTFOBins:[/yellow] fetch failed "
+                f"({type(_exc).__name__}: {str(_exc)[:80]}). "
+                "Continuing with other sources."
+            )
     else:
         results["gtfobins"] = {"rows": 0, "status": "SKIP"}
 
@@ -400,13 +405,17 @@ def run_etl(
 
         try:
             count = scrape_lots(lolbas_conn, cfg)
-            lolbas_meta.setdefault("lots", {})["last_synced"] = datetime.now(timezone.utc).isoformat()
+            lolbas_meta.setdefault("lots", {})["last_synced"] = datetime.now(
+                timezone.utc
+            ).isoformat()
             results["lots"] = {"rows": count, "status": "OK"}
             console.print(f"  [green]LOTS:[/green] {count} sites ingested.")
         except Exception as _exc:  # noqa: BLE001
             results["lots"] = {"rows": 0, "status": "FAIL", "error": str(_exc)[:200]}
-            console.print(f"  [yellow]LOTS:[/yellow] fetch failed "
-                          f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing.")
+            console.print(
+                f"  [yellow]LOTS:[/yellow] fetch failed "
+                f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing."
+            )
     else:
         results["lots"] = {"rows": 0, "status": "SKIP"}
 
@@ -416,13 +425,17 @@ def run_etl(
 
         try:
             count = fetch_malapi(lolbas_conn, cfg)
-            lolbas_meta.setdefault("malapi", {})["last_synced"] = datetime.now(timezone.utc).isoformat()
+            lolbas_meta.setdefault("malapi", {})["last_synced"] = datetime.now(
+                timezone.utc
+            ).isoformat()
             results["malapi"] = {"rows": count, "status": "OK"}
             console.print(f"  [green]MalAPI:[/green] {count} entries ingested.")
         except Exception as _exc:  # noqa: BLE001
             results["malapi"] = {"rows": 0, "status": "FAIL", "error": str(_exc)[:200]}
-            console.print(f"  [yellow]MalAPI:[/yellow] fetch failed "
-                          f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing.")
+            console.print(
+                f"  [yellow]MalAPI:[/yellow] fetch failed "
+                f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing."
+            )
     else:
         results["malapi"] = {"rows": 0, "status": "SKIP"}
 
@@ -439,8 +452,10 @@ def run_etl(
             console.print(f"  [green]LOLDrivers:[/green] {count} drivers ingested.")
         except Exception as _exc:  # noqa: BLE001
             results["loldrivers"] = {"rows": 0, "status": "FAIL", "error": str(_exc)[:200]}
-            console.print(f"  [yellow]LOLDrivers:[/yellow] fetch failed "
-                          f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing.")
+            console.print(
+                f"  [yellow]LOLDrivers:[/yellow] fetch failed "
+                f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing."
+            )
     else:
         results["loldrivers"] = {"rows": 0, "status": "SKIP"}
 
@@ -449,13 +464,17 @@ def run_etl(
 
     try:
         art_counts = populate_evasion_artifacts(cfg.kb_path)
-        lolbas_meta.setdefault("artifacts", {})["last_synced"] = datetime.now(timezone.utc).isoformat()
+        lolbas_meta.setdefault("artifacts", {})["last_synced"] = datetime.now(
+            timezone.utc
+        ).isoformat()
         results["artifacts"] = {"rows": sum(art_counts.values()), "status": "OK"}
         console.print(f"  [green]Evasion artifacts:[/green] {art_counts}")
     except Exception as _exc:  # noqa: BLE001
         results["artifacts"] = {"rows": 0, "status": "FAIL", "error": str(_exc)[:200]}
-        console.print(f"  [yellow]Evasion artifacts:[/yellow] populate failed "
-                      f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing.")
+        console.print(
+            f"  [yellow]Evasion artifacts:[/yellow] populate failed "
+            f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing."
+        )
 
     # ---- 7. NVD ----
     if _should_run("nvd", "weekly", nvd_meta):
@@ -468,8 +487,10 @@ def run_etl(
             console.print(f"  [green]NVD:[/green] {count} CVEs ingested.")
         except Exception as _exc:  # noqa: BLE001
             results["nvd"] = {"rows": 0, "status": "FAIL", "error": str(_exc)[:200]}
-            console.print(f"  [yellow]NVD:[/yellow] fetch failed "
-                          f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing.")
+            console.print(
+                f"  [yellow]NVD:[/yellow] fetch failed "
+                f"({type(_exc).__name__}: {str(_exc)[:80]}). Continuing."
+            )
     else:
         results["nvd"] = {"rows": 0, "status": "SKIP"}
 

@@ -16,6 +16,7 @@ CI service definitions (GitHub Actions):
 If MOCK_SSH_HOST / MOCK_SSH_PORT are not set, integration tests are skipped
 automatically — they must not fail in environments without Docker services.
 """
+
 from __future__ import annotations
 
 import os
@@ -25,11 +26,11 @@ from unittest import mock
 
 import pytest
 
-ENGAGEMENT_ID   = 1
-AES_KEY_HEX     = "bb" * 32
-MOCK_SSH_HOST   = os.getenv("MOCK_SSH_HOST", "")
-MOCK_SSH_PORT   = int(os.getenv("MOCK_SSH_PORT", "2223"))
-SSH_AVAILABLE   = bool(MOCK_SSH_HOST)
+ENGAGEMENT_ID = 1
+AES_KEY_HEX = "bb" * 32
+MOCK_SSH_HOST = os.getenv("MOCK_SSH_HOST", "")
+MOCK_SSH_PORT = int(os.getenv("MOCK_SSH_PORT", "2223"))
+SSH_AVAILABLE = bool(MOCK_SSH_HOST)
 
 
 @pytest.fixture()

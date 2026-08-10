@@ -164,7 +164,17 @@ def _build_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (ENGAGEMENT_ID, asset_type, identifier, identifier, status, method, http, evidence, notes)
+                (
+                    ENGAGEMENT_ID,
+                    asset_type,
+                    identifier,
+                    identifier,
+                    status,
+                    method,
+                    http,
+                    evidence,
+                    notes,
+                )
                 for asset_type, identifier, status, method, http, evidence, notes in validation_rows
             ],
         )
@@ -449,9 +459,15 @@ def _assert_phase6_report_surface_filters_stale_rows(
     validation_rows = [row for row in rows if row.get("record_type") == "cloud_validation"]
     assert _csv_validation_status(validation_rows, "firebase", WEAK_FIREBASE) == "UNVERIFIED"
     assert _csv_stored_validation_status(validation_rows, "firebase", WEAK_FIREBASE) == "VALIDATED"
-    assert _csv_validation_status(validation_rows, "supabase", HONEYPOT_SUPABASE) == "HONEYPOT_SUSPECTED"
+    assert (
+        _csv_validation_status(validation_rows, "supabase", HONEYPOT_SUPABASE)
+        == "HONEYPOT_SUSPECTED"
+    )
     assert _csv_validation_status(validation_rows, "firebase", DEAD_FIREBASE) == "DEAD"
-    assert _csv_validation_status(validation_rows, "aws_s3", ACCESSIBLE_BUCKET) == "ACCESSIBLE_BUT_NO_DATA"
+    assert (
+        _csv_validation_status(validation_rows, "aws_s3", ACCESSIBLE_BUCKET)
+        == "ACCESSIBLE_BUT_NO_DATA"
+    )
     asset_rows = [row for row in rows if row.get("record_type") == "cloud_asset"]
     assert _csv_asset_reportable(asset_rows, "firebase", STABLE_FIREBASE) == "True"
     assert _csv_asset_reportable(asset_rows, "aws_s3", STABLE_BUCKET) == "True"
@@ -491,16 +507,14 @@ def _assert_dashboard_filters_stale_rows(data_dir: Path, reports_dir: Path) -> s
         reports_dir=reports_dir,
         output_path=reports_dir / "dashboard.html",
     )
-    overview = json.loads((reports_dir / "dashboard" / "data" / "engagements.json").read_text(encoding="utf-8"))
+    overview = json.loads(
+        (reports_dir / "dashboard" / "data" / "engagements.json").read_text(encoding="utf-8")
+    )
     slug = next(item["slug"] for item in overview["items"] if item["id"] == str(ENGAGEMENT_ID))
     detail = json.loads(
-        (
-            reports_dir
-            / "dashboard"
-            / "data"
-            / "engagements"
-            / f"{slug}.json"
-        ).read_text(encoding="utf-8")
+        (reports_dir / "dashboard" / "data" / "engagements" / f"{slug}.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert _dashboard_targets(detail) == {
         f"aws_s3://{STABLE_BUCKET}",
@@ -626,8 +640,7 @@ def _csv_validation_status(
     row = next(
         item
         for item in rows
-        if item.get("cloud_asset_type") == asset_type
-        and item.get("cloud_identifier") == identifier
+        if item.get("cloud_asset_type") == asset_type and item.get("cloud_identifier") == identifier
     )
     return row.get("validation_status") or ""
 
@@ -640,8 +653,7 @@ def _csv_stored_validation_status(
     row = next(
         item
         for item in rows
-        if item.get("cloud_asset_type") == asset_type
-        and item.get("cloud_identifier") == identifier
+        if item.get("cloud_asset_type") == asset_type and item.get("cloud_identifier") == identifier
     )
     return row.get("stored_validation_status") or ""
 
@@ -654,8 +666,7 @@ def _csv_asset_reportable(
     row = next(
         item
         for item in rows
-        if item.get("cloud_asset_type") == asset_type
-        and item.get("cloud_identifier") == identifier
+        if item.get("cloud_asset_type") == asset_type and item.get("cloud_identifier") == identifier
     )
     return row.get("validation_reportable") or ""
 
@@ -695,11 +706,7 @@ def _assert_graph_payload_excludes_stale_key_nodes(
     assert isinstance(graph_payload, dict)
     nodes = graph_payload.get("nodes")
     assert isinstance(nodes, list)
-    node_ids = {
-        str(node.get("node_id") or "")
-        for node in nodes
-        if isinstance(node, dict)
-    }
+    node_ids = {str(node.get("node_id") or "") for node in nodes if isinstance(node, dict)}
     assert "VULN::weak-key" not in node_ids
     assert "VULN::honeypot-key" not in node_ids
     assert "VULN::weak-key" not in graph_payload.get("critical_path_nodes", [])

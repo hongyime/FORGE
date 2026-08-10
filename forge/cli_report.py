@@ -17,7 +17,6 @@ from forge.cli_helpers import _cli_audit
 from forge.db.direct_connect import direct_connect
 
 
-
 @report_app.command("generate")
 def report_generate(
     engagement: str = typer.Option(..., "--engagement", "-e"),
@@ -79,8 +78,12 @@ def report_generate(
     engagement_id = int(engagement)
 
     _cli_audit(
-        db_path, engagement_id, "phase6", "report_synthesizer",
-        "report_generate_start", target=output,
+        db_path,
+        engagement_id,
+        "phase6",
+        "report_synthesizer",
+        "report_generate_start",
+        target=output,
         result=f"assume_yes={yes} provider={provider or 'llama_cpp'} max_loops={max_loops if max_loops is not None else '<default>'}",
     )
     try:
@@ -93,14 +96,21 @@ def report_generate(
         )
     except Exception as exc:
         _cli_audit(
-            db_path, engagement_id, "phase6", "report_synthesizer",
-            "report_generate_failed", target=output,
+            db_path,
+            engagement_id,
+            "phase6",
+            "report_synthesizer",
+            "report_generate_failed",
+            target=output,
             result=f"{type(exc).__name__}: {str(exc)[:180]}",
         )
         raise
     _cli_audit(
-        db_path, engagement_id, "phase6", "report_synthesizer",
-        "report_generate_complete", target=str(result_path) if result_path else None,
+        db_path,
+        engagement_id,
+        "phase6",
+        "report_synthesizer",
+        "report_generate_complete",
+        target=str(result_path) if result_path else None,
         result=f"success provider={provider or 'llama_cpp'}",
     )
-

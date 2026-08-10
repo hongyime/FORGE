@@ -30,9 +30,7 @@ def test_parse_validated_detail_downgrades_sequential_aws_sts_account_id() -> No
 
 
 def test_parse_validated_detail_downgrades_aws_sts_without_account_id() -> None:
-    proof = parse_validated_detail(
-        "VALIDATED:aws_sts_get_caller_identity:UserId=AIDAEXAMPLE"
-    )
+    proof = parse_validated_detail("VALIDATED:aws_sts_get_caller_identity:UserId=AIDAEXAMPLE")
 
     assert proof == {
         "validation_status": "UNVERIFIED",
@@ -84,8 +82,7 @@ def test_parse_validated_detail_can_return_raw_proof_for_review_notes() -> None:
 
 def test_parse_validated_detail_preserves_labelled_embedded_validation_field() -> None:
     proof = parse_validated_detail(
-        "key=AKIA...MPLE; "
-        "validation=VALIDATED:aws_sts_get_caller_identity:AccountId=742931608514"
+        "key=AKIA...MPLE; validation=VALIDATED:aws_sts_get_caller_identity:AccountId=742931608514"
     )
 
     assert proof == {
@@ -171,9 +168,7 @@ def test_parse_validated_detail_downgrades_low_signal_legacy_cloud_read_proofs(
 
 
 def test_parse_validated_detail_downgrades_unknown_validated_method() -> None:
-    proof = parse_validated_detail(
-        "VALIDATED:future_provider_success:provider returned 200"
-    )
+    proof = parse_validated_detail("VALIDATED:future_provider_success:provider returned 200")
 
     assert proof == {
         "validation_status": "UNVERIFIED",
@@ -412,8 +407,7 @@ def test_parse_validated_detail_preserves_stable_profile_provider_proofs(
             "vercel_user_get",
         ),
         (
-            "VALIDATED:vercel_user_get:Vercel user ok: "
-            "user_id=user_test user_profile_present=true",
+            "VALIDATED:vercel_user_get:Vercel user ok: user_id=user_test user_profile_present=true",
             "vercel_user_get",
         ),
         (

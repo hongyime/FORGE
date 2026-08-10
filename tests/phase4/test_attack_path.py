@@ -860,12 +860,10 @@ class TestLoadCloudAssets:
             if edge.edge_type == "cloud_misconfig"
         }
         assert any(
-            source == cloud_by_identifier["bucket-a"].node_id
-            for source, _target in cloud_edges
+            source == cloud_by_identifier["bucket-a"].node_id for source, _target in cloud_edges
         )
         assert any(
-            source == cloud_by_identifier["bucket-b"].node_id
-            for source, _target in cloud_edges
+            source == cloud_by_identifier["bucket-b"].node_id for source, _target in cloud_edges
         )
 
     def test_legacy_deterministic_cloud_exposure_uses_validated_target_identifier(
@@ -919,8 +917,7 @@ class TestLoadCloudAssets:
         vuln_nodes = [
             node
             for node in graph.nodes
-            if node.node_type == NodeType.VULN
-            and node.label == "Validated Firebase data exposure"
+            if node.node_type == NodeType.VULN and node.label == "Validated Firebase data exposure"
         ]
 
         assert vuln_nodes
@@ -987,8 +984,7 @@ class TestLoadCloudAssets:
         cloud_nodes = [
             node
             for node in graph.nodes
-            if node.node_type == NodeType.CLOUD
-            and node.metadata.get("identifier") == "shared-id"
+            if node.node_type == NodeType.CLOUD and node.metadata.get("identifier") == "shared-id"
         ]
         nodes_by_service = {str(node.metadata.get("service")): node for node in cloud_nodes}
 
@@ -1003,9 +999,7 @@ class TestLoadCloudAssets:
             assert nodes_by_service[service].metadata["validation_method"] == validation_method
 
         vuln_by_label = {
-            node.label: node
-            for node in graph.nodes
-            if node.node_type == NodeType.VULN
+            node.label: node for node in graph.nodes if node.node_type == NodeType.VULN
         }
         assert "AWS shared bucket exposure" in vuln_by_label
         assert "GCS shared bucket exposure" not in vuln_by_label
@@ -1019,7 +1013,9 @@ class TestLoadCloudAssets:
             cloud_source_by_vuln[vuln_by_label["AWS shared bucket exposure"].node_id]
             == nodes_by_service["aws_s3"].node_id
         )
-        assert all(source != nodes_by_service["gcs"].node_id for source in cloud_source_by_vuln.values())
+        assert all(
+            source != nodes_by_service["gcs"].node_id for source in cloud_source_by_vuln.values()
+        )
 
     def test_cloud_asset_alias_rows_merge_with_canonical_validation_nodes(self, tmp_path: Path):
         db = _make_db(tmp_path, "cloud-alias-graph.db")
@@ -1079,9 +1075,7 @@ class TestLoadCloudAssets:
         assert "CLOUD::s3::legacy-assets" not in cloud_node_ids
         assert "CLOUD::aws_s3::legacy-assets" in cloud_node_ids
         alias_node = next(
-            node
-            for node in cloud_nodes
-            if node.node_id == "CLOUD::aws_s3::legacy-assets"
+            node for node in cloud_nodes if node.node_id == "CLOUD::aws_s3::legacy-assets"
         )
         assert alias_node.metadata["service"] == "aws_s3"
         assert alias_node.metadata["provider_identifier"] == "LegacyAssetsExact"
@@ -1193,23 +1187,27 @@ class TestLoadCloudAssets:
             if node.node_type == NodeType.CLOUD
         }
         vuln_by_label = {
-            node.label: node
-            for node in graph.nodes
-            if node.node_type == NodeType.VULN
+            node.label: node for node in graph.nodes if node.node_type == NodeType.VULN
         }
 
         assert cloud_nodes["bucket-stale"].metadata["validation_status"] == "HONEYPOT_SUSPECTED"
         assert cloud_nodes["bucket-good"].metadata["validation_status"] == "VALIDATED"
         assert cloud_nodes["manual-note-bucket"].metadata["validation_status"] == "VALIDATED"
-        assert cloud_nodes["manual-note-bucket"].metadata["validation_method"] == "manual_validated_note"
+        assert (
+            cloud_nodes["manual-note-bucket"].metadata["validation_method"]
+            == "manual_validated_note"
+        )
         assert cloud_nodes["acct-unsupported"].metadata["validation_status"] == "UNSUPPORTED"
-        assert cloud_nodes["metadata-bucket"].metadata["validation_status"] == "ACCESSIBLE_BUT_NO_DATA"
+        assert (
+            cloud_nodes["metadata-bucket"].metadata["validation_status"] == "ACCESSIBLE_BUT_NO_DATA"
+        )
         assert cloud_nodes["bucket-good"].metadata["validation_notes"] == (
             "Probe notes token=[REDACTED]"
         )
-        assert "reports/customer-records.csv" in cloud_nodes["bucket-good"].metadata[
-            "validation_evidence_summary"
-        ]
+        assert (
+            "reports/customer-records.csv"
+            in cloud_nodes["bucket-good"].metadata["validation_evidence_summary"]
+        )
         assert "Stale cloud exposure" not in vuln_by_label
         assert "Validated cloud exposure" in vuln_by_label
         assert "Manual note cloud exposure" not in vuln_by_label
@@ -1419,8 +1417,7 @@ class TestLoadApiKeys:
                 WHERE engagement_id=1 AND service='aws'
                 """,
                 (
-                    "VALIDATED:slack_auth_test:Slack auth ok: "
-                    "actor_id=U7A3C9K2 team_id=T9B2D6F4",
+                    "VALIDATED:slack_auth_test:Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4",
                     "2026-07-15T09:30:00+00:00",
                 ),
             )
@@ -2403,7 +2400,8 @@ class TestGraphBuildArtifacts:
         assert manifest["maltego_type_mapping"]["company_external"] == "maltego.Company"
         assert any(
             node["forge_node_type"] == "HOST"
-            and node["maltego_entity_type"] in {"maltego.Domain", "maltego.IPv4Address", "maltego.Alias"}
+            and node["maltego_entity_type"]
+            in {"maltego.Domain", "maltego.IPv4Address", "maltego.Alias"}
             and "layout" in node
             for node in manifest["nodes"]
         )
@@ -2499,10 +2497,19 @@ class TestGraphBuildArtifacts:
         assert "AccountId=742931608514" in api_key_csv_row["MetadataJSON"]
         assert "key_enc" not in api_key_csv_row["MetadataJSON"]
         assert "AKIAIOSFODNN7EXAMPLE" not in api_key_csv_row["MetadataJSON"]
-        edge_csv_lines = [line.strip() for line in edges_csv_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        edge_csv_lines = [
+            line.strip()
+            for line in edges_csv_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
         assert edge_csv_lines[0] == "Source,Target,Weight,Relation,MetadataJSON"
-        assert any("artifact_seed_provenance" in line and "webfinger" in line for line in edge_csv_lines[1:])
-        assert any("artifact_seed_provenance" in line and "did.json" in line for line in edge_csv_lines[1:])
+        assert any(
+            "artifact_seed_provenance" in line and "webfinger" in line
+            for line in edge_csv_lines[1:]
+        )
+        assert any(
+            "artifact_seed_provenance" in line and "did.json" in line for line in edge_csv_lines[1:]
+        )
         assert all("never-render-this" not in line for line in edge_csv_lines[1:])
         assert any(not line.endswith(",") for line in edge_csv_lines[1:])
 
@@ -2586,8 +2593,24 @@ class TestGraphBuildArtifacts:
                 """,
                 [
                     (101, source_url, "url", "urlscan", 1, 0.82, "{}"),
-                    (102, email_seed, "email", "artifact", 2, 0.74, json.dumps(compiled_context, sort_keys=True)),
-                    (103, api_seed, "url", "artifact", 2, 0.68, json.dumps(compiled_context, sort_keys=True)),
+                    (
+                        102,
+                        email_seed,
+                        "email",
+                        "artifact",
+                        2,
+                        0.74,
+                        json.dumps(compiled_context, sort_keys=True),
+                    ),
+                    (
+                        103,
+                        api_seed,
+                        "url",
+                        "artifact",
+                        2,
+                        0.68,
+                        json.dumps(compiled_context, sort_keys=True),
+                    ),
                 ],
             )
             con.executemany(
@@ -2660,7 +2683,12 @@ class TestGraphBuildArtifacts:
             and edge["metadata"].get("download_filename") == "42-opaque-compiled.dex"
             for edge in manifest.get("edges", [])
         )
-        for exported_text in (graphml_text, mtgx_graphml, graph_json_text, json.dumps(manifest, sort_keys=True)):
+        for exported_text in (
+            graphml_text,
+            mtgx_graphml,
+            graph_json_text,
+            json.dumps(manifest, sort_keys=True),
+        ):
             assert "artifact_seed_provenance" in exported_text
             assert "application/x-dex" in exported_text
             assert "42-opaque-compiled.dex" in exported_text

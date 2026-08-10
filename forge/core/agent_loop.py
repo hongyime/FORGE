@@ -140,7 +140,9 @@ class AgentLoop:
         # P1-6 - dead-letter topic for retry-exhausted messages. Set to
         # None to disable (drops continue to be audited).
         self._dead_letter_topic: str | None = (
-            dead_letter_topic.strip() if isinstance(dead_letter_topic, str) and dead_letter_topic.strip() else None
+            dead_letter_topic.strip()
+            if isinstance(dead_letter_topic, str) and dead_letter_topic.strip()
+            else None
         )
         # P0-4 - cap on concurrent in-flight handlers. Set to None for
         # unbounded (legacy behaviour). When set, the bus consumer blocks
@@ -307,9 +309,7 @@ class AgentLoop:
             self._shutdown_event.set()
         await self._drain()
 
-    async def _iter_bus(
-        self, topics: list[str]
-    ) -> "AsyncIterator[AgentMessage]":
+    async def _iter_bus(self, topics: list[str]) -> "AsyncIterator[AgentMessage]":
         """Yield messages from the bus subscription.
 
         The :class:`MessageBus` protocol declares ``subscribe`` with an
@@ -334,12 +334,8 @@ class AgentLoop:
         aiter_obj = iterator.__aiter__()
 
         while self._running:
-            next_task: asyncio.Task[AgentMessage] = asyncio.ensure_future(
-                aiter_obj.__anext__()
-            )
-            shutdown_task: asyncio.Task[bool] = asyncio.ensure_future(
-                self._shutdown_event.wait()
-            )
+            next_task: asyncio.Task[AgentMessage] = asyncio.ensure_future(aiter_obj.__anext__())
+            shutdown_task: asyncio.Task[bool] = asyncio.ensure_future(self._shutdown_event.wait())
             done, _pending = await asyncio.wait(
                 {next_task, shutdown_task},
                 return_when=asyncio.FIRST_COMPLETED,
@@ -399,7 +395,6 @@ class AgentLoop:
         finally:
             if self._concurrency_sem is not None:
                 self._concurrency_sem.release()
-
 
     async def _process_message(self, msg: AgentMessage) -> None:
         """Audit, route, and publish-back for a single bus message.
@@ -467,14 +462,12 @@ class AgentLoop:
                 correlation_id=msg.correlation_id,
                 agent_role=agent_role,
                 error_detail=(
-                    f"{exc.__class__.__name__}: {exc} "
-                    f"(agent={agent_role!r}, topic={msg.topic!r})"
+                    f"{exc.__class__.__name__}: {exc} (agent={agent_role!r}, topic={msg.topic!r})"
                 ),
                 trace=traceback.format_exc(),
             )
             _LOG.warning(
-                "AgentLoop: agent=%s raised %s on topic=%s correlation_id=%s; "
-                "skipping message",
+                "AgentLoop: agent=%s raised %s on topic=%s correlation_id=%s; skipping message",
                 agent_role,
                 exc.__class__.__name__,
                 msg.topic,
@@ -518,9 +511,7 @@ class AgentLoop:
                     trace=traceback.format_exc(),
                 )
 
-    async def _handle_ack_timeout(
-        self, msg: AgentMessage, agent_role: str
-    ) -> None:
+    async def _handle_ack_timeout(self, msg: AgentMessage, agent_role: str) -> None:
         """Re-publish ``msg`` with bumped retry_count, or drop on exhaustion.
 
         The retry count is taken from the message envelope itself so the
@@ -565,8 +556,7 @@ class AgentLoop:
                 try:
                     await self._bus.publish(self._dead_letter_topic, dlq_msg)
                     _LOG.info(
-                        "AgentLoop: published exhausted message to DLQ %s "
-                        "correlation_id=%s",
+                        "AgentLoop: published exhausted message to DLQ %s correlation_id=%s",
                         self._dead_letter_topic,
                         msg.correlation_id,
                     )
@@ -591,16 +581,14 @@ class AgentLoop:
                 correlation_id=msg.correlation_id,
                 agent_role=agent_role,
                 error_detail=(
-                    f"failed to re-queue message after ack timeout: "
-                    f"{exc.__class__.__name__}: {exc}"
+                    f"failed to re-queue message after ack timeout: {exc.__class__.__name__}: {exc}"
                 ),
                 trace=traceback.format_exc(),
             )
             return
 
         _LOG.info(
-            "AgentLoop: re-queued correlation_id=%s topic=%s retry=%d/%d "
-            "(agent=%s)",
+            "AgentLoop: re-queued correlation_id=%s topic=%s retry=%d/%d (agent=%s)",
             msg.correlation_id,
             msg.topic,
             retry.retry_count,
@@ -658,14 +646,11 @@ class AgentLoop:
                 await self._audit_error(
                     correlation_id="agent-loop:heartbeat",
                     error_detail=(
-                        f"state_store.save_heartbeat raised "
-                        f"{exc.__class__.__name__}: {exc}"
+                        f"state_store.save_heartbeat raised {exc.__class__.__name__}: {exc}"
                     ),
                     trace=traceback.format_exc(),
                 )
-                _LOG.warning(
-                    "AgentLoop: heartbeat persistence failed: %s", exc
-                )
+                _LOG.warning("AgentLoop: heartbeat persistence failed: %s", exc)
                 return
 
         await self._audit_heartbeat(timestamp=timestamp, persisted=save is not None)
@@ -714,8 +699,7 @@ class AgentLoop:
             in_flight = list(self._in_progress)
             drain_budget = max(self._message_ack_timeout + 5.0, 5.0)
             _LOG.info(
-                "AgentLoop._drain: awaiting %d in-flight handler(s) "
-                "(timeout=%.1fs)",
+                "AgentLoop._drain: awaiting %d in-flight handler(s) (timeout=%.1fs)",
                 len(in_flight),
                 drain_budget,
             )
@@ -796,13 +780,9 @@ class AgentLoop:
         try:
             await self._audit.log(entry)
         except Exception:  # noqa: BLE001 - audit failure must not crash loop
-            _LOG.exception(
-                "AgentLoop: failed to write MESSAGE_RECEIVED audit entry"
-            )
+            _LOG.exception("AgentLoop: failed to write MESSAGE_RECEIVED audit entry")
 
-    async def _audit_heartbeat(
-        self, *, timestamp: float, persisted: bool
-    ) -> None:
+    async def _audit_heartbeat(self, *, timestamp: float, persisted: bool) -> None:
         """Append a ``STATE_TRANSITION`` audit entry for a heartbeat tick."""
         entry = AuditEntry(
             correlation_id="agent-loop:heartbeat",
@@ -820,9 +800,7 @@ class AgentLoop:
         try:
             await self._audit.log(entry)
         except Exception:  # noqa: BLE001 - audit failure must not crash loop
-            _LOG.exception(
-                "AgentLoop: failed to write STATE_TRANSITION audit entry"
-            )
+            _LOG.exception("AgentLoop: failed to write STATE_TRANSITION audit entry")
 
     async def _audit_error(
         self,
@@ -855,8 +833,7 @@ class AgentLoop:
             await self._audit.log(entry)
         except Exception:  # noqa: BLE001 - audit failure must not crash loop
             _LOG.exception(
-                "AgentLoop: failed to write ERROR audit entry "
-                "(detail=%s)",
+                "AgentLoop: failed to write ERROR audit entry (detail=%s)",
                 error_detail,
             )
 

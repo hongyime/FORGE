@@ -15,9 +15,15 @@ from forge.engagement_orchestrator import (
 
 
 def test_classify_seed_value_recognizes_archive_style_mobile_bundle_urls() -> None:
-    assert _classify_seed_value("https://downloads.acme.example/client.xapk?download=1") == "apk_url"
-    assert _classify_seed_value("https://downloads.acme.example/client.apkm?download=1") == "apk_url"
-    assert _classify_seed_value("https://downloads.acme.example/client.apks?download=1") == "apk_url"
+    assert (
+        _classify_seed_value("https://downloads.acme.example/client.xapk?download=1") == "apk_url"
+    )
+    assert (
+        _classify_seed_value("https://downloads.acme.example/client.apkm?download=1") == "apk_url"
+    )
+    assert (
+        _classify_seed_value("https://downloads.acme.example/client.apks?download=1") == "apk_url"
+    )
     assert (
         _classify_seed_value(
             "https://id.acme.example/.well-known/webfinger?resource=acct:user@acme.example"
@@ -25,8 +31,7 @@ def test_classify_seed_value_recognizes_archive_style_mobile_bundle_urls() -> No
         == "url"
     )
     assert (
-        _classify_remote_artifact_url("https://acme.example/.well-known/security.txt")
-        == "config"
+        _classify_remote_artifact_url("https://acme.example/.well-known/security.txt") == "config"
     )
     for metadata_url in (
         "https://acme.example/humans.txt",
@@ -75,7 +80,10 @@ def test_normalize_root_domain_handles_common_second_level_public_suffixes() -> 
 
 
 def test_classify_remote_artifact_url_recognizes_7z_archives() -> None:
-    assert _classify_remote_artifact_url("https://downloads.acme.example/intel-drop.7z?sig=abc") == "archive"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/intel-drop.7z?sig=abc")
+        == "archive"
+    )
 
 
 def test_security_scanner_config_artifact_format_labels_are_source_aware() -> None:
@@ -115,10 +123,7 @@ spec:
     - host: ingress.acme.example
 """.strip()
 
-    assert (
-        processor._orchestration_structured_payload_text(payload, source_hint="notes.yaml")
-        == ""
-    )
+    assert processor._orchestration_structured_payload_text(payload, source_hint="notes.yaml") == ""
     assert processor._orchestration_structured_payload_text(
         payload,
         source_hint="k8s/ingress.yaml",
@@ -143,10 +148,13 @@ dependencies:
         payload,
         source_hint="Chart.lock",
     ).splitlines() == ["https://charts.bitnami.com/bitnami"]
-    assert processor._orchestration_structured_payload_text(
-        payload,
-        source_hint="notes.yaml",
-    ) == ""
+    assert (
+        processor._orchestration_structured_payload_text(
+            payload,
+            source_hint="notes.yaml",
+        )
+        == ""
+    )
 
 
 def test_recon_tool_output_artifact_format_labels_are_source_aware() -> None:

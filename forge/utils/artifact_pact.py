@@ -39,7 +39,11 @@ def pact_contract_artifact_label(value: str) -> str:
         if "." not in name and _looks_like_pact_contract_stem(name):
             return "pact-contract"
     stem = _stem_without_config_suffix(name)
-    if _has_token(stem, "pact") and _has_token(stem, "contract") and name.endswith((".json", ".yaml", ".yml")):
+    if (
+        _has_token(stem, "pact")
+        and _has_token(stem, "contract")
+        and name.endswith((".json", ".yaml", ".yml"))
+    ):
         return "pact-contract"
     if _has_token(stem, "pact") and _has_token(stem, "contract"):
         return "pact-contract"
@@ -67,7 +71,9 @@ def pact_contract_candidate_values(
     fallback_values: Callable[[str], list[str]],
     is_urlish_key: Callable[[str], bool],
 ) -> list[str]:
-    values = _pact_document_values(document, normalize_url=normalize_url, is_urlish_key=is_urlish_key)
+    values = _pact_document_values(
+        document, normalize_url=normalize_url, is_urlish_key=is_urlish_key
+    )
     for value in [*document_values(document), *fallback_values(text)]:
         if value not in values:
             values.append(value)
@@ -85,7 +91,9 @@ def _pact_document_values(
     base_url = normalized_bases[0] if normalized_bases else ""
     values = list(base_values)
     for interaction in _pact_interaction_sources(document):
-        for value in _pact_interaction_values(interaction, base_url=base_url, is_urlish_key=is_urlish_key):
+        for value in _pact_interaction_values(
+            interaction, base_url=base_url, is_urlish_key=is_urlish_key
+        ):
             if value not in values:
                 values.append(value)
     return values[:512]
@@ -150,7 +158,9 @@ def _pact_base_values(document: Any) -> list[str]:
     return values[:128]
 
 
-def _pact_interaction_values(value: Any, *, base_url: str, is_urlish_key: Callable[[str], bool]) -> list[str]:
+def _pact_interaction_values(
+    value: Any, *, base_url: str, is_urlish_key: Callable[[str], bool]
+) -> list[str]:
     values: list[str] = []
 
     def append(candidate: str) -> None:
@@ -239,4 +249,7 @@ def _looks_like_pact_contract_stem(value: str) -> bool:
 
 def _looks_hostish(value: str) -> bool:
     text = str(value or "").strip()
-    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{1,253}(?::\d{1,5})?(?:/[^\s?#]*)?", text)) and "." in text
+    return (
+        bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{1,253}(?::\d{1,5})?(?:/[^\s?#]*)?", text))
+        and "." in text
+    )

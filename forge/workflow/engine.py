@@ -166,9 +166,7 @@ def _safe_eval_condition(condition: str, last_result: dict[str, object]) -> bool
     try:
         tree = ast.parse(condition, mode="eval")
     except SyntaxError as exc:
-        raise UnsafeTransitionConditionError(
-            condition, f"syntax error: {exc.msg}"
-        ) from exc
+        raise UnsafeTransitionConditionError(condition, f"syntax error: {exc.msg}") from exc
 
     for node in ast.walk(tree):
         if isinstance(node, _ALLOWED_AST_NODES):
@@ -188,13 +186,9 @@ def _safe_eval_condition(condition: str, last_result: dict[str, object]) -> bool
                 "indexing like result['key']",
             )
         if isinstance(node, ast.Call):
-            raise UnsafeTransitionConditionError(
-                condition, "function calls are forbidden"
-            )
+            raise UnsafeTransitionConditionError(condition, "function calls are forbidden")
         if isinstance(node, ast.Lambda):
-            raise UnsafeTransitionConditionError(
-                condition, "lambdas are forbidden"
-            )
+            raise UnsafeTransitionConditionError(condition, "lambdas are forbidden")
         if isinstance(
             node,
             (
@@ -221,9 +215,7 @@ def _safe_eval_condition(condition: str, last_result: dict[str, object]) -> bool
         # AST already whitelisted above; bracket access + comparisons only.
         value = eval(code, sandbox_globals, sandbox_locals)  # noqa: S307 # nosec B307
     except NameError as exc:
-        raise UnsafeTransitionConditionError(
-            condition, f"unknown name: {exc}"
-        ) from exc
+        raise UnsafeTransitionConditionError(condition, f"unknown name: {exc}") from exc
     return bool(value)
 
 
@@ -324,9 +316,7 @@ class WorkflowEngine:
         )
         return workflow_id
 
-    async def advance_stage(
-        self, workflow_id: str, stage_result: dict[str, object]
-    ) -> None:
+    async def advance_stage(self, workflow_id: str, stage_result: dict[str, object]) -> None:
         """Mark the current stage completed and advance to the next.
 
         Persists after the transition (Requirement 5.3). Evaluates the
@@ -350,8 +340,7 @@ class WorkflowEngine:
                 last_exc = exc
                 if attempt < _CONCURRENCY_MAX_ATTEMPTS - 1:
                     await asyncio.sleep(
-                        _CONCURRENCY_BASE_BACKOFF_S * (1 + random.random())
-                        * (attempt + 1)
+                        _CONCURRENCY_BASE_BACKOFF_S * (1 + random.random()) * (attempt + 1)
                     )
                     continue
                 await self._audit.log(
@@ -391,8 +380,7 @@ class WorkflowEngine:
                 last_exc = exc
                 if attempt < _CONCURRENCY_MAX_ATTEMPTS - 1:
                     await asyncio.sleep(
-                        _CONCURRENCY_BASE_BACKOFF_S * (1 + random.random())
-                        * (attempt + 1)
+                        _CONCURRENCY_BASE_BACKOFF_S * (1 + random.random()) * (attempt + 1)
                     )
                     continue
                 await self._audit.log(
@@ -410,9 +398,7 @@ class WorkflowEngine:
         if last_exc is not None:  # pragma: no cover
             raise last_exc
 
-    async def _advance_stage_once(
-        self, workflow_id: str, stage_result: dict[str, object]
-    ) -> None:
+    async def _advance_stage_once(self, workflow_id: str, stage_result: dict[str, object]) -> None:
         """Single attempt at advancing the stage; raises on version mismatch."""
         row = await self._load_or_raise(workflow_id)
         definition = self._resolve_definition(row)
@@ -480,9 +466,7 @@ class WorkflowEngine:
                     correlation_id=workflow_id,
                     event_type=AuditEventType.STATE_TRANSITION,
                     tool_name="workflow_engine",
-                    output_summary=(
-                        f"workflow halted at {current_stage.name}: condition false"
-                    ),
+                    output_summary=(f"workflow halted at {current_stage.name}: condition false"),
                     success=True,
                 )
             )
@@ -762,9 +746,7 @@ class WorkflowEngine:
             resumed.append(workflow_id)
         return resumed
 
-    async def restart_workflow(
-        self, workflow_id: str, *, reset_retries: bool = True
-    ) -> None:
+    async def restart_workflow(self, workflow_id: str, *, reset_retries: bool = True) -> None:
         """Reset and re-run a previously failed or completed workflow (P2-11).
 
         Loads the existing row, resets ``is_complete`` to ``False``,
@@ -852,9 +834,7 @@ class WorkflowEngine:
         payload: dict[str, object] = dict(stage.payload_template)
         payload.update(params)
         if results is not None:
-            payload["_results"] = {
-                k: v for k, v in results.items() if not k.startswith("_")
-            }
+            payload["_results"] = {k: v for k, v in results.items() if not k.startswith("_")}
         message = AgentMessage(
             topic=stage.topic,
             payload=payload,
@@ -894,10 +874,7 @@ class WorkflowEngine:
                 expected_version=expected_version,
             )
         except CheckpointTooLargeError as exc:
-            failure_msg = (
-                f"checkpoint_too_large:{exc.size_bytes} bytes > "
-                f"{exc.limit_bytes} bytes"
-            )
+            failure_msg = f"checkpoint_too_large:{exc.size_bytes} bytes > {exc.limit_bytes} bytes"
             # Best-effort failure record: drop the oversized payload so the
             # failure marker itself fits. A separate read-modify-write to
             # avoid recursing into the size guard.
@@ -932,9 +909,7 @@ class WorkflowEngine:
             )
             raise
 
-    async def _handle_stage_index_oob(
-        self, row: WorkflowStateRow, total_stages: int
-    ) -> None:
+    async def _handle_stage_index_oob(self, row: WorkflowStateRow, total_stages: int) -> None:
         """Mark a workflow failed when ``current_stage_index >= len(stages)`` (P2-7).
 
         The caller has already verified that ``row.is_complete`` is
@@ -973,9 +948,7 @@ class WorkflowEngine:
         )
 
     @staticmethod
-    def _evaluate_transition(
-        condition: str | None, last_result: dict[str, object]
-    ) -> bool:
+    def _evaluate_transition(condition: str | None, last_result: dict[str, object]) -> bool:
         """Evaluate a transition condition with the safe AST whitelist (P0-2).
 
         ``None`` is treated as unconditional advance. Hostile or
@@ -1027,14 +1000,10 @@ class WorkflowEngine:
             return {}
         return {str(k): str(v) for k, v in decoded.items()}
 
-    def _decode_results(
-        self, row: WorkflowStateRow, workflow_id: str
-    ) -> dict[str, object]:
+    def _decode_results(self, row: WorkflowStateRow, workflow_id: str) -> dict[str, object]:
         """Decode intermediate_results with corruption recovery (P2-8)."""
         try:
-            decoded = (
-                json.loads(row.intermediate_results) if row.intermediate_results else {}
-            )
+            decoded = json.loads(row.intermediate_results) if row.intermediate_results else {}
         except json.JSONDecodeError as exc:
             asyncio.ensure_future(self._mark_corrupt_and_audit(workflow_id, exc))
             return {}
@@ -1042,9 +1011,7 @@ class WorkflowEngine:
             return {}
         return {str(k): v for k, v in decoded.items()}
 
-    async def _mark_corrupt_and_audit(
-        self, workflow_id: str, exc: json.JSONDecodeError
-    ) -> None:
+    async def _mark_corrupt_and_audit(self, workflow_id: str, exc: json.JSONDecodeError) -> None:
         """Persist the corruption flag and emit an ERROR audit entry (P2-8)."""
         try:
             await self._store.mark_corrupted(workflow_id)

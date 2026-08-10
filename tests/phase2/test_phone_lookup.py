@@ -57,12 +57,8 @@ def test_mine_dork_urls_parallelizes_site_queries_but_preserves_site_order(monke
                         "uddg=https%3A%2F%2Ftwitter.com%2Facmeintel"
                         "&uddg=https%3A%2F%2Fresearch.acme.co%2Fteam%3Femail%3Dalpha%40acme.co"
                     ),
-                    "instagram.com": (
-                        "uddg=https%3A%2F%2Finstagram.com%2Fbravo.ops"
-                    ),
-                    "linkedin.com": (
-                        "uddg=https%3A%2F%2Fwww.linkedin.com%2Fin%2Falice-example"
-                    ),
+                    "instagram.com": ("uddg=https%3A%2F%2Finstagram.com%2Fbravo.ops"),
+                    "linkedin.com": ("uddg=https%3A%2F%2Fwww.linkedin.com%2Fin%2Falice-example"),
                 }
                 return _FakeResponse(payloads[site])
             finally:
@@ -459,8 +455,7 @@ def test_mine_dork_urls_supplements_recursive_public_profiles_when_cap_allows(
                     "uddg=https%3A%2F%2Fwww.patreon.com%2Fjoin"
                 ),
                 "ko-fi.com": (
-                    "uddg=https%3A%2F%2Fko-fi.com%2Fphonekofi&"
-                    "uddg=https%3A%2F%2Fko-fi.com%2Fhome"
+                    "uddg=https%3A%2F%2Fko-fi.com%2Fphonekofi&uddg=https%3A%2F%2Fko-fi.com%2Fhome"
                 ),
                 "buymeacoffee.com": (
                     "uddg=https%3A%2F%2Fwww.buymeacoffee.com%2Fphonecoffee&"
@@ -499,44 +494,37 @@ def test_mine_dork_urls_supplements_recursive_public_profiles_when_cap_allows(
                     "uddg=https%3A%2F%2Fbeacons.ai%2Fpricing"
                 ),
                 "bio.link": (
-                    "uddg=https%3A%2F%2Fbio.link%2Fphonebio&"
-                    "uddg=https%3A%2F%2Fbio.link%2Fdiscover"
+                    "uddg=https%3A%2F%2Fbio.link%2Fphonebio&uddg=https%3A%2F%2Fbio.link%2Fdiscover"
                 ),
                 "bio.site": (
-                    "uddg=https%3A%2F%2Fbio.site%2Fphonebiosite&"
-                    "uddg=https%3A%2F%2Fbio.site%2Flogin"
+                    "uddg=https%3A%2F%2Fbio.site%2Fphonebiosite&uddg=https%3A%2F%2Fbio.site%2Flogin"
                 ),
                 "allmylinks.com": (
                     "uddg=https%3A%2F%2Fallmylinks.com%2Fphoneaml&"
                     "uddg=https%3A%2F%2Fallmylinks.com%2Fsettings"
                 ),
                 "lnk.bio": (
-                    "uddg=https%3A%2F%2Flnk.bio%2Fphonelnk&"
-                    "uddg=https%3A%2F%2Flnk.bio%2Flogin"
+                    "uddg=https%3A%2F%2Flnk.bio%2Fphonelnk&uddg=https%3A%2F%2Flnk.bio%2Flogin"
                 ),
                 "solo.to": (
-                    "uddg=https%3A%2F%2Fsolo.to%2Fphonesolo&"
-                    "uddg=https%3A%2F%2Fsolo.to%2Fpricing"
+                    "uddg=https%3A%2F%2Fsolo.to%2Fphonesolo&uddg=https%3A%2F%2Fsolo.to%2Fpricing"
                 ),
                 "campsite.bio": (
                     "uddg=https%3A%2F%2Fcampsite.bio%2Fphonecamp&"
                     "uddg=https%3A%2F%2Fcampsite.bio%2Fpricing"
                 ),
                 "bento.me": (
-                    "uddg=https%3A%2F%2Fbento.me%2Fphonebento&"
-                    "uddg=https%3A%2F%2Fbento.me%2Fpricing"
+                    "uddg=https%3A%2F%2Fbento.me%2Fphonebento&uddg=https%3A%2F%2Fbento.me%2Fpricing"
                 ),
                 "hoo.be": (
-                    "uddg=https%3A%2F%2Fhoo.be%2Fphonehoo&"
-                    "uddg=https%3A%2F%2Fhoo.be%2Fdiscover"
+                    "uddg=https%3A%2F%2Fhoo.be%2Fphonehoo&uddg=https%3A%2F%2Fhoo.be%2Fdiscover"
                 ),
                 "taplink.cc": (
                     "uddg=https%3A%2F%2Ftaplink.cc%2Fphonetap&"
                     "uddg=https%3A%2F%2Ftaplink.cc%2Fpricing"
                 ),
                 "msha.ke": (
-                    "uddg=https%3A%2F%2Fmsha.ke%2Fphone.milk&"
-                    "uddg=https%3A%2F%2Fmsha.ke%2Flogin"
+                    "uddg=https%3A%2F%2Fmsha.ke%2Fphone.milk&uddg=https%3A%2F%2Fmsha.ke%2Flogin"
                 ),
                 "medium.com": (
                     "uddg=https%3A%2F%2Fphonewriter.medium.com%2Fsignal&"
@@ -556,8 +544,7 @@ def test_mine_dork_urls_supplements_recursive_public_profiles_when_cap_allows(
                     "uddg=https%3A%2F%2Fdev.to%2Ft%2Fsecurity"
                 ),
                 "about.me": (
-                    "uddg=https%3A%2F%2Fabout.me%2Fphoneabout&"
-                    "uddg=https%3A%2F%2Fabout.me%2Fsupport"
+                    "uddg=https%3A%2F%2Fabout.me%2Fphoneabout&uddg=https%3A%2F%2Fabout.me%2Fsupport"
                 ),
                 "gitlab.com": (
                     "uddg=https%3A%2F%2Fgitlab.com%2Fphoneforge&"
@@ -601,8 +588,7 @@ def test_mine_dork_urls_supplements_recursive_public_profiles_when_cap_allows(
                     "uddg=https%3A%2F%2Fwww.snapchat.com%2Fadd"
                 ),
                 "keybase.io": (
-                    "uddg=https%3A%2F%2Fkeybase.io%2Fphonekey&"
-                    "uddg=https%3A%2F%2Fkeybase.io%2Fdocs"
+                    "uddg=https%3A%2F%2Fkeybase.io%2Fphonekey&uddg=https%3A%2F%2Fkeybase.io%2Fdocs"
                 ),
                 "bsky.app": (
                     "uddg=https%3A%2F%2Fbsky.app%2Fprofile%2Fphonebsky&"
@@ -773,8 +759,7 @@ def test_mine_dork_urls_supplements_recursive_public_profiles_when_cap_allows(
                     "uddg=https%3A%2F%2Fdevpost.com%2Fhackathons"
                 ),
                 "read.cv": (
-                    "uddg=https%3A%2F%2Fread.cv%2Fphonereadcv&"
-                    "uddg=https%3A%2F%2Fread.cv%2Fexplore"
+                    "uddg=https%3A%2F%2Fread.cv%2Fphonereadcv&uddg=https%3A%2F%2Fread.cv%2Fexplore"
                 ),
                 "codepen.io": (
                     "uddg=https%3A%2F%2Fcodepen.io%2Fphonepen%2Fpen%2Fsecurity&"
@@ -1178,7 +1163,9 @@ def test_check_account_existence_paces_direct_provider_requests(monkeypatch) -> 
     ]
 
 
-def test_lookup_phone_persists_parallel_mined_results_and_audit(monkeypatch, tmp_path: Path) -> None:
+def test_lookup_phone_persists_parallel_mined_results_and_audit(
+    monkeypatch, tmp_path: Path
+) -> None:
     db_path = tmp_path / "engagement.db"
     con = sqlite3.connect(db_path)
     try:
@@ -1247,9 +1234,7 @@ def test_lookup_phone_persists_parallel_mined_results_and_audit(monkeypatch, tmp
 
     con = sqlite3.connect(db_path)
     try:
-        emails = con.execute(
-            "SELECT email, source FROM emails WHERE engagement_id=1001"
-        ).fetchall()
+        emails = con.execute("SELECT email, source FROM emails WHERE engagement_id=1001").fetchall()
         assert emails == [("ops@acme.co", "phone_dork_mining")]
 
         social_rows = con.execute(
@@ -1261,21 +1246,15 @@ def test_lookup_phone_persists_parallel_mined_results_and_audit(monkeypatch, tmp
             """
         ).fetchall()
         assert any(
-            row[0] == "phone:+15551234567" and row[1] == "phone_dork:acmeops"
-            for row in social_rows
+            row[0] == "phone:+15551234567" and row[1] == "phone_dork:acmeops" for row in social_rows
         )
-        assert any(
-            row[0] == "phone:+15551234567" and row[1] == "telegram"
-            for row in social_rows
-        )
+        assert any(row[0] == "phone:+15551234567" and row[1] == "telegram" for row in social_rows)
         assert any(
             row[0] == "phone:+15551234567" and str(row[1]).startswith("phone_dork_url:")
             for row in social_rows
         )
         url_profile = next(
-            json.loads(row[2])
-            for row in social_rows
-            if str(row[1]).startswith("phone_dork_url:")
+            json.loads(row[2]) for row in social_rows if str(row[1]).startswith("phone_dork_url:")
         )
         assert url_profile["platform"] == "twitter"
         assert url_profile["host"] == "twitter.com"

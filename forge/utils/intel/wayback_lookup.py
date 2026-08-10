@@ -4,6 +4,7 @@ This module intentionally performs passive historical URL lookups only. It
 does not fetch archived page bodies or replay target traffic; callers decide
 which discovered URLs are still in-scope and worth probing later.
 """
+
 from __future__ import annotations
 
 import os
@@ -226,8 +227,7 @@ def search_wayback_urls_detailed(
                     response = _wayback_get(client, _WAYBACK_CDX_URL, params=params)
                     if getattr(response, "status_code", None) != 200:
                         error = (
-                            f"page_{page}_http_status_"
-                            f"{getattr(response, 'status_code', 'unknown')}"
+                            f"page_{page}_http_status_{getattr(response, 'status_code', 'unknown')}"
                         )
                         break
                     try:

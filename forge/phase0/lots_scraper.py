@@ -19,6 +19,7 @@ lots_sites schema:
   https_only          INTEGER       — 0/1 (1 means HTTPS enforced)
   notes               TEXT
 """
+
 from __future__ import annotations
 
 import logging
@@ -84,9 +85,7 @@ def _ensure_chromium_installed() -> None:
         # If we can't even query the path, fall through to install
         pass
 
-    _LOG.info(
-        "playwright chromium missing - auto-installing (one-time, ~87 MB)..."
-    )
+    _LOG.info("playwright chromium missing - auto-installing (one-time, ~87 MB)...")
     try:
         _sp.run(
             [_sys.executable, "-m", "playwright", "install", "chromium"],
@@ -105,8 +104,10 @@ def _ensure_chromium_installed() -> None:
 def _fetch_playwright(cfg: ForgeConfig) -> str:
     _ensure_chromium_installed()
     from playwright.sync_api import sync_playwright  # noqa: PLC0415
+
     try:
         from playwright_stealth import stealth_sync  # noqa: PLC0415
+
         has_stealth = True
     except ImportError:
         has_stealth = False
@@ -137,6 +138,7 @@ def _fetch_playwright(cfg: ForgeConfig) -> str:
 def _fetch_curl(cfg: ForgeConfig) -> str:
     try:
         from curl_cffi import requests as cffi_requests  # noqa: PLC0415
+
         proxies = {"https": cfg.proxy} if cfg.proxy else None
         resp = cffi_requests.get(
             LOTS_URL,
@@ -148,6 +150,7 @@ def _fetch_curl(cfg: ForgeConfig) -> str:
         return resp.text
     except ImportError:
         import urllib.request  # noqa: PLC0415
+
         with urllib.request.urlopen(LOTS_URL, timeout=30) as r:  # noqa: S310
             return r.read().decode("utf-8", errors="replace")
 
@@ -186,14 +189,16 @@ def _parse_html(html: str) -> list[dict]:
         notes = cells[-1].get_text(strip=True) if len(cells) > 4 else ""
 
         if domain and "." in domain:
-            sites.append({
-                "domain":             domain.lower(),
-                "provider":           provider,
-                "allows_upload":      allows_upload,
-                "allows_direct_link": allows_direct,
-                "https_only":         1,
-                "notes":              notes[:512],
-            })
+            sites.append(
+                {
+                    "domain": domain.lower(),
+                    "provider": provider,
+                    "allows_upload": allows_upload,
+                    "allows_direct_link": allows_direct,
+                    "https_only": 1,
+                    "notes": notes[:512],
+                }
+            )
 
     if not sites:
         _LOG.warning("LOTS: table parsed but no valid domains found — using seed list.")
@@ -211,15 +216,78 @@ def _hardcoded_seed() -> list[dict]:
     get the complete current list.
     """
     return [
-        {"domain": "raw.githubusercontent.com",     "provider": "GitHub",    "allows_upload": 0, "allows_direct_link": 1, "https_only": 1, "notes": "Raw file hosting"},
-        {"domain": "gist.githubusercontent.com",    "provider": "GitHub",    "allows_upload": 0, "allows_direct_link": 1, "https_only": 1, "notes": "Gist raw content"},
-        {"domain": "cdn.discordapp.com",            "provider": "Discord",   "allows_upload": 1, "allows_direct_link": 1, "https_only": 1, "notes": "Attachment CDN"},
-        {"domain": "storage.googleapis.com",        "provider": "Google",    "allows_upload": 1, "allows_direct_link": 1, "https_only": 1, "notes": "GCS public bucket"},
-        {"domain": "s3.amazonaws.com",              "provider": "AWS",       "allows_upload": 1, "allows_direct_link": 1, "https_only": 1, "notes": "S3 public bucket"},
-        {"domain": "onedrive.live.com",             "provider": "Microsoft", "allows_upload": 1, "allows_direct_link": 1, "https_only": 1, "notes": "OneDrive share links"},
-        {"domain": "transfer.sh",                   "provider": "Transfer",  "allows_upload": 1, "allows_direct_link": 1, "https_only": 1, "notes": "CLI file transfer"},
-        {"domain": "pastebin.com",                  "provider": "Pastebin",  "allows_upload": 1, "allows_direct_link": 1, "https_only": 1, "notes": "Paste raw content"},
-        {"domain": "githubusercontent.com",          "provider": "GitHub",    "allows_upload": 0, "allows_direct_link": 1, "https_only": 1, "notes": "Release asset CDN"},
+        {
+            "domain": "raw.githubusercontent.com",
+            "provider": "GitHub",
+            "allows_upload": 0,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "Raw file hosting",
+        },
+        {
+            "domain": "gist.githubusercontent.com",
+            "provider": "GitHub",
+            "allows_upload": 0,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "Gist raw content",
+        },
+        {
+            "domain": "cdn.discordapp.com",
+            "provider": "Discord",
+            "allows_upload": 1,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "Attachment CDN",
+        },
+        {
+            "domain": "storage.googleapis.com",
+            "provider": "Google",
+            "allows_upload": 1,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "GCS public bucket",
+        },
+        {
+            "domain": "s3.amazonaws.com",
+            "provider": "AWS",
+            "allows_upload": 1,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "S3 public bucket",
+        },
+        {
+            "domain": "onedrive.live.com",
+            "provider": "Microsoft",
+            "allows_upload": 1,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "OneDrive share links",
+        },
+        {
+            "domain": "transfer.sh",
+            "provider": "Transfer",
+            "allows_upload": 1,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "CLI file transfer",
+        },
+        {
+            "domain": "pastebin.com",
+            "provider": "Pastebin",
+            "allows_upload": 1,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "Paste raw content",
+        },
+        {
+            "domain": "githubusercontent.com",
+            "provider": "GitHub",
+            "allows_upload": 0,
+            "allows_direct_link": 1,
+            "https_only": 1,
+            "notes": "Release asset CDN",
+        },
     ]
 
 

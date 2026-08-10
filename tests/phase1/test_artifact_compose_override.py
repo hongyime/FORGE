@@ -167,7 +167,9 @@ def test_compose_profile_artifact_feeds_passive_recursive_pivots(tmp_path: Path)
         assert ("http://compose-prod-edge.acme.example", "url") in seeds
         assert ("https://compose-prod.acme.example/api?view=ops", "url") in seeds
         assert ("compose-prod-owner@acme.example", "email") in seeds
-        assert all("${COMPOSE_HOST}" not in value and "secret=drop" not in value for value, _ in seeds)
+        assert all(
+            "${COMPOSE_HOST}" not in value and "secret=drop" not in value for value, _ in seeds
+        )
 
         cloud_assets = {
             (row[0], row[1])

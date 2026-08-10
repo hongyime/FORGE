@@ -272,9 +272,7 @@ class ForgeConfig:
             and not web_secret_key
             and not _is_dev_profile()
         ):
-            raise RuntimeError(
-                "FORGE_WEB_SECRET_KEY must be set when FORGE_WEB_ENABLED=1."
-            )
+            raise RuntimeError("FORGE_WEB_SECRET_KEY must be set when FORGE_WEB_ENABLED=1.")
         distributed_enabled = os.environ.get("FORGE_DISTRIBUTED_ENABLED", "0").strip() in (
             "1",
             "true",
@@ -313,50 +311,75 @@ class ForgeConfig:
             "on",
         )
         shodan_key = (
-            os.environ.get("FORGE_SHODAN_API_KEY")
-            or os.environ.get("FORGE_SHODAN_KEY")
-            or None
+            os.environ.get("FORGE_SHODAN_API_KEY") or os.environ.get("FORGE_SHODAN_KEY") or None
         )
         auth_max_attempts_raw = os.environ.get("FORGE_AUTH_MAX_ATTEMPTS", "1000").strip()
         auth_max_attempts = int(auth_max_attempts_raw) if auth_max_attempts_raw.isdigit() else 1000
         auth_rate_limit_raw = os.environ.get("FORGE_AUTH_RATE_LIMIT", "10").strip()
         auth_rate_limit = int(auth_rate_limit_raw) if auth_rate_limit_raw.isdigit() else 10
-        c2_default_channel = (os.environ.get("FORGE_C2_DEFAULT_CHANNEL", "https").strip().lower() or "https")
+        c2_default_channel = (
+            os.environ.get("FORGE_C2_DEFAULT_CHANNEL", "https").strip().lower() or "https"
+        )
         if c2_default_channel not in {"https", "dns", "smb", "icmp"}:
-            _LOG.warning("Invalid FORGE_C2_DEFAULT_CHANNEL=%r; defaulting to https.", c2_default_channel)
+            _LOG.warning(
+                "Invalid FORGE_C2_DEFAULT_CHANNEL=%r; defaulting to https.", c2_default_channel
+            )
             c2_default_channel = "https"
-        c2_fallback_order_raw = os.environ.get("FORGE_C2_FALLBACK_ORDER", "https,dns,smb,icmp").strip()
-        c2_fallback_order = [item.strip().lower() for item in c2_fallback_order_raw.split(",") if item.strip()]
+        c2_fallback_order_raw = os.environ.get(
+            "FORGE_C2_FALLBACK_ORDER", "https,dns,smb,icmp"
+        ).strip()
+        c2_fallback_order = [
+            item.strip().lower() for item in c2_fallback_order_raw.split(",") if item.strip()
+        ]
         if not c2_fallback_order:
             c2_fallback_order = ["https", "dns", "smb", "icmp"]
         valid_channels = {"https", "dns", "smb", "icmp"}
         if any(ch not in valid_channels for ch in c2_fallback_order):
-            _LOG.warning("Invalid FORGE_C2_FALLBACK_ORDER=%r; defaulting to https,dns,smb,icmp.", c2_fallback_order_raw)
+            _LOG.warning(
+                "Invalid FORGE_C2_FALLBACK_ORDER=%r; defaulting to https,dns,smb,icmp.",
+                c2_fallback_order_raw,
+            )
             c2_fallback_order = ["https", "dns", "smb", "icmp"]
-        c2_failure_threshold_https_raw = os.environ.get("FORGE_C2_FAIL_THRESHOLD_HTTPS", "3").strip()
+        c2_failure_threshold_https_raw = os.environ.get(
+            "FORGE_C2_FAIL_THRESHOLD_HTTPS", "3"
+        ).strip()
         c2_failure_threshold_dns_raw = os.environ.get("FORGE_C2_FAIL_THRESHOLD_DNS", "3").strip()
         c2_failure_threshold_smb_raw = os.environ.get("FORGE_C2_FAIL_THRESHOLD_SMB", "2").strip()
         c2_failure_threshold_icmp_raw = os.environ.get("FORGE_C2_FAIL_THRESHOLD_ICMP", "2").strip()
-        c2_failure_threshold_https = int(c2_failure_threshold_https_raw) if c2_failure_threshold_https_raw.isdigit() else 3
-        c2_failure_threshold_dns = int(c2_failure_threshold_dns_raw) if c2_failure_threshold_dns_raw.isdigit() else 3
-        c2_failure_threshold_smb = int(c2_failure_threshold_smb_raw) if c2_failure_threshold_smb_raw.isdigit() else 2
-        c2_failure_threshold_icmp = int(c2_failure_threshold_icmp_raw) if c2_failure_threshold_icmp_raw.isdigit() else 2
+        c2_failure_threshold_https = (
+            int(c2_failure_threshold_https_raw) if c2_failure_threshold_https_raw.isdigit() else 3
+        )
+        c2_failure_threshold_dns = (
+            int(c2_failure_threshold_dns_raw) if c2_failure_threshold_dns_raw.isdigit() else 3
+        )
+        c2_failure_threshold_smb = (
+            int(c2_failure_threshold_smb_raw) if c2_failure_threshold_smb_raw.isdigit() else 2
+        )
+        c2_failure_threshold_icmp = (
+            int(c2_failure_threshold_icmp_raw) if c2_failure_threshold_icmp_raw.isdigit() else 2
+        )
         c2_smb_pipe_name = os.environ.get("FORGE_C2_SMB_PIPE_NAME", "atsvc").strip() or "atsvc"
         c2_smb_fallback_timeout_raw = os.environ.get("FORGE_C2_SMB_FALLBACK_TIMEOUT", "30").strip()
-        c2_smb_fallback_timeout = int(c2_smb_fallback_timeout_raw) if c2_smb_fallback_timeout_raw.isdigit() else 30
-        c2_icmp_target_ip = os.environ.get("FORGE_C2_ICMP_TARGET_IP", "127.0.0.1").strip() or "127.0.0.1"
+        c2_smb_fallback_timeout = (
+            int(c2_smb_fallback_timeout_raw) if c2_smb_fallback_timeout_raw.isdigit() else 30
+        )
+        c2_icmp_target_ip = (
+            os.environ.get("FORGE_C2_ICMP_TARGET_IP", "127.0.0.1").strip() or "127.0.0.1"
+        )
         c2_icmp_packet_interval_raw = os.environ.get("FORGE_C2_ICMP_PACKET_INTERVAL", "180").strip()
-        c2_icmp_packet_interval = int(c2_icmp_packet_interval_raw) if c2_icmp_packet_interval_raw.isdigit() else 180
+        c2_icmp_packet_interval = (
+            int(c2_icmp_packet_interval_raw) if c2_icmp_packet_interval_raw.isdigit() else 180
+        )
         cloud_aws_profile = os.environ.get("FORGE_AWS_PROFILE") or None
         cloud_aws_regions_raw = os.environ.get("FORGE_AWS_REGIONS", "").strip()
-        cloud_aws_regions = [item.strip() for item in cloud_aws_regions_raw.split(",") if item.strip()]
+        cloud_aws_regions = [
+            item.strip() for item in cloud_aws_regions_raw.split(",") if item.strip()
+        ]
         cloud_aws_services_raw = os.environ.get(
             "FORGE_AWS_SERVICES", "iam,s3,rds,ec2,lambda,cloudtrail"
         ).strip()
         cloud_aws_services = [
-            item.strip().lower()
-            for item in cloud_aws_services_raw.split(",")
-            if item.strip()
+            item.strip().lower() for item in cloud_aws_services_raw.split(",") if item.strip()
         ]
         cloud_azure_subscription_id = os.environ.get("FORGE_AZURE_SUBSCRIPTION_ID") or None
         cloud_azure_tenant_id = os.environ.get("FORGE_AZURE_TENANT_ID") or None
@@ -365,9 +388,7 @@ class ForgeConfig:
             "FORGE_AZURE_SERVICES", "rbac,storage,sql,keyvault,appservice"
         ).strip()
         cloud_azure_services = [
-            item.strip().lower()
-            for item in cloud_azure_services_raw.split(",")
-            if item.strip()
+            item.strip().lower() for item in cloud_azure_services_raw.split(",") if item.strip()
         ]
 
         kb_path = _env_path("FORGE_KB_PATH") or (data_dir / "knowledge.db")
@@ -543,9 +564,7 @@ def prompt_offensive_upgrade(phase_label: str = "Offensive modules") -> bool:
     root = Path(__file__).resolve().parent.parent
     req_file = root / "requirements-full.txt"
     if not req_file.exists():
-        console.print(
-            f"[bold red]ERROR:[/bold red] requirements-full.txt not found at {req_file}."
-        )
+        console.print(f"[bold red]ERROR:[/bold red] requirements-full.txt not found at {req_file}.")
         return False
 
     console.print("[bold cyan]Installing offensive dependencies...[/bold cyan]")
@@ -611,7 +630,12 @@ def _is_dev_profile() -> bool:
     env_name = os.environ.get("FORGE_ENV", "").strip().lower()
     if env_name in {"dev", "development", "test", "local"}:
         return True
-    return os.environ.get("FORGE_WEB_ALLOW_INSECURE_SECRET", "0").strip() in ("1", "true", "yes", "on")
+    return os.environ.get("FORGE_WEB_ALLOW_INSECURE_SECRET", "0").strip() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 def split_secret_values(raw: Optional[str]) -> list[str]:
@@ -670,9 +694,7 @@ class PlatformSettings(BaseSettings):
     # FORGE_STATE_DB_URL=sqlite:///path.db explicitly. asyncpg is the only
     # supported Postgres driver - alembic migrations will strip the +asyncpg
     # suffix when invoking sync DDL.
-    state_db_url: str = (
-        "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
-    )
+    state_db_url: str = "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
 
     # -- Plugin Architecture --------------------------------------------------
     plugin_dir: str = "./plugins"
@@ -696,9 +718,7 @@ class PlatformSettings(BaseSettings):
     # Audit DB is reserved for future structured-audit work; the live audit
     # trail today is the JSONL hash chain in :class:`AuditLogger`. Default
     # is the same Postgres instance to keep ops simple.
-    audit_db_url: str = (
-        "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
-    )
+    audit_db_url: str = "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
     telemetry_threshold_ms: int = 5000  # Latency warning threshold
 
     # -- Message Retry --------------------------------------------------------
@@ -715,8 +735,14 @@ class PlatformSettings(BaseSettings):
 
     # -- Validators -----------------------------------------------------------
 
-    @field_validator("provider_timeout", "heartbeat_interval", "telemetry_threshold_ms",
-                     "message_retry_max", "message_ack_timeout", mode="before")
+    @field_validator(
+        "provider_timeout",
+        "heartbeat_interval",
+        "telemetry_threshold_ms",
+        "message_retry_max",
+        "message_ack_timeout",
+        mode="before",
+    )
     @classmethod
     def _positive_int(cls, v: object) -> int:
         """Ensure numeric settings are positive integers."""

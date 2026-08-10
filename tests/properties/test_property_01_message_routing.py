@@ -78,9 +78,7 @@ class _RecorderAgent:
     def subscribed_topics(self) -> list[str]:
         return list(self._topics)
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         self.received.append(message)
         return list(self._outputs)
 
@@ -88,9 +86,7 @@ class _RecorderAgent:
         return {"role": self._role, "received_count": len(self.received)}
 
 
-async def _drive_loop_for(
-    loop: AgentLoop, duration_seconds: float
-) -> None:
+async def _drive_loop_for(loop: AgentLoop, duration_seconds: float) -> None:
     """Run the agent loop for a bounded duration then shut it down."""
     task = asyncio.create_task(loop.run())
     await asyncio.sleep(duration_seconds)
@@ -152,8 +148,7 @@ class TestSingleSubscriberRouting:
         msg_received = [
             e
             for e in audit.entries
-            if e.event_type == AuditEventType.MESSAGE_RECEIVED
-            and e.correlation_id == "cid-single"
+            if e.event_type == AuditEventType.MESSAGE_RECEIVED and e.correlation_id == "cid-single"
         ]
         assert len(msg_received) == 1
 
@@ -207,9 +202,7 @@ class TestTopicIsolation:
 
         await bus.publish(
             "topic.a",
-            AgentMessage(
-                topic="topic.a", payload={}, correlation_id="cid-iso"
-            ),
+            AgentMessage(topic="topic.a", payload={}, correlation_id="cid-iso"),
         )
 
         await _drive_loop_for(loop, 0.4)
@@ -233,9 +226,7 @@ class TestOutputRepublish:
             payload={"forwarded": True},
             correlation_id="cid-chain",
         )
-        upstream = _RecorderAgent(
-            role="up", topics=["topic.in"], outputs=[downstream_msg]
-        )
+        upstream = _RecorderAgent(role="up", topics=["topic.in"], outputs=[downstream_msg])
         # Downstream agent subscribes to "out"
         downstream = _RecorderAgent(role="down", topics=["topic.out"])
         registry.register(upstream)
@@ -245,9 +236,7 @@ class TestOutputRepublish:
 
         await bus.publish(
             "topic.in",
-            AgentMessage(
-                topic="topic.in", payload={}, correlation_id="cid-chain"
-            ),
+            AgentMessage(topic="topic.in", payload={}, correlation_id="cid-chain"),
         )
         await _drive_loop_for(loop, 0.6)
 

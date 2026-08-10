@@ -158,9 +158,7 @@ class TestDecompositionContract:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    async def test_one_output_per_stage(
-        self, workflow: dict[str, Any]
-    ) -> None:
+    async def test_one_output_per_stage(self, workflow: dict[str, Any]) -> None:
         agent = PlannerAgent()
         message = AgentMessage(
             topic=INBOUND_TOPIC,
@@ -180,9 +178,7 @@ class TestDecompositionContract:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    async def test_output_order_matches_stage_order(
-        self, workflow: dict[str, Any]
-    ) -> None:
+    async def test_output_order_matches_stage_order(self, workflow: dict[str, Any]) -> None:
         agent = PlannerAgent()
         message = AgentMessage(
             topic=INBOUND_TOPIC,
@@ -204,9 +200,7 @@ class TestDecompositionContract:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    async def test_correlation_id_propagated(
-        self, workflow: dict[str, Any]
-    ) -> None:
+    async def test_correlation_id_propagated(self, workflow: dict[str, Any]) -> None:
         agent = PlannerAgent()
         cid = "trace-12345"
         message = AgentMessage(
@@ -224,9 +218,7 @@ class TestDecompositionContract:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    async def test_source_agent_is_planner(
-        self, workflow: dict[str, Any]
-    ) -> None:
+    async def test_source_agent_is_planner(self, workflow: dict[str, Any]) -> None:
         agent = PlannerAgent()
         message = AgentMessage(
             topic=INBOUND_TOPIC,
@@ -391,9 +383,7 @@ class TestConcreteSequence:
         ]
         assert all(m.correlation_id == "trace-mvp-1" for m in outputs)
         assert all(m.source_agent == "planner" for m in outputs)
-        assert all(
-            m.payload["payload"].get("engagement_id") == "e1" for m in outputs
-        )
+        assert all(m.payload["payload"].get("engagement_id") == "e1" for m in outputs)
 
 
 # ---------------------------------------------------------------------------

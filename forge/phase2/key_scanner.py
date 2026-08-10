@@ -8,6 +8,7 @@ OPSEC: GitHub code search is logged and attributed to the PAT used.
 Use a throwaway, non-attributable GitHub account.
 Mandatory confirmation prompt before validation calls.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -27,7 +28,12 @@ from urllib.parse import quote, urlparse
 
 from forge.opsec.crypto import encrypt_string
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
-from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet, with_internet_retry
+from forge.opsec.resilience import (
+    _SHUTDOWN,
+    _interruptible_sleep,
+    wait_for_internet,
+    with_internet_retry,
+)
 from forge.opsec.scope_gate import assert_in_scope
 from forge.utils.validation_identifiers import looks_compound_placeholder_identifier
 
@@ -38,12 +44,20 @@ try:
     from forge.utils.intel.secret_finder import (
         AzureStorageConnectionStringValidator as SharedAzureStorageConnectionStringValidator,
     )
-    from forge.utils.intel.secret_finder import CloudflareApiTokenValidator as SharedCloudflareApiTokenValidator
-    from forge.utils.intel.secret_finder import DatadogApiKeyValidator as SharedDatadogApiKeyValidator
-    from forge.utils.intel.secret_finder import DiscordBotTokenValidator as SharedDiscordBotTokenValidator
+    from forge.utils.intel.secret_finder import (
+        CloudflareApiTokenValidator as SharedCloudflareApiTokenValidator,
+    )
+    from forge.utils.intel.secret_finder import (
+        DatadogApiKeyValidator as SharedDatadogApiKeyValidator,
+    )
+    from forge.utils.intel.secret_finder import (
+        DiscordBotTokenValidator as SharedDiscordBotTokenValidator,
+    )
     from forge.utils.intel.secret_finder import GitlabPatValidator as SharedGitlabPatValidator
     from forge.utils.intel.secret_finder import GoogleApiKeyValidator as SharedGoogleApiKeyValidator
-    from forge.utils.intel.secret_finder import HuggingFaceTokenValidator as SharedHuggingFaceTokenValidator
+    from forge.utils.intel.secret_finder import (
+        HuggingFaceTokenValidator as SharedHuggingFaceTokenValidator,
+    )
     from forge.utils.intel.secret_finder import MailchimpKeyValidator as SharedMailchimpKeyValidator
     from forge.utils.intel.secret_finder import NetlifyTokenValidator as SharedNetlifyTokenValidator
     from forge.utils.intel.secret_finder import NotionTokenValidator as SharedNotionTokenValidator
@@ -51,11 +65,15 @@ try:
     from forge.utils.intel.secret_finder import (
         PostHogPersonalApiKeyValidator as SharedPostHogPersonalApiKeyValidator,
     )
-    from forge.utils.intel.secret_finder import SentryAuthTokenValidator as SharedSentryAuthTokenValidator
+    from forge.utils.intel.secret_finder import (
+        SentryAuthTokenValidator as SharedSentryAuthTokenValidator,
+    )
     from forge.utils.intel.secret_finder import SendgridKeyValidator as SharedSendgridKeyValidator
     from forge.utils.intel.secret_finder import SlackTokenValidator as SharedSlackTokenValidator
     from forge.utils.intel.secret_finder import StripeKeyValidator as SharedStripeKeyValidator
-    from forge.utils.intel.secret_finder import TelegramBotTokenValidator as SharedTelegramBotTokenValidator
+    from forge.utils.intel.secret_finder import (
+        TelegramBotTokenValidator as SharedTelegramBotTokenValidator,
+    )
     from forge.utils.intel.secret_finder import VercelTokenValidator as SharedVercelTokenValidator
 except Exception:  # noqa: BLE001
     SharedAnthropicKeyValidator = None  # type: ignore[assignment]
@@ -226,7 +244,9 @@ def _github_has_profile_proof(payload: object) -> bool:
 
 
 def _stripe_has_balance_proof(payload: object) -> bool:
-    return isinstance(payload, dict) and str(payload.get("object") or "").strip().lower() == "balance"
+    return (
+        isinstance(payload, dict) and str(payload.get("object") or "").strip().lower() == "balance"
+    )
 
 
 def _stripe_balance_detail(payload: object) -> str:
@@ -277,8 +297,7 @@ class BaseKeyValidator(ABC):
     result_validation_method = "validator_api"
 
     @abstractmethod
-    def validate(self, key: str, proxy: Optional[str] = None) -> ValidationResult:
-        ...
+    def validate(self, key: str, proxy: Optional[str] = None) -> ValidationResult: ...
 
 
 class GithubPatValidator(BaseKeyValidator):
@@ -288,11 +307,15 @@ class GithubPatValidator(BaseKeyValidator):
     def validate(self, key: str, proxy: Optional[str] = None) -> ValidationResult:
         try:
             import httpx
+
             transport = httpx.HTTPTransport(proxy=proxy) if proxy else None
             with httpx.Client(transport=transport, timeout=10) as client:
                 resp = client.get(
                     self.API_URL,
-                    headers={"Authorization": f"Bearer {key}", "Accept": "application/vnd.github+json"},
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Accept": "application/vnd.github+json",
+                    },
                 )
             if resp.status_code == 200:
                 try:
@@ -349,6 +372,7 @@ class StripeKeyValidator(BaseKeyValidator):
     def validate(self, key: str, proxy: Optional[str] = None) -> ValidationResult:
         try:
             import httpx
+
             transport = httpx.HTTPTransport(proxy=proxy) if proxy else None
             with httpx.Client(transport=transport, timeout=10) as client:
                 resp = client.get(self.API_URL, headers={"Authorization": f"Bearer {key}"})
@@ -380,6 +404,7 @@ class SendgridKeyValidator(BaseKeyValidator):
     def validate(self, key: str, proxy: Optional[str] = None) -> ValidationResult:
         try:
             import httpx
+
             transport = httpx.HTTPTransport(proxy=proxy) if proxy else None
             with httpx.Client(transport=transport, timeout=10) as client:
                 resp = client.get(self.API_URL, headers={"Authorization": f"Bearer {key}"})
@@ -408,16 +433,27 @@ class TwilioKeyValidator(BaseKeyValidator):
     result_validation_method = "twilio_account_api"
 
     def validate(self, key: str, proxy: Optional[str] = None) -> ValidationResult:
-        return ValidationResult(state=ValidationState.UNCONFIRMED, detail="Twilio requires account SID + auth token pair")
+        return ValidationResult(
+            state=ValidationState.UNCONFIRMED,
+            detail="Twilio requires account SID + auth token pair",
+        )
 
 
 class AwsKeyValidator(BaseKeyValidator):
     result_validation_method = "aws_sts_get_caller_identity"
 
-    def validate(self, key: str, secret: Optional[str] = None, proxy: Optional[str] = None) -> ValidationResult:
+    def validate(
+        self, key: str, secret: Optional[str] = None, proxy: Optional[str] = None
+    ) -> ValidationResult:
         if not secret:
-            return ValidationResult(state=ValidationState.UNCONFIRMED, detail="AWS secret key not found adjacent to access key ID")
-        return ValidationResult(state=ValidationState.UNCONFIRMED, detail="AWS validation requires signed STS request — not yet implemented")
+            return ValidationResult(
+                state=ValidationState.UNCONFIRMED,
+                detail="AWS secret key not found adjacent to access key ID",
+            )
+        return ValidationResult(
+            state=ValidationState.UNCONFIRMED,
+            detail="AWS validation requires signed STS request — not yet implemented",
+        )
 
 
 _VALIDATOR_MAP: dict[str, BaseKeyValidator] = {
@@ -460,7 +496,9 @@ if SharedSlackTokenValidator is not None:
 if SharedMailchimpKeyValidator is not None:
     _VALIDATOR_MAP["MailchimpKeyValidator"] = SharedMailchimpKeyValidator()  # type: ignore[assignment]
 if SharedAzureStorageConnectionStringValidator is not None:
-    _VALIDATOR_MAP["AzureStorageConnectionStringValidator"] = SharedAzureStorageConnectionStringValidator()  # type: ignore[assignment]
+    _VALIDATOR_MAP["AzureStorageConnectionStringValidator"] = (
+        SharedAzureStorageConnectionStringValidator()
+    )  # type: ignore[assignment]
 if SharedStripeKeyValidator is not None:
     _VALIDATOR_MAP["StripeKeyValidator"] = SharedStripeKeyValidator()  # type: ignore[assignment]
 if SharedSendgridKeyValidator is not None:
@@ -471,6 +509,7 @@ if SharedSendgridKeyValidator is not None:
 # GitHub code search
 # ---------------------------------------------------------------------------
 
+
 def _github_keyscan(pattern: dict, domain: str, github_token: str) -> list[dict]:
     regex = pattern["regex"]
     query = f"{regex} {domain}"
@@ -478,9 +517,13 @@ def _github_keyscan(pattern: dict, domain: str, github_token: str) -> list[dict]
     _GITHUB_RATE_LIMITER.wait(url)
     try:
         import httpx
+
         resp = httpx.get(
             url,
-            headers={"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github+json"},
+            headers={
+                "Authorization": f"Bearer {github_token}",
+                "Accept": "application/vnd.github+json",
+            },
             timeout=15,
         )
         if resp.status_code == 429:
@@ -668,6 +711,7 @@ def _extract_keys_from_content(content: str, pattern_regex: str, group: int = 0)
 # Main scan function
 # ---------------------------------------------------------------------------
 
+
 def run_keyscan(
     engagement_id: int,
     engagement_scope: list[str],
@@ -699,6 +743,7 @@ def run_keyscan(
         else:
             try:
                 import questionary
+
                 if not questionary.confirm(
                     f"[KEYSCAN OPSEC] Validation calls will be made to AWS/Stripe/GitHub/etc APIs.\n"
                     f"These calls are logged by the service and may trigger alerts.\n"
@@ -786,7 +831,9 @@ def run_keyscan(
                             getattr(validator, "result_validation_method", "") or ""
                         ).strip()
                         if validation_method and validation_state == ValidationState.ACTIVE:
-                            validation_detail = f"VALIDATED:{validation_method}:{validation_detail or ''}"
+                            validation_detail = (
+                                f"VALIDATED:{validation_method}:{validation_detail or ''}"
+                            )
 
                 cur = eng_db_conn.execute(
                     """INSERT OR IGNORE INTO key_scanner_findings
@@ -794,16 +841,27 @@ def run_keyscan(
                         source_url, repo_name, key_redacted, key_enc, validation_state, validation_detail)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
-                        engagement_id, domain, pattern["service"], pattern["name"],
-                        hit["backend"], source_url, hit.get("repo_name"),
-                        key_redacted, key_enc, validation_state.value, validation_detail,
+                        engagement_id,
+                        domain,
+                        pattern["service"],
+                        pattern["name"],
+                        hit["backend"],
+                        source_url,
+                        hit.get("repo_name"),
+                        key_redacted,
+                        key_enc,
+                        validation_state.value,
+                        validation_detail,
                     ),
                 )
                 eng_db_conn.commit()
                 if cur.rowcount <= 0:
                     continue
                 count += 1
-                print(f"[KEYSCAN] Found {pattern['name']} in {source_url} — {validation_state.value}", flush=True)
+                print(
+                    f"[KEYSCAN] Found {pattern['name']} in {source_url} — {validation_state.value}",
+                    flush=True,
+                )
                 sys.stdout.flush()
 
     return count

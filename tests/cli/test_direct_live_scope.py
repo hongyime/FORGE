@@ -124,7 +124,9 @@ def test_direct_keyscan_org_restriction_uses_scoped_domain(
         json.dumps({"roe_id": "ROE-ACME-2026-07", "domains": ["acme.example"]}),
         encoding="utf-8",
     )
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
     observed: dict[str, object] = {}
 
     def _fake_run_key_scanner(**kwargs: object) -> int:
@@ -189,7 +191,9 @@ def test_direct_recon_crawl_denies_out_of_scope_before_fetch(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
 
@@ -218,7 +222,9 @@ def test_direct_recon_subdomains_denies_out_of_scope_before_enum(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
 
@@ -244,10 +250,14 @@ def test_direct_recon_crawl_scope_manifest_url_prefix_denies_same_host_drift(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
-    monkeypatch.setattr(crawler, "crawl_target_sync", lambda *args, **kwargs: calls.append("called") or [])
+    monkeypatch.setattr(
+        crawler, "crawl_target_sync", lambda *args, **kwargs: calls.append("called") or []
+    )
 
     with pytest.raises(typer.BadParameter, match="outside scope manifest"):
         cli.recon_crawl(
@@ -318,7 +328,9 @@ def test_direct_recon_crawl_passes_scope_to_crawler(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[dict[str, object]] = []
 
@@ -347,10 +359,14 @@ def test_direct_auth_bypass_requires_roe_before_network(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
-    monkeypatch.setattr(auth_bypass_mod, "run_bypass_assessment", lambda *args, **kwargs: calls.append("called"))
+    monkeypatch.setattr(
+        auth_bypass_mod, "run_bypass_assessment", lambda *args, **kwargs: calls.append("called")
+    )
 
     with pytest.raises(typer.BadParameter, match="requires --roe-id"):
         cli.auth_bypass(
@@ -369,10 +385,14 @@ def test_direct_auth_bypass_scope_manifest_denies_before_network(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
-    monkeypatch.setattr(auth_bypass_mod, "run_bypass_assessment", lambda *args, **kwargs: calls.append("called"))
+    monkeypatch.setattr(
+        auth_bypass_mod, "run_bypass_assessment", lambda *args, **kwargs: calls.append("called")
+    )
 
     with pytest.raises(typer.BadParameter, match="outside scope manifest"):
         cli.auth_bypass(
@@ -422,7 +442,9 @@ def test_direct_recon_ports_passes_scope_override(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["10.10.0.0/16"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[dict[str, object]] = []
 
@@ -514,7 +536,9 @@ def test_direct_osint_urlscan_denies_out_of_scope_before_lookup(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
     monkeypatch.setattr(
@@ -541,7 +565,9 @@ def test_direct_osint_shodan_denies_out_of_scope_before_lookup(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
     monkeypatch.setattr(shodan_lookup, "_shodan_key", lambda: "test-key")
 
     calls: list[str] = []
@@ -568,7 +594,9 @@ def test_direct_auth_brute_requires_roe_before_post(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
     monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: calls.append("called"))
@@ -594,7 +622,9 @@ def test_direct_auth_brute_scope_denies_before_post(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
     monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: calls.append("called"))
@@ -618,7 +648,9 @@ def test_direct_cloud_firebase_requires_roe_before_auditor(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["project.firebaseapp.com"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     with pytest.raises(typer.BadParameter, match="requires --roe-id"):
         cli.cloud_firebase(
@@ -641,7 +673,9 @@ def test_direct_cloud_supabase_scope_denies_before_scanner(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.supabase.co"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     with pytest.raises(typer.BadParameter, match="outside scope"):
         cli.cloud_supabase(
@@ -667,7 +701,9 @@ def test_direct_cloud_firebase_extract_target_url_denies_before_fetch(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
     monkeypatch.setattr(
@@ -695,7 +731,9 @@ def test_direct_cloud_aws_requires_roe_before_questionary(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     with pytest.raises(typer.BadParameter, match="requires --roe-id"):
         cli.cloud_aws(
@@ -719,7 +757,9 @@ def test_direct_cloud_aws_yes_skips_questionary(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(
@@ -751,7 +791,9 @@ def test_direct_cloud_azure_requires_roe_before_questionary(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     with pytest.raises(typer.BadParameter, match="requires --roe-id"):
         cli.cloud_azure(
@@ -777,7 +819,9 @@ def test_direct_cloud_azure_yes_skips_questionary(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(
@@ -811,7 +855,9 @@ def test_direct_vuln_idor_requires_roe_before_scan(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     with pytest.raises(typer.BadParameter, match="requires --roe-id"):
         cli.vuln_idor(
@@ -835,7 +881,9 @@ def test_direct_vuln_idor_scope_denies_before_scan(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
 
@@ -896,7 +944,9 @@ def test_direct_vuln_passive_target_scope_denies_before_collection(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
 
     calls: list[str] = []
     monkeypatch.setattr(
@@ -952,7 +1002,9 @@ def test_firebase_auditor_module_scope_gate_denies_before_subprocess(
     auditor = FirebaseAuditor(db_path=db_path, engagement_id=1001)
 
     calls: list[str] = []
-    monkeypatch.setattr(auditor, "_register_cleanup", lambda *args, **kwargs: calls.append("called"))
+    monkeypatch.setattr(
+        auditor, "_register_cleanup", lambda *args, **kwargs: calls.append("called")
+    )
 
     with pytest.raises(Exception, match="not within engagement scope"):
         auditor.run(
@@ -972,7 +1024,9 @@ def test_direct_post_shell_requires_roe_before_payload_generation(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
     monkeypatch.setattr(cli, "_assert_offensive_cli", lambda *_args, **_kwargs: None)
 
     with pytest.raises(typer.BadParameter, match="requires --roe-id"):
@@ -991,7 +1045,9 @@ def test_direct_post_beacon_requires_roe_before_generation(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
     monkeypatch.setattr(cli, "_assert_offensive_cli", lambda *_args, **_kwargs: None)
 
     with pytest.raises(typer.BadParameter, match="requires --roe-id"):
@@ -1023,7 +1079,9 @@ def test_direct_post_lateral_scope_denies_before_run(
 
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path, scope=["allowed.example"])
-    monkeypatch.setattr(cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path)))
+    monkeypatch.setattr(
+        cli.ForgeConfig, "load", staticmethod(lambda: _FakeConfig(db_path, tmp_path))
+    )
     monkeypatch.setattr(cli, "_assert_offensive_cli", lambda *_args, **_kwargs: None)
 
     calls: list[str] = []

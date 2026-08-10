@@ -22,6 +22,7 @@ Validation rules:
 Severity levels: ERROR (blocks delivery), WARNING (advisory).
 Strict mode: --strict promotes all WARNINGs to ERRORs.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -80,21 +81,29 @@ _PASTE_URL_RE = re.compile(
 )
 
 _SHELLCODE_RE = re.compile(
-    r"(?:\\x[0-9a-fA-F]{2}){8,}"      # 8+ consecutive \xNN escape sequences
+    r"(?:\\x[0-9a-fA-F]{2}){8,}"  # 8+ consecutive \xNN escape sequences
     r"|msfvenom\b"
     r"|meterpreter\b",
     re.IGNORECASE,
 )
 
-_MONITORING_KEYWORDS = frozenset({
-    "monitoring", "ongoing", "intelligence", "paste", "post-engagement",
-    "leaklooker", "exfil monitor",
-})
+_MONITORING_KEYWORDS = frozenset(
+    {
+        "monitoring",
+        "ongoing",
+        "intelligence",
+        "paste",
+        "post-engagement",
+        "leaklooker",
+        "exfil monitor",
+    }
+)
 
 RISK_LABELS = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"}
 
 
 # ── Result model ───────────────────────────────────────────────────────────────
+
 
 @dataclass
 class ValidationResult:
@@ -106,7 +115,8 @@ class ValidationResult:
         errors:   List of blocking rule violations (must be fixed before delivery).
         warnings: List of advisory issues (noted in audit log; do not block).
     """
-    errors:   list[str] = field(default_factory=list)
+
+    errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -116,39 +126,30 @@ class ValidationResult:
     def summary(self) -> str:
         if self.passed:
             return (
-                f"PASSED — {len(self.warnings)} warning(s)."
-                if self.warnings
-                else "PASSED — clean."
+                f"PASSED — {len(self.warnings)} warning(s)." if self.warnings else "PASSED — clean."
             )
-        return (
-            f"FAILED — {len(self.errors)} error(s), "
-            f"{len(self.warnings)} warning(s)."
-        )
+        return f"FAILED — {len(self.errors)} error(s), {len(self.warnings)} warning(s)."
 
 
 # ── Individual rule implementations ────────────────────────────────────────────
 
-def _v01_mandatory_sections(
-    text: str, result: ValidationResult, strict: bool
-) -> None:
+
+def _v01_mandatory_sections(text: str, result: ValidationResult, strict: bool) -> None:
     """V-01: All mandatory sections must be present."""
     from forge.phase6.report_synthesizer import MANDATORY_SECTIONS
+
     for section in MANDATORY_SECTIONS:
         if section not in text:
-            result.errors.append(
-                f"[V-01] Mandatory section missing: {section!r}."
-            )
+            result.errors.append(f"[V-01] Mandatory section missing: {section!r}.")
 
 
 def _v02_risk_label_in_exec_summary(
     text: str, overall_risk: str, result: ValidationResult, strict: bool
 ) -> None:
     """V-02: Risk label must appear in Executive Summary prose."""
-    exec_match = re.search(
-        r"## 1\. Executive Summary\n(.*?)(?=\n## |\Z)", text, re.DOTALL
-    )
+    exec_match = re.search(r"## 1\. Executive Summary\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
     if not exec_match:
-        return   # V-01 already raised; skip
+        return  # V-01 already raised; skip
     exec_text = exec_match.group(1)
     if overall_risk.upper() not in exec_text.upper():
         msg = (
@@ -228,7 +229,9 @@ def _parse_approved_ip_ranges(
                 "V-03: approved_ip_ranges entry %s is unusually broad "
                 "(prefix /%d < recommended /%d) — every address inside it "
                 "will bypass internal-IP detection.",
-                candidate, network.prefixlen, min_prefix,
+                candidate,
+                network.prefixlen,
+                min_prefix,
             )
     return parsed
 
@@ -248,9 +251,7 @@ def _ip_in_any_network(
     return any(ip_obj in net for net in networks)
 
 
-def _v04_no_credential_leaks(
-    text: str, result: ValidationResult, strict: bool
-) -> None:
+def _v04_no_credential_leaks(text: str, result: ValidationResult, strict: bool) -> None:
     """V-04: No plaintext credential patterns in report body."""
     match = _CRED_LEAK_RE.search(text)
     if match:
@@ -260,11 +261,10 @@ def _v04_no_credential_leaks(
         )
 
 
-def _v05_minimum_section_length(
-    text: str, result: ValidationResult, strict: bool
-) -> None:
+def _v05_minimum_section_length(text: str, result: ValidationResult, strict: bool) -> None:
     """V-05: Each mandatory section must contain ≥50 words of prose."""
     from forge.phase6.report_synthesizer import MANDATORY_SECTIONS
+
     for section in MANDATORY_SECTIONS:
         idx = text.find(section)
         if idx == -1:
@@ -277,8 +277,8 @@ def _v05_minimum_section_length(
             other_idx = text.find(other, idx + 1)
             if other_idx != -1 and other_idx < next_section_idx:
                 next_section_idx = other_idx
-        section_body = text[idx + len(section):next_section_idx]
-        word_count   = len(section_body.split())
+        section_body = text[idx + len(section) : next_section_idx]
+        word_count = len(section_body.split())
         if word_count < 50:
             msg = (
                 f"[V-05] Section {section!r} has only {word_count} words "
@@ -291,13 +291,9 @@ def _v05_minimum_section_length(
                 logger.warning(msg)
 
 
-def _v06_exec_summary_word_cap(
-    text: str, result: ValidationResult, strict: bool
-) -> None:
+def _v06_exec_summary_word_cap(text: str, result: ValidationResult, strict: bool) -> None:
     """V-06: Executive Summary must not exceed 500 words (avoids LLM padding)."""
-    exec_match = re.search(
-        r"## 1\. Executive Summary\n(.*?)(?=\n## |\Z)", text, re.DOTALL
-    )
+    exec_match = re.search(r"## 1\. Executive Summary\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
     if not exec_match:
         return
     word_count = len(exec_match.group(1).split())
@@ -313,9 +309,7 @@ def _v06_exec_summary_word_cap(
             logger.warning(msg)
 
 
-def _v07_no_paste_urls(
-    text: str, result: ValidationResult, strict: bool
-) -> None:
+def _v07_no_paste_urls(text: str, result: ValidationResult, strict: bool) -> None:
     """V-07: No public paste-site URLs in report body."""
     matches = _PASTE_URL_RE.findall(text)
     if matches:
@@ -325,9 +319,7 @@ def _v07_no_paste_urls(
         )
 
 
-def _v08_no_shellcode(
-    text: str, result: ValidationResult, strict: bool
-) -> None:
+def _v08_no_shellcode(text: str, result: ValidationResult, strict: bool) -> None:
     """V-08: No raw shellcode sequences or msfvenom/meterpreter strings."""
     match = _SHELLCODE_RE.search(text)
     if match:
@@ -337,9 +329,7 @@ def _v08_no_shellcode(
         )
 
 
-def _v09_evidence_length(
-    text: str, result: ValidationResult, strict: bool
-) -> None:
+def _v09_evidence_length(text: str, result: ValidationResult, strict: bool) -> None:
     """
     V-09: No individual evidence block > 512 chars in the report.
     Evidence should be summarised, not reproduced verbatim.
@@ -371,11 +361,9 @@ def _v10_exec_summary_monitoring_reference(
     if not ongoing_intel.monitoring_enabled or ongoing_intel.new_findings_count == 0:
         return
 
-    exec_match = re.search(
-        r"## 1\. Executive Summary\n(.*?)(?=\n## |\Z)", text, re.DOTALL
-    )
+    exec_match = re.search(r"## 1\. Executive Summary\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
     if not exec_match:
-        return   # V-01 already covers missing section
+        return  # V-01 already covers missing section
 
     exec_text = exec_match.group(1).lower()
     has_reference = any(kw in exec_text for kw in _MONITORING_KEYWORDS)
@@ -395,13 +383,14 @@ def _v10_exec_summary_monitoring_reference(
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+
 def validate_report(
-    raw_text:             str,
-    overall_risk:         str,
+    raw_text: str,
+    overall_risk: str,
     approved_internal_ips: list[str] | None = None,
-    strict:               bool = False,
-    ongoing_intel:        "OngoingIntelligenceContext | None" = None,
-    approved_ip_ranges:   list[str] | None = None,
+    strict: bool = False,
+    ongoing_intel: "OngoingIntelligenceContext | None" = None,
+    approved_ip_ranges: list[str] | None = None,
 ) -> ValidationResult:
     """
     Run all validation rules against a generated report.

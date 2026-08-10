@@ -145,8 +145,7 @@ class TestTimeoutEnforcement:
         # We allow a 50% downward fudge because asyncio.wait_for can fire
         # slightly early due to clock granularity.
         assert elapsed >= timeout * 0.5, (
-            f"Timeout fired too early: elapsed={elapsed:.3f}s "
-            f"timeout={timeout:.3f}s"
+            f"Timeout fired too early: elapsed={elapsed:.3f}s timeout={timeout:.3f}s"
         )
         # Upper bound: the cancellation must happen well before the slow
         # call would naturally complete.  Allow 5x the timeout to absorb
@@ -157,8 +156,7 @@ class TestTimeoutEnforcement:
             f"{sleep_for:.3f}s; the timeout did not abort the call."
         )
         assert elapsed <= timeout * 5.0, (
-            f"Timeout fired far later than budget: elapsed={elapsed:.3f}s "
-            f"timeout={timeout:.3f}s"
+            f"Timeout fired far later than budget: elapsed={elapsed:.3f}s timeout={timeout:.3f}s"
         )
 
 

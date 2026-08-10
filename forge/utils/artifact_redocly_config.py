@@ -143,7 +143,9 @@ def _normalized_url(value: str) -> str:
     except ValueError:
         return ""
     path = unquote(parsed.path or "/")
-    return strip_sensitive_url_query(parsed._replace(netloc=netloc, path=path, fragment="").geturl())
+    return strip_sensitive_url_query(
+        parsed._replace(netloc=netloc, path=path, fragment="").geturl()
+    )
 
 
 def _safe_json_loads(value: str) -> Any:

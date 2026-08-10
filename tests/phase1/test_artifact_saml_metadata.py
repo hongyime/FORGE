@@ -63,11 +63,14 @@ def test_saml_metadata_urls_resolve_source_gated_passive_endpoints() -> None:
         "https://www.acme.example/security/sso",
         "https://login.acme.example/FederationMetadata/2007-06/tenant.xml",
     ]
-    assert saml_metadata_urls(
-        _SAML_XML,
-        source_label="xml",
-        base_url="https://login.acme.example/metadata.xml",
-    ) == []
+    assert (
+        saml_metadata_urls(
+            _SAML_XML,
+            source_label="xml",
+            base_url="https://login.acme.example/metadata.xml",
+        )
+        == []
+    )
     assert saml_metadata_artifact_label("metadata.xml") == ""
     assert saml_metadata_artifact_label("saml/metadata.xml") == "saml-metadata"
     assert saml_metadata_artifact_label("FederationMetadata/2007-06/FederationMetadata.xml") == (

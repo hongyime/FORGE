@@ -19,9 +19,7 @@ def test_recon_tool_json_document_uses_bounded_workers_and_preserves_order(
         "three": {"results": [{"name": "three.acme.example"}]},
         "four": {"matched-url": "https://four.acme.example/path"},
     }
-    original_child = (
-        ArtifactQueueProcessor._recon_tool_output_structured_document_child_values
-    )
+    original_child = ArtifactQueueProcessor._recon_tool_output_structured_document_child_values
     active = 0
     peak = 0
     lock = threading.Lock()

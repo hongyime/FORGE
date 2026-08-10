@@ -132,7 +132,9 @@ def database_client_config_artifact_label(value: str) -> str:
         if name.endswith(suffix):
             return label
     segments = set(parts[:-1])
-    if ({"dbeaver", ".dbeaver"} & segments or _has_segment_containing(parts, "dbeaver")) and name in _DBeaver_NAMES:
+    if (
+        {"dbeaver", ".dbeaver"} & segments or _has_segment_containing(parts, "dbeaver")
+    ) and name in _DBeaver_NAMES:
         return "dbeaver-datasources"
     if ({".idea", "datagrip", "jetbrains"} & segments) and name in _JETBRAINS_NAMES:
         return "jetbrains-datasources"
@@ -161,7 +163,9 @@ def database_client_host_candidates(text: str) -> list[str]:
         _XML_ELEMENT_RE,
         _PLIST_RE,
     ):
-        matches.extend((match.start(), match.group("value")) for match in pattern.finditer(str(text or "")))
+        matches.extend(
+            (match.start(), match.group("value")) for match in pattern.finditer(str(text or ""))
+        )
     for _, value in sorted(matches, key=lambda item: item[0]):
         _append(values, seen, value)
     return values
@@ -259,7 +263,11 @@ def _field_pairs(text: str) -> list[tuple[int, str, str]]:
         _PLIST_PAIR_RE,
     ):
         pairs.extend(
-            (match.start(), _fingerprint(match.group("key")), str(match.group("value") or "").strip())
+            (
+                match.start(),
+                _fingerprint(match.group("key")),
+                str(match.group("value") or "").strip(),
+            )
             for match in pattern.finditer(str(text or ""))
         )
     return sorted(pairs, key=lambda item: item[0])

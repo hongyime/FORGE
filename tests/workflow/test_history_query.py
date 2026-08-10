@@ -125,9 +125,16 @@ async def test_replay_workflow_includes_elapsed_seconds(store: StateStore) -> No
     assert all(t["elapsed_seconds_since_start"] >= 0 for t in timeline)
     # Each entry has the documented keys.
     expected_keys = {
-        "id", "timestamp", "elapsed_seconds_since_start", "event_type",
-        "from_stage_index", "to_stage_index", "from_version", "to_version",
-        "actor", "detail",
+        "id",
+        "timestamp",
+        "elapsed_seconds_since_start",
+        "event_type",
+        "from_stage_index",
+        "to_stage_index",
+        "from_version",
+        "to_version",
+        "actor",
+        "detail",
     }
     for t in timeline:
         assert expected_keys <= set(t.keys()), f"missing keys in {t}"

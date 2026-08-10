@@ -83,4 +83,6 @@ def test_ai_plugin_manifest_becomes_passive_inventory(tmp_path: Path) -> None:
         "plugin.acme.example/AcmePortal",
         "artifact_ai_plugin_manifest",
     ) in cloud_assets
-    assert not any(row[:2] == ("ai_plugin_manifest", "generic.acme.example/notaplugin") for row in cloud_assets)
+    assert not any(
+        row[:2] == ("ai_plugin_manifest", "generic.acme.example/notaplugin") for row in cloud_assets
+    )

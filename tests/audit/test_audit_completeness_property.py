@@ -64,9 +64,7 @@ _param_keys = st.one_of(
         ]
     ),
     st.text(
-        alphabet=st.characters(
-            min_codepoint=ord("a"), max_codepoint=ord("z")
-        ),
+        alphabet=st.characters(min_codepoint=ord("a"), max_codepoint=ord("z")),
         min_size=1,
         max_size=10,
     ),
@@ -150,8 +148,7 @@ class TestAuditLogCompleteness:
 
         # 1. Count is preserved — no events dropped.
         assert len(persisted) == len(entries), (
-            f"AuditLogger dropped events: logged {len(entries)} but stored "
-            f"{len(persisted)}"
+            f"AuditLogger dropped events: logged {len(entries)} but stored {len(persisted)}"
         )
 
         # 2. Order is preserved and every non-redacted field round-trips.
@@ -167,9 +164,7 @@ class TestAuditLogCompleteness:
                 assert got.input_params is None
             else:
                 assert got.input_params is not None
-                assert set(got.input_params.keys()) == set(
-                    expected.input_params.keys()
-                )
+                assert set(got.input_params.keys()) == set(expected.input_params.keys())
 
     @pytest.mark.asyncio
     async def test_empty_sequence_yields_empty_log(self) -> None:

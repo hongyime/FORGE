@@ -5,6 +5,7 @@ Canonical: forge/phase2/auth_adapters/dbms_adapter.py
 DBMS authentication adapter for MySQL and PostgreSQL.
 Dispatches based on `service` kwarg ('mysql' | 'postgres').
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +14,7 @@ from typing import Optional
 
 from forge.utils.intel.auth_adapters import BaseAuthAdapter
 
-_LOG     = logging.getLogger(__name__)
+_LOG = logging.getLogger(__name__)
 _TIMEOUT = 10
 
 
@@ -31,7 +32,7 @@ class DBMSAdapter(BaseAuthAdapter):
 
     @property
     def default_port(self) -> int:
-        return 3306   # MySQL default; postgres overrides to 5432
+        return 3306  # MySQL default; postgres overrides to 5432
 
     @property
     def service_name(self) -> str:
@@ -43,7 +44,7 @@ class DBMSAdapter(BaseAuthAdapter):
         username: str,
         password: str,
         port: Optional[int] = None,
-        service: str = "mysql",   # 'mysql' | 'postgres'
+        service: str = "mysql",  # 'mysql' | 'postgres'
         database: str = "",
         **kwargs,
     ) -> tuple[bool, Optional[str]]:

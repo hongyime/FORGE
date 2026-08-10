@@ -63,7 +63,9 @@ def test_verify_rejects_wrong_issuer() -> None:
     now = int(time.time())
     payload = {
         "sub": _TEST_SUBJECT,
-        "iat": now, "nbf": now, "exp": now + 60,
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
         "jti": "abcdef" * 4,
         "iss": "someone-else",
         "aud": "forge-webui",
@@ -76,7 +78,9 @@ def test_verify_rejects_wrong_audience() -> None:
     now = int(time.time())
     payload = {
         "sub": _TEST_SUBJECT,
-        "iat": now, "nbf": now, "exp": now + 60,
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
         "jti": "abcdef" * 4,
         "iss": "forge-webui",
         "aud": "someone-else",
@@ -88,9 +92,13 @@ def test_verify_rejects_wrong_audience() -> None:
 def test_verify_rejects_expired_token() -> None:
     now = int(time.time())
     payload = {
-        "sub": _TEST_SUBJECT, "iat": now - 300, "nbf": now - 300,
-        "exp": now - 60, "jti": "a" * 32,
-        "iss": "forge-webui", "aud": "forge-webui",
+        "sub": _TEST_SUBJECT,
+        "iat": now - 300,
+        "nbf": now - 300,
+        "exp": now - 60,
+        "jti": "a" * 32,
+        "iss": "forge-webui",
+        "aud": "forge-webui",
     }
     stale = jwt.encode(payload, _TEST_SECRET, algorithm="HS256")
     assert auth_mod.verify_token(stale) is None
@@ -99,9 +107,13 @@ def test_verify_rejects_expired_token() -> None:
 def test_verify_rejects_nbf_future() -> None:
     now = int(time.time())
     payload = {
-        "sub": _TEST_SUBJECT, "iat": now, "nbf": now + 300,
-        "exp": now + 600, "jti": "b" * 32,
-        "iss": "forge-webui", "aud": "forge-webui",
+        "sub": _TEST_SUBJECT,
+        "iat": now,
+        "nbf": now + 300,
+        "exp": now + 600,
+        "jti": "b" * 32,
+        "iss": "forge-webui",
+        "aud": "forge-webui",
     }
     token = jwt.encode(payload, _TEST_SECRET, algorithm="HS256")
     assert auth_mod.verify_token(token) is None
@@ -113,8 +125,13 @@ def test_verify_rejects_algorithm_none() -> None:
 
     now = int(time.time())
     payload = {
-        "sub": _TEST_SUBJECT, "iat": now, "nbf": now, "exp": now + 60,
-        "jti": "c" * 32, "iss": "forge-webui", "aud": "forge-webui",
+        "sub": _TEST_SUBJECT,
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
+        "jti": "c" * 32,
+        "iss": "forge-webui",
+        "aud": "forge-webui",
     }
 
     def _b64url(data: bytes) -> str:
@@ -133,8 +150,13 @@ def test_verify_rejects_rs256_shaped_token() -> None:
 
     now = int(time.time())
     payload = {
-        "sub": _TEST_SUBJECT, "iat": now, "nbf": now, "exp": now + 60,
-        "jti": "d" * 32, "iss": "forge-webui", "aud": "forge-webui",
+        "sub": _TEST_SUBJECT,
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
+        "jti": "d" * 32,
+        "iss": "forge-webui",
+        "aud": "forge-webui",
     }
     signed = jwt.encode(payload, _TEST_SECRET, algorithm="HS256")
     _, body, sig = signed.split(".")
@@ -163,8 +185,12 @@ def test_verify_rejects_garbage_input() -> None:
 def test_verify_returns_none_on_missing_sub_claim() -> None:
     now = int(time.time())
     payload = {
-        "iat": now, "nbf": now, "exp": now + 60, "jti": "e" * 32,
-        "iss": "forge-webui", "aud": "forge-webui",
+        "iat": now,
+        "nbf": now,
+        "exp": now + 60,
+        "jti": "e" * 32,
+        "iss": "forge-webui",
+        "aud": "forge-webui",
     }
     token = jwt.encode(payload, _TEST_SECRET, algorithm="HS256")
     assert auth_mod.verify_token(token) is None
@@ -176,6 +202,7 @@ def test_secret_refuses_empty_in_dev_profile(monkeypatch: pytest.MonkeyPatch) ->
     # patches it — we want to actually invoke the guarded code path.
     import importlib
     from forge.webui import auth as _real_auth_mod
+
     importlib.reload(_real_auth_mod)
 
     import forge.config
@@ -184,7 +211,8 @@ def test_secret_refuses_empty_in_dev_profile(monkeypatch: pytest.MonkeyPatch) ->
         web_secret_key = ""
 
     monkeypatch.setattr(
-        forge.config.ForgeConfig, "load",
+        forge.config.ForgeConfig,
+        "load",
         staticmethod(lambda: _FakeConfig()),
     )
     monkeypatch.setenv("FORGE_ENV", "dev")

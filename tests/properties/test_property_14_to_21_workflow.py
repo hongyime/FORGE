@@ -371,9 +371,7 @@ class TestProperty20WorkflowResumption:
         bus_b = InMemoryMessageBus()
         audit_b = AuditLogger()
         store_b = StateStore(db_url=db_url)
-        engine_b = WorkflowEngine(
-            bus=bus_b, state_store=store_b, audit=audit_b
-        )
+        engine_b = WorkflowEngine(bus=bus_b, state_store=store_b, audit=audit_b)
         engine_b.register_definition(two_stage_workflow)
         resumed = await engine_b.resume_incomplete_workflows()
 
@@ -443,9 +441,7 @@ class TestProperty21CorruptedCheckpointRecovery:
             await engine.resume_incomplete_workflows()
 
         # ERROR audit entry was emitted
-        errors = [
-            e for e in audit.entries if e.event_type == AuditEventType.ERROR
-        ]
+        errors = [e for e in audit.entries if e.event_type == AuditEventType.ERROR]
         assert any(wid in (e.correlation_id or "") for e in errors)
         await store.close()
 
@@ -504,15 +500,11 @@ class TestProperty22ConcurrentAdvance:
         successes = [r for r in results if r is None]
         errors = [r for r in results if isinstance(r, BaseException)]
         # At least one writer must have succeeded.
-        assert len(successes) >= 1, (
-            f"both concurrent writers failed: {errors!r}"
-        )
+        assert len(successes) >= 1, f"both concurrent writers failed: {errors!r}"
         # If only one succeeded, the other must have surfaced a
         # ConcurrentCheckpointError -- never silently dropped.
         if len(successes) == 1:
-            assert any(
-                isinstance(e, ConcurrentCheckpointError) for e in errors
-            ), (
+            assert any(isinstance(e, ConcurrentCheckpointError) for e in errors), (
                 f"second writer was silently dropped; errors={errors!r}"
             )
 
@@ -667,15 +659,9 @@ class TestProperty24ResumeIdempotency:
         assert wid in first
         assert wid not in second
         # Exactly one publish on the workflow's stage topic.
-        assert publish_count["n"] == 1, (
-            f"expected 1 publish, got {publish_count['n']}"
-        )
+        assert publish_count["n"] == 1, f"expected 1 publish, got {publish_count['n']}"
         # Audit captures the skip event.
-        skips = [
-            e
-            for e in audit_b.entries
-            if e.output_summary == "workflow_resume_skipped"
-        ]
+        skips = [e for e in audit_b.entries if e.output_summary == "workflow_resume_skipped"]
         assert any(e.correlation_id == wid for e in skips)
         await store_b.close()
 
@@ -695,9 +681,7 @@ class TestProperty24ResumeIdempotency:
             definition_name=two_stage_workflow.name,
             definition_version=two_stage_workflow.version,
         )
-        outcomes = await asyncio.gather(
-            *[state_store.try_claim_for_resume(wid) for _ in range(5)]
-        )
+        outcomes = await asyncio.gather(*[state_store.try_claim_for_resume(wid) for _ in range(5)])
         # Exactly one True, the rest False.
         assert outcomes.count(True) == 1, f"outcomes={outcomes!r}"
         assert outcomes.count(False) == 4
@@ -818,6 +802,7 @@ class TestProperty27JsonDecodeRecovery:
         # Reach into the underlying SQL row and corrupt the JSON column.
         sm = state_store._ensure_engine()  # type: ignore[attr-defined]
         from forge.workflow.state_store import WorkflowStateRow
+
         async with sm() as session:
             async with session.begin():
                 row = await session.get(WorkflowStateRow, wid)
@@ -880,8 +865,7 @@ class TestProperty28RestartWorkflow:
         # The engine fixture's audit logger is in scope via engine._audit.
         audit_entries = engine._audit.entries  # type: ignore[attr-defined]
         assert any(
-            e.output_summary == "workflow_restarted"
-            and e.correlation_id == wid
+            e.output_summary == "workflow_restarted" and e.correlation_id == wid
             for e in audit_entries
         )
 
@@ -916,6 +900,7 @@ class TestProperty29RetryLimitAlias:
 
     def test_retry_limit_alias_emits_deprecation_warning(self) -> None:
         import warnings as _warnings
+
         with _warnings.catch_warnings(record=True) as captured:
             _warnings.simplefilter("always")
             stage = WorkflowStage(  # type: ignore[call-arg]
@@ -927,13 +912,13 @@ class TestProperty29RetryLimitAlias:
         assert stage.max_attempts == 7
         assert stage.retry_limit == 7  # property alias for read access
         assert any(
-            issubclass(w.category, DeprecationWarning)
-            and "retry_limit" in str(w.message)
+            issubclass(w.category, DeprecationWarning) and "retry_limit" in str(w.message)
             for w in captured
         )
 
     def test_max_attempts_no_warning(self) -> None:
         import warnings as _warnings
+
         with _warnings.catch_warnings(record=True) as captured:
             _warnings.simplefilter("always")
             stage = WorkflowStage(
@@ -944,7 +929,6 @@ class TestProperty29RetryLimitAlias:
             )
         assert stage.max_attempts == 5
         assert not any(
-            issubclass(w.category, DeprecationWarning)
-            and "retry_limit" in str(w.message)
+            issubclass(w.category, DeprecationWarning) and "retry_limit" in str(w.message)
             for w in captured
         )

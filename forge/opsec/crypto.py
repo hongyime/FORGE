@@ -161,7 +161,7 @@ def decrypt_string(ciphertext: str, passphrase: Optional[str] = None) -> str:
         )
 
     try:
-        payload = base64.b64decode(ciphertext[len(prefix):])
+        payload = base64.b64decode(ciphertext[len(prefix) :])
     except Exception as exc:
         raise ValueError(f"Ciphertext is not valid base64: {exc}") from exc
 
@@ -177,8 +177,8 @@ def decrypt_string(ciphertext: str, passphrase: Optional[str] = None) -> str:
         key = _derive_key_v1_compat(raw)
 
     nonce = rest[:_NONCE_LEN]
-    tag = rest[_NONCE_LEN:_NONCE_LEN + _TAG_LEN]
-    ct_bytes = rest[_NONCE_LEN + _TAG_LEN:]
+    tag = rest[_NONCE_LEN : _NONCE_LEN + _TAG_LEN]
+    ct_bytes = rest[_NONCE_LEN + _TAG_LEN :]
 
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
     plaintext_ba = bytearray()
@@ -196,6 +196,4 @@ def decrypt_string(ciphertext: str, passphrase: Optional[str] = None) -> str:
 
 def is_encrypted(value: str) -> bool:
     """Return True if *value* is a FORGE-ENC ciphertext (v1 or v2)."""
-    return isinstance(value, str) and (
-        value.startswith(_PREFIX_V1) or value.startswith(_PREFIX_V2)
-    )
+    return isinstance(value, str) and (value.startswith(_PREFIX_V1) or value.startswith(_PREFIX_V2))

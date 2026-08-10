@@ -54,10 +54,13 @@ def test_supabase_cli_config_maps_project_refs_to_passive_urls() -> None:
         "https://acme-prod-123.supabase.co",
         "https://acme-stage-456.supabase.co",
     ]
-    assert supabase_cli_config_urls(
-        'project_id = "not valid"',
-        source_hint="supabase/config.toml",
-    ) == []
+    assert (
+        supabase_cli_config_urls(
+            'project_id = "not valid"',
+            source_hint="supabase/config.toml",
+        )
+        == []
+    )
     assert supabase_cli_config_urls(payload, source_hint="notes/config.toml") == []
 
 

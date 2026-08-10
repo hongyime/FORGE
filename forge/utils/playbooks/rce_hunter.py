@@ -8,6 +8,7 @@ Steps:
 
 Checks _SHUTDOWN at top of every step.
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,7 +60,9 @@ def run_rce_hunter_playbook(
     elif dry_run:
         safe_check_passed = True  # simulate pass in dry-run
 
-    print(f"[RCE HUNTER] Step 2: safe check {'PASSED' if safe_check_passed else 'FAILED'}", flush=True)
+    print(
+        f"[RCE HUNTER] Step 2: safe check {'PASSED' if safe_check_passed else 'FAILED'}", flush=True
+    )
     sys.stdout.flush()
 
     if not safe_check_passed:
@@ -89,6 +92,7 @@ def run_rce_hunter_playbook(
 def _query_kb(banner: str, kb_path: str) -> tuple[Optional[str], Optional[str]]:
     """Query knowledge.db FTS for CVE matching service banner."""
     import sqlite3 as _sqlite3
+
     try:
         conn = _sqlite3.connect(kb_path)
         conn.row_factory = _sqlite3.Row
@@ -117,7 +121,9 @@ def _query_kb(banner: str, kb_path: str) -> tuple[Optional[str], Optional[str]]:
 
 def _run_safe_check(ip: str, exploit_path: Optional[str]) -> bool:
     """Run non-destructive proof-of-concept (time-based sleep or echo eval)."""
-    _LOG.info("Safe check for %s (exploit: %s) — stub; real impl sends timed payload", ip, exploit_path)
+    _LOG.info(
+        "Safe check for %s (exploit: %s) — stub; real impl sends timed payload", ip, exploit_path
+    )
     return False  # stub — real impl sends `sleep 5` payload and measures response delay
 
 

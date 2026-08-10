@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from urllib.parse import unquote, urljoin, urlparse
 
-_HREF_RE = re.compile(r"""\bhref\s*=\s*(?P<quote>["'])(?P<url>[^"'<>]{1,1024})(?P=quote)""", re.IGNORECASE)
+_HREF_RE = re.compile(
+    r"""\bhref\s*=\s*(?P<quote>["'])(?P<url>[^"'<>]{1,1024})(?P=quote)""", re.IGNORECASE
+)
 
 
 def host_meta_href_urls(text: str, *, base_url: str) -> list[str]:

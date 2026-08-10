@@ -170,8 +170,7 @@ class TestProtocolOpacity:
             lowered = method_name.lower()
             for token in BACKEND_LEAK_TOKENS:
                 assert token not in lowered, (
-                    f"LLMProvider method {method_name!r} contains "
-                    f"backend-specific token {token!r}."
+                    f"LLMProvider method {method_name!r} contains backend-specific token {token!r}."
                 )
 
     def test_protocol_methods_are_all_async(self) -> None:
@@ -208,9 +207,7 @@ class _OpaqueProvider:
             latency_ms=0.5,
         )
 
-    async def structured_output(
-        self, request: CompletionRequest, schema: dict
-    ) -> dict:
+    async def structured_output(self, request: CompletionRequest, schema: dict) -> dict:
         return {"backend": self._label, "schema_keys": list(schema.keys())}
 
     async def embed(self, text: str) -> list[float]:
@@ -224,9 +221,7 @@ _request_strategy = st.builds(
     CompletionRequest,
     prompt=st.text(min_size=1, max_size=64),
     max_tokens=st.integers(min_value=1, max_value=2048),
-    temperature=st.floats(
-        min_value=0.0, max_value=2.0, allow_nan=False, allow_infinity=False
-    ),
+    temperature=st.floats(min_value=0.0, max_value=2.0, allow_nan=False, allow_infinity=False),
     system=st.one_of(st.none(), st.text(min_size=0, max_size=128)),
     stop=st.one_of(
         st.none(),
@@ -291,9 +286,7 @@ class TestAgentEquivalenceAcrossBackends:
     @pytest.mark.asyncio
     async def test_response_carries_no_backend_specific_attribute(self) -> None:
         provider = _OpaqueProvider("alpha")
-        response = await provider.complete(
-            CompletionRequest(prompt="hello", max_tokens=8)
-        )
+        response = await provider.complete(CompletionRequest(prompt="hello", max_tokens=8))
         # The serialized response keys must be exactly the opaque set.
         keys = set(response.model_dump().keys())
         assert keys == EXPECTED_RESPONSE_FIELDS

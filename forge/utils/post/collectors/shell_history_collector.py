@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -16,10 +15,11 @@ REDACTION_PATTERNS = (
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "[REDACTED]"),
 )
 
+
 class ShellHistoryCollector(BaseCollector):
     """
     Collect shell history files with filtering for secrets.
-    
+
     Targets:
       - ~/.bash_history
       - ~/.zsh_history
@@ -30,10 +30,14 @@ class ShellHistoryCollector(BaseCollector):
 
     def discover(self) -> Generator[ArtifactMetadata, None, None]:
         hist_files = [
-            ".bash_history", ".zsh_history", ".python_history",
-            ".mysql_history", ".psql_history", ".sh_history"
+            ".bash_history",
+            ".zsh_history",
+            ".python_history",
+            ".mysql_history",
+            ".psql_history",
+            ".sh_history",
         ]
-        
+
         for f in hist_files:
             p = Path.home() / f
             if p.exists():
@@ -50,20 +54,20 @@ class ShellHistoryCollector(BaseCollector):
             path = Path(artifact.source_path)
             if not path.exists():
                 return None
-            
+
             data = path.read_bytes()
 
             # Redact secrets from the history data
             try:
-                history_text = data.decode('utf-8', errors='ignore')
+                history_text = data.decode("utf-8", errors="ignore")
                 for pattern, replacement in REDACTION_PATTERNS:
                     history_text = pattern.sub(replacement, history_text)
-                data = history_text.encode('utf-8')
+                data = history_text.encode("utf-8")
             except Exception:
                 # If redaction fails, we still collect the original data
                 pass
 
-            sha256  = self._sha256(data)
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
             del data
 
@@ -73,10 +77,10 @@ class ShellHistoryCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(path),
-                sha256     = sha256,
-                size_bytes = len(payload),
-                metadata   = artifact,
+                path=str(path),
+                sha256=sha256,
+                size_bytes=len(payload),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

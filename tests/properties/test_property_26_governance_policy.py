@@ -139,9 +139,7 @@ class TestRulePrecedence:
                 ),
             ]
         )
-        decision = engine.evaluate(
-            "exfil_data", params={}, risk_level="high"
-        )
+        decision = engine.evaluate("exfil_data", params={}, risk_level="high")
         assert decision is PolicyDecision.DENY
 
     def test_non_matching_rule_skipped(self) -> None:
@@ -159,9 +157,7 @@ class TestRulePrecedence:
                 ),
             ]
         )
-        decision = engine.evaluate(
-            "anything_at_all", params={}, risk_level="low"
-        )
+        decision = engine.evaluate("anything_at_all", params={}, risk_level="low")
         assert decision is PolicyDecision.APPROVE
 
     @given(
@@ -213,9 +209,7 @@ class TestRegexMatching:
             ]
         )
         # Matches the pattern -> denied (also default for high)
-        d1 = engine.evaluate(
-            "danger_payload", params={}, risk_level="high"
-        )
+        d1 = engine.evaluate("danger_payload", params={}, risk_level="high")
         assert d1 is PolicyDecision.DENY
 
         # Does not match the pattern -> default for low risk
@@ -269,8 +263,7 @@ class TestConditionsMatching:
         )
         # Param missing -> rule skipped
         assert (
-            engine.evaluate("any", params={}, risk_level="medium")
-            is PolicyDecision.REQUIRE_REVIEW
+            engine.evaluate("any", params={}, risk_level="medium") is PolicyDecision.REQUIRE_REVIEW
         )
 
 
@@ -286,24 +279,18 @@ class TestEvaluateOrRaise:
     async def test_deny_raises_governance_denied(self) -> None:
         engine = PolicyEngine(rules=[])
         with pytest.raises(GovernanceDeniedError):
-            await engine.evaluate_or_raise(
-                "any", params={}, risk_level="high"
-            )
+            await engine.evaluate_or_raise("any", params={}, risk_level="high")
 
     @pytest.mark.asyncio
     async def test_approve_returns_decision(self) -> None:
         engine = PolicyEngine(rules=[])
-        decision = await engine.evaluate_or_raise(
-            "any", params={}, risk_level="low"
-        )
+        decision = await engine.evaluate_or_raise("any", params={}, risk_level="low")
         assert decision is PolicyDecision.APPROVE
 
     @pytest.mark.asyncio
     async def test_require_review_returns_decision(self) -> None:
         engine = PolicyEngine(rules=[])
-        decision = await engine.evaluate_or_raise(
-            "any", params={}, risk_level="medium"
-        )
+        decision = await engine.evaluate_or_raise("any", params={}, risk_level="medium")
         assert decision is PolicyDecision.REQUIRE_REVIEW
 
 
@@ -338,9 +325,7 @@ class TestAuditContract:
         )
 
         gov_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in audit.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 1
         entry = gov_entries[0]

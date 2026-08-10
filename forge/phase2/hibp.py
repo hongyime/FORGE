@@ -10,6 +10,7 @@ feed into priority queue for local_breach.py credential lookup.
 Rate limit: 1 req/1.5s (free tier). No key needed for breach lookup.
 HIBP API v3 docs: https://haveibeenpwned.com/API/v3
 """
+
 from __future__ import annotations
 
 import json
@@ -39,13 +40,16 @@ def _fetch_breaches_for_email(email: str, api_key: Optional[str] = None) -> list
     _RATE_LIMITER.wait(url)
     try:
         from curl_cffi import requests as cffi_requests
+
         headers = {"User-Agent": _UA, "hibp-api-key": api_key} if api_key else {"User-Agent": _UA}
         resp = cffi_requests.get(url, headers=headers, timeout=15)
         if resp.status_code == 404:
             _RATE_LIMITER.record_success(url)
             return []  # email not in any breach
         if resp.status_code == 401:
-            raise PermissionError("HIBP API key required for per-email lookups. Get free key at haveibeenpwned.com")
+            raise PermissionError(
+                "HIBP API key required for per-email lookups. Get free key at haveibeenpwned.com"
+            )
         if resp.status_code == 429:
             _RATE_LIMITER.record_failure(url, 429)
             raise ConnectionError("HIBP rate limited")
@@ -54,6 +58,7 @@ def _fetch_breaches_for_email(email: str, api_key: Optional[str] = None) -> list
         return resp.json() or []
     except (ImportError, AttributeError):
         import urllib.request
+
         req = urllib.request.Request(url, headers={"User-Agent": _UA})
         with urllib.request.urlopen(req, timeout=15) as r:
             if r.status == 404:
@@ -67,6 +72,7 @@ def _fetch_domain_breaches(domain: str) -> list[dict]:
     _RATE_LIMITER.wait(url)
     try:
         from curl_cffi import requests as cffi_requests
+
         resp = cffi_requests.get(url, headers={"User-Agent": _UA}, timeout=15)
         resp.raise_for_status()
         _RATE_LIMITER.record_success(url)
@@ -94,7 +100,12 @@ def query_hibp(
               not which specific employees).
     With key = per-email lookup (confirms each employee's breach exposure).
     """
-    summary = {"emails_checked": 0, "total_breaches": 0, "emails_exposed": 0, "breaches_by_name": {}}
+    summary = {
+        "emails_checked": 0,
+        "total_breaches": 0,
+        "emails_exposed": 0,
+        "breaches_by_name": {},
+    }
 
     # Get in-scope domains from engagement scope
     domains = [d for d in engagement_scope if "." in d and "@" not in d]
@@ -177,7 +188,11 @@ def query_hibp(
                         """INSERT OR REPLACE INTO email_intelligence
                            (engagement_id, email, source, enrichment_data)
                            VALUES (?, ?, 'hibp', ?)""",
-                        (engagement_id, email, json.dumps({"breaches": [b.get("Name") for b in breaches]})),
+                        (
+                            engagement_id,
+                            email,
+                            json.dumps({"breaches": [b.get("Name") for b in breaches]}),
+                        ),
                     )
                 eng_db_conn.commit()
 

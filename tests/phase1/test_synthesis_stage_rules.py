@@ -98,9 +98,7 @@ def _row(email: str, source: str, profile_data: Any) -> dict[str, Any]:
         "email": email,
         "source": source,
         "profile_data": (
-            profile_data
-            if isinstance(profile_data, str)
-            else json.dumps(profile_data)
+            profile_data if isinstance(profile_data, str) else json.dumps(profile_data)
         ),
     }
 
@@ -519,12 +517,8 @@ _SPACED_BRAND_PROVIDER_LABEL_CASES: tuple[tuple[str, str], ...] = (
 
 
 @pytest.mark.parametrize(("label", "expected"), _SPACED_PROVIDER_LABEL_CASES)
-def test_platform_hint_canonicalizes_spaced_provider_labels(
-    label: str, expected: str
-) -> None:
-    resolved = EngagementSynthesisEngine._social_profile_platform_hint(
-        {"platform": label}
-    )
+def test_platform_hint_canonicalizes_spaced_provider_labels(label: str, expected: str) -> None:
+    resolved = EngagementSynthesisEngine._social_profile_platform_hint({"platform": label})
     assert resolved == expected
 
 
@@ -532,9 +526,7 @@ def test_platform_hint_canonicalizes_spaced_provider_labels(
 def test_platform_hint_canonicalizes_spaced_brand_provider_labels(
     label: str, expected: str
 ) -> None:
-    resolved = EngagementSynthesisEngine._social_profile_platform_hint(
-        {"platform": label}
-    )
+    resolved = EngagementSynthesisEngine._social_profile_platform_hint({"platform": label})
     assert resolved == expected
 
 

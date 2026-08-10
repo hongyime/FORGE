@@ -104,7 +104,10 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
     def _html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
         fetched_urls.extend(spec.url for spec in specs)
         if progress_label == "1.D cloud+HTML fetch":
-            return ['<a href="/careers">Careers</a>' if spec.url == "https://acme.example" else "" for spec in specs]
+            return [
+                '<a href="/careers">Careers</a>' if spec.url == "https://acme.example" else ""
+                for spec in specs
+            ]
         if progress_label == "1.D5 URL surface fetch":
             return [
                 f'<a href="{artifact_url}">Download client</a>'
@@ -117,9 +120,14 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
     def _callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
         del worker, max_workers
         if progress_callback and progress_label:
-            progress_callback(progress_label, {"total": len(items), "completed": len(items), "failed": 0})
+            progress_callback(
+                progress_label, {"total": len(items), "completed": len(items), "failed": 0}
+            )
         if progress_label and progress_label.endswith("DNS enrichment"):
-            return [{"root_domain": str(item), "queried_hosts": [str(item)], "cname_targets": []} for item in items]
+            return [
+                {"root_domain": str(item), "queried_hosts": [str(item)], "cname_targets": []}
+                for item in items
+            ]
         if progress_label and progress_label.endswith("whois/RDAP"):
             return [{"root_domain": str(item), "rdap": {}} for item in items]
         if progress_label and progress_label.endswith("Wayback CDX"):
@@ -153,7 +161,7 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
                 AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
                 SLACK_BOT_TOKEN=xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx
                 MAILCHIMP_API_KEY=1234567890abcdef1234567890abcdef-us1
-                AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=smokeblobacct;AccountKey={'A' * 86}==
+                AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=smokeblobacct;AccountKey={"A" * 86}==
                 """.strip(),
             )
         assert request.source_url == artifact_url
@@ -186,7 +194,9 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
     monkeypatch.setattr(subprocess, "run", _run_module)
     monkeypatch.setattr("forge.cli._run_html_fetch_batch", _html_batch)
     monkeypatch.setattr("forge.cli._run_callable_batch", _callable_batch)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifact_request", _download_artifact)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifact_request", _download_artifact
+    )
     monkeypatch.setattr(cloud_validate.httpx, "Client", _CloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
     monkeypatch.setattr(cloud_validate, "_decrypt_secret", _decrypt)
@@ -295,21 +305,21 @@ def test_kill_chain_dashboard_detail_preserves_recursive_fallback_review_surface
     assert "exact_seeds" not in detail_json
 
     validation_rows = {
-        (row["Type"], row["Method"]): row
-        for row in detail["sections"]["cloud_validation_results"]
+        (row["Type"], row["Method"]): row for row in detail["sections"]["cloud_validation_results"]
     }
     assert validation_rows[("firebase", "firebase_database_shallow_read")]["Status"] == "VALIDATED"
     assert validation_rows[("supabase", "supabase_rest_root")]["Status"] == "VALIDATED"
     assert validation_rows[("aws", "aws_sts_get_caller_identity")]["Status"] == "VALIDATED"
     assert validation_rows[("slack", "slack_auth_test")]["Status"] == "VALIDATED"
-    assert validation_rows[("azure", "azure_blob_list_containers_shared_key")]["Status"] == "VALIDATED"
+    assert (
+        validation_rows[("azure", "azure_blob_list_containers_shared_key")]["Status"] == "VALIDATED"
+    )
     assert validation_rows[("mailchimp", "mailchimp_ping_api")]["Status"] == "UNVERIFIED"
     assert "Chimpy" in validation_rows[("mailchimp", "mailchimp_ping_api")]["Notes"]
 
     key_rows = detail["sections"]["key_scanner_findings"]
     assert {
-        (row["Service"], row["Validation Status"], row["Validation Method"])
-        for row in key_rows
+        (row["Service"], row["Validation Status"], row["Validation Method"]) for row in key_rows
     } >= {
         ("aws", "VALIDATED", "aws_sts_get_caller_identity"),
         ("slack", "VALIDATED", "slack_auth_test"),

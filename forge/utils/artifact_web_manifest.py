@@ -5,9 +5,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
-_ANDROID_PACKAGE_RE = re.compile(
-    r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$"
-)
+_ANDROID_PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
 _APP_STORE_ID_RE = re.compile(r"(?:^|/|-)id(?P<id>\d{6,12})(?:$|[/?#-])", re.IGNORECASE)
 
 _ANDROID_PLATFORMS = {"android", "google_play", "google-play", "play"}
@@ -127,13 +125,17 @@ def _related_application_entry_assets(entry: dict[str, Any]) -> list[tuple[str, 
         if not package_name:
             package_name = _android_package_from_url(entry.get("url"))
         if package_name:
-            values.append(("mobile_android_package", package_name, "artifact_web_manifest_related_app"))
+            values.append(
+                ("mobile_android_package", package_name, "artifact_web_manifest_related_app")
+            )
     if platform in _IOS_PLATFORMS:
         app_store_id = _normalize_app_store_id(entry.get("id"))
         if not app_store_id:
             app_store_id = _app_store_id_from_url(entry.get("url"))
         if app_store_id:
-            values.append(("mobile_ios_app_store_id", app_store_id, "artifact_web_manifest_related_app"))
+            values.append(
+                ("mobile_ios_app_store_id", app_store_id, "artifact_web_manifest_related_app")
+            )
     return values
 
 

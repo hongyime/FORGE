@@ -200,7 +200,9 @@ def _assert_terminal_contract(
     assert "UNVALIDATED" not in dict(summary["status_counts"])  # type: ignore[arg-type]
 
 
-def test_every_artifact_cloud_asset_type_reaches_terminal_state(tmp_path: Path, monkeypatch) -> None:
+def test_every_artifact_cloud_asset_type_reaches_terminal_state(
+    tmp_path: Path, monkeypatch
+) -> None:
     supported_types = _stub_registered_validators(monkeypatch)
     expected_unsupported_types = set(_ARTIFACT_EMITTED_CLOUD_ASSET_TYPES) - supported_types
     assert expected_unsupported_types
@@ -270,8 +272,6 @@ def test_every_artifact_cloud_asset_type_reaches_terminal_state(tmp_path: Path, 
     assert set(persisted_statuses) == set(_ARTIFACT_EMITTED_CLOUD_ASSET_TYPES)
     assert set(persisted_statuses.values()) <= _TERMINAL_SAFE_STATUSES
     assert {
-        asset_type
-        for asset_type, status in persisted_statuses.items()
-        if status == "UNSUPPORTED"
+        asset_type for asset_type, status in persisted_statuses.items() if status == "UNSUPPORTED"
     } == expected_unsupported_types
     assert _ProviderCallsForbidden.calls == []

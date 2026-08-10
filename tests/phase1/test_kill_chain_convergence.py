@@ -190,7 +190,9 @@ def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
     def callable_batch(items, worker, **kwargs):  # noqa: ANN001, ANN003
         label = str(kwargs.get("progress_label") or "")
         if "DNS enrichment" in label:
-            return [{"root_domain": item, "queried_hosts": [], "cname_targets": []} for item in items]
+            return [
+                {"root_domain": item, "queried_hosts": [], "cname_targets": []} for item in items
+            ]
         if "whois/RDAP" in label:
             return [{"root_domain": item, "rdap": {}} for item in items]
         if "Wayback CDX" in label:
@@ -199,7 +201,11 @@ def test_keyscan_discovered_org_uses_schema_allowed_seed_source(
 
     monkeypatch.setattr(cli, "_run_html_fetch_batch", html_batch)
     monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
-    monkeypatch.setattr(cli, "_run_forge_module_subprocess", lambda argv, **_kwargs: subprocess.CompletedProcess(argv, 0, "", ""))
+    monkeypatch.setattr(
+        cli,
+        "_run_forge_module_subprocess",
+        lambda argv, **_kwargs: subprocess.CompletedProcess(argv, 0, "", ""),
+    )
 
     cli.kill_chain(
         seed="acme.example",

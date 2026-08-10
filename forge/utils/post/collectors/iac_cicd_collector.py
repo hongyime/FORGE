@@ -9,6 +9,7 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class IacCicdCollector(BaseCollector):
     """
     Collect IaC and CI/CD artifacts.

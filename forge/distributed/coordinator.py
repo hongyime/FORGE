@@ -98,28 +98,33 @@ class QueueCoordinator:
         finally:
             pubsub.close()
 
+
 class RateLimiter:
     """
     A simple token bucket rate limiter using Redis.
     Without a Redis URL, it uses an in-memory dictionary for single-process runs.
     If Redis is configured but unavailable, admission fails closed.
     """
+
     def __init__(self, redis_url: str | None = None):
         self._redis_url = redis_url
         self._local_buckets: dict[str, list[float]] = {}
         self._local_lock = threading.Lock()
-        
+
     def acquire(self, bucket_name: str, max_requests: int, window_seconds: int = 60) -> bool:
         if self._redis_url:
             try:
                 import redis
+
                 client = redis.Redis.from_url(self._redis_url)
                 return self._redis_acquire(client, bucket_name, max_requests, window_seconds)
             except Exception:  # noqa: BLE001
                 return False
         return self._local_acquire(bucket_name, max_requests, window_seconds)
 
-    def _redis_acquire(self, client: Any, bucket_name: str, max_requests: int, window_seconds: int) -> bool:
+    def _redis_acquire(
+        self, client: Any, bucket_name: str, max_requests: int, window_seconds: int
+    ) -> bool:
         if max_requests <= 0 or window_seconds <= 0:
             return False
         now_ms = int(time.time() * 1000)

@@ -15,6 +15,7 @@ OPSEC:
   - Staging path registered with cleanup.py before first write.
   - Glob patterns validated against engagement scope where applicable.
 """
+
 from __future__ import annotations
 
 import abc
@@ -34,37 +35,41 @@ from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-confi
 
 _LOG = logging.getLogger(__name__)
 
-DEFAULT_STAGGER   = 2.0   # seconds between file reads
-PAUSE_INTERVAL    = 100   # files between 30s pauses
-PAUSE_DURATION    = 30.0  # seconds
+DEFAULT_STAGGER = 2.0  # seconds between file reads
+PAUSE_INTERVAL = 100  # files between 30s pauses
+PAUSE_DURATION = 30.0  # seconds
 
 
 @dataclass
 class ArtifactMetadata:
     """Common metadata model for all collection families."""
-    artifact_family:   str
-    source_path:       str
-    source_platform:   str
+
+    artifact_family: str
+    source_path: str
+    source_platform: str
     collection_method: str
-    artifact_subtype:  Optional[str] = None
-    confidence:        float = 0.5
-    encryption_state:  str = "encrypted"
-    redaction_state:   str = "none"
-    validation_state:  str = "discovered"
+    artifact_subtype: Optional[str] = None
+    confidence: float = 0.5
+    encryption_state: str = "encrypted"
+    redaction_state: str = "none"
+    validation_state: str = "discovered"
     report_safe_summary_fields: dict = field(default_factory=dict)
+
 
 @dataclass
 class CollectedFile:
     """Metadata record for a single collected file. Content is NOT stored here."""
-    path:       str
-    sha256:     str
+
+    path: str
+    sha256: str
     size_bytes: int
-    metadata:   ArtifactMetadata
+    metadata: ArtifactMetadata
     compressed: bool = True
-    encrypted:  bool = True
+    encrypted: bool = True
 
 
 # ── Abstract base ──────────────────────────────────────────────────────────────
+
 
 class BaseCollector(abc.ABC):
     """
@@ -81,21 +86,21 @@ class BaseCollector(abc.ABC):
 
     def __init__(
         self,
-        db_path:       Path,
+        db_path: Path,
         engagement_id: int,
-        session_key:   str           = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
-        staging_dir:   Optional[Path] = None,
-        stagger:       float          = DEFAULT_STAGGER,
+        session_key: str = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
+        staging_dir: Optional[Path] = None,
+        stagger: float = DEFAULT_STAGGER,
     ) -> None:
-        self._db_path       = db_path
+        self._db_path = db_path
         self._engagement_id = engagement_id
-        self._session_key   = session_key
-        self._key           = bytes.fromhex(session_key) if len(session_key) == 64 else None
-        self._staging_dir   = staging_dir or self._default_staging_dir()
-        self._stagger       = stagger
-        self._file_count    = 0
-        self._roe_id        = None
-        self._require_roe   = True
+        self._session_key = session_key
+        self._key = bytes.fromhex(session_key) if len(session_key) == 64 else None
+        self._staging_dir = staging_dir or self._default_staging_dir()
+        self._stagger = stagger
+        self._file_count = 0
+        self._roe_id = None
+        self._require_roe = True
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -131,7 +136,9 @@ class BaseCollector(abc.ABC):
     def _require_local_collection_roe(self, action_name: str) -> str | None:
         if not self._require_roe:
             return None
-        normalized = " ".join(str(self._roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split())[:160]
+        normalized = " ".join(
+            str(self._roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split()
+        )[:160]
         if not normalized:
             raise RuntimeError(
                 f"{self.__class__.__name__}.{action_name} requires roe_id or FORGE_ROE_ID "
@@ -156,7 +163,9 @@ class BaseCollector(abc.ABC):
 
     def persist_metadata(self, record: CollectedFile) -> None:
         """Write metadata-only record to engagement DB. Content never stored here."""
-        record.metadata.validation_state = self._next_validation_state(record.metadata.validation_state)
+        record.metadata.validation_state = self._next_validation_state(
+            record.metadata.validation_state
+        )
         summary_payload = self._build_report_safe_summary(record.metadata)
         try:
             con = direct_connect(self._db_path)
@@ -195,7 +204,8 @@ class BaseCollector(abc.ABC):
         try:
             from Crypto.Cipher import AES
             from Crypto.Random import get_random_bytes
-            nonce  = get_random_bytes(12)
+
+            nonce = get_random_bytes(12)
             cipher = AES.new(self._key, AES.MODE_GCM, nonce=nonce)
             ct, tag = cipher.encrypt_and_digest(compressed)
             return nonce + tag + ct
@@ -238,6 +248,7 @@ class BaseCollector(abc.ABC):
     def _register_cleanup(path: Path) -> None:
         try:
             from forge.shared.cleanup import register_cleanup_file
+
             register_cleanup_file(path)
         except ImportError:
             pass
@@ -312,6 +323,7 @@ class BaseCollector(abc.ABC):
 
 # ── Filesystem collector ───────────────────────────────────────────────────────
 
+
 class FilesystemCollector(BaseCollector):
     """
     Recursive file collector with glob pattern filtering, stagger, and in-memory
@@ -325,22 +337,23 @@ class FilesystemCollector(BaseCollector):
 
     def __init__(
         self,
-        db_path:       Path,
+        db_path: Path,
         engagement_id: int,
-        root:          Path,
-        patterns:      Optional[list[str]] = None,
-        max_size:      int                  = 50 * 1024 * 1024,
-        session_key:   str                  = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
-        staging_dir:   Optional[Path]       = None,
-        stagger:       float                = DEFAULT_STAGGER,
+        root: Path,
+        patterns: Optional[list[str]] = None,
+        max_size: int = 50 * 1024 * 1024,
+        session_key: str = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
+        staging_dir: Optional[Path] = None,
+        stagger: float = DEFAULT_STAGGER,
     ) -> None:
         super().__init__(db_path, engagement_id, session_key, staging_dir, stagger)
-        self._root     = root
+        self._root = root
         self._patterns = patterns or ["*.docx", "*.xlsx", "*.pdf", "*.txt", "*.csv"]
         self._max_size = max_size
 
     def discover(self) -> Generator[ArtifactMetadata, None, None]:
         import fnmatch
+
         _LOG.info("FilesystemCollector: scanning %s (patterns=%s)", self._root, self._patterns)
 
         for dirpath, _, filenames in os.walk(self._root):
@@ -370,8 +383,8 @@ class FilesystemCollector(BaseCollector):
     def collect(self, artifact: ArtifactMetadata) -> Optional[CollectedFile]:
         full = Path(artifact.source_path)
         try:
-            data    = full.read_bytes()
-            sha256  = self._sha256(data)
+            data = full.read_bytes()
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
 
             # Write encrypted chunk to staging dir (existing writable path)
@@ -381,10 +394,10 @@ class FilesystemCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(full),
-                sha256     = sha256,
-                size_bytes = len(data),
-                metadata   = artifact,
+                path=str(full),
+                sha256=sha256,
+                size_bytes=len(data),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

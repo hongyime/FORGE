@@ -13,7 +13,10 @@ from forge.utils.artifact_electron_update_metadata import (
 
 
 def test_classify_remote_artifact_url_recognizes_electron_asar_archives() -> None:
-    assert _classify_remote_artifact_url("https://downloads.acme.example/app.asar?sig=abc") == "archive"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/app.asar?sig=abc")
+        == "archive"
+    )
     assert _suffix_from_content_type("application/x-asar") == ".asar"
     assert _suffix_from_content_type("application/vnd.electron.asar; charset=binary") == ".asar"
     assert _extract_artifact_relative_route_urls(
@@ -76,12 +79,18 @@ def test_electron_update_metadata_candidates_resolve_safe_release_urls() -> None
         "https://cdn.acme.example/acme-1.2.3.dmg",
         "https://updates.acme.example/releases/packages/acme-1.2.3-x64.nsis.7z",
     ]
-    assert electron_update_metadata_candidates(
-        "path: acme-1.2.3.exe",
-        source_hint="release-notes.yaml",
-        base_url="https://updates.acme.example/releases/release-notes.yaml",
-    ) == []
-    assert electron_update_metadata_candidates(
-        "path: acme-1.2.3.exe",
-        source_hint="latest.yml",
-    ) == []
+    assert (
+        electron_update_metadata_candidates(
+            "path: acme-1.2.3.exe",
+            source_hint="release-notes.yaml",
+            base_url="https://updates.acme.example/releases/release-notes.yaml",
+        )
+        == []
+    )
+    assert (
+        electron_update_metadata_candidates(
+            "path: acme-1.2.3.exe",
+            source_hint="latest.yml",
+        )
+        == []
+    )

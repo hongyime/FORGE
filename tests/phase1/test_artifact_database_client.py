@@ -24,7 +24,10 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
 @pytest.mark.parametrize(
     ("value", "label"),
     [
-        ("DBeaverData/workspace/.metadata/.plugins/org.jkiss.dbeaver.core/data-sources.json", "dbeaver-datasources"),
+        (
+            "DBeaverData/workspace/.metadata/.plugins/org.jkiss.dbeaver.core/data-sources.json",
+            "dbeaver-datasources",
+        ),
         (".dbeaver/data-sources.xml", "dbeaver-datasources"),
         (".idea/dataSources.xml", "jetbrains-datasources"),
         ("DataGrip/project/.idea/dataSources.local.xml", "jetbrains-datasources"),
@@ -183,7 +186,14 @@ def test_artifact_queue_processor_extracts_database_client_configs(
 ) -> None:
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifact_database_clients"
-    dbeaver_root = artifact_root / "DBeaverData" / "workspace" / ".metadata" / ".plugins" / "org.jkiss.dbeaver.core"
+    dbeaver_root = (
+        artifact_root
+        / "DBeaverData"
+        / "workspace"
+        / ".metadata"
+        / ".plugins"
+        / "org.jkiss.dbeaver.core"
+    )
     dbeaver_root.mkdir(parents=True)
     bootstrap_engagement(db_path, name="Database Client Config Test")
 
@@ -222,10 +232,20 @@ def test_artifact_queue_processor_extracts_database_client_configs(
             ),
         )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.dbeaver/data-sources.json") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/project/.idea/dataSources.xml") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.dbeaver/data-sources.json")
+        == "config"
+    )
+    assert (
+        _classify_remote_artifact_url(
+            "https://downloads.acme.example/project/.idea/dataSources.xml"
+        )
+        == "config"
+    )
     assert _artifact_format_label(dbeaver_path) == "dbeaver-datasources"
-    assert _artifact_format_label("dataSources.xml.jetbrains-datasources") == "jetbrains-datasources"
+    assert (
+        _artifact_format_label("dataSources.xml.jetbrains-datasources") == "jetbrains-datasources"
+    )
     assert (
         _select_remote_artifact_filename(
             77,
@@ -247,9 +267,7 @@ def test_artifact_queue_processor_extracts_database_client_configs(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "dbeaver-owner@acme.example" in emails
         assert "datagrip-owner@acme.example" in emails

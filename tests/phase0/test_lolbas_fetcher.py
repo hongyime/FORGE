@@ -13,6 +13,7 @@ Coverage targets:
   - MITRE ID deduplication across commands.
   - OS family always 'windows' for LOLBAS entries.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ from forge.phase0.lolbas_fetcher import _bulk_insert, _normalise, fetch_lolbas
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def lolbas_db(tmp_path: Path) -> sqlite3.Connection:
@@ -61,6 +63,7 @@ def _make_entry(**overrides) -> dict:
 # _normalise() tests
 # ---------------------------------------------------------------------------
 
+
 class TestNormalise:
     def test_valid_entry_produces_row(self) -> None:
         row = _normalise(_make_entry())
@@ -82,19 +85,33 @@ class TestNormalise:
 
     def test_mitre_deduplication(self) -> None:
         """Same MitreID across multiple commands appears only once."""
-        entry = _make_entry(Commands=[
-            {"Category": "Execute", "MitreID": "T1059", "Usecase": "Run", "Command": "cmd"},
-            {"Category": "Execute", "MitreID": "T1059", "Usecase": "Run2", "Command": "cmd2"},
-        ])
+        entry = _make_entry(
+            Commands=[
+                {"Category": "Execute", "MitreID": "T1059", "Usecase": "Run", "Command": "cmd"},
+                {"Category": "Execute", "MitreID": "T1059", "Usecase": "Run2", "Command": "cmd2"},
+            ]
+        )
         row = _normalise(entry)
         assert row is not None
         assert row["mitre_technique"].count("T1059") == 1
 
     def test_use_case_deduplication(self) -> None:
-        entry = _make_entry(Commands=[
-            {"Category": "Download", "MitreID": "T1105", "Usecase": "Download", "Command": "c1"},
-            {"Category": "Download", "MitreID": "T1105", "Usecase": "Download", "Command": "c2"},
-        ])
+        entry = _make_entry(
+            Commands=[
+                {
+                    "Category": "Download",
+                    "MitreID": "T1105",
+                    "Usecase": "Download",
+                    "Command": "c1",
+                },
+                {
+                    "Category": "Download",
+                    "MitreID": "T1105",
+                    "Usecase": "Download",
+                    "Command": "c2",
+                },
+            ]
+        )
         row = _normalise(entry)
         assert row is not None
         assert row["use_case"].count("Download") == 1
@@ -125,6 +142,7 @@ class TestNormalise:
 # ---------------------------------------------------------------------------
 # _bulk_insert() tests
 # ---------------------------------------------------------------------------
+
 
 class TestBulkInsert:
     def test_inserts_single_row(self, lolbas_db: sqlite3.Connection) -> None:
@@ -178,6 +196,7 @@ class TestBulkInsert:
 # fetch_lolbas() tests
 # ---------------------------------------------------------------------------
 
+
 class TestFetchLolbas:
     def test_raises_on_offline_strict(self, lolbas_db: sqlite3.Connection) -> None:
         cfg = MagicMock()
@@ -188,10 +207,13 @@ class TestFetchLolbas:
     def test_fetch_parses_and_inserts(self, lolbas_db: sqlite3.Connection, tmp_path: Path) -> None:
         """Mock HTTP response with two LOLBAS entries; verify count returned."""
         import json  # noqa: PLC0415
-        fake_payload = json.dumps([
-            _make_entry(Name="Certutil.exe"),
-            _make_entry(Name="Bitsadmin.exe", Description="Background transfer tool"),
-        ]).encode()
+
+        fake_payload = json.dumps(
+            [
+                _make_entry(Name="Certutil.exe"),
+                _make_entry(Name="Bitsadmin.exe", Description="Background transfer tool"),
+            ]
+        ).encode()
 
         cfg = MagicMock()
         cfg.offline_strict = False
@@ -206,10 +228,13 @@ class TestFetchLolbas:
     def test_fetch_skips_invalid_entries(self, lolbas_db: sqlite3.Connection) -> None:
         """Entries with no Name must be silently skipped."""
         import json  # noqa: PLC0415
-        fake_payload = json.dumps([
-            {"Name": "", "Commands": []},
-            _make_entry(Name="Certutil.exe"),
-        ]).encode()
+
+        fake_payload = json.dumps(
+            [
+                {"Name": "", "Commands": []},
+                _make_entry(Name="Certutil.exe"),
+            ]
+        ).encode()
 
         cfg = MagicMock()
         cfg.offline_strict = False

@@ -28,9 +28,7 @@ class ScopeViolationError(ForgeError):
     def __init__(self, target: str, scope: "EngagementScope") -> None:
         self.target = target
         self.scope = scope
-        super().__init__(
-            f"Scope violation: target {target!r} is outside the engagement scope"
-        )
+        super().__init__(f"Scope violation: target {target!r} is outside the engagement scope")
 
 
 class ProviderUnavailableError(ForgeError):
@@ -124,9 +122,7 @@ class UnsafeTransitionConditionError(ForgeError):
     def __init__(self, condition: str, reason: str) -> None:
         self.condition = condition
         self.reason = reason
-        super().__init__(
-            f"Unsafe transition condition rejected: {reason} (expr={condition!r})"
-        )
+        super().__init__(f"Unsafe transition condition rejected: {reason} (expr={condition!r})")
 
 
 class CheckpointTooLargeError(ForgeError):

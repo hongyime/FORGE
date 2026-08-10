@@ -100,7 +100,9 @@ def test_api_spec_and_client_collection_content_types_map_to_config_artifact_suf
         )
         == "LICENSE"
     )
-    assert _artifact_format_label(".well-known/related-website-set.json") == "related-website-set.json"
+    assert (
+        _artifact_format_label(".well-known/related-website-set.json") == "related-website-set.json"
+    )
     assert _artifact_format_label(".well-known/first-party-set.json") == "first-party-set.json"
     assert _artifact_format_label("load-test.jmx") == "jmeter-test-plan"
     assert _artifact_format_label("k6-test.js") == "k6-script"

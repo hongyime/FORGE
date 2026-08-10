@@ -12,9 +12,7 @@ POSIX_LAUNCHERS = (
     "forge-report.sh",
 )
 
-RUNTIME_LAUNCHERS = tuple(
-    launcher for launcher in POSIX_LAUNCHERS if launcher != "setup.sh"
-)
+RUNTIME_LAUNCHERS = tuple(launcher for launcher in POSIX_LAUNCHERS if launcher != "setup.sh")
 
 
 def _read_launcher(name: str) -> str:

@@ -113,13 +113,14 @@ def connection_client_config_artifact_label(value: str) -> str:
     if "securecrt" in segments and "sessions" in segments and name.endswith((".ini", ".xml")):
         return "securecrt-session"
     if "superputty" in segments and (
-        name == "sessions.xml"
-        or ("sessions" in segments and name.endswith((".xml", ".settings")))
+        name == "sessions.xml" or ("sessions" in segments and name.endswith((".xml", ".settings")))
     ):
         return "superputty-config"
     if "filezilla" in segments and name in _FILEZILLA_NAMES:
         return "filezilla-config"
-    if "cyberduck" in segments and (name.endswith(".duck") or name in {"bookmarks.xml", "bookmarks.plist"}):
+    if "cyberduck" in segments and (
+        name.endswith(".duck") or name in {"bookmarks.xml", "bookmarks.plist"}
+    ):
         return "cyberduck-bookmark"
     if "transmit" in segments and name in _TRANSMIT_NAMES:
         return "transmit-favorites"

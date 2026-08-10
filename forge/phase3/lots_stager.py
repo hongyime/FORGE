@@ -30,6 +30,7 @@ Supported shortener backends:
   - v.gd          (same API as is.gd, alternative domain)
   - tinyurl.com   (no auth, HTTPS, no native one-time support — emulated via cleanup)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -50,37 +51,38 @@ _LOG = logging.getLogger(__name__)
 
 # ── Types ──────────────────────────────────────────────────────────────────────
 
+
 class LOTSCategory(str, Enum):
-    CODE_SHARING    = "code_sharing"
-    TEXT_SHARING    = "text_sharing"
-    CLOUD_STORAGE   = "cloud_storage"
-    FILE_TRANSFER   = "file_transfer"
-    WEBHOOK         = "webhook"
+    CODE_SHARING = "code_sharing"
+    TEXT_SHARING = "text_sharing"
+    CLOUD_STORAGE = "cloud_storage"
+    FILE_TRANSFER = "file_transfer"
+    WEBHOOK = "webhook"
 
 
 class ShortenerBackend(str, Enum):
-    IS_GD     = "is_gd"
-    V_GD      = "v_gd"
-    TINYURL   = "tinyurl"
+    IS_GD = "is_gd"
+    V_GD = "v_gd"
+    TINYURL = "tinyurl"
 
 
 @dataclass(frozen=True)
 class LOTSSite:
-    domain:      str
-    category:    LOTSCategory
+    domain: str
+    category: LOTSCategory
     requires_auth: bool
-    stealth_rank: int      # 1 (most trusted) → 10 (least)
-    upload_api:  str | None = None
+    stealth_rank: int  # 1 (most trusted) → 10 (least)
+    upload_api: str | None = None
 
 
 @dataclass
 class StagingResult:
-    raw_url:       str          # Direct LOTS URL (HTTPS only)
-    short_url:     str | None = None   # One-time shortener URL if requested
-    sha256:        str          = ""
-    provider:      str          = ""
-    one_time:      bool         = False
-    staged_at:     float        = field(default_factory=time.time)
+    raw_url: str  # Direct LOTS URL (HTTPS only)
+    short_url: str | None = None  # One-time shortener URL if requested
+    sha256: str = ""
+    provider: str = ""
+    one_time: bool = False
+    staged_at: float = field(default_factory=time.time)
 
     def delivery_url(self) -> str:
         """Return the URL to hand to the target (short_url preferred)."""
@@ -89,20 +91,25 @@ class StagingResult:
 
 # ── Exceptions ─────────────────────────────────────────────────────────────────
 
+
 class HTTPSEnforcementError(ValueError):
     """Raised when a non-HTTPS URL is supplied to any staging function."""
+
 
 class StagingBackendError(RuntimeError):
     """Raised when a LOTS upload fails after all retries."""
 
+
 class NoSuitableSiteError(RuntimeError):
     """Raised when lolbas.db contains no LOTS site matching the requested criteria."""
+
 
 class ProxyRequiredError(RuntimeError):
     """Raised when a proxy is mandatory but not supplied."""
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _enforce_https(url: str) -> None:
     parsed = urlparse(url)
@@ -126,8 +133,7 @@ def _get_cffi_session(proxy: str | None = None):
         from curl_cffi import requests as cffi_requests
     except ImportError as exc:
         raise ImportError(
-            "curl_cffi is required for LOTS staging. "
-            "Install with: pip install curl-cffi"
+            "curl_cffi is required for LOTS staging. Install with: pip install curl-cffi"
         ) from exc
 
     require_proxy = os.getenv("FORGE_REQUIRE_PROXY", "").lower() in ("1", "true", "yes")
@@ -145,10 +151,11 @@ def _get_cffi_session(proxy: str | None = None):
 
 # ── KB query ───────────────────────────────────────────────────────────────────
 
+
 def _query_lots_sites(
-    kb_path:      Path,
-    category:     LOTSCategory | None = None,
-    max_rank:     int = 5,
+    kb_path: Path,
+    category: LOTSCategory | None = None,
+    max_rank: int = 5,
     exclude_auth: bool = False,
 ) -> list[LOTSSite]:
     """
@@ -190,6 +197,7 @@ def _query_lots_sites(
 
 # ── LOTS upload backends ───────────────────────────────────────────────────────
 
+
 class _GistBackend:
     """Upload payload as a secret GitHub Gist (requires GITHUB_TOKEN env var)."""
 
@@ -200,34 +208,34 @@ class _GistBackend:
 
     def upload(
         self,
-        content:  bytes,
+        content: bytes,
         filename: str,
-        proxy:    str | None,
+        proxy: str | None,
     ) -> str:
         payload = {
             "description": "",
-            "public":      False,
-            "files":       {filename: {"content": content.decode(errors="replace")}},
+            "public": False,
+            "files": {filename: {"content": content.decode(errors="replace")}},
         }
         session = _get_cffi_session(proxy)
 
-        @exponential_backoff(max_retries=3, retryable_codes={429, 503}, jitter_mode=JitterMode.GAUSSIAN)
+        @exponential_backoff(
+            max_retries=3, retryable_codes={429, 503}, jitter_mode=JitterMode.GAUSSIAN
+        )
         def _post():
             return session.post(
                 self.BASE_URL,
                 json=payload,
                 headers={
                     "Authorization": f"token {self._token}",
-                    "Accept":        "application/vnd.github.v3+json",
+                    "Accept": "application/vnd.github.v3+json",
                 },
                 timeout=20,
             )
 
         resp = _post()
         if resp.status_code != 201:
-            raise StagingBackendError(
-                f"GitHub Gist upload failed: HTTP {resp.status_code}"
-            )
+            raise StagingBackendError(f"GitHub Gist upload failed: HTTP {resp.status_code}")
         data = resp.json()
         raw_url = data["files"][filename]["raw_url"]
         _enforce_https(raw_url)
@@ -241,9 +249,9 @@ class _TransferShBackend:
 
     def upload(
         self,
-        content:  bytes,
+        content: bytes,
         filename: str,
-        proxy:    str | None,
+        proxy: str | None,
     ) -> str:
         session = _get_cffi_session(proxy)
 
@@ -258,9 +266,7 @@ class _TransferShBackend:
 
         resp = _put()
         if resp.status_code != 200:
-            raise StagingBackendError(
-                f"transfer.sh upload failed: HTTP {resp.status_code}"
-            )
+            raise StagingBackendError(f"transfer.sh upload failed: HTTP {resp.status_code}")
         url = resp.text.strip()
         _enforce_https(url)
         return url
@@ -280,17 +286,17 @@ class _PastebinBackend:
 
     def upload(
         self,
-        content:  bytes,
+        content: bytes,
         filename: str,
-        proxy:    str | None,
+        proxy: str | None,
     ) -> str:
         session = _get_cffi_session(proxy)
         data = {
-            "api_dev_key":          self._api_key,
-            "api_option":           "paste",
-            "api_paste_code":       content.decode(errors="replace"),
-            "api_paste_name":       filename,
-            "api_paste_private":    "2",   # Private
+            "api_dev_key": self._api_key,
+            "api_option": "paste",
+            "api_paste_code": content.decode(errors="replace"),
+            "api_paste_name": filename,
+            "api_paste_private": "2",  # Private
             "api_paste_expire_date": "1H",
         }
 
@@ -300,15 +306,14 @@ class _PastebinBackend:
 
         resp = _post()
         if resp.status_code != 200 or resp.text.startswith("Bad API request"):
-            raise StagingBackendError(
-                f"Pastebin upload failed: {resp.text[:200]}"
-            )
+            raise StagingBackendError(f"Pastebin upload failed: {resp.text[:200]}")
         url = resp.text.strip()
         _enforce_https(url)
         return url
 
 
 # ── URL shortener backends ─────────────────────────────────────────────────────
+
 
 class _IsGdShortener:
     """
@@ -326,9 +331,9 @@ class _IsGdShortener:
 
     def shorten(self, url: str, proxy: str | None) -> str:
         _enforce_https(url)
-        slug    = secrets.token_urlsafe(8)
-        params  = urlencode({"format": "simple", "url": url, "shorturl": slug})
-        full    = f"{self._base}?{params}"
+        slug = secrets.token_urlsafe(8)
+        params = urlencode({"format": "simple", "url": url, "shorturl": slug})
+        full = f"{self._base}?{params}"
         session = _get_cffi_session(proxy)
 
         @exponential_backoff(max_retries=3, retryable_codes={429})
@@ -337,9 +342,7 @@ class _IsGdShortener:
 
         resp = _get()
         if resp.status_code != 200:
-            raise StagingBackendError(
-                f"is.gd shortener failed: HTTP {resp.status_code}"
-            )
+            raise StagingBackendError(f"is.gd shortener failed: HTTP {resp.status_code}")
         short = resp.text.strip()
         _enforce_https(short)
         return short
@@ -360,9 +363,7 @@ class _TinyURLShortener:
 
         resp = _get()
         if resp.status_code != 200:
-            raise StagingBackendError(
-                f"TinyURL shortener failed: HTTP {resp.status_code}"
-            )
+            raise StagingBackendError(f"TinyURL shortener failed: HTTP {resp.status_code}")
         short = resp.text.strip()
         _enforce_https(short)
         _LOG.warning(
@@ -373,6 +374,7 @@ class _TinyURLShortener:
 
 
 # ── Public engine ──────────────────────────────────────────────────────────────
+
 
 class LOTSStager:
     """
@@ -391,22 +393,22 @@ class LOTSStager:
 
     def __init__(
         self,
-        kb_path:           Path,
-        proxy:             str | None = None,
+        kb_path: Path,
+        proxy: str | None = None,
         shortener_backend: ShortenerBackend = ShortenerBackend.IS_GD,
-        dry_run:           bool = False,
+        dry_run: bool = False,
     ) -> None:
-        self._kb_path   = kb_path
-        self._proxy     = proxy
+        self._kb_path = kb_path
+        self._proxy = proxy
         self._shortener = shortener_backend
-        self._dry_run   = dry_run
+        self._dry_run = dry_run
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def select_site(
         self,
-        category:     LOTSCategory | None = None,
-        max_rank:     int = 5,
+        category: LOTSCategory | None = None,
+        max_rank: int = 5,
         exclude_auth: bool = True,
     ) -> LOTSSite:
         """
@@ -424,10 +426,10 @@ class LOTSStager:
     def stage(
         self,
         payload_bytes: bytes,
-        filename:      str,
-        category:      LOTSCategory | None = None,
-        one_time:      bool = True,
-        max_rank:      int = 5,
+        filename: str,
+        category: LOTSCategory | None = None,
+        one_time: bool = True,
+        max_rank: int = 5,
     ) -> StagingResult:
         """
         Upload payload to the best available LOTS provider and optionally wrap
@@ -443,20 +445,23 @@ class LOTSStager:
         Returns:
             StagingResult with raw_url and optionally short_url.
         """
-        sha256   = _sha256_of(payload_bytes)
-        site     = self.select_site(category, max_rank)
+        sha256 = _sha256_of(payload_bytes)
+        site = self.select_site(category, max_rank)
         provider = site.domain
 
         if self._dry_run:
             _LOG.info(
                 "[DRY-RUN] Would stage %d bytes to %s (category=%s sha256=%s)",
-                len(payload_bytes), provider, site.category.value, sha256[:16],
+                len(payload_bytes),
+                provider,
+                site.category.value,
+                sha256[:16],
             )
             return StagingResult(
-                raw_url  = f"https://{provider}/dry-run/{sha256[:8]}",
-                sha256   = sha256,
-                provider = provider,
-                one_time = one_time,
+                raw_url=f"https://{provider}/dry-run/{sha256[:8]}",
+                sha256=sha256,
+                provider=provider,
+                one_time=one_time,
             )
 
         raw_url = self._upload(payload_bytes, filename, site)
@@ -468,14 +473,17 @@ class LOTSStager:
 
         _LOG.info(
             "Staged %d bytes to %s (sha256=%s) one_time=%s",
-            len(payload_bytes), provider, sha256[:16], one_time,
+            len(payload_bytes),
+            provider,
+            sha256[:16],
+            one_time,
         )
         return StagingResult(
-            raw_url  = raw_url,
-            short_url= short_url,
-            sha256   = sha256,
-            provider = provider,
-            one_time = one_time,
+            raw_url=raw_url,
+            short_url=short_url,
+            sha256=sha256,
+            provider=provider,
+            one_time=one_time,
         )
 
     def shorten_url(self, url: str) -> str:
@@ -522,17 +530,17 @@ class LOTSStager:
 
     def stage_file(
         self,
-        path:     Path,
+        path: Path,
         category: LOTSCategory | None = None,
         one_time: bool = True,
-        max_rank: int  = 5,
+        max_rank: int = 5,
     ) -> StagingResult:
         """Convenience wrapper: read file and call stage()."""
         data = path.read_bytes()
         return self.stage(
-            payload_bytes = data,
-            filename      = path.name,
-            category      = category,
-            one_time      = one_time,
-            max_rank      = max_rank,
+            payload_bytes=data,
+            filename=path.name,
+            category=category,
+            one_time=one_time,
+            max_rank=max_rank,
         )

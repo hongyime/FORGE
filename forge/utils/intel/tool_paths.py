@@ -1,4 +1,5 @@
 """Shared external OSINT tool discovery helpers."""
+
 from __future__ import annotations
 
 import os

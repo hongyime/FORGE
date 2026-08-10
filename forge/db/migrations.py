@@ -124,7 +124,9 @@ def _m0001_initial_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_creds_email      ON credentials (email);
     """)
     try:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_engagement ON audit_log (engagement_id, phase)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_engagement ON audit_log (engagement_id, phase)"
+        )
     except sqlite3.OperationalError:
         pass
     conn.commit()
@@ -546,7 +548,7 @@ def _m0012_enhanced_llm_feedback(conn: sqlite3.Connection) -> None:
     _safe_alter(conn, "ALTER TABLE llm_feedback ADD COLUMN engagement_context_relevance REAL")
     _safe_alter(conn, "ALTER TABLE llm_feedback ADD COLUMN final_approval BOOLEAN DEFAULT FALSE")
     _safe_alter(conn, "ALTER TABLE llm_feedback ADD COLUMN validation_timestamp TIMESTAMP")
-    
+
     # Create new validation rules table
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS llm_validation_rules (
@@ -565,37 +567,79 @@ def _m0012_enhanced_llm_feedback(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_validation_rules_type ON llm_validation_rules (rule_type, enabled);
         CREATE INDEX IF NOT EXISTS idx_validation_rules_severity ON llm_validation_rules (severity, enabled);
     """)
-    
+
     # Insert default validation rules
     default_rules = [
-        ("hardcoded_ip", "opsec", "critical", r"\\b(?:[0-9]{{1,3}}\\.){{3}}[0-9]{{1,3}}\\b", 
-         "Hardcoded IP addresses in reports", "Replace with [REDACTED] or similar"),
-        ("credential_exposure", "opsec", "critical", r"(?i)(password|token|key|secret)\\s*[:=]\\s*\\S+",
-         "Credential plaintext exposure", "Reference credentials by type only, never reveal values"),
-        ("tool_disclosure", "opsec", "high", r"(?i)(nmap|metasploit|burp|sqlmap|forge)",
-         "Security tool names in reports", "Use generic terms like 'automated scanner'"),
-        ("methodology_disclosure", "opsec", "medium", r"(?i)(exploit.*chain|lateral.*movement|persistence)",
-         "Detailed methodology disclosure", "Keep methodology descriptions high-level"),
-        ("cve_format", "factual", "high", r"CVE\\s*-\s*\\d{{4}}\\s*-\s*\\d+",
-         "CVE format validation", "Ensure CVE references follow proper format"),
-        ("severity_consistency", "factual", "medium", r"(?i)(critical|high|medium|low|info)",
-         "Severity rating consistency", "Ensure severity ratings align with CVSS scores"),
+        (
+            "hardcoded_ip",
+            "opsec",
+            "critical",
+            r"\\b(?:[0-9]{{1,3}}\\.){{3}}[0-9]{{1,3}}\\b",
+            "Hardcoded IP addresses in reports",
+            "Replace with [REDACTED] or similar",
+        ),
+        (
+            "credential_exposure",
+            "opsec",
+            "critical",
+            r"(?i)(password|token|key|secret)\\s*[:=]\\s*\\S+",
+            "Credential plaintext exposure",
+            "Reference credentials by type only, never reveal values",
+        ),
+        (
+            "tool_disclosure",
+            "opsec",
+            "high",
+            r"(?i)(nmap|metasploit|burp|sqlmap|forge)",
+            "Security tool names in reports",
+            "Use generic terms like 'automated scanner'",
+        ),
+        (
+            "methodology_disclosure",
+            "opsec",
+            "medium",
+            r"(?i)(exploit.*chain|lateral.*movement|persistence)",
+            "Detailed methodology disclosure",
+            "Keep methodology descriptions high-level",
+        ),
+        (
+            "cve_format",
+            "factual",
+            "high",
+            r"CVE\\s*-\s*\\d{{4}}\\s*-\s*\\d+",
+            "CVE format validation",
+            "Ensure CVE references follow proper format",
+        ),
+        (
+            "severity_consistency",
+            "factual",
+            "medium",
+            r"(?i)(critical|high|medium|low|info)",
+            "Severity rating consistency",
+            "Ensure severity ratings align with CVSS scores",
+        ),
     ]
-    
+
     for rule_name, rule_type, severity, pattern, description, remediation in default_rules:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR IGNORE INTO llm_validation_rules 
             (rule_name, rule_type, severity, pattern, description, remediation_hint)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (rule_name, rule_type, severity, pattern, description, remediation))
-    
+        """,
+            (rule_name, rule_type, severity, pattern, description, remediation),
+        )
+
     conn.commit()
 
 
 def _m0013_cloud_audit_enhancement(conn: sqlite3.Connection) -> None:
     """Enhanced cloud audit schema for AWS and Azure support."""
     # Add cloud provider specific columns to cloud_assets table
-    _safe_alter(conn, "ALTER TABLE cloud_assets ADD COLUMN cloud_provider TEXT CHECK (cloud_provider IN ('aws','azure','gcp','firebase','supabase','digitalocean'))")
+    _safe_alter(
+        conn,
+        "ALTER TABLE cloud_assets ADD COLUMN cloud_provider TEXT CHECK (cloud_provider IN ('aws','azure','gcp','firebase','supabase','digitalocean'))",
+    )
     _safe_alter(conn, "ALTER TABLE cloud_assets ADD COLUMN resource_type TEXT")
     _safe_alter(conn, "ALTER TABLE cloud_assets ADD COLUMN region TEXT")
     _safe_alter(conn, "ALTER TABLE cloud_assets ADD COLUMN account_id TEXT")
@@ -604,13 +648,16 @@ def _m0013_cloud_audit_enhancement(conn: sqlite3.Connection) -> None:
     _safe_alter(conn, "ALTER TABLE cloud_assets ADD COLUMN tags_json TEXT DEFAULT '{}'")
     _safe_alter(conn, "ALTER TABLE cloud_assets ADD COLUMN compliance_frameworks TEXT DEFAULT '[]'")
     _safe_alter(conn, "ALTER TABLE cloud_assets ADD COLUMN last_assessed TIMESTAMP")
-    
+
     # Add cloud-specific vulnerability finding metadata
-    _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT CHECK (cloud_provider IN ('aws','azure','gcp','firebase','supabase','digitalocean'))")
+    _safe_alter(
+        conn,
+        "ALTER TABLE vulnerability_findings ADD COLUMN cloud_provider TEXT CHECK (cloud_provider IN ('aws','azure','gcp','firebase','supabase','digitalocean'))",
+    )
     _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN resource_id TEXT")
     _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN compliance_control TEXT")
     _safe_alter(conn, "ALTER TABLE vulnerability_findings ADD COLUMN remediation_cli TEXT")
-    
+
     # Create cloud audit metadata table
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS cloud_audit_metadata (
@@ -633,7 +680,7 @@ def _m0013_cloud_audit_enhancement(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_cloud_audit_engagement ON cloud_audit_metadata (engagement_id, cloud_provider, status);
         CREATE INDEX IF NOT EXISTS idx_cloud_audit_status ON cloud_audit_metadata (status, audit_end_time);
     """)
-    
+
     conn.commit()
 
 
@@ -944,7 +991,9 @@ def _m0019_cloud_provider_identifier(conn: sqlite3.Connection) -> None:
             """
         )
     if _table_sql_contains(conn, "cloud_validation_results", "cloud_validation_results"):
-        _safe_alter(conn, "ALTER TABLE cloud_validation_results ADD COLUMN provider_identifier TEXT")
+        _safe_alter(
+            conn, "ALTER TABLE cloud_validation_results ADD COLUMN provider_identifier TEXT"
+        )
         conn.execute(
             """
             UPDATE cloud_validation_results
@@ -1146,7 +1195,11 @@ _MIGRATIONS: list[tuple[int, str, Migration]] = [
     (21, "run_audit_manifests", _m0021_run_audit_manifests),
     (22, "cloud_asset_metadata", _m0022_cloud_asset_metadata),
     (23, "distributed_task_attempts", _m0023_distributed_task_attempts),
-    (24, "distributed_task_running_attempt_backfill", _m0024_distributed_task_running_attempt_backfill),
+    (
+        24,
+        "distributed_task_running_attempt_backfill",
+        _m0024_distributed_task_running_attempt_backfill,
+    ),
     (25, "artifact_queue_attempts", _m0025_artifact_queue_attempts),
     (26, "cloud_ref_seed_type", _m0026_cloud_ref_seed_type),
 ]
@@ -1253,9 +1306,7 @@ def _rebuild_table(
     try:
         all_names = [
             str(row[0])
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         ]
     except sqlite3.OperationalError:
         all_names = []
@@ -1275,6 +1326,7 @@ def _rebuild_table(
     # gives every migration a unique temp name so parallel _rebuild_table calls
     # (should never happen but defensive) can't step on each other.
     import hashlib as _hashlib  # noqa: PLC0415
+
     _sql_digest = _hashlib.sha1(create_table_sql.encode("utf-8")).hexdigest()[:8]
     temp_table = f"{table_name}__rebuild_{_sql_digest}"
     conn.execute(

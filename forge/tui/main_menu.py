@@ -38,12 +38,12 @@ _BANNER = "=" * 66
 _TITLE = "  FORGE Toolkit - Interactive Menu"
 
 _CHOICES: tuple[tuple[str, str, str], ...] = (
-    ("1", "Run kill-chain on a target",      "any seed -> full spider"),
-    ("2", "View dashboard",                  "open reports/dashboard.html"),
+    ("1", "Run kill-chain on a target", "any seed -> full spider"),
+    ("2", "View dashboard", "open reports/dashboard.html"),
     ("3", "Regenerate report on engagement", "--yes on existing"),
-    ("4", "Health check",                    "versions, engagements, LLMs"),
-    ("5", "Browse engagements",              "interactive TUI viewer"),
-    ("6", "Sync knowledge base",             "Phase 0 ETL"),
+    ("4", "Health check", "versions, engagements, LLMs"),
+    ("5", "Browse engagements", "interactive TUI viewer"),
+    ("6", "Sync knowledge base", "Phase 0 ETL"),
 )
 
 _VALID_KEYS = {c[0] for c in _CHOICES} | {"q", "Q"}
@@ -283,17 +283,13 @@ def _run_forge(*args: str, preview: bool = True) -> int:
 def _action_kill_chain() -> None:
     _CONSOLE.print()
     _CONSOLE.print("[bold]Kill-chain[/bold] — spider a single seed until stable.")
-    seed = _prompt_or_back(
-        "Seed (domain / ip / email / phone / @username / \"Full Name\")"
-    )
+    seed = _prompt_or_back('Seed (domain / ip / email / phone / @username / "Full Name")')
     if seed is None:
         return
     if not seed:
         _CONSOLE.print("[yellow]No seed given — cancelled.[/yellow]")
         return
-    engagement = _prompt_or_back(
-        "Engagement id [dim](blank = auto-derive)[/dim]", default=""
-    )
+    engagement = _prompt_or_back("Engagement id [dim](blank = auto-derive)[/dim]", default="")
     if engagement is None:
         return
     flags_raw = _prompt_or_back(
@@ -343,15 +339,20 @@ def _action_report_generate() -> None:
 
     _CONSOLE.print()
     _CONSOLE.print("[bold]Provider[/bold] — how to render the report:")
-    _CONSOLE.print("  [cyan]template[/cyan]  fast (~2s), deterministic, no LLM  [dim](default)[/dim]")
+    _CONSOLE.print(
+        "  [cyan]template[/cyan]  fast (~2s), deterministic, no LLM  [dim](default)[/dim]"
+    )
     _CONSOLE.print("  [cyan]auto[/cyan]      cascade through installed LLM CLIs (Kiro/Claude/...)")
     # P2-B01: build choices dynamically from _AUTO_CASCADE_DEFAULT_ORDER so
     # bedrock_anthropic and openai_compatible don't fall out of the TUI menu
     # when the cascade constant changes upstream.
     from forge.phase6.report_synthesizer import _AUTO_CASCADE_DEFAULT_ORDER  # noqa: PLC0415
+
     _CONSOLE.print("  [cyan]kiro_cli[/cyan]  force Kiro CLI (best quality if installed)")
     _CONSOLE.print("  [cyan]claude_code[/cyan]  force Claude Code")
-    _CONSOLE.print("  [cyan]llama_cpp[/cyan]  local Qwen 1.5B [dim](slow, often fails validation)[/dim]")
+    _CONSOLE.print(
+        "  [cyan]llama_cpp[/cyan]  local Qwen 1.5B [dim](slow, often fails validation)[/dim]"
+    )
     _cascade_choices: list[str] = ["template", "auto"] + [
         name for name in _AUTO_CASCADE_DEFAULT_ORDER if name != "template"
     ]
@@ -367,8 +368,7 @@ def _action_report_generate() -> None:
     if provider is None:
         return
 
-    _run_forge("report", "generate", "--engagement", engagement,
-               "--yes", "--provider", provider)
+    _run_forge("report", "generate", "--engagement", engagement, "--yes", "--provider", provider)
 
 
 def _action_health_check() -> None:
@@ -404,9 +404,7 @@ def _action_health_check() -> None:
 
     llm_cli_names = ("kiro", "claude", "codex", "gemini")
     found = [name for name in llm_cli_names if shutil.which(name)]
-    _CONSOLE.print(
-        f"[cyan]LLM CLIs on PATH:[/cyan] {', '.join(found) if found else 'none'}"
-    )
+    _CONSOLE.print(f"[cyan]LLM CLIs on PATH:[/cyan] {', '.join(found) if found else 'none'}")
 
 
 def _action_browse_engagements() -> None:
@@ -438,7 +436,9 @@ def _action_browse_engagements() -> None:
         target = _engagement_target(db_path) or "[dim]—[/dim]"
         try:
             size = db_path.stat().st_size
-            size_str = f"{size / 1024:.0f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+            size_str = (
+                f"{size / 1024:.0f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+            )
         except OSError:
             size_str = "?"
         counts = _engagement_row_counts(db_path)

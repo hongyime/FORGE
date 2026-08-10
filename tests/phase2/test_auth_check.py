@@ -2,6 +2,7 @@
 tests/phase2/test_auth_check.py
 Unit tests for Module 2-B: auth_check.py (CredentialValidator)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,6 +24,7 @@ from forge.utils.intel.auth_check import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def engagement_db(tmp_path: Path) -> Path:
@@ -65,6 +67,7 @@ def engagement_db(tmp_path: Path) -> Path:
 # CredentialValidator init
 # ---------------------------------------------------------------------------
 
+
 def test_validator_dry_run_default(engagement_db):
     v = CredentialValidator(engagement_db, 1)
     assert v._dry_run is True
@@ -85,6 +88,7 @@ def test_validator_adapters_registered(engagement_db):
 # _scope_check
 # ---------------------------------------------------------------------------
 
+
 def test_scope_check_in_scope(engagement_db):
     v = CredentialValidator(engagement_db, 1)
     assert v._scope_check("10.0.0.1") is True
@@ -99,9 +103,10 @@ def test_scope_check_out_of_scope(engagement_db):
 # _load_credentials
 # ---------------------------------------------------------------------------
 
+
 def test_load_credentials_stub_enc(engagement_db):
     """ENC: stub ciphertext cannot be reversed — rows are skipped gracefully."""
-    v    = CredentialValidator(engagement_db, 1)
+    v = CredentialValidator(engagement_db, 1)
     rows = v._load_credentials()
     # With stub encryption, decrypt returns None and rows are skipped.
     assert isinstance(rows, list)
@@ -116,7 +121,7 @@ def test_load_credentials_plaintext_passthrough(engagement_db):
     )
     con.commit()
     con.close()
-    v    = CredentialValidator(engagement_db, 1)
+    v = CredentialValidator(engagement_db, 1)
     rows = v._load_credentials()
     bobs = [r for r in rows if r.email == "bob@example.com"]
     assert len(bobs) == 1
@@ -126,6 +131,7 @@ def test_load_credentials_plaintext_passthrough(engagement_db):
 # ---------------------------------------------------------------------------
 # _attempt — lockout gate
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_attempt_lockout_skipped(engagement_db):
@@ -181,9 +187,10 @@ async def test_attempt_failure_increments_lockout(engagement_db):
 # validate_all — dry_run
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_validate_all_dry_run_returns_empty(engagement_db):
-    v       = CredentialValidator(engagement_db, 1, dry_run=True)
+    v = CredentialValidator(engagement_db, 1, dry_run=True)
     results = await v.validate_all(["ssh"])
     assert results == []
 
@@ -191,6 +198,7 @@ async def test_validate_all_dry_run_returns_empty(engagement_db):
 # ---------------------------------------------------------------------------
 # _write_result
 # ---------------------------------------------------------------------------
+
 
 def test_write_result_success_sets_validated(engagement_db):
     con = sqlite3.connect(engagement_db)
@@ -201,10 +209,13 @@ def test_write_result_success_sets_validated(engagement_db):
     )
     con.commit()
 
-    v      = CredentialValidator(engagement_db, 1)
+    v = CredentialValidator(engagement_db, 1)
     result = AttemptResult(
-        cred_id=99, email="test@example.com",
-        host="10.0.0.1", service="ssh", success=True,
+        cred_id=99,
+        email="test@example.com",
+        host="10.0.0.1",
+        service="ssh",
+        success=True,
     )
     v._write_result(result)
 
@@ -222,11 +233,14 @@ def test_write_result_failure_sets_error(engagement_db):
     )
     con.commit()
 
-    v      = CredentialValidator(engagement_db, 1)
+    v = CredentialValidator(engagement_db, 1)
     result = AttemptResult(
-        cred_id=98, email="fail@example.com",
-        host="10.0.0.1", service="ssh",
-        success=False, error="Permission denied",
+        cred_id=98,
+        email="fail@example.com",
+        host="10.0.0.1",
+        service="ssh",
+        success=False,
+        error="Permission denied",
     )
     v._write_result(result)
 
@@ -239,13 +253,16 @@ def test_write_result_failure_sets_error(engagement_db):
 def test_write_result_audit_log_never_contains_password(engagement_db):
     v = CredentialValidator(engagement_db, 1)
     result = AttemptResult(
-        cred_id=1, email="alice@example.com",
-        host="10.0.0.1", service="ssh",
-        success=False, error="bad creds",
+        cred_id=1,
+        email="alice@example.com",
+        host="10.0.0.1",
+        service="ssh",
+        success=False,
+        error="bad creds",
     )
     v._write_result(result)
 
-    con  = sqlite3.connect(engagement_db)
+    con = sqlite3.connect(engagement_db)
     logs = con.execute("SELECT result FROM audit_log").fetchall()
     con.close()
     for (result,) in logs:

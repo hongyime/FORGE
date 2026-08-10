@@ -71,9 +71,7 @@ class PlannerAgent:
         """Topics consumed by the planner."""
         return [INBOUND_TOPIC]
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         """Decompose ``message.payload['workflow']`` into per-stage tasks.
 
         Args:
@@ -95,9 +93,7 @@ class PlannerAgent:
         payload = message.payload or {}
         raw_workflow = payload.get("workflow")
         if raw_workflow is None:
-            raise ValueError(
-                "PlannerAgent: payload missing required 'workflow' key"
-            )
+            raise ValueError("PlannerAgent: payload missing required 'workflow' key")
 
         # Accept either an already-built WorkflowDefinition or a dict.
         if isinstance(raw_workflow, WorkflowDefinition):
@@ -112,9 +108,7 @@ class PlannerAgent:
             )
 
         context_obj = payload.get("context", {})
-        context: dict[str, object] = (
-            dict(context_obj) if isinstance(context_obj, dict) else {}
-        )
+        context: dict[str, object] = dict(context_obj) if isinstance(context_obj, dict) else {}
 
         outputs: list[AgentMessage] = []
         for index, stage in enumerate(workflow.stages):

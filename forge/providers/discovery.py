@@ -64,11 +64,11 @@ DEFAULT_MODEL_LIST_TIMEOUT_S = 5.0
 class DiscoveredBackend:
     """One backend the router can use, with classified models."""
 
-    backend_name: str            # e.g. "claude_code", "ollama"
-    family: str                  # e.g. "subprocess", "openai_compatible", "boto3"
-    endpoint: str | None         # base URL or path; None for in-process / shell-out
-    model_id: str                # the resolved primary model
-    api_key_present: bool        # True iff backend uses a key (audit context)
+    backend_name: str  # e.g. "claude_code", "ollama"
+    family: str  # e.g. "subprocess", "openai_compatible", "boto3"
+    endpoint: str | None  # base URL or path; None for in-process / shell-out
+    model_id: str  # the resolved primary model
+    api_key_present: bool  # True iff backend uses a key (audit context)
     tier_assignment: TierAssignment
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -78,7 +78,7 @@ class DiscoveryResult:
     """Outcome of a full discovery sweep."""
 
     backends: list[DiscoveredBackend]
-    skipped: list[tuple[str, str]]    # (probe_name, reason)
+    skipped: list[tuple[str, str]]  # (probe_name, reason)
     duration_s: float
     paid_allowed: bool
 
@@ -123,6 +123,7 @@ def _sync_tcp_probe(host: str, port: int) -> None:
 
 async def _probe_claude_code() -> DiscoveredBackend | None:
     from forge.providers.claude_code import claude_code_available
+
     available, hint = claude_code_available()
     if not available:
         return None
@@ -155,9 +156,7 @@ async def _probe_codex_cli() -> DiscoveredBackend | None:
         endpoint=bin_path,
         model_id="gpt-5-codex-subscription",
         api_key_present=False,
-        tier_assignment=classify_model(
-            ModelInfo(model_id="gpt-5", backend_family="subprocess")
-        ),
+        tier_assignment=classify_model(ModelInfo(model_id="gpt-5", backend_family="subprocess")),
         extra={"detection": "binary"},
     )
 
@@ -207,7 +206,9 @@ async def _probe_openai_compatible_saas(
             if 200 <= resp.status_code < 300:
                 payload = resp.json()
                 chosen_model, pricing = _pick_default_from_model_list(
-                    payload, default_model, backend_name,
+                    payload,
+                    default_model,
+                    backend_name,
                 )
     except (httpx.HTTPError, json.JSONDecodeError, ValueError, TypeError):
         pass
@@ -305,7 +306,9 @@ async def _probe_bedrock_anthropic() -> DiscoveredBackend | None:
         return None
     # Pick a region: env > config > default. We DON'T call AWS APIs here;
     # the actual list-models call happens in BedrockAnthropicProvider.health.
-    region = _env_first("AWS_REGION", "AWS_DEFAULT_REGION") or _read_aws_region(config) or "us-east-1"
+    region = (
+        _env_first("AWS_REGION", "AWS_DEFAULT_REGION") or _read_aws_region(config) or "us-east-1"
+    )
     # Default to a Haiku inference profile in the user's region; the user
     # can override via FORGE_BEDROCK_MODEL.
     explicit_model = os.environ.get("FORGE_BEDROCK_MODEL", "").strip()
@@ -368,9 +371,7 @@ async def _probe_local_openai_server(
         async with httpx.AsyncClient(timeout=DEFAULT_MODEL_LIST_TIMEOUT_S) as client:
             # Ollama's /api/tags is richer; openai-shape /v1/models also works.
             tags_url = (
-                f"http://{host}:{port}/api/tags"
-                if backend_name == "ollama"
-                else f"{base}/models"
+                f"http://{host}:{port}/api/tags" if backend_name == "ollama" else f"{base}/models"
             )
             resp = await client.get(tags_url)
             if 200 <= resp.status_code < 300:
@@ -457,6 +458,7 @@ async def _probe_llama_cpp() -> DiscoveredBackend | None:
         path = ggufs[0]
     # Estimate parameter count from filename, e.g. "qwen2.5-1.5b-instruct..."
     import re
+
     m = re.search(r"(\d+(?:\.\d+)?)\s*b", path.name, re.IGNORECASE)
     params = float(m.group(1)) if m else None
     info = ModelInfo(
@@ -497,6 +499,7 @@ async def discover_backends(
         A :class:`DiscoveryResult` listing detected backends + skip reasons.
     """
     import time as _time
+
     t0 = _time.perf_counter()
     overrides = overrides if overrides is not None else load_overrides()
 
@@ -516,6 +519,7 @@ async def discover_backends(
             except Exception as exc:  # noqa: BLE001 - defensive
                 _LOG.debug("discovery probe %s failed: %s", name, exc)
                 return None
+
         return asyncio.ensure_future(_wrapped())
 
     # Tier A
@@ -525,27 +529,52 @@ async def discover_backends(
 
     # Tier B (paid-gated)
     saas_specs = [
-        ("openrouter", ("OPENROUTER_API_KEY",), "https://openrouter.ai/api/v1", "anthropic/claude-haiku-4-5"),
+        (
+            "openrouter",
+            ("OPENROUTER_API_KEY",),
+            "https://openrouter.ai/api/v1",
+            "anthropic/claude-haiku-4-5",
+        ),
         ("openai", ("OPENAI_API_KEY",), "https://api.openai.com/v1", "gpt-4o-mini"),
         ("groq", ("GROQ_API_KEY",), "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
         ("deepseek", ("DEEPSEEK_API_KEY",), "https://api.deepseek.com/v1", "deepseek-chat"),
         ("mistral", ("MISTRAL_API_KEY",), "https://api.mistral.ai/v1", "mistral-small-latest"),
-        ("together", ("TOGETHER_API_KEY",), "https://api.together.xyz/v1", "meta-llama/Llama-3-8b-chat-hf"),
-        ("fireworks", ("FIREWORKS_API_KEY",), "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/llama-v3-8b-instruct"),
+        (
+            "together",
+            ("TOGETHER_API_KEY",),
+            "https://api.together.xyz/v1",
+            "meta-llama/Llama-3-8b-chat-hf",
+        ),
+        (
+            "fireworks",
+            ("FIREWORKS_API_KEY",),
+            "https://api.fireworks.ai/inference/v1",
+            "accounts/fireworks/models/llama-v3-8b-instruct",
+        ),
         ("xai", ("XAI_API_KEY",), "https://api.x.ai/v1", "grok-2-1212"),
         ("perplexity", ("PERPLEXITY_API_KEY",), "https://api.perplexity.ai", "sonar-small-online"),
-        ("google_genai", ("GOOGLE_API_KEY", "GEMINI_API_KEY"), "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash"),
+        (
+            "google_genai",
+            ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+            "gemini-2.0-flash",
+        ),
     ]
     for name, env_keys, ep, dm in saas_specs:
-        probes.append((
-            name,
-            run_probe(
-                _probe_openai_compatible_saas(
-                    name, env_key=env_keys, endpoint=ep, default_model=dm,
-                ),
+        probes.append(
+            (
                 name,
-            ),
-        ))
+                run_probe(
+                    _probe_openai_compatible_saas(
+                        name,
+                        env_key=env_keys,
+                        endpoint=ep,
+                        default_model=dm,
+                    ),
+                    name,
+                ),
+            )
+        )
 
     # Tier C
     probes.append(("bedrock_anthropic", run_probe(_probe_bedrock_anthropic(), "bedrock_anthropic")))
@@ -559,15 +588,20 @@ async def discover_backends(
         ("text_generation_webui", "127.0.0.1", 5000, "/v1"),
     ]
     for name, host, port, suf in local_specs:
-        probes.append((
-            name,
-            run_probe(
-                _probe_local_openai_server(
-                    name, host=host, port=port, endpoint_suffix=suf,
-                ),
+        probes.append(
+            (
                 name,
-            ),
-        ))
+                run_probe(
+                    _probe_local_openai_server(
+                        name,
+                        host=host,
+                        port=port,
+                        endpoint_suffix=suf,
+                    ),
+                    name,
+                ),
+            )
+        )
 
     # Tier D - llama_cpp backstop
     probes.append(("llama_cpp", run_probe(_probe_llama_cpp(), "llama_cpp")))
@@ -586,10 +620,10 @@ async def discover_backends(
     # Sort: subscription/free first, then bedrock, then SaaS by tier-pref,
     # then local servers, llama_cpp ALWAYS last.
     family_order = {
-        "subprocess": 0,           # Claude Code, Codex CLI etc - free, top-quality
-        "boto3": 1,                # Bedrock - paid but accountable
-        "openai_compatible": 2,    # SaaS APIs + local OpenAI-shaped servers
-        "llama_cpp": 99,           # backstop
+        "subprocess": 0,  # Claude Code, Codex CLI etc - free, top-quality
+        "boto3": 1,  # Bedrock - paid but accountable
+        "openai_compatible": 2,  # SaaS APIs + local OpenAI-shaped servers
+        "llama_cpp": 99,  # backstop
     }
     found.sort(key=lambda b: (family_order.get(b.family, 50), b.backend_name))
     # Ensure llama_cpp is dead last regardless.

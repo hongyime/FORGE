@@ -153,9 +153,7 @@ def test_artifact_queue_processor_ocrs_har_base64_image_response_bodies(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         seeds = {
             (row[0], row[1])
@@ -275,7 +273,7 @@ def test_artifact_queue_processor_parses_har_websocket_message_payloads(
                                     ),
                                 }
                             ],
-                        }
+                        },
                     ],
                 }
             }
@@ -291,9 +289,7 @@ def test_artifact_queue_processor_parses_har_websocket_message_payloads(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         seeds = {
             (row[0], row[1])

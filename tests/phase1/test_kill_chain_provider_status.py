@@ -290,8 +290,11 @@ def test_provider_failures_finalize_failed_and_retry(tmp_path: Path, monkeypatch
     assert attempts.count(("H", ROOT_DOMAIN)) == 2
     assert attempts.count(("I", ROOT_DOMAIN)) == 2
     failed_by_loop = {
-        loop: sum(1 for row_loop, status, _error, _metadata in _provider_seed_runs(db_path)
-                  if row_loop == loop and status == "failed")
+        loop: sum(
+            1
+            for row_loop, status, _error, _metadata in _provider_seed_runs(db_path)
+            if row_loop == loop and status == "failed"
+        )
         for loop in PROVIDER_LOOPS.values()
     }
     assert failed_by_loop == {loop: 2 for loop in PROVIDER_LOOPS.values()}
@@ -352,8 +355,7 @@ def test_root_tool_failure_keeps_same_run_retry_budget_alive(
         con.close()
     assert len(failed_a_runs) == 2
     assert all(
-        f"simulated {failed_stage} failure" in str(error or "")
-        for _status, error in failed_a_runs
+        f"simulated {failed_stage} failure" in str(error or "") for _status, error in failed_a_runs
     )
     run_metadata = _latest_run_metadata(db_path)
     assert run_metadata["pending_work_counts"][pending_key] == 1
@@ -382,11 +384,7 @@ def test_root_child_commands_receive_scope_manifest(
     expected_stages = {"A", "B", "B2", "D3", "D4", "F"}
     assert expected_stages <= {stage for stage, target in attempts if target == ROOT_DOMAIN}
     manifest_path = str(tmp_path / "roe-scope.json")
-    argv_by_stage = {
-        stage: argv
-        for stage, argv in module_argvs
-        if stage in expected_stages
-    }
+    argv_by_stage = {stage: argv for stage, argv in module_argvs if stage in expected_stages}
     assert expected_stages <= set(argv_by_stage)
     for stage in expected_stages:
         argv = argv_by_stage[stage]
@@ -426,11 +424,7 @@ def test_synthesized_out_of_scope_root_is_not_dispatched(
     assert "evil.example" not in list(metadata.get("root_domains") or [])
     denied_rows = _audit_actions(db_path, "root_domain_scope_denied")
     assert denied_rows
-    evil_denials = [
-        result
-        for target, result in denied_rows
-        if target == "evil.example"
-    ]
+    evil_denials = [result for target, result in denied_rows if target == "evil.example"]
     assert len(evil_denials) == 1
     assert "reason=scope_manifest_denied" in evil_denials[0]
     assert f"scope_manifest={(tmp_path / 'roe-scope.json').resolve().as_posix()}" in evil_denials[0]

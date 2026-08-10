@@ -31,7 +31,9 @@ def latest_cloud_validation_metadata_index(
         if "provider_identifier" in columns
         else "identifier AS provider_identifier"
     )
-    method_expr = "validation_method" if "validation_method" in columns else "NULL AS validation_method"
+    method_expr = (
+        "validation_method" if "validation_method" in columns else "NULL AS validation_method"
+    )
     http_expr = "http_status" if "http_status" in columns else "NULL AS http_status"
     evidence_expr = "evidence" if "evidence" in columns else "NULL AS evidence"
     notes_expr = "notes" if "notes" in columns else "NULL AS notes"

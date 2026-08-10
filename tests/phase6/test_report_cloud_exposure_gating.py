@@ -227,12 +227,11 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert inventory_by_identifier["742931608514"]["stored_validation_status"] == "VALIDATED"
     assert inventory_by_identifier["742931608514"]["validation_reportable"] is False
     assert inventory_by_identifier["742931608514"]["method"] == "aws_sts_get_caller_identity"
-    assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"][
-        "evidence_summary"
-    ]
-    assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"][
-        "proof"
-    ]
+    assert (
+        "prod/customer-records.csv"
+        in inventory_by_identifier["validated-bucket"]["evidence_summary"]
+    )
+    assert "prod/customer-records.csv" in inventory_by_identifier["validated-bucket"]["proof"]
     assert inventory_by_identifier["manual-note-bucket"]["validation_status"] == "UNVERIFIED"
     assert inventory_by_identifier["manual-note-bucket"]["stored_validation_status"] == "VALIDATED"
     assert inventory_by_identifier["manual-note-bucket"]["validation_reportable"] is False
@@ -242,13 +241,9 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     assert inventory_by_identifier["metadata-bucket"]["validation_reportable"] is False
     assert inventory_by_identifier["metadata-bucket"]["method"] == "gcs_http_probe"
     validated_finding = next(
-        item
-        for item in ctx.exploits.exploited
-        if item.get("resource_id") == "validated-bucket"
+        item for item in ctx.exploits.exploited if item.get("resource_id") == "validated-bucket"
     )
-    assert "prod/customer-records.csv" in validated_finding[
-        "validation_evidence_summary"
-    ]
+    assert "prod/customer-records.csv" in validated_finding["validation_evidence_summary"]
     assert "prod/customer-records.csv" in validated_finding["validation_proof"]
 
     csv_titles = {
@@ -280,8 +275,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     markdown = report_path.read_text(encoding="utf-8")
     payload = json.loads(report_path.with_suffix(".json").read_text(encoding="utf-8"))
     exported_titles = {
-        str(item.get("title") or "")
-        for item in payload["context"]["exploits"]["exploited"]
+        str(item.get("title") or "") for item in payload["context"]["exploits"]["exploited"]
     }
 
     assert "Latest validated public S3 bucket listing exposure" in markdown
@@ -295,8 +289,7 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
         if item["identifier"] == "acct-unsupported"
     } == {"UNSUPPORTED"}
     assert any(
-        item["identifier"] == "validated-bucket"
-        and "prod/customer-records.csv" in item["proof"]
+        item["identifier"] == "validated-bucket" and "prod/customer-records.csv" in item["proof"]
         for item in payload["context"]["cloud_validation_inventory"]
     )
 
@@ -314,28 +307,22 @@ def test_report_exports_gate_deterministic_cloud_exposures_on_latest_validated_s
     raw_path = raw_synth.generate(ENGAGEMENT_ID)
     raw_payload = json.loads(raw_path.read_text(encoding="utf-8"))
     raw_titles = {
-        str(item.get("title") or "")
-        for item in raw_payload["context"]["exploits"]["exploited"]
+        str(item.get("title") or "") for item in raw_payload["context"]["exploits"]["exploited"]
     }
     with raw_path.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
         raw_csv_titles = {
-            row["title"]
-            for row in csv.DictReader(handle)
-            if row["record_type"] == "finding"
+            row["title"] for row in csv.DictReader(handle) if row["record_type"] == "finding"
         }
     with raw_path.with_suffix(".csv").open(encoding="utf-8", newline="") as handle:
         raw_validation_rows = [
-            row
-            for row in csv.DictReader(handle)
-            if row["record_type"] == "cloud_validation"
+            row for row in csv.DictReader(handle) if row["record_type"] == "cloud_validation"
         ]
 
     assert raw_payload["format"] == "raw_export"
     assert raw_titles == {"Latest validated public S3 bucket listing exposure"}
     assert raw_csv_titles == {"Latest validated public S3 bucket listing exposure"}
     assert any(
-        row["cloud_identifier"] == "acct-unsupported"
-        and row["validation_status"] == "UNSUPPORTED"
+        row["cloud_identifier"] == "acct-unsupported" and row["validation_status"] == "UNSUPPORTED"
         for row in raw_validation_rows
     )
     assert any(

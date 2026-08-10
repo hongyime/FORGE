@@ -30,6 +30,7 @@ Anonymous quota is ~100 searches / day per source-IP, so this module
 sends a single search per hostname and never fires the /result/ endpoint
 automatically (a helper is exposed for callers that want the deep-dive).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -334,17 +335,19 @@ def search_urlscan(
         page_ptr = str(_dig(entry, "page", "ptr") or "").strip().lower()
         page_server = str(_dig(entry, "page", "server") or "").strip()
 
-        result["scans"].append({
-            "scan_id": scan_id,
-            "time":    task_time,
-            "domain":  page_domain,
-            "url":     page_url,
-            "task_url": task_url,
-            "ip":      page_ip,
-            "ptr":     page_ptr,
-            "server":  page_server,
-            "score":   score,
-        })
+        result["scans"].append(
+            {
+                "scan_id": scan_id,
+                "time": task_time,
+                "domain": page_domain,
+                "url": page_url,
+                "task_url": task_url,
+                "ip": page_ip,
+                "ptr": page_ptr,
+                "server": page_server,
+                "score": score,
+            }
+        )
 
         if page_ip:
             ip_set.add(page_ip)
@@ -458,10 +461,7 @@ def persist_urlscan_findings(
         if dom and ip and dom not in dom_to_ip:
             dom_to_ip[dom] = ip
 
-    related = [
-        d for d in (result.get("related_domains") or [])
-        if isinstance(d, str) and d
-    ]
+    related = [d for d in (result.get("related_domains") or []) if isinstance(d, str) and d]
     summary["related_matched"] = related
 
     try:
@@ -527,18 +527,20 @@ def persist_urlscan_findings(
                 if persisted.get("seed_inserted"):
                     summary["url_seeds_written"] += 1
 
-        audit_payload = json.dumps({
-            "source":          "urlscan",
-            "hostname":        normalised,
-            "total":           int(result.get("total", 0) or 0),
-            "scans_returned":  len(result.get("scans", []) or []),
-            "unique_ips":      list(result.get("unique_ips", []) or [])[:20],
-            "related_domains": related[:20],
-            "servers":         list(result.get("servers", []) or [])[:20],
-            "hosts_written":   summary["hosts_written"],
-            "url_seeds":       summary["url_seeds_written"],
-            "error":           result.get("error", ""),
-        })
+        audit_payload = json.dumps(
+            {
+                "source": "urlscan",
+                "hostname": normalised,
+                "total": int(result.get("total", 0) or 0),
+                "scans_returned": len(result.get("scans", []) or []),
+                "unique_ips": list(result.get("unique_ips", []) or [])[:20],
+                "related_domains": related[:20],
+                "servers": list(result.get("servers", []) or [])[:20],
+                "hosts_written": summary["hosts_written"],
+                "url_seeds": summary["url_seeds_written"],
+                "error": result.get("error", ""),
+            }
+        )
         try:
             con.execute(
                 "INSERT INTO audit_log "

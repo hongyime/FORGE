@@ -78,9 +78,7 @@ class BedrockAnthropicProvider:
         try:
             import boto3  # noqa: PLC0415
         except ImportError as exc:
-            raise ProviderUnavailableError(
-                "bedrock_anthropic: boto3 not installed"
-            ) from exc
+            raise ProviderUnavailableError("bedrock_anthropic: boto3 not installed") from exc
         kwargs: dict[str, Any] = {"service_name": "bedrock-runtime"}
         if self._region:
             kwargs["region_name"] = self._region
@@ -113,16 +111,12 @@ class BedrockAnthropicProvider:
                 f"bedrock_anthropic: timeout after {self._timeout}s"
             ) from exc
         except Exception as exc:  # noqa: BLE001 - botocore raises various
-            raise ProviderUnavailableError(
-                f"bedrock_anthropic: invoke failed: {exc}"
-            ) from exc
+            raise ProviderUnavailableError(f"bedrock_anthropic: invoke failed: {exc}") from exc
 
         try:
             payload = json.loads(resp["body"].read())
         except (KeyError, json.JSONDecodeError, AttributeError) as exc:
-            raise ProviderUnavailableError(
-                f"bedrock_anthropic: malformed response: {exc}"
-            ) from exc
+            raise ProviderUnavailableError(f"bedrock_anthropic: malformed response: {exc}") from exc
 
         text = self._extract_text(payload)
         usage = payload.get("usage") or {}

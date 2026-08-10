@@ -637,9 +637,7 @@ def test_end_to_end_engagement_pipeline_validates_artifact_discovered_azure_conn
     _bootstrap_db(db_path)
 
     azure_connection_string = (
-        "DefaultEndpointsProtocol=https;"
-        "AccountName=acmeartifactblob;"
-        f"AccountKey={'A' * 86}=="
+        f"DefaultEndpointsProtocol=https;AccountName=acmeartifactblob;AccountKey={'A' * 86}=="
     )
     (artifact_root / "ops.env").write_text(
         f"""
@@ -1077,9 +1075,7 @@ def test_end_to_end_engagement_pipeline_mixes_key_validators_cloud_asset_and_tem
     _bootstrap_db(db_path)
 
     azure_connection_string = (
-        "DefaultEndpointsProtocol=https;"
-        "AccountName=comboartifactblob;"
-        f"AccountKey={'A' * 86}=="
+        f"DefaultEndpointsProtocol=https;AccountName=comboartifactblob;AccountKey={'A' * 86}=="
     )
     google_api_key = "AIza" + "G" * 35
     gitlab_pat = "glpat-" + "L" * 20

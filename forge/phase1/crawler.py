@@ -194,7 +194,9 @@ async def _crawl_http(
     processed: set[str] = set()
     queue: list[tuple[str, int]] = [(seed_canonical, 0)]
     output: list[tuple[str, str, dict[str, str]]] = []
-    delay_seconds = _crawl_request_delay_seconds() if request_delay is None else max(0.0, request_delay)
+    delay_seconds = (
+        _crawl_request_delay_seconds() if request_delay is None else max(0.0, request_delay)
+    )
     rate_limit_retries = _crawl_rate_limit_retries()
     fallback_backoff = _crawl_rate_limit_backoff_seconds()
     async with httpx.AsyncClient(follow_redirects=False, timeout=timeout) as client:
@@ -229,7 +231,9 @@ async def _crawl_http(
             status_code = int(getattr(resp, "status_code", 0) or 0)
             if 300 <= status_code < 400:
                 location = str(getattr(resp, "headers", {}).get("location", "") or "").strip()
-                redirect_url = _canonical_crawl_url(urljoin(current_url, location)) if location else None
+                redirect_url = (
+                    _canonical_crawl_url(urljoin(current_url, location)) if location else None
+                )
                 if redirect_url is None:
                     continue
                 if urlsplit(redirect_url).netloc != seed_host:
@@ -349,7 +353,9 @@ async def crawl_target(
         url_prefixes=url_prefixes,
         require_scope=require_scope,
     )
-    delay_seconds = _crawl_request_delay_seconds() if request_delay is None else max(0.0, request_delay)
+    delay_seconds = (
+        _crawl_request_delay_seconds() if request_delay is None else max(0.0, request_delay)
+    )
     if screenshot and screenshot_dir is not None:
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -362,6 +368,7 @@ async def crawl_target(
                 page = await browser.new_page()
                 try:
                     if scope_filter is not None:
+
                         async def _guard_route(route: object) -> None:
                             request = getattr(route, "request", None)
                             request_url = str(getattr(request, "url", "") or "")
@@ -376,9 +383,7 @@ async def crawl_target(
                         await asyncio.sleep(delay_seconds)
                     response = await page.goto(target_url, timeout=int(timeout * 1000))
                     browser_final_url = str(
-                        getattr(page, "url", "")
-                        or getattr(response, "url", "")
-                        or target_url
+                        getattr(page, "url", "") or getattr(response, "url", "") or target_url
                     )
                     if scope_filter is None or scope_filter(browser_final_url):
                         file_name = "root.png"

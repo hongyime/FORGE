@@ -104,9 +104,7 @@ _DISALLOWED_CAPS = (
 
 _allowed_capability = st.sampled_from(_ALLOWED_CAPS)
 _disallowed_capability = st.sampled_from(_DISALLOWED_CAPS)
-_random_capability = st.text(
-    alphabet=string.ascii_lowercase + "_", min_size=2, max_size=20
-)
+_random_capability = st.text(alphabet=string.ascii_lowercase + "_", min_size=2, max_size=20)
 
 
 def _all_allowed_caps() -> st.SearchStrategy[list[str]]:
@@ -149,9 +147,7 @@ class TestDisabledMode:
 
     @given(caps=st.lists(_random_capability, min_size=0, max_size=10))
     @settings(max_examples=30, deadline=None)
-    def test_disabled_allows_arbitrary_capabilities(
-        self, caps: list[str]
-    ) -> None:
+    def test_disabled_allows_arbitrary_capabilities(self, caps: list[str]) -> None:
         enforcer = SafeModeEnforcer(enabled=False)
         plugin = _FakePlugin(caps if caps else ["any"])
         assert enforcer.is_allowed(plugin) is True
@@ -196,8 +192,7 @@ class TestEnabledAnyDisallowed:
         message = str(exc_info.value)
         disallowed_in_caps = set(caps) - SafeModeEnforcer.ALLOWED_CAPABILITIES
         assert any(c in message for c in disallowed_in_caps), (
-            f"Error message must name a disallowed capability; "
-            f"got {message!r} for caps {caps!r}"
+            f"Error message must name a disallowed capability; got {message!r} for caps {caps!r}"
         )
 
 
@@ -216,14 +211,10 @@ class TestAuditContract:
             max_size=4,
             unique=True,
         ),
-        correlation=st.text(
-            alphabet=string.ascii_lowercase, min_size=1, max_size=12
-        ),
+        correlation=st.text(alphabet=string.ascii_lowercase, min_size=1, max_size=12),
     )
     @settings(max_examples=20, deadline=None)
-    def test_one_audit_entry_per_enforce_call(
-        self, caps: list[str], correlation: str
-    ) -> None:
+    def test_one_audit_entry_per_enforce_call(self, caps: list[str], correlation: str) -> None:
         audit = AuditLogger()
         enforcer = SafeModeEnforcer(enabled=True, audit_logger=audit)
         plugin = _FakePlugin(caps)
@@ -235,9 +226,7 @@ class TestAuditContract:
             allowed = False
 
         gov_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in audit.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 1
         entry = gov_entries[0]
@@ -283,9 +272,7 @@ class TestConcreteSequence:
                 enforcer.enforce(bad)
 
         gov_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.GOVERNANCE_DECISION
+            e for e in audit.entries if e.event_type == AuditEventType.GOVERNANCE_DECISION
         ]
         assert len(gov_entries) == 6
         allows = [e for e in gov_entries if e.success]

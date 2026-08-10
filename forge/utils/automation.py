@@ -44,7 +44,12 @@ class Suggestion:
 
 
 class AutomationEngine:
-    def __init__(self, engagement_id: int, queue: QueueCoordinator | None = None, scheduler: TaskScheduler | None = None):
+    def __init__(
+        self,
+        engagement_id: int,
+        queue: QueueCoordinator | None = None,
+        scheduler: TaskScheduler | None = None,
+    ):
         self.engagement_id = engagement_id
         self.cfg = ForgeConfig.load()
         self.db_path = self.cfg.engagement_db_path(str(engagement_id))
@@ -56,18 +61,18 @@ class AutomationEngine:
         """Subscribe to forge.events and trigger playbooks automatically based on events."""
         if not self.queue or not self.playbooks:
             return
-            
+
         while True:
             msg = self.queue.consume_topic("forge.events", timeout_seconds=1.0)
             if not msg:
                 time.sleep(0.1)
                 continue
-                
+
             payload = msg.payload
             event_type = payload.get("message")
             event_data = payload.get("payload", {})
             eng_id = payload.get("engagement_id", self.engagement_id)
-            
+
             if event_type == "task_done":
                 task_key = event_data.get("task_key", "")
                 self._handle_task_done(eng_id, task_key)
@@ -81,7 +86,10 @@ class AutomationEngine:
         parent_context: dict[str, Any] = {}
         with direct_connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute("SELECT payload FROM distributed_tasks WHERE engagement_id=? AND task_key=?", (engagement_id, task_key)).fetchone()
+            row = conn.execute(
+                "SELECT payload FROM distributed_tasks WHERE engagement_id=? AND task_key=?",
+                (engagement_id, task_key),
+            ).fetchone()
             if row and row["payload"]:
                 try:
                     payload_dict = json.loads(row["payload"])
@@ -91,17 +99,18 @@ class AutomationEngine:
                     if next_steps and self.scheduler:
                         next_step_data = next_steps[0]
                         remaining = next_steps[1:]
-                        
+
                         n_action = next_step_data["action"]
                         n_params = next_step_data["params"]
                         n_task_type = n_action.split(":")[-1]
                         if is_unsupported_scheduled_task_type(n_task_type):
                             return
                         n_target = n_params.get("target", n_params.get("domain", "default"))
-                        
+
                         import time
-                        n_task_key = f"{n_task_type}:{n_target}:{int(time.time()*1000)}"
-                        
+
+                        n_task_key = f"{n_task_type}:{n_target}:{int(time.time() * 1000)}"
+
                         n_payload = inherit_roe_scope_context(
                             payload_dict,
                             {"task_type": n_task_type, **n_params},
@@ -125,13 +134,12 @@ class AutomationEngine:
                                 }
                                 for step in remaining_supported
                             ]
-                            
+
                         from forge.distributed.scheduler import ScheduledTask
+
                         self.scheduler.schedule(
                             ScheduledTask(
-                                engagement_id=engagement_id,
-                                task_key=n_task_key,
-                                payload=n_payload
+                                engagement_id=engagement_id, task_key=n_task_key, payload=n_payload
                             )
                         )
                 except Exception:
@@ -160,6 +168,7 @@ class AutomationEngine:
         # should not be treated as cloud secrets. See BF-007 / BF-016.
         if task_key.startswith("recon:secret_scan"):
             import logging
+
             logging.getLogger(__name__).info(
                 "Cloud Leak playbook trigger skipped: cloud-secret model not yet implemented."
             )
@@ -239,9 +248,7 @@ class AutomationEngine:
 
     def _is_rce_candidate(self, row: sqlite3.Row) -> bool:
         text = " ".join(
-            str(row[key] or "")
-            for key in ("vuln_type", "title")
-            if key in row.keys()
+            str(row[key] or "") for key in ("vuln_type", "title") if key in row.keys()
         ).lower()
         return "rce" in text or "remote code execution" in text
 
@@ -252,36 +259,42 @@ class AutomationEngine:
         suggestions: list[Suggestion] = []
         with direct_connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            
+
             # 1. Recon: Ports and Crawls
             self._suggest_port_scans(conn, suggestions)
             self._suggest_crawls(conn, suggestions)
-            
+
             # 2. Intelligence: Credential Validation & OSINT
             self._suggest_credential_validation(conn, suggestions)
             self._suggest_osint_enrichment(conn, suggestions)
-            
+
             # 3. Vulnerability: Scanning & Correlation
             self._suggest_vuln_scans(conn, suggestions)
             self._suggest_correlation(conn, suggestions)
-            
+
             # 4. Post-Exploit: Lateral Movement & Exfil
             self._suggest_lateral_movement(conn, suggestions)
-            
+
             # 5. Reporting
             self._suggest_reporting(conn, suggestions)
 
         return sorted(suggestions, key=lambda x: x.priority, reverse=True)
 
-    def _suggest_credential_validation(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
+    def _suggest_credential_validation(
+        self, conn: sqlite3.Connection, suggestions: list[Suggestion]
+    ) -> None:
         # Live credential use requires an explicit scoped validation model.
         return
 
-    def _suggest_osint_enrichment(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
+    def _suggest_osint_enrichment(
+        self, conn: sqlite3.Connection, suggestions: list[Suggestion]
+    ) -> None:
         # No supported web automation execute action exists for email OSINT yet.
         return
 
-    def _suggest_lateral_movement(self, conn: sqlite3.Connection, suggestions: list[Suggestion]) -> None:
+    def _suggest_lateral_movement(
+        self, conn: sqlite3.Connection, suggestions: list[Suggestion]
+    ) -> None:
         # The locked FORGE goal is authorized ASM, not post-exploitation.
         return
 

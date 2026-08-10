@@ -5,6 +5,7 @@ Unit tests for mobile_config_parse.py (Module 4-F).
 All tests are fully offline (zipfile fixture data, stdlib only).
 No network calls at any point.
 """
+
 from __future__ import annotations
 
 import base64
@@ -29,8 +30,10 @@ from forge.phase4.mobile_config_parse import FirebaseExtractor, FirebaseProject
 # APK fixture builder helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _make_apk(tmp_path: Path, google_services: dict | None = None,
-              strings_xml: str | None = None) -> Path:
+
+def _make_apk(
+    tmp_path: Path, google_services: dict | None = None, strings_xml: str | None = None
+) -> Path:
     apk = tmp_path / "test.apk"
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -42,8 +45,9 @@ def _make_apk(tmp_path: Path, google_services: dict | None = None,
     return apk
 
 
-def _make_ipa(tmp_path: Path, plist_data: dict | None = None,
-              other_plist: str | None = None) -> Path:
+def _make_ipa(
+    tmp_path: Path, plist_data: dict | None = None, other_plist: str | None = None
+) -> Path:
     ipa = tmp_path / "test.ipa"
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -96,10 +100,10 @@ _GOOGLE_SERVICES = {
 }
 
 _GOOGLESERVICE_PLIST = {
-    "PROJECT_ID":    "myapp-ios-project",
-    "API_KEY":       "AIzaSyDEADBEEF_IOS_PLACEHOLDER_KEY",
-    "DATABASE_URL":  "https://myapp-ios-project-default-rtdb.firebaseio.com",
-    "BUNDLE_ID":     "com.example.myapp",
+    "PROJECT_ID": "myapp-ios-project",
+    "API_KEY": "AIzaSyDEADBEEF_IOS_PLACEHOLDER_KEY",
+    "DATABASE_URL": "https://myapp-ios-project-default-rtdb.firebaseio.com",
+    "BUNDLE_ID": "com.example.myapp",
     "GCX_SENDER_ID": "987654321",
 }
 
@@ -111,9 +115,13 @@ _STRINGS_XML_WITH_RTDB = """<?xml version="1.0" encoding="utf-8"?>
 
 
 def _supabase_anon_key_for_ref(project_ref: str) -> str:
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"iss": "supabase", "ref": project_ref, "role": "anon"}).encode("utf-8")
-    ).decode("ascii").rstrip("=")
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps({"iss": "supabase", "ref": project_ref, "role": "anon"}).encode("utf-8")
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
     return f"eyJhbGciOiJIUzI1NiJ9.{payload}.signature"
 
 
@@ -127,7 +135,8 @@ def tmp_db(tmp_path: Path) -> Path:
     db = tmp_path / "eng.db"
     con = sqlite3.connect(db)
     FirebaseExtractor._ensure_schema(con)
-    con.commit(); con.close()
+    con.commit()
+    con.close()
     return db
 
 
@@ -135,8 +144,8 @@ def tmp_db(tmp_path: Path) -> Path:
 # APK extraction
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestAPKExtraction:
 
+class TestAPKExtraction:
     def test_extracts_project_id(self, extractor: FirebaseExtractor, tmp_path: Path):
         apk = _make_apk(tmp_path, google_services=_GOOGLE_SERVICES)
         projects = extractor.extract_apk(apk)
@@ -289,11 +298,11 @@ class TestAPKExtraction:
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr(
                 "res/values/strings.xml",
-                '<resources><string>https://first-fallback-default-rtdb.firebaseio.com</string></resources>',
+                "<resources><string>https://first-fallback-default-rtdb.firebaseio.com</string></resources>",
             )
             zf.writestr(
                 "split/res/values/strings.xml",
-                '<resources><string>https://second-fallback-default-rtdb.firebaseio.com</string></resources>',
+                "<resources><string>https://second-fallback-default-rtdb.firebaseio.com</string></resources>",
             )
         apk.write_bytes(buf.getvalue())
 
@@ -358,8 +367,8 @@ class TestAPKExtraction:
 # IPA extraction
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestIPAExtraction:
 
+class TestIPAExtraction:
     def test_extracts_project_id(self, extractor: FirebaseExtractor, tmp_path: Path):
         ipa = _make_ipa(tmp_path, plist_data=_GOOGLESERVICE_PLIST)
         projects = extractor.extract_ipa(ipa)
@@ -392,9 +401,9 @@ class TestIPAExtraction:
     def test_fallback_plist_rtdb_regex(self, extractor: FirebaseExtractor, tmp_path: Path):
         plist_xml = (
             '<?xml version="1.0"?>'
-            '<plist><dict><key>DB</key>'
-            '<string>https://ios-fallback-default-rtdb.firebaseio.com</string>'
-            '</dict></plist>'
+            "<plist><dict><key>DB</key>"
+            "<string>https://ios-fallback-default-rtdb.firebaseio.com</string>"
+            "</dict></plist>"
         )
         ipa = _make_ipa(tmp_path, other_plist=plist_xml)
         projects = extractor.extract_ipa(ipa)
@@ -467,11 +476,11 @@ class TestIPAExtraction:
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr(
                 "Payload/First.app/Settings.plist",
-                '<plist><string>https://first-ios-default-rtdb.firebaseio.com</string></plist>',
+                "<plist><string>https://first-ios-default-rtdb.firebaseio.com</string></plist>",
             )
             zf.writestr(
                 "Payload/Second.app/Settings.plist",
-                '<plist><string>https://second-ios-default-rtdb.firebaseio.com</string></plist>',
+                "<plist><string>https://second-ios-default-rtdb.firebaseio.com</string></plist>",
             )
         ipa.write_bytes(buf.getvalue())
 
@@ -485,29 +494,29 @@ class TestIPAExtraction:
 # Storage
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestStorage:
 
+class TestStorage:
     def test_store_writes_cloud_asset(
         self, extractor: FirebaseExtractor, tmp_db: Path, tmp_path: Path
     ):
         projects = [
             FirebaseProject(
-                project_id="test-proj", api_key_enc=None, rtdb_url=None,
-                bundle_id=None, source_file="app.apk", extract_path="google-services.json",
+                project_id="test-proj",
+                api_key_enc=None,
+                rtdb_url=None,
+                bundle_id=None,
+                source_file="app.apk",
+                extract_path="google-services.json",
             )
         ]
         count = extractor.store(projects, tmp_db, engagement_id=1)
         assert count == 1
         con = sqlite3.connect(tmp_db)
-        row = con.execute(
-            "SELECT * FROM cloud_assets WHERE identifier='test-proj'"
-        ).fetchone()
+        row = con.execute("SELECT * FROM cloud_assets WHERE identifier='test-proj'").fetchone()
         con.close()
         assert row is not None
 
-    def test_store_deduplicates(
-        self, extractor: FirebaseExtractor, tmp_db: Path
-    ):
+    def test_store_deduplicates(self, extractor: FirebaseExtractor, tmp_db: Path):
         p = FirebaseProject("dup-proj", None, None, None, "app.apk", "g.json")
         extractor.store([p], tmp_db, 1)
         extractor.store([p], tmp_db, 1)
@@ -577,14 +586,15 @@ class TestStorage:
             con.close()
         assert rows == [("batch-proj-a",), ("batch-proj-b",)]
 
-    def test_emit_json_hides_plaintext_key(
-        self, extractor: FirebaseExtractor, tmp_path: Path
-    ):
+    def test_emit_json_hides_plaintext_key(self, extractor: FirebaseExtractor, tmp_path: Path):
         projects = [
             FirebaseProject(
-                project_id="my-proj", api_key_enc="ENCRYPTED_VALUE",
-                rtdb_url=None, bundle_id=None,
-                source_file="app.apk", extract_path="g.json",
+                project_id="my-proj",
+                api_key_enc="ENCRYPTED_VALUE",
+                rtdb_url=None,
+                bundle_id=None,
+                source_file="app.apk",
+                extract_path="g.json",
             )
         ]
         out = tmp_path / "output.json"
@@ -593,12 +603,8 @@ class TestStorage:
         assert data[0]["api_key"] == "<age-encrypted>"
         assert "ENCRYPTED_VALUE" not in out.read_text()
 
-    def test_emit_json_null_key_when_none(
-        self, extractor: FirebaseExtractor, tmp_path: Path
-    ):
-        projects = [
-            FirebaseProject("p", None, None, None, "a.apk", "g.json")
-        ]
+    def test_emit_json_null_key_when_none(self, extractor: FirebaseExtractor, tmp_path: Path):
+        projects = [FirebaseProject("p", None, None, None, "a.apk", "g.json")]
         out = tmp_path / "out.json"
         extractor.emit_json(projects, out)
         data = json.loads(out.read_text())
@@ -671,7 +677,6 @@ class TestStorage:
 
 
 class TestSupabaseExtraction:
-
     def test_extract_supabase_apk(self, extractor: FirebaseExtractor, tmp_path: Path):
         apk = tmp_path / "supabase.apk"
         buf = io.BytesIO()
@@ -706,9 +711,9 @@ class TestSupabaseExtraction:
     def test_extract_supabase_key_only_text_uses_jwt_ref(self, extractor: FirebaseExtractor):
         configs = extractor._extract_supabase_from_text(  # noqa: SLF001
             (
-                'export const anon = '
+                "export const anon = "
                 '"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
-                'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtleW9ubHktcHJvaiIsInJvbGUiOiJhbm9uIn0.'
+                "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtleW9ubHktcHJvaiIsInJvbGUiOiJhbm9uIn0."
                 'signature321";'
             ),
             "artifact.js",
@@ -742,10 +747,10 @@ class TestSupabaseExtraction:
         configs = extractor._extract_supabase_from_text(  # noqa: SLF001
             (
                 'const first = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
-                'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpcnN0LXByb2oiLCJyb2xlIjoiYW5vbiJ9.'
+                "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpcnN0LXByb2oiLCJyb2xlIjoiYW5vbiJ9."
                 'signature111";\n'
                 'const second = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
-                'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY29uZC1wcm9qIiwicm9sZSI6ImFub24ifQ.'
+                "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlY29uZC1wcm9qIiwicm9sZSI6ImFub24ifQ."
                 'signature222";'
             ),
             "artifact.js",
@@ -846,14 +851,16 @@ class TestSupabaseExtraction:
             "splits/second.apk!assets/second.js",
         ]
 
-    def test_extract_supabase_archive_style_android_bundle(self, extractor: FirebaseExtractor, tmp_path: Path):
+    def test_extract_supabase_archive_style_android_bundle(
+        self, extractor: FirebaseExtractor, tmp_path: Path
+    ):
         bundle = _make_archive_style_android_bundle(
             tmp_path,
             "test.apkm",
             supabase_text=(
                 'export const url = "https://archive-proj.supabase.co";\n'
                 'export const anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
-                'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyY2hpdmUtcHJvaiIsInJvbGUiOiJhbm9uIn0.'
+                "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyY2hpdmUtcHJvaiIsInJvbGUiOiJhbm9uIn0."
                 'signature123";\n'
             ),
         )
@@ -866,7 +873,6 @@ class TestSupabaseExtraction:
 
 
 class TestWebConfigExtraction:
-
     def test_extract_web_config(self, extractor: FirebaseExtractor):
         html = """
         <html><script>
@@ -974,7 +980,7 @@ def test_cloud_firebase_extract_cli_persists_supabase_from_archive_style_bundle(
         supabase_text=(
             'export const url = "https://cli-archive.supabase.co";\n'
             'export const anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
-            'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsaS1hcmNoaXZlIiwicm9sZSI6ImFub24ifQ.'
+            "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsaS1hcmNoaXZlIiwicm9sZSI6ImFub24ifQ."
             'signature123";\n'
         ),
     )

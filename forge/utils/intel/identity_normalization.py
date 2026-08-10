@@ -50,18 +50,33 @@ class NormalizedIdentity:
 
 
 # Providers that collapse dotted-name (Gmail-style).
-_DOT_NORMALIZE_PROVIDERS: frozenset[str] = frozenset({
-    "gmail.com", "googlemail.com",
-})
+_DOT_NORMALIZE_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "gmail.com",
+        "googlemail.com",
+    }
+)
 
 # Common disposable email domains. Kept short — comprehensive lists
 # live in phase0 KB fetchers.
-_DISPOSABLE_DOMAINS: frozenset[str] = frozenset({
-    "mailinator.com", "guerrillamail.com", "10minutemail.com",
-    "tempmail.com", "temp-mail.org", "throwawaymail.com",
-    "yopmail.com", "trashmail.com", "getnada.com", "sharklasers.com",
-    "mailnesia.com", "maildrop.cc", "mytemp.email", "fakeinbox.com",
-})
+_DISPOSABLE_DOMAINS: frozenset[str] = frozenset(
+    {
+        "mailinator.com",
+        "guerrillamail.com",
+        "10minutemail.com",
+        "tempmail.com",
+        "temp-mail.org",
+        "throwawaymail.com",
+        "yopmail.com",
+        "trashmail.com",
+        "getnada.com",
+        "sharklasers.com",
+        "mailnesia.com",
+        "maildrop.cc",
+        "mytemp.email",
+        "fakeinbox.com",
+    }
+)
 
 
 class EmailNormalizer:
@@ -125,10 +140,10 @@ _HOMOGRAPH_MAP: dict[str, str] = {
     "\u03b1": "a",  # Greek small alpha
     # Digit look-alikes we DO NOT normalize (they carry meaning) — but
     # zero-width chars we DO strip:
-    "\u200b": "",   # ZWSP
-    "\u200c": "",   # ZWNJ
-    "\u200d": "",   # ZWJ
-    "\ufeff": "",   # BOM
+    "\u200b": "",  # ZWSP
+    "\u200c": "",  # ZWNJ
+    "\u200d": "",  # ZWJ
+    "\ufeff": "",  # BOM
 }
 
 
@@ -168,9 +183,7 @@ class UsernameNormalizer:
 # ---------------------------------------------------------------------------
 
 
-_PHONE_EXT_RE = re.compile(
-    r"(?i)\s*(?:x|ext\.?|extension)\s*[:# ]?\s*(\d{1,6})\s*$"
-)
+_PHONE_EXT_RE = re.compile(r"(?i)\s*(?:x|ext\.?|extension)\s*[:# ]?\s*(\d{1,6})\s*$")
 
 
 class PhoneNormalizer:
@@ -204,9 +217,7 @@ class PhoneNormalizer:
 
             parsed = phonenumbers.parse(digits_only, None)
             if phonenumbers.is_valid_number(parsed):
-                canonical = phonenumbers.format_number(
-                    parsed, phonenumbers.PhoneNumberFormat.E164
-                )
+                canonical = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
                 metadata["country_code"] = str(parsed.country_code or "")
                 metadata["national_number"] = str(parsed.national_number or "")
             else:
@@ -234,20 +245,64 @@ class PhoneNormalizer:
 # French, Spanish, Portuguese, Italian, Dutch, Nordic, SG, HK, JP, IN.
 _LEGAL_SUFFIXES: tuple[str, ...] = (
     # English / US
-    "inc", "incorporated", "corp", "corporation", "co", "company", "llc",
-    "ltd", "limited", "plc", "l.p.", "lp", "l.l.c.",
+    "inc",
+    "incorporated",
+    "corp",
+    "corporation",
+    "co",
+    "company",
+    "llc",
+    "ltd",
+    "limited",
+    "plc",
+    "l.p.",
+    "lp",
+    "l.l.c.",
     # Germanic
-    "gmbh", "ag", "kg", "ohg", "ug", "eg", "kgaa",
+    "gmbh",
+    "ag",
+    "kg",
+    "ohg",
+    "ug",
+    "eg",
+    "kgaa",
     # French / Latin
-    "sa", "sas", "sarl", "eurl", "snc", "scea", "scp",
+    "sa",
+    "sas",
+    "sarl",
+    "eurl",
+    "snc",
+    "scea",
+    "scp",
     # Spanish / Portuguese / Italian
-    "s.a.", "s.l.", "s.r.l.", "srl", "lda", "sarl", "sccl",
+    "s.a.",
+    "s.l.",
+    "s.r.l.",
+    "srl",
+    "lda",
+    "sarl",
+    "sccl",
     # Dutch / Nordic
-    "bv", "nv", "as", "ab", "aps", "oy", "hf",
+    "bv",
+    "nv",
+    "as",
+    "ab",
+    "aps",
+    "oy",
+    "hf",
     # Asia
-    "pte", "pte.", "pvt", "pvt.", "kk", "kabushiki", "kabushiki kaisha",
+    "pte",
+    "pte.",
+    "pvt",
+    "pvt.",
+    "kk",
+    "kabushiki",
+    "kabushiki kaisha",
     # Chinese / HK
-    "ltd.", "co.", "hldg", "holdings",
+    "ltd.",
+    "co.",
+    "hldg",
+    "holdings",
 )
 
 
@@ -295,11 +350,38 @@ class CompanyNormalizer:
 # ---------------------------------------------------------------------------
 
 
-_HONORIFICS: frozenset[str] = frozenset({
-    "mr", "mrs", "ms", "mx", "dr", "prof", "sir", "dame", "lord", "lady",
-    "hon", "rev", "fr", "sr", "jr", "phd", "md", "esq", "cpa",
-    "ing", "ir", "mba", "ma", "ba", "mrcp", "mrcs", "frcp", "frcs",
-})
+_HONORIFICS: frozenset[str] = frozenset(
+    {
+        "mr",
+        "mrs",
+        "ms",
+        "mx",
+        "dr",
+        "prof",
+        "sir",
+        "dame",
+        "lord",
+        "lady",
+        "hon",
+        "rev",
+        "fr",
+        "sr",
+        "jr",
+        "phd",
+        "md",
+        "esq",
+        "cpa",
+        "ing",
+        "ir",
+        "mba",
+        "ma",
+        "ba",
+        "mrcp",
+        "mrcs",
+        "frcp",
+        "frcs",
+    }
+)
 
 
 class PersonNameNormalizer:

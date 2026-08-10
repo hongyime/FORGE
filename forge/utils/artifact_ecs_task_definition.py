@@ -86,7 +86,9 @@ def ecs_task_definition_candidates(document: Any) -> list[str]:
             if isinstance(secret_entry, Mapping):
                 _append_secret_ref(_ref(secret_entry, "valueFrom", "value_from"), append)
         repo_credentials = _child(container, "repositoryCredentials", "repository_credentials")
-        _append_secret_ref(_ref(repo_credentials, "credentialsParameter", "credentials_parameter"), append)
+        _append_secret_ref(
+            _ref(repo_credentials, "credentialsParameter", "credentials_parameter"), append
+        )
     return candidates
 
 
@@ -101,7 +103,11 @@ def _task_definition_mapping(document: Any) -> Mapping[str, Any]:
 
 
 def _container_definitions(task: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    return [entry for entry in _list(task, "containerDefinitions", "container_definitions") if isinstance(entry, Mapping)]
+    return [
+        entry
+        for entry in _list(task, "containerDefinitions", "container_definitions")
+        if isinstance(entry, Mapping)
+    ]
 
 
 def _append_secret_ref(value: str, append: Any) -> None:
@@ -131,7 +137,11 @@ def _child(mapping: Mapping[str, Any], *keys: str) -> Mapping[str, Any]:
 def _list(mapping: Mapping[str, Any], *keys: str) -> list[Any]:
     wanted = {_fingerprint(key) for key in keys}
     for key, value in mapping.items():
-        if _fingerprint(key) in wanted and isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        if (
+            _fingerprint(key) in wanted
+            and isinstance(value, Sequence)
+            and not isinstance(value, (str, bytes, bytearray))
+        ):
             return list(value)
     return []
 

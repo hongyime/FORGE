@@ -49,8 +49,7 @@ def test_api_spec_mapping_children_use_bounded_workers_and_preserve_order(
 
     raw_values = processor._api_spec_document_candidate_values(document)
     result = [
-        ArtifactQueueProcessor._api_spec_url_candidate_entry(raw_value)
-        for raw_value in raw_values
+        ArtifactQueueProcessor._api_spec_url_candidate_entry(raw_value) for raw_value in raw_values
     ]
 
     assert peak == 4
@@ -101,8 +100,7 @@ def test_api_spec_list_items_use_bounded_workers_and_preserve_order(
 
     raw_values = processor._api_spec_document_candidate_values(document)
     result = [
-        ArtifactQueueProcessor._api_spec_url_candidate_entry(raw_value)
-        for raw_value in raw_values
+        ArtifactQueueProcessor._api_spec_url_candidate_entry(raw_value) for raw_value in raw_values
     ]
 
     assert peak == 4

@@ -78,4 +78,6 @@ def _resolve_url(value: object, *, base_url: str) -> str:
     except ValueError:
         netloc = host
     path = unquote(parsed_resolved.path or "/")
-    return strip_sensitive_url_query(parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl())
+    return strip_sensitive_url_query(
+        parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl()
+    )

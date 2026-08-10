@@ -15,6 +15,7 @@ Pre-flight guard:
   Phase 5 modules import this package at init time; the check prevents silent
   failures when operators skip `forge kb sync` before engaging.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -31,18 +31,16 @@ def test_static_site_helper_recognizes_framework_build_artifacts() -> None:
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
         "dist/assets/index-8f3ea4bd.js"
     )
-    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
-        "service-worker.js"
-    )
-    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
-        "favicon-32x32.png"
-    )
+    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("service-worker.js")
+    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("favicon-32x32.png")
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("vercel.json")
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("netlify.toml")
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("render.yaml")
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("fly.toml")
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("railway.toml")
-    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("staticwebapp.config.json")
+    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
+        "staticwebapp.config.json"
+    )
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("apphosting.yaml")
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("heroku.yml")
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name("heroku-app.json")
@@ -106,10 +104,18 @@ def test_static_site_helper_recognizes_framework_build_artifacts() -> None:
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
         ".well-known/uma2-configuration"
     )
-    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(".well-known/jwks.json")
-    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(".well-known/webfinger")
-    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(".well-known/mta-sts.txt")
-    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(".well-known/did.json")
+    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
+        ".well-known/jwks.json"
+    )
+    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
+        ".well-known/webfinger"
+    )
+    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
+        ".well-known/mta-sts.txt"
+    )
+    assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
+        ".well-known/did.json"
+    )
     assert cloud_validate.BaseCloudValidator._is_common_static_site_object_name(
         ".well-known/matrix/server"
     )
@@ -197,29 +203,32 @@ def test_repository_metadata_helper_downgrades_only_metadata_names() -> None:
     assert not cloud_validate.BaseCloudValidator._is_common_repository_metadata_object_name(
         "secrets/prod-values.yaml"
     )
-    assert cloud_validate.BaseCloudValidator._meaningful_object_names(
-        [
-            "archive/",
-            "README.md",
-            "package.json",
-            "services/api/pyproject.toml",
-            "requirements-dev.txt",
-            "runtime/.nvmrc",
-            "services/api/.python-version",
-            ".tool-versions",
-            "frontend/tsconfig.app.json",
-            "frontend/vite.config.ts",
-            "frontend/tailwind.config.js",
-            "frontend/postcss.config.cjs",
-            "frontend/webpack.config.mjs",
-            "deploy/chart/Chart.yaml",
-            "deploy/chart/Chart.lock",
-            "deploy/kustomization.yaml",
-            "deploy/helmfile.yaml",
-            "deploy/skaffold.yml",
-            "deploy/Kptfile",
-        ]
-    ) == []
+    assert (
+        cloud_validate.BaseCloudValidator._meaningful_object_names(
+            [
+                "archive/",
+                "README.md",
+                "package.json",
+                "services/api/pyproject.toml",
+                "requirements-dev.txt",
+                "runtime/.nvmrc",
+                "services/api/.python-version",
+                ".tool-versions",
+                "frontend/tsconfig.app.json",
+                "frontend/vite.config.ts",
+                "frontend/tailwind.config.js",
+                "frontend/postcss.config.cjs",
+                "frontend/webpack.config.mjs",
+                "deploy/chart/Chart.yaml",
+                "deploy/chart/Chart.lock",
+                "deploy/kustomization.yaml",
+                "deploy/helmfile.yaml",
+                "deploy/skaffold.yml",
+                "deploy/Kptfile",
+            ]
+        )
+        == []
+    )
     assert cloud_validate.BaseCloudValidator._meaningful_object_names(
         ["README.md", "package.json", "exports/customer-data.csv"]
     ) == ["exports/customer-data.csv"]
@@ -244,15 +253,18 @@ def test_filesystem_metadata_helper_downgrades_only_metadata_names() -> None:
     assert cloud_validate.BaseCloudValidator._is_common_filesystem_metadata_object_name(
         "__MACOSX/._report.pdf"
     )
-    assert cloud_validate.BaseCloudValidator._meaningful_object_names(
-        [
-            "archive/",
-            "exports/.DS_Store",
-            "media/Thumbs.db",
-            "desktop.ini",
-            "__MACOSX/._report.pdf",
-        ]
-    ) == []
+    assert (
+        cloud_validate.BaseCloudValidator._meaningful_object_names(
+            [
+                "archive/",
+                "exports/.DS_Store",
+                "media/Thumbs.db",
+                "desktop.ini",
+                "__MACOSX/._report.pdf",
+            ]
+        )
+        == []
+    )
     assert cloud_validate.BaseCloudValidator._meaningful_object_names(
         ["Thumbs.db", "reports/final.pdf"]
     ) == ["reports/final.pdf"]
@@ -292,16 +304,19 @@ def test_api_documentation_helper_downgrades_only_documentation_names() -> None:
     assert not cloud_validate.BaseCloudValidator._is_common_api_documentation_object_name(
         "api-docs/customer-records.csv"
     )
-    assert cloud_validate.BaseCloudValidator._meaningful_object_names(
-        [
-            "openapi.json",
-            "docs/openapi/swagger.yaml",
-            "docs/graphql/schema.graphql",
-            "soap/service.wsdl",
-            "swagger-ui/swagger-ui-bundle.js",
-            "api-docs/acme.postman_collection.json",
-        ]
-    ) == []
+    assert (
+        cloud_validate.BaseCloudValidator._meaningful_object_names(
+            [
+                "openapi.json",
+                "docs/openapi/swagger.yaml",
+                "docs/graphql/schema.graphql",
+                "soap/service.wsdl",
+                "swagger-ui/swagger-ui-bundle.js",
+                "api-docs/acme.postman_collection.json",
+            ]
+        )
+        == []
+    )
     assert cloud_validate.BaseCloudValidator._meaningful_object_names(
         ["openapi.json", "exports/customer-records.csv"]
     ) == ["exports/customer-records.csv"]

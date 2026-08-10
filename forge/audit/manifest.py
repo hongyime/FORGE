@@ -161,7 +161,9 @@ def build_run_audit_manifest(
 ) -> AuditManifestRecord:
     """Build but do not persist a deterministic manifest for one engagement run."""
     previous_hash = previous_manifest_hash or _latest_manifest_hash(
-        conn, engagement_id=engagement_id, exclude_run_id=run_id,
+        conn,
+        engagement_id=engagement_id,
+        exclude_run_id=run_id,
     )
     payload = {
         "manifest_version": 1,
@@ -609,19 +611,23 @@ def _artifact_digests(
             continue
         size = path.stat().st_size
         if size > _MAX_ARTIFACT_BYTES:
-            digests.append({
-                "path": path.name,
-                "size": size,
-                "sha256": None,
-                "skipped": "too_large",
-            })
+            digests.append(
+                {
+                    "path": path.name,
+                    "size": size,
+                    "sha256": None,
+                    "skipped": "too_large",
+                }
+            )
             continue
         data = path.read_bytes()
-        digests.append({
-            "path": path.name,
-            "size": len(data),
-            "sha256": hashlib.sha256(data).hexdigest(),
-        })
+        digests.append(
+            {
+                "path": path.name,
+                "size": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
     return digests
 
 

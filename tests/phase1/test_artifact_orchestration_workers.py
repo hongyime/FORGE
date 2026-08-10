@@ -89,10 +89,13 @@ def test_orchestration_routing_rules_use_bounded_workers_and_preserve_order(
         "http://first.acme.example",
         "http://second.acme.example",
     ]
-    assert processor._orchestration_structured_payload_text(
-        "metadata:\n  labels:\n    traefik.http.routers.api.rule: Host(`ignored.acme.example`)",
-        source_hint="notes.yaml",
-    ) == ""
+    assert (
+        processor._orchestration_structured_payload_text(
+            "metadata:\n  labels:\n    traefik.http.routers.api.rule: Host(`ignored.acme.example`)",
+            source_hint="notes.yaml",
+        )
+        == ""
+    )
 
 
 def test_packaged_helm_chart_values_member_feeds_recursive_discovery(tmp_path) -> None:

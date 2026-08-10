@@ -18,6 +18,7 @@ Test categories:
   9. CyberChef recipe   — recipe file written, contains key, valid JSON
  10. Channel failure    — partial upload failure returns partial result
 """
+
 from __future__ import annotations
 
 import json
@@ -43,6 +44,7 @@ from forge.utils.post.collectors.filesystem import FilesystemCollector
 
 # ── 1. Full pipeline ──────────────────────────────────────────────────────────
 
+
 def test_full_collect_upload_monitor_pipeline(int_eng_db, tmp_path, patch_confirm_approve):
     # Seed some test files
     data_dir = tmp_path / "data"
@@ -58,9 +60,13 @@ def test_full_collect_upload_monitor_pipeline(int_eng_db, tmp_path, patch_confir
     mock_channel.send.return_value = True
 
     exfil = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
-        channel=mock_channel, session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        channel=mock_channel,
+        session_key=AES_KEY_HEX,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
         dry_run=False,
         roe_id="ROE-TEST",
     )
@@ -68,7 +74,8 @@ def test_full_collect_upload_monitor_pipeline(int_eng_db, tmp_path, patch_confir
     with mock.patch("time.sleep"):
         hashes = exfil.run(
             collector_type="filesystem",
-            root=data_dir, patterns=["*.docx", "*.txt"],
+            root=data_dir,
+            patterns=["*.docx", "*.txt"],
         )
 
     # Both files collected
@@ -79,7 +86,7 @@ def test_full_collect_upload_monitor_pipeline(int_eng_db, tmp_path, patch_confir
     mock_channel.send.assert_called()
 
     # ExfilMonitor registered
-    con  = sqlite3.connect(int_eng_db)
+    con = sqlite3.connect(int_eng_db)
     rows = con.execute("SELECT sha256 FROM exfil_monitor_targets").fetchall()
     con.close()
     registered = {r[0] for r in rows}
@@ -87,6 +94,7 @@ def test_full_collect_upload_monitor_pipeline(int_eng_db, tmp_path, patch_confir
 
 
 # ── 2. Dry-run mode ───────────────────────────────────────────────────────────
+
 
 def test_dry_run_no_upload_no_monitor(int_eng_db, tmp_path, patch_confirm_approve):
     data_dir = tmp_path / "data"
@@ -98,23 +106,28 @@ def test_dry_run_no_upload_no_monitor(int_eng_db, tmp_path, patch_confirm_approv
     mock_channel = mock.MagicMock()
 
     exfil = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
-        channel=mock_channel, session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        channel=mock_channel,
+        session_key=AES_KEY_HEX,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
         dry_run=True,
     )
 
     with mock.patch("time.sleep"):
         hashes = exfil.run(
             collector_type="filesystem",
-            root=data_dir, patterns=["*.docx"],
+            root=data_dir,
+            patterns=["*.docx"],
         )
 
     # Dry run: no upload
     mock_channel.send.assert_not_called()
 
     # Dry run: no ExfilMonitor registration
-    con  = sqlite3.connect(int_eng_db)
+    con = sqlite3.connect(int_eng_db)
     rows = con.execute("SELECT * FROM exfil_monitor_targets").fetchall()
     con.close()
     assert len(rows) == 0
@@ -122,7 +135,10 @@ def test_dry_run_no_upload_no_monitor(int_eng_db, tmp_path, patch_confirm_approv
 
 # ── 3. Multiple collector types in sequence ───────────────────────────────────
 
-def test_filesystem_and_env_vars_collectors(int_eng_db, tmp_path, patch_confirm_approve, monkeypatch):
+
+def test_filesystem_and_env_vars_collectors(
+    int_eng_db, tmp_path, patch_confirm_approve, monkeypatch
+):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     (data_dir / "config.txt").write_bytes(b"config data")
@@ -136,9 +152,14 @@ def test_filesystem_and_env_vars_collectors(int_eng_db, tmp_path, patch_confirm_
 
     # Run filesystem collector
     exfil1 = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
-        channel=mock_channel, session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0, dry_run=False,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        channel=mock_channel,
+        session_key=AES_KEY_HEX,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
+        dry_run=False,
         roe_id="ROE-TEST",
     )
     with mock.patch("time.sleep"):
@@ -146,14 +167,19 @@ def test_filesystem_and_env_vars_collectors(int_eng_db, tmp_path, patch_confirm_
 
     # Run env_vars collector
     exfil2 = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
-        channel=mock_channel, session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0, dry_run=False,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        channel=mock_channel,
+        session_key=AES_KEY_HEX,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
+        dry_run=False,
         roe_id="ROE-TEST",
     )
     h2 = exfil2.run("env_vars")
 
-    con  = sqlite3.connect(int_eng_db)
+    con = sqlite3.connect(int_eng_db)
     rows = con.execute("SELECT sha256 FROM exfil_monitor_targets").fetchall()
     con.close()
     all_registered = {r[0] for r in rows}
@@ -163,6 +189,7 @@ def test_filesystem_and_env_vars_collectors(int_eng_db, tmp_path, patch_confirm_
 
 # ── 4. ThrottledUploader rate respected ──────────────────────────────────────
 
+
 def test_throttled_uploader_paces_chunks():
     mock_channel = mock.MagicMock()
     mock_channel.send.return_value = True
@@ -170,7 +197,7 @@ def test_throttled_uploader_paces_chunks():
 
     uploader = ThrottledUploader(
         mock_channel,
-        max_bytes_per_sec=1024,   # 1 KB/s — forces meaningful sleep
+        max_bytes_per_sec=1024,  # 1 KB/s — forces meaningful sleep
         chunk_size=512,
     )
     with mock.patch("time.sleep", side_effect=sleep_calls.append):
@@ -182,6 +209,7 @@ def test_throttled_uploader_paces_chunks():
 
 # ── 5. Time window blocks full pipeline ──────────────────────────────────────
 
+
 def test_exfiltrator_blocks_outside_window(int_eng_db, tmp_path, patch_confirm_approve):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -190,11 +218,13 @@ def test_exfiltrator_blocks_outside_window(int_eng_db, tmp_path, patch_confirm_a
     staging.mkdir()
 
     exfil = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
         channel=mock.MagicMock(),
         session_key=AES_KEY_HEX,
         window=(dtime(9, 0), dtime(17, 0)),
-        staging_dir=staging, stagger=0.0,
+        staging_dir=staging,
+        stagger=0.0,
         roe_id="ROE-TEST",
     )
     with mock.patch("forge.utils.post.transfer_util.datetime") as mock_dt:
@@ -204,6 +234,7 @@ def test_exfiltrator_blocks_outside_window(int_eng_db, tmp_path, patch_confirm_a
 
 
 # ── 6. Staging hygiene ────────────────────────────────────────────────────────
+
 
 def test_no_new_top_level_dirs_created(int_eng_db, tmp_path, patch_confirm_approve):
     """Exfiltrator must only write to pre-existing staging directories."""
@@ -217,10 +248,14 @@ def test_no_new_top_level_dirs_created(int_eng_db, tmp_path, patch_confirm_appro
     before = set(tmp_path.iterdir())
 
     exfil = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
         channel=mock.MagicMock(send=mock.MagicMock(return_value=True)),
         session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0, dry_run=False,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
+        dry_run=False,
         roe_id="ROE-TEST",
     )
     with mock.patch("time.sleep"):
@@ -228,12 +263,11 @@ def test_no_new_top_level_dirs_created(int_eng_db, tmp_path, patch_confirm_appro
 
     after = set(tmp_path.iterdir())
     new_dirs = {p for p in (after - before) if p.is_dir()}
-    assert len(new_dirs) == 0, (
-        f"Unexpected new top-level directories: {new_dirs}"
-    )
+    assert len(new_dirs) == 0, f"Unexpected new top-level directories: {new_dirs}"
 
 
 # ── 7. Content isolation from DB ─────────────────────────────────────────────
+
 
 def test_file_content_not_in_db_after_collection(int_eng_db, tmp_path, patch_confirm_approve):
     secret_bytes = b"CLASSIFIED_SECRET_PAYLOAD_XYZ"
@@ -244,16 +278,20 @@ def test_file_content_not_in_db_after_collection(int_eng_db, tmp_path, patch_con
     staging.mkdir()
 
     exfil = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
         channel=mock.MagicMock(send=mock.MagicMock(return_value=True)),
         session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0, dry_run=False,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
+        dry_run=False,
         roe_id="ROE-TEST",
     )
     with mock.patch("time.sleep"):
         exfil.run("filesystem", root=data_dir, patterns=["*.txt"])
 
-    con      = sqlite3.connect(int_eng_db)
+    con = sqlite3.connect(int_eng_db)
     all_data = str(con.execute("SELECT * FROM exfiltrated_data").fetchall())
     con.close()
     assert b"CLASSIFIED_SECRET_PAYLOAD_XYZ" not in all_data.encode()
@@ -261,6 +299,7 @@ def test_file_content_not_in_db_after_collection(int_eng_db, tmp_path, patch_con
 
 
 # ── 8. ExfilMonitor SHA-256 registration ──────────────────────────────────────
+
 
 def test_exfil_monitor_deduplicates_hashes(int_eng_db, tmp_path, patch_confirm_approve):
     """Running exfil twice on the same file must not duplicate monitor entries."""
@@ -272,10 +311,14 @@ def test_exfil_monitor_deduplicates_hashes(int_eng_db, tmp_path, patch_confirm_a
 
     def make_exfil():
         return Exfiltrator(
-            db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
+            db_path=int_eng_db,
+            engagement_id=ENGAGEMENT_ID,
             channel=mock.MagicMock(send=mock.MagicMock(return_value=True)),
             session_key=AES_KEY_HEX,
-            window=None, staging_dir=staging, stagger=0.0, dry_run=False,
+            window=None,
+            staging_dir=staging,
+            stagger=0.0,
+            dry_run=False,
             roe_id="ROE-TEST",
         )
 
@@ -283,13 +326,14 @@ def test_exfil_monitor_deduplicates_hashes(int_eng_db, tmp_path, patch_confirm_a
         make_exfil().run("filesystem", root=data_dir, patterns=["*.docx"])
         make_exfil().run("filesystem", root=data_dir, patterns=["*.docx"])
 
-    con   = sqlite3.connect(int_eng_db)
+    con = sqlite3.connect(int_eng_db)
     count = con.execute("SELECT COUNT(*) FROM exfil_monitor_targets").fetchone()[0]
     con.close()
     assert count == 1, "Duplicate SHA-256 must be deduplicated by UNIQUE constraint."
 
 
 # ── 9. CyberChef recipe ───────────────────────────────────────────────────────
+
 
 def test_cyberchef_recipe_written_on_emit_flag(int_eng_db, tmp_path, patch_confirm_approve):
     data_dir = tmp_path / "data"
@@ -299,10 +343,14 @@ def test_cyberchef_recipe_written_on_emit_flag(int_eng_db, tmp_path, patch_confi
     staging.mkdir()
 
     exfil = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
         channel=mock.MagicMock(send=mock.MagicMock(return_value=True)),
         session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0, dry_run=False,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
+        dry_run=False,
         roe_id="ROE-TEST",
     )
     with mock.patch("time.sleep"):
@@ -317,6 +365,7 @@ def test_cyberchef_recipe_written_on_emit_flag(int_eng_db, tmp_path, patch_confi
 
 # ── 10. Channel failure partial result ───────────────────────────────────────
 
+
 def test_partial_upload_failure_returns_partial_hashes(int_eng_db, tmp_path, patch_confirm_approve):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -327,6 +376,7 @@ def test_partial_upload_failure_returns_partial_hashes(int_eng_db, tmp_path, pat
 
     # Channel fails on every other send
     call_count = {"n": 0}
+
     def flaky_send(data):
         call_count["n"] += 1
         return call_count["n"] % 2 == 0  # fails on 1st, 3rd, ...
@@ -335,9 +385,14 @@ def test_partial_upload_failure_returns_partial_hashes(int_eng_db, tmp_path, pat
     mock_channel.send.side_effect = flaky_send
 
     exfil = Exfiltrator(
-        db_path=int_eng_db, engagement_id=ENGAGEMENT_ID,
-        channel=mock_channel, session_key=AES_KEY_HEX,
-        window=None, staging_dir=staging, stagger=0.0, dry_run=False,
+        db_path=int_eng_db,
+        engagement_id=ENGAGEMENT_ID,
+        channel=mock_channel,
+        session_key=AES_KEY_HEX,
+        window=None,
+        staging_dir=staging,
+        stagger=0.0,
+        dry_run=False,
         roe_id="ROE-TEST",
     )
     with mock.patch("time.sleep"):

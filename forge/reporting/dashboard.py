@@ -3,6 +3,7 @@
 Builds a compact overview page across every engagement and a dedicated
 detail page per engagement so the main dashboard stays readable.
 """
+
 from __future__ import annotations
 
 import html
@@ -131,7 +132,7 @@ def _truncate(value: Any, limit: int = 140) -> str:
     text = str(value or "").strip()
     if len(text) <= limit:
         return text
-    return f"{text[:limit - 3]}..."
+    return f"{text[: limit - 3]}..."
 
 
 _DASHBOARD_SECRET_ASSIGNMENT_RE = re.compile(
@@ -283,12 +284,18 @@ def _run_policy_summary(metadata: Any, *, dry_run: bool, attack_mode: bool) -> d
         "roe_present": bool(policy_dict.get("roe_present", bool(roe_id))),
         "roe_missing": bool(policy_dict.get("roe_missing", requires_roe and not roe_id)),
         "live_probing_allowed": bool(
-            policy_dict.get("live_probing_allowed", metadata_dict.get("live_probing_allowed", live_default))
+            policy_dict.get(
+                "live_probing_allowed", metadata_dict.get("live_probing_allowed", live_default)
+            )
         ),
         "tool_execution_allowed": bool(
-            policy_dict.get("tool_execution_allowed", metadata_dict.get("tool_execution_allowed", live_default))
+            policy_dict.get(
+                "tool_execution_allowed", metadata_dict.get("tool_execution_allowed", live_default)
+            )
         ),
-        "active_recon_allowed": bool(policy_dict.get("active_recon_allowed", attack_mode and live_default)),
+        "active_recon_allowed": bool(
+            policy_dict.get("active_recon_allowed", attack_mode and live_default)
+        ),
         "credential_validation_allowed": bool(
             policy_dict.get("credential_validation_allowed", attack_mode and live_default)
         ),
@@ -467,7 +474,9 @@ def _seed_email_candidates(
     return candidates
 
 
-def _merged_host_rows(con: sqlite3.Connection, engagement_id: int, *, limit: int | None = None) -> list[dict[str, str]]:
+def _merged_host_rows(
+    con: sqlite3.Connection, engagement_id: int, *, limit: int | None = None
+) -> list[dict[str, str]]:
     host_rows = _fetch_rows(
         con,
         """
@@ -502,7 +511,9 @@ def _merged_host_rows(con: sqlite3.Connection, engagement_id: int, *, limit: int
     return merged[:limit] if limit is not None else merged
 
 
-def _merged_email_rows(con: sqlite3.Connection, engagement_id: int, *, limit: int | None = None) -> list[dict[str, str]]:
+def _merged_email_rows(
+    con: sqlite3.Connection, engagement_id: int, *, limit: int | None = None
+) -> list[dict[str, str]]:
     email_rows = _fetch_rows(
         con,
         """
@@ -568,7 +579,11 @@ def _key_row_is_reportable(
     row: sqlite3.Row,
     validation_index: dict[tuple[str, str], bool],
 ) -> bool:
-    state = str(row["validation_state"] or "").strip().upper() if "validation_state" in row.keys() else ""
+    state = (
+        str(row["validation_state"] or "").strip().upper()
+        if "validation_state" in row.keys()
+        else ""
+    )
     if state != "ACTIVE":
         return False
     identifier = str(row["domain"] or "").strip().lower() if "domain" in row.keys() else ""
@@ -608,7 +623,7 @@ def _key_scanner_rows(
     return _fetch_rows(
         con,
         f"""
-        SELECT {', '.join(select_parts)}
+        SELECT {", ".join(select_parts)}
         FROM key_scanner_findings
         WHERE engagement_id=?
         ORDER BY id DESC
@@ -645,7 +660,9 @@ def _key_scanner_inventory_rows(
 
 
 def _vulnerability_validation_asset(row: sqlite3.Row) -> str:
-    provider = str(row["cloud_provider"] or "").strip().lower() if "cloud_provider" in row.keys() else ""
+    provider = (
+        str(row["cloud_provider"] or "").strip().lower() if "cloud_provider" in row.keys() else ""
+    )
     parameter = str(row["parameter"] or "").strip().lower() if "parameter" in row.keys() else ""
     target_url = str(row["target_url"] or "").strip().lower() if "target_url" in row.keys() else ""
     hint = f"{parameter} {target_url}"
@@ -667,7 +684,9 @@ def _vulnerability_validation_asset(row: sqlite3.Row) -> str:
 
 
 def _vulnerability_validation_identifier(row: sqlite3.Row) -> str:
-    resource_id = str(row["resource_id"] or "").strip().lower() if "resource_id" in row.keys() else ""
+    resource_id = (
+        str(row["resource_id"] or "").strip().lower() if "resource_id" in row.keys() else ""
+    )
     if resource_id:
         return resource_id
     target_url = str(row["target_url"] or "").strip()
@@ -775,7 +794,7 @@ def _reportable_vulnerability_rows(
     rows = _fetch_rows(
         con,
         f"""
-        SELECT {', '.join(select_parts)}
+        SELECT {", ".join(select_parts)}
         FROM vulnerability_findings
         WHERE engagement_id=?
         ORDER BY id DESC
@@ -783,9 +802,7 @@ def _reportable_vulnerability_rows(
         (engagement_id,),
     )
     validation_index = _reportable_cloud_validation_index(con, engagement_id)
-    reportable = [
-        row for row in rows if _vulnerability_row_is_reportable(row, validation_index)
-    ]
+    reportable = [row for row in rows if _vulnerability_row_is_reportable(row, validation_index)]
     return reportable[:limit] if limit is not None else reportable
 
 
@@ -961,7 +978,10 @@ def _materialize_audit_manifest_artifacts(
 
 def _graph_files(eng_id: str, reports_dir: Path) -> list[Path]:
     names = set(_graph_artifact_names(int(eng_id)))
-    return sorted((reports_dir / name for name in names if (reports_dir / name).exists()), key=lambda path: path.name.lower())
+    return sorted(
+        (reports_dir / name for name in names if (reports_dir / name).exists()),
+        key=lambda path: path.name.lower(),
+    )
 
 
 def _graph_root_from_artifact(path: Path) -> ElementTree.Element | None:
@@ -974,7 +994,8 @@ def _graph_root_from_artifact(path: Path) -> ElementTree.Element | None:
                     (
                         name
                         for name in archive.namelist()
-                        if name.lower() == "graphs/graph1.graphml" or name.lower().endswith(".graphml")
+                        if name.lower() == "graphs/graph1.graphml"
+                        or name.lower().endswith(".graphml")
                     ),
                     "",
                 )
@@ -988,7 +1009,12 @@ def _graph_root_from_artifact(path: Path) -> ElementTree.Element | None:
 
 def _graph_entity_type_to_node_type(entity_type: str) -> str:
     normalized = str(entity_type or "").strip().lower()
-    if normalized in {"maltego.domain", "maltego.url", "maltego.ipv4address", "maltego.ipv6address"}:
+    if normalized in {
+        "maltego.domain",
+        "maltego.url",
+        "maltego.ipv4address",
+        "maltego.ipv6address",
+    }:
         return "HOST"
     if normalized in {"maltego.emailaddress", "maltego.phonenumber", "maltego.alias"}:
         return "CREDENTIAL"
@@ -1105,7 +1131,9 @@ def _merge_safe_forge_property(
     metadata.setdefault(key, _safe_metadata_property_value(raw_value))
 
 
-def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generated_at: str) -> dict[str, Any] | None:
+def _graph_payload_from_root(
+    root: ElementTree.Element, *, source: str, generated_at: str
+) -> dict[str, Any] | None:
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
 
@@ -1143,10 +1171,9 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
                 )
                 if label:
                     node_payload["label"] = label
-                node_payload["node_type"] = (
-                    str(properties.get("forge.node_type") or "").strip().upper()
-                    or _graph_entity_type_to_node_type(entity_type)
-                )
+                node_payload["node_type"] = str(
+                    properties.get("forge.node_type") or ""
+                ).strip().upper() or _graph_entity_type_to_node_type(entity_type)
                 node_payload["severity"] = (
                     str(properties.get("forge.severity") or "").strip().upper() or "INFO"
                 )
@@ -1232,8 +1259,7 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
                         properties.get("forge.edge_type")
                         or properties.get("maltego.link.manual.type")
                         or edge_payload["edge_type"]
-                    )
-                    .strip()
+                    ).strip()
                     or "relationship"
                 )
                 if properties.get("forge.weight"):
@@ -1284,9 +1310,7 @@ def _graph_payload_from_root(root: ElementTree.Element, *, source: str, generate
         return None
 
     critical_path_nodes = [
-        str(node.get("node_id") or "")
-        for node in nodes
-        if bool(node.get("on_critical_path"))
+        str(node.get("node_id") or "") for node in nodes if bool(node.get("on_critical_path"))
     ]
     return {
         "nodes": nodes,
@@ -1306,8 +1330,7 @@ def _graph_summary(files: list[Path]) -> dict[str, Any]:
             payload = json.loads(graph_json.read_text(encoding="utf-8", errors="replace"))
             nodes = payload.get("nodes", []) or []
             entity_types = Counter(
-                str(node.get("node_type") or node.get("entity_type") or "UNKNOWN")
-                for node in nodes
+                str(node.get("node_type") or node.get("entity_type") or "UNKNOWN") for node in nodes
             )
             return {
                 "nodes": int(payload.get("node_count") or len(nodes)),
@@ -1316,8 +1339,7 @@ def _graph_summary(files: list[Path]) -> dict[str, Any]:
                 "critical_weight": payload.get("critical_path_weight"),
                 "entity_types": entity_types.most_common(8),
                 "sample_nodes": [
-                    str(node.get("label") or node.get("node_id") or "")
-                    for node in nodes[:8]
+                    str(node.get("label") or node.get("node_id") or "") for node in nodes[:8]
                 ],
                 "source": graph_json.name,
             }
@@ -1406,12 +1428,16 @@ def _graph_node_validation_key(node: dict[str, Any]) -> tuple[str, str]:
     node_text = f"{node.get('label') or ''} {metadata.get('target_url') or ''}".lower()
     if asset in {"aws", "amazon"} and "s3" in node_text:
         asset = "aws_s3"
-    identifier = str(
-        metadata.get("resource_id")
-        or metadata.get("identifier")
-        or metadata.get("domain")
-        or ""
-    ).strip().lower()
+    identifier = (
+        str(
+            metadata.get("resource_id")
+            or metadata.get("identifier")
+            or metadata.get("domain")
+            or ""
+        )
+        .strip()
+        .lower()
+    )
     return asset, identifier
 
 
@@ -1468,13 +1494,16 @@ def _graph_node_is_unreportable_key_finding(
     vuln_type = str(metadata.get("vuln_type") or node.get("vuln_type") or "").strip().upper()
     label = str(node.get("label") or node.get("title") or "").strip().lower()
     is_key_scanner_node = node_type == "APIKEY" or source_table == "key_scanner_findings"
-    is_key_finding_node = (
-        source_table == "vulnerability_findings"
-        and (vuln_type == "DETERMINISTIC_KEY_EXPOSURE" or label.startswith("active exposed "))
+    is_key_finding_node = source_table == "vulnerability_findings" and (
+        vuln_type == "DETERMINISTIC_KEY_EXPOSURE" or label.startswith("active exposed ")
     )
     if not is_key_scanner_node and not is_key_finding_node:
         return False
-    if source_table and source_table not in {"key_scanner_findings", "vulnerability_findings"} and node_type != "APIKEY":
+    if (
+        source_table
+        and source_table not in {"key_scanner_findings", "vulnerability_findings"}
+        and node_type != "APIKEY"
+    ):
         return False
     asset, identifier = _graph_node_validation_key(node)
     detail = _graph_node_key_validation_detail(node)
@@ -1544,7 +1573,9 @@ def _merge_cloud_node_metadata(
     asset: str,
 ) -> None:
     target_metadata = target.setdefault("metadata", {})
-    duplicate_metadata = duplicate.get("metadata") if isinstance(duplicate.get("metadata"), dict) else {}
+    duplicate_metadata = (
+        duplicate.get("metadata") if isinstance(duplicate.get("metadata"), dict) else {}
+    )
     if not isinstance(target_metadata, dict):
         target_metadata = {}
         target["metadata"] = target_metadata
@@ -1586,7 +1617,11 @@ def _dedupe_graph_payload_cloud_alias_nodes(
         score = _canonical_cloud_node_score(node, asset, identifier)
         if key not in choices or score > choices[key][1]:
             choices[key] = (index, score)
-    duplicate_keys = {key for key in keys_by_index.values() if sum(value == key for value in keys_by_index.values()) > 1}
+    duplicate_keys = {
+        key
+        for key in keys_by_index.values()
+        if sum(value == key for value in keys_by_index.values()) > 1
+    }
     if not duplicate_keys:
         return payload
 
@@ -1844,7 +1879,11 @@ def _graph_summary_from_payload(payload: dict[str, Any], source: str) -> dict[st
     edges = payload.get("edges", []) if isinstance(payload.get("edges"), list) else []
     critical_path = {
         str(item)
-        for item in (payload.get("critical_path_nodes", []) if isinstance(payload.get("critical_path_nodes"), list) else [])
+        for item in (
+            payload.get("critical_path_nodes", [])
+            if isinstance(payload.get("critical_path_nodes"), list)
+            else []
+        )
         if str(item).strip()
     }
     entity_types = Counter(
@@ -1990,7 +2029,11 @@ def _seed_graph_payload_for_engagement(
         seed_id = int(row["id"])
         metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
         metadata_dict = metadata if isinstance(metadata, dict) else {}
-        synthesis = metadata_dict.get("synthesis") if isinstance(metadata_dict.get("synthesis"), dict) else {}
+        synthesis = (
+            metadata_dict.get("synthesis")
+            if isinstance(metadata_dict.get("synthesis"), dict)
+            else {}
+        )
         confidence = float(row["confidence"] or 0.0)
         confidence_band = str(synthesis.get("confidence_band") or "")
         node_id = f"SEED::{seed_id}"
@@ -2195,7 +2238,9 @@ def _graph_payload_for_engagement(
         try:
             payload = _parse_graph_payload(graph_json.read_text(encoding="utf-8", errors="replace"))
             if _graph_payload_has_structure(payload):
-                generated_at = _format_dt(datetime.fromtimestamp(graph_json.stat().st_mtime).isoformat())
+                generated_at = _format_dt(
+                    datetime.fromtimestamp(graph_json.stat().st_mtime).isoformat()
+                )
                 graph_payload = _graph_payload_with_defaults(
                     payload,
                     source=graph_json.name,
@@ -2241,7 +2286,9 @@ def _graph_state_for_engagement(
     engagement_id: int,
     graph_files: list[Path],
 ) -> tuple[dict[str, Any], dict[str, Any] | None, str]:
-    graph_payload, graph_snapshot_at = _graph_payload_for_engagement(con, engagement_id, graph_files)
+    graph_payload, graph_snapshot_at = _graph_payload_for_engagement(
+        con, engagement_id, graph_files
+    )
     if _graph_payload_has_structure(graph_payload):
         payload_source = str(graph_payload.get("source") or "engagement_graph_payload")
         return (
@@ -2927,8 +2974,14 @@ def _detail_sections(
     ):
         metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
         synthesis = metadata.get("synthesis") if isinstance(metadata, dict) else {}
-        corroborator_count = int(synthesis.get("corroborating_seed_count") or 0) if isinstance(synthesis, dict) else 0
-        corroborator_types = synthesis.get("corroborating_seed_types") if isinstance(synthesis, dict) else []
+        corroborator_count = (
+            int(synthesis.get("corroborating_seed_count") or 0)
+            if isinstance(synthesis, dict)
+            else 0
+        )
+        corroborator_types = (
+            synthesis.get("corroborating_seed_types") if isinstance(synthesis, dict) else []
+        )
         type_preview = (
             ", ".join(str(item) for item in list(corroborator_types)[:3] if str(item).strip())
             if isinstance(corroborator_types, list)
@@ -2945,8 +2998,12 @@ def _detail_sections(
                 "Status": str(row["status"] or ""),
                 "Depth": str(row["depth"] or ""),
                 "Conf": str(row["confidence"] or ""),
-                "Band": str(synthesis.get("confidence_band") or "") if isinstance(synthesis, dict) else "",
-                "Relations": str(synthesis.get("supporting_relations") or 0) if isinstance(synthesis, dict) else "0",
+                "Band": str(synthesis.get("confidence_band") or "")
+                if isinstance(synthesis, dict)
+                else "",
+                "Relations": str(synthesis.get("supporting_relations") or 0)
+                if isinstance(synthesis, dict)
+                else "0",
                 "CorroboratedBy": corroborated_by,
             }
         )
@@ -2957,7 +3014,9 @@ def _detail_sections(
             "Relation": str(row["relation_type"] or ""),
             "To": f"{str(row['target_seed'] or '')} [{str(row['target_type'] or '')}]",
             "Conf": str(row["confidence"] or ""),
-            "Evidence": _relation_evidence_preview(_safe_json_loads(str(row["evidence_json"] or "{}"))),
+            "Evidence": _relation_evidence_preview(
+                _safe_json_loads(str(row["evidence_json"] or "{}"))
+            ),
             "Seen": _format_dt(str(row["discovered_at"] or "")),
         }
         for row in _fetch_rows(
@@ -3743,18 +3802,11 @@ def _render_overview_page(
     total_critical = sum(int(item["severity_summary"].get("CRITICAL", 0)) for item in engagements)
     total_high = sum(int(item["severity_summary"].get("HIGH", 0)) for item in engagements)
     status_options = sorted(
-        {
-            str(item.get("status") or "unknown").strip() or "unknown"
-            for item in engagements
-        },
+        {str(item.get("status") or "unknown").strip() or "unknown" for item in engagements},
         key=lambda value: value.lower(),
     )
     tag_options = sorted(
-        {
-            tag
-            for item in engagements
-            for tag in item.get("tags", [])
-        },
+        {tag for item in engagements for tag in item.get("tags", [])},
         key=lambda value: value.casefold(),
     )
 
@@ -3882,7 +3934,7 @@ def _render_overview_page(
           <input id="filter" class="search" type="search" placeholder="Filter by id, name, seed, operator, status, slug" oninput="filterRows()">
           <select id="status-filter" class="search" onchange="filterRows()">
             <option value="ALL">All statuses</option>
-            {''.join(f"<option value='{html.escape(status)}'>{html.escape(status)}</option>" for status in status_options)}
+            {"".join(f"<option value='{html.escape(status)}'>{html.escape(status)}</option>" for status in status_options)}
           </select>
           <select id="severity-filter" class="search" onchange="filterRows()">
             <option value="ALL">All severities</option>
@@ -3893,7 +3945,7 @@ def _render_overview_page(
           </select>
           <select id="tag-filter" class="search" onchange="filterRows()">
             <option value="ALL">All tags</option>
-            {''.join(f"<option value='{html.escape(tag.casefold())}'>{html.escape(tag)}</option>" for tag in tag_options)}
+            {"".join(f"<option value='{html.escape(tag.casefold())}'>{html.escape(tag)}</option>" for tag in tag_options)}
           </select>
           <select id="report-state-filter" class="search" onchange="filterRows()">
             <option value="ALL">All report states</option>
@@ -3933,7 +3985,7 @@ def _render_overview_page(
             </tr>
           </thead>
           <tbody>
-            {''.join(rows) if rows else '<tr><td colspan="12"><div class="empty">No engagement databases were found.</div></td></tr>'}
+            {"".join(rows) if rows else '<tr><td colspan="12"><div class="empty">No engagement databases were found.</div></td></tr>'}
           </tbody>
         </table>
       </div>
@@ -4084,9 +4136,9 @@ def _render_table(title: str, rows: list[dict[str, str]]) -> str:
     body_html = []
     for row in rows:
         body_html.append(
-            "<tr>" + "".join(
-                f"<td>{html.escape(str(row.get(head, '')))}</td>" for head in headers
-            ) + "</tr>"
+            "<tr>"
+            + "".join(f"<td>{html.escape(str(row.get(head, '')))}</td>" for head in headers)
+            + "</tr>"
         )
     return (
         '<section class="panel">'
@@ -4101,10 +4153,10 @@ def _render_artifact_card(page_path: Path, artifact: Path, kind: str) -> str:
     href = _relative_href(page_path, artifact)
     return (
         '<div class="artifact">'
-        f"<span class=\"artifact-kind\">{html.escape(kind)}</span>"
-        f"<strong><a href=\"{html.escape(href)}\">{html.escape(artifact.name)}</a></strong>"
-        f"<div class=\"tiny muted\">{html.escape(_format_size(artifact.stat().st_size))}</div>"
-        f"<div class=\"tiny muted\">{html.escape(_format_dt(datetime.fromtimestamp(artifact.stat().st_mtime).isoformat()))}</div>"
+        f'<span class="artifact-kind">{html.escape(kind)}</span>'
+        f'<strong><a href="{html.escape(href)}">{html.escape(artifact.name)}</a></strong>'
+        f'<div class="tiny muted">{html.escape(_format_size(artifact.stat().st_size))}</div>'
+        f'<div class="tiny muted">{html.escape(_format_dt(datetime.fromtimestamp(artifact.stat().st_mtime).isoformat()))}</div>'
         "</div>"
     )
 
@@ -4158,7 +4210,9 @@ def _report_family_groups(report_files: list[Path]) -> list[tuple[str, list[Path
             continue
         families.setdefault(artifact.stem, []).append(artifact)
         family_mtimes[artifact.stem] = max(family_mtimes.get(artifact.stem, 0.0), stat.st_mtime)
-        family_has_json[artifact.stem] = family_has_json.get(artifact.stem, False) or artifact.suffix.lower() == ".json"
+        family_has_json[artifact.stem] = (
+            family_has_json.get(artifact.stem, False) or artifact.suffix.lower() == ".json"
+        )
     grouped = [
         (
             stem,
@@ -4248,14 +4302,20 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
         provider = _report_payload_value(payload, lineage, "provider", "rendered_provider")
         requested_provider = _report_payload_value(payload, lineage, "requested_provider")
         upstream_provider = _report_payload_value(payload, lineage, "upstream_provider")
-        rendered_provider = _report_payload_value(lineage, payload, "rendered_provider", "render_backend", "provider")
+        rendered_provider = _report_payload_value(
+            lineage, payload, "rendered_provider", "render_backend", "provider"
+        )
         render_path = _report_payload_value(payload, lineage, "render_path")
         fallback_reason = _report_payload_value(payload, lineage, "fallback_reason")
-        report_write_error = _report_payload_value(payload, lineage, "report_write_error", "write_error")
+        report_write_error = _report_payload_value(
+            payload, lineage, "report_write_error", "write_error"
+        )
         format_name = _report_payload_value(payload, lineage, "format")
         findings_checksum = _report_payload_value(payload, lineage, "findings_checksum")
         raw_export = provider == "raw_export"
-        render_backend = upstream_provider if raw_export and upstream_provider else rendered_provider
+        render_backend = (
+            upstream_provider if raw_export and upstream_provider else rendered_provider
+        )
         latest_mtime = max(
             (path.stat().st_mtime for path in family_files),
             default=0.0,
@@ -4264,8 +4324,7 @@ def _report_history_payload(report_files: list[Path]) -> list[dict[str, Any]]:
         if not generated_at and latest_mtime:
             generated_at = _format_dt(datetime.fromtimestamp(latest_mtime).isoformat())
         available_exports = [
-            _report_export_descriptor(path, raw_export=raw_export)
-            for path in family_files
+            _report_export_descriptor(path, raw_export=raw_export) for path in family_files
         ]
         validation_summary = _report_validation_inventory_summary(payload)
         history.append(
@@ -4303,9 +4362,7 @@ def _report_review_counts(report_history: list[dict[str, Any]]) -> dict[str, Any
         "report_family_count": len(report_history),
         "latest_report_family": str(latest.get("family_stem") or ""),
         "latest_report_export_count": int(
-            latest.get("export_count")
-            or len(latest.get("available_exports") or [])
-            or 0
+            latest.get("export_count") or len(latest.get("available_exports") or []) or 0
         ),
         "has_prior_report_generations": len(report_history) > 1,
     }
@@ -4448,7 +4505,9 @@ def _render_report_backend_summary(summary: dict[str, Any] | None) -> str:
             )
         )
     if summary.get("artifact_name"):
-        meta_blocks.append(_render_meta_block("Artifact", str(summary.get("artifact_name") or "-"), mono=True))
+        meta_blocks.append(
+            _render_meta_block("Artifact", str(summary.get("artifact_name") or "-"), mono=True)
+        )
     lines = [f"<div class='meta-list'>{''.join(meta_blocks)}</div>"]
     available_exports = summary.get("available_exports") or []
     if available_exports:
@@ -4488,7 +4547,9 @@ def _render_graph_summary(summary: dict[str, Any]) -> str:
         f'<span class="pill warn">critical {int(summary.get("critical_nodes", 0))}</span>',
     ]
     if summary.get("critical_weight") is not None:
-        chips.append(f'<span class="pill">{html.escape(str(summary["critical_weight"]))} weight</span>')
+        chips.append(
+            f'<span class="pill">{html.escape(str(summary["critical_weight"]))} weight</span>'
+        )
     entity_chips = "".join(
         f'<span class="pill">{html.escape(str(kind))} {count}</span>'
         for kind, count in summary.get("entity_types", [])
@@ -4518,16 +4579,14 @@ def _render_graph_stage(summary: dict[str, Any]) -> str:
     )
     if not node_markup:
         node_markup = "<div class='graph-node'><span>Awaiting labeled nodes from GraphML or JSON output.</span></div>"
-    return (
-        "<div class='graph-stage'>"
-        f"<div class='graph-nodes'>{node_markup}</div>"
-        "</div>"
-    )
+    return f"<div class='graph-stage'><div class='graph-nodes'>{node_markup}</div></div>"
 
 
 def _render_audit_timeline(rows: list[dict[str, str]]) -> str:
     if not rows:
-        return '<div class="empty">No audit activity has been recorded for this engagement yet.</div>'
+        return (
+            '<div class="empty">No audit activity has been recorded for this engagement yet.</div>'
+        )
     items = []
     for row in rows[:8]:
         action = row.get("Action", "")
@@ -4610,14 +4669,20 @@ def _render_engagement_page(
 
     scope_html = (
         '<div class="chips">'
-        + "".join(f'<span class="chip"><code>{html.escape(str(item))}</code></span>' for item in engagement["scope"])
+        + "".join(
+            f'<span class="chip"><code>{html.escape(str(item))}</code></span>'
+            for item in engagement["scope"]
+        )
         + "</div>"
         if engagement["scope"]
         else '<div class="empty">No explicit scope entries stored in the engagement metadata.</div>'
     )
     seed_html = (
         '<div class="chips">'
-        + "".join(f'<span class="chip"><code>{html.escape(str(seed))}</code></span>' for seed in engagement["seeds"])
+        + "".join(
+            f'<span class="chip"><code>{html.escape(str(seed))}</code></span>'
+            for seed in engagement["seeds"]
+        )
         + "</div>"
         if engagement["seeds"]
         else '<div class="empty">No seed history found for this engagement.</div>'
@@ -4687,7 +4752,7 @@ def _render_engagement_page(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FORGE {html.escape(engagement['id'])}</title>
+  <title>FORGE {html.escape(engagement["id"])}</title>
   <style>{_base_styles()}</style>
 </head>
 <body>
@@ -4696,38 +4761,38 @@ def _render_engagement_page(
       <div>
         <a class="backlink" href="{html.escape(_relative_href(page_path, index_path))}">← Back to dashboard</a>
         <div class="chips" style="margin-top:14px">
-          <span class="chip">engagement {html.escape(engagement['id'])}</span>
-          <span class="chip">{html.escape(engagement['status'] or 'unknown')}</span>
+          <span class="chip">engagement {html.escape(engagement["id"])}</span>
+          <span class="chip">{html.escape(engagement["status"] or "unknown")}</span>
           <span class="chip">{len(report_files)} reports</span>
           <span class="chip">{len(graph_files)} graph artifacts</span>
           <span class="chip">{len(audit_files)} audit artifacts</span>
-          {''.join(f'<span class="chip">{html.escape(str(tag))}</span>' for tag in engagement.get('tags', []))}
+          {"".join(f'<span class="chip">{html.escape(str(tag))}</span>' for tag in engagement.get("tags", []))}
         </div>
-        <h1>{html.escape(engagement['name'])}</h1>
-        <p class="muted">Primary seed: <span class="mono">{html.escape(engagement['primary_seed'] or '-')}</span></p>
+        <h1>{html.escape(engagement["name"])}</h1>
+        <p class="muted">Primary seed: <span class="mono">{html.escape(engagement["primary_seed"] or "-")}</span></p>
       </div>
       <div class="hero-meta">
         <div class="stamp">Latest audit</div>
-        <div>{html.escape(engagement['latest_audit'] or engagement['updated_at'] or '-')}</div>
-        <div class="stamp">DB size: {html.escape(_format_size(int(engagement['size_bytes'] or 0)))}</div>
+        <div>{html.escape(engagement["latest_audit"] or engagement["updated_at"] or "-")}</div>
+        <div class="stamp">DB size: {html.escape(_format_size(int(engagement["size_bytes"] or 0)))}</div>
       </div>
     </section>
 
     <section class="stats">
-      <div class="stat"><div class="label">Hosts</div><div class="value">{int(counts.get('hosts', 0))}</div></div>
-      <div class="stat"><div class="label">Emails</div><div class="value">{int(counts.get('emails', 0))}</div></div>
-      <div class="stat"><div class="label">Services</div><div class="value">{int(counts.get('services', 0))}</div></div>
+      <div class="stat"><div class="label">Hosts</div><div class="value">{int(counts.get("hosts", 0))}</div></div>
+      <div class="stat"><div class="label">Emails</div><div class="value">{int(counts.get("emails", 0))}</div></div>
+      <div class="stat"><div class="label">Services</div><div class="value">{int(counts.get("services", 0))}</div></div>
       <div class="stat"><div class="label">Highest severity</div><div class="value">{html.escape(str(highest_severity))}</div></div>
-      <div class="stat"><div class="label">Critical / High</div><div class="value">{int(severity_summary.get('CRITICAL', 0))} / {int(severity_summary.get('HIGH', 0))}</div></div>
-      <div class="stat"><div class="label">Audit rows</div><div class="value">{int(counts.get('audit_log', 0))}</div></div>
-      <div class="stat"><div class="label">Run status</div><div class="value">{html.escape(str(run_summary.get('status', 'untracked')))}</div></div>
+      <div class="stat"><div class="label">Critical / High</div><div class="value">{int(severity_summary.get("CRITICAL", 0))} / {int(severity_summary.get("HIGH", 0))}</div></div>
+      <div class="stat"><div class="label">Audit rows</div><div class="value">{int(counts.get("audit_log", 0))}</div></div>
+      <div class="stat"><div class="label">Run status</div><div class="value">{html.escape(str(run_summary.get("status", "untracked")))}</div></div>
     </section>
 
     <div class="section-stack">
       <section class="panel">
         <div class="panel-head"><h2>Metadata</h2></div>
         <div class="panel-body">
-          <div class="meta-list">{''.join(meta_blocks)}</div>
+          <div class="meta-list">{"".join(meta_blocks)}</div>
         </div>
       </section>
 
@@ -4742,7 +4807,7 @@ def _render_engagement_page(
             </div>
             <div class="lane">
               <div class="eyebrow">Surface</div>
-              <div class="figure">{int(counts.get('hosts', 0)) + int(counts.get('emails', 0))}</div>
+              <div class="figure">{int(counts.get("hosts", 0)) + int(counts.get("emails", 0))}</div>
               <div class="tiny muted">Hosts + emails</div>
             </div>
             <div class="lane">
@@ -4858,20 +4923,20 @@ def _engagement_index_payload(engagement: dict[str, Any]) -> dict[str, Any]:
 
 
 def _engagement_detail_payload(engagement: dict[str, Any], root_page: Path) -> dict[str, Any]:
-    report_history = engagement.get("report_history") or _report_history_payload(engagement["report_files"])
+    report_history = engagement.get("report_history") or _report_history_payload(
+        engagement["report_files"]
+    )
     latest_report_files = _latest_report_family_files(engagement["report_files"])
     preview_files = [path for path in latest_report_files if path.suffix.lower() == ".md"]
     report_previews = [_report_preview_payload(root_page, path) for path in preview_files]
-    artifacts = [
-        _artifact_payload(root_page, path, kind="report")
-        for path in engagement["report_files"]
-    ] + [
-        _artifact_payload(root_page, path, kind="graph")
-        for path in engagement["graph_files"]
-    ] + [
-        _artifact_payload(root_page, path, kind="audit")
-        for path in engagement.get("audit_files", [])
-    ]
+    artifacts = (
+        [_artifact_payload(root_page, path, kind="report") for path in engagement["report_files"]]
+        + [_artifact_payload(root_page, path, kind="graph") for path in engagement["graph_files"]]
+        + [
+            _artifact_payload(root_page, path, kind="audit")
+            for path in engagement.get("audit_files", [])
+        ]
+    )
     payload = {
         **_engagement_index_payload(engagement),
         "path": engagement["path"],

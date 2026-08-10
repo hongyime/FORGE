@@ -146,9 +146,7 @@ class ReportingAgent:
         """Topics consumed by the reporting agent."""
         return [INBOUND_TOPIC]
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         """Render the report and emit a single completion message."""
         payload = message.payload or {}
         findings_obj = payload.get("findings", [])
@@ -158,15 +156,11 @@ class ReportingAgent:
                 f"{type(findings_obj).__name__}"
             )
         findings: list[dict[str, object]] = [
-            cast("dict[str, object]", f)
-            for f in findings_obj
-            if isinstance(f, dict)
+            cast("dict[str, object]", f) for f in findings_obj if isinstance(f, dict)
         ]
 
         analysis_summary_raw = payload.get("summary", "")
-        analysis_summary = (
-            str(analysis_summary_raw) if analysis_summary_raw else ""
-        )
+        analysis_summary = str(analysis_summary_raw) if analysis_summary_raw else ""
 
         engagement_obj = payload.get("engagement", {})
         engagement: dict[str, object] = (
@@ -178,9 +172,7 @@ class ReportingAgent:
         # Sort findings most-severe-first for stable section ordering.
         ordered = sorted(
             findings,
-            key=lambda f: _SEVERITY_WEIGHT.get(
-                str(f.get("severity", "info")).lower(), 99
-            ),
+            key=lambda f: _SEVERITY_WEIGHT.get(str(f.get("severity", "info")).lower(), 99),
         )
 
         # ---- 1. Section bodies ----------------------------------------
@@ -326,6 +318,7 @@ class ReportingAgent:
         tier_label = ""
         backend_label = ""
         from forge.providers.router import RouterAsProvider  # noqa: PLC0415
+
         if isinstance(self._llm, RouterAsProvider):
             last = self._llm.last_result
             if last is not None:
@@ -350,9 +343,7 @@ class ReportingAgent:
         return (text if text else deterministic), None
 
     @staticmethod
-    def _stub_executive_summary(
-        findings: list[dict[str, object]], analysis_summary: str
-    ) -> str:
+    def _stub_executive_summary(findings: list[dict[str, object]], analysis_summary: str) -> str:
         """Deterministic executive summary used when no LLM is available."""
         if not findings:
             return (
@@ -376,16 +367,12 @@ class ReportingAgent:
                 "remediation prior to production exposure."
             )
         else:
-            sentences.append(
-                "No critical or high-severity issues were observed."
-            )
+            sentences.append("No critical or high-severity issues were observed.")
         if analysis_summary:
             sentences.append(f"Analysis summary: {analysis_summary}")
         return " ".join(sentences)
 
-    def _render_detailed_findings(
-        self, findings: list[dict[str, object]]
-    ) -> str:
+    def _render_detailed_findings(self, findings: list[dict[str, object]]) -> str:
         """Render one subsection per finding with provenance footers."""
         if not findings:
             return "_No findings recorded._"
@@ -394,14 +381,10 @@ class ReportingAgent:
             parts.append(self._render_single_finding(index, finding))
         return "\n\n".join(parts)
 
-    def _render_single_finding(
-        self, index: int, finding: dict[str, object]
-    ) -> str:
+    def _render_single_finding(self, index: int, finding: dict[str, object]) -> str:
         """Render exactly one finding subsection."""
         severity = str(finding.get("severity", "info")).lower()
-        title = str(
-            finding.get("category", finding.get("finding_id", "Finding"))
-        )
+        title = str(finding.get("category", finding.get("finding_id", "Finding")))
         finding_id = str(finding.get("finding_id", f"finding-{index}"))
         description = str(finding.get("description", "")).strip()
         risk_rating = str(finding.get("risk_rating", severity))
@@ -459,9 +442,7 @@ class ReportingAgent:
                     "internal mitigation; consult the linked audit entry "
                     "for raw tool output."
                 )
-            bullets.append(
-                f"- **{finding_id}** ({severity}): {recommendation.strip()}"
-            )
+            bullets.append(f"- **{finding_id}** ({severity}): {recommendation.strip()}")
         return "\n".join(bullets)
 
     @staticmethod
@@ -530,9 +511,7 @@ class ReportingAgent:
         return provenance
 
     @staticmethod
-    def _build_summary_prompt(
-        findings: list[dict[str, object]], analysis_summary: str
-    ) -> str:
+    def _build_summary_prompt(findings: list[dict[str, object]], analysis_summary: str) -> str:
         """Build the prompt forwarded to the LLM for executive summary synthesis."""
         lines = [
             "Engagement findings (most severe first):",

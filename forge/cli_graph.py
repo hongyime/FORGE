@@ -18,7 +18,6 @@ from forge.cli_helpers import _direct_cli_load_scope_lists, _direct_cli_require_
 from forge.db.direct_connect import direct_connect
 
 
-
 @graph_app.command("build")
 def graph_build(
     engagement: str = typer.Option(..., "--engagement", "-e"),
@@ -103,7 +102,11 @@ def graph_build(
         return str(raw or "UNKNOWN").strip().upper() or "UNKNOWN"
 
     def _severity_text(node) -> str:
-        raw = node.severity.value if node.severity and hasattr(node.severity, "value") else node.severity
+        raw = (
+            node.severity.value
+            if node.severity and hasattr(node.severity, "value")
+            else node.severity
+        )
         return str(raw or "").strip().upper()
 
     def _edge_relation(edge) -> str:
@@ -117,9 +120,7 @@ def graph_build(
         if not isinstance(raw_metadata, dict):
             return {}
         try:
-            return _json.loads(
-                _json.dumps(raw_metadata, sort_keys=True, default=str)
-            )
+            return _json.loads(_json.dumps(raw_metadata, sort_keys=True, default=str))
         except Exception:
             return {
                 str(key): str(value)
@@ -196,9 +197,7 @@ def graph_build(
         if not isinstance(raw_metadata, dict):
             return {}
         try:
-            return _json.loads(
-                _json.dumps(raw_metadata, sort_keys=True, default=str)
-            )
+            return _json.loads(_json.dumps(raw_metadata, sort_keys=True, default=str))
         except Exception:
             return {
                 str(key): str(value)
@@ -230,8 +229,13 @@ def graph_build(
             identifier = str(metadata.get("identifier") or "").strip()
             if identifier:
                 label = identifier
-        if node_type == "EXTERNAL" and " " in label and any(
-            token in label.lower() for token in ("corp", "inc", "llc", "ltd", "company", "organization")
+        if (
+            node_type == "EXTERNAL"
+            and " " in label
+            and any(
+                token in label.lower()
+                for token in ("corp", "inc", "llc", "ltd", "company", "organization")
+            )
         ):
             return "maltego.Company", "company.name", label
         if "@" in label and " " not in label:
@@ -272,7 +276,9 @@ def graph_build(
         x_step = 220.0
         y_base = 120.0
         y_step = 120.0
-        for column, kind in enumerate(list(ordered_types) + [kind for kind in groups if kind not in ordered_types]):
+        for column, kind in enumerate(
+            list(ordered_types) + [kind for kind in groups if kind not in ordered_types]
+        ):
             nodes_for_kind = groups.get(kind, [])
             if not nodes_for_kind:
                 continue
@@ -437,17 +443,27 @@ def graph_build(
             x, y = positions.get(str(node.node_id), (0.0, 0.0))
             lines.append(f'    <node id="{_xs.quoteattr(node.node_id)[1:-1]}">')
             lines.append(f'      <data key="label">{_xs.escape(str(node.label or ""))}</data>')
-            lines.append(f'      <data key="entity_type">{_xs.escape(_node_type_text(node))}</data>')
+            lines.append(
+                f'      <data key="entity_type">{_xs.escape(_node_type_text(node))}</data>'
+            )
             lines.append(f'      <data key="maltego_entity_type">{_xs.escape(entity_type)}</data>')
-            lines.append(f'      <data key="primary_property">{_xs.escape(primary_property)}</data>')
+            lines.append(
+                f'      <data key="primary_property">{_xs.escape(primary_property)}</data>'
+            )
             lines.append(f'      <data key="primary_value">{_xs.escape(primary_value)}</data>')
             lines.append(f'      <data key="severity">{_xs.escape(_severity_text(node))}</data>')
-            lines.append(f'      <data key="critical">{"1" if node.on_critical_path else "0"}</data>')
-            lines.append(f'      <data key="source_table">{_xs.escape(str(node.source_table or ""))}</data>')
-            lines.append(f'      <data key="source_id">{int(node.source_id or 0)}</data>')
-            lines.append(f'      <data key="metadata_json">{_xs.escape(_node_metadata_text(node))}</data>')
             lines.append(
-                "      <data key=\"analyst_properties_json\">"
+                f'      <data key="critical">{"1" if node.on_critical_path else "0"}</data>'
+            )
+            lines.append(
+                f'      <data key="source_table">{_xs.escape(str(node.source_table or ""))}</data>'
+            )
+            lines.append(f'      <data key="source_id">{int(node.source_id or 0)}</data>')
+            lines.append(
+                f'      <data key="metadata_json">{_xs.escape(_node_metadata_text(node))}</data>'
+            )
+            lines.append(
+                '      <data key="analyst_properties_json">'
                 f"{_xs.escape(_json.dumps(_node_analyst_properties(node), ensure_ascii=False, separators=(',', ':'), sort_keys=True))}"
                 "</data>"
             )
@@ -467,7 +483,9 @@ def graph_build(
             lines.append(
                 f'      <data key="edge_critical">{"1" if bool(getattr(edge, "on_critical_path", False)) else "0"}</data>'
             )
-            lines.append(f'      <data key="edge_metadata_json">{_xs.escape(_edge_metadata_text(edge))}</data>')
+            lines.append(
+                f'      <data key="edge_metadata_json">{_xs.escape(_edge_metadata_text(edge))}</data>'
+            )
             lines.append("    </edge>")
         lines.append("  </graph>")
         lines.append("</graphml>")
@@ -484,10 +502,25 @@ def graph_build(
             },
         )
         for attrs in (
-            {"id": "mtg_entity", "for": "node", "attr.name": "MaltegoEntity", "attr.type": "string"},
-            {"id": "mtg_entity_renderer", "for": "node", "attr.name": "EntityRenderer", "yfiles.type": "nodegraphics"},
+            {
+                "id": "mtg_entity",
+                "for": "node",
+                "attr.name": "MaltegoEntity",
+                "attr.type": "string",
+            },
+            {
+                "id": "mtg_entity_renderer",
+                "for": "node",
+                "attr.name": "EntityRenderer",
+                "yfiles.type": "nodegraphics",
+            },
             {"id": "mtg_link", "for": "edge", "attr.name": "MaltegoLink", "attr.type": "string"},
-            {"id": "mtg_link_renderer", "for": "edge", "attr.name": "LinkRenderer", "yfiles.type": "edgegraphics"},
+            {
+                "id": "mtg_link_renderer",
+                "for": "edge",
+                "attr.name": "LinkRenderer",
+                "yfiles.type": "edgegraphics",
+            },
         ):
             _ElementTree.SubElement(graphml, "key", attrs)
 
@@ -504,7 +537,9 @@ def graph_build(
             }
             if display_name:
                 attrs["displayName"] = display_name
-            prop = _ElementTree.SubElement(parent, "{http://maltego.paterva.com/xml/mtgx}Property", attrs)
+            prop = _ElementTree.SubElement(
+                parent, "{http://maltego.paterva.com/xml/mtgx}Property", attrs
+            )
             val = _ElementTree.SubElement(prop, "{http://maltego.paterva.com/xml/mtgx}Value")
             val.text = value
 
@@ -522,11 +557,30 @@ def graph_build(
                 "{http://maltego.paterva.com/xml/mtgx}Properties",
             )
             _property(properties_el, primary_property, primary_value, display_name="Primary Value")
-            _property(properties_el, "forge.label", str(node.label or ""), display_name="FORGE Label")
-            _property(properties_el, "forge.node_type", _node_type_text(node), display_name="FORGE Node Type")
-            _property(properties_el, "forge.severity", _severity_text(node), display_name="FORGE Severity")
-            _property(properties_el, "forge.source_table", str(node.source_table or ""), display_name="FORGE Source Table")
-            _property(properties_el, "forge.source_id", str(node.source_id), display_name="FORGE Source ID")
+            _property(
+                properties_el, "forge.label", str(node.label or ""), display_name="FORGE Label"
+            )
+            _property(
+                properties_el,
+                "forge.node_type",
+                _node_type_text(node),
+                display_name="FORGE Node Type",
+            )
+            _property(
+                properties_el, "forge.severity", _severity_text(node), display_name="FORGE Severity"
+            )
+            _property(
+                properties_el,
+                "forge.source_table",
+                str(node.source_table or ""),
+                display_name="FORGE Source Table",
+            )
+            _property(
+                properties_el,
+                "forge.source_id",
+                str(node.source_id),
+                display_name="FORGE Source ID",
+            )
             _property(
                 properties_el,
                 "forge.metadata_json",
@@ -610,13 +664,17 @@ def graph_build(
                 display_name="FORGE Metadata JSON",
             )
 
-            link_renderer_data = _ElementTree.SubElement(edge_el, "data", {"key": "mtg_link_renderer"})
+            link_renderer_data = _ElementTree.SubElement(
+                edge_el, "data", {"key": "mtg_link_renderer"}
+            )
             _ElementTree.SubElement(
                 link_renderer_data,
                 "{http://maltego.paterva.com/xml/mtgx}LinkRenderer",
             )
 
-        return _ElementTree.tostring(graphml, encoding="utf-8", xml_declaration=True).decode("utf-8")
+        return _ElementTree.tostring(graphml, encoding="utf-8", xml_declaration=True).decode(
+            "utf-8"
+        )
 
     mermaid_str = dot_str = json_str = ""
 
@@ -653,29 +711,53 @@ def graph_build(
 
         # Companion CSVs: friendly for "New Entities From CSV" wizard
         import csv as _csv  # noqa: PLC0415
+
         nodes_csv = out_dir / f"{stem}_nodes.csv"
         edges_csv = out_dir / f"{stem}_edges.csv"
         with nodes_csv.open("w", newline="", encoding="utf-8") as fh:
             w = _csv.writer(fh)
-            w.writerow(["EntityID", "EntityType", "Label", "Severity",
-                        "OnCriticalPath", "SourceTable", "MetadataJSON"])
+            w.writerow(
+                [
+                    "EntityID",
+                    "EntityType",
+                    "Label",
+                    "Severity",
+                    "OnCriticalPath",
+                    "SourceTable",
+                    "MetadataJSON",
+                ]
+            )
             for n in graph.nodes:
                 nt = n.node_type.value if hasattr(n.node_type, "value") else str(n.node_type)
-                sev = n.severity.value if n.severity and hasattr(n.severity, "value") else (n.severity or "")
-                w.writerow([n.node_id, nt, n.label, sev,
-                            "1" if n.on_critical_path else "0", n.source_table,
-                            _node_metadata_text(n)])
+                sev = (
+                    n.severity.value
+                    if n.severity and hasattr(n.severity, "value")
+                    else (n.severity or "")
+                )
+                w.writerow(
+                    [
+                        n.node_id,
+                        nt,
+                        n.label,
+                        sev,
+                        "1" if n.on_critical_path else "0",
+                        n.source_table,
+                        _node_metadata_text(n),
+                    ]
+                )
         with edges_csv.open("w", newline="", encoding="utf-8") as fh:
             w = _csv.writer(fh)
             w.writerow(["Source", "Target", "Weight", "Relation", "MetadataJSON"])
             for e in graph.edges:
-                w.writerow([
-                    e.source_node_id,
-                    e.target_node_id,
-                    float(getattr(e, "weight", 1.0)),
-                    _edge_relation(e),
-                    _edge_metadata_text(e),
-                ])
+                w.writerow(
+                    [
+                        e.source_node_id,
+                        e.target_node_id,
+                        float(getattr(e, "weight", 1.0)),
+                        _edge_relation(e),
+                        _edge_metadata_text(e),
+                    ]
+                )
 
         console.print(f"[green]Maltego MTGX:[/green] {mtgx_path}")
         console.print(f"[green]Maltego GraphML:[/green] {graphml_path}")

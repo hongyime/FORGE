@@ -135,7 +135,9 @@ class CommandCenterService:
             event_publisher=self._publish_scheduler_event,
         )
 
-    def _publish_scheduler_event(self, engagement_id: int, message: str, payload: dict[str, Any]) -> None:
+    def _publish_scheduler_event(
+        self, engagement_id: int, message: str, payload: dict[str, Any]
+    ) -> None:
         severity = "critical" if "failed" in message else "info"
         event = CommandEvent(
             event_id=uuid.uuid4().hex,
@@ -332,7 +334,10 @@ class CommandCenterService:
             event_type="emergency_stop_triggered",
             engagement_id=self.engagement_id,
             timestamp=utc_now(),
-            payload={"cancelled_action_ids": cancelled_action_ids, "cancelled_task_keys": cancelled_task_keys},
+            payload={
+                "cancelled_action_ids": cancelled_action_ids,
+                "cancelled_task_keys": cancelled_task_keys,
+            },
             severity="critical",
         )
         self.record_event(event)
@@ -695,9 +700,11 @@ class CommandCenterService:
                             "action_type": stored.action_type.value,
                             "policy_outcome": stored.policy_outcome.value,
                         },
-                        severity="warning" if stored.risk_level == CommandRiskLevel.CRITICAL else "info",
+                        severity="warning"
+                        if stored.risk_level == CommandRiskLevel.CRITICAL
+                        else "info",
                     ),
-                    con=con
+                    con=con,
                 )
             if (
                 state.enabled
@@ -709,12 +716,21 @@ class CommandCenterService:
         return dispatchable_ids
 
     def _merge_action(self, existing: CommandAction, generated: CommandAction) -> CommandAction:
-        if existing.status in _TERMINAL_ACTION_STATUSES or existing.status == CommandActionStatus.RUNNING:
+        if (
+            existing.status in _TERMINAL_ACTION_STATUSES
+            or existing.status == CommandActionStatus.RUNNING
+        ):
             return existing
         next_status = existing.status
-        if generated.execution_mode == "autonomous" and generated.policy_outcome == CommandPolicyOutcome.QUEUE:
+        if (
+            generated.execution_mode == "autonomous"
+            and generated.policy_outcome == CommandPolicyOutcome.QUEUE
+        ):
             next_status = CommandActionStatus.QUEUED
-        elif generated.policy_outcome in {CommandPolicyOutcome.SUGGEST, CommandPolicyOutcome.AUTO_EXECUTE}:
+        elif generated.policy_outcome in {
+            CommandPolicyOutcome.SUGGEST,
+            CommandPolicyOutcome.AUTO_EXECUTE,
+        }:
             next_status = CommandActionStatus.SUGGESTED
         validate_action_transition(existing.status, next_status)
         return existing.model_copy(
@@ -816,7 +832,9 @@ class CommandCenterService:
             """,
             (self.engagement_id,),
         ).fetchone()
-        host_context = _json_loads(str(host_row[1]) if host_row and host_row[1] is not None else None, {})
+        host_context = _json_loads(
+            str(host_row[1]) if host_row and host_row[1] is not None else None, {}
+        )
         service_map: dict[int, dict[str, Any]] = {}
         for row in service_rows:
             port = int(row[0])
@@ -830,8 +848,12 @@ class CommandCenterService:
             port = int(row[0])
             service_map[port] = {
                 "port": port,
-                "service": str(row[1]) if row[1] is not None else service_map.get(port, {}).get("service", ""),
-                "version": str(row[2]) if row[2] is not None else service_map.get(port, {}).get("version"),
+                "service": str(row[1])
+                if row[1] is not None
+                else service_map.get(port, {}).get("service", ""),
+                "version": str(row[2])
+                if row[2] is not None
+                else service_map.get(port, {}).get("version"),
                 "scanned_at": str(row[3]),
                 "confidence": float(row[4]) if row[4] is not None else None,
                 "cdn_detected": bool(row[5]),
@@ -884,7 +906,9 @@ class CommandCenterService:
             "os_family": (
                 str(host_row[0])
                 if host_row and host_row[0] is not None
-                else str(service_rows[0][3]) if service_rows and service_rows[0][3] is not None else host_context.get("os_family")
+                else str(service_rows[0][3])
+                if service_rows and service_rows[0][3] is not None
+                else host_context.get("os_family")
             ),
             "services": services,
             "urls": [
@@ -982,7 +1006,9 @@ class CommandCenterService:
                     state=state,
                 )
             )
-        if {"ssh", "smb", "ftp", "rdp"} & service_names and context["credential_count"]["available"] > 0:
+        if {"ssh", "smb", "ftp", "rdp"} & service_names and context["credential_count"][
+            "available"
+        ] > 0:
             primary_service = next(
                 iter(sorted({"ssh", "smb", "ftp", "rdp"} & service_names)),
                 "ssh",
@@ -996,7 +1022,9 @@ class CommandCenterService:
                     confidence=96,
                     risk_level=CommandRiskLevel.CRITICAL,
                     reasoning=f"Unvalidated credentials exist and {primary_service.upper()} is exposed on {host}.",
-                    opsec_warnings=["Respects lockout thresholds but still touches authentication controls."],
+                    opsec_warnings=[
+                        "Respects lockout thresholds but still touches authentication controls."
+                    ],
                     params={"host": host, "service": primary_service},
                     state=state,
                 )
@@ -1005,7 +1033,8 @@ class CommandCenterService:
             (
                 str(finding.get("url"))
                 for finding in context["latest_findings"]
-                if str(finding.get("severity", "")).lower() == "critical" and str(finding.get("url"))
+                if str(finding.get("severity", "")).lower() == "critical"
+                and str(finding.get("url"))
             ),
             None,
         )
@@ -1144,7 +1173,7 @@ class CommandCenterService:
                     "url_count": len(context["urls"]),
                 },
             ),
-            con=con
+            con=con,
         )
 
     def _maybe_emit_critical_finding(
@@ -1182,7 +1211,7 @@ class CommandCenterService:
                     severity="critical",
                     expires_at=utc_now() + timedelta(hours=8),
                 ),
-                con=con
+                con=con,
             )
         if state.enabled and state.pause_on_new_critical_finding and not state.emergency_stop:
             updated = state.model_copy(
@@ -1202,7 +1231,7 @@ class CommandCenterService:
                     payload={"enabled": False, "paused_reason": updated.paused_reason},
                     severity="critical",
                 ),
-                con=con
+                con=con,
             )
 
     def _persist_action(self, con: sqlite3.Connection, action: CommandAction) -> None:

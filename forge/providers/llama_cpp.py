@@ -96,9 +96,7 @@ class LlamaCppProvider:
         try:
             from llama_cpp import Llama
         except ImportError as exc:  # pragma: no cover - exercised when extension absent
-            raise ProviderUnavailableError(
-                f"llama-cpp-python is not installed: {exc}"
-            ) from exc
+            raise ProviderUnavailableError(f"llama-cpp-python is not installed: {exc}") from exc
 
         try:
             self._llm: Any = Llama(model_path=str(model_path), verbose=False)
@@ -131,9 +129,7 @@ class LlamaCppProvider:
         start = time.perf_counter()
 
         try:
-            raw = await self._call_with_timeout(
-                self._invoke_completion, request, json_mode=False
-            )
+            raw = await self._call_with_timeout(self._invoke_completion, request, json_mode=False)
         except ProviderUnavailableError as exc:
             await self._log_failure(correlation_id, start, str(exc))
             raise
@@ -185,8 +181,7 @@ class LlamaCppProvider:
 
         if not isinstance(parsed, dict):
             message = (
-                "llama_cpp structured output must be a JSON object; "
-                f"got {type(parsed).__name__}"
+                f"llama_cpp structured output must be a JSON object; got {type(parsed).__name__}"
             )
             await self._log_failure(correlation_id, start, message)
             raise ProviderUnavailableError(message)
@@ -224,9 +219,7 @@ class LlamaCppProvider:
     async def health_check(self) -> bool:
         """Return True if the loaded model can respond to a trivial prompt."""
         try:
-            await self.complete(
-                CompletionRequest(prompt="ping", max_tokens=1, temperature=0.0)
-            )
+            await self.complete(CompletionRequest(prompt="ping", max_tokens=1, temperature=0.0))
         except ProviderUnavailableError:
             return False
         return True
@@ -254,9 +247,7 @@ class LlamaCppProvider:
         except ProviderUnavailableError:
             raise
         except Exception as exc:  # noqa: BLE001 - normalise backend failures
-            raise ProviderUnavailableError(
-                f"llama_cpp backend failure: {exc}"
-            ) from exc
+            raise ProviderUnavailableError(f"llama_cpp backend failure: {exc}") from exc
 
     def _invoke_completion(
         self,
@@ -366,9 +357,7 @@ class LlamaCppProvider:
         )
         await self._audit_logger.log(entry)
 
-    async def _log_failure(
-        self, correlation_id: str, start: float, error_detail: str
-    ) -> None:
+    async def _log_failure(self, correlation_id: str, start: float, error_detail: str) -> None:
         """Append an LLM_INFERENCE audit entry for a failed call."""
         if self._audit_logger is None:
             return

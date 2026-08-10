@@ -196,7 +196,9 @@ class Worker:
                 status, message = result_queue.get(timeout=0.5)
             except queue.Empty as exc:
                 if process.exitcode:
-                    raise RuntimeError(f"task handler process exited with code {process.exitcode}") from exc
+                    raise RuntimeError(
+                        f"task handler process exited with code {process.exitcode}"
+                    ) from exc
                 raise RuntimeError("task handler exited without reporting a result") from exc
             if status == "error":
                 raise RuntimeError(str(message))

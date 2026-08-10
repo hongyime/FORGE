@@ -8,6 +8,7 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class AzureCollector(BaseCollector):
     """
     Collect Azure credentials from environment variables.

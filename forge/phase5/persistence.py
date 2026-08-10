@@ -4,6 +4,7 @@ Classification: DESTRUCTIVE — requires operator approval.
 FORGE_SAFE_MODE=1 blocks all persistence actions.
 Uses LOLBAS/GTFOBins KB to select appropriate persistence vector.
 """
+
 from __future__ import annotations
 
 import logging
@@ -55,7 +56,11 @@ def deploy_persistence(
     if dry_run:
         print(f"[DRY-RUN] Would deploy {technique['name']} on {ip}")
         print(f"  Command: {technique.get('command', 'N/A')}")
-        return {"deployed": False, "technique": technique["name"], "cleanup_cmd": technique.get("cleanup")}
+        return {
+            "deployed": False,
+            "technique": technique["name"],
+            "cleanup_cmd": technique.get("cleanup"),
+        }
 
     print(f"[PERSISTENCE] Deploying {technique['name']} on {ip}...", flush=True)
     sys.stdout.flush()
@@ -74,6 +79,7 @@ def deploy_persistence(
 def _select_technique(os_family: str, method: str, kb_path: str) -> Optional[dict]:
     """Query knowledge.db for appropriate LOLBin persistence technique."""
     import sqlite3 as _sqlite3
+
     try:
         conn = _sqlite3.connect(kb_path)
         conn.row_factory = _sqlite3.Row
@@ -90,4 +96,8 @@ def _select_technique(os_family: str, method: str, kb_path: str) -> Optional[dic
             return {"name": row["name"], "command": None, "cleanup": None}
     except Exception as e:
         _LOG.debug("KB query failed: %s", e)
-    return {"name": "scheduled_task" if os_family == "windows" else "cron", "command": None, "cleanup": None}
+    return {
+        "name": "scheduled_task" if os_family == "windows" else "cron",
+        "command": None,
+        "cleanup": None,
+    }

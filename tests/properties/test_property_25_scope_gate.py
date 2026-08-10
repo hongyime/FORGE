@@ -92,16 +92,16 @@ def _ipv4_in(network: str) -> st.SearchStrategy[str]:
     # Avoid network/broadcast addresses for clarity
     lo = int(net.network_address) + 1
     hi = int(net.broadcast_address) - 1
-    return st.integers(min_value=lo, max_value=hi).map(
-        lambda v: str(ipaddress.IPv4Address(v))
-    )
+    return st.integers(min_value=lo, max_value=hi).map(lambda v: str(ipaddress.IPv4Address(v)))
 
 
 def _ipv4_outside(network: str) -> st.SearchStrategy[str]:
     net = ipaddress.IPv4Network(network)
-    return st.integers(min_value=1, max_value=2**32 - 2).map(
-        lambda v: str(ipaddress.IPv4Address(v))
-    ).filter(lambda ip: ipaddress.IPv4Address(ip) not in net)
+    return (
+        st.integers(min_value=1, max_value=2**32 - 2)
+        .map(lambda v: str(ipaddress.IPv4Address(v)))
+        .filter(lambda ip: ipaddress.IPv4Address(ip) not in net)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +117,7 @@ class TestIsInScopeAgreesWithValidate:
         target=_domain(),
     )
     @settings(max_examples=40, deadline=None)
-    def test_in_scope_target_does_not_raise(
-        self, scope_domains: list[str], target: str
-    ) -> None:
+    def test_in_scope_target_does_not_raise(self, scope_domains: list[str], target: str) -> None:
         gate = ScopeGate(EngagementScope(domains=scope_domains))
         if gate.is_in_scope(target):
             gate.validate(target)  # must not raise
@@ -148,9 +146,7 @@ class TestDomainScope:
         sub_label=st.text(alphabet=_LABEL_CHAR, min_size=1, max_size=8),
     )
     @settings(max_examples=30, deadline=None)
-    def test_exact_match_does_not_cover_subdomains(
-        self, parent: str, sub_label: str
-    ) -> None:
+    def test_exact_match_does_not_cover_subdomains(self, parent: str, sub_label: str) -> None:
         gate = ScopeGate(EngagementScope(domains=[parent]))
         target = f"{sub_label}.{parent}"
         assume(target != parent)
@@ -159,9 +155,7 @@ class TestDomainScope:
 
     @given(parent=_domain(), sub_label=st.text(alphabet=_LABEL_CHAR, min_size=1, max_size=8))
     @settings(max_examples=30, deadline=None)
-    def test_wildcard_matches_subdomains(
-        self, parent: str, sub_label: str
-    ) -> None:
+    def test_wildcard_matches_subdomains(self, parent: str, sub_label: str) -> None:
         target = f"{sub_label}.{parent}"
         assume(target != parent)
         gate = ScopeGate(EngagementScope(domains=[f"*.{parent}"]))
@@ -176,9 +170,7 @@ class TestDomainScope:
 
     @given(parent=_domain(), prefix=st.text(alphabet=_LABEL_CHAR, min_size=1, max_size=6))
     @settings(max_examples=30, deadline=None)
-    def test_wildcard_does_not_match_overlapping_suffix(
-        self, parent: str, prefix: str
-    ) -> None:
+    def test_wildcard_does_not_match_overlapping_suffix(self, parent: str, prefix: str) -> None:
         # "evilexample.com" must NOT match "*.example.com"
         gate = ScopeGate(EngagementScope(domains=[f"*.{parent}"]))
         # construct a domain that ends with parent but isn't a true subdomain
@@ -248,9 +240,7 @@ class TestAuditContract:
         correlation: str,
     ) -> None:
         audit = AuditLogger()
-        gate = ScopeGate(
-            EngagementScope(domains=scope_domains), audit_logger=audit
-        )
+        gate = ScopeGate(EngagementScope(domains=scope_domains), audit_logger=audit)
 
         try:
             gate.validate(target, correlation_id=correlation)
@@ -258,14 +248,9 @@ class TestAuditContract:
         except ScopeViolationError:
             allowed = False
 
-        scope_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.SCOPE_DECISION
-        ]
+        scope_entries = [e for e in audit.entries if e.event_type == AuditEventType.SCOPE_DECISION]
         assert len(scope_entries) == 1, (
-            f"validate() must emit exactly one SCOPE_DECISION entry; got "
-            f"{len(scope_entries)}"
+            f"validate() must emit exactly one SCOPE_DECISION entry; got {len(scope_entries)}"
         )
         entry = scope_entries[0]
         assert entry.correlation_id == correlation
@@ -315,11 +300,7 @@ class TestConcreteSequence:
                 gate.validate(bad)
 
         # 10 audit entries total (5 allows + 5 denies)
-        scope_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.SCOPE_DECISION
-        ]
+        scope_entries = [e for e in audit.entries if e.event_type == AuditEventType.SCOPE_DECISION]
         assert len(scope_entries) == 10
         allows = [e for e in scope_entries if e.success]
         denies = [e for e in scope_entries if not e.success]

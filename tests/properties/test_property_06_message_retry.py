@@ -68,9 +68,7 @@ class _SlowAgent:
     def subscribed_topics(self) -> list[str]:
         return list(self._topics)
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         # Record what we saw BEFORE we sleep so cancellation does not
         # erase the trace.
         self.attempts.append(message)
@@ -81,9 +79,7 @@ class _SlowAgent:
         return {"role": self._role, "attempts": len(self.attempts)}
 
 
-async def _drive_loop_for(
-    loop: AgentLoop, duration_seconds: float
-) -> None:
+async def _drive_loop_for(loop: AgentLoop, duration_seconds: float) -> None:
     task = asyncio.create_task(loop.run())
     await asyncio.sleep(duration_seconds)
     await loop.shutdown()
@@ -148,12 +144,10 @@ class TestRetryBudgetEnforced:
         errors = [
             e
             for e in audit.entries
-            if e.event_type == AuditEventType.ERROR
-            and e.correlation_id == "cid-retry"
+            if e.event_type == AuditEventType.ERROR and e.correlation_id == "cid-retry"
         ]
         assert len(errors) >= 1, (
-            "Retry budget exhaustion must produce at least one ERROR audit "
-            "entry"
+            "Retry budget exhaustion must produce at least one ERROR audit entry"
         )
 
 
@@ -265,6 +259,5 @@ class TestNoInfiniteRetryLoop:
 
         # Hard upper bound on attempts
         assert len(agent.attempts) == 1 + retry_max, (
-            f"Attempts not bounded: got {len(agent.attempts)} for "
-            f"retry_max={retry_max}"
+            f"Attempts not bounded: got {len(agent.attempts)} for retry_max={retry_max}"
         )

@@ -102,7 +102,9 @@ def _value_candidates(key_hint: str, value: Any) -> list[str]:
         bucket = _static_bucket(value)
         if bucket:
             candidates.append(f"s3://{bucket}")
-    if key in _ENDPOINT_KEYS or any(marker in key for marker in ("domainname", "publicurl", "apiurl")):
+    if key in _ENDPOINT_KEYS or any(
+        marker in key for marker in ("domainname", "publicurl", "apiurl")
+    ):
         endpoint = _endpoint_candidate(value)
         if endpoint:
             candidates.append(endpoint)

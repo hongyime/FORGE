@@ -146,9 +146,7 @@ class TestPluginLoaderDiscovery:
     """Validates Requirements 4.2 and 4.6."""
 
     @pytest.mark.asyncio
-    async def test_valid_plugin_registered_invalid_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_valid_plugin_registered_invalid_rejected(self, tmp_path: Path) -> None:
         """One valid + one invalid plugin: valid is registered, invalid logged."""
         _write(tmp_path / "good.py", VALID_PLUGIN_SRC)
         _write(tmp_path / "bad.py", INVALID_PLUGIN_SRC)
@@ -164,20 +162,12 @@ class TestPluginLoaderDiscovery:
 
         # The audit log records exactly one successful load and at least
         # one rejection (the broken plugin).
-        loads = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.STATE_TRANSITION
-        ]
-        warnings = [
-            e for e in audit.entries if e.event_type == AuditEventType.WARNING
-        ]
+        loads = [e for e in audit.entries if e.event_type == AuditEventType.STATE_TRANSITION]
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
         assert len(loads) == 1
         assert loads[0].tool_name == "nmap"
         assert len(warnings) >= 1
-        assert any(
-            "metadata is unavailable" in (w.error_detail or "") for w in warnings
-        )
+        assert any("metadata is unavailable" in (w.error_detail or "") for w in warnings)
 
     @pytest.mark.asyncio
     async def test_skips_non_python_files(self, tmp_path: Path) -> None:
@@ -208,9 +198,7 @@ class TestPluginLoaderDiscovery:
         assert set(registry.keys()) == {"nmap", "dns_enum"}
 
         # The import failure must surface as a WARNING audit entry.
-        warnings = [
-            e for e in audit.entries if e.event_type == AuditEventType.WARNING
-        ]
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
         assert any("boom on import" in (w.error_detail or "") for w in warnings)
 
     @pytest.mark.asyncio
@@ -225,13 +213,9 @@ class TestPluginLoaderDiscovery:
         assert set(registry.keys()) == {"nmap", "dns_enum"}
 
     @pytest.mark.asyncio
-    async def test_missing_plugin_dir_returns_empty_registry(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_missing_plugin_dir_returns_empty_registry(self, tmp_path: Path) -> None:
         """A non-existent plugin_dir is tolerated and yields an empty registry."""
-        loader = PluginLoader(
-            plugin_dir=str(tmp_path / "does-not-exist"), audit=AuditLogger()
-        )
+        loader = PluginLoader(plugin_dir=str(tmp_path / "does-not-exist"), audit=AuditLogger())
         registry = await loader.discover_and_load()
         assert registry == {}
 
@@ -250,9 +234,7 @@ class TestPluginLoaderResolve:
         assert plugin.metadata.version == "1.0.0"
 
     @pytest.mark.asyncio
-    async def test_resolve_unknown_tool_raises_key_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_resolve_unknown_tool_raises_key_error(self, tmp_path: Path) -> None:
         _write(tmp_path / "good.py", VALID_PLUGIN_SRC)
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=AuditLogger())
         await loader.discover_and_load()
@@ -261,9 +243,7 @@ class TestPluginLoaderResolve:
             loader.resolve("does-not-exist")
 
     @pytest.mark.asyncio
-    async def test_list_plugins_returns_metadata_for_all_registered(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_list_plugins_returns_metadata_for_all_registered(self, tmp_path: Path) -> None:
         _write(tmp_path / "first.py", VALID_PLUGIN_SRC)
         _write(tmp_path / "second.py", SECOND_VALID_PLUGIN_SRC)
 

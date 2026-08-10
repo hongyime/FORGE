@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -9,6 +8,7 @@ from typing import Generator, Optional
 from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollector, CollectedFile
 
 _LOG = logging.getLogger(__name__)
+
 
 class AwsCollector(BaseCollector):
     """
@@ -35,8 +35,8 @@ class AwsCollector(BaseCollector):
     def collect(self, artifact: ArtifactMetadata) -> Optional[CollectedFile]:
         try:
             aws_file = Path(artifact.source_path)
-            data    = aws_file.read_bytes()
-            sha256  = self._sha256(data)
+            data = aws_file.read_bytes()
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
             del data
 
@@ -45,10 +45,10 @@ class AwsCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(aws_file),
-                sha256     = sha256,
-                size_bytes = len(payload),
-                metadata   = artifact,
+                path=str(aws_file),
+                sha256=sha256,
+                size_bytes=len(payload),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

@@ -170,8 +170,12 @@ def test_oci_and_docker_save_static_artifact_review_parity(
     report_markdown = report_path.read_text(encoding="utf-8")
     report_payload = json.loads(report_path.with_suffix(".json").read_text(encoding="utf-8"))
     report_csv_rows = list(csv.DictReader(report_path.with_suffix(".csv").open(encoding="utf-8")))
-    raw_rows = ReportSynthesizer._raw_export_csv_rows(ContextBuilder(db_path, ENGAGEMENT_ID).build())
-    report_blob = json.dumps(report_payload, sort_keys=True) + json.dumps(report_csv_rows, sort_keys=True)
+    raw_rows = ReportSynthesizer._raw_export_csv_rows(
+        ContextBuilder(db_path, ENGAGEMENT_ID).build()
+    )
+    report_blob = json.dumps(report_payload, sort_keys=True) + json.dumps(
+        report_csv_rows, sort_keys=True
+    )
 
     assert "Validated public S3 bucket listing exposure" in report_markdown
     assert "Validated public OCI S3 bucket listing exposure" in report_markdown
@@ -207,8 +211,7 @@ def test_oci_and_docker_save_static_artifact_review_parity(
     dashboard_blob = json.dumps(dashboard_payload, sort_keys=True)
 
     finding_titles = {
-        str(row["Title"])
-        for row in dashboard_payload["sections"]["vulnerability_findings"]
+        str(row["Title"]) for row in dashboard_payload["sections"]["vulnerability_findings"]
     }
     assert "Validated public S3 bucket listing exposure" in finding_titles
     assert "Validated public OCI S3 bucket listing exposure" in finding_titles

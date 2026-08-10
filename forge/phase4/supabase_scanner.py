@@ -14,6 +14,7 @@ What it tests after key is found:
 Authorization: target must be in engagement scope.
 OPSEC: all requests via curl_cffi, routes through FORGE_PROXY.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,12 +34,8 @@ _LOG = logging.getLogger(__name__)
 _RATE_LIMITER = AdaptiveRateLimiter(base_delay=1.0, max_delay=30.0, min_delay=0.5, jitter=0.3)
 
 # Supabase anon key pattern (JWT with 'anon' role)
-_SUPABASE_KEY_PATTERN = re.compile(
-    r'eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+'
-)
-_SUPABASE_URL_PATTERN = re.compile(
-    r'https?://([a-z0-9]+)\.supabase\.(?:co|com|io)'
-)
+_SUPABASE_KEY_PATTERN = re.compile(r"eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+")
+_SUPABASE_URL_PATTERN = re.compile(r"https?://([a-z0-9]+)\.supabase\.(?:co|com|io)")
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS supabase_findings (
@@ -61,9 +58,11 @@ def _fetch_text(url: str, cfg=None) -> Optional[str]:
     _RATE_LIMITER.wait(url)
     try:
         from curl_cffi import requests as cffi_requests
+
         proxies = {"https": cfg.proxy} if cfg and cfg.proxy else None
-        resp = cffi_requests.get(url, impersonate=cfg.curl_profile if cfg else "chrome120",
-                                  proxies=proxies, timeout=20)
+        resp = cffi_requests.get(
+            url, impersonate=cfg.curl_profile if cfg else "chrome120", proxies=proxies, timeout=20
+        )
         if resp.status_code == 200:
             _RATE_LIMITER.record_success(url)
             return resp.text
@@ -83,6 +82,7 @@ def _extract_supabase_keys(text: str, source_url: str) -> list[dict]:
     for key in keys:
         try:
             import base64
+
             payload = key.split(".")[1]
             # Pad base64
             payload += "=" * (4 - len(payload) % 4)
@@ -94,13 +94,15 @@ def _extract_supabase_keys(text: str, source_url: str) -> list[dict]:
 
     for ref in urls:
         for key, role in anon_keys or [("", "unknown")]:
-            results.append({
-                "project_ref": ref,
-                "project_url": f"https://{ref}.supabase.co",
-                "anon_key": key or None,
-                "key_role": role,
-                "source_url": source_url,
-            })
+            results.append(
+                {
+                    "project_ref": ref,
+                    "project_url": f"https://{ref}.supabase.co",
+                    "anon_key": key or None,
+                    "key_role": role,
+                    "source_url": source_url,
+                }
+            )
 
     return results
 
@@ -115,6 +117,7 @@ def _test_rls(project_url: str, anon_key: str, cfg=None) -> list[dict]:
     _RATE_LIMITER.wait(rest_url + "/")
     try:
         from curl_cffi import requests as cffi_requests
+
         proxies = {"https": cfg.proxy} if cfg and cfg.proxy else None
         spec_resp = cffi_requests.get(
             rest_url + "/",
@@ -144,7 +147,8 @@ def _test_rls(project_url: str, anon_key: str, cfg=None) -> list[dict]:
         _RATE_LIMITER.wait(url)
         try:
             resp = cffi_requests.get(
-                url, headers=headers,
+                url,
+                headers=headers,
                 impersonate=cfg.curl_profile if cfg else "chrome120",
                 proxies=proxies,
                 timeout=10,
@@ -152,17 +156,25 @@ def _test_rls(project_url: str, anon_key: str, cfg=None) -> list[dict]:
             if resp.status_code == 200:
                 data = resp.json()
                 if isinstance(data, list) and len(data) > 0:
-                    severity = "HIGH" if any(
-                        k in str(data[0]).lower()
-                        for k in ("password", "token", "secret", "key", "email", "phone")
-                    ) else "MEDIUM"
-                    findings.append({
-                        "table_name": table,
-                        "finding_type": "RLS_BYPASS_SELECT",
-                        "severity": severity,
-                        "detail": f"Unauthenticated SELECT returned {len(data)} rows. Sample keys: {list(data[0].keys())[:5]}",
-                    })
-                    print(f"[SUPABASE] RLS bypass on {table}: {len(data)} rows readable", flush=True)
+                    severity = (
+                        "HIGH"
+                        if any(
+                            k in str(data[0]).lower()
+                            for k in ("password", "token", "secret", "key", "email", "phone")
+                        )
+                        else "MEDIUM"
+                    )
+                    findings.append(
+                        {
+                            "table_name": table,
+                            "finding_type": "RLS_BYPASS_SELECT",
+                            "severity": severity,
+                            "detail": f"Unauthenticated SELECT returned {len(data)} rows. Sample keys: {list(data[0].keys())[:5]}",
+                        }
+                    )
+                    print(
+                        f"[SUPABASE] RLS bypass on {table}: {len(data)} rows readable", flush=True
+                    )
             _RATE_LIMITER.record_success(url)
         except Exception:
             pass
@@ -232,13 +244,15 @@ def scan_supabase(
 
     # --- Manual / env keys ---
     if manual_project_ref:
-        candidates.append({
-            "project_ref": manual_project_ref,
-            "project_url": f"https://{manual_project_ref}.supabase.co",
-            "anon_key": manual_anon_key or os.environ.get("FORGE_SUPABASE_ANON_KEY", ""),
-            "key_role": "provided",
-            "source_url": "manual",
-        })
+        candidates.append(
+            {
+                "project_ref": manual_project_ref,
+                "project_url": f"https://{manual_project_ref}.supabase.co",
+                "anon_key": manual_anon_key or os.environ.get("FORGE_SUPABASE_ANON_KEY", ""),
+                "key_role": "provided",
+                "source_url": "manual",
+            }
+        )
 
     if not candidates:
         env_key = os.environ.get("FORGE_SUPABASE_ANON_KEY", "")
@@ -246,22 +260,27 @@ def scan_supabase(
             # Extract project ref from key if possible
             try:
                 import base64
+
                 payload = env_key.split(".")[1]
                 payload += "=" * (4 - len(payload) % 4)
                 decoded = json.loads(base64.b64decode(payload).decode())
                 ref = decoded.get("ref", "unknown")
             except Exception:
                 ref = "unknown"
-            candidates.append({
-                "project_ref": ref,
-                "project_url": f"https://{ref}.supabase.co",
-                "anon_key": env_key,
-                "key_role": "env",
-                "source_url": "FORGE_SUPABASE_ANON_KEY",
-            })
+            candidates.append(
+                {
+                    "project_ref": ref,
+                    "project_url": f"https://{ref}.supabase.co",
+                    "anon_key": env_key,
+                    "key_role": "env",
+                    "source_url": "FORGE_SUPABASE_ANON_KEY",
+                }
+            )
 
     if not candidates:
-        print("[SUPABASE] No Supabase project found. Provide --target-url or FORGE_SUPABASE_ANON_KEY.")
+        print(
+            "[SUPABASE] No Supabase project found. Provide --target-url or FORGE_SUPABASE_ANON_KEY."
+        )
         return []
 
     # Deduplicate by project_ref
@@ -286,11 +305,19 @@ def scan_supabase(
             """INSERT OR IGNORE INTO supabase_findings
                (engagement_id, project_ref, anon_key, source_url, table_name, finding_type, severity, detail)
                VALUES (?, ?, ?, ?, NULL, 'KEY_DISCOVERED', 'INFO', ?)""",
-            (engagement_id, ref, key[:40] + "..." if len(key) > 40 else key,
-             candidate.get("source_url", ""), f"Role: {candidate.get('key_role')}"),
+            (
+                engagement_id,
+                ref,
+                key[:40] + "..." if len(key) > 40 else key,
+                candidate.get("source_url", ""),
+                f"Role: {candidate.get('key_role')}",
+            ),
         )
         eng_db_conn.commit()
-        print(f"[SUPABASE] Project: {ref} | Key: {key[:20]}... | Source: {candidate.get('source_url')}", flush=True)
+        print(
+            f"[SUPABASE] Project: {ref} | Key: {key[:20]}... | Source: {candidate.get('source_url')}",
+            flush=True,
+        )
 
         if not key:
             continue
@@ -303,8 +330,16 @@ def scan_supabase(
                     """INSERT OR IGNORE INTO supabase_findings
                        (engagement_id, project_ref, anon_key, source_url, table_name, finding_type, severity, detail)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (engagement_id, ref, key[:40], candidate.get("source_url", ""),
-                     f["table_name"], f["finding_type"], f["severity"], f["detail"]),
+                    (
+                        engagement_id,
+                        ref,
+                        key[:40],
+                        candidate.get("source_url", ""),
+                        f["table_name"],
+                        f["finding_type"],
+                        f["severity"],
+                        f["detail"],
+                    ),
                 )
             except Exception as e:
                 _LOG.warning("DB insert failed: %s", e)

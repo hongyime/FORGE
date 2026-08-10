@@ -2,6 +2,7 @@
 tests/phase4/test_hash_credential_bridge.py
 Unit tests for hash_credential_bridge.py (Module 4-C).
 """
+
 from __future__ import annotations
 
 import re
@@ -23,6 +24,7 @@ from forge.phase4.hash_credential_bridge import (
 # ══════════════════════════════════════════════════════════════════════════════
 # Fixtures
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 @pytest.fixture
 def db_with_hashes(tmp_path: Path) -> Path:
@@ -50,7 +52,8 @@ def db_with_hashes(tmp_path: Path) -> Path:
         INSERT INTO credentials VALUES
             (3, 2, 'other@corp.com', 0, 'hash999', 'MD5', NULL, NULL);
     """)
-    con.commit(); con.close()
+    con.commit()
+    con.close()
     return db
 
 
@@ -62,6 +65,7 @@ def bridge(db_with_hashes: Path) -> HashCredentialBridge:
 # ══════════════════════════════════════════════════════════════════════════════
 # HashAttackClass taxonomy
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class TestHashAttackClassEnum:
     def test_all_four_classes_exist(self):
@@ -77,16 +81,17 @@ class TestHashAttackClassEnum:
 # classify_hash_attack_from_exploit
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestClassifyHashAttack:
 
+class TestClassifyHashAttack:
     def _exploit(self, title="", description="", type_="remote", platform="windows"):
         con = sqlite3.connect(":memory:")
         con.row_factory = sqlite3.Row
         con.execute("""CREATE TABLE e
             (edb_id INT, title TEXT, type TEXT, platform TEXT,
              path TEXT, cvss_score REAL, description TEXT)""")
-        con.execute("INSERT INTO e VALUES (1,?,?,?,?,?,?)",
-                    [title, type_, platform, "", 5.0, description])
+        con.execute(
+            "INSERT INTO e VALUES (1,?,?,?,?,?,?)", [title, type_, platform, "", 5.0, description]
+        )
         return con.execute("SELECT * FROM e").fetchone()
 
     def test_ntlm_relay_keyword(self):
@@ -137,12 +142,15 @@ class TestClassifyHashAttack:
 # HashCredentialSet
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestHashCredentialSet:
 
+class TestHashCredentialSet:
     def _make_cred(self, cid, plaintext=None):
         return HashCredential(
-            credential_id=cid, email="u@c.com", hash_type="NTLM",
-            password_hash="aabbcc", hash_plaintext=plaintext,
+            credential_id=cid,
+            email="u@c.com",
+            hash_type="NTLM",
+            password_hash="aabbcc",
+            hash_plaintext=plaintext,
         )
 
     def test_empty_set_has_no_hash(self):
@@ -158,10 +166,12 @@ class TestHashCredentialSet:
         assert not s.has_cracked
 
     def test_has_cracked_true_when_one_cracked(self):
-        s = HashCredentialSet([
-            self._make_cred(1, plaintext=None),
-            self._make_cred(2, plaintext="P@ssw0rd"),
-        ])
+        s = HashCredentialSet(
+            [
+                self._make_cred(1, plaintext=None),
+                self._make_cred(2, plaintext="P@ssw0rd"),
+            ]
+        )
         assert s.has_cracked
 
     def test_crack_pending_true_when_uncracked_exists(self):
@@ -177,17 +187,21 @@ class TestHashCredentialSet:
         assert set(s.all_hash_ids) == {5, 7}
 
     def test_cracked_ids_subset(self):
-        s = HashCredentialSet([
-            self._make_cred(1, plaintext="cracked"),
-            self._make_cred(2, plaintext=None),
-        ])
+        s = HashCredentialSet(
+            [
+                self._make_cred(1, plaintext="cracked"),
+                self._make_cred(2, plaintext=None),
+            ]
+        )
         assert s.cracked_ids == [1]
 
     def test_summary_counts(self):
-        s = HashCredentialSet([
-            self._make_cred(1, plaintext="p"),
-            self._make_cred(2, plaintext=None),
-        ])
+        s = HashCredentialSet(
+            [
+                self._make_cred(1, plaintext="p"),
+                self._make_cred(2, plaintext=None),
+            ]
+        )
         summary = s.summary()
         assert summary["total_hashes"] == 2
         assert summary["cracked"] == 1
@@ -198,8 +212,8 @@ class TestHashCredentialSet:
 # HashCredentialBridge
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestHashCredentialBridge:
 
+class TestHashCredentialBridge:
     def test_get_hash_credentials_returns_set(self, bridge: HashCredentialBridge):
         s = bridge.get_hash_credentials("10.0.0.1")
         assert isinstance(s, HashCredentialSet)
@@ -214,6 +228,7 @@ class TestHashCredentialBridge:
 
     def test_plaintext_never_logged(self, bridge: HashCredentialBridge, caplog):
         import logging
+
         with caplog.at_level(logging.DEBUG):
             bridge.get_hash_credentials("")
         for record in caplog.records:
@@ -238,7 +253,8 @@ class TestHashCredentialBridge:
         con.execute("""CREATE TABLE credentials
             (id INTEGER PRIMARY KEY, engagement_id INTEGER, email TEXT, validated INTEGER)""")
         con.execute("INSERT INTO credentials VALUES (1, 1, 'x@y.com', 1)")
-        con.commit(); con.close()
+        con.commit()
+        con.close()
         bridge = HashCredentialBridge(db, engagement_id=1)
         s = bridge.get_hash_credentials("")
         assert not s.has_any_hash

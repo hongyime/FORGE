@@ -120,15 +120,11 @@ class TestSubprocessModeSecurity:
     """SUBPROCESS executor regression tests covering Fixes 1, 4, 5, 7."""
 
     @pytest.mark.asyncio
-    async def test_stdout_overflow_killed_with_error(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    async def test_stdout_overflow_killed_with_error(self, tmp_path, monkeypatch) -> None:
         """Fix 1: a child producing > MAX_STDOUT_BYTES is killed and we
         return a failure PluginResult referencing the cap."""
         # Patch the cap down so the test runs quickly.
-        monkeypatch.setattr(
-            "forge.plugins.executor.MAX_STDOUT_BYTES", 64 * 1024
-        )
+        monkeypatch.setattr("forge.plugins.executor.MAX_STDOUT_BYTES", 64 * 1024)
 
         # Tiny Python program that floods stdout (writes 1 MiB) — the
         # patched 64 KiB cap will be exceeded almost immediately.
@@ -142,9 +138,7 @@ class TestSubprocessModeSecurity:
             encoding="utf-8",
         )
 
-        plugin = _make_plugin(
-            name="flooder", mode=ExecutionMode.SUBPROCESS, timeout_seconds=10
-        )
+        plugin = _make_plugin(name="flooder", mode=ExecutionMode.SUBPROCESS, timeout_seconds=10)
         executor = PluginExecutor(settings=_make_test_settings())
 
         result = await executor.execute(
@@ -156,9 +150,7 @@ class TestSubprocessModeSecurity:
         assert result.error is not None
         assert "stdout exceeded" in result.error
         # Audit must record the failure.
-        entries = [
-            e for e in executor.audit.entries if e.tool_name == "flooder"
-        ]
+        entries = [e for e in executor.audit.entries if e.tool_name == "flooder"]
         assert len(entries) == 1
         assert entries[0].success is False
 
@@ -167,27 +159,19 @@ class TestSubprocessModeSecurity:
         """Fix 7: non-empty, non-JSON stdout → success=False with descriptive
         error (was previously masked as success=True)."""
         script = tmp_path / "garbage.py"
-        script.write_text(
-            "print('this is not json output')\n", encoding="utf-8"
-        )
+        script.write_text("print('this is not json output')\n", encoding="utf-8")
 
-        plugin = _make_plugin(
-            name="garbage", mode=ExecutionMode.SUBPROCESS, timeout_seconds=10
-        )
+        plugin = _make_plugin(name="garbage", mode=ExecutionMode.SUBPROCESS, timeout_seconds=10)
         executor = PluginExecutor(settings=_make_test_settings())
 
-        result = await executor.execute(
-            plugin, params={"cmd": [sys.executable, str(script)]}
-        )
+        result = await executor.execute(plugin, params={"cmd": [sys.executable, str(script)]})
 
         assert result.success is False
         assert result.error is not None
         assert "not valid JSON" in result.error
 
     @pytest.mark.asyncio
-    async def test_subprocess_inherits_minimal_env_only(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    async def test_subprocess_inherits_minimal_env_only(self, tmp_path, monkeypatch) -> None:
         """Fix 4: child env contains PATH/HOME/LANG/TZ but NOT arbitrary
         host vars by default."""
         # Set a sentinel var the child must NOT see.
@@ -212,9 +196,7 @@ class TestSubprocessModeSecurity:
         )
         executor = PluginExecutor(settings=_make_test_settings())
 
-        result = await executor.execute(
-            plugin, params={"cmd": [sys.executable, str(script)]}
-        )
+        result = await executor.execute(plugin, params={"cmd": [sys.executable, str(script)]})
 
         assert result.success is True, f"got error: {result.error!r}"
         assert result.output["has_secret"] is False
@@ -222,9 +204,7 @@ class TestSubprocessModeSecurity:
         assert result.output["has_lang"] is True
 
     @pytest.mark.asyncio
-    async def test_subprocess_env_allowlist_via_metadata(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    async def test_subprocess_env_allowlist_via_metadata(self, tmp_path, monkeypatch) -> None:
         """Fix 4: metadata.inherit_env_vars opts the child into specific keys."""
         monkeypatch.setenv("MY_ALLOWED_KEY", "allowed_value")
         monkeypatch.setenv("MY_BLOCKED_KEY", "blocked_value")
@@ -246,9 +226,7 @@ class TestSubprocessModeSecurity:
         )
         executor = PluginExecutor(settings=_make_test_settings())
 
-        result = await executor.execute(
-            plugin, params={"cmd": [sys.executable, str(script)]}
-        )
+        result = await executor.execute(plugin, params={"cmd": [sys.executable, str(script)]})
 
         assert result.success is True, f"got error: {result.error!r}"
         assert result.output["allowed"] == "allowed_value"
@@ -261,9 +239,7 @@ class TestSubprocessModeSecurity:
         We simulate an exception by patching the bounded reader to raise
         and assert ``_terminate_subprocess`` is invoked.
         """
-        plugin = _make_plugin(
-            name="reaper", mode=ExecutionMode.SUBPROCESS, timeout_seconds=5
-        )
+        plugin = _make_plugin(name="reaper", mode=ExecutionMode.SUBPROCESS, timeout_seconds=5)
         executor = PluginExecutor(settings=_make_test_settings())
 
         terminate_calls: list[int] = []
@@ -282,8 +258,10 @@ class TestSubprocessModeSecurity:
         async def _fake_reader(stream, max_bytes):
             raise RuntimeError("synthetic reader failure")
 
-        with patch.object(executor, "_terminate_subprocess", _fake_terminate), \
-             patch("forge.plugins.executor._read_stream_bounded", _fake_reader):
+        with (
+            patch.object(executor, "_terminate_subprocess", _fake_terminate),
+            patch("forge.plugins.executor._read_stream_bounded", _fake_reader),
+        ):
             result = await executor.execute(
                 plugin,
                 params={
@@ -301,16 +279,12 @@ class TestSubprocessModeSecurity:
         assert result.error is not None
         assert "synthetic reader failure" in result.error
         # And critically: the terminate hook fired.
-        assert len(terminate_calls) >= 1, (
-            "child must be reaped when reader raises"
-        )
+        assert len(terminate_calls) >= 1, "child must be reaped when reader raises"
 
     @pytest.mark.asyncio
     async def test_missing_cmd_raises_validation_error(self) -> None:
         """SUBPROCESS without a 'cmd' list → ValueError surfaced as failure."""
-        plugin = _make_plugin(
-            name="no_cmd", mode=ExecutionMode.SUBPROCESS, timeout_seconds=5
-        )
+        plugin = _make_plugin(name="no_cmd", mode=ExecutionMode.SUBPROCESS, timeout_seconds=5)
         executor = PluginExecutor(settings=_make_test_settings())
 
         result = await executor.execute(plugin, params={})
@@ -347,14 +321,10 @@ class TestRestApiModeSecurity:
     @pytest.mark.asyncio
     async def test_localhost_endpoint_rejected(self) -> None:
         """Fix 2: http://127.0.0.1/ raises SsrfBlockedError."""
-        plugin = _make_plugin(
-            name="local", mode=ExecutionMode.REST_API, timeout_seconds=5
-        )
+        plugin = _make_plugin(name="local", mode=ExecutionMode.REST_API, timeout_seconds=5)
         executor = PluginExecutor(settings=_make_test_settings())
 
-        result = await executor.execute(
-            plugin, params={"endpoint": "http://127.0.0.1/api"}
-        )
+        result = await executor.execute(plugin, params={"endpoint": "http://127.0.0.1/api"})
         assert result.success is False
         assert result.error is not None
         assert "SsrfBlockedError" in result.error or "blocked network" in result.error
@@ -378,9 +348,7 @@ class TestRestApiModeSecurity:
         """Fix 2: explicit AWS IMDS endpoint rejected (test_link_local
         checks the IP — this asserts the URL string is rejected too)."""
         with pytest.raises(SsrfBlockedError):
-            _validate_endpoint_url(
-                "http://169.254.169.254/latest/api/token"
-            )
+            _validate_endpoint_url("http://169.254.169.254/latest/api/token")
 
     @pytest.mark.asyncio
     async def test_file_scheme_rejected(self) -> None:
@@ -420,9 +388,7 @@ class TestRestApiModeSecurity:
     @pytest.mark.asyncio
     async def test_response_size_cap_enforced(self, monkeypatch) -> None:
         """Fix 8: streaming response > MAX_REST_RESPONSE_BYTES raises."""
-        monkeypatch.setattr(
-            "forge.plugins.executor.MAX_REST_RESPONSE_BYTES", 1024
-        )
+        monkeypatch.setattr("forge.plugins.executor.MAX_REST_RESPONSE_BYTES", 1024)
         # Bypass SSRF for the test endpoint.
         monkeypatch.setattr(
             "forge.plugins.executor._validate_endpoint_url",
@@ -453,17 +419,13 @@ class TestRestApiModeSecurity:
             def stream(self, method, url, **kwargs):  # noqa: ARG002
                 return _FakeStreamCtx()
 
-        plugin = _make_plugin(
-            name="oversized", mode=ExecutionMode.REST_API, timeout_seconds=5
-        )
+        plugin = _make_plugin(name="oversized", mode=ExecutionMode.REST_API, timeout_seconds=5)
         executor = PluginExecutor(
             http_client=_FakeClient(),  # type: ignore[arg-type]
             settings=_make_test_settings(),
         )
 
-        result = await executor.execute(
-            plugin, params={"endpoint": "https://example.com/big"}
-        )
+        result = await executor.execute(plugin, params={"endpoint": "https://example.com/big"})
         assert result.success is False
         assert result.error is not None
         assert "exceeded" in result.error and "byte limit" in result.error
@@ -543,13 +505,9 @@ class TestDockerModeHardening:
     async def test_argv_includes_resource_limits(self, monkeypatch) -> None:
         """Fix 3: --memory, --memory-swap, --cpus, --pids-limit are present."""
         captured, fake_exec = self._build_capturing_subprocess()
-        monkeypatch.setattr(
-            "asyncio.create_subprocess_exec", fake_exec
-        )
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
-        plugin = _make_plugin(
-            name="docker_t", mode=ExecutionMode.DOCKER, timeout_seconds=10
-        )
+        plugin = _make_plugin(name="docker_t", mode=ExecutionMode.DOCKER, timeout_seconds=10)
         executor = PluginExecutor(settings=_make_test_settings())
 
         result = await executor.execute(
@@ -567,13 +525,9 @@ class TestDockerModeHardening:
     async def test_argv_includes_network_none(self, monkeypatch) -> None:
         """Fix 3: --network=none + existing --rm/--read-only/-i remain."""
         captured, fake_exec = self._build_capturing_subprocess()
-        monkeypatch.setattr(
-            "asyncio.create_subprocess_exec", fake_exec
-        )
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
-        plugin = _make_plugin(
-            name="docker_n", mode=ExecutionMode.DOCKER, timeout_seconds=10
-        )
+        plugin = _make_plugin(name="docker_n", mode=ExecutionMode.DOCKER, timeout_seconds=10)
         executor = PluginExecutor(settings=_make_test_settings())
         await executor.execute(plugin, params={"image": "alpine:3.19"})
 
@@ -587,13 +541,9 @@ class TestDockerModeHardening:
     async def test_argv_includes_user_nobody(self, monkeypatch) -> None:
         """Fix 3: --user=65534:65534 (nobody:nogroup) always present."""
         captured, fake_exec = self._build_capturing_subprocess()
-        monkeypatch.setattr(
-            "asyncio.create_subprocess_exec", fake_exec
-        )
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
-        plugin = _make_plugin(
-            name="docker_u", mode=ExecutionMode.DOCKER, timeout_seconds=10
-        )
+        plugin = _make_plugin(name="docker_u", mode=ExecutionMode.DOCKER, timeout_seconds=10)
         executor = PluginExecutor(settings=_make_test_settings())
         await executor.execute(plugin, params={"image": "alpine:3.19"})
 
@@ -606,13 +556,9 @@ class TestDockerModeHardening:
         plugin tries to smuggle them via params (params are not honoured
         for sandbox-defining flags)."""
         captured, fake_exec = self._build_capturing_subprocess()
-        monkeypatch.setattr(
-            "asyncio.create_subprocess_exec", fake_exec
-        )
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
-        plugin = _make_plugin(
-            name="docker_v", mode=ExecutionMode.DOCKER, timeout_seconds=10
-        )
+        plugin = _make_plugin(name="docker_v", mode=ExecutionMode.DOCKER, timeout_seconds=10)
         executor = PluginExecutor(settings=_make_test_settings())
         # Even with a malicious-looking env value, no -v should appear.
         await executor.execute(
@@ -628,26 +574,16 @@ class TestDockerModeHardening:
         # No volume-mount flag in any form.
         for token in argv:
             assert not token.startswith("-v"), f"unexpected -v flag: {token}"
-            assert not token.startswith("--volume"), (
-                f"unexpected --volume flag: {token}"
-            )
-            assert not token.startswith("--mount"), (
-                f"unexpected --mount flag: {token}"
-            )
+            assert not token.startswith("--volume"), f"unexpected --volume flag: {token}"
+            assert not token.startswith("--mount"), f"unexpected --mount flag: {token}"
 
     @pytest.mark.asyncio
-    async def test_docker_limits_overrideable_per_instance(
-        self, monkeypatch
-    ) -> None:
+    async def test_docker_limits_overrideable_per_instance(self, monkeypatch) -> None:
         """Per-instance ``docker_limits`` ctor arg overrides PlatformSettings."""
         captured, fake_exec = self._build_capturing_subprocess()
-        monkeypatch.setattr(
-            "asyncio.create_subprocess_exec", fake_exec
-        )
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
 
-        plugin = _make_plugin(
-            name="docker_o", mode=ExecutionMode.DOCKER, timeout_seconds=10
-        )
+        plugin = _make_plugin(name="docker_o", mode=ExecutionMode.DOCKER, timeout_seconds=10)
         executor = PluginExecutor(
             settings=_make_test_settings(),
             docker_limits={"memory_mb": 256, "cpus": 0.5, "pids_limit": 64},

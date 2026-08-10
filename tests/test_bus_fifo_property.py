@@ -120,9 +120,7 @@ def _message_sequences(draw: st.DrawFn) -> list[AgentMessage]:
 # ---------------------------------------------------------------------------
 
 
-async def _consume_n(
-    bus: InMemoryMessageBus, topic: str, n: int
-) -> list[AgentMessage]:
+async def _consume_n(bus: InMemoryMessageBus, topic: str, n: int) -> list[AgentMessage]:
     """Consume exactly ``n`` messages from ``bus`` on ``topic`` and return them.
 
     ``InMemoryMessageBus.subscribe`` is an async generator with a
@@ -141,9 +139,7 @@ async def _consume_n(
     return received
 
 
-async def _publish_then_consume(
-    messages: list[AgentMessage], topic: str
-) -> list[AgentMessage]:
+async def _publish_then_consume(messages: list[AgentMessage], topic: str) -> list[AgentMessage]:
     """Publish ``messages`` to a fresh InMemoryMessageBus, then drain ``len(messages)``."""
     bus = InMemoryMessageBus()
     for msg in messages:
@@ -153,9 +149,7 @@ async def _publish_then_consume(
     return received
 
 
-def _publish_to_disconnected_redis(
-    messages: list[AgentMessage], topic: str
-) -> RedisMessageBus:
+def _publish_to_disconnected_redis(messages: list[AgentMessage], topic: str) -> RedisMessageBus:
     """Publish ``messages`` to a RedisMessageBus that is forced offline.
 
     Returns the bus so callers can inspect ``_buffer``. No live Redis is
@@ -202,8 +196,7 @@ def test_property_5_inmemory_bus_fifo_per_topic(
     expected_ids = [m.correlation_id for m in messages]
     actual_ids = [m.correlation_id for m in received]
     assert actual_ids == expected_ids, (
-        f"FIFO violated on correlation_ids: expected {expected_ids!r}, "
-        f"got {actual_ids!r}"
+        f"FIFO violated on correlation_ids: expected {expected_ids!r}, got {actual_ids!r}"
     )
 
     # Payloads must also match position-for-position. Equality on dicts
@@ -304,9 +297,7 @@ async def test_inmemory_bus_fifo_concrete_sequence() -> None:
     received = await _consume_n(bus, topic, len(messages))
     await bus.close()
 
-    assert [m.correlation_id for m in received] == [
-        m.correlation_id for m in messages
-    ]
+    assert [m.correlation_id for m in received] == [m.correlation_id for m in messages]
     assert [m.payload["index"] for m in received] == [0, 1, 2, 3, 4]
 
 

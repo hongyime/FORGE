@@ -73,9 +73,7 @@ class _StubLLM:
             latency_ms=0.1,
         )
 
-    async def structured_output(
-        self, request: CompletionRequest, schema: dict
-    ) -> dict:
+    async def structured_output(self, request: CompletionRequest, schema: dict) -> dict:
         return {"summary": "stub"}
 
     async def embed(self, text: str) -> list[float]:
@@ -104,9 +102,7 @@ class _DiscoveryPlugin:
                 "hosts": [{"ip": "10.0.0.1", "hostname": "target.example.com"}],
                 "services": [{"name": "ssh", "port": 22, "host": "10.0.0.1"}],
                 "ports": [22, 80, 443],
-                "endpoints": [
-                    {"url": "https://target.example.com/login", "method": "POST"}
-                ],
+                "endpoints": [{"url": "https://target.example.com/login", "method": "POST"}],
             },
         )
 
@@ -252,9 +248,7 @@ class TestMvpPipelineEndToEnd:
                 audit=audit,
             )
         )
-        registry.register(
-            ReportingAgent(llm_provider=_StubLLM(), audit=audit)
-        )
+        registry.register(ReportingAgent(llm_provider=_StubLLM(), audit=audit))
 
         # Track final report output via a sink subscriber that captures the
         # reporting agent's outbound message.
@@ -269,9 +263,7 @@ class TestMvpPipelineEndToEnd:
             def subscribed_topics(self) -> list[str]:
                 return ["agent.reporting.complete"]
 
-            async def receive_message(
-                self, message: AgentMessage
-            ) -> list[AgentMessage]:
+            async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
                 sink.append(message)
                 return []
 
@@ -317,9 +309,7 @@ class TestMvpPipelineEndToEnd:
             def subscribed_topics(self) -> list[str]:
                 return ["agent.analysis.complete"]
 
-            async def receive_message(
-                self, message: AgentMessage
-            ) -> list[AgentMessage]:
+            async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
                 return [
                     AgentMessage(
                         topic="agent.reporting.run",
@@ -341,9 +331,7 @@ class TestMvpPipelineEndToEnd:
             def subscribed_topics(self) -> list[str]:
                 return ["agent.discovery.complete"]
 
-            async def receive_message(
-                self, message: AgentMessage
-            ) -> list[AgentMessage]:
+            async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
                 payload = dict(message.payload or {})
                 # Analysis expects 'asset_inventory' + 'plugins'
                 inv = payload.get("asset_inventory", {})
@@ -397,9 +385,7 @@ class TestMvpPipelineEndToEnd:
 
         # Audit log captured tool invocations from both plugins
         tool_invocations = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.TOOL_INVOCATION
+            e for e in audit.entries if e.event_type == AuditEventType.TOOL_INVOCATION
         ]
         tool_names = {e.tool_name for e in tool_invocations}
         assert "port_scan_stub" in tool_names
@@ -426,9 +412,7 @@ class TestWorkflowPersistenceAndResumption:
         audit_a = AuditLogger()
         store_a = StateStore(db_url=db_url)
         await store_a.init_schema()
-        engine_a = WorkflowEngine(
-            bus=bus_a, state_store=store_a, audit=audit_a
-        )
+        engine_a = WorkflowEngine(bus=bus_a, state_store=store_a, audit=audit_a)
         wid = await engine_a.start_workflow(MVP_WORKFLOW)
         await engine_a.advance_stage(wid, {"discovery_output": "stub"})
         await store_a.close()
@@ -437,9 +421,7 @@ class TestWorkflowPersistenceAndResumption:
         bus_b = InMemoryMessageBus()
         audit_b = AuditLogger()
         store_b = StateStore(db_url=db_url)
-        engine_b = WorkflowEngine(
-            bus=bus_b, state_store=store_b, audit=audit_b
-        )
+        engine_b = WorkflowEngine(bus=bus_b, state_store=store_b, audit=audit_b)
         engine_b.register_definition(MVP_WORKFLOW)
 
         resumed = await engine_b.resume_incomplete_workflows()

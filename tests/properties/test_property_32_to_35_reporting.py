@@ -58,9 +58,7 @@ class _StubLLM:
             latency_ms=0.5,
         )
 
-    async def structured_output(
-        self, request: CompletionRequest, schema: dict
-    ) -> dict:
+    async def structured_output(self, request: CompletionRequest, schema: dict) -> dict:
         return {"text": self._text}
 
     async def embed(self, text: str) -> list[float]:
@@ -94,18 +92,14 @@ def _findings(n: int = 3) -> list[dict[str, Any]]:
             "category": "vulnerability",
             "description": f"Test finding number {i}",
             "risk_rating": severities[i % len(severities)],
-            "evidence_refs": [
-                {"correlation_id": f"cid-tool-{i}", "tool_name": f"tool_{i}"}
-            ],
+            "evidence_refs": [{"correlation_id": f"cid-tool-{i}", "tool_name": f"tool_{i}"}],
         }
         for i in range(n)
     ]
 
 
 def _msg(payload: dict[str, Any], cid: str = "cid-report") -> AgentMessage:
-    return AgentMessage(
-        topic=INBOUND_TOPIC, payload=payload, correlation_id=cid
-    )
+    return AgentMessage(topic=INBOUND_TOPIC, payload=payload, correlation_id=cid)
 
 
 # ---------------------------------------------------------------------------
@@ -143,25 +137,19 @@ class TestProperty32ReportCompleteness:
 
     @pytest.mark.asyncio
     async def test_all_sections_present_with_llm(self) -> None:
-        agent = ReportingAgent(
-            llm_provider=_StubLLM(), audit=AuditLogger()
-        )
+        agent = ReportingAgent(llm_provider=_StubLLM(), audit=AuditLogger())
         outputs = await agent.receive_message(
             _msg({"findings": _findings(3), "summary": "analysis OK"})
         )
         assert len(outputs) == 1
         report = str(outputs[0].payload.get("report_md", ""))
         for heading in self.REQUIRED_HEADINGS:
-            assert heading in report, (
-                f"Required heading {heading!r} missing from report"
-            )
+            assert heading in report, f"Required heading {heading!r} missing from report"
 
     @pytest.mark.asyncio
     async def test_all_sections_present_without_llm(self) -> None:
         agent = ReportingAgent(llm_provider=None, audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(2), "summary": ""})
-        )
+        outputs = await agent.receive_message(_msg({"findings": _findings(2), "summary": ""}))
         report = str(outputs[0].payload.get("report_md", ""))
         for heading in self.REQUIRED_HEADINGS:
             assert heading in report
@@ -169,9 +157,7 @@ class TestProperty32ReportCompleteness:
     @pytest.mark.asyncio
     async def test_empty_findings_still_produces_report(self) -> None:
         agent = ReportingAgent(llm_provider=None, audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": [], "summary": ""})
-        )
+        outputs = await agent.receive_message(_msg({"findings": [], "summary": ""}))
         report = str(outputs[0].payload.get("report_md", ""))
         # Even empty inventories must render every section.
         for heading in TestProperty32ReportCompleteness.REQUIRED_HEADINGS:
@@ -189,25 +175,19 @@ class TestProperty33OutputFormat:
     @pytest.mark.asyncio
     async def test_format_field_is_markdown(self) -> None:
         agent = ReportingAgent(llm_provider=None, audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(1)})
-        )
+        outputs = await agent.receive_message(_msg({"findings": _findings(1)}))
         assert outputs[0].payload.get("format") == "markdown"
 
     @pytest.mark.asyncio
     async def test_outbound_topic(self) -> None:
         agent = ReportingAgent(llm_provider=None, audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(1)})
-        )
+        outputs = await agent.receive_message(_msg({"findings": _findings(1)}))
         assert outputs[0].topic == OUTBOUND_TOPIC
 
     @pytest.mark.asyncio
     async def test_correlation_id_propagated(self) -> None:
         agent = ReportingAgent(llm_provider=None, audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(1)}, cid="trace-xyz")
-        )
+        outputs = await agent.receive_message(_msg({"findings": _findings(1)}, cid="trace-xyz"))
         assert outputs[0].correlation_id == "trace-xyz"
 
 
@@ -238,9 +218,7 @@ class TestProperty34Provenance:
     @pytest.mark.asyncio
     async def test_provenance_index_in_payload(self) -> None:
         agent = ReportingAgent(llm_provider=None, audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(2)})
-        )
+        outputs = await agent.receive_message(_msg({"findings": _findings(2)}))
         provenance = outputs[0].payload.get("provenance")
         # Either a provenance list appears in the payload, OR the report
         # body itself contains the correlation_ids. Both satisfy Req 10.4.
@@ -262,9 +240,7 @@ class TestProperty35GracefulDegradation:
     @pytest.mark.asyncio
     async def test_no_llm_produces_report(self) -> None:
         agent = ReportingAgent(llm_provider=None, audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(2)})
-        )
+        outputs = await agent.receive_message(_msg({"findings": _findings(2)}))
         report = str(outputs[0].payload.get("report_md", ""))
         lineage = outputs[0].payload.get("report_lineage")
         assert len(report) > 0
@@ -279,12 +255,8 @@ class TestProperty35GracefulDegradation:
     @pytest.mark.asyncio
     async def test_llm_outage_does_not_abort_report(self) -> None:
         audit = AuditLogger()
-        agent = ReportingAgent(
-            llm_provider=_UnavailableLLM(), audit=audit
-        )
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(2)})
-        )
+        agent = ReportingAgent(llm_provider=_UnavailableLLM(), audit=audit)
+        outputs = await agent.receive_message(_msg({"findings": _findings(2)}))
         # Still produces a complete report
         report = str(outputs[0].payload.get("report_md", ""))
         lineage = outputs[0].payload.get("report_lineage")
@@ -299,11 +271,7 @@ class TestProperty35GracefulDegradation:
         # And audits a degradation warning
         from forge.audit.models import AuditEventType
 
-        warnings = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.WARNING
-        ]
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
         assert len(warnings) >= 1, (
             "LLM outage during reporting must emit at least one WARNING audit"
         )
@@ -311,9 +279,7 @@ class TestProperty35GracefulDegradation:
     @pytest.mark.asyncio
     async def test_unexpected_llm_error_records_fallback_lineage(self) -> None:
         agent = ReportingAgent(llm_provider=_BrokenLLM(), audit=AuditLogger())
-        outputs = await agent.receive_message(
-            _msg({"findings": _findings(2)})
-        )
+        outputs = await agent.receive_message(_msg({"findings": _findings(2)}))
         report = str(outputs[0].payload.get("report_md", ""))
         lineage = outputs[0].payload.get("report_lineage")
         assert "Executive Summary" in report

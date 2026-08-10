@@ -53,10 +53,13 @@ def test_sanity_config_urls_require_project_and_dataset_context() -> None:
     assert sanity_config_urls(payload, source_hint="sanity.config.ts") == [
         "https://acmeprod123.api.sanity.io",
     ]
-    assert sanity_config_urls(
-        "projectId: 'acmeprod123'",
-        source_hint="sanity.config.ts",
-    ) == []
+    assert (
+        sanity_config_urls(
+            "projectId: 'acmeprod123'",
+            source_hint="sanity.config.ts",
+        )
+        == []
+    )
     assert sanity_config_urls(payload, source_hint="notes/config.ts") == []
 
 
@@ -74,12 +77,15 @@ def test_sanity_env_urls_require_public_project_and_dataset_context() -> None:
         }
     ) == ["https://acmeprod123.api.sanity.io"]
     assert sanity_env_urls({"NEXT_PUBLIC_SANITY_PROJECT_ID": "acmeprod123"}) == []
-    assert sanity_env_urls(
-        {
-            "NEXT_PUBLIC_SANITY_PROJECT_ID": "yourprojectid",
-            "NEXT_PUBLIC_SANITY_DATASET": "production",
-        }
-    ) == []
+    assert (
+        sanity_env_urls(
+            {
+                "NEXT_PUBLIC_SANITY_PROJECT_ID": "yourprojectid",
+                "NEXT_PUBLIC_SANITY_DATASET": "production",
+            }
+        )
+        == []
+    )
 
 
 def test_artifact_queue_processor_extracts_sanity_config_project_pivot(

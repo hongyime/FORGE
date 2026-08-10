@@ -11,6 +11,7 @@ Feeds extracted keys into key_scanner_findings and firebase_agneyastra.
 OPSEC: uses curl_cffi with TLS fingerprinting, respects rate limiter.
 Authorization: target must be in engagement scope.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,7 +32,7 @@ _RATE_LIMITER = AdaptiveRateLimiter(base_delay=1.5, max_delay=30.0, min_delay=1.
 _FIREBASE_CONFIG_PATTERNS = [
     # firebaseConfig = { apiKey: "...", projectId: "..." }
     re.compile(
-        r'(?:firebaseConfig|initializeApp)\s*[=\(]\s*\{([^}]{50,500})\}',
+        r"(?:firebaseConfig|initializeApp)\s*[=\(]\s*\{([^}]{50,500})\}",
         re.DOTALL | re.IGNORECASE,
     ),
     # Individual fields
@@ -45,14 +46,14 @@ _FIREBASE_CONFIG_PATTERNS = [
 
 # Firebase project ID from various URL patterns
 _PROJECT_ID_PATTERNS = [
-    re.compile(r'https?://([a-z0-9\-]+)\.firebaseapp\.com'),
-    re.compile(r'https?://([a-z0-9\-]+)\.web\.app'),
-    re.compile(r'https?://([a-z0-9\-]+)\.firebaseio\.com'),
-    re.compile(r'https?://firebasestorage\.googleapis\.com/v0/b/([a-z0-9\-]+)\.appspot\.com'),
+    re.compile(r"https?://([a-z0-9\-]+)\.firebaseapp\.com"),
+    re.compile(r"https?://([a-z0-9\-]+)\.web\.app"),
+    re.compile(r"https?://([a-z0-9\-]+)\.firebaseio\.com"),
+    re.compile(r"https?://firebasestorage\.googleapis\.com/v0/b/([a-z0-9\-]+)\.appspot\.com"),
     re.compile(r'project[_-]?id["\s]*[:=]\s*["\']([a-z0-9\-]{4,30})["\']', re.IGNORECASE),
 ]
 
-_GOOGLE_API_KEY_PAT = re.compile(r'AIza[0-9A-Za-z\-_]{35}')
+_GOOGLE_API_KEY_PAT = re.compile(r"AIza[0-9A-Za-z\-_]{35}")
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS firebase_extracted (
@@ -76,6 +77,7 @@ def _fetch_text(url: str, cfg=None) -> Optional[str]:
     _RATE_LIMITER.wait(url)
     try:
         from curl_cffi import requests as cffi_requests
+
         proxies = {"https": cfg.proxy} if cfg and cfg.proxy else None
         profile = cfg.curl_profile if cfg else "chrome120"
         resp = cffi_requests.get(
@@ -223,11 +225,14 @@ def extract_firebase_config(
         api_key = cfg_item.get("api_key")
         _api_key_str = str(api_key or "")
         _api_key_disp = (
-            f"{_api_key_str[:4]}...{_api_key_str[-4:]}"
-            if len(_api_key_str) > 8 else "***"
+            f"{_api_key_str[:4]}...{_api_key_str[-4:]}" if len(_api_key_str) > 8 else "***"
         )
-        print(f"[FIREBASE] Found config: project_id={project_id} api_key={_api_key_disp}" if api_key else
-              f"[FIREBASE] Found config: project_id={project_id}", flush=True)
+        print(
+            f"[FIREBASE] Found config: project_id={project_id} api_key={_api_key_disp}"
+            if api_key
+            else f"[FIREBASE] Found config: project_id={project_id}",
+            flush=True,
+        )
         sys.stdout.flush()
 
         try:

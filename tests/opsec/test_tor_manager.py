@@ -100,6 +100,7 @@ def test_tor_search_roots_never_escape_cwd(components: list[str]) -> None:
         # current working directory.
         resolved.relative_to(cwd_resolved)
 
+
 # ---------------------------------------------------------------------------
 # Property 2 (A2): Vendor is the only accepted search root; legacy cwd
 # tor.exe is ignored with WARN
@@ -153,7 +154,8 @@ def test_vendor_only_search_ignores_legacy_cwd(
     assert result.resolve() != legacy.resolve()
 
     warn_records = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING and "Legacy_Tor_Cache" in r.getMessage()
     ]
     assert len(warn_records) == 1, (
@@ -161,8 +163,7 @@ def test_vendor_only_search_ignores_legacy_cwd(
         f"{[r.getMessage() for r in warn_records]}"
     )
     assert str(legacy.parent) in warn_records[0].getMessage(), (
-        f"WARN must name the legacy path {legacy.parent!r}; "
-        f"got: {warn_records[0].getMessage()!r}"
+        f"WARN must name the legacy path {legacy.parent!r}; got: {warn_records[0].getMessage()!r}"
     )
 
 
@@ -189,7 +190,8 @@ def test_missing_archive_raises_with_vendor_path_in_message(
     monkeypatch.chdir(tmp_path)
     # Force _search_roots to yield only the empty cwd path.
     monkeypatch.setattr(
-        TorManager, "_search_roots",
+        TorManager,
+        "_search_roots",
         classmethod(lambda cls: [tmp_path / "vendor" / "tor"]),
     )
 
@@ -236,8 +238,7 @@ def test_safe_tar_extractall_rejects_traversal(tmp_path: Path) -> None:
     )
     # The guard must reject BEFORE any write hits disk.
     assert list(dest.iterdir()) == [], (
-        f"_safe_tar_extractall must not create files on rejection; "
-        f"found: {list(dest.iterdir())}"
+        f"_safe_tar_extractall must not create files on rejection; found: {list(dest.iterdir())}"
     )
 
 
@@ -312,9 +313,7 @@ def test_find_tor_exe_shortest_path_wins(
     # Three candidates at increasing depth — all contain ``/tor/`` so they
     # pass the substring filter. Distinct names keep string lengths ordered.
     shallow = _mk_tor_exe(tmp_path / "vendor" / "tor" / "tor" / "tor.exe")
-    mid = _mk_tor_exe(
-        tmp_path / "vendor" / "tor" / "tor-expert-bundle" / "tor" / "tor.exe"
-    )
+    mid = _mk_tor_exe(tmp_path / "vendor" / "tor" / "tor-expert-bundle" / "tor" / "tor.exe")
     deep = _mk_tor_exe(
         tmp_path / "vendor" / "tor" / "tor-expert-bundle" / "sub" / "tor" / "tor.exe"
     )
@@ -358,7 +357,8 @@ def test_legacy_cwd_tor_emits_warn_once(
     caplog.clear()
     TorManager._find_tor_exe()
     warns_first = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING and "Legacy_Tor_Cache" in r.getMessage()
     ]
     assert len(warns_first) == 1, (
@@ -372,7 +372,8 @@ def test_legacy_cwd_tor_emits_warn_once(
     caplog.clear()
     TorManager._find_tor_exe()
     warns_second = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.levelno == logging.WARNING and "Legacy_Tor_Cache" in r.getMessage()
     ]
     assert len(warns_second) == 1, (

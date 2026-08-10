@@ -1,4 +1,5 @@
 """Shared pacing helpers for public OSINT/provider HTTP calls."""
+
 from __future__ import annotations
 
 import os

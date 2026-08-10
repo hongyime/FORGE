@@ -6,6 +6,7 @@ Results enriched into email_intelligence table.
 
 Authorization: Free public API. Scope gate mandatory.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,7 +25,9 @@ _XON_API = "https://api.xposedornot.com/v1/breach-analytics"
 _RATE_LIMITER = AdaptiveRateLimiter(base_delay=1.0, max_delay=30.0, min_delay=1.0, jitter=0.2)
 
 
-def _is_cache_valid(conn: sqlite3.Connection, engagement_id: int, email: str, ttl_hours: int) -> bool:
+def _is_cache_valid(
+    conn: sqlite3.Connection, engagement_id: int, email: str, ttl_hours: int
+) -> bool:
     row = conn.execute(
         """SELECT discovered_at FROM email_intelligence
            WHERE engagement_id=? AND email=? AND source='xposedornot'
@@ -34,6 +37,7 @@ def _is_cache_valid(conn: sqlite3.Connection, engagement_id: int, email: str, tt
     if not row:
         return False
     import datetime
+
     try:
         last = datetime.datetime.fromisoformat(row[0])
         age = (datetime.datetime.utcnow() - last).total_seconds() / 3600
@@ -48,6 +52,7 @@ def _fetch_xon(email: str) -> Optional[dict[str, Any]]:
     _RATE_LIMITER.wait(url)
     try:
         from curl_cffi import requests as cffi_requests
+
         resp = cffi_requests.get(url, timeout=15)
         if resp.status_code == 404:
             _RATE_LIMITER.record_success(url)
@@ -60,6 +65,7 @@ def _fetch_xon(email: str) -> Optional[dict[str, Any]]:
         return resp.json()
     except ImportError:
         import urllib.request
+
         req = urllib.request.Request(url, headers={"User-Agent": "FORGE/1.0"})
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read())
@@ -135,7 +141,11 @@ def query_xposed(
                 """INSERT OR REPLACE INTO email_intelligence
                    (engagement_id, email, source, enrichment_data)
                    VALUES (?, ?, 'xposedornot', ?)""",
-                (engagement_id, email, json.dumps({"breaches": breach_names, "count": breach_count})),
+                (
+                    engagement_id,
+                    email,
+                    json.dumps({"breaches": breach_names, "count": breach_count}),
+                ),
             )
         eng_db_conn.commit()
         count += 1

@@ -42,14 +42,12 @@ _REPORT_METADATA_KEYS = (
 def _string_map(value: object) -> dict[str, object]:
     if not isinstance(value, Mapping):
         return {}
-    return {
-        str(key): item
-        for key, item in value.items()
-        if isinstance(key, str)
-    }
+    return {str(key): item for key, item in value.items() if isinstance(key, str)}
 
 
-def _report_text_and_metadata(results: Mapping[str, object]) -> tuple[str | None, dict[str, object]]:
+def _report_text_and_metadata(
+    results: Mapping[str, object],
+) -> tuple[str | None, dict[str, object]]:
     report = results.get("report")
     metadata: dict[str, object] = {}
     if isinstance(report, Mapping):
@@ -126,11 +124,7 @@ async def get_report(
         )
 
     try:
-        results = (
-            json.loads(row.intermediate_results)
-            if row.intermediate_results
-            else {}
-        )
+        results = json.loads(row.intermediate_results) if row.intermediate_results else {}
     except json.JSONDecodeError:
         results = {}
 

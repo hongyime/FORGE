@@ -4,6 +4,7 @@ Queries only the public URL index. It does not download WARC payloads or fetch
 target pages; discovered URLs are handed back to the normal scoped recursion
 path for later handling.
 """
+
 from __future__ import annotations
 
 import json
@@ -286,8 +287,7 @@ def search_commoncrawl_urls_detailed(
                     "status": "failed",
                     "urls": [],
                     "error": (
-                        "collinfo_http_status_"
-                        f"{getattr(coll_response, 'status_code', 'unknown')}"
+                        f"collinfo_http_status_{getattr(coll_response, 'status_code', 'unknown')}"
                     ),
                 }
             try:

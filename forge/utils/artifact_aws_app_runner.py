@@ -78,10 +78,7 @@ def _looks_like_copilot_manifest(mapping: Mapping[str, Any]) -> bool:
     keys = {_fingerprint(key) for key in mapping}
     service_type = str(_ref(mapping, "type") or "").strip().lower()
     return "name" in keys and (
-        "image" in keys
-        or "http" in keys
-        or "variables" in keys
-        or service_type.endswith("service")
+        "image" in keys or "http" in keys or "variables" in keys or service_type.endswith("service")
     )
 
 
@@ -91,9 +88,17 @@ def _append_image_refs(mapping: Mapping[str, Any], append: Any) -> None:
     for value in (
         _ref(mapping, "image", "imageIdentifier", "image_identifier"),
         _ref(_child(mapping, "image"), "location", "repository", "uri"),
-        _ref(_child(mapping, "sourceConfiguration", "source_configuration"), "imageRepository", "image_repository"),
+        _ref(
+            _child(mapping, "sourceConfiguration", "source_configuration"),
+            "imageRepository",
+            "image_repository",
+        ),
         _ref(image_repository, "imageIdentifier", "image_identifier"),
-        _ref(_child(mapping, "imageRepository", "image_repository"), "imageIdentifier", "image_identifier"),
+        _ref(
+            _child(mapping, "imageRepository", "image_repository"),
+            "imageIdentifier",
+            "image_identifier",
+        ),
     ):
         image_url = _container_image_url_candidate(value)
         if image_url:
@@ -101,7 +106,9 @@ def _append_image_refs(mapping: Mapping[str, Any], append: Any) -> None:
 
 
 def _append_http_aliases(mapping: Mapping[str, Any], append: Any) -> None:
-    for alias in _values_for_keys(_child(mapping, "http"), "alias", "aliases", "host", "hosts", "domain", "domains"):
+    for alias in _values_for_keys(
+        _child(mapping, "http"), "alias", "aliases", "host", "hosts", "domain", "domains"
+    ):
         url = _url_candidate(alias)
         if url:
             append(url)
@@ -113,7 +120,14 @@ def _append_http_aliases(mapping: Mapping[str, Any], append: Any) -> None:
 
 def _append_env_refs(mapping: Mapping[str, Any], append: Any) -> None:
     env_values = [
-        *_raw_values_for_keys(mapping, "variables", "env", "environment", "environmentVariables", "environment_variables"),
+        *_raw_values_for_keys(
+            mapping,
+            "variables",
+            "env",
+            "environment",
+            "environmentVariables",
+            "environment_variables",
+        ),
         *_raw_values_for_keys(_child(mapping, "run"), "env", "environment"),
         *_raw_values_for_keys(_child(mapping, "build"), "env", "environment"),
     ]
@@ -284,7 +298,10 @@ def _looks_like_copilot_manifest_path(parts: list[str], name: str) -> bool:
         if part != "copilot":
             continue
         tail = parts[index + 1 : -1]
-        return bool(1 <= len(tail) <= 3 and all(segment not in {"docs", "doc", "examples", "example"} for segment in tail))
+        return bool(
+            1 <= len(tail) <= 3
+            and all(segment not in {"docs", "doc", "examples", "example"} for segment in tail)
+        )
     return False
 
 

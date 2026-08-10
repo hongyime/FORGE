@@ -52,7 +52,9 @@ def test_search_commoncrawl_urls_paces_latest_indexes_and_dedupes_jsonl(monkeypa
     monkeypatch.setenv("FORGE_COMMONCRAWL_INDEX_LIMIT", "2")
     monkeypatch.setenv("FORGE_COMMONCRAWL_RESULTS_PER_INDEX", "7")
     sleeps: list[float] = []
-    monkeypatch.setattr(commoncrawl_lookup.time, "sleep", lambda seconds: sleeps.append(float(seconds)))
+    monkeypatch.setattr(
+        commoncrawl_lookup.time, "sleep", lambda seconds: sleeps.append(float(seconds))
+    )
 
     responses = [
         _Response(

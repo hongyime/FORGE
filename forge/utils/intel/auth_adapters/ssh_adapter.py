@@ -5,6 +5,7 @@ Canonical: forge/phase2/auth_adapters/ssh_adapter.py
 SSH authentication adapter using asyncssh.
 Gaussian jitter applied to all delays (σ = 30%) per PRD §12.3.2.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,8 +17,8 @@ from forge.utils.intel.auth_adapters import BaseAuthAdapter
 
 _LOG = logging.getLogger(__name__)
 
-_CONNECT_TIMEOUT = 10   # seconds
-_CMD_TIMEOUT     = 8    # seconds; minimal probe only — do not execute commands
+_CONNECT_TIMEOUT = 10  # seconds
+_CMD_TIMEOUT = 8  # seconds; minimal probe only — do not execute commands
 
 
 class SSHAdapter(BaseAuthAdapter):

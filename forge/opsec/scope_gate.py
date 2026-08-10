@@ -50,6 +50,7 @@ class ScopeViolationError(ValueError):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _normalise(target: str) -> str:
     """
     Normalise *target* to a bare hostname or IP address for comparison.
@@ -115,7 +116,9 @@ def _matches_scope_entry(normalised_target: str, entry: str) -> bool:
     # 3. CIDR.
     if "/" in entry_lower:
         try:
-            return ipaddress.ip_address(normalised_target) in ipaddress.ip_network(entry_lower, strict=False)
+            return ipaddress.ip_address(normalised_target) in ipaddress.ip_network(
+                entry_lower, strict=False
+            )
         except ValueError:
             pass
 

@@ -180,8 +180,7 @@ def _assert_redacted(actual: dict[str, Any], original: dict[str, Any]) -> None:
             _assert_redacted(actual_value, original_value)
         else:
             assert actual_value == original_value, (
-                f"non-secret key {k!r} value was modified: "
-                f"{original_value!r} -> {actual_value!r}"
+                f"non-secret key {k!r} value was modified: {original_value!r} -> {actual_value!r}"
             )
 
 
@@ -198,9 +197,7 @@ class TestProperty24AuditSecretRedaction:
         suppress_health_check=[HealthCheck.too_slow],
     )
     @given(params=_params_strategy())
-    async def test_logged_entry_redacts_secrets_recursively(
-        self, params: dict[str, Any]
-    ) -> None:
+    async def test_logged_entry_redacts_secrets_recursively(self, params: dict[str, Any]) -> None:
         """Sub-properties 1, 2, 3: an entry passed through ``log()`` is
         persisted with secret-like keys (at any depth, any case, substring
         match) replaced by ``"[REDACTED]"`` and non-secret keys preserved."""
@@ -230,9 +227,7 @@ class TestProperty24AuditSecretRedaction:
         suppress_health_check=[HealthCheck.too_slow],
     )
     @given(params=_params_strategy())
-    async def test_log_does_not_mutate_caller_input(
-        self, params: dict[str, Any]
-    ) -> None:
+    async def test_log_does_not_mutate_caller_input(self, params: dict[str, Any]) -> None:
         """Sub-property 4: ``log()`` must not mutate the caller's dict.
 
         We deep-copy ``params`` before calling ``log()`` and assert the
@@ -263,9 +258,7 @@ class TestProperty24AuditSecretRedaction:
         suppress_health_check=[HealthCheck.too_slow],
     )
     @given(params=_params_strategy())
-    async def test_stored_entry_is_independent_of_caller_dict(
-        self, params: dict[str, Any]
-    ) -> None:
+    async def test_stored_entry_is_independent_of_caller_dict(self, params: dict[str, Any]) -> None:
         """The stored ``input_params`` is a distinct object from the caller's
         dict (and from any of its nested dicts). This is what makes the
         no-mutation guarantee robust against the caller mutating their

@@ -41,7 +41,7 @@ def _project_refs(text: str) -> list[str]:
         for value in _document_ref_values(parsed):
             _append_ref(refs, seen, value)
 
-    for match in _KV_RE.finditer(str(text or "")[:128 * 1024]):
+    for match in _KV_RE.finditer(str(text or "")[: 128 * 1024]):
         _append_ref(refs, seen, match.group("value"))
     return refs
 

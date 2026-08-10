@@ -37,7 +37,12 @@ _TAILSCALE_NAMES = {
     "tailscale-funnel.json",
     "tailscale-funnel.yaml",
 }
-_LOCALTUNNEL_DIRECT_NAMES = {".localtunnelrc", "localtunnel.json", "localtunnel.yaml", "localtunnel.yml"}
+_LOCALTUNNEL_DIRECT_NAMES = {
+    ".localtunnelrc",
+    "localtunnel.json",
+    "localtunnel.yaml",
+    "localtunnel.yml",
+}
 _LOCALTUNNEL_SEGMENT_NAMES = {"lt.json", "lt.yaml", "lt.yml", *_LOCALTUNNEL_DIRECT_NAMES}
 _ENDPOINT_KEYS = (
     r"host|hostname|domain|domains|fqdn|endpoint|endpoints|url|urls|"
@@ -84,19 +89,31 @@ def tunnel_config_artifact_label(value: str) -> str:
     segments = set(parts[:-1])
     if name in _NGROK_NAMES:
         return "ngrok-config"
-    if name.startswith("ngrok.") and Path(name).suffix.lower() in {".yml", ".yaml", ".json", ".conf"}:
+    if name.startswith("ngrok.") and Path(name).suffix.lower() in {
+        ".yml",
+        ".yaml",
+        ".json",
+        ".conf",
+    }:
         return "ngrok-config"
     if name.startswith("cloudflared.") and Path(name).suffix.lower() in {".yml", ".yaml", ".json"}:
         return "cloudflared-config"
     if _has_segment(parts, ".cloudflared", "cloudflared") and name in _CLOUDFLARED_NAMES:
         return "cloudflared-config"
-    if ("cloudflare" in segments or "tunnels" in segments) and name in {"tunnel.yml", "tunnel.yaml"}:
+    if ("cloudflare" in segments or "tunnels" in segments) and name in {
+        "tunnel.yml",
+        "tunnel.yaml",
+    }:
         return "cloudflared-config"
     if name.startswith(("tailscale-serve.", "tailscale-funnel.")):
         return "tailscale-serve-config"
     if _has_segment(parts, "tailscale") and name in _TAILSCALE_NAMES:
         return "tailscale-serve-config"
-    if name in _LOCALTUNNEL_DIRECT_NAMES or _has_segment(parts, "localtunnel") and name in _LOCALTUNNEL_SEGMENT_NAMES:
+    if (
+        name in _LOCALTUNNEL_DIRECT_NAMES
+        or _has_segment(parts, "localtunnel")
+        and name in _LOCALTUNNEL_SEGMENT_NAMES
+    ):
         return "localtunnel-config"
     return ""
 
@@ -106,7 +123,9 @@ def tunnel_config_endpoint_candidates(text: str) -> list[str]:
     seen: set[str] = set()
     matches: list[tuple[int, str]] = []
     for pattern in (_JSON_FIELD_RE, _FIELD_RE, _XML_ELEMENT_RE, _PLIST_RE):
-        matches.extend((match.start(), match.group("value")) for match in pattern.finditer(str(text or "")))
+        matches.extend(
+            (match.start(), match.group("value")) for match in pattern.finditer(str(text or ""))
+        )
     for _, value in sorted(matches, key=lambda item: item[0]):
         _append(values, seen, value)
     return values
@@ -149,7 +168,9 @@ def _has_segment(parts: list[str], *values: str) -> bool:
 
 def _append(values: list[str], seen: set[str], value: str) -> None:
     candidate = str(value or "").strip().strip("\"'`[]{}(),;").strip(".")
-    if not candidate or any(marker in candidate for marker in ("${", "$(", "{{", "}}", "<", ">", "*")):
+    if not candidate or any(
+        marker in candidate for marker in ("${", "$(", "{{", "}}", "<", ">", "*")
+    ):
         return
     host = _candidate_host(candidate)
     if not host or not _public_endpoint_host(host):

@@ -50,13 +50,13 @@ _LOG = logging.getLogger(__name__)
 #: partial matches are intentional (e.g. an Authorization header value
 #: containing "Bearer eyJ..." still matches).
 _VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\bsk-[A-Za-z0-9]{20,}"),         # OpenAI
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),          # AWS access key
-    re.compile(r"\bASIA[0-9A-Z]{16}\b"),          # AWS session key
-    re.compile(r"\beyJ[A-Za-z0-9_\-=]{10,}"),     # JWT prefix (base64-encoded {)
-    re.compile(r"\bghp_[A-Za-z0-9]{20,}"),        # GitHub PAT
-    re.compile(r"\bgho_[A-Za-z0-9]{20,}"),        # GitHub OAuth
-    re.compile(r"\bglpat-[A-Za-z0-9_\-]{20,}"),   # GitLab PAT
+    re.compile(r"\bsk-[A-Za-z0-9]{20,}"),  # OpenAI
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),  # AWS access key
+    re.compile(r"\bASIA[0-9A-Z]{16}\b"),  # AWS session key
+    re.compile(r"\beyJ[A-Za-z0-9_\-=]{10,}"),  # JWT prefix (base64-encoded {)
+    re.compile(r"\bghp_[A-Za-z0-9]{20,}"),  # GitHub PAT
+    re.compile(r"\bgho_[A-Za-z0-9]{20,}"),  # GitHub OAuth
+    re.compile(r"\bglpat-[A-Za-z0-9_\-]{20,}"),  # GitLab PAT
     re.compile(r"-----BEGIN [A-Z ]+PRIVATE KEY-----"),  # PEM
 )
 
@@ -192,8 +192,11 @@ class AuditLogger:
             self._fh = None
         # Roll: log_path.(N-1) -> log_path.N, ... log_path -> log_path.1
         for i in range(self._backup_count, 0, -1):
-            src = self._log_path if i == 1 else self._log_path.with_suffix(
-                self._log_path.suffix + f".{i - 1}")
+            src = (
+                self._log_path
+                if i == 1
+                else self._log_path.with_suffix(self._log_path.suffix + f".{i - 1}")
+            )
             dst = self._log_path.with_suffix(self._log_path.suffix + f".{i}")
             if src.exists():
                 if dst.exists():
@@ -335,10 +338,7 @@ class AuditLogger:
                 if not isinstance(k, str):
                     redacted_dict[str(k)] = self._redact(v)
                     continue
-                if any(
-                    re.search(pat, k, re.IGNORECASE)
-                    for pat in self._REDACT_KEY_PATTERNS
-                ):
+                if any(re.search(pat, k, re.IGNORECASE) for pat in self._REDACT_KEY_PATTERNS):
                     redacted_dict[k] = "[REDACTED]"
                 else:
                     redacted_dict[k] = self._redact(v)

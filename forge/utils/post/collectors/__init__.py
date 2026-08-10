@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from forge.config import is_offensive_enabled

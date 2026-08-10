@@ -75,7 +75,9 @@ def _scheduled_searxng_allowed_urls() -> set[str]:
             os.environ.get("FORGE_SCHEDULED_SEARXNG_ALLOWED_URLS")
             or os.environ.get("FORGE_SEARXNG_ALLOWED_URLS")
             or ""
-        ).replace(";", ",").split(","),
+        )
+        .replace(";", ",")
+        .split(","),
     ]
     return {
         canonical
@@ -347,9 +349,7 @@ def _scheduled_url_fetch_scope_options(
         if str(item or "").strip()
     ]
     url_prefixes = [
-        str(item)
-        for item in list(scope_manifest.get("urls") or [])
-        if str(item or "").strip()
+        str(item) for item in list(scope_manifest.get("urls") or []) if str(item or "").strip()
     ]
     return {
         "scope_values": scope_values,
@@ -382,7 +382,7 @@ def run_scheduled_task(
     _assert_scheduled_roe(engagement_id, task_type, target, payload, db_path)
     if task_type in _TARGET_SCOPED_TASK_TYPES:
         _assert_scheduled_target_scope(engagement_id, task_type, target, payload, db_path)
-        
+
     if task_type == "validate":
         key_id = int(payload.get("key_id", 0))
         bucket = str(payload.get("rate_limit_bucket", "cloud_api_global"))
@@ -396,8 +396,11 @@ def run_scheduled_task(
         )
         key_scope_checker = None
         if scope_manifest is not None:
+
             def key_scope_checker(row_payload: dict[str, object]) -> bool:
-                return bool(key_validation_scope_decision(scope_manifest, row_payload).get("allowed"))
+                return bool(
+                    key_validation_scope_decision(scope_manifest, row_payload).get("allowed")
+                )
 
         run_cloud_validate(
             key_id,
@@ -407,7 +410,7 @@ def run_scheduled_task(
             key_scope_checker=key_scope_checker,
         )
         return
-        
+
     if task_type == "crawl_stealth":
         use_tor = bool(payload.get("use_tor", False))
         j_min = int(payload.get("jitter_min_ms", 1000))
@@ -431,7 +434,7 @@ def run_scheduled_task(
             )
             _deny_scheduled_task(engagement_id, task_type, target, reason, db_path)
         return
-        
+
     if task_type == "searxng_passive":
         searxng_url = str(payload.get("searxng_url", "http://searxng:8080"))
         use_tor = bool(payload.get("use_tor", False))

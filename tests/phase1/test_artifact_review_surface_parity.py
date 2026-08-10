@@ -243,19 +243,13 @@ def test_artifact_pivots_surface_across_graph_dashboard_and_report_inventory(
         output_path=reports_dir / "dashboard.html",
     )
     overview = json.loads(
-        (reports_dir / "dashboard" / "data" / "engagements.json").read_text(
-            encoding="utf-8"
-        )
+        (reports_dir / "dashboard" / "data" / "engagements.json").read_text(encoding="utf-8")
     )
     slug = next(item["slug"] for item in overview["items"] if item["id"] == "1001")
     detail_payload = json.loads(
-        (
-            reports_dir
-            / "dashboard"
-            / "data"
-            / "engagements"
-            / f"{slug}.json"
-        ).read_text(encoding="utf-8")
+        (reports_dir / "dashboard" / "data" / "engagements" / f"{slug}.json").read_text(
+            encoding="utf-8"
+        )
     )
 
     seed_values = {row["Seed"] for row in detail_payload["sections"]["engagement_seeds"]}

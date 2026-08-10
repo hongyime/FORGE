@@ -124,8 +124,16 @@ def framework_config_artifact_label(value: str) -> str:
 
 def framework_config_host_candidates(text: str) -> list[str]:
     matches: list[tuple[int, str]] = []
-    for pattern in (_QUOTED_FIELD_RE, _FIELD_RE, _DOTNET_CONNECTION_RE, _XML_CONNECTION_RE, _ENV_FALLBACK_RE):
-        matches.extend((match.start(), match.group("value")) for match in pattern.finditer(str(text or "")))
+    for pattern in (
+        _QUOTED_FIELD_RE,
+        _FIELD_RE,
+        _DOTNET_CONNECTION_RE,
+        _XML_CONNECTION_RE,
+        _ENV_FALLBACK_RE,
+    ):
+        matches.extend(
+            (match.start(), match.group("value")) for match in pattern.finditer(str(text or ""))
+        )
     values: list[str] = []
     seen: set[str] = set()
     for _, value in sorted(matches, key=lambda item: item[0]):
@@ -160,7 +168,10 @@ def _has_segment(parts: list[str], value: str) -> bool:
 
 def _has_sequence(parts: list[str], sequence: tuple[str, ...]) -> bool:
     size = len(sequence)
-    return any(tuple(parts[index : index + size]) == sequence for index in range(max(0, len(parts) - size + 1)))
+    return any(
+        tuple(parts[index : index + size]) == sequence
+        for index in range(max(0, len(parts) - size + 1))
+    )
 
 
 def _is_spring_config_name(name: str) -> bool:
@@ -172,7 +183,10 @@ def _append(values: list[str], seen: set[str], value: str) -> None:
     lowered = raw.lower()
     if not raw or lowered in {"config", "env", "getenv", "process"}:
         return
-    if any(marker in lowered for marker in ("${", "$(", "{{", "}}", "env(", "getenv(", "process.env", "os.getenv")):
+    if any(
+        marker in lowered
+        for marker in ("${", "$(", "{{", "}}", "env(", "getenv(", "process.env", "os.getenv")
+    ):
         return
     host = _candidate_host(raw).strip("[]").lower().strip(".")
     if not host or host in seen or not _usable_host(host):
@@ -186,7 +200,10 @@ def _append_service_endpoint(values: list[str], seen: set[str], key: str, value:
     lowered = raw.lower()
     if not raw or lowered in {"config", "env", "getenv", "process"}:
         return
-    if any(marker in lowered for marker in ("${", "$(", "{{", "}}", "env(", "getenv(", "process.env", "os.getenv")):
+    if any(
+        marker in lowered
+        for marker in ("${", "$(", "{{", "}}", "env(", "getenv(", "process.env", "os.getenv")
+    ):
         return
     host = _candidate_host(raw).strip("[]").lower().strip(".")
     if not host or not _usable_host(host):

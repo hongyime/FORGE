@@ -34,6 +34,7 @@ class TestAuthCheckEnvPollutionFix:
 
         assert hasattr(auth_check, "_AUTH_CHECK_ENV_LOCK")
         import threading as _th
+
         assert isinstance(auth_check._AUTH_CHECK_ENV_LOCK, type(_th.Lock()))
 
     def test_finally_clause_pops_empty_string_previous(self) -> None:
@@ -41,7 +42,7 @@ class TestAuthCheckEnvPollutionFix:
         from forge.utils.intel import auth_check
 
         source = inspect.getsource(auth_check)
-        assert "previous_key in (None, \"\")" in source, (
+        assert 'previous_key in (None, "")' in source, (
             "finally-clause must restore both None and '' cases so an "
             "empty-string prior key doesn't leave test-key in place."
         )
@@ -117,8 +118,7 @@ class TestWizardPassesScopeOverride:
             "doesn't short-circuit True via the hosts.in_scope=1 DB bit."
         )
         assert "load_scope_from_db" in text, (
-            "wizard must load the engagement scope before invoking the "
-            "port scanner."
+            "wizard must load the engagement scope before invoking the port scanner."
         )
 
 
@@ -163,11 +163,11 @@ class TestV03ExtendedDetection:
     @pytest.mark.parametrize(
         "ip",
         [
-            "127.0.0.1",           # IPv4 loopback
-            "127.5.10.15",         # IPv4 loopback broad
-            "100.64.0.1",          # CGNAT low
-            "100.127.255.254",     # CGNAT high
-            "169.254.1.1",         # IPv4 link-local
+            "127.0.0.1",  # IPv4 loopback
+            "127.5.10.15",  # IPv4 loopback broad
+            "100.64.0.1",  # CGNAT low
+            "100.127.255.254",  # CGNAT high
+            "169.254.1.1",  # IPv4 link-local
         ],
     )
     def test_ipv4_extended_ranges_flagged(self, ip: str) -> None:
@@ -179,17 +179,17 @@ class TestV03ExtendedDetection:
     @pytest.mark.parametrize(
         "ip",
         [
-            "::1",                 # IPv6 loopback
-            "fc00:1::1",           # IPv6 ULA (fc)
-            "fd12:3456:789a::1",   # IPv6 ULA (fd)
-            "fe80::1",             # IPv6 link-local
+            "::1",  # IPv6 loopback
+            "fc00:1::1",  # IPv6 ULA (fc)
+            "fd12:3456:789a::1",  # IPv6 ULA (fd)
+            "fe80::1",  # IPv6 link-local
         ],
     )
     def test_ipv6_internal_ranges_flagged(self, ip: str) -> None:
         result = self._run_v03(f"jumpbox at {ip} exfiltrated data", approved_ips=[])
-        assert any(f"[V-03] Internal IP" in w and ip.lower() in w.lower() for w in result.warnings), (
-            f"V-03 must flag IPv6 internal {ip!r}."
-        )
+        assert any(
+            f"[V-03] Internal IP" in w and ip.lower() in w.lower() for w in result.warnings
+        ), f"V-03 must flag IPv6 internal {ip!r}."
 
     def test_public_ip_not_flagged(self) -> None:
         result = self._run_v03("8.8.8.8 is Google DNS", approved_ips=[])
@@ -204,20 +204,14 @@ class TestV03OverlyBroadCidrWarning:
 
         caplog.set_level(logging.WARNING, logger="forge.phase6.llm_validator")
         _parse_approved_ip_ranges(["0.0.0.0/0"])
-        assert any(
-            "unusually broad" in rec.message
-            for rec in caplog.records
-        )
+        assert any("unusually broad" in rec.message for rec in caplog.records)
 
     def test_narrow_range_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         from forge.phase6.llm_validator import _parse_approved_ip_ranges
 
         caplog.set_level(logging.WARNING, logger="forge.phase6.llm_validator")
         _parse_approved_ip_ranges(["10.0.0.0/24"])
-        assert not any(
-            "unusually broad" in rec.message
-            for rec in caplog.records
-        )
+        assert not any("unusually broad" in rec.message for rec in caplog.records)
 
 
 class TestScopeManifestPathAllowlist:
@@ -238,7 +232,9 @@ class TestScopeManifestPathAllowlist:
         with pytest.raises(ValueError, match="1 MiB"):
             _load_scope_manifest(str(big))
 
-    def test_rejects_absolute_path_outside_workspace(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_rejects_absolute_path_outside_workspace(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Path under neither cwd nor home is rejected."""
         from forge.cli import _load_scope_manifest
 
@@ -291,6 +287,8 @@ class TestFirebaseApiKeyRedactionFirst4Last4:
         assert "[:4]" in combined and "[-4:]" in combined
 
     def test_firebase_extract_source_no_longer_shows_first_10_chars(self) -> None:
-        text = Path("forge/phase4/firebase_extract.py").read_text(encoding="utf-8", errors="replace")
+        text = Path("forge/phase4/firebase_extract.py").read_text(
+            encoding="utf-8", errors="replace"
+        )
         assert "api_key[:10]" not in text
         assert "[:4]" in text and "[-4:]" in text

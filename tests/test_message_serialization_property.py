@@ -115,9 +115,7 @@ def _agent_message_strategy() -> st.SearchStrategy[AgentMessage]:
     suppress_health_check=[HealthCheck.too_slow],
     deadline=None,
 )
-def test_envelope_round_trip_preserves_message_and_topic(
-    message: AgentMessage, topic: str
-) -> None:
+def test_envelope_round_trip_preserves_message_and_topic(message: AgentMessage, topic: str) -> None:
     """For any AgentMessage and topic, the wire envelope round-trips losslessly.
 
     Mirrors the exact serialization performed by both InMemoryMessageBus and
@@ -139,9 +137,7 @@ def test_envelope_round_trip_preserves_message_and_topic(
 
 @given(message=_agent_message_strategy(), topic=_topic_strategy)
 @settings(max_examples=100, deadline=None)
-def test_envelope_round_trip_field_by_field(
-    message: AgentMessage, topic: str
-) -> None:
+def test_envelope_round_trip_field_by_field(message: AgentMessage, topic: str) -> None:
     """Each AgentMessage field is preserved individually through the envelope.
 
     This is a finer-grained version of the above property: if equality ever

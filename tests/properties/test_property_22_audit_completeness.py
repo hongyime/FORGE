@@ -115,9 +115,7 @@ def test_audit_log_completeness(entries: list[AuditEntry]) -> None:
     recorded = logger.entries
 
     # Length: exactly N records for N logged events.
-    assert len(recorded) == len(entries), (
-        f"expected {len(entries)} entries, got {len(recorded)}"
-    )
+    assert len(recorded) == len(entries), f"expected {len(entries)} entries, got {len(recorded)}"
 
     # Order plus preservation of event_type, correlation_id, and timestamp.
     for original, stored in zip(entries, recorded, strict=True):

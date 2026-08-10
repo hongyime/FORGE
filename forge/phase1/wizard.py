@@ -117,6 +117,7 @@ def run_wizard(engagement_id: str) -> None:
         # doesn't short-circuit to True on the hosts.in_scope=1 DB bit.
         # Defense-in-depth: every module calls the scope gate directly.
         from forge.opsec.scope_gate import load_scope_from_db  # noqa: PLC0415
+
         _wizard_db_path = cfg.engagement_db_path(engagement_id)
         try:
             _wizard_scope = [
@@ -134,7 +135,9 @@ def run_wizard(engagement_id: str) -> None:
             scope_override=_wizard_scope,
         )
     if run_ports:
-        console.print(f"[green]Port scan step complete:[/green] {len(findings)} open services found.")
+        console.print(
+            f"[green]Port scan step complete:[/green] {len(findings)} open services found."
+        )
     else:
         console.print("[yellow]Port scan skipped.[/yellow]")
 

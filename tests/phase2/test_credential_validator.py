@@ -9,6 +9,7 @@ Test strategy:
   - Asserts: dry_run default, scope gate, lockout tracking,
     password zeroisation, audit_log completeness, cross-service correlation.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,6 +27,7 @@ from forge.utils.intel.auth_check import (
 
 
 # ─── shared fixtures ─────────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def engagement_db(tmp_path: Path) -> Path:
@@ -66,13 +68,14 @@ def validator(engagement_db: Path) -> CredentialValidator:
         engagement_id=1,
         delay=0.0,
         concurrency=2,
-        dry_run=True,   # safe default
+        dry_run=True,  # safe default
     )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Dry-run default behaviour
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestDryRunDefault:
     def test_dry_run_true_by_default(self, validator):
@@ -105,6 +108,7 @@ class TestDryRunDefault:
 # Scope gate
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestScopeGate:
     def test_out_of_scope_host_skipped(self, engagement_db):
         from forge.opsec.scope_gate import ScopeViolationError
@@ -118,7 +122,7 @@ class TestScopeGate:
         with patch("questionary.text") as mock_q:
             mock_q.return_value.ask.return_value = "YES"
             with pytest.raises(ScopeViolationError):
-                asyncio.run(v.validate_all(["ssh"], ["192.168.99.1"]))   # out of scope
+                asyncio.run(v.validate_all(["ssh"], ["192.168.99.1"]))  # out of scope
 
     def test_in_scope_host_proceeds(self, engagement_db):
         v = CredentialValidator(engagement_db, 1, dry_run=False, delay=0.0)
@@ -137,6 +141,7 @@ class TestScopeGate:
 # ═══════════════════════════════════════════════════════════════════════════
 # Lockout detection
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestLockoutDetection:
     def test_lockout_skips_after_threshold(self, engagement_db):
@@ -181,6 +186,7 @@ class TestLockoutDetection:
 # Password zeroisation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestPasswordZeroisation:
     def test_password_deleted_after_adapter_call(self, engagement_db):
         """
@@ -202,8 +208,10 @@ class TestPasswordZeroisation:
             decrypt_calls.append(result)
             return result
 
-        with patch("forge.utils.intel.auth_check.decrypt_string", side_effect=tracking_decrypt), \
-             patch("questionary.text") as mock_q:
+        with (
+            patch("forge.utils.intel.auth_check.decrypt_string", side_effect=tracking_decrypt),
+            patch("questionary.text") as mock_q,
+        ):
             mock_q.return_value.ask.return_value = "YES"
             asyncio.run(v.validate_all(["ssh"], ["10.0.0.1"]))
 
@@ -214,6 +222,7 @@ class TestPasswordZeroisation:
 # ═══════════════════════════════════════════════════════════════════════════
 # Audit log completeness
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestAuditLog:
     def test_attempts_logged_to_audit_log(self, engagement_db):
@@ -226,15 +235,15 @@ class TestAuditLog:
             mock_q.return_value.ask.return_value = "YES"
             asyncio.run(v.validate_all(["ssh"], ["10.0.0.1"]))
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
-        rows  = con.execute("SELECT result FROM audit_log").fetchall()
+        rows = con.execute("SELECT result FROM audit_log").fetchall()
         con.close()
 
         assert count >= 1
         detail_str = " ".join((r[0] or "") for r in rows).lower()
         # Passwords must never appear in audit_log
-        assert "hunter2"  not in detail_str
+        assert "hunter2" not in detail_str
         assert "p@ssword" not in detail_str
 
     def test_successful_validation_updates_credential_row(self, engagement_db):
@@ -247,7 +256,7 @@ class TestAuditLog:
             mock_q.return_value.ask.return_value = "YES"
             asyncio.run(v.validate_all(["ssh"], ["10.0.0.1"]))
 
-        con  = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         rows = con.execute(
             "SELECT validated, validated_service FROM credentials WHERE validated=1"
         ).fetchall()
@@ -259,6 +268,7 @@ class TestAuditLog:
 # ═══════════════════════════════════════════════════════════════════════════
 # Cross-service correlation
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestCrossServiceCorrelation:
     def test_success_enqueues_other_services(self, engagement_db):
@@ -274,9 +284,12 @@ class TestCrossServiceCorrelation:
             call_log.append(kw.get("service", "unknown"))
             return False
 
-        ssh_adapter  = AsyncMock(); ssh_adapter.authenticate  = AsyncMock(return_value=True)
-        smb_adapter  = AsyncMock(); smb_adapter.authenticate  = AsyncMock(side_effect=fake_authenticate)
-        http_adapter = AsyncMock(); http_adapter.authenticate = AsyncMock(side_effect=fake_authenticate)
+        ssh_adapter = AsyncMock()
+        ssh_adapter.authenticate = AsyncMock(return_value=True)
+        smb_adapter = AsyncMock()
+        smb_adapter.authenticate = AsyncMock(side_effect=fake_authenticate)
+        http_adapter = AsyncMock()
+        http_adapter.authenticate = AsyncMock(side_effect=fake_authenticate)
 
         v._adapters = {"ssh": ssh_adapter, "smb": smb_adapter, "http": http_adapter}
 
@@ -292,9 +305,11 @@ class TestCrossServiceCorrelation:
 # Gaussian jitter
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestGaussianJitter:
     def test_jitter_within_sigma_range(self, validator):
         import statistics
+
         samples = [validator._jittered_delay(base=1.0) for _ in range(200)]
         assert all(s > 0 for s in samples)
         # Mean should be within 30% of base
@@ -308,6 +323,7 @@ class TestGaussianJitter:
 # ═══════════════════════════════════════════════════════════════════════════
 # Adapter registration
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestAdapterRegistration:
     def test_all_default_adapters_registered(self, validator):

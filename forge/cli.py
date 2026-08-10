@@ -268,13 +268,10 @@ def _root_callback(
         # httpx/curl_cffi call fails with `curl (7) Failed to connect`.
         # Cleared only for this process; .env file is untouched.
         import os
+
         os.environ.pop("FORGE_PROXY", None)
 
-    if (
-        cfg.is_tor_requested
-        and not (offline_strict or cfg.offline_strict)
-        and not no_tor
-    ):
+    if cfg.is_tor_requested and not (offline_strict or cfg.offline_strict) and not no_tor:
         from forge.opsec.tor import TorManager  # noqa: PLC0415
         import atexit  # noqa: PLC0415
 
@@ -543,9 +540,7 @@ def web_automation_loop(
     coordinator = QueueCoordinator(redis_url=cfg.redis_url)
     scheduler = TaskScheduler(db_path=db_path, queue=coordinator)
 
-    engine = AutomationEngine(
-        engagement_id=int(engagement), queue=coordinator, scheduler=scheduler
-    )
+    engine = AutomationEngine(engagement_id=int(engagement), queue=coordinator, scheduler=scheduler)
     console.print(f"[green]Automation Engine loop started for engagement:[/green] {engagement}")
     engine.run_event_loop()
 
@@ -579,19 +574,23 @@ def kb_status() -> None:
 @kb_app.command("fetch-breach")
 def kb_fetch_breach(
     url: Optional[str] = typer.Option(
-        None, "--url",
+        None,
+        "--url",
         help="HTTP(S) URL of a breach dump (SQLite .db, CSV, JSON, or archive).",
     ),
     src_file: Optional[str] = typer.Option(
-        None, "--file",
+        None,
+        "--file",
         help="Local path to a breach dump to copy into .forge_data/breach/.",
     ),
     name: Optional[str] = typer.Option(
-        None, "--name",
+        None,
+        "--name",
         help="Output filename (default: derive from URL/file basename).",
     ),
     force: bool = typer.Option(
-        False, "--force",
+        False,
+        "--force",
         help="Overwrite an existing dump with the same name.",
     ),
 ) -> None:
@@ -610,9 +609,7 @@ def kb_fetch_breach(
     import urllib.parse  # noqa: PLC0415
 
     if (url is None) == (src_file is None):
-        console.print(
-            "[bold red]ERROR:[/bold red] specify exactly one of --url or --file"
-        )
+        console.print("[bold red]ERROR:[/bold red] specify exactly one of --url or --file")
         raise typer.Exit(code=2)
 
     cfg = ForgeConfig.load()
@@ -629,8 +626,7 @@ def kb_fetch_breach(
     out_path = breach_dir / out_name
     if out_path.exists() and not force:
         console.print(
-            f"[bold red]ERROR:[/bold red] {out_path} already exists. "
-            f"Use --force to overwrite."
+            f"[bold red]ERROR:[/bold red] {out_path} already exists. Use --force to overwrite."
         )
         raise typer.Exit(code=1)
 
@@ -638,6 +634,7 @@ def kb_fetch_breach(
         console.print(f"[cyan]Fetching[/cyan] {url}")
         try:
             from curl_cffi import requests as _req  # noqa: PLC0415
+
             resp = _req.get(url, timeout=300, allow_redirects=True)
             resp.raise_for_status()
             out_path.write_bytes(resp.content)
@@ -653,12 +650,9 @@ def kb_fetch_breach(
         _sh.copy2(src_path, out_path)
 
     console.print(
-        f"[green]Breach dump ready:[/green] {out_path}  "
-        f"({out_path.stat().st_size:,} bytes)"
+        f"[green]Breach dump ready:[/green] {out_path}  ({out_path.stat().st_size:,} bytes)"
     )
-    console.print(
-        f"[dim]Next:[/dim] forge osint breach --engagement <id> --db {out_path}"
-    )
+    console.print(f"[dim]Next:[/dim] forge osint breach --engagement <id> --db {out_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -707,6 +701,7 @@ def recon_subdomains(
         operator=str(getattr(cfg, "operator", "operator") or "operator"),
     )
     from forge.cli import console
+
     _print_recon_subdomain_summary(console, domain, found)
 
 
@@ -844,7 +839,6 @@ def recon_ports(
     console.print(f"[green]Basic open-port findings:[/green] {len(findings_basic)}")
 
 
-
 # Phase 2 OSINT commands extracted to forge/cli_osint.py
 
 # ---------------------------------------------------------------------------
@@ -937,8 +931,12 @@ def exploit_correlate(
     engagement_id = int(engagement)
 
     _cli_audit(
-        db_path, engagement_id, "phase4", "exploit_correlator",
-        "correlate_start", target=host,
+        db_path,
+        engagement_id,
+        "phase4",
+        "exploit_correlator",
+        "correlate_start",
+        target=host,
     )
 
     with direct_connect(db_path) as con:
@@ -959,8 +957,12 @@ def exploit_correlate(
         )
     except sqlite3.OperationalError as exc:
         _cli_audit(
-            db_path, engagement_id, "phase4", "exploit_correlator",
-            "correlate_skipped", target=host,
+            db_path,
+            engagement_id,
+            "phase4",
+            "exploit_correlator",
+            "correlate_skipped",
+            target=host,
             result=f"cache_open_failed: {type(exc).__name__}: {str(exc)[:120]}",
         )
         console.print(
@@ -1015,14 +1017,22 @@ def exploit_correlate(
                 con.commit()
         console.print(f"[green]Exploit suggestions generated:[/green] {len(suggestions)}")
         _cli_audit(
-            db_path, engagement_id, "phase4", "exploit_correlator",
-            "correlate_complete", target=host,
+            db_path,
+            engagement_id,
+            "phase4",
+            "exploit_correlator",
+            "correlate_complete",
+            target=host,
             result=f"suggestions={len(suggestions)}",
         )
     except Exception as exc:
         _cli_audit(
-            db_path, engagement_id, "phase4", "exploit_correlator",
-            "correlate_failed", target=host,
+            db_path,
+            engagement_id,
+            "phase4",
+            "exploit_correlator",
+            "correlate_failed",
+            target=host,
             result=f"{type(exc).__name__}: {str(exc)[:180]}",
         )
         raise
@@ -1195,11 +1205,11 @@ def vuln_summary(
         console.print(f"{severity:8} {summary.get(severity, 0)}")
 
 
-
 # Phase 4 Cloud commands extracted to forge/cli_cloud.py
 
 
 # Phase 4 Graph commands extracted to forge/cli_graph.py
+
 
 @auth_app.command("brute")
 def auth_brute(
@@ -1339,7 +1349,6 @@ def auth_bypass(
         console.print(f"[green]No bypass detected[/green] {result.technique} @ {result.target_url}")
 
 
-
 # Phase 5 Post commands extracted to forge/cli_post.py
 
 
@@ -1380,9 +1389,9 @@ def kill_chain(
     seed: str = typer.Argument(
         ...,
         help="ANY identifier: domain (target.example), IP (10.0.0.5), email "
-             "(user@x.com), phone (+15551234567), username (@handle), "
-             "company name (\"Acme Corp\"), or full name in quotes "
-             "(\"FORGE Operator\").",
+        "(user@x.com), phone (+15551234567), username (@handle), "
+        'company name ("Acme Corp"), or full name in quotes '
+        '("FORGE Operator").',
     ),
     related_seed: Optional[list[str]] = typer.Option(
         None,
@@ -1390,9 +1399,11 @@ def kill_chain(
         help="Additional seed belonging to the same engagement. Repeat the flag for multi-seed runs.",
     ),
     engagement: Optional[str] = typer.Option(
-        None, "--engagement", "-e",
+        None,
+        "--engagement",
+        "-e",
         help="Engagement ID. Omit to auto-derive next available ID and "
-             "auto-create the engagement row with the seed as scope.",
+        "auto-create the engagement row with the seed as scope.",
     ),
     resume: bool = typer.Option(
         True,
@@ -1400,22 +1411,26 @@ def kill_chain(
         help="Reuse persisted seed-run state and skip fan-outs already completed for this engagement.",
     ),
     max_iter: int = typer.Option(
-        15, "--max-iter",
+        15,
+        "--max-iter",
         help="Spider iterations (default 15, max 20). Loop breaks early on stable snapshot.",
     ),
     tor: bool = typer.Option(
-        False, "--tor",
+        False,
+        "--tor",
         help="Route every subcommand through vendored Tor. Adds ~5s per module for bootstrap.",
     ),
     dry_run: bool = typer.Option(
-        False, "--dry-run",
+        False,
+        "--dry-run",
         help="Log every intended action without executing outbound calls. Nothing hits the network.",
     ),
     attack_mode: bool = typer.Option(
-        True, "--attack-mode/--no-attack-mode",
+        True,
+        "--attack-mode/--no-attack-mode",
         help="ACTIVE recon (DEFAULT ON): port scan + credential validation "
-             "(SSH/SMB/RDP/FTP/HTTP). Pass --no-attack-mode for passive-only. "
-             "Requires --roe-id + --scope-manifest (or env vars) for any live run.",
+        "(SSH/SMB/RDP/FTP/HTTP). Pass --no-attack-mode for passive-only. "
+        "Requires --roe-id + --scope-manifest (or env vars) for any live run.",
     ),
     roe_id: Optional[str] = typer.Option(
         None,
@@ -1436,11 +1451,13 @@ def kill_chain(
         ),
     ),
     skip_cloud: bool = typer.Option(
-        False, "--skip-cloud",
+        False,
+        "--skip-cloud",
         help="Skip cloud discovery (Supabase/Firebase/Amplify/GCP/Vercel/Netlify).",
     ),
     skip_keyscan: bool = typer.Option(
-        False, "--skip-keyscan",
+        False,
+        "--skip-keyscan",
         help="Skip GitHub keyscan (protects FORGE_GITHUB_TOKEN quota).",
     ),
     parallel_fanout: int = typer.Option(
@@ -1581,12 +1598,12 @@ def kill_chain(
     use_tor = tor
     max_iterations = max_iter
     dry_run_all = dry_run
-    dry_run_keyscan = dry_run              # dry_run supersedes both dry-run flags
+    dry_run_keyscan = dry_run  # dry_run supersedes both dry-run flags
     active_recon = attack_mode
     credential_validate = attack_mode
     resume_enabled = resume
-    no_playwright = False                  # Playwright is always on now
-    wayback_full = True                    # Wayback is always full-paginated
+    no_playwright = False  # Playwright is always on now
+    wayback_full = True  # Wayback is always full-paginated
     report_provider = str(report_provider or "").strip() or None
     if report_max_loops is not None and int(report_max_loops) < 0:
         raise typer.BadParameter("--report-max-loops must be zero or greater.")
@@ -1656,6 +1673,7 @@ def kill_chain(
     import re as _re  # noqa: PLC0415
     import socket as _socket  # noqa: PLC0415
     import ipaddress as _ipaddress  # noqa: PLC0415
+
     _COMPANY_SUFFIXES = {
         "co",
         "company",
@@ -1823,8 +1841,9 @@ def kill_chain(
             return "url"
         if _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", v):
             return "email"
-        if _re.match(r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$",
-                     v.lower()):
+        if _re.match(
+            r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$", v.lower()
+        ):
             return "domain"
         if _looks_like_company_name(v):
             return "company"
@@ -1871,15 +1890,23 @@ def kill_chain(
         host = hostname.strip().lower().lstrip(".")
         if host.startswith("www."):
             host = host[4:]
-        if any(host == domain or host.endswith(f".{domain}") for domain in _SOCIAL_PLATFORM_DOMAINS):
+        if any(
+            host == domain or host.endswith(f".{domain}") for domain in _SOCIAL_PLATFORM_DOMAINS
+        ):
             return True
         if (
-            any(host == domain or host.endswith(f".{domain}") for domain in _MASTODON_INSTANCE_DOMAINS)
+            any(
+                host == domain or host.endswith(f".{domain}")
+                for domain in _MASTODON_INSTANCE_DOMAINS
+            )
             or host.startswith("mastodon.")
             or host.startswith("mstdn.")
         ):
             return True
-        return any(host == domain or host.endswith(f".{domain}") for domain in _MANAGED_CLOUD_PROVIDER_DOMAINS)
+        return any(
+            host == domain or host.endswith(f".{domain}")
+            for domain in _MANAGED_CLOUD_PROVIDER_DOMAINS
+        )
 
     initial_seed_values: list[str] = []
     for raw_seed in [seed, *(related_seed or [])]:
@@ -1968,7 +1995,9 @@ def kill_chain(
         return {
             "value": seed_value,
             "seed_type": entry_type,
-            "scope_values": [seed_value, f"*.{seed_value}"] if entry_type == "domain" else [seed_value],
+            "scope_values": [seed_value, f"*.{seed_value}"]
+            if entry_type == "domain"
+            else [seed_value],
             "derived_domain": _derive_domain_for_seed(seed_value, entry_type),
             "username_seed": seed_value.lstrip("@") if entry_type == "username" else "",
             "phone_seed": seed_value if entry_type == "phone" else "",
@@ -2038,7 +2067,10 @@ def kill_chain(
                 break
         for asset_type, pattern in (
             ("amplify", _re.compile(r"^([a-z0-9\-]+)\.amplifyapp\.com$", _re.IGNORECASE)),
-            ("gcp_appspot", _re.compile(r"^([a-z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com$", _re.IGNORECASE)),
+            (
+                "gcp_appspot",
+                _re.compile(r"^([a-z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com$", _re.IGNORECASE),
+            ),
             (
                 "gcp_cloudfunctions",
                 _re.compile(r"^[a-z0-9\-]+-([a-z0-9\-]+)\.cloudfunctions\.net$", _re.IGNORECASE),
@@ -2074,7 +2106,8 @@ def kill_chain(
                 continue
             project_ref = (
                 hostname
-                if asset_type in {"cloudflare_worker", "cloudflare_r2", "github_pages", "gitlab_pages"}
+                if asset_type
+                in {"cloudflare_worker", "cloudflare_r2", "github_pages", "gitlab_pages"}
                 else str(match.group(1) or "").strip(".")
             )
             if asset_type == "gcp_cloudfunctions":
@@ -2186,11 +2219,7 @@ def kill_chain(
         confidence: float,
         evidence: dict[str, object],
     ) -> None:
-        if (
-            source_seed_id is None
-            or target_seed_id is None
-            or source_seed_id == target_seed_id
-        ):
+        if source_seed_id is None or target_seed_id is None or source_seed_id == target_seed_id:
             return
         try:
             con.execute(
@@ -2332,9 +2361,7 @@ def kill_chain(
         if not normalized_email or "@" not in normalized_email:
             return
         handles = [
-            str(username or "").strip()
-            for username in usernames
-            if str(username or "").strip()
+            str(username or "").strip() for username in usernames if str(username or "").strip()
         ]
         if not handles:
             return
@@ -2392,19 +2419,23 @@ def kill_chain(
     # Ensure the engagement row exists (create if missing so downstream
     # scope_gate / audit_log FKs don't fail on a fresh ID).
     import sqlite3 as _sq_init  # noqa: PLC0415
+
     _db_path_init = cfg.engagement_db_path(engagement)
     _fresh = not _db_path_init.exists()
     if _fresh:
         from forge.db.schema import apply_schema  # noqa: PLC0415
+
         _con_init = _sq_init.connect(str(_db_path_init))
         try:
             apply_schema(_con_init)
             try:
                 from forge.db.migrations import run_migrations  # noqa: PLC0415
+
                 run_migrations(_con_init)
             except Exception:  # noqa: BLE001
                 pass
             import json as _json_init  # noqa: PLC0415
+
             _scope_list: list[str] = []
             for prepared_seed in prepared_initial_seed_routes:
                 for scope_value in prepared_seed["scope_values"]:
@@ -2415,16 +2446,19 @@ def kill_chain(
                     "INSERT OR IGNORE INTO engagements "
                     "(id, name, scope_json, status, operator) "
                     "VALUES (?, ?, ?, 'ACTIVE', ?)",
-                    (int(engagement), f"auto:{seed_type}:{seed[:30]}",
-                     _json_init.dumps(_scope_list), cfg.operator),
+                    (
+                        int(engagement),
+                        f"auto:{seed_type}:{seed[:30]}",
+                        _json_init.dumps(_scope_list),
+                        cfg.operator,
+                    ),
                 )
                 _con_init.commit()
             except (_sq_init.OperationalError, _sq_init.IntegrityError):
                 pass
         finally:
             _con_init.close()
-        console.print(f"[dim]Auto-created engagement {engagement} "
-                      f"(seed_type={seed_type})[/dim]")
+        console.print(f"[dim]Auto-created engagement {engagement} (seed_type={seed_type})[/dim]")
     # Derive the "domain" that legacy fan-outs (subdomain enum, DNS,
     # Wayback, RDAP, harvest, crawler) expect. For non-domain seeds we
     # skip those fan-outs and route to specialised modules instead.
@@ -2513,30 +2547,18 @@ def kill_chain(
         if derived_domain and derived_domain not in root_domains:
             root_domains.append(derived_domain)
     extra_username_seeds = [
-        str(item["username_seed"])
-        for item in additional_seed_routes
-        if item["username_seed"]
+        str(item["username_seed"]) for item in additional_seed_routes if item["username_seed"]
     ]
     extra_phone_seeds = [
-        str(item["phone_seed"])
-        for item in additional_seed_routes
-        if item["phone_seed"]
+        str(item["phone_seed"]) for item in additional_seed_routes if item["phone_seed"]
     ]
     extra_name_seeds = [
-        str(item["name_seed"])
-        for item in additional_seed_routes
-        if item["name_seed"]
+        str(item["name_seed"]) for item in additional_seed_routes if item["name_seed"]
     ]
     extra_company_seeds = [
-        str(item["company_seed"])
-        for item in additional_seed_routes
-        if item["company_seed"]
+        str(item["company_seed"]) for item in additional_seed_routes if item["company_seed"]
     ]
-    extra_ip_seeds = [
-        str(item["ip_seed"])
-        for item in additional_seed_routes
-        if item["ip_seed"]
-    ]
+    extra_ip_seeds = [str(item["ip_seed"]) for item in additional_seed_routes if item["ip_seed"]]
     processed_emails: set[str] = set()
     processed_social_handles: set[str] = set()
     processed_keyscan_targets: set[str] = set()
@@ -2703,29 +2725,38 @@ def kill_chain(
             "report_max_loops": report_max_loops,
             "last_step": str(run_progress_state.get("last_step") or ""),
             "last_message": str(run_progress_state.get("last_message") or ""),
-            "last_step_elapsed_seconds": float(run_progress_state.get("last_step_elapsed_seconds") or 0.0),
+            "last_step_elapsed_seconds": float(
+                run_progress_state.get("last_step_elapsed_seconds") or 0.0
+            ),
             "last_step_at": str(run_progress_state.get("last_step_at") or ""),
             "active_batch_label": str(run_progress_state.get("active_batch_label") or ""),
             "active_batch_eta_seconds": (
                 round(float(active_batch_eta_seconds), 1)
-                if isinstance(active_batch_eta_seconds, (int, float)) and not isinstance(active_batch_eta_seconds, bool)
+                if isinstance(active_batch_eta_seconds, (int, float))
+                and not isinstance(active_batch_eta_seconds, bool)
                 else None
             ),
-            "active_artifact_stage_label": str(run_progress_state.get("active_artifact_stage_label") or ""),
+            "active_artifact_stage_label": str(
+                run_progress_state.get("active_artifact_stage_label") or ""
+            ),
             "active_artifact_eta_seconds": (
                 round(float(active_artifact_eta_seconds), 1)
                 if isinstance(active_artifact_eta_seconds, (int, float))
                 and not isinstance(active_artifact_eta_seconds, bool)
                 else None
             ),
-            "active_validation_stage_label": str(run_progress_state.get("active_validation_stage_label") or ""),
+            "active_validation_stage_label": str(
+                run_progress_state.get("active_validation_stage_label") or ""
+            ),
             "active_validation_eta_seconds": (
                 round(float(active_validation_eta_seconds), 1)
                 if isinstance(active_validation_eta_seconds, (int, float))
                 and not isinstance(active_validation_eta_seconds, bool)
                 else None
             ),
-            "active_finalization_stage_label": str(run_progress_state.get("active_finalization_stage_label") or ""),
+            "active_finalization_stage_label": str(
+                run_progress_state.get("active_finalization_stage_label") or ""
+            ),
             "active_finalization_eta_seconds": (
                 round(float(active_finalization_eta_seconds), 1)
                 if isinstance(active_finalization_eta_seconds, (int, float))
@@ -2735,20 +2766,18 @@ def kill_chain(
             "recent_steps": list(recent_steps)[-8:],
             "counts": dict(counts),
             "queue_metrics": {
-                str(group): {
-                    str(label): int(count or 0)
-                    for label, count in values.items()
-                }
+                str(group): {str(label): int(count or 0) for label, count in values.items()}
                 for group, values in queue_metrics.items()
                 if isinstance(values, dict)
             },
             "pending_work_counts": {
-                str(label): int(count or 0)
-                for label, count in pending_work_counts.items()
+                str(label): int(count or 0) for label, count in pending_work_counts.items()
             },
             "pending_work_total": int(run_progress_state.get("pending_work_total") or 0),
             "last_iteration_delta": dict(last_iteration_delta),
-            "last_iteration_stable": last_iteration_stable if isinstance(last_iteration_stable, bool) else None,
+            "last_iteration_stable": last_iteration_stable
+            if isinstance(last_iteration_stable, bool)
+            else None,
         }
 
     def _current_run_progress_payload() -> dict[str, object]:
@@ -2763,7 +2792,9 @@ def kill_chain(
             "phase": str(run_progress_state.get("phase") or ""),
             "last_step": str(run_progress_state.get("last_step") or ""),
             "last_message": str(run_progress_state.get("last_message") or ""),
-            "last_step_elapsed_seconds": round(float(run_progress_state.get("last_step_elapsed_seconds") or 0.0), 3),
+            "last_step_elapsed_seconds": round(
+                float(run_progress_state.get("last_step_elapsed_seconds") or 0.0), 3
+            ),
             "last_step_at": str(run_progress_state.get("last_step_at") or ""),
             "current_iteration": last_iteration,
             "run_kind": "kill_chain",
@@ -2780,24 +2811,31 @@ def kill_chain(
             "active_batch_label": str(run_progress_state.get("active_batch_label") or ""),
             "active_batch_eta_seconds": (
                 round(float(active_batch_eta_seconds), 1)
-                if isinstance(active_batch_eta_seconds, (int, float)) and not isinstance(active_batch_eta_seconds, bool)
+                if isinstance(active_batch_eta_seconds, (int, float))
+                and not isinstance(active_batch_eta_seconds, bool)
                 else None
             ),
-            "active_artifact_stage_label": str(run_progress_state.get("active_artifact_stage_label") or ""),
+            "active_artifact_stage_label": str(
+                run_progress_state.get("active_artifact_stage_label") or ""
+            ),
             "active_artifact_eta_seconds": (
                 round(float(active_artifact_eta_seconds), 1)
                 if isinstance(active_artifact_eta_seconds, (int, float))
                 and not isinstance(active_artifact_eta_seconds, bool)
                 else None
             ),
-            "active_validation_stage_label": str(run_progress_state.get("active_validation_stage_label") or ""),
+            "active_validation_stage_label": str(
+                run_progress_state.get("active_validation_stage_label") or ""
+            ),
             "active_validation_eta_seconds": (
                 round(float(active_validation_eta_seconds), 1)
                 if isinstance(active_validation_eta_seconds, (int, float))
                 and not isinstance(active_validation_eta_seconds, bool)
                 else None
             ),
-            "active_finalization_stage_label": str(run_progress_state.get("active_finalization_stage_label") or ""),
+            "active_finalization_stage_label": str(
+                run_progress_state.get("active_finalization_stage_label") or ""
+            ),
             "active_finalization_eta_seconds": (
                 round(float(active_finalization_eta_seconds), 1)
                 if isinstance(active_finalization_eta_seconds, (int, float))
@@ -2842,7 +2880,15 @@ def kill_chain(
             queue_metrics = {}
         queue_metrics["fanout_batch"] = {
             key: int(metrics.get(key) or 0)
-            for key in ("total", "workers", "running", "pending", "queue_depth", "completed", "failed")
+            for key in (
+                "total",
+                "workers",
+                "running",
+                "pending",
+                "queue_depth",
+                "completed",
+                "failed",
+            )
         }
         run_progress_state["queue_metrics"] = queue_metrics
         run_progress_state["active_batch_label"] = label
@@ -2862,7 +2908,15 @@ def kill_chain(
             queue_metrics = {}
         queue_metrics["artifact_processor"] = {
             key: int(metrics.get(key) or 0)
-            for key in ("total", "workers", "running", "pending", "queue_depth", "completed", "failed")
+            for key in (
+                "total",
+                "workers",
+                "running",
+                "pending",
+                "queue_depth",
+                "completed",
+                "failed",
+            )
         }
         run_progress_state["queue_metrics"] = queue_metrics
         run_progress_state["active_artifact_stage_label"] = label
@@ -2930,7 +2984,15 @@ def kill_chain(
             queue_metrics = {}
         queue_metrics["validation_batch"] = {
             key: int(metrics.get(key) or 0)
-            for key in ("total", "workers", "running", "pending", "queue_depth", "completed", "failed")
+            for key in (
+                "total",
+                "workers",
+                "running",
+                "pending",
+                "queue_depth",
+                "completed",
+                "failed",
+            )
         }
         run_progress_state["queue_metrics"] = queue_metrics
         run_progress_state["active_validation_stage_label"] = label
@@ -2950,7 +3012,15 @@ def kill_chain(
             queue_metrics = {}
         queue_metrics["finalization_batch"] = {
             key: int(metrics.get(key) or 0)
-            for key in ("total", "workers", "running", "pending", "queue_depth", "completed", "failed")
+            for key in (
+                "total",
+                "workers",
+                "running",
+                "pending",
+                "queue_depth",
+                "completed",
+                "failed",
+            )
         }
         run_progress_state["queue_metrics"] = queue_metrics
         run_progress_state["active_finalization_stage_label"] = label
@@ -2976,7 +3046,9 @@ def kill_chain(
     ) -> None:
         metadata_payload = metadata if isinstance(metadata, dict) else {}
         try:
-            metadata_json = json.dumps(metadata_payload, sort_keys=True) if metadata_payload else "{}"
+            metadata_json = (
+                json.dumps(metadata_payload, sort_keys=True) if metadata_payload else "{}"
+            )
         except (TypeError, ValueError):
             metadata_json = "{}"
         try:
@@ -3012,6 +3084,7 @@ def kill_chain(
 
     def _persist_seed() -> None:
         import sqlite3 as _sq2  # noqa: PLC0415
+
         con = _sq2.connect(db_path)
         try:
             for index, seed_entry in enumerate(classified_seeds):
@@ -3040,11 +3113,15 @@ def kill_chain(
                         con.execute(
                             "INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context) "
                             "VALUES (?, ?, ?, 'unknown', ?)",
-                            (engagement_id, "0.0.0.0", seed_value.lower(),
-                             _host_context_json(
-                                 "kill_chain_seed",
-                                 synthetic_ip=True,
-                             )),
+                            (
+                                engagement_id,
+                                "0.0.0.0",
+                                seed_value.lower(),
+                                _host_context_json(
+                                    "kill_chain_seed",
+                                    synthetic_ip=True,
+                                ),
+                            ),
                         )
                     except (_sq2.IntegrityError, _sq2.OperationalError):
                         pass
@@ -3053,8 +3130,11 @@ def kill_chain(
                         con.execute(
                             "INSERT INTO hosts (engagement_id, ip, hostname, os_family, host_context) "
                             "VALUES (?, ?, ?, 'unknown', ?)",
-                            (engagement_id, seed_value, "",
-                             _host_context_json("kill_chain_seed"),
+                            (
+                                engagement_id,
+                                seed_value,
+                                "",
+                                _host_context_json("kill_chain_seed"),
                             ),
                         )
                     except (_sq2.IntegrityError, _sq2.OperationalError):
@@ -3075,17 +3155,23 @@ def kill_chain(
     seed_run_tracker = None
 
     _cli_audit(
-        db_path, engagement_id, "orchestrator", "kill_chain",
-        "kill_chain_start", target=seed,
-        result=(f"seed_type={seed_type} seed_count={len(classified_seeds)} "
-                f"root_domains={','.join(root_domains) if root_domains else '-'} "
-                f"skip_keyscan={skip_keyscan} "
-                f"skip_cloud={skip_cloud} tor={tor} dry_run={dry_run} "
-                f"attack_mode={attack_mode} live_probe={not dry_run_all} "
-                f"auto_run_detected={auto_run_detected} "
-                f"roe_id={roe_id or '-'} "
-                f"scope_manifest={'present' if scope_manifest_metadata else '-'} "
-                f"max_iter={max_iter}"),
+        db_path,
+        engagement_id,
+        "orchestrator",
+        "kill_chain",
+        "kill_chain_start",
+        target=seed,
+        result=(
+            f"seed_type={seed_type} seed_count={len(classified_seeds)} "
+            f"root_domains={','.join(root_domains) if root_domains else '-'} "
+            f"skip_keyscan={skip_keyscan} "
+            f"skip_cloud={skip_cloud} tor={tor} dry_run={dry_run} "
+            f"attack_mode={attack_mode} live_probe={not dry_run_all} "
+            f"auto_run_detected={auto_run_detected} "
+            f"roe_id={roe_id or '-'} "
+            f"scope_manifest={'present' if scope_manifest_metadata else '-'} "
+            f"max_iter={max_iter}"
+        ),
     )
 
     def _publish_run_progress(step: str, msg: str = "", *, force: bool = False) -> None:
@@ -3095,7 +3181,11 @@ def kill_chain(
         msg_text = _strip_console_markup(msg)[:320]
         if not step_text:
             return
-        if not force and step_text == str(run_progress_state.get("last_step") or "") and msg_text == str(run_progress_state.get("last_message") or ""):
+        if (
+            not force
+            and step_text == str(run_progress_state.get("last_step") or "")
+            and msg_text == str(run_progress_state.get("last_message") or "")
+        ):
             return
         elapsed = _time.time() - step_start
         run_progress_state["phase"] = _infer_run_phase(step_text)
@@ -3166,11 +3256,14 @@ def kill_chain(
                 progress_label_prefix=label,
             )
         if dry_run_all:
-            _log(label, f"[yellow]DRY-RUN-ALL[/yellow] would run: "
-                        f"forge {' '.join(cmd_argv)}")
+            _log(label, f"[yellow]DRY-RUN-ALL[/yellow] would run: forge {' '.join(cmd_argv)}")
             _cli_audit(
-                db_path, engagement_id, "orchestrator", "kill_chain",
-                "dry_run_all_step", target=label,
+                db_path,
+                engagement_id,
+                "orchestrator",
+                "kill_chain",
+                "dry_run_all_step",
+                target=label,
                 result="forge " + " ".join(cmd_argv),
             )
             _finalize_module_seed_runs(
@@ -3189,8 +3282,11 @@ def kill_chain(
             timeout_seconds=module_timeout_seconds,
         )
         if proc.returncode != 0:
-            _log(label, f"[yellow]exit={proc.returncode}[/yellow] "
-                        f"stderr={proc.stderr[-200:] if proc.stderr else 'none'}")
+            _log(
+                label,
+                f"[yellow]exit={proc.returncode}[/yellow] "
+                f"stderr={proc.stderr[-200:] if proc.stderr else 'none'}",
+            )
             _finalize_module_seed_runs(
                 run_handles,
                 base_metadata_value=base_metadata,
@@ -3512,8 +3608,7 @@ def kill_chain(
             import httpx  # noqa: PLC0415
             from forge.utils.intel.http_pacing import web_fetch_get  # noqa: PLC0415
 
-            with httpx.Client(follow_redirects=True, timeout=timeout,
-                              verify=False) as client:  # noqa: S501
+            with httpx.Client(follow_redirects=True, timeout=timeout, verify=False) as client:  # noqa: S501
                 r = web_fetch_get(client, url)
                 return r.text or ""
         except Exception:  # noqa: BLE001
@@ -3537,17 +3632,17 @@ def kill_chain(
                 try:
                     ctx = browser.new_context(
                         ignore_https_errors=True,
-                        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                    "Chrome/120.0.0.0 Safari/537.36"),
+                        user_agent=(
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/120.0.0.0 Safari/537.36"
+                        ),
                     )
                     page = ctx.new_page()
-                    page.goto(url, timeout=int(timeout * 1000),
-                              wait_until="domcontentloaded")
+                    page.goto(url, timeout=int(timeout * 1000), wait_until="domcontentloaded")
                     # Give SPA JS a moment to fetch + render
                     try:
-                        page.wait_for_load_state("networkidle",
-                                                  timeout=5000)
+                        page.wait_for_load_state("networkidle", timeout=5000)
                     except Exception:  # noqa: BLE001
                         pass
                     html = page.content() or ""
@@ -3705,7 +3800,9 @@ def kill_chain(
             rec = raw_records if isinstance(raw_records, dict) else {}
             for tgt in rec.get("CNAME", []):
                 normalized_target = tgt.rstrip(".").lower()
-                if normalized_target == root_domain or normalized_target.endswith("." + root_domain):
+                if normalized_target == root_domain or normalized_target.endswith(
+                    "." + root_domain
+                ):
                     discovered_targets.add(normalized_target)
             for txt in rec.get("TXT", []):
                 lowered_txt = txt.lower()
@@ -3739,8 +3836,8 @@ def kill_chain(
         result: dict[str, object] = {}
         try:
             import httpx  # noqa: PLC0415
-            with httpx.Client(follow_redirects=True, timeout=timeout,
-                              verify=False) as c:  # noqa: S501
+
+            with httpx.Client(follow_redirects=True, timeout=timeout, verify=False) as c:  # noqa: S501
                 r = c.get(f"https://rdap.org/domain/{domain_name}")
                 if r.status_code != 200:
                     status = "skipped" if int(r.status_code) == 404 else "failed"
@@ -3782,16 +3879,16 @@ def kill_chain(
                         if len(row) >= 4 and row[0] == "fn":
                             registrar = str(row[3])
                             break
-        ns = [n.get("ldhName", "").lower()
-              for n in data.get("nameservers", []) if n.get("ldhName")]
+        ns = [n.get("ldhName", "").lower() for n in data.get("nameservers", []) if n.get("ldhName")]
         result["registrant_emails"] = emails
         result["registrar"] = registrar
         result["related_nameservers"] = ns
         result["_forge_status"] = "completed"
         return result
 
-    def _wayback_urls(domain_name: str, timeout: float = 15.0,
-                      limit: int = 500) -> dict[str, object]:
+    def _wayback_urls(
+        domain_name: str, timeout: float = 15.0, limit: int = 500
+    ) -> dict[str, object]:
         """Query archive.org CDX API for every URL ever crawled under
         <domain>/*. Returns unique original URLs. Empty on failure.
 
@@ -3965,14 +4062,21 @@ def kill_chain(
             e = m.group(1).lower().strip()
             if "@" in e and "." in e.split("@")[-1]:
                 emails.add(e)
-        for m in _re.finditer(
-            r'[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+', html
-        ):
+        for m in _re.finditer(r"[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+", html):
             e = m.group(0).lower().strip(".")
             # Filter garbage / example emails
-            if not any(bad in e for bad in ("example.", "test@", "@example",
-                                             "sentry.io", "wixpress.com",
-                                             "@2x.png", "@sha256")):
+            if not any(
+                bad in e
+                for bad in (
+                    "example.",
+                    "test@",
+                    "@example",
+                    "sentry.io",
+                    "wixpress.com",
+                    "@2x.png",
+                    "@sha256",
+                )
+            ):
                 if len(e) <= 254 and e.count("@") == 1:
                     emails.add(e)
 
@@ -4010,11 +4114,27 @@ def kill_chain(
                     org = ""
                     if first_path == "orgs" and len(path_parts) >= 2:
                         org = path_parts[1].lower()
-                    elif first_path not in {"features", "pricing", "topics", "trending",
-                                            "collections", "events", "sponsors", "readme",
-                                            "orgs", "settings", "explore", "marketplace",
-                                            "notifications", "issues", "pulls", "join",
-                                            "login", "logout", "search"}:
+                    elif first_path not in {
+                        "features",
+                        "pricing",
+                        "topics",
+                        "trending",
+                        "collections",
+                        "events",
+                        "sponsors",
+                        "readme",
+                        "orgs",
+                        "settings",
+                        "explore",
+                        "marketplace",
+                        "notifications",
+                        "issues",
+                        "pulls",
+                        "join",
+                        "login",
+                        "logout",
+                        "search",
+                    }:
                         org = first_path
                     if org:
                         github_orgs.add(org)
@@ -4489,9 +4609,7 @@ def kill_chain(
         else:
             ip = str(resolved_ip or "").strip() or "0.0.0.0"
             synthetic_ip = (
-                _is_placeholder_host_ip(ip)
-                if synthetic_ip is None
-                else bool(synthetic_ip)
+                _is_placeholder_host_ip(ip) if synthetic_ip is None else bool(synthetic_ip)
             )
         try:
             con.execute(
@@ -4514,7 +4632,9 @@ def kill_chain(
         normalized_host = str(hostname or "").strip().lower().strip(".")
         if not normalized_host:
             return None
-        if not any(normalized_host == root or normalized_host.endswith("." + root) for root in root_domains):
+        if not any(
+            normalized_host == root or normalized_host.endswith("." + root) for root in root_domains
+        ):
             return None
         return normalized_host
 
@@ -4562,8 +4682,7 @@ def kill_chain(
         con = _sq.connect(db_path)
         try:
             existing_host_rows = con.execute(
-                "SELECT hostname FROM hosts WHERE engagement_id=? "
-                "AND hostname IS NOT NULL",
+                "SELECT hostname FROM hosts WHERE engagement_id=? AND hostname IS NOT NULL",
                 (engagement_id,),
             ).fetchall()
             existing = _collect_normalized_text_row_value_set(
@@ -4647,9 +4766,7 @@ def kill_chain(
                 ),
                 max_workers=1,
                 progress_label=(
-                    f"{resolution_progress_label} apply"
-                    if resolution_progress_label
-                    else None
+                    f"{resolution_progress_label} apply" if resolution_progress_label else None
                 ),
                 progress_callback=progress_callback,
             )
@@ -5052,22 +5169,22 @@ def kill_chain(
         are found, the corresponding scanner runs.
         """
         refs: dict[str, list[str]] = {
-        "supabase": [],
-        "firebase": [],
-        "aws_s3": [],
-        "do_spaces": [],
-        "gcs": [],
-        "azure_blob": [],
-        "amplify": [],
-        "gcp_appspot": [],
-        "gcp_cloudfunctions": [],
-        "cloudflare_pages": [],
-        "cloudflare_worker": [],
-        "cloudflare_r2": [],
-        "github_pages": [],
-        "gitlab_pages": [],
-        "vercel": [],
-        "netlify": [],
+            "supabase": [],
+            "firebase": [],
+            "aws_s3": [],
+            "do_spaces": [],
+            "gcs": [],
+            "azure_blob": [],
+            "amplify": [],
+            "gcp_appspot": [],
+            "gcp_cloudfunctions": [],
+            "cloudflare_pages": [],
+            "cloudflare_worker": [],
+            "cloudflare_r2": [],
+            "github_pages": [],
+            "gitlab_pages": [],
+            "vercel": [],
+            "netlify": [],
         }
 
         def _add(bucket: str, val: str) -> None:
@@ -5135,9 +5252,7 @@ def kill_chain(
             _add("azure_blob", f"{m.group(1).lower()}/$web")
         for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)\.amplifyapp\.com", html):
             _add("amplify", m.group(1))
-        for m in _re.finditer(
-            r"https?://([a-zA-Z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com", html
-        ):
+        for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com", html):
             _add("gcp_appspot", m.group(1))
         for m in _re.finditer(
             r"https?://[a-z0-9\-]+-[a-zA-Z0-9\-]+\.cloudfunctions\.net(?:/[^\s\"'<>]*)?",
@@ -5158,7 +5273,9 @@ def kill_chain(
             _re.IGNORECASE,
         ):
             _add("cloudflare_r2", m.group(1).lower())
-        for m in _re.finditer(r"https?://([a-z0-9][a-z0-9\-]*\.github\.io)(?:/|$)", html, _re.IGNORECASE):
+        for m in _re.finditer(
+            r"https?://([a-z0-9][a-z0-9\-]*\.github\.io)(?:/|$)", html, _re.IGNORECASE
+        ):
             _add("github_pages", m.group(1).lower())
         for m in _re.finditer(
             r"https?://([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.gitlab\.io)(?:/|$)",
@@ -5168,9 +5285,7 @@ def kill_chain(
             _add("gitlab_pages", m.group(1).lower())
         for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)\.vercel\.app", html):
             _add("vercel", m.group(1))
-        for m in _re.finditer(
-            r"https?://([a-zA-Z0-9\-]+)\.netlify\.(?:app|com)", html
-        ):
+        for m in _re.finditer(r"https?://([a-zA-Z0-9\-]+)\.netlify\.(?:app|com)", html):
             _add("netlify", m.group(1))
         return refs
 
@@ -5185,17 +5300,21 @@ def kill_chain(
         """
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
+
             def _c(sql: str) -> int:
                 try:
                     return con.execute(sql, (engagement_id,)).fetchone()[0]
                 except _sq.OperationalError:
                     return 0
+
             return (
                 _c("SELECT COUNT(*) FROM hosts WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM emails WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM subdomains WHERE engagement_id=?"),
-                _c("SELECT COUNT(*) FROM services s "
-                   "JOIN hosts h ON s.host_id=h.id WHERE h.engagement_id=?"),
+                _c(
+                    "SELECT COUNT(*) FROM services s "
+                    "JOIN hosts h ON s.host_id=h.id WHERE h.engagement_id=?"
+                ),
                 _c("SELECT COUNT(*) FROM key_scanner_findings WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM crawl_results WHERE engagement_id=?"),
                 _c("SELECT COUNT(*) FROM github_findings WHERE engagement_id=?"),
@@ -5216,6 +5335,7 @@ def kill_chain(
         base_counts = _snapshot_counts(snapshot or _snapshot())
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
+
             def _c(sql: str) -> int:
                 try:
                     return int(con.execute(sql, (engagement_id,)).fetchone()[0] or 0)
@@ -5231,7 +5351,9 @@ def kill_chain(
                     "vulnerability_findings": _c(
                         "SELECT COUNT(*) FROM vulnerability_findings WHERE engagement_id=?"
                     ),
-                    "artifact_queue": _c("SELECT COUNT(*) FROM artifact_queue WHERE engagement_id=?"),
+                    "artifact_queue": _c(
+                        "SELECT COUNT(*) FROM artifact_queue WHERE engagement_id=?"
+                    ),
                 }
             )
         finally:
@@ -5249,9 +5371,7 @@ def kill_chain(
                 except _sq.OperationalError:
                     return {}
                 return {
-                    str(row[0] or ""): int(row[1] or 0)
-                    for row in rows
-                    if str(row[0] or "").strip()
+                    str(row[0] or ""): int(row[1] or 0) for row in rows if str(row[0] or "").strip()
                 }
 
             artifact_queue = _group_counts(
@@ -5305,10 +5425,7 @@ def kill_chain(
         if not isinstance(artifact_queue, dict):
             artifact_queue = {}
         statuses = ("queued", "downloaded", "parsed", "failed", "skipped")
-        parts = [
-            f"{status}={int(artifact_queue.get(status) or 0)}"
-            for status in statuses
-        ]
+        parts = [f"{status}={int(artifact_queue.get(status) or 0)}" for status in statuses]
         parts.append(f"pending_work_total={int(metadata.get('pending_work_total') or 0)}")
         return " ".join(parts)
 
@@ -5433,8 +5550,7 @@ def kill_chain(
         con = _sq.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         try:
             rows = con.execute(
-                "SELECT DISTINCT ip FROM hosts WHERE engagement_id=? "
-                "AND ip IS NOT NULL",
+                "SELECT DISTINCT ip FROM hosts WHERE engagement_id=? AND ip IS NOT NULL",
                 (engagement_id,),
             ).fetchall()
         finally:
@@ -5480,6 +5596,7 @@ def kill_chain(
 
     def _queue_discovered_artifacts() -> int:
         """Queue downloaded-file URLs for later static artifact analysis."""
+
         def _artifact_type_for_url(
             raw_url: str,
             seed_type: str | None = None,
@@ -5508,10 +5625,7 @@ def kill_chain(
                     """,
                     (engagement_id,),
                 ).fetchall()
-                source_rows.extend(
-                    ("crawl_results", cast(tuple[Any, ...], row))
-                    for row in rows
-                )
+                source_rows.extend(("crawl_results", cast(tuple[Any, ...], row)) for row in rows)
             except _sq.OperationalError:
                 pass
             try:
@@ -5525,8 +5639,7 @@ def kill_chain(
                     (engagement_id,),
                 ).fetchall()
                 source_rows.extend(
-                    ("engagement_seed", cast(tuple[Any, ...], row))
-                    for row in seed_rows
+                    ("engagement_seed", cast(tuple[Any, ...], row)) for row in seed_rows
                 )
             except _sq.OperationalError:
                 pass
@@ -5612,9 +5725,7 @@ def kill_chain(
             )
             queue_candidates: list[dict[str, object]] = []
             seen_urls: set[str] = set()
-            queue_candidate_apply_label = _derive_apply_progress_label(
-                reduction_progress_label
-            )
+            queue_candidate_apply_label = _derive_apply_progress_label(reduction_progress_label)
             _run_ordered_inprocess_apply_batch(
                 reduced_classified_candidates,
                 lambda reduced_candidate: _apply_artifact_queue_candidate_item(
@@ -5649,7 +5760,9 @@ def kill_chain(
                     )
                     if con.total_changes > before_changes:
                         if discovered_from == "crawl_results":
-                            queued_seed_type = "apk_url" if _is_mobile_bundle_url(raw_url) else "url"
+                            queued_seed_type = (
+                                "apk_url" if _is_mobile_bundle_url(raw_url) else "url"
+                            )
                             _upsert_engagement_seed(
                                 con,
                                 raw_url,
@@ -5715,8 +5828,7 @@ def kill_chain(
         con = _sq.connect(db_path)
         try:
             existing_host_rows = con.execute(
-                "SELECT hostname FROM hosts WHERE engagement_id=? "
-                "AND hostname IS NOT NULL",
+                "SELECT hostname FROM hosts WHERE engagement_id=? AND hostname IS NOT NULL",
                 (engagement_id,),
             ).fetchall()
             existing = _collect_normalized_text_row_value_set(
@@ -5733,6 +5845,7 @@ def kill_chain(
                 ),
                 progress_callback=_record_batch_progress,
             )
+
             def _apply_ptr_lookup_result(item: tuple[str, str]) -> int:
                 ip, hostname = item
                 if not hostname or hostname in existing:
@@ -5762,9 +5875,7 @@ def kill_chain(
             applied_ptr_entries = _run_ordered_inprocess_apply_batch(
                 lookup_results,
                 _apply_ptr_lookup_result,
-                progress_label=_derive_apply_progress_label(
-                    f"{last_iteration}.C PTR reverse-DNS"
-                ),
+                progress_label=_derive_apply_progress_label(f"{last_iteration}.C PTR reverse-DNS"),
                 progress_callback=_record_batch_progress,
                 order_note="PTR persistence order preserved",
             )
@@ -5903,20 +6014,20 @@ def kill_chain(
             return
         prior_artifact_processor = prior_queue_metrics.get("artifact_processor")
         prior_artifact_cumulative = prior_queue_metrics.get("artifact_processor_cumulative")
-        if not isinstance(prior_artifact_processor, dict) and not isinstance(prior_artifact_cumulative, dict):
+        if not isinstance(prior_artifact_processor, dict) and not isinstance(
+            prior_artifact_cumulative, dict
+        ):
             return
         queue_metrics = run_progress_state.get("queue_metrics")
         if not isinstance(queue_metrics, dict):
             queue_metrics = {}
         if isinstance(prior_artifact_processor, dict):
             queue_metrics["artifact_processor"] = {
-                str(key): int(value or 0)
-                for key, value in prior_artifact_processor.items()
+                str(key): int(value or 0) for key, value in prior_artifact_processor.items()
             }
         if isinstance(prior_artifact_cumulative, dict):
             queue_metrics["artifact_processor_cumulative"] = {
-                str(key): int(value or 0)
-                for key, value in prior_artifact_cumulative.items()
+                str(key): int(value or 0) for key, value in prior_artifact_cumulative.items()
             }
         run_progress_state["queue_metrics"] = queue_metrics
 
@@ -5965,9 +6076,7 @@ def kill_chain(
     engagement_run_tracker = EngagementRunTracker(db_path, engagement_id)
     seed_run_tracker = SeedRunTracker(db_path, engagement_id)
     recovered_seed_run_count = (
-        seed_run_tracker.recover_abandoned_running_runs()
-        if resume_enabled
-        else 0
+        seed_run_tracker.recover_abandoned_running_runs() if resume_enabled else 0
     )
     if recovered_seed_run_count:
         _log(
@@ -6155,7 +6264,9 @@ def kill_chain(
                     _ap_parsed += 1
             if _ap_parsed:
                 _ap_con.commit()
-                _log("artifact parse", f"[green]{_ap_parsed} artifact(s) metadata extracted[/green]")
+                _log(
+                    "artifact parse", f"[green]{_ap_parsed} artifact(s) metadata extracted[/green]"
+                )
         finally:
             _ap_con.close()
     except Exception as _ap_exc:  # noqa: BLE001
@@ -6236,7 +6347,9 @@ def kill_chain(
                 _append(f"https://{compact_ref}", "url")
         elif service_alias == "cloudflare_pages":
             _append(
-                f"https://{compact_ref}.pages.dev" if "." not in compact_ref else f"https://{compact_ref}",
+                f"https://{compact_ref}.pages.dev"
+                if "." not in compact_ref
+                else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "cloudflare_worker":
@@ -6247,12 +6360,16 @@ def kill_chain(
                 _append(f"https://{compact_ref}", "url")
         elif service_alias == "github_pages":
             _append(
-                f"https://{compact_ref}.github.io" if "." not in compact_ref else f"https://{compact_ref}",
+                f"https://{compact_ref}.github.io"
+                if "." not in compact_ref
+                else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "gitlab_pages":
             _append(
-                f"https://{compact_ref}.gitlab.io" if "." not in compact_ref else f"https://{compact_ref}",
+                f"https://{compact_ref}.gitlab.io"
+                if "." not in compact_ref
+                else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "supabase":
@@ -6270,12 +6387,16 @@ def kill_chain(
             _append(f"https://{compact_ref}.digitaloceanspaces.com", "url")
         elif service_alias == "vercel":
             _append(
-                f"https://{compact_ref}.vercel.app" if "." not in compact_ref else f"https://{compact_ref}",
+                f"https://{compact_ref}.vercel.app"
+                if "." not in compact_ref
+                else f"https://{compact_ref}",
                 "url",
             )
         elif service_alias == "netlify":
             _append(
-                f"https://{compact_ref}.netlify.app" if "." not in compact_ref else f"https://{compact_ref}",
+                f"https://{compact_ref}.netlify.app"
+                if "." not in compact_ref
+                else f"https://{compact_ref}",
                 "url",
             )
         return entries
@@ -6442,7 +6563,10 @@ def kill_chain(
             "local_artifact",
             "local_filesystem",
         }
-        if source_backend in local_artifact_backends and parsed_source.scheme not in {"http", "https"}:
+        if source_backend in local_artifact_backends and parsed_source.scheme not in {
+            "http",
+            "https",
+        }:
             return {
                 "allowed": True,
                 "reason": "operator_local_artifact",
@@ -6536,14 +6660,15 @@ def kill_chain(
             total_failed += int(summary.get("failed") or 0)
             for key, value in (summary.get("status_counts") or {}).items():
                 normalized_key = str(key)
-                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(value or 0)
+                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(
+                    value or 0
+                )
             if attempted < pending_validation_batch_limit:
                 break
         if total_attempted == 0:
             return
         status_text = " ".join(
-            f"{str(key).lower()}={value}"
-            for key, value in sorted(status_counts.items())
+            f"{str(key).lower()}={value}" for key, value in sorted(status_counts.items())
         )
         _log(
             pass_label,
@@ -6587,14 +6712,15 @@ def kill_chain(
             total_failed += int(summary.get("failed") or 0)
             for key, value in (summary.get("status_counts") or {}).items():
                 normalized_key = str(key)
-                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(value or 0)
+                status_counts[normalized_key] = status_counts.get(normalized_key, 0) + int(
+                    value or 0
+                )
             if attempted < pending_validation_batch_limit:
                 break
         if total_attempted == 0:
             return
         status_text = " ".join(
-            f"{str(key).lower()}={value}"
-            for key, value in sorted(status_counts.items())
+            f"{str(key).lower()}={value}" for key, value in sorted(status_counts.items())
         )
         _log(
             pass_label,
@@ -6647,8 +6773,12 @@ def kill_chain(
             requested_by = str(stop_request.get("requested_by") or "unknown")
             reason = str(stop_request.get("reason") or "operator stop requested")
             _cli_audit(
-                db_path, engagement_id, "orchestrator", "kill_chain",
-                "kill_chain_cancelled", target=domain or seed,
+                db_path,
+                engagement_id,
+                "orchestrator",
+                "kill_chain",
+                "kill_chain_cancelled",
+                target=domain or seed,
                 result=f"phase={phase} requested_by={requested_by} reason={reason[:180]}",
             )
             engagement_run_tracker.finish_run(
@@ -6670,14 +6800,20 @@ def kill_chain(
             )
             return True
 
-        pause_request = _read_pause_request() or _run_control_requested_via_metadata("pause_requested")
+        pause_request = _read_pause_request() or _run_control_requested_via_metadata(
+            "pause_requested"
+        )
         if pause_request is None:
             return False
         requested_by = str(pause_request.get("requested_by") or "unknown")
         reason = str(pause_request.get("reason") or "operator pause requested")
         _cli_audit(
-            db_path, engagement_id, "orchestrator", "kill_chain",
-            "kill_chain_paused", target=domain or seed,
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "kill_chain_paused",
+            target=domain or seed,
             result=f"phase={phase} requested_by={requested_by} reason={reason[:180]}",
         )
         engagement_run_tracker.finish_run(
@@ -6695,8 +6831,7 @@ def kill_chain(
         _clear_run_control_markers()
         _refresh_dashboard_review_surface("paused")
         console.print(
-            f"\n[yellow]Kill-chain paused[/yellow] during {phase} "
-            f"(requested by {requested_by})."
+            f"\n[yellow]Kill-chain paused[/yellow] during {phase} (requested by {requested_by})."
         )
         return True
 
@@ -6711,26 +6846,43 @@ def kill_chain(
 
     _log("spider", f"starting fan-out loop (max_iterations={max_iterations})")
     all_cloud_refs: dict[str, list[str]] = {
-        "supabase": [], "firebase": [], "aws_s3": [], "do_spaces": [], "gcs": [], "azure_blob": [], "amplify": [],
-        "gcp_appspot": [], "gcp_cloudfunctions": [],
-        "cloudflare_pages": [], "cloudflare_worker": [], "cloudflare_r2": [],
-        "github_pages": [], "gitlab_pages": [],
-        "vercel": [], "netlify": [],
+        "supabase": [],
+        "firebase": [],
+        "aws_s3": [],
+        "do_spaces": [],
+        "gcs": [],
+        "azure_blob": [],
+        "amplify": [],
+        "gcp_appspot": [],
+        "gcp_cloudfunctions": [],
+        "cloudflare_pages": [],
+        "cloudflare_worker": [],
+        "cloudflare_r2": [],
+        "github_pages": [],
+        "gitlab_pages": [],
+        "vercel": [],
+        "netlify": [],
     }
     host_surface_batch_limit = 20
     all_github_orgs: set[str] = set()  # populated in fan-out D, used in fan-out F
-    processed_emails: set[str] = set()          # emails already sent through xposed/holehe/social/sherlock
-    processed_github_orgs: set[str] = set()      # GH orgs already keyscanned
+    processed_emails: set[str] = set()  # emails already sent through xposed/holehe/social/sherlock
+    processed_github_orgs: set[str] = set()  # GH orgs already keyscanned
     processed_keyscan_targets: set[str] = set()  # domains/orgs already keyscanned
-    processed_cloud_refs: set[str] = set()       # cloud service:ref pairs already scanned
-    processed_host_surfaces: set[str] = set()    # hostnames already D/D2 surface-fetched
-    attempted_host_surfaces: set[str] = set()    # hostnames attempted; prevents first-batch starvation
-    processed_url_seeds: set[str] = set()        # in-scope URL seeds already surface-fetched
-    processed_social_handles: set[str] = set()   # social_profiles handles already Sherlocked
-    processed_phone_seeds: set[str] = set()      # phone seeds already routed through phone enrichment
-    processed_username_seeds: set[str] = set()   # username seeds already routed through username enumeration
-    processed_name_seeds: set[str] = set()       # name seeds already routed through name search
-    processed_company_seeds: set[str] = set()    # company seeds already routed through public entity search
+    processed_cloud_refs: set[str] = set()  # cloud service:ref pairs already scanned
+    processed_host_surfaces: set[str] = set()  # hostnames already D/D2 surface-fetched
+    attempted_host_surfaces: set[str] = (
+        set()
+    )  # hostnames attempted; prevents first-batch starvation
+    processed_url_seeds: set[str] = set()  # in-scope URL seeds already surface-fetched
+    processed_social_handles: set[str] = set()  # social_profiles handles already Sherlocked
+    processed_phone_seeds: set[str] = set()  # phone seeds already routed through phone enrichment
+    processed_username_seeds: set[str] = (
+        set()
+    )  # username seeds already routed through username enumeration
+    processed_name_seeds: set[str] = set()  # name seeds already routed through name search
+    processed_company_seeds: set[str] = (
+        set()
+    )  # company seeds already routed through public entity search
 
     def _resume_normalize(value: str) -> str:
         return value.strip().lower()
@@ -6822,9 +6974,7 @@ def kill_chain(
         )
         if statuses is not None:
             status_values = sorted(
-                str(status or "").strip()
-                for status in statuses
-                if str(status or "").strip()
+                str(status or "").strip() for status in statuses if str(status or "").strip()
             )
             if not status_values:
                 return set()
@@ -6842,11 +6992,7 @@ def kill_chain(
                 return set()
         finally:
             con.close()
-        return {
-            _resume_normalize(str(row[0] or ""))
-            for row in rows
-            if str(row[0] or "").strip()
-        }
+        return {_resume_normalize(str(row[0] or "")) for row in rows if str(row[0] or "").strip()}
 
     def _load_completed_seed_values(
         loop_names: list[str],
@@ -6866,14 +7012,17 @@ def kill_chain(
     completed_d4_domains = _load_completed_seed_values(["fanout_d4_urlscan"], seed_type="domain")
     completed_dns_domains = _load_completed_seed_values(["fanout_g_dns"], seed_type="domain")
     completed_rdap_domains = _load_completed_seed_values(["fanout_h_rdap"], seed_type="domain")
-    completed_wayback_domains = _load_completed_seed_values(["fanout_i_wayback"], seed_type="domain")
+    completed_wayback_domains = _load_completed_seed_values(
+        ["fanout_i_wayback"], seed_type="domain"
+    )
     completed_url_seeds = _load_completed_seed_values(["fanout_d5_url_seed_html"], seed_type="url")
     processed_emails = _load_completed_seed_values(["fanout_e_chain"], seed_type="email")
-    processed_social_handles = _load_completed_seed_values(["fanout_e5_chain"], seed_type="username")
+    processed_social_handles = _load_completed_seed_values(
+        ["fanout_e5_chain"], seed_type="username"
+    )
     processed_keyscan_targets = _load_completed_seed_values(["fanout_f_keyscan"])
     processed_github_orgs = {
-        target for target in processed_keyscan_targets
-        if "::github_org::" in target
+        target for target in processed_keyscan_targets if "::github_org::" in target
     }
     retryable_github_org_targets = {
         target
@@ -6886,23 +7035,23 @@ def kill_chain(
     processed_cloud_refs = _load_completed_seed_values(["fanout_j_cloud_scan"], seed_type="other")
     completed_host_surfaces = _load_completed_seed_values(["fanout_d_host_surface"])
     processed_host_surfaces = {
-        _normalize_host_surface_value(item)
-        for item in completed_host_surfaces
+        _normalize_host_surface_value(item) for item in completed_host_surfaces
     }
     attempted_host_surfaces = {
         _normalize_host_surface_value(item)
         for item in _load_seed_run_values(["fanout_d_host_surface"])
     }
-    processed_url_seeds = {
-        _normalize_url_seed_value(item)
-        for item in completed_url_seeds
-    }
-    completed_username_seeds = _load_completed_seed_values(["fanout_k_seed_username"], seed_type="username")
+    processed_url_seeds = {_normalize_url_seed_value(item) for item in completed_url_seeds}
+    completed_username_seeds = _load_completed_seed_values(
+        ["fanout_k_seed_username"], seed_type="username"
+    )
     completed_phone_seeds = _load_completed_seed_values(["fanout_l_seed_phone"], seed_type="phone")
     completed_ipv4_seeds = _load_completed_seed_values(["fanout_o_seed_ip"], seed_type="ipv4")
     completed_ipv6_seeds = _load_completed_seed_values(["fanout_o_seed_ip"], seed_type="ipv6")
     completed_name_seeds = _load_completed_seed_values(["fanout_m_seed_name"], seed_type="name")
-    completed_company_seeds = _load_completed_seed_values(["fanout_n_seed_company"], seed_type="company")
+    completed_company_seeds = _load_completed_seed_values(
+        ["fanout_n_seed_company"], seed_type="company"
+    )
     processed_phone_seeds = set(completed_phone_seeds)
     processed_ip_seeds = set(completed_ipv4_seeds | completed_ipv6_seeds)
     processed_username_seeds = {
@@ -6933,7 +7082,9 @@ def kill_chain(
             + len(completed_company_seeds)
         )
         if resume_reused:
-            _log("resume", f"reusing persisted fan-out state for {resume_reused} seed/loop target(s)")
+            _log(
+                "resume", f"reusing persisted fan-out state for {resume_reused} seed/loop target(s)"
+            )
 
     _set_progress_counts()
     run_progress_state["phase"] = "preflight"
@@ -7120,10 +7271,7 @@ def kill_chain(
         finally:
             con.close()
         seed_email_rows = _filter_depth_limited_seed_rows(
-            [
-                (str(row[0] or "").strip(), int(row[1] or 0))
-                for row in seed_rows
-            ]
+            [(str(row[0] or "").strip(), int(row[1] or 0)) for row in seed_rows]
         )
         raw_email_values = _collect_text_row_values(
             [*email_rows, *[(email_value,) for email_value, _depth in seed_email_rows]],
@@ -7351,7 +7499,9 @@ def kill_chain(
             "returncodes": email_returncodes,
             "chain_status": chain_status,
             "output_count": max(1, len(email_returncodes)),
-            "error": None if chain_status != "failed" else "one or more email fan-out modules failed",
+            "error": None
+            if chain_status != "failed"
+            else "one or more email fan-out modules failed",
             "inferred_usernames": list(inferred_usernames),
             "seed_run_entry": _prepare_one_shot_seed_run_entry(
                 seed_value=email,
@@ -7364,9 +7514,7 @@ def kill_chain(
                 status=chain_status,
                 output_count=max(1, len(email_returncodes)),
                 error=(
-                    None
-                    if chain_status != "failed"
-                    else "one or more email fan-out modules failed"
+                    None if chain_status != "failed" else "one or more email fan-out modules failed"
                 ),
                 finish_metadata={
                     "iteration": iteration,
@@ -7383,9 +7531,7 @@ def kill_chain(
     ) -> str | None:
         email = str(item.get("email") or "")
         chain_status = str(item.get("chain_status") or "failed")
-        _apply_one_shot_seed_run_entry(
-            cast(dict[str, object] | None, item.get("seed_run_entry"))
-        )
+        _apply_one_shot_seed_run_entry(cast(dict[str, object] | None, item.get("seed_run_entry")))
         if not email or chain_status not in {"completed", "skipped"}:
             return None
         processed_emails_out.add(email)
@@ -7546,7 +7692,9 @@ def kill_chain(
             return None
         metadata_counts = cast(dict[str, int], prepared_url_surface_entry["metadata_counts"])
         has_payload = bool(prepared_url_surface_entry.get("has_payload"))
-        output_count = int(prepared_url_surface_entry["output_count_base"]) + int(url_item_cloud_refs)
+        output_count = int(prepared_url_surface_entry["output_count_base"]) + int(
+            url_item_cloud_refs
+        )
         status = "completed" if has_payload else "failed"
         error = None if has_payload else "empty_url_fetch"
         finalization_entry = _prepare_module_seed_run_finalization_entry(
@@ -7662,10 +7810,7 @@ def kill_chain(
     ) -> list[tuple[int, str]]:
         domain_index, result = item
         wb_urls = list((result or {}).get("urls") or [])
-        return [
-            (int(domain_index), str(url_value or ""))
-            for url_value in wb_urls
-        ]
+        return [(int(domain_index), str(url_value or "")) for url_value in wb_urls]
 
     def _apply_wayback_host_parse_input_group(
         item: list[tuple[int, str]] | None,
@@ -7755,8 +7900,8 @@ def kill_chain(
         return f"{str(query_domain or '').strip()}::github_org::{str(github_org or '').strip()}"
 
     def _keyscan_org_target_parts(target_key: str) -> tuple[str, str] | None:
-        query_domain, separator, github_org = str(target_key or "").strip().partition(
-            "::github_org::"
+        query_domain, separator, github_org = (
+            str(target_key or "").strip().partition("::github_org::")
         )
         if not separator:
             return None
@@ -8170,11 +8315,7 @@ def kill_chain(
         items: Sequence[Any],
         returncodes: Sequence[int],
     ) -> list[Any]:
-        return [
-            item
-            for item, returncode in zip(items, returncodes)
-            if int(returncode) == 0
-        ]
+        return [item for item, returncode in zip(items, returncodes) if int(returncode) == 0]
 
     def _successful_dispatch_seed_values(
         specs: Sequence[ModuleDispatchSpec],
@@ -8351,9 +8492,7 @@ def kill_chain(
             str(target.get("ref") or ""),
             str(decision.get("reason") or "scope_manifest_denied"),
         )
-        skipped_key = _apply_one_shot_seed_run_entry(
-            _prepare_denied_cloud_seed_skip_entry(item)
-        )
+        skipped_key = _apply_one_shot_seed_run_entry(_prepare_denied_cloud_seed_skip_entry(item))
         processed_key = str(skipped_key or key or "").strip()
         if processed_key:
             processed_refs_out.add(processed_key)
@@ -8729,11 +8868,7 @@ def kill_chain(
         *,
         already: set[str],
     ) -> set[str]:
-        return {
-            handle
-            for handle in handle_set
-            if handle and handle not in already
-        }
+        return {handle for handle in handle_set if handle and handle not in already}
 
     def _prepare_social_profile_handle_item(
         handle: str,
@@ -9119,9 +9254,7 @@ def kill_chain(
                 continue
             if isinstance(value, list):
                 metadata[key] = [
-                    str(item or "").strip()
-                    for item in value[:8]
-                    if str(item or "").strip()
+                    str(item or "").strip() for item in value[:8] if str(item or "").strip()
                 ]
             elif isinstance(value, (str, int, float, bool)):
                 metadata[key] = value
@@ -9317,7 +9450,12 @@ def kill_chain(
             seed_type = str(row[1] or "").strip().lower() or None
             raw_metadata = str(row[2] or "{}") if len(row) > 2 else "{}"
             if raw_url:
-                return raw_url, "engagement_seed", seed_type, _artifact_source_metadata(raw_metadata)
+                return (
+                    raw_url,
+                    "engagement_seed",
+                    seed_type,
+                    _artifact_source_metadata(raw_metadata),
+                )
         return None
 
     def _prepare_artifact_source_reduction_item(
@@ -9555,9 +9693,7 @@ def kill_chain(
             }
         domain_added = 0
         for normalized_target in cast(list[str], item["cname_targets"]):
-            resolved_target = resolved_cname_map.get(
-                str(normalized_target or "").strip().lower()
-            )
+            resolved_target = resolved_cname_map.get(str(normalized_target or "").strip().lower())
             if _persist_discovered_subdomain_seed(
                 con,
                 normalized_target,
@@ -9632,7 +9768,8 @@ def kill_chain(
             ),
             base_metadata_value={},
             status="completed",
-            output_count=int(item.get("output_count_base") or 0) + int(item.get("domain_added") or 0),
+            output_count=int(item.get("output_count_base") or 0)
+            + int(item.get("domain_added") or 0),
             extra_metadata={
                 "iteration": iteration,
                 "signals": [
@@ -9701,9 +9838,7 @@ def kill_chain(
         status = _normalize_fanout_status(result.get("status"))
         raw_provider_statuses = result.get("provider_statuses") or {}
         provider_statuses = (
-            dict(raw_provider_statuses)
-            if isinstance(raw_provider_statuses, dict)
-            else {}
+            dict(raw_provider_statuses) if isinstance(raw_provider_statuses, dict) else {}
         )
         urls = list(result.get("urls", []) or [])
         raw_url_metadata = result.get("url_metadata") or {}
@@ -9819,10 +9954,7 @@ def kill_chain(
             progress_label=f"{progress_label_prefix} root-domain prep",
             progress_callback=_record_batch_progress,
         )
-        resume_skip_inputs = [
-            (stage_label, root_domain)
-            for root_domain in skipped_domains
-        ]
+        resume_skip_inputs = [(stage_label, root_domain) for root_domain in skipped_domains]
         if len(resume_skip_inputs) > 1 and parallel_workers > 1:
             _log(
                 f"{progress_label_prefix} skip-log prep",
@@ -9847,10 +9979,7 @@ def kill_chain(
             progress_label=f"{progress_label_prefix} skip-log merge",
             progress_callback=_record_batch_progress,
         )
-        dry_run_entries = [
-            (root_domain, loop_name)
-            for root_domain in pending_domains
-        ]
+        dry_run_entries = [(root_domain, loop_name) for root_domain in pending_domains]
         if len(dry_run_entries) > 1 and parallel_workers > 1:
             _log(
                 f"{progress_label_prefix} dry-run finalize prep",
@@ -10361,9 +10490,7 @@ def kill_chain(
     ) -> str | None:
         handle = str(item.get("handle") or "")
         chain_status = str(item.get("chain_status") or "")
-        _apply_one_shot_seed_run_entry(
-            cast(dict[str, object] | None, item.get("seed_run_entry"))
-        )
+        _apply_one_shot_seed_run_entry(cast(dict[str, object] | None, item.get("seed_run_entry")))
         if not handle or chain_status not in {"completed", "skipped"}:
             return None
         processed_social_handles_out.add(handle)
@@ -10412,10 +10539,7 @@ def kill_chain(
                 return []
         finally:
             con.close()
-        raw_prioritized_rows = [
-            (str(row[1] or "").strip(), int(row[3] or 0))
-            for row in rows
-        ]
+        raw_prioritized_rows = [(str(row[1] or "").strip(), int(row[3] or 0)) for row in rows]
         if progress_label and len(raw_prioritized_rows) > 1 and max_workers > 1:
             _log(
                 progress_label,
@@ -10658,20 +10782,12 @@ def kill_chain(
             }
         )
         pending_hosts = [
-            hostname
-            for hostname in candidates
-            if hostname not in processed_host_surfaces
+            hostname for hostname in candidates if hostname not in processed_host_surfaces
         ]
         never_attempted = [
-            hostname
-            for hostname in pending_hosts
-            if hostname not in attempted_host_surfaces
+            hostname for hostname in pending_hosts if hostname not in attempted_host_surfaces
         ]
-        retryable = [
-            hostname
-            for hostname in pending_hosts
-            if hostname in attempted_host_surfaces
-        ]
+        retryable = [hostname for hostname in pending_hosts if hostname in attempted_host_surfaces]
         return [*retryable, *never_attempted]
 
     def _pending_host_surface_count() -> int:
@@ -10696,8 +10812,7 @@ def kill_chain(
         if not query_domains:
             return []
         query_domains_by_key = {
-            _resume_normalize(query_domain): query_domain
-            for query_domain in query_domains
+            _resume_normalize(query_domain): query_domain for query_domain in query_domains
         }
         specs: list[dict[str, str]] = []
         for target_key in sorted(retryable_github_org_targets):
@@ -10892,8 +11007,7 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             skipped_a_log_inputs = [
-                (f"{iteration}.A subdomain enum", root_domain)
-                for root_domain in skipped_a_domains
+                (f"{iteration}.A subdomain enum", root_domain) for root_domain in skipped_a_domains
             ]
             if len(skipped_a_log_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -10982,8 +11096,7 @@ def kill_chain(
         if active_recon:
             _run_module(
                 _append_scope_manifest_arg(
-                    ["recon", "ports", "--engagement", engagement, "--basic",
-                     "--timeout", "1.5"],
+                    ["recon", "ports", "--engagement", engagement, "--basic", "--timeout", "1.5"],
                     scope_manifest,
                 ),
                 f"{iteration}.A2 port scan (ACTIVE)",
@@ -11238,9 +11351,7 @@ def kill_chain(
                 progress_label_prefix=f"{iteration}.D host surface",
             )
             fetch_spec_inputs = [
-                (host, scheme)
-                for host in hostnames
-                for scheme in ("https", "http")
+                (host, scheme) for host in hostnames for scheme in ("https", "http")
             ]
             if len(fetch_spec_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -11305,6 +11416,7 @@ def kill_chain(
                 from forge.phase2.xray_runner import (  # noqa: PLC0415
                     run_xray_passive as _run_xray_passive,
                 )
+
                 for _xr_index, _xr_payload in enumerate(html_results):
                     if _xr_index >= len(fetch_specs) or not _xr_payload:
                         continue
@@ -11354,15 +11466,15 @@ def kill_chain(
                             if len(html_parse_items) == 1
                             else 1,
                         ),
-                        "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
+                        "cloud_refs": _extract_cloud_refs(item[1])
+                        if not skip_cloud and item[1]
+                        else {},
                     },
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.D1 HTML parse",
                     progress_callback=_record_batch_progress,
                 )
-                main_surface_parse_results.extend(
-                    cast(list[dict[str, Any]], html_surface_results)
-                )
+                main_surface_parse_results.extend(cast(list[dict[str, Any]], html_surface_results))
             if passive_text_specs:
                 if len(passive_text_specs) > 1 and parallel_workers > 1:
                     _log(
@@ -11407,7 +11519,9 @@ def kill_chain(
                                 if len(passive_text_parse_items) == 1
                                 else 1,
                             ),
-                            "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
+                            "cloud_refs": _extract_cloud_refs(item[1])
+                            if not skip_cloud and item[1]
+                            else {},
                         },
                         max_workers=parallel_workers,
                         progress_label=f"{iteration}.D2 passive text parse",
@@ -11471,7 +11585,7 @@ def kill_chain(
                     _log(
                         f"{iteration}.D cloud-ref merge",
                         "[dim]sequential dispatch x1[/dim]  [dim]cloud-ref order preserved[/dim]",
-                )
+                    )
                 applied_cloud_ref_counts = _run_inprocess_batch(
                     prepared_cloud_ref_groups,
                     lambda item: _apply_cloud_ref_group(
@@ -11556,9 +11670,7 @@ def kill_chain(
             host_surface_finalize_inputs = [
                 (
                     hostname,
-                    host_surface_handles[index]
-                    if index < len(host_surface_handles)
-                    else None,
+                    host_surface_handles[index] if index < len(host_surface_handles) else None,
                     int(host_surface_payload_counts.get(hostname, 0)),
                 )
                 for index, hostname in enumerate(hostnames)
@@ -11601,18 +11713,16 @@ def kill_chain(
                 progress_label=f"{iteration}.D host surface processed-set update",
                 progress_callback=_record_batch_progress,
             )
-            cloud_summary = (
-                f"cloud={new_refs_this_iter}"
-                if not skip_cloud
-                else "cloud=skipped"
+            cloud_summary = f"cloud={new_refs_this_iter}" if not skip_cloud else "cloud=skipped"
+            _log(
+                f"{iteration}.D cloud+HTML mining",
+                f"scanned {len(hostnames)} hostname(s) "
+                f"[{'httpx-only' if no_playwright else 'playwright+httpx'}] "
+                f"| {cloud_summary} "
+                f"emails+={new_emails_html} phones+={new_phones_html} ips+={new_ips_html} hosts+={new_hosts_html} "
+                f"profile_urls+={new_profile_urls} html_urls+={new_urls_html} urls+={new_urls_passive} "
+                f"gh_orgs={len(mined['github_orgs'])}",
             )
-            _log(f"{iteration}.D cloud+HTML mining",
-                 f"scanned {len(hostnames)} hostname(s) "
-                 f"[{'httpx-only' if no_playwright else 'playwright+httpx'}] "
-                 f"| {cloud_summary} "
-                 f"emails+={new_emails_html} phones+={new_phones_html} ips+={new_ips_html} hosts+={new_hosts_html} "
-                 f"profile_urls+={new_profile_urls} html_urls+={new_urls_html} urls+={new_urls_passive} "
-                 f"gh_orgs={len(mined['github_orgs'])}")
 
             # ─── Fan-out D3: Shodan enrichment per host discovered ───
             # Runs once per root unless a prior attempt failed. Domain mode
@@ -11635,21 +11745,28 @@ def kill_chain(
                         f"[dim]parallel parse x{min(parallel_workers, len(pending_d3_domains))}[/dim]",
                     )
                 d3_specs = _run_inprocess_batch(
-                        pending_d3_domains,
-                        lambda root_domain: ModuleDispatchSpec(
-                            cmd_argv=_append_scope_manifest_arg(
-                                ["osint", "shodan", "--engagement", engagement, "--target", root_domain],
-                                scope_manifest,
-                            ),
-                            label=f"{iteration}.D3 shodan ({root_domain})",
-                            loop_name="fanout_d3_shodan",
-                            seed_contexts=[_seed_context(root_domain, "domain")],
-                            metadata={"iteration": iteration},
+                    pending_d3_domains,
+                    lambda root_domain: ModuleDispatchSpec(
+                        cmd_argv=_append_scope_manifest_arg(
+                            [
+                                "osint",
+                                "shodan",
+                                "--engagement",
+                                engagement,
+                                "--target",
+                                root_domain,
+                            ],
+                            scope_manifest,
                         ),
-                        max_workers=parallel_workers,
-                        progress_label=f"{iteration}.D3 spec prep",
-                        progress_callback=_record_batch_progress,
-                    )
+                        label=f"{iteration}.D3 shodan ({root_domain})",
+                        loop_name="fanout_d3_shodan",
+                        seed_contexts=[_seed_context(root_domain, "domain")],
+                        metadata={"iteration": iteration},
+                    ),
+                    max_workers=parallel_workers,
+                    progress_label=f"{iteration}.D3 spec prep",
+                    progress_callback=_record_batch_progress,
+                )
                 d_schedule_merge_inputs.append(
                     {
                         "skip_logs": [
@@ -11681,21 +11798,28 @@ def kill_chain(
                         f"[dim]parallel parse x{min(parallel_workers, len(pending_d4_domains))}[/dim]",
                     )
                 d4_specs = _run_inprocess_batch(
-                        pending_d4_domains,
-                        lambda root_domain: ModuleDispatchSpec(
-                            cmd_argv=_append_scope_manifest_arg(
-                                ["osint", "urlscan", "--engagement", engagement, "--hostname", root_domain],
-                                scope_manifest,
-                            ),
-                            label=f"{iteration}.D4 urlscan ({root_domain})",
-                            loop_name="fanout_d4_urlscan",
-                            seed_contexts=[_seed_context(root_domain, "domain")],
-                            metadata={"iteration": iteration},
+                    pending_d4_domains,
+                    lambda root_domain: ModuleDispatchSpec(
+                        cmd_argv=_append_scope_manifest_arg(
+                            [
+                                "osint",
+                                "urlscan",
+                                "--engagement",
+                                engagement,
+                                "--hostname",
+                                root_domain,
+                            ],
+                            scope_manifest,
                         ),
-                        max_workers=parallel_workers,
-                        progress_label=f"{iteration}.D4 spec prep",
-                        progress_callback=_record_batch_progress,
-                    )
+                        label=f"{iteration}.D4 urlscan ({root_domain})",
+                        loop_name="fanout_d4_urlscan",
+                        seed_contexts=[_seed_context(root_domain, "domain")],
+                        metadata={"iteration": iteration},
+                    ),
+                    max_workers=parallel_workers,
+                    progress_label=f"{iteration}.D4 spec prep",
+                    progress_callback=_record_batch_progress,
+                )
                 d_schedule_merge_inputs.append(
                     {
                         "skip_logs": [
@@ -11800,7 +11924,11 @@ def kill_chain(
             progress_label=f"{iteration}.D5 URL depth-limit",
             progress_callback=_record_batch_progress,
         )
-        if prioritized_url_seed_rows and len(prioritized_url_seed_rows) > 1 and parallel_workers > 1:
+        if (
+            prioritized_url_seed_rows
+            and len(prioritized_url_seed_rows) > 1
+            and parallel_workers > 1
+        ):
             _log(
                 f"{iteration}.D5 URL seed scope prep",
                 f"[dim]parallel parse x{min(parallel_workers, len(prioritized_url_seed_rows))}[/dim]",
@@ -11943,9 +12071,9 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="prioritized URL batch order preserved",
             )
-            url_seed_batch = shallow_url_batch + deeper_url_batch[
-                : max(0, 20 - len(shallow_url_batch))
-            ]
+            url_seed_batch = (
+                shallow_url_batch + deeper_url_batch[: max(0, 20 - len(shallow_url_batch))]
+            )
             completed_url_seed_values: list[str] = []
             if dry_run_all:
                 _emit_prepared_notice_log(
@@ -12016,7 +12144,9 @@ def kill_chain(
                     lambda item: HtmlFetchSpec(
                         url=item[0],
                         use_playwright=_url_seed_should_use_playwright(item[0]),
-                        playwright_timeout=15.0 if _url_seed_should_use_playwright(item[0]) else 0.0,
+                        playwright_timeout=15.0
+                        if _url_seed_should_use_playwright(item[0])
+                        else 0.0,
                         fallback_timeout=8.0,
                     ),
                     max_workers=parallel_workers,
@@ -12036,9 +12166,7 @@ def kill_chain(
                     progress_label=f"{iteration}.D5 URL surface fetch",
                     progress_callback=_record_batch_progress,
                 )
-                url_surface_parse_urls = [
-                    url_seed for url_seed, _url_depth in url_seed_batch
-                ]
+                url_surface_parse_urls = [url_seed for url_seed, _url_depth in url_seed_batch]
                 url_surface_parse_items: list[tuple[str, Any]] = []
                 _run_ordered_inprocess_apply_batch(
                     list(enumerate(url_surface_results)),
@@ -12066,7 +12194,9 @@ def kill_chain(
                             if len(url_surface_parse_items) == 1
                             else 1,
                         ),
-                        "cloud_refs": _extract_cloud_refs(item[1]) if not skip_cloud and item[1] else {},
+                        "cloud_refs": _extract_cloud_refs(item[1])
+                        if not skip_cloud and item[1]
+                        else {},
                     },
                     max_workers=parallel_workers,
                     progress_label=f"{iteration}.D5 URL surface parse",
@@ -12270,9 +12400,7 @@ def kill_chain(
                     if url_seed
                 ]
                 cloud_summary = (
-                    f"cloud={url_cloud_refs_added}"
-                    if not skip_cloud
-                    else "cloud=skipped"
+                    f"cloud={url_cloud_refs_added}" if not skip_cloud else "cloud=skipped"
                 )
                 _log(
                     f"{iteration}.D5 URL surface mining",
@@ -12371,8 +12499,10 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="email batch order preserved",
             )
-            _log(f"{iteration}.E email fan-out",
-                 f"[green]{len(iter_emails)} new email(s) -> xposed/emailrep/holehe/social/sherlock/gravatar[/green]")
+            _log(
+                f"{iteration}.E email fan-out",
+                f"[green]{len(iter_emails)} new email(s) -> xposed/emailrep/holehe/social/sherlock/gravatar[/green]",
+            )
             e_specs: list[ModuleDispatchSpec] = []
             e_spec_emails: list[str] = []
             identity_lookup_specs: list[ModuleDispatchSpec] = []
@@ -12551,13 +12681,8 @@ def kill_chain(
             )
             successful_email_localpart_handles = set(inferred_handles) if dry_run_all else set()
             for spec, email, returncode in zip(e_specs, e_spec_emails, e_returncodes):
-                if (
-                    spec.loop_name == "fanout_e_sherlock_localpart"
-                    and int(returncode) == 0
-                ):
-                    successful_email_localpart_handles.update(
-                        inferred_by_email.get(email, [])
-                    )
+                if spec.loop_name == "fanout_e_sherlock_localpart" and int(returncode) == 0:
+                    successful_email_localpart_handles.update(inferred_by_email.get(email, []))
             if identity_lookup_specs:
                 if len(identity_lookup_specs) > 1:
                     if identity_lookup_workers <= 1:
@@ -12747,8 +12872,10 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="social-handle batch order preserved",
             )
-            _log(f"{iteration}.E5 social-handle fan-out",
-                 f"[green]{len(social_handles)} new handle(s) -> Sherlock[/green]")
+            _log(
+                f"{iteration}.E5 social-handle fan-out",
+                f"[green]{len(social_handles)} new handle(s) -> Sherlock[/green]",
+            )
             if len(social_handle_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.E5 sherlock spec prep",
@@ -12770,7 +12897,9 @@ def kill_chain(
                     label=f"{iteration}.E5 sherlock (@{handle})",
                     loop_name="fanout_e5_sherlock_social_handles",
                     seed_contexts=[
-                        _seed_context(handle, "username", source="social_profile", depth=2, confidence=0.8)
+                        _seed_context(
+                            handle, "username", source="social_profile", depth=2, confidence=0.8
+                        )
                     ],
                     metadata={"iteration": iteration},
                 ),
@@ -12802,11 +12931,20 @@ def kill_chain(
             instagram_specs = _run_inprocess_batch(
                 instagram_handles,
                 lambda handle: ModuleDispatchSpec(
-                    cmd_argv=["osint", "instagram", "--engagement", engagement, "--username", handle],
+                    cmd_argv=[
+                        "osint",
+                        "instagram",
+                        "--engagement",
+                        engagement,
+                        "--username",
+                        handle,
+                    ],
                     label=f"{iteration}.E5.5 instagram (@{handle})",
                     loop_name="fanout_e55_instagram",
                     seed_contexts=[
-                        _seed_context(handle, "username", source="social_profile", depth=2, confidence=0.8)
+                        _seed_context(
+                            handle, "username", source="social_profile", depth=2, confidence=0.8
+                        )
                     ],
                     metadata={"iteration": iteration},
                 ),
@@ -13015,7 +13153,11 @@ def kill_chain(
             target_reduction_progress_label = _derive_reduction_progress_label(
                 f"{iteration}.F keyscan target prep"
             )
-            if target_reduction_progress_label and len(prepared_keyscan_targets) > 1 and parallel_workers > 1:
+            if (
+                target_reduction_progress_label
+                and len(prepared_keyscan_targets) > 1
+                and parallel_workers > 1
+            ):
                 _log(
                     target_reduction_progress_label,
                     f"[dim]parallel parse x{min(parallel_workers, len(prepared_keyscan_targets))}[/dim]",
@@ -13368,9 +13510,10 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
                 order_note="prioritized username batch order preserved",
             )
-            username_batch = shallow_username_batch + deeper_username_batch[
-                : max(0, 10 - len(shallow_username_batch))
-            ]
+            username_batch = (
+                shallow_username_batch
+                + deeper_username_batch[: max(0, 10 - len(shallow_username_batch))]
+            )
             if len(username_batch) > 1 and parallel_workers > 1:
                 _log(
                     f"{iteration}.K username spec prep",
@@ -13675,9 +13818,7 @@ def kill_chain(
             lambda item: {
                 "normalized_ip": str(item[1] or "").strip(),
                 "pending_entry": (
-                    (str(item[0]), str(item[2]))
-                    if str(item[1] or "").strip()
-                    else None
+                    (str(item[0]), str(item[2])) if str(item[1] or "").strip() else None
                 ),
             },
             max_workers=parallel_workers,
@@ -14165,8 +14306,7 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             dns_dry_run_entries = [
-                (root_domain, "fanout_g_dns")
-                for root_domain in pending_dns_domains
+                (root_domain, "fanout_g_dns") for root_domain in pending_dns_domains
             ]
             if len(dns_dry_run_entries) > 1 and parallel_workers > 1:
                 _log(
@@ -14340,8 +14480,7 @@ def kill_chain(
                 con = _sq.connect(db_path)
                 try:
                     existing_host_rows = con.execute(
-                        "SELECT hostname FROM hosts WHERE engagement_id=? "
-                        "AND hostname IS NOT NULL",
+                        "SELECT hostname FROM hosts WHERE engagement_id=? AND hostname IS NOT NULL",
                         (engagement_id,),
                     ).fetchall()
                     existing = _collect_normalized_text_row_value_set(
@@ -14541,8 +14680,12 @@ def kill_chain(
             )
             if aggregate_saas_signals:
                 _cli_audit(
-                    db_path, engagement_id, "orchestrator", "kill_chain",
-                    "dns_saas_signals", target=",".join(root_domains),
+                    db_path,
+                    engagement_id,
+                    "orchestrator",
+                    "kill_chain",
+                    "dns_saas_signals",
+                    target=",".join(root_domains),
                     result=f"signals={','.join(aggregate_saas_signals)}",
                 )
 
@@ -14576,8 +14719,7 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             rdap_resume_skip_log_inputs = [
-                (f"{iteration}.H whois/RDAP", root_domain)
-                for root_domain in skipped_rdap_domains
+                (f"{iteration}.H whois/RDAP", root_domain) for root_domain in skipped_rdap_domains
             ]
             if len(rdap_resume_skip_log_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -14604,8 +14746,7 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             rdap_dry_run_entries = [
-                (root_domain, "fanout_h_rdap")
-                for root_domain in pending_rdap_domains
+                (root_domain, "fanout_h_rdap") for root_domain in pending_rdap_domains
             ]
             if len(rdap_dry_run_entries) > 1 and parallel_workers > 1:
                 _log(
@@ -14649,8 +14790,7 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             rdap_resume_skip_log_inputs = [
-                (f"{iteration}.H whois/RDAP", root_domain)
-                for root_domain in skipped_rdap_domains
+                (f"{iteration}.H whois/RDAP", root_domain) for root_domain in skipped_rdap_domains
             ]
             if len(rdap_resume_skip_log_inputs) > 1 and parallel_workers > 1:
                 _log(
@@ -14872,8 +15012,7 @@ def kill_chain(
                 progress_callback=_record_batch_progress,
             )
             wayback_dry_run_entries = [
-                (root_domain, "fanout_i_wayback")
-                for root_domain in pending_wayback_domains
+                (root_domain, "fanout_i_wayback") for root_domain in pending_wayback_domains
             ]
             if len(wayback_dry_run_entries) > 1 and parallel_workers > 1:
                 _log(
@@ -14976,7 +15115,7 @@ def kill_chain(
                             f"[dim]provider-bounded dispatch x"
                             f"{min(passive_archive_workers, len(pending_wayback_domains))}[/dim]"
                         ),
-                )
+                    )
                 wayback_results = _run_callable_batch(
                     pending_wayback_domains,
                     lambda root_domain: _archive_lookup_root_domain(
@@ -15005,9 +15144,7 @@ def kill_chain(
                     progress_callback=_record_batch_progress,
                 )
                 wayback_host_parse_items: list[tuple[int, str]] = []
-                wayback_host_candidate_groups: list[list[Any]] = [
-                    [] for _ in wayback_results
-                ]
+                wayback_host_candidate_groups: list[list[Any]] = [[] for _ in wayback_results]
                 if len(prepared_wayback_host_parse_groups) > 1:
                     _log(
                         f"{iteration}.I Wayback host input merge",
@@ -15171,22 +15308,22 @@ def kill_chain(
         # processed_cloud_refs.
         if not skip_cloud:
             cloud_commands_map = {
-                "supabase":            ("cloud", "supabase"),
-                "firebase":            ("cloud", "firebase"),
-                "aws_s3":              None,
-                "do_spaces":           None,
-                "gcs":                 None,
-                "azure_blob":          None,
-                "amplify":             None,
-                "gcp_appspot":         None,
-                "gcp_cloudfunctions":  None,
-                "cloudflare_pages":    None,
-                "cloudflare_worker":   None,
-                "cloudflare_r2":       None,
-                "github_pages":        None,
-                "gitlab_pages":        None,
-                "vercel":              None,
-                "netlify":             None,
+                "supabase": ("cloud", "supabase"),
+                "firebase": ("cloud", "firebase"),
+                "aws_s3": None,
+                "do_spaces": None,
+                "gcs": None,
+                "azure_blob": None,
+                "amplify": None,
+                "gcp_appspot": None,
+                "gcp_cloudfunctions": None,
+                "cloudflare_pages": None,
+                "cloudflare_worker": None,
+                "cloudflare_r2": None,
+                "github_pages": None,
+                "gitlab_pages": None,
+                "vercel": None,
+                "netlify": None,
             }
             cloud_target_source_groups = [
                 {service: refs}
@@ -15194,7 +15331,11 @@ def kill_chain(
                 if service in cloud_commands_map
             ]
             source_progress_label = f"{iteration}.J cloud target source prep"
-            if cloud_target_source_groups and len(cloud_target_source_groups) > 1 and parallel_workers > 1:
+            if (
+                cloud_target_source_groups
+                and len(cloud_target_source_groups) > 1
+                and parallel_workers > 1
+            ):
                 _log(
                     source_progress_label,
                     f"[dim]parallel parse x{min(parallel_workers, len(cloud_target_source_groups))}[/dim]",
@@ -15314,8 +15455,7 @@ def kill_chain(
                 )
                 pending_cloud_targets = scoped_pending_cloud_targets
             if not pending_cloud_targets:
-                _log(f"{iteration}.J cloud scans",
-                     "[dim]no new cloud refs to scan[/dim]")
+                _log(f"{iteration}.J cloud scans", "[dim]no new cloud refs to scan[/dim]")
             else:
                 try:
                     with direct_connect(db_path) as con:
@@ -15352,7 +15492,10 @@ def kill_chain(
                                     source="cross_reference",
                                     depth=2,
                                     confidence=0.8,
-                                    metadata={"service": str(item["service"]), "ref": str(item["ref"])},
+                                    metadata={
+                                        "service": str(item["service"]),
+                                        "ref": str(item["ref"]),
+                                    },
                                 )
                             ],
                             metadata={"iteration": iteration, "service": str(item["service"])},
@@ -15487,7 +15630,7 @@ def kill_chain(
                         _log(
                             f"{iteration}.J cloud validation result log",
                             "[dim]sequential dispatch x1[/dim]  [dim]validation log order preserved[/dim]",
-                    )
+                        )
                     _run_inprocess_batch(
                         prepared_validation_logs,
                         _apply_prepared_log_entry,
@@ -15576,8 +15719,7 @@ def kill_chain(
 
         after = _snapshot()
         iteration_delta = {
-            label: int(after[index] - before[index])
-            for index, label in enumerate(_SNAPSHOT_LABELS)
+            label: int(after[index] - before[index]) for index, label in enumerate(_SNAPSHOT_LABELS)
         }
         counts_stable = after == before
         pending_work_counts = _pending_work_counts() if counts_stable else {}
@@ -15600,15 +15742,17 @@ def kill_chain(
             _log(f"iteration {iteration}", "[dim]no new items — spider stable, exiting loop[/dim]")
             break
         else:
-            _log(f"iteration {iteration}",
-                 f"delta hosts=+{after[0]-before[0]} "
-                 f"emails=+{after[1]-before[1]} "
-                 f"subs=+{after[2]-before[2]} "
-                 f"svcs=+{after[3]-before[3]} "
-                 f"keys=+{after[4]-before[4]} "
-                 f"crawl=+{after[5]-before[5]} "
-                 f"gh=+{after[6]-before[6]} "
-                 f"social=+{after[7]-before[7]}")
+            _log(
+                f"iteration {iteration}",
+                f"delta hosts=+{after[0] - before[0]} "
+                f"emails=+{after[1] - before[1]} "
+                f"subs=+{after[2] - before[2]} "
+                f"svcs=+{after[3] - before[3]} "
+                f"keys=+{after[4] - before[4]} "
+                f"crawl=+{after[5] - before[5]} "
+                f"gh=+{after[6] - before[6]} "
+                f"social=+{after[7] - before[7]}",
+            )
 
     # ═══════════════════════════════════════════════════════════════════
     # FINAL PHASE - synthesis only (per-iteration OSINT already fired above)
@@ -15616,10 +15760,18 @@ def kill_chain(
 
     # Phase 6 report path is part of the fixed finalization pipeline shape.
     from datetime import datetime as _dt, timezone as _tz  # noqa: PLC0415
+
     _report_ts = _dt.now(tz=_tz.utc).strftime("%Y%m%dT%H%M%S")
     _report_path = f"reports/engagement_{engagement}_kill_chain_{_report_ts}.md"
-    report_args = ["report", "generate", "--engagement", engagement,
-                   "--yes", "--output", _report_path]
+    report_args = [
+        "report",
+        "generate",
+        "--engagement",
+        engagement,
+        "--yes",
+        "--output",
+        _report_path,
+    ]
     if report_provider:
         report_args += ["--provider", report_provider]
     if report_max_loops is not None:
@@ -15713,9 +15865,7 @@ def kill_chain(
         if not attack_mode or dry_run_all:
             return specs
         try:
-            _dd_con = direct_connect(
-                f"file:{db_path.as_posix()}?mode=ro", uri=True
-            )
+            _dd_con = direct_connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
         except Exception:  # noqa: BLE001
             return specs
         try:
@@ -16005,8 +16155,12 @@ def kill_chain(
         _run_pending_cloud_key_validation("final cloud key validation")
         _run_finding_synthesis("final finding synthesis")
         _cli_audit(
-            db_path, engagement_id, "orchestrator", "kill_chain",
-            "cloud_scan_summary", target=domain,
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "cloud_scan_summary",
+            target=domain,
             result=(
                 f"supabase={len(all_cloud_refs['supabase'])} "
                 f"firebase={len(all_cloud_refs['firebase'])} "
@@ -16119,7 +16273,9 @@ def kill_chain(
             reason = f"report generate exited {report_returncode}"
         else:
             reason = "report generate completed without a report artifact"
-        _log("report fallback", f"[yellow]{reason}; forcing deterministic template fallback[/yellow]")
+        _log(
+            "report fallback", f"[yellow]{reason}; forcing deterministic template fallback[/yellow]"
+        )
         _cli_audit(
             db_path,
             engagement_id,
@@ -16206,8 +16362,12 @@ def kill_chain(
 
     total = _time.time() - step_start
     _cli_audit(
-        db_path, engagement_id, "orchestrator", "kill_chain",
-        "kill_chain_complete", target=domain,
+        db_path,
+        engagement_id,
+        "orchestrator",
+        "kill_chain",
+        "kill_chain_complete",
+        target=domain,
         result=f"elapsed_s={total:.1f} emails_chained={len(emails) if emails else 0}",
     )
     final_pending_total = int(run_progress_state.get("pending_work_total") or 0)
@@ -16241,7 +16401,10 @@ def kill_chain(
                     _pkv_validated += 1
             if _pkv_validated:
                 _pkv_con.commit()
-                _log("key validation", f"[green]{_pkv_validated} credentials auto-validated via provider probes[/green]")
+                _log(
+                    "key validation",
+                    f"[green]{_pkv_validated} credentials auto-validated via provider probes[/green]",
+                )
         finally:
             _pkv_con.close()
     except Exception as _pkv_exc:  # noqa: BLE001
@@ -16250,7 +16413,10 @@ def kill_chain(
     # ─── Aggregate stats (task 3 wiring) ──────────────────────────────
     # Compute + persist stats JSON sidecar alongside the report.
     try:
-        from forge.phase6.aggregate_stats import compute_stats as _as_compute, write_json_sidecar as _as_write  # noqa: PLC0415
+        from forge.phase6.aggregate_stats import (
+            compute_stats as _as_compute,
+            write_json_sidecar as _as_write,
+        )  # noqa: PLC0415
         from forge.db.direct_connect import direct_connect as _as_dc  # noqa: PLC0415
 
         _as_con = _as_dc(db_path)
@@ -16281,6 +16447,7 @@ def kill_chain(
     _mn = f"reports/{engagement}_attack_graph_nodes.csv"
     _me = f"reports/{engagement}_attack_graph_edges.csv"
     from pathlib import Path as _P3  # noqa: PLC0415
+
     if _P3(_mg).is_file() or _P3(_mtgx).is_file():
         if _P3(_mtgx).is_file():
             console.print(f"[dim]Maltego workspace:[/dim] {_mtgx}")
@@ -16370,8 +16537,12 @@ def kill_chain(
     )
 
     _cli_audit(
-        db_path, engagement_id, "orchestrator", "kill_chain",
-        "prereq_detection", target=domain,
+        db_path,
+        engagement_id,
+        "orchestrator",
+        "kill_chain",
+        "prereq_detection",
+        target=domain,
         result=(
             f"detected={len(detected)} auto_run={auto_run_detected} "
             f"offensive_prereqs={include_offensive_prereqs}"
@@ -16380,15 +16551,23 @@ def kill_chain(
 
     def _audit_prereq_auto_run(result: str) -> None:
         _cli_audit(
-            db_path, engagement_id, "orchestrator", "kill_chain",
-            "prereq_auto_run", target=domain,
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "prereq_auto_run",
+            target=domain,
             result=result,
         )
 
     def _audit_prereq_prompted(result: str) -> None:
         _cli_audit(
-            db_path, engagement_id, "orchestrator", "kill_chain",
-            "prereq_prompted", target=domain,
+            db_path,
+            engagement_id,
+            "orchestrator",
+            "kill_chain",
+            "prereq_prompted",
+            target=domain,
             result=result,
         )
 
@@ -16420,11 +16599,14 @@ def kill_chain(
 @app.command("dashboard")
 def dashboard(
     output: Optional[str] = typer.Option(
-        None, "--output", "-o",
+        None,
+        "--output",
+        "-o",
         help="Output HTML path. Defaults to reports/dashboard.html.",
     ),
     open_browser: bool = typer.Option(
-        False, "--open",
+        False,
+        "--open",
         help="Open the generated dashboard in your default browser.",
     ),
 ) -> None:
@@ -16456,7 +16638,10 @@ def dashboard(
     console.print(f"  [dim]open in browser: start {result}[/dim]")
     if open_browser:
         import webbrowser
+
         webbrowser.open(result.resolve().as_uri())
+
+
 @app.command("doctor")
 def doctor() -> None:
     """Proactive environment and dependency health check."""
@@ -16468,7 +16653,7 @@ def doctor() -> None:
     from forge.config import ForgeConfig
 
     console.print("\n[bold cyan]FORGE Doctor[/bold cyan] - Environment Health Check\n")
-    
+
     cfg = ForgeConfig.load()
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Component", width=20)
@@ -16505,6 +16690,7 @@ def doctor() -> None:
         table.add_row("Shodan API", "[yellow]MISSING[/yellow]", "FORGE_SHODAN_API_KEY not set")
 
     import os
+
     if os.environ.get("FORGE_GITHUB_TOKEN"):
         table.add_row("GitHub Token", "[green]OK[/green]", "Configured")
     else:
@@ -16559,7 +16745,6 @@ def menu(
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Command registration imports (must be after app objects are defined)
 # ---------------------------------------------------------------------------
@@ -16605,6 +16790,7 @@ from forge.cli_post import (  # noqa: F401,E402
     post_shell,
 )
 from forge.cli_report import report_generate  # noqa: F401,E402
+
 
 def main() -> None:
     app()

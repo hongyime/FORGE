@@ -55,8 +55,12 @@ def test_artifact_queue_processor_extracts_remote_access_config_artifacts(
         encoding="utf-8",
     )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/ops-console.rdp") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/citrix-app.ica") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/ops-console.rdp") == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/citrix-app.ica") == "config"
+    )
     assert _suffix_from_content_type("application/x-rdp") == ".rdp"
     assert _suffix_from_content_type("application/rdp") == ".rdp"
     assert _suffix_from_content_type("application/x-ica") == ".ica"
@@ -74,9 +78,7 @@ def test_artifact_queue_processor_extracts_remote_access_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "rdp-owner@acme.example" in emails
         assert "ica-owner@acme.example" in emails

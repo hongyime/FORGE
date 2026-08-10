@@ -50,11 +50,13 @@ def _chat_response(text: str = "hello", model: str = "test-model") -> dict[str, 
     return {
         "id": "chatcmpl-test",
         "model": model,
-        "choices": [{
-            "index": 0,
-            "message": {"role": "assistant", "content": text},
-            "finish_reason": "stop",
-        }],
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
         "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
     }
 
@@ -221,9 +223,7 @@ async def test_embed_happy_path() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert body["input"] == "embed me"
-        return httpx.Response(200, json={
-            "data": [{"embedding": [0.1, 0.2, 0.3], "index": 0}]
-        })
+        return httpx.Response(200, json={"data": [{"embedding": [0.1, 0.2, 0.3], "index": 0}]})
 
     p = _make_provider(httpx.MockTransport(handler))
     vec = await p.embed("embed me")
@@ -355,22 +355,25 @@ async def test_extra_headers_forwarded() -> None:
 # -- Backend-name auto-derivation --------------------------------------------
 
 
-@pytest.mark.parametrize("endpoint,expected", [
-    ("https://api.openai.com/v1", "openai"),
-    ("https://openrouter.ai/api/v1", "openrouter"),
-    ("https://api.groq.com/openai/v1", "groq"),
-    ("https://api.deepseek.com/v1", "deepseek"),
-    ("https://api.mistral.ai/v1", "mistral"),
-    ("https://api.together.xyz/v1", "together"),
-    ("https://api.fireworks.ai/inference/v1", "fireworks"),
-    ("https://api.x.ai/v1", "xai"),
-    ("https://api.perplexity.ai", "perplexity"),
-    ("http://localhost:11434/v1", "ollama"),
-    ("http://127.0.0.1:11434/v1", "ollama"),
-    ("http://localhost:1234/v1", "lmstudio"),
-    ("http://localhost:8080/v1", "llamacpp_server"),
-    ("http://localhost:8000/v1", "vllm"),
-])
+@pytest.mark.parametrize(
+    "endpoint,expected",
+    [
+        ("https://api.openai.com/v1", "openai"),
+        ("https://openrouter.ai/api/v1", "openrouter"),
+        ("https://api.groq.com/openai/v1", "groq"),
+        ("https://api.deepseek.com/v1", "deepseek"),
+        ("https://api.mistral.ai/v1", "mistral"),
+        ("https://api.together.xyz/v1", "together"),
+        ("https://api.fireworks.ai/inference/v1", "fireworks"),
+        ("https://api.x.ai/v1", "xai"),
+        ("https://api.perplexity.ai", "perplexity"),
+        ("http://localhost:11434/v1", "ollama"),
+        ("http://127.0.0.1:11434/v1", "ollama"),
+        ("http://localhost:1234/v1", "lmstudio"),
+        ("http://localhost:8080/v1", "llamacpp_server"),
+        ("http://localhost:8000/v1", "vllm"),
+    ],
+)
 def test_backend_name_auto_derivation(endpoint: str, expected: str) -> None:
     p = OpenAICompatibleProvider(endpoint=endpoint, model="x", api_key="k")
     assert p.backend_name == expected

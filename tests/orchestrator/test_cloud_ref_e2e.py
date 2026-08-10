@@ -36,9 +36,7 @@ def cloud_ref_db(tmp_path):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     run_migrations(conn)
-    conn.execute(
-        "INSERT INTO engagements (id, name, operator) VALUES (1, 'cloud_ref_e2e', 'kiro')"
-    )
+    conn.execute("INSERT INTO engagements (id, name, operator) VALUES (1, 'cloud_ref_e2e', 'kiro')")
     for host in CLOUD_REF_HOSTNAMES:
         conn.execute(
             "INSERT INTO engagement_seeds "
@@ -52,7 +50,9 @@ def cloud_ref_db(tmp_path):
 
 
 class TestCloudRefRoundTrip:
-    def test_cloud_ref_rows_persist_at_expected_count(self, cloud_ref_db: sqlite3.Connection) -> None:
+    def test_cloud_ref_rows_persist_at_expected_count(
+        self, cloud_ref_db: sqlite3.Connection
+    ) -> None:
         count = cloud_ref_db.execute(
             "SELECT COUNT(*) FROM engagement_seeds "
             "WHERE engagement_id = 1 AND seed_type = 'cloud_ref'"
@@ -88,7 +88,9 @@ class TestCloudRefRoundTrip:
         for host in CLOUD_REF_HOSTNAMES:
             assert host in seed_values
 
-    def test_domain_family_filter_also_finds_cloud_ref(self, cloud_ref_db: sqlite3.Connection) -> None:
+    def test_domain_family_filter_also_finds_cloud_ref(
+        self, cloud_ref_db: sqlite3.Connection
+    ) -> None:
         rows = cloud_ref_db.execute(
             """
             SELECT seed_value FROM engagement_seeds

@@ -246,6 +246,7 @@ def run_passive_http_collection(
     require_scope: bool = False,
 ) -> int:
     from forge.opsec.scope_gate import load_scope_from_db
+
     scope = (
         [str(item) for item in scope_values if str(item or "").strip()]
         if scope_values is not None
@@ -415,7 +416,9 @@ def _engagement_passive_targets(
                 try:
                     from forge.opsec.scope_gate import scope_entries_from_payload  # noqa: PLC0415
 
-                    scope_entries = scope_entries_from_payload(json.loads(str(row["scope_json"] or "[]")))
+                    scope_entries = scope_entries_from_payload(
+                        json.loads(str(row["scope_json"] or "[]"))
+                    )
                 except json.JSONDecodeError:
                     scope_entries = []
                 for entry in scope_entries:

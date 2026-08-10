@@ -60,9 +60,7 @@ def test_scheduler_rejects_offensive_task_types_before_insert(
     scheduler = TaskScheduler(db_path=db_path, queue=queue)
 
     with pytest.raises(UnsupportedScheduledTaskError, match=task_type):
-        scheduler.schedule(
-            ScheduledTask(1, f"{task_type}:blocked", {"task_type": task_type})
-        )
+        scheduler.schedule(ScheduledTask(1, f"{task_type}:blocked", {"task_type": task_type}))
 
     with sqlite3.connect(db_path) as con:
         queued = con.execute(

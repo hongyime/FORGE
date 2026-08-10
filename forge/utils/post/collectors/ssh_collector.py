@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -12,6 +11,7 @@ _LOG = logging.getLogger(__name__)
 
 # SSH key filename prefixes to collect
 _SSH_KEY_PREFIXES = ("id_rsa", "id_ed25519", "id_ecdsa", "id_dsa")
+
 
 class SshCollector(BaseCollector):
     """
@@ -40,8 +40,8 @@ class SshCollector(BaseCollector):
     def collect(self, artifact: ArtifactMetadata) -> Optional[CollectedFile]:
         try:
             entry = Path(artifact.source_path)
-            data    = entry.read_bytes()
-            sha256  = self._sha256(data)
+            data = entry.read_bytes()
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
             del data
 
@@ -50,10 +50,10 @@ class SshCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(entry),
-                sha256     = sha256,
-                size_bytes = len(payload),
-                metadata   = artifact,
+                path=str(entry),
+                sha256=sha256,
+                size_bytes=len(payload),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

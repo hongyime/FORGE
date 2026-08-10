@@ -54,9 +54,7 @@ from forge.plugins.loader import PluginLoader
 
 _NAME_CHARS = string.ascii_letters + string.digits + "_-."
 
-_name_strategy = st.text(
-    alphabet=st.sampled_from(_NAME_CHARS), min_size=1, max_size=24
-)
+_name_strategy = st.text(alphabet=st.sampled_from(_NAME_CHARS), min_size=1, max_size=24)
 
 _version_strategy = st.from_regex(r"\d+\.\d+\.\d+", fullmatch=True)
 
@@ -66,9 +64,7 @@ _capability_strategy = st.text(
     max_size=16,
 )
 
-_capabilities_strategy = st.lists(
-    _capability_strategy, min_size=0, max_size=6, unique=True
-)
+_capabilities_strategy = st.lists(_capability_strategy, min_size=0, max_size=6, unique=True)
 
 _execution_mode_strategy = st.sampled_from(list(ExecutionMode))
 
@@ -99,8 +95,8 @@ class TestSchemaShape:
             # specific parent env vars (default minimal env hides
             # FORGE_* secrets from child processes).
             "inherit_env_vars",
-}
-)
+        }
+    )
 
     def test_field_set_matches_documented_contract(self) -> None:
         actual = frozenset(PluginMetadata.model_fields.keys())
@@ -285,20 +281,14 @@ class TestLoaderRejectsNonConformantMetadata:
     """The loader rejects plugins whose metadata fails validation."""
 
     @pytest.mark.asyncio
-    async def test_metadata_not_pluginmetadata_instance_rejected(
-        self, tmp_path: Path
-    ) -> None:
-        (tmp_path / "wrong.py").write_text(
-            _NO_METADATA_SRC, encoding="utf-8"
-        )
+    async def test_metadata_not_pluginmetadata_instance_rejected(self, tmp_path: Path) -> None:
+        (tmp_path / "wrong.py").write_text(_NO_METADATA_SRC, encoding="utf-8")
         audit = AuditLogger()
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=audit)
         registry = await loader.discover_and_load()
 
         assert registry == {}
-        warnings = [
-            e for e in audit.entries if e.event_type == AuditEventType.WARNING
-        ]
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
         # The Plugin protocol gate filters out objects that don't even
         # satisfy duck-typing (no metadata attr), so the rejection is silent.
         # When metadata exists but is the wrong type, a WARNING is recorded.
@@ -312,12 +302,8 @@ class TestLoaderRejectsNonConformantMetadata:
         registry = await loader.discover_and_load()
 
         assert registry == {}
-        warnings = [
-            e for e in audit.entries if e.event_type == AuditEventType.WARNING
-        ]
-        assert any(
-            "blank" in (w.error_detail or "").lower() for w in warnings
-        ), (
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
+        assert any("blank" in (w.error_detail or "").lower() for w in warnings), (
             "Blank metadata.name must produce a 'blank'-tagged WARNING"
         )
 

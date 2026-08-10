@@ -2,6 +2,7 @@
 tests/phase4/test_firebase_agneyastra.py
 Unit + integration tests for cloud_audit.py (Module 4-E).
 """
+
 from __future__ import annotations
 
 import json
@@ -25,6 +26,7 @@ from forge.phase4.cloud_audit import (
 def _parse_output_fixture(data: dict) -> list[FirebaseFinding]:
     """Test helper: invoke _parse_output on in-memory data."""
     import tempfile, json, pathlib
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         p = pathlib.Path(f.name)
@@ -36,6 +38,7 @@ def _parse_output_fixture(data: dict) -> list[FirebaseFinding]:
 # ══════════════════════════════════════════════════════════════════════════════
 # Fixtures
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 @pytest.fixture
 def tmp_db(tmp_path: Path) -> Path:
@@ -49,7 +52,8 @@ def tmp_db(tmp_path: Path) -> Path:
         VALUES (99, 'firebase', 'dummy-proj', 'dummy-proj', 'test', datetime('now'))
         """
     )
-    con.commit(); con.close()
+    con.commit()
+    con.close()
     return db
 
 
@@ -60,17 +64,30 @@ def auditor(tmp_db: Path) -> FirebaseAuditor:
 
 _FIXTURE_JSON = {
     "findings": [
-        {"category": "auth_bypass",       "title": "Auth bypass detected",
-         "description": "Firebase auth rules allow unauthenticated writes.",
-         "detail": {"endpoint": "/users"}},
-        {"category": "rtdb_public_read",  "title": "RTDB public read",
-         "description": "Realtime DB readable without credentials.",
-         "detail": {}},
-        {"category": "functions_unauth",  "title": "Cloud Function unauth",
-         "description": "Function invocable without auth.",
-         "detail": {}},
-        {"category": "informational",     "title": "Remote config accessible",
-         "description": "Remote config accessible.", "detail": {}},
+        {
+            "category": "auth_bypass",
+            "title": "Auth bypass detected",
+            "description": "Firebase auth rules allow unauthenticated writes.",
+            "detail": {"endpoint": "/users"},
+        },
+        {
+            "category": "rtdb_public_read",
+            "title": "RTDB public read",
+            "description": "Realtime DB readable without credentials.",
+            "detail": {},
+        },
+        {
+            "category": "functions_unauth",
+            "title": "Cloud Function unauth",
+            "description": "Function invocable without auth.",
+            "detail": {},
+        },
+        {
+            "category": "informational",
+            "title": "Remote config accessible",
+            "description": "Remote config accessible.",
+            "detail": {},
+        },
     ]
 }
 
@@ -79,23 +96,27 @@ _FIXTURE_JSON = {
 # ToolVersionError
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestToolVersionError:
 
+class TestToolVersionError:
     def test_missing_binary_raises(self):
         with patch("shutil.which", return_value=None):
             with pytest.raises(ToolVersionError, match="not found on PATH"):
                 _assert_tool_version("agneyastra", "1.0.0")
 
     def test_outdated_binary_raises(self):
-        with patch("shutil.which", return_value="/usr/local/bin/agneyastra"), \
-             patch("subprocess.run") as mock_run:
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/agneyastra"),
+            patch("subprocess.run") as mock_run,
+        ):
             mock_run.return_value = MagicMock(stdout="agneyastra 0.9.0", stderr="")
             with pytest.raises(ToolVersionError, match="0.9.0"):
                 _assert_tool_version("agneyastra", "1.0.0")
 
     def test_valid_binary_passes(self):
-        with patch("shutil.which", return_value="/usr/local/bin/agneyastra"), \
-             patch("subprocess.run") as mock_run:
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/agneyastra"),
+            patch("subprocess.run") as mock_run,
+        ):
             mock_run.return_value = MagicMock(stdout="agneyastra version 1.0.0", stderr="")
             _assert_tool_version("agneyastra", "1.0.0")  # should not raise
 
@@ -104,8 +125,8 @@ class TestToolVersionError:
 # _parse_output
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestParseOutput:
 
+class TestParseOutput:
     def test_parses_all_findings(self):
         findings = _parse_output_fixture(_FIXTURE_JSON)
         assert len(findings) == 4
@@ -131,10 +152,16 @@ class TestParseOutput:
         assert info.severity == "INFO"
 
     def test_evidence_truncated_to_512(self):
-        data = {"findings": [
-            {"category": "auth_bypass", "title": "t", "description": "d",
-             "detail": {"x": "A" * 1000}}
-        ]}
+        data = {
+            "findings": [
+                {
+                    "category": "auth_bypass",
+                    "title": "t",
+                    "description": "d",
+                    "detail": {"x": "A" * 1000},
+                }
+            ]
+        }
         findings = _parse_output_fixture(data)
         assert len(findings[0].evidence) <= 512
 
@@ -157,33 +184,35 @@ class TestParseOutput:
 # Severity mapping completeness
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestSeverityMap:
 
+class TestSeverityMap:
     def test_all_critical_categories_present(self):
-        assert _SEVERITY_MAP["auth_bypass"]       == "CRITICAL"
-        assert _SEVERITY_MAP["rtdb_public_write"]  == "CRITICAL"
+        assert _SEVERITY_MAP["auth_bypass"] == "CRITICAL"
+        assert _SEVERITY_MAP["rtdb_public_write"] == "CRITICAL"
 
     def test_high_categories_present(self):
-        assert _SEVERITY_MAP["rtdb_public_read"]   == "HIGH"
-        assert _SEVERITY_MAP["firestore_public"]   == "HIGH"
-        assert _SEVERITY_MAP["storage_public"]     == "HIGH"
+        assert _SEVERITY_MAP["rtdb_public_read"] == "HIGH"
+        assert _SEVERITY_MAP["firestore_public"] == "HIGH"
+        assert _SEVERITY_MAP["storage_public"] == "HIGH"
 
     def test_medium_categories_present(self):
-        assert _SEVERITY_MAP["functions_unauth"]      == "MEDIUM"
-        assert _SEVERITY_MAP["remote_config_unauth"]  == "MEDIUM"
+        assert _SEVERITY_MAP["functions_unauth"] == "MEDIUM"
+        assert _SEVERITY_MAP["remote_config_unauth"] == "MEDIUM"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Dry-run
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestDryRun:
 
+class TestDryRun:
     def test_dry_run_no_subprocess(self, auditor: FirebaseAuditor):
-        with patch("forge.phase4.cloud_audit._assert_tool_version"), \
-             patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None), \
-             patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q, \
-             patch("subprocess.run") as mock_sub:
+        with (
+            patch("forge.phase4.cloud_audit._assert_tool_version"),
+            patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None),
+            patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q,
+            patch("subprocess.run") as mock_sub,
+        ):
             mock_q.confirm.return_value.ask.return_value = True
             findings = auditor.run(
                 project_id="my-proj-12345",
@@ -194,9 +223,11 @@ class TestDryRun:
         assert findings == []
 
     def test_dry_run_no_db_writes(self, auditor: FirebaseAuditor, tmp_db: Path):
-        with patch("forge.phase4.cloud_audit._assert_tool_version"), \
-             patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None), \
-             patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q:
+        with (
+            patch("forge.phase4.cloud_audit._assert_tool_version"),
+            patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None),
+            patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q,
+        ):
             mock_q.confirm.return_value.ask.return_value = True
             auditor.run(project_id="proj", tests=["auth"], dry_run=True)
         con = sqlite3.connect(tmp_db)
@@ -208,7 +239,6 @@ class TestDryRun:
 
 
 class TestCredentialResolution:
-
     def test_validate_firebase_key_format(self):
         assert _validate_firebase_api_key("AIzaSyAbCdEfGhIjKlMnOpQrStUvWxYz1234567")
         assert not _validate_firebase_api_key("not-a-firebase-key")
@@ -231,8 +261,8 @@ class TestCredentialResolution:
 # Integration: fixture JSON → DB rows
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestIntegration:
 
+class TestIntegration:
     def test_findings_persisted_to_db(self, auditor: FirebaseAuditor, tmp_db: Path):
         findings = [
             FirebaseFinding("auth_bypass", "CRITICAL", "t", "d", "e"),
@@ -241,13 +271,12 @@ class TestIntegration:
         con = sqlite3.connect(tmp_db)
         FirebaseAuditor._ensure_schema(con)
         count = auditor._store_findings(con, "my-proj", findings)
-        con.commit(); con.close()
+        con.commit()
+        con.close()
         assert count == 2
 
         con = sqlite3.connect(tmp_db)
-        rows = con.execute(
-            "SELECT * FROM vulnerability_findings WHERE engagement_id=1"
-        ).fetchall()
+        rows = con.execute("SELECT * FROM vulnerability_findings WHERE engagement_id=1").fetchall()
         con.close()
         assert len(rows) == 2
 
@@ -256,9 +285,7 @@ class TestIntegration:
         FirebaseAuditor._ensure_schema(con)
         auditor._store_cloud_asset(con, "my-proj-123")
         con.commit()
-        row = con.execute(
-            "SELECT * FROM cloud_assets WHERE identifier='my-proj-123'"
-        ).fetchone()
+        row = con.execute("SELECT * FROM cloud_assets WHERE identifier='my-proj-123'").fetchone()
         con.close()
         assert row is not None
 
@@ -276,13 +303,17 @@ class TestIntegration:
 
     def test_cleanup_file_registered_before_parse(self, auditor: FirebaseAuditor):
         registered: list[Path] = []
-        with patch("forge.phase4.cloud_audit._assert_tool_version"), \
-             patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None), \
-             patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q, \
-             patch("forge.phase4.cloud_audit.FirebaseAuditor._register_cleanup",
-                   side_effect=lambda p: registered.append(Path(p))), \
-             patch("subprocess.run") as mock_sub, \
-             patch("forge.phase4.cloud_audit.FirebaseAuditor._parse_output", return_value=[]):
+        with (
+            patch("forge.phase4.cloud_audit._assert_tool_version"),
+            patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None),
+            patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q,
+            patch(
+                "forge.phase4.cloud_audit.FirebaseAuditor._register_cleanup",
+                side_effect=lambda p: registered.append(Path(p)),
+            ),
+            patch("subprocess.run") as mock_sub,
+            patch("forge.phase4.cloud_audit.FirebaseAuditor._parse_output", return_value=[]),
+        ):
             mock_q.confirm.return_value.ask.return_value = True
             mock_sub.return_value = MagicMock(returncode=0, stdout="", stderr="")
             auditor.run(project_id="proj", tests=["auth"])
@@ -291,11 +322,13 @@ class TestIntegration:
         assert not registered[0].exists()
 
     def test_missing_key_persists_info_finding(self, auditor: FirebaseAuditor, tmp_db: Path):
-        with patch("forge.phase4.cloud_audit._assert_tool_version"), \
-             patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None), \
-             patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q, \
-             patch("subprocess.run") as mock_sub, \
-             patch("forge.phase4.cloud_audit.FirebaseAuditor._parse_output", return_value=[]):
+        with (
+            patch("forge.phase4.cloud_audit._assert_tool_version"),
+            patch("forge.phase4.cloud_audit._resolve_firebase_api_key", return_value=None),
+            patch("forge.phase4.cloud_audit.questionary", create=True) as mock_q,
+            patch("subprocess.run") as mock_sub,
+            patch("forge.phase4.cloud_audit.FirebaseAuditor._parse_output", return_value=[]),
+        ):
             mock_q.confirm.return_value.ask.return_value = True
             mock_sub.return_value = MagicMock(returncode=0, stdout="", stderr="")
             auditor.run(project_id="missing-key-proj", tests=["auth"])

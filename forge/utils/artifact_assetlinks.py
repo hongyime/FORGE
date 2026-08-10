@@ -4,9 +4,7 @@ import json
 import re
 from typing import Any
 
-_ANDROID_PACKAGE_RE = re.compile(
-    r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$"
-)
+_ANDROID_PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
 
 
 def assetlinks_android_packages(text: str) -> list[str]:

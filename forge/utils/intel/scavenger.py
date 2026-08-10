@@ -18,6 +18,7 @@ OPSEC (PRD §12.3):
   - Rate: 2s default for GitHub, 1s for GitLab; honour 429 + X-RateLimit-Reset.
   - --dry-run prints generated queries without any network calls.
 """
+
 from __future__ import annotations
 
 import json
@@ -45,8 +46,8 @@ except Exception:
 
 GITHUB_SEARCH_URL = "https://api.github.com/search/code"
 GITLAB_SEARCH_URL = "https://gitlab.com/api/v4/search"
-GITHUB_RAW_URL    = "https://raw.githubusercontent.com/{repo}/{ref}/{path}"
-PATTERN_FILE      = Path(__file__).parent / "data" / "secret_patterns.json"
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/{repo}/{ref}/{path}"
+PATTERN_FILE = Path(__file__).parent / "data" / "secret_patterns.json"
 
 _SCAVENGER_DDL = """
 CREATE TABLE IF NOT EXISTS scavenger_findings (
@@ -73,12 +74,13 @@ CREATE INDEX IF NOT EXISTS idx_scavenger_engagement
 # Pattern loading
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SecretPattern:
-    name:       str
-    regex:      re.Pattern
+    name: str
+    regex: re.Pattern
     confidence: str
-    group:      int = 0   # capture group; 0 = full match
+    group: int = 0  # capture group; 0 = full match
 
 
 def load_patterns(path: Path = PATTERN_FILE) -> list[SecretPattern]:
@@ -91,12 +93,14 @@ def load_patterns(path: Path = PATTERN_FILE) -> list[SecretPattern]:
     patterns = []
     for p in data.get("patterns", []):
         try:
-            patterns.append(SecretPattern(
-                name=p["name"],
-                regex=re.compile(p["regex"], re.MULTILINE | re.DOTALL),
-                confidence=p.get("confidence", "medium"),
-                group=p.get("group", 0),
-            ))
+            patterns.append(
+                SecretPattern(
+                    name=p["name"],
+                    regex=re.compile(p["regex"], re.MULTILINE | re.DOTALL),
+                    confidence=p.get("confidence", "medium"),
+                    group=p.get("group", 0),
+                )
+            )
         except re.error as exc:
             _LOG.warning("Bad pattern '%s': %s", p.get("name"), exc)
     return patterns
@@ -128,12 +132,13 @@ def _load_secret_patterns(path: Path = PATTERN_FILE) -> list[dict[str, str]]:
 # Secret matching
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SecretMatch:
-    pattern_name:    str
-    secret_value:    str    # full plaintext — encrypted before DB write
-    secret_redacted: str    # first4...last4
-    context_snippet: str    # ≤ 256 chars around match
+    pattern_name: str
+    secret_value: str  # full plaintext — encrypted before DB write
+    secret_redacted: str  # first4...last4
+    context_snippet: str  # ≤ 256 chars around match
 
 
 class _CompatRedacted(str):
@@ -176,21 +181,24 @@ def _extract_matches(content: str, patterns: list[SecretPattern]) -> list[Secret
                 continue
             if not value:
                 continue
-            start   = max(0, m.start() - 64)
-            end     = min(len(content), m.end() + 64)
+            start = max(0, m.start() - 64)
+            end = min(len(content), m.end() + 64)
             snippet = content[start:end].replace("\n", " ")[:256]
-            results.append(SecretMatch(
-                pattern_name    = pat.name,
-                secret_value    = value,
-                secret_redacted = _redact(value),
-                context_snippet = snippet,
-            ))
+            results.append(
+                SecretMatch(
+                    pattern_name=pat.name,
+                    secret_value=value,
+                    secret_redacted=_redact(value),
+                    context_snippet=snippet,
+                )
+            )
     return results
 
 
 # ---------------------------------------------------------------------------
 # GitHub backend
 # ---------------------------------------------------------------------------
+
 
 def _github_search(
     domain: str,
@@ -235,26 +243,26 @@ def _github_search(
                 _LOG.error("GitHub search HTTP %d", resp.status_code)
                 break
 
-            data  = resp.json()
+            data = resp.json()
             items = data.get("items", [])
             if not items:
                 break
 
             for item in items:
-                repo      = item.get("repository", {}).get("full_name", "")
+                repo = item.get("repository", {}).get("full_name", "")
                 file_path = item.get("path", "")
-                html_url  = item.get("html_url", "")
+                html_url = item.get("html_url", "")
                 # Fetch raw content.
-                ref       = item.get("repository", {}).get("default_branch", "main")
-                raw_url   = GITHUB_RAW_URL.format(repo=repo, ref=ref, path=file_path)
+                ref = item.get("repository", {}).get("default_branch", "main")
+                raw_url = GITHUB_RAW_URL.format(repo=repo, ref=ref, path=file_path)
                 time.sleep(delay * 0.5)
                 content = _fetch_file_content(raw_url, headers, client)
 
                 yield {
-                    "url":       html_url,
+                    "url": html_url,
                     "file_path": file_path,
                     "repo_name": repo,
-                    "content":   content,
+                    "content": content,
                 }
 
             # Standard depth: first page only per term.
@@ -266,6 +274,7 @@ def _github_search(
 # ---------------------------------------------------------------------------
 # GitLab backend
 # ---------------------------------------------------------------------------
+
 
 def _gitlab_search(
     domain: str,
@@ -297,10 +306,10 @@ def _gitlab_search(
     for item in items:
         time.sleep(delay)
         yield {
-            "url":       item.get("web_url", ""),
+            "url": item.get("web_url", ""),
             "file_path": item.get("path", ""),
             "repo_name": str(item.get("project_id", "")),
-            "content":   item.get("data", ""),
+            "content": item.get("data", ""),
         }
 
 
@@ -308,10 +317,12 @@ def _gitlab_search(
 # Storage
 # ---------------------------------------------------------------------------
 
+
 def _encrypt(plaintext: str) -> str:
     if encrypt_string is not None:
         return encrypt_string(plaintext)
     import base64
+
     return "BASE64:" + base64.b64encode(plaintext.encode()).decode()
 
 
@@ -361,18 +372,19 @@ def _store_finding(
 # Orchestrator
 # ---------------------------------------------------------------------------
 
+
 def run_scavenger(
     db_path: Path,
     engagement_id: int,
     domain: str,
     keywords: Optional[list[str]] = None,
     backends: Optional[list[str]] = None,
-    github_token: Optional[str]   = None,
-    gitlab_token: Optional[str]   = None,
-    delay: float                  = 2.0,
-    depth: str                    = "standard",   # 'standard' | 'deep'
-    dry_run: bool                 = False,
-    operator: str                 = "operator",
+    github_token: Optional[str] = None,
+    gitlab_token: Optional[str] = None,
+    delay: float = 2.0,
+    depth: str = "standard",  # 'standard' | 'deep'
+    dry_run: bool = False,
+    operator: str = "operator",
 ) -> int:
     """
     Scan public code repos and pastes for secrets referencing domain.
@@ -380,7 +392,11 @@ def run_scavenger(
     """
     if Session is None:
         raise ImportError("curl_cffi required: pip install curl_cffi")
-    from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_entries_from_payload
+    from forge.opsec.scope_gate import (
+        ScopeViolationError,
+        assert_in_scope,
+        scope_entries_from_payload,
+    )
 
     class _CompatScopeViolation(ScopeViolationError, ValueError):
         def __str__(self):
@@ -402,11 +418,11 @@ def run_scavenger(
             con.close()
             raise _CompatScopeViolation(domain, scope)
 
-    patterns  = load_patterns()
-    backends  = backends or ["github", "gitlab"]
-    keywords  = keywords or []
-    total     = 0
-    ts        = datetime.now(timezone.utc).isoformat()
+    patterns = load_patterns()
+    backends = backends or ["github", "gitlab"]
+    keywords = keywords or []
+    total = 0
+    ts = datetime.now(timezone.utc).isoformat()
 
     if dry_run:
         for term in [domain] + keywords:
@@ -426,7 +442,9 @@ def run_scavenger(
                         wait = max(1, int(reset) - int(time.time()))
                         time.sleep(wait)
                 elif status == 200:
-                    payload = github_data.json() if callable(getattr(github_data, "json", None)) else {}
+                    payload = (
+                        github_data.json() if callable(getattr(github_data, "json", None)) else {}
+                    )
                     for item in payload.get("items", []):
                         result = {
                             "url": item.get("html_url", ""),
@@ -444,7 +462,9 @@ def run_scavenger(
                             total += 1
                             _LOG.warning(
                                 "Scavenger [github] %s — %s → %s",
-                                result.get("repo_name"), match.pattern_name, match.secret_redacted,
+                                result.get("repo_name"),
+                                match.pattern_name,
+                                match.secret_redacted,
                             )
 
         if "gitlab" in backends:

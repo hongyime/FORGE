@@ -29,7 +29,12 @@ _APPSYNC_HOST_RE = re.compile(
 )
 _USER_POOL_KEYS = ("awsuserpoolsid", "userpoolid", "cognitouserpooldefaultpoolid")
 _IDENTITY_POOL_KEYS = ("awscognitoidentitypoolid", "identitypoolid", "cognitoidentitydefaultpoolid")
-_APP_CLIENT_KEYS = ("awsuserpoolswebclientid", "userpoolclientid", "appclientid", "cognitouserpooldefaultappclientid")
+_APP_CLIENT_KEYS = (
+    "awsuserpoolswebclientid",
+    "userpoolclientid",
+    "appclientid",
+    "cognitouserpooldefaultappclientid",
+)
 _URL_KEYS = (
     "awsappsyncgraphqlendpoint",
     "appsyncgraphqlendpoint",
@@ -115,9 +120,17 @@ def _candidate_values(pairs: list[tuple[int, str, str]], *, trusted: bool = Fals
             if bucket := _bucket_name(normalized):
                 append(f"s3://{bucket}")
     if app_client:
-        append(f"aws-cognito-app-client://{user_pool}/{app_client}" if user_pool else f"aws-cognito-app-client://{app_client}")
+        append(
+            f"aws-cognito-app-client://{user_pool}/{app_client}"
+            if user_pool
+            else f"aws-cognito-app-client://{app_client}"
+        )
     if pinpoint_app:
-        append(f"aws-pinpoint-app://{_segment(region)}/{pinpoint_app}" if region else f"aws-pinpoint-app://{pinpoint_app}")
+        append(
+            f"aws-pinpoint-app://{_segment(region)}/{pinpoint_app}"
+            if region
+            else f"aws-pinpoint-app://{pinpoint_app}"
+        )
     return candidates
 
 
@@ -131,7 +144,14 @@ def _strong_identity_or_api_key(key: str) -> bool:
     if normalized.startswith(_STRONG_PREFIXES):
         return _key_matches(normalized, *keys)
     if normalized.startswith(_CONTEXT_PREFIXES):
-        return _key_matches(normalized, "userpoolid", "userpoolclientid", "identitypoolid", *_URL_KEYS, *_PINPOINT_KEYS)
+        return _key_matches(
+            normalized,
+            "userpoolid",
+            "userpoolclientid",
+            "identitypoolid",
+            *_URL_KEYS,
+            *_PINPOINT_KEYS,
+        )
     return False
 
 
@@ -160,14 +180,18 @@ def _url_candidates(value: str) -> list[str]:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return []
     try:
-        netloc = f"{parsed.hostname.lower()}:{parsed.port}" if parsed.port else parsed.hostname.lower()
+        netloc = (
+            f"{parsed.hostname.lower()}:{parsed.port}" if parsed.port else parsed.hostname.lower()
+        )
     except ValueError:
         return []
     return [urlunparse((parsed.scheme.lower(), netloc, parsed.path or "", "", "", ""))]
 
 
 def _appsync_ref(value: str) -> str:
-    match = _APPSYNC_HOST_RE.fullmatch(str(urlparse(str(value or "").strip()).hostname or "").lower())
+    match = _APPSYNC_HOST_RE.fullmatch(
+        str(urlparse(str(value or "").strip()).hostname or "").lower()
+    )
     if not match:
         return ""
     return f"aws-appsync-api://{match.group('region').lower()}/{match.group('api_id').lower()}"

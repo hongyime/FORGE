@@ -15,6 +15,7 @@ Modules
 
 Public surface (lazy-imported to keep CLI startup fast):
 """
+
 from __future__ import annotations
 
 __all__ = [
@@ -34,32 +35,42 @@ __all__ = [
 def __getattr__(name: str):  # noqa: ANN001
     if name == "VersionParser":
         from forge.phase4.version_parser import VersionParser
+
         return VersionParser
     if name == "ExploitCorrelator":
         from forge.phase4.exploit_correlator import ExploitCorrelator
+
         return ExploitCorrelator
     if name == "HashCredentialBridge":
         from forge.phase4.hash_credential_bridge import HashCredentialBridge
+
         return HashCredentialBridge
     if name == "IDORScanner":
         from forge.phase4.param_probe import IDORScanner
+
         return IDORScanner
     if name == "FirebaseAuditor":
         from forge.phase4.cloud_audit import FirebaseAuditor
+
         return FirebaseAuditor
     if name == "FirebaseExtractor":
         from forge.phase4.mobile_config_parse import FirebaseExtractor
+
         return FirebaseExtractor
     if name == "SupabaseScanner":
         from forge.phase4.api_policy_check import SupabaseScanner
+
         return SupabaseScanner
     if name == "AWSAuditor":
         from forge.phase4.aws_audit import AWSAuditor
+
         return AWSAuditor
     if name == "AzureAuditor":
         from forge.phase4.azure_audit import AzureAuditor
+
         return AzureAuditor
     if name == "run_bypass_assessment":
         from forge.phase4.auth_bypass import run_bypass_assessment
+
         return run_bypass_assessment
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -116,7 +116,8 @@ class CodexCliProvider(SubprocessProvider):
                 self._binary,
                 "exec",
                 "--skip-git-repo-check",
-                "--output-last-message", tmp_path,
+                "--output-last-message",
+                tmp_path,
                 prompt,
             ]
             t0 = time.perf_counter()

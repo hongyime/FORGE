@@ -1,4 +1,5 @@
 """Shared persistence for passive-provider URL discoveries."""
+
 from __future__ import annotations
 
 import json

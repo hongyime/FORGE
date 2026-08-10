@@ -24,6 +24,7 @@ The harness itself:
   - queries the DB for row counts across hosts, emails, audit_log, etc.
   - writes a Markdown table with PASS/FAIL per criterion
 """
+
 from __future__ import annotations
 
 import json
@@ -109,40 +110,50 @@ def prep_engagement(eng_id: int, seed: str) -> None:
         db_path.unlink()
     # Import via subprocess to avoid path issues
     from forge.db.schema import apply_schema
+
     con = sqlite3.connect(str(db_path))
     apply_schema(con)
     try:
         from forge.db.migrations import run_migrations
+
         run_migrations(con)
     except Exception:
         pass
     con.execute(
-        "INSERT INTO engagements (id,name,scope_json,status,operator) "
-        "VALUES (?,?,?,?,?)",
+        "INSERT INTO engagements (id,name,scope_json,status,operator) VALUES (?,?,?,?,?)",
         (eng_id, f"real_target_{eng_id}", json.dumps([seed]), "ACTIVE", "prawn"),
     )
     con.commit()
     con.close()
 
 
-def run_killchain(eng_id: int, seed: str, flags: list[str],
-                  timeout: float = 300.0) -> tuple[int, float, str]:
+def run_killchain(
+    eng_id: int, seed: str, flags: list[str], timeout: float = 300.0
+) -> tuple[int, float, str]:
     """Fire kill-chain and return (exit_code, duration, stderr_tail)."""
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["TERM"] = "dumb"
     env["NO_COLOR"] = "1"
     argv = [
-        str(FORGE_EXE), "--no-tor", "kill-chain", seed,
-        "--engagement", str(eng_id),
+        str(FORGE_EXE),
+        "--no-tor",
+        "kill-chain",
+        seed,
+        "--engagement",
+        str(eng_id),
         *flags,
     ]
     t0 = time.time()
     try:
         proc = subprocess.run(
-            argv, capture_output=True, text=True,
-            timeout=timeout, env=env,
-            encoding="utf-8", errors="replace",
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+            encoding="utf-8",
+            errors="replace",
         )
         duration = time.time() - t0
         stderr_tail = (proc.stderr or "")[-300:]
@@ -158,9 +169,16 @@ def count_rows(eng_id: int) -> dict[str, int]:
         return {}
     con = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
     counts: dict[str, int] = {}
-    for table in ("hosts", "emails", "subdomains", "services",
-                  "audit_log", "key_scanner_findings", "crawl_results",
-                  "social_profiles"):
+    for table in (
+        "hosts",
+        "emails",
+        "subdomains",
+        "services",
+        "audit_log",
+        "key_scanner_findings",
+        "crawl_results",
+        "social_profiles",
+    ):
         try:
             n = con.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE engagement_id=?",
@@ -204,19 +222,21 @@ def main() -> int:
             print(f"  (--report-only)  verdict={summary_ok}")
             for d in details:
                 print(f"    {d}")
-            results.append({
-                "id": entry["id"],
-                "seed": entry["seed"],
-                "type": entry["type"],
-                "note": entry["note"],
-                "exit_code": "N/A",
-                "duration_s": 0.0,
-                "counts": counts,
-                "criteria": entry["success"],
-                "details": details,
-                "verdict": summary_ok,
-                "stderr_tail": "",
-            })
+            results.append(
+                {
+                    "id": entry["id"],
+                    "seed": entry["seed"],
+                    "type": entry["type"],
+                    "note": entry["note"],
+                    "exit_code": "N/A",
+                    "duration_s": 0.0,
+                    "counts": counts,
+                    "criteria": entry["success"],
+                    "details": details,
+                    "verdict": summary_ok,
+                    "stderr_tail": "",
+                }
+            )
             continue
         prep_engagement(entry["id"], entry["seed"])
         rc, dur, err = run_killchain(entry["id"], entry["seed"], entry["flags"])
@@ -233,19 +253,21 @@ def main() -> int:
         if err and rc != 0:
             print(f"    stderr: {err}")
 
-        results.append({
-            "id": entry["id"],
-            "seed": entry["seed"],
-            "type": entry["type"],
-            "note": entry["note"],
-            "exit_code": rc,
-            "duration_s": round(dur, 1),
-            "counts": counts,
-            "criteria": entry["success"],
-            "details": details,
-            "verdict": summary_ok,
-            "stderr_tail": err,
-        })
+        results.append(
+            {
+                "id": entry["id"],
+                "seed": entry["seed"],
+                "type": entry["type"],
+                "note": entry["note"],
+                "exit_code": rc,
+                "duration_s": round(dur, 1),
+                "counts": counts,
+                "criteria": entry["success"],
+                "details": details,
+                "verdict": summary_ok,
+                "stderr_tail": err,
+            }
+        )
 
     # Write Markdown report
     lines = [

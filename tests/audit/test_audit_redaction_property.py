@@ -71,14 +71,11 @@ def _secret_key_strategy() -> st.SearchStrategy[str]:
     """Generate keys that contain at least one secret pattern as a substring,
     with random surrounding characters and arbitrary case."""
 
-    def _build(
-        pattern: str, prefix: str, suffix: str, case_seed: list[bool]
-    ) -> str:
+    def _build(pattern: str, prefix: str, suffix: str, case_seed: list[bool]) -> str:
         # Apply random case to the secret pattern itself so we cover
         # "Password", "TOKEN", "ApI_KeY", "myToken", etc.
         cased = "".join(
-            ch.upper() if flag else ch.lower()
-            for ch, flag in zip(pattern, case_seed, strict=False)
+            ch.upper() if flag else ch.lower() for ch, flag in zip(pattern, case_seed, strict=False)
         )
         # case_seed may be shorter than pattern; pad with original case.
         if len(cased) < len(pattern):
@@ -169,9 +166,7 @@ def _assert_redacted(actual: dict[str, Any], original: dict[str, Any]) -> None:
     - Secret keys map to the literal string "[REDACTED]".
     - Non-secret keys preserve values; nested dicts recurse.
     """
-    assert set(actual.keys()) == set(original.keys()), (
-        "redaction must not add or remove keys"
-    )
+    assert set(actual.keys()) == set(original.keys()), "redaction must not add or remove keys"
     for k, original_value in original.items():
         actual_value = actual[k]
         if _is_secret_key(k):
@@ -185,8 +180,7 @@ def _assert_redacted(actual: dict[str, Any], original: dict[str, Any]) -> None:
             _assert_redacted(actual_value, original_value)
         else:
             assert actual_value == original_value, (
-                f"non-secret key {k!r} value was modified: "
-                f"{original_value!r} -> {actual_value!r}"
+                f"non-secret key {k!r} value was modified: {original_value!r} -> {actual_value!r}"
             )
 
 
@@ -202,9 +196,7 @@ class TestRedactSecretsProperty:
         suppress_health_check=[HealthCheck.too_slow],
     )
     @given(params=_params_strategy())
-    def test_redact_secrets_matches_contract(
-        self, params: dict[str, Any]
-    ) -> None:
+    def test_redact_secrets_matches_contract(self, params: dict[str, Any]) -> None:
         """For arbitrary nested dicts, redact_secrets() matches the contract:
         every secret-like key (top-level or nested, any case, substring match)
         becomes "[REDACTED]" while non-secret keys are preserved."""
@@ -221,9 +213,7 @@ class TestRedactSecretsProperty:
         suppress_health_check=[HealthCheck.too_slow],
     )
     @given(params=_params_strategy())
-    def test_redact_secrets_is_idempotent(
-        self, params: dict[str, Any]
-    ) -> None:
+    def test_redact_secrets_is_idempotent(self, params: dict[str, Any]) -> None:
         """Applying redaction twice yields the same result as applying it once."""
         logger = AuditLogger()
         once = logger.redact_secrets(params)
@@ -241,9 +231,7 @@ class TestAuditEntryRedactionProperty:
     )
     @given(params=_params_strategy())
     @pytest.mark.asyncio
-    async def test_logged_entry_has_redacted_input_params(
-        self, params: dict[str, Any]
-    ) -> None:
+    async def test_logged_entry_has_redacted_input_params(self, params: dict[str, Any]) -> None:
         """An AuditEntry passed through log() ends up stored with redacted
         input_params matching the redaction contract."""
         logger = AuditLogger()
@@ -257,9 +245,7 @@ class TestAuditEntryRedactionProperty:
 
         await logger.log(entry)
 
-        stored = next(
-            e for e in logger.entries if e.correlation_id == correlation_id
-        )
+        stored = next(e for e in logger.entries if e.correlation_id == correlation_id)
         assert stored.input_params is not None
         _assert_redacted(stored.input_params, params)
 

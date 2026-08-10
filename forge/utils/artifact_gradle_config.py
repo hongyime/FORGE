@@ -96,11 +96,7 @@ def _source_path(value: str) -> str:
 def _unescape_properties_value(value: str) -> str:
     text = str(value or "").strip().strip("\"'")
     return (
-        text.replace("\\:", ":")
-        .replace("\\/", "/")
-        .replace("\\=", "=")
-        .replace("\\ ", " ")
-        .strip()
+        text.replace("\\:", ":").replace("\\/", "/").replace("\\=", "=").replace("\\ ", " ").strip()
     )
 
 

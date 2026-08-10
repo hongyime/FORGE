@@ -131,6 +131,7 @@ def _fetch(url: str, cfg: ForgeConfig) -> list[dict[str, Any]]:
     try:
         import ijson
         import io
+
         out: list[dict[str, Any]] = []
         f = io.BytesIO(raw)
         # Try NVD 2.0 format first
@@ -398,6 +399,7 @@ def _http_get(url: str, cfg: ForgeConfig) -> bytes:
         # anonymous to 50 req/30s. Public data - skip FORGE_PROXY (OPSEC
         # proxy) unless FORGE_KB_USE_PROXY=1 is explicitly set.
         import os
+
         headers = {"User-Agent": "FORGE-Toolkit/1.0"}
         if "nvd.nist.gov" in url:
             api_key = os.environ.get("FORGE_NVD_API_KEY", "").strip()

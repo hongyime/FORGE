@@ -108,9 +108,7 @@ class TestResolutionContract:
     ) -> None:
         tmp_path = tmp_path_factory.mktemp("p11")
         for i, name in enumerate(names):
-            (tmp_path / f"plugin_{i}.py").write_text(
-                _valid_plugin_src(name), encoding="utf-8"
-            )
+            (tmp_path / f"plugin_{i}.py").write_text(_valid_plugin_src(name), encoding="utf-8")
 
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=AuditLogger())
         registry = await loader.discover_and_load()
@@ -142,9 +140,7 @@ class TestResolutionContract:
 
         tmp_path = tmp_path_factory.mktemp("p11u")
         for i, name in enumerate(registered):
-            (tmp_path / f"plugin_{i}.py").write_text(
-                _valid_plugin_src(name), encoding="utf-8"
-            )
+            (tmp_path / f"plugin_{i}.py").write_text(_valid_plugin_src(name), encoding="utf-8")
 
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=AuditLogger())
         await loader.discover_and_load()
@@ -157,12 +153,8 @@ class TestResolutionIdempotence:
     """resolve() returns the same instance every time."""
 
     @pytest.mark.asyncio
-    async def test_resolve_returns_identical_instance(
-        self, tmp_path: Path
-    ) -> None:
-        (tmp_path / "p.py").write_text(
-            _valid_plugin_src("stable_tool"), encoding="utf-8"
-        )
+    async def test_resolve_returns_identical_instance(self, tmp_path: Path) -> None:
+        (tmp_path / "p.py").write_text(_valid_plugin_src("stable_tool"), encoding="utf-8")
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=AuditLogger())
         await loader.discover_and_load()
 
@@ -194,9 +186,7 @@ class TestMembershipAgreesWithResolve:
     ) -> None:
         tmp_path = tmp_path_factory.mktemp("p11m")
         for i, name in enumerate(registered):
-            (tmp_path / f"p_{i}.py").write_text(
-                _valid_plugin_src(name), encoding="utf-8"
-            )
+            (tmp_path / f"p_{i}.py").write_text(_valid_plugin_src(name), encoding="utf-8")
 
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=AuditLogger())
         await loader.discover_and_load()
@@ -214,9 +204,7 @@ class TestResolveDoesNotMutate:
 
     @pytest.mark.asyncio
     async def test_resolve_does_not_emit_audit(self, tmp_path: Path) -> None:
-        (tmp_path / "x.py").write_text(
-            _valid_plugin_src("noop_tool"), encoding="utf-8"
-        )
+        (tmp_path / "x.py").write_text(_valid_plugin_src("noop_tool"), encoding="utf-8")
         audit = AuditLogger()
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=audit)
         await loader.discover_and_load()

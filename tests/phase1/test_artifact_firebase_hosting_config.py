@@ -44,7 +44,9 @@ def test_firebase_hosting_config_structured_parser_is_source_gated(tmp_path) -> 
         processor._js_runtime_text_structured_payload_text(payload, source_hint="firebase.json")
         == "https://acme-portal.web.app"
     )
-    assert processor._js_runtime_text_structured_payload_text(payload, source_hint="notes.json") == ""
+    assert (
+        processor._js_runtime_text_structured_payload_text(payload, source_hint="notes.json") == ""
+    )
 
 
 def test_firebase_hosting_web_app_url_feeds_existing_cloud_asset_mapping(tmp_path) -> None:
@@ -55,4 +57,8 @@ def test_firebase_hosting_web_app_url_feeds_existing_cloud_asset_mapping(tmp_pat
         source="artifact_firebase_hosting_config",
     )
 
-    assert {"asset_type": "firebase", "identifier": "acme-portal", "source": "artifact_firebase_hosting_config"} in entries
+    assert {
+        "asset_type": "firebase",
+        "identifier": "acme-portal",
+        "source": "artifact_firebase_hosting_config",
+    } in entries

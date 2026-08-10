@@ -129,7 +129,9 @@ def _exec_sync(sync_url: str, sql: str) -> None:
         import psycopg  # noqa: PLC0415
     except ImportError:
         pytest.skip("psycopg not installed; pip install 'psycopg[binary]'")
-    with psycopg.connect(sync_url.replace("postgresql+psycopg://", "postgresql://"), autocommit=True) as conn:
+    with psycopg.connect(
+        sync_url.replace("postgresql+psycopg://", "postgresql://"), autocommit=True
+    ) as conn:
         with conn.cursor() as cur:
             cur.execute(sql)
 
@@ -151,7 +153,6 @@ def db_url(postgres_db_url: str) -> str:
     schema URL automatically.
     """
     return postgres_db_url
-
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ OPSEC (PRD §12.3):
   - Every found account is written to ``account_existence`` with
     ``source_tool='holehe'``; scope gate enforced by email-domain match.
 """
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -80,9 +81,7 @@ def _holehe_max_workers_default() -> int:
 
 def _split_configured_command(value: str) -> list[str]:
     return [
-        part.strip("\"'")
-        for part in shlex.split(value, posix=os.name != "nt")
-        if part.strip("\"'")
+        part.strip("\"'") for part in shlex.split(value, posix=os.name != "nt") if part.strip("\"'")
     ]
 
 
@@ -201,13 +200,15 @@ def run_holehe(
     for email in emails:
         if not _in_scope(email, scope):
             from forge.opsec.scope_gate import ScopeViolationError
+
             con.close()
             raise ScopeViolationError(email, scope)
 
     if dry_run:
         _LOG.info(
             "[DRY-RUN] holehe: would query %d in-scope emails: %s",
-            len(emails), ", ".join(emails[:5]) + ("..." if len(emails) > 5 else ""),
+            len(emails),
+            ", ".join(emails[:5]) + ("..." if len(emails) > 5 else ""),
         )
         con.close()
         return 0
@@ -223,8 +224,7 @@ def run_holehe(
     bounded_workers = max(1, min(worker_count, len(emails), 4))
     if bounded_workers == 1:
         ordered_results = [
-            _run_holehe_probe(command, email, timeout_per_email, proxy)
-            for email in emails
+            _run_holehe_probe(command, email, timeout_per_email, proxy) for email in emails
         ]
     else:
         ordered_results: list[tuple[str, list[str], list[str], bool] | None] = [None] * len(emails)
@@ -241,9 +241,13 @@ def run_holehe(
         if timed_out:
             _LOG.warning("holehe timed out on %s after %ds", email, timeout_per_email)
             insert_audit_log(
-                con, engagement_id, "holehe_timeout",
+                con,
+                engagement_id,
+                "holehe_timeout",
                 f"email={email} timeout_s={timeout_per_email}",
-                phase="phase2", module="holehe", ts=ts,
+                phase="phase2",
+                module="holehe",
+                ts=ts,
             )
             continue
 
@@ -270,15 +274,20 @@ def run_holehe(
             )
 
         insert_audit_log(
-            con, engagement_id, "holehe_query",
+            con,
+            engagement_id,
+            "holehe_query",
             f"email={email} found={len(found)} rate_limited={len(rate_limited)}",
-            phase="phase2", module="holehe", ts=ts,
+            phase="phase2",
+            module="holehe",
+            ts=ts,
         )
 
     con.commit()
     con.close()
     _LOG.info(
         "holehe: %d account-existence rows upserted for engagement %d",
-        written, engagement_id,
+        written,
+        engagement_id,
     )
     return written

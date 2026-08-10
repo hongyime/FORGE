@@ -158,9 +158,12 @@ def test_run_cloud_validate_respects_scheduled_rate_limit_before_provider(
     con = sqlite3.connect(db_path)
     try:
         assert con.execute("SELECT COUNT(*) FROM cloud_validation_results").fetchone()[0] == 0
-        assert con.execute(
-            "SELECT validation_state FROM key_scanner_findings WHERE id=2"
-        ).fetchone()[0] == "UNCONFIRMED"
+        assert (
+            con.execute("SELECT validation_state FROM key_scanner_findings WHERE id=2").fetchone()[
+                0
+            ]
+            == "UNCONFIRMED"
+        )
     finally:
         con.close()
 

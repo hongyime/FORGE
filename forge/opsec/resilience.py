@@ -1,4 +1,5 @@
 """Shared resilience utilities — graceful shutdown, internet retry, interruptible sleep."""
+
 import threading
 import time
 import socket
@@ -95,7 +96,9 @@ def with_internet_retry(
                 if not restored:
                     return None
             else:
-                delay = base_delay * (2 ** attempt)
-                print(f"[RETRY] Attempt {attempt + 1}/{max_retries} failed: {e}. Retrying in {delay:.1f}s...")
+                delay = base_delay * (2**attempt)
+                print(
+                    f"[RETRY] Attempt {attempt + 1}/{max_retries} failed: {e}. Retrying in {delay:.1f}s..."
+                )
                 _interruptible_sleep(delay, shutdown_event=shutdown_event)
     return None

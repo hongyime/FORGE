@@ -114,9 +114,7 @@ def _agent_message_strategy() -> st.SearchStrategy[AgentMessage]:
     suppress_health_check=[HealthCheck.too_slow],
     deadline=None,
 )
-def test_property_30_envelope_round_trip_is_lossless(
-    message: AgentMessage, topic: str
-) -> None:
+def test_property_30_envelope_round_trip_is_lossless(message: AgentMessage, topic: str) -> None:
     """Any AgentMessage round-trips through the bus envelope without loss.
 
     Mirrors the exact serialization performed by both ``InMemoryMessageBus``
@@ -135,9 +133,7 @@ def test_property_30_envelope_round_trip_is_lossless(
 
 @given(message=_agent_message_strategy(), topic=_topic_strategy)
 @settings(max_examples=100, deadline=None)
-def test_property_30_envelope_round_trip_field_by_field(
-    message: AgentMessage, topic: str
-) -> None:
+def test_property_30_envelope_round_trip_field_by_field(message: AgentMessage, topic: str) -> None:
     """Each AgentMessage field is preserved individually through the envelope."""
     serialized = json.dumps({"topic": topic, "payload": message.model_dump()})
     data = json.loads(serialized)

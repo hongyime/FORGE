@@ -27,6 +27,7 @@ Strategy:
 
 OPSEC: Uses curl_cffi; full directory + all files fetched (not targeted).
 """
+
 from __future__ import annotations
 
 import json
@@ -105,9 +106,9 @@ def _parse_yaml(name: str, raw: bytes) -> dict[str, Any] | None:
                 code_samples.append(f"[{fn}] {code[:200]}")
 
     return {
-        "name":        name,
-        "os_family":   "linux",
-        "functions":   json.dumps(function_names),
+        "name": name,
+        "os_family": "linux",
+        "functions": json.dumps(function_names),
         "description": description or name,
     }
 
@@ -128,6 +129,7 @@ def _bulk_insert(conn: sqlite3.Connection, rows: list[dict]) -> int:
 
 def _http_get(url: str, cfg: ForgeConfig) -> bytes:
     import os
+
     headers = {}
     # GitHub API rate-limits anonymous requests at 60/hour. If the operator
     # has a burn token in FORGE_GITHUB_TOKEN, use it to raise the ceiling
@@ -147,6 +149,7 @@ def _http_get(url: str, cfg: ForgeConfig) -> bytes:
     use_proxy = os.environ.get("FORGE_KB_USE_PROXY", "0").strip() in ("1", "true", "yes")
     try:
         from curl_cffi import requests as cffi_requests  # noqa: PLC0415
+
         proxies = {"https": cfg.proxy} if (cfg.proxy and use_proxy) else None
         resp = cffi_requests.get(
             url,
@@ -159,5 +162,6 @@ def _http_get(url: str, cfg: ForgeConfig) -> bytes:
         return resp.content
     except ImportError:
         import urllib.request  # noqa: PLC0415
+
         with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310
             return r.read()

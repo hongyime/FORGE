@@ -81,9 +81,7 @@ class TelemetryCollector:
         """Read-only access to collected latency records."""
         return list(self._records)
 
-    def get_records_by_category(
-        self, category: MetricCategory
-    ) -> list[LatencyRecord]:
+    def get_records_by_category(self, category: MetricCategory) -> list[LatencyRecord]:
         """Return all records for a specific metric category."""
         return [r for r in self._records if r.category == category]
 
@@ -162,8 +160,12 @@ class TelemetryCollector:
             entry = AuditEntry(
                 correlation_id=record.correlation_id or "telemetry",
                 event_type=AuditEventType.WARNING,
-                tool_name=record.label if record.category == MetricCategory.TOOL_EXECUTION else None,
-                agent_role=record.label if record.category == MetricCategory.AGENT_PROCESSING else None,
+                tool_name=record.label
+                if record.category == MetricCategory.TOOL_EXECUTION
+                else None,
+                agent_role=record.label
+                if record.category == MetricCategory.AGENT_PROCESSING
+                else None,
                 output_summary=warning_msg,
                 duration_ms=record.duration_ms,
                 success=True,

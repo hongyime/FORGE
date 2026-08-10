@@ -59,6 +59,7 @@ _UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
+
 def _int_env(name: str, default: int, *, minimum: int, maximum: int) -> int:
     raw_value = os.environ.get(name, "").strip()
     if not raw_value:
@@ -2861,7 +2862,9 @@ def _epieos_profile_entries_from_container(
             entries.append((_epieos_profile_entry_platform(value, fallback_platform), value))
             return entries
         for child_key, child_value in value.items():
-            if str(child_key or "").strip().lower() == "email" or _epieos_is_identity_claim_container_key(child_key):
+            if str(
+                child_key or ""
+            ).strip().lower() == "email" or _epieos_is_identity_claim_container_key(child_key):
                 continue
             child_platform = (
                 fallback_platform
@@ -2875,7 +2878,9 @@ def _epieos_profile_entries_from_container(
                     child_key,
                     child_value,
                 )
-                if stack_exchange_user and _epieos_handle(fallback_platform, stack_exchange_user, ""):
+                if stack_exchange_user and _epieos_handle(
+                    fallback_platform, stack_exchange_user, ""
+                ):
                     entries.append(
                         (
                             _epieos_profile_platform_label(fallback_platform),
@@ -3486,8 +3491,7 @@ def _epieos_normalize_handle_candidate(value: Any) -> str:
         from forge.engagement_orchestrator import EngagementSynthesisEngine
 
         return str(
-            EngagementSynthesisEngine._normalize_social_profile_handle_candidate(candidate)
-            or ""
+            EngagementSynthesisEngine._normalize_social_profile_handle_candidate(candidate) or ""
         ).strip()
     except Exception:
         if " " in candidate or "/" in candidate:
@@ -3513,7 +3517,9 @@ def _epieos_normalize_gravatar_handle_candidate(value: Any) -> str:
     candidate_lower = candidate.lower()
     if not candidate or candidate_lower in _GRAVATAR_RESERVED_PROFILE_HANDLES:
         return ""
-    if re.fullmatch(r"[a-f0-9]{32}", candidate_lower) or re.fullmatch(r"[a-f0-9]{64}", candidate_lower):
+    if re.fullmatch(r"[a-f0-9]{32}", candidate_lower) or re.fullmatch(
+        r"[a-f0-9]{64}", candidate_lower
+    ):
         return ""
     return _epieos_normalize_handle_candidate(candidate)
 
@@ -4027,9 +4033,7 @@ def _epieos_figshare_profile_url(data: dict[str, Any]) -> str:
 def _epieos_humanize_slug(value: Any) -> str:
     slug = str(value or "").strip().strip("/").lstrip("@")
     tokens = [
-        token
-        for token in re.split(r"[-_]+", slug)
-        if token and re.search(r"[A-Za-z]", token)
+        token for token in re.split(r"[-_]+", slug) if token and re.search(r"[A-Za-z]", token)
     ]
     if not tokens:
         return ""
@@ -4161,16 +4165,14 @@ def _epieos_profile_url(platform: str, data: dict[str, Any]) -> str:
     if not explicit:
         explicit = _epieos_profile_alias_url(platform_name, data)
     profile_alias = data.get("profile")
-    if (
-        not explicit
-        and isinstance(profile_alias, str)
-        and "://" in profile_alias.strip()
-    ):
+    if not explicit and isinstance(profile_alias, str) and "://" in profile_alias.strip():
         explicit = profile_alias.strip()
     if explicit:
         if platform_name in _EPIEOS_DISCORD_PLATFORM_NAMES:
             return _epieos_discord_explicit_profile_url(explicit)
-        if platform_name in _EPIEOS_MATRIX_PLATFORM_NAMES and not _epieos_matrix_identity_id(data, explicit):
+        if platform_name in _EPIEOS_MATRIX_PLATFORM_NAMES and not _epieos_matrix_identity_id(
+            data, explicit
+        ):
             return ""
         if platform_name in _EPIEOS_FEDERATED_PLATFORM_NAMES:
             federated_url = _epieos_federated_profile_url(data, explicit)
@@ -4189,64 +4191,67 @@ def _epieos_profile_url(platform: str, data: dict[str, Any]) -> str:
             explicit_host = str(urlparse(explicit).hostname or "").strip().lower()
             if explicit_host.startswith("www."):
                 explicit_host = explicit_host[4:]
-            if explicit_host == "news.ycombinator.com" and not _epieos_handle_from_profile_url(explicit):
+            if explicit_host == "news.ycombinator.com" and not _epieos_handle_from_profile_url(
+                explicit
+            ):
                 return ""
             if platform_name == "facebook":
                 people_url = _epieos_facebook_people_profile_url(data, explicit)
                 if people_url:
                     return people_url
-            if platform_name in {"devto", "dev.to"} and not _epieos_handle_from_profile_url(explicit):
-                return ""
-            if platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES and not _epieos_handle_from_profile_url(explicit):
+            if platform_name in {"devto", "dev.to"} and not _epieos_handle_from_profile_url(
+                explicit
+            ):
                 return ""
             if (
-                platform_name
-                in {
-                    "500px",
-                    "500px.com",
-                    "academia",
-                    "academia.edu",
-                    "adplist",
-                    "adp_list",
-                    "artstation",
-                    "artstation.com",
-                    "contra",
-                    "contra.com",
-                    "figma",
-                    "figma.com",
-                    "figshare",
-                    "github_gist",
-                    "githubgist",
-                    "gist",
-                    "google_scholar",
-                    "googlescholar",
-                    "codepen",
-                    "deviantart",
-                    "deviantart.com",
-                    "indie_hackers",
-                    "indiehackers",
-                    "launchpad",
-                    "muckrack",
-                    "muck_rack",
-                    "muckrack.com",
-                    "polywork",
-                    "polywork.com",
-                    "quora",
-                    "quora.com",
-                    "scholar",
-                    "semantic_scholar",
-                    "semanticscholar",
-                    "sourceforge",
-                    "sourceforge_net",
-                    "spotify",
-                    "strava",
-                    "strava.com",
-                    "unsplash",
-                    "unsplash.com",
-                    "zenodo",
-                }
+                platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES
                 and not _epieos_handle_from_profile_url(explicit)
             ):
+                return ""
+            if platform_name in {
+                "500px",
+                "500px.com",
+                "academia",
+                "academia.edu",
+                "adplist",
+                "adp_list",
+                "artstation",
+                "artstation.com",
+                "contra",
+                "contra.com",
+                "figma",
+                "figma.com",
+                "figshare",
+                "github_gist",
+                "githubgist",
+                "gist",
+                "google_scholar",
+                "googlescholar",
+                "codepen",
+                "deviantart",
+                "deviantart.com",
+                "indie_hackers",
+                "indiehackers",
+                "launchpad",
+                "muckrack",
+                "muck_rack",
+                "muckrack.com",
+                "polywork",
+                "polywork.com",
+                "quora",
+                "quora.com",
+                "scholar",
+                "semantic_scholar",
+                "semanticscholar",
+                "sourceforge",
+                "sourceforge_net",
+                "spotify",
+                "strava",
+                "strava.com",
+                "unsplash",
+                "unsplash.com",
+                "zenodo",
+            } and not _epieos_handle_from_profile_url(explicit):
                 return ""
             return explicit
     if platform_name in _EPIEOS_MATRIX_PLATFORM_NAMES:
@@ -4260,12 +4265,16 @@ def _epieos_profile_url(platform: str, data: dict[str, Any]) -> str:
     if platform_name in _EPIEOS_DISCORD_PLATFORM_NAMES:
         return _epieos_discord_profile_url(platform_name, data)
     if platform_name == "linkedin_company":
-        slug = _first_non_empty_string(
-            data.get("slug"),
-            data.get("company_slug"),
-            data.get("company"),
-            data.get("company_name"),
-        ).strip().strip("/")
+        slug = (
+            _first_non_empty_string(
+                data.get("slug"),
+                data.get("company_slug"),
+                data.get("company"),
+                data.get("company_name"),
+            )
+            .strip()
+            .strip("/")
+        )
         if slug:
             return f"https://www.linkedin.com/company/{slug}"
         return ""
@@ -4594,28 +4603,49 @@ def _epieos_handle(platform: str, data: dict[str, Any], url: str) -> str:
         if platform_name == "mastodon" and "@" in handle:
             handle = handle.split("@", 1)[0].strip()
         if platform_name == "pinterest":
-            normalized = "" if _epieos_direct_handle_is_reserved(platform_name, handle) else _epieos_normalize_pinterest_handle_candidate(handle)
+            normalized = (
+                ""
+                if _epieos_direct_handle_is_reserved(platform_name, handle)
+                else _epieos_normalize_pinterest_handle_candidate(handle)
+            )
         elif platform_name == "vimeo":
-            normalized = "" if handle.lower() in _VIMEO_RESERVED_PROFILE_PATHS else _epieos_normalize_vimeo_handle_candidate(handle)
+            normalized = (
+                ""
+                if handle.lower() in _VIMEO_RESERVED_PROFILE_PATHS
+                else _epieos_normalize_vimeo_handle_candidate(handle)
+            )
         elif platform_name in {"lastfm", "last.fm", "last_fm"}:
             normalized = _epieos_normalize_lastfm_handle_candidate(handle)
         elif platform_name == "bandcamp":
             normalized = _epieos_normalize_bandcamp_handle_candidate(handle)
         elif platform_name == "mixcloud":
-            normalized = "" if handle.lower() in _MIXCLOUD_RESERVED_PROFILE_PATHS else _epieos_normalize_mixcloud_handle_candidate(handle)
+            normalized = (
+                ""
+                if handle.lower() in _MIXCLOUD_RESERVED_PROFILE_PATHS
+                else _epieos_normalize_mixcloud_handle_candidate(handle)
+            )
         elif platform_name == "letterboxd":
-            normalized = "" if handle.lower() in _LETTERBOXD_RESERVED_PROFILE_PATHS else _epieos_normalize_letterboxd_handle_candidate(handle)
+            normalized = (
+                ""
+                if handle.lower() in _LETTERBOXD_RESERVED_PROFILE_PATHS
+                else _epieos_normalize_letterboxd_handle_candidate(handle)
+            )
         elif platform_name == "instagram" and handle.lower() in _INSTAGRAM_RESERVED_PROFILE_PATHS:
             normalized = ""
         elif platform_name == "keybase" and handle.lower() in _KEYBASE_RESERVED_PROFILE_PATHS:
             normalized = ""
-        elif platform_name in {"telegram", "telegramme"} and handle.lower() in _TELEGRAM_RESERVED_PROFILE_PATHS:
+        elif (
+            platform_name in {"telegram", "telegramme"}
+            and handle.lower() in _TELEGRAM_RESERVED_PROFILE_PATHS
+        ):
             normalized = ""
         elif platform_name == "tiktok" and handle.lower() in _TIKTOK_RESERVED_PROFILE_HANDLES:
             normalized = ""
         elif platform_name == "youtube" and handle.lower() in _YOUTUBE_RESERVED_PROFILE_HANDLES:
             normalized = ""
-        elif platform_name in {"devto", "dev.to"} and handle.lower() in _DEVTO_RESERVED_PROFILE_PATHS:
+        elif (
+            platform_name in {"devto", "dev.to"} and handle.lower() in _DEVTO_RESERVED_PROFILE_PATHS
+        ):
             normalized = ""
         elif (
             platform_name in _EPIEOS_TWITTER_PLATFORM_NAMES
@@ -4648,11 +4678,20 @@ def _epieos_handle(platform: str, data: dict[str, Any], url: str) -> str:
             normalized = ""
         elif platform_name == "flickr" and handle.lower() in _FLICKR_RESERVED_PHOTOS_PATHS:
             normalized = ""
-        elif platform_name in {"slideshare", "slide_share"} and handle.lower() in _SLIDESHARE_RESERVED_PROFILE_PATHS:
+        elif (
+            platform_name in {"slideshare", "slide_share"}
+            and handle.lower() in _SLIDESHARE_RESERVED_PROFILE_PATHS
+        ):
             normalized = ""
-        elif platform_name in {"soundcloud", "sound_cloud"} and handle.lower() in _SOUNDCLOUD_RESERVED_PROFILE_PATHS:
+        elif (
+            platform_name in {"soundcloud", "sound_cloud"}
+            and handle.lower() in _SOUNDCLOUD_RESERVED_PROFILE_PATHS
+        ):
             normalized = ""
-        elif platform_name in {"speakerdeck", "speaker_deck"} and handle.lower() in _SPEAKERDECK_RESERVED_PROFILE_PATHS:
+        elif (
+            platform_name in {"speakerdeck", "speaker_deck"}
+            and handle.lower() in _SPEAKERDECK_RESERVED_PROFILE_PATHS
+        ):
             normalized = ""
         elif platform_name == "vimeo" and handle.lower() in _VIMEO_RESERVED_PROFILE_PATHS:
             normalized = ""
@@ -4714,7 +4753,11 @@ def _epieos_handle(platform: str, data: dict[str, Any], url: str) -> str:
         if path_parts[0].lower() in reserved_bandcamp:
             return ""
         return _epieos_normalize_bandcamp_handle_candidate(path_parts[0])
-    if hostname.endswith("linkedin.com") and len(path_parts) >= 2 and path_parts[0] in {"in", "pub", "company"}:
+    if (
+        hostname.endswith("linkedin.com")
+        and len(path_parts) >= 2
+        and path_parts[0] in {"in", "pub", "company"}
+    ):
         return path_parts[1].lstrip("@")
     if hostname.endswith("github.com"):
         if hostname == "gist.github.com":
@@ -4862,7 +4905,11 @@ def _epieos_handle(platform: str, data: dict[str, Any], url: str) -> str:
         if path_parts[0].lower() in _TELEGRAM_RESERVED_PROFILE_PATHS:
             return ""
         return path_parts[0].lstrip("@")
-    if hostname.endswith("reddit.com") and len(path_parts) >= 2 and path_parts[0].lower() in {"u", "user"}:
+    if (
+        hostname.endswith("reddit.com")
+        and len(path_parts) >= 2
+        and path_parts[0].lower() in {"u", "user"}
+    ):
         return path_parts[1].lstrip("@")
     if hostname.endswith("speakerdeck.com"):
         reserved_speakerdeck = {
@@ -5129,9 +5176,17 @@ def _epieos_handle(platform: str, data: dict[str, Any], url: str) -> str:
         if path_parts[0].lower() in _MUCKRACK_RESERVED_PROFILE_HANDLES:
             return ""
         return _epieos_normalize_handle_candidate(path_parts[0])
-    if hostname.endswith("bsky.app") and len(path_parts) >= 2 and path_parts[0].lower() == "profile":
+    if (
+        hostname.endswith("bsky.app")
+        and len(path_parts) >= 2
+        and path_parts[0].lower() == "profile"
+    ):
         return path_parts[1].lstrip("@")
-    if hostname.endswith("bsky.social") and len(path_parts) >= 2 and path_parts[0].lower() == "profile":
+    if (
+        hostname.endswith("bsky.social")
+        and len(path_parts) >= 2
+        and path_parts[0].lower() == "profile"
+    ):
         return path_parts[1].lstrip("@")
     if hostname.endswith("bsky.social") and path_parts[0].startswith("@"):
         return path_parts[0].lstrip("@")
@@ -5162,8 +5217,7 @@ def _epieos_handle_from_profile_url(url: str) -> str:
         return ""
     try:
         return str(
-            EngagementSynthesisEngine._extract_social_profile_handle_from_url(url)
-            or ""
+            EngagementSynthesisEngine._extract_social_profile_handle_from_url(url) or ""
         ).strip()
     except Exception:
         return ""
@@ -5332,7 +5386,9 @@ def _epieos_identity_claim_phone_values(data: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
-def _epieos_identity_claim_url_values(data: dict[str, Any], nested_keys: tuple[str, ...]) -> list[str]:
+def _epieos_identity_claim_url_values(
+    data: dict[str, Any], nested_keys: tuple[str, ...]
+) -> list[str]:
     values: list[str] = []
     for claims in _epieos_identity_claim_containers(data):
         values.extend(_epieos_claim_url_values(claims, nested_keys))
@@ -5529,7 +5585,12 @@ def _epieos_domain_values(value: Any) -> list[str]:
     if not text or "@" in text:
         return []
     prefix, separator, suffix = text.partition(":")
-    if separator and prefix.lower() in {"applinks", "webcredentials", "activitycontinuation", "appclips"}:
+    if separator and prefix.lower() in {
+        "applinks",
+        "webcredentials",
+        "activitycontinuation",
+        "appclips",
+    }:
         text = suffix.strip()
         if not text or "@" in text:
             return []
@@ -5599,7 +5660,15 @@ def _epieos_company_name(platform: str, data: dict[str, Any]) -> str:
         return work_history_name
     platform_name = str(platform or "").strip().lower()
     if platform_name in {"wellfound", "angellist", "angel.co"}:
-        for key in ("profile_url", "profileUrl", "profileURL", "url", "html_url", "htmlUrl", "link"):
+        for key in (
+            "profile_url",
+            "profileUrl",
+            "profileURL",
+            "url",
+            "html_url",
+            "htmlUrl",
+            "link",
+        ):
             slug = _epieos_company_profile_slug_from_url(str(data.get(key) or ""))
             if slug:
                 return _epieos_humanize_slug(slug)

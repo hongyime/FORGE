@@ -34,13 +34,9 @@ _AUTH_SIMPLE_HEADER_RE = re.compile(
     r"(?:Bearer|Basic|Digest)\s+[^\s,;]+"
 )
 _AUTH_AWS_HEADER_RE = re.compile(
-    r"(?is)\b(Authorization)\s*:\s*AWS4-HMAC-SHA256\s+.*?"
-    + _HEADER_STOP_RE
+    r"(?is)\b(Authorization)\s*:\s*AWS4-HMAC-SHA256\s+.*?" + _HEADER_STOP_RE
 )
-_COOKIE_HEADER_RE = re.compile(
-    r"(?is)\b(Set-Cookie|Cookie)\s*:\s*.*?"
-    + _HEADER_STOP_RE
-)
+_COOKIE_HEADER_RE = re.compile(r"(?is)\b(Set-Cookie|Cookie)\s*:\s*.*?" + _HEADER_STOP_RE)
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*")
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
 _AWS_ACCESS_KEY_RE = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")

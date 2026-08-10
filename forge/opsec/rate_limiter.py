@@ -3,6 +3,7 @@
 Copied from searchtoolkit/searchtoolkit/rate_limiter.py (best-in-class per
 CROSS_TOOLKIT_ANALYSIS.md Section 9.1). All FORGE outbound scraping uses this.
 """
+
 from __future__ import annotations
 
 import random
@@ -70,7 +71,7 @@ class RateLimiter:
         with self._lock:
             self._domain_failures[domain] = self._domain_failures.get(domain, 0) + 1
             failures = self._domain_failures[domain]
-            backoff = min(2 ** failures, self.max_delay)
+            backoff = min(2**failures, self.max_delay)
             self._domain_delays[domain] = time.time() + backoff
             if status_code == 429 and self._rotate_tor_on_rate_limit and self._tor_manager:
                 self._tor_manager.rotate_circuit()
@@ -109,9 +110,7 @@ class AdaptiveRateLimiter(RateLimiter):
     def record_success(self, url: str) -> None:
         domain = urlparse(url).netloc
         with self._lock:
-            self._domain_success_streaks[domain] = (
-                self._domain_success_streaks.get(domain, 0) + 1
-            )
+            self._domain_success_streaks[domain] = self._domain_success_streaks.get(domain, 0) + 1
             if self._domain_success_streaks[domain] >= 5:
                 self.base_delay = max(
                     self.min_delay, self.base_delay * (1 - self.adjustment_factor)

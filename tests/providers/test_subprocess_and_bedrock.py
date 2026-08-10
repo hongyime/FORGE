@@ -45,8 +45,9 @@ class _FakeBedrockBody:
 
 
 class _FakeBedrockClient:
-    def __init__(self, response_payload: dict[str, Any] | None = None,
-                 raise_exc: Exception | None = None) -> None:
+    def __init__(
+        self, response_payload: dict[str, Any] | None = None, raise_exc: Exception | None = None
+    ) -> None:
         self._payload = response_payload or {
             "content": [{"type": "text", "text": "fake response"}],
             "usage": {"input_tokens": 10, "output_tokens": 5},
@@ -121,10 +122,12 @@ async def test_bedrock_construction_rejects_empty_model() -> None:
 
 @pytest.mark.asyncio
 async def test_bedrock_structured_output_strips_code_fences() -> None:
-    fake = _FakeBedrockClient(response_payload={
-        "content": [{"type": "text", "text": "```json\n{\"answer\": 99}\n```"}],
-        "usage": {"input_tokens": 1, "output_tokens": 1},
-    })
+    fake = _FakeBedrockClient(
+        response_payload={
+            "content": [{"type": "text", "text": '```json\n{"answer": 99}\n```'}],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+    )
     p = BedrockAnthropicProvider(model_id="x", boto3_client=fake)
     out = await p.structured_output(
         CompletionRequest(prompt="x"),
@@ -169,6 +172,7 @@ async def test_claude_code_complete_happy_path(tmp_path: Any) -> None:
 @pytest.mark.asyncio
 async def test_claude_code_non_zero_exit_raises_unavailable(tmp_path: Any) -> None:
     import sys as _sys
+
     if "win" in _sys.platform:
         stub = tmp_path / "claude.cmd"
         stub.write_text("@echo off\r\necho boom 1>&2\r\nexit /b 7\r\n", encoding="ascii")
@@ -185,6 +189,7 @@ async def test_claude_code_non_zero_exit_raises_unavailable(tmp_path: Any) -> No
 @pytest.mark.asyncio
 async def test_claude_code_health_check(tmp_path: Any) -> None:
     import sys as _sys
+
     if "win" in _sys.platform:
         stub = tmp_path / "claude.cmd"
         stub.write_text("@echo off\r\necho 1.0.0\r\nexit /b 0\r\n", encoding="ascii")
@@ -200,6 +205,7 @@ async def test_claude_code_health_check(tmp_path: Any) -> None:
 @pytest.mark.asyncio
 async def test_claude_code_embed_raises_unavailable(tmp_path: Any) -> None:
     import sys as _sys
+
     if "win" in _sys.platform:
         stub = tmp_path / "claude.cmd"
         stub.write_text("@echo off\r\nexit /b 0\r\n", encoding="ascii")

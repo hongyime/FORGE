@@ -25,6 +25,7 @@ OPSEC constraints (PRD v7.2 §12.1):
     check_same_thread=False flag, which is deliberately NOT set here
     to prevent accidental concurrent write races.
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,6 +48,7 @@ _BUSY_TIMEOUT_MS: int = 5_000
 # Custom exceptions
 # ---------------------------------------------------------------------------
 
+
 class ReadOnlyViolationError(RuntimeError):
     """Raised when a write is attempted on a read-only DB connection."""
 
@@ -54,6 +56,7 @@ class ReadOnlyViolationError(RuntimeError):
 # ---------------------------------------------------------------------------
 # Write connection factory
 # ---------------------------------------------------------------------------
+
 
 def get_engagement_db(db_path: Path) -> sqlite3.Connection:
     """
@@ -98,6 +101,7 @@ def _configure_write_connection(conn: sqlite3.Connection) -> None:
 # Read-only connection factory
 # ---------------------------------------------------------------------------
 
+
 def get_readonly_db(db_path: Path) -> sqlite3.Connection:
     """
     Open *db_path* in read-only mode using the SQLite URI API.
@@ -112,8 +116,7 @@ def get_readonly_db(db_path: Path) -> sqlite3.Connection:
     """
     if not db_path.exists():
         raise FileNotFoundError(
-            f"Knowledge base not found at {db_path}. "
-            "Run `forge kb sync` before engaging."
+            f"Knowledge base not found at {db_path}. Run `forge kb sync` before engaging."
         )
 
     uri = db_path.as_uri() + "?mode=ro"
@@ -170,6 +173,7 @@ def _readonly_authorizer(
 # ---------------------------------------------------------------------------
 # Context manager for scoped write sessions
 # ---------------------------------------------------------------------------
+
 
 @contextmanager
 def engagement_session(db_path: Path) -> Generator[sqlite3.Connection, None, None]:

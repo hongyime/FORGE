@@ -63,6 +63,7 @@ def _httpx_client(*args, **kwargs):
 
     return httpx.Client(*args, **kwargs)
 
+
 GITHUB_SEARCH_URL = "https://api.github.com/search/code"
 GITLAB_SEARCH_URL = "https://gitlab.com/api/v4/search"
 GITLAB_PROJECT_URL = "https://gitlab.com/api/v4/projects"
@@ -316,8 +317,7 @@ def _profile_proof_host_is_reserved(host: str) -> bool:
     if normalized in _PROFILE_PROOF_RESERVED_HOSTS:
         return True
     return any(
-        normalized.endswith(f".{reserved_host}")
-        for reserved_host in _PROFILE_PROOF_RESERVED_HOSTS
+        normalized.endswith(f".{reserved_host}") for reserved_host in _PROFILE_PROOF_RESERVED_HOSTS
     )
 
 
@@ -365,7 +365,11 @@ def _has_sequential_numeric_identifier_token(value: object) -> bool:
     candidate = str(value or "").strip().lower()
     compact = re.sub(r"[^0-9]+", "", candidate)
     alnum_compact = re.sub(r"[^a-z0-9]+", "", candidate)
-    if alnum_compact and alnum_compact.isdigit() and _looks_sequential_numeric_identifier(alnum_compact):
+    if (
+        alnum_compact
+        and alnum_compact.isdigit()
+        and _looks_sequential_numeric_identifier(alnum_compact)
+    ):
         return True
     if compact and compact == alnum_compact and _looks_sequential_numeric_identifier(compact):
         return True
@@ -432,9 +436,7 @@ def _profile_proof_url_is_low_signal(value: str) -> bool:
     if _profile_proof_host_is_reserved(host):
         return True
     path_tokens = [
-        token
-        for token in re.findall(r"[a-z0-9]+", parsed.path.lower())
-        if len(token) > 1
+        token for token in re.findall(r"[a-z0-9]+", parsed.path.lower()) if len(token) > 1
     ]
     return bool(path_tokens) and all(
         token in _PROFILE_PROOF_PLACEHOLDER_TOKENS for token in path_tokens
@@ -446,18 +448,12 @@ def _profile_proof_email_is_low_signal(value: str) -> bool:
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         return True
     local_part, domain = email.rsplit("@", 1)
-    if (
-        _profile_proof_host_is_reserved(domain)
-        or domain.endswith(".example")
-    ):
+    if _profile_proof_host_is_reserved(domain) or domain.endswith(".example"):
         return True
     local_compact = re.sub(r"[^a-z0-9]+", "", local_part)
-    if (
-        len(local_compact) >= 3
-        and (
-            local_compact in _PROFILE_PROOF_PLACEHOLDER_TOKENS
-            or _looks_repeated_compact_identifier(local_compact)
-        )
+    if len(local_compact) >= 3 and (
+        local_compact in _PROFILE_PROOF_PLACEHOLDER_TOKENS
+        or _looks_repeated_compact_identifier(local_compact)
     ):
         return True
     return False
@@ -743,9 +739,7 @@ class AwsKeyValidator(BaseKeyValidator):
                     )
                 ns = "{https://sts.amazonaws.com/doc/2011-06-15/}"
                 acct_id = (
-                    root.findtext(f".//{ns}Account")
-                    or root.findtext(".//Account")
-                    or ""
+                    root.findtext(f".//{ns}Account") or root.findtext(".//Account") or ""
                 ).strip()
                 acct_id = _stable_numeric_identifier(acct_id, min_len=12, max_len=12)
                 if not acct_id:
@@ -819,8 +813,7 @@ class GithubPatValidator(BaseKeyValidator):
         del kwargs
         token = str(key or "").strip()
         if not (
-            self._CLASSIC_PAT_RE.fullmatch(token)
-            or self._FINE_GRAINED_PAT_RE.fullmatch(token)
+            self._CLASSIC_PAT_RE.fullmatch(token) or self._FINE_GRAINED_PAT_RE.fullmatch(token)
         ):
             return ValidationResult(
                 state=ValidationState.UNCONFIRMED,
@@ -1026,7 +1019,9 @@ class StripeKeyValidator(BaseKeyValidator):
             return False
         if payload.get("livemode") is not True:
             return False
-        return isinstance(payload.get("available"), list) and isinstance(payload.get("pending"), list)
+        return isinstance(payload.get("available"), list) and isinstance(
+            payload.get("pending"), list
+        )
 
     def validate(self, key: str, proxy: Optional[str] = None, **kwargs) -> ValidationResult:
         del kwargs
@@ -1229,10 +1224,14 @@ class SendgridKeyValidator(BaseKeyValidator):
                         detail=self._scopes_detail(scopes_payload),
                     )
                 if scopes_resp.status_code == 401:
-                    return ValidationResult(state=ValidationState.REVOKED, detail="401 Unauthorized")
+                    return ValidationResult(
+                        state=ValidationState.REVOKED, detail="401 Unauthorized"
+                    )
                 if scopes_resp.status_code == 429:
                     return ValidationResult(state=ValidationState.UNCONFIRMED, detail="HTTP 429")
-                return ValidationResult(state=ValidationState.ERROR, detail=f"HTTP {scopes_resp.status_code}")
+                return ValidationResult(
+                    state=ValidationState.ERROR, detail=f"HTTP {scopes_resp.status_code}"
+                )
             if resp.status_code == 401:
                 return ValidationResult(state=ValidationState.REVOKED, detail="401 Unauthorized")
             if resp.status_code == 429:
@@ -1480,7 +1479,11 @@ class OpenAIKeyValidator(BaseKeyValidator):
                 )
             detail = self._error_detail(payload, f"HTTP {resp.status_code}")
             lowered = detail.lower()
-            if resp.status_code == 401 or "invalid api key" in lowered or "invalid_api_key" in lowered:
+            if (
+                resp.status_code == 401
+                or "invalid api key" in lowered
+                or "invalid_api_key" in lowered
+            ):
                 return ValidationResult(state=ValidationState.REVOKED, detail=detail)
             if resp.status_code in (403, 429):
                 return ValidationResult(state=ValidationState.UNCONFIRMED, detail=detail)
@@ -1575,7 +1578,11 @@ class AnthropicKeyValidator(BaseKeyValidator):
                 )
             detail = self._error_detail(payload, f"HTTP {resp.status_code}")
             lowered = detail.lower()
-            if resp.status_code == 401 or "authentication_error" in lowered or "invalid x-api-key" in lowered:
+            if (
+                resp.status_code == 401
+                or "authentication_error" in lowered
+                or "invalid x-api-key" in lowered
+            ):
                 return ValidationResult(state=ValidationState.REVOKED, detail=detail)
             if resp.status_code in (403, 429):
                 return ValidationResult(state=ValidationState.UNCONFIRMED, detail=detail)
@@ -1762,7 +1769,9 @@ class DiscordBotTokenValidator(BaseKeyValidator):
                     detail=f"Discord bot auth ok: bot_id={bot_id} bot_profile_present=true",
                 )
             if resp.status_code in (401, 403):
-                return ValidationResult(state=ValidationState.REVOKED, detail=f"HTTP {resp.status_code}")
+                return ValidationResult(
+                    state=ValidationState.REVOKED, detail=f"HTTP {resp.status_code}"
+                )
             if resp.status_code == 429:
                 return ValidationResult(state=ValidationState.UNCONFIRMED, detail="HTTP 429")
             return ValidationResult(state=ValidationState.ERROR, detail=f"HTTP {resp.status_code}")
@@ -1968,7 +1977,9 @@ class DatadogApiKeyValidator(BaseKeyValidator):
         if isinstance(payload, dict):
             errors = payload.get("errors")
             if isinstance(errors, list) and errors:
-                return "; ".join(str(item).strip() for item in errors if str(item).strip()) or fallback
+                return (
+                    "; ".join(str(item).strip() for item in errors if str(item).strip()) or fallback
+                )
             message = str(payload.get("message") or payload.get("error") or "").strip()
             if message:
                 return message
@@ -2639,10 +2650,12 @@ class SlackTokenValidator(BaseKeyValidator):
         if not text or lowered in _PLACEHOLDER_IDENTIFIERS:
             return ""
         normalized = text.upper()
-        prefix = next((item.upper() for item in prefixes if normalized.startswith(item.upper())), "")
+        prefix = next(
+            (item.upper() for item in prefixes if normalized.startswith(item.upper())), ""
+        )
         if not prefix or not re.fullmatch(rf"{prefix}[A-Z0-9]{{5,32}}", normalized):
             return ""
-        suffix = normalized[len(prefix):]
+        suffix = normalized[len(prefix) :]
         if len(set(suffix)) == 1:
             return ""
         if suffix.isdigit() and _looks_sequential_numeric_identifier(suffix):
@@ -2729,8 +2742,13 @@ class AzureStorageConnectionStringValidator(BaseKeyValidator):
 
         blob_endpoint = str(params.get("blobendpoint") or "").strip()
         if not blob_endpoint:
-            protocol = str(params.get("defaultendpointsprotocol") or "https").strip().lower() or "https"
-            endpoint_suffix = str(params.get("endpointsuffix") or "core.windows.net").strip() or "core.windows.net"
+            protocol = (
+                str(params.get("defaultendpointsprotocol") or "https").strip().lower() or "https"
+            )
+            endpoint_suffix = (
+                str(params.get("endpointsuffix") or "core.windows.net").strip()
+                or "core.windows.net"
+            )
             blob_endpoint = f"{protocol}://{account_name}.blob.{endpoint_suffix}"
         blob_endpoint = blob_endpoint.rstrip("/")
 
@@ -2751,17 +2769,11 @@ class AzureStorageConnectionStringValidator(BaseKeyValidator):
 
             request_date = _dt.datetime.now(_dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
             query_params = {"comp": "list", "maxresults": "3"}
-            canonicalized_headers = (
-                f"x-ms-date:{request_date}\n"
-                f"x-ms-version:{self._API_VERSION}\n"
-            )
+            canonicalized_headers = f"x-ms-date:{request_date}\nx-ms-version:{self._API_VERSION}\n"
             canonicalized_resource = "\n".join(
                 [
                     f"/{account_name}{resource_path}",
-                    *(
-                        f"{name.lower()}:{value}"
-                        for name, value in sorted(query_params.items())
-                    ),
+                    *(f"{name.lower()}:{value}" for name, value in sorted(query_params.items())),
                 ]
             )
             string_to_sign = "\n".join(
@@ -3278,7 +3290,11 @@ def run_key_scanner(
     con.commit()
 
     # Scope gate.
-    from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope, scope_entries_from_payload
+    from forge.opsec.scope_gate import (
+        ScopeViolationError,
+        assert_in_scope,
+        scope_entries_from_payload,
+    )
 
     scope_row = con.execute(
         "SELECT scope_json FROM engagements WHERE id=?", (engagement_id,)

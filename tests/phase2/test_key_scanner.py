@@ -190,9 +190,7 @@ class TestPatternFile:
         assert any("github" in s for s in services)
 
     def test_gitlab_pat_pattern_present(self):
-        gitlab_patterns = [
-            p for p in load_key_patterns() if p["service"].lower() == "gitlab"
-        ]
+        gitlab_patterns = [p for p in load_key_patterns() if p["service"].lower() == "gitlab"]
         assert any(p["name"] == "gitlab_pat" for p in gitlab_patterns)
 
     def test_legacy_phase2_gitlab_pattern_uses_shared_validator(self):
@@ -293,7 +291,9 @@ class TestPatternFile:
                 patch.object(legacy_key_scanner, "wait_for_internet", return_value=True),
                 patch.object(legacy_key_scanner, "with_internet_retry", side_effect=_run_provider),
                 patch.object(legacy_key_scanner, "_github_keyscan", return_value=[]),
-                patch.object(legacy_key_scanner, "_gitlab_keyscan", return_value=[hit]) as mock_gitlab,
+                patch.object(
+                    legacy_key_scanner, "_gitlab_keyscan", return_value=[hit]
+                ) as mock_gitlab,
                 patch.object(
                     legacy_key_scanner,
                     "_fetch_file_content",
@@ -474,9 +474,7 @@ class TestPatternFile:
 
         patterns = legacy_key_scanner._load_patterns()
         slack_patterns = {
-            pattern["name"]: pattern
-            for pattern in patterns
-            if pattern["service"] == "slack"
+            pattern["name"]: pattern for pattern in patterns if pattern["service"] == "slack"
         }
 
         assert slack_patterns["slack_bot_token"]["validation_method"] == "SlackTokenValidator"
@@ -486,10 +484,7 @@ class TestPatternFile:
     def test_legacy_phase2_supported_provider_patterns_use_shared_validators(self):
         from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
 
-        patterns = {
-            pattern["name"]: pattern
-            for pattern in legacy_key_scanner._load_patterns()
-        }
+        patterns = {pattern["name"]: pattern for pattern in legacy_key_scanner._load_patterns()}
 
         assert patterns["stripe_live_secret_key"]["validation_method"] == "StripeKeyValidator"
         assert patterns["mailchimp_api_key"]["validation_method"] == "MailchimpKeyValidator"
@@ -584,15 +579,14 @@ class TestPatternFile:
     def test_legacy_phase2_ai_provider_patterns_use_shared_validators(self):
         from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
 
-        patterns = {
-            pattern["name"]: pattern
-            for pattern in legacy_key_scanner._load_patterns()
-        }
+        patterns = {pattern["name"]: pattern for pattern in legacy_key_scanner._load_patterns()}
 
         assert patterns["openai_project_api_key"]["validation_method"] == "OpenAIKeyValidator"
         assert patterns["openai_legacy_api_key"]["validation_method"] == "OpenAIKeyValidator"
         assert patterns["anthropic_api_key"]["validation_method"] == "AnthropicKeyValidator"
-        assert isinstance(legacy_key_scanner._VALIDATOR_MAP["OpenAIKeyValidator"], OpenAIKeyValidator)
+        assert isinstance(
+            legacy_key_scanner._VALIDATOR_MAP["OpenAIKeyValidator"], OpenAIKeyValidator
+        )
         assert isinstance(
             legacy_key_scanner._VALIDATOR_MAP["AnthropicKeyValidator"],
             AnthropicKeyValidator,
@@ -601,18 +595,11 @@ class TestPatternFile:
     def test_legacy_phase2_social_messaging_patterns_use_shared_validators(self):
         from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
 
-        patterns = {
-            pattern["name"]: pattern
-            for pattern in legacy_key_scanner._load_patterns()
-        }
+        patterns = {pattern["name"]: pattern for pattern in legacy_key_scanner._load_patterns()}
 
-        assert patterns["huggingface_token"]["validation_method"] == (
-            "HuggingFaceTokenValidator"
-        )
+        assert patterns["huggingface_token"]["validation_method"] == ("HuggingFaceTokenValidator")
         assert patterns["discord_bot_token"]["validation_method"] == "DiscordBotTokenValidator"
-        assert patterns["telegram_bot_token"]["validation_method"] == (
-            "TelegramBotTokenValidator"
-        )
+        assert patterns["telegram_bot_token"]["validation_method"] == ("TelegramBotTokenValidator")
         assert isinstance(
             legacy_key_scanner._VALIDATOR_MAP["HuggingFaceTokenValidator"],
             HuggingFaceTokenValidator,
@@ -629,14 +616,9 @@ class TestPatternFile:
     def test_legacy_phase2_collaboration_observability_patterns_use_shared_validators(self):
         from forge.phase2 import key_scanner as legacy_key_scanner  # noqa: PLC0415
 
-        patterns = {
-            pattern["name"]: pattern
-            for pattern in legacy_key_scanner._load_patterns()
-        }
+        patterns = {pattern["name"]: pattern for pattern in legacy_key_scanner._load_patterns()}
 
-        assert patterns["notion_integration_token"]["validation_method"] == (
-            "NotionTokenValidator"
-        )
+        assert patterns["notion_integration_token"]["validation_method"] == ("NotionTokenValidator")
         assert patterns["notion_legacy_secret_token"]["validation_method"] == (
             "NotionTokenValidator"
         )
@@ -896,9 +878,7 @@ class TestAzureStorageConnectionStringValidator:
     def test_active_connection_string_returns_active(self):
         validator = AzureStorageConnectionStringValidator()
         connection_string = (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=acmestorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=acmestorage;AccountKey={'A' * 86}=="
         )
         response = MagicMock()
         response.status_code = 200
@@ -918,9 +898,7 @@ class TestAzureStorageConnectionStringValidator:
     def test_empty_container_listing_is_still_active(self):
         validator = AzureStorageConnectionStringValidator()
         connection_string = (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=acmestorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=acmestorage;AccountKey={'A' * 86}=="
         )
         response = MagicMock()
         response.status_code = 200
@@ -938,9 +916,7 @@ class TestAzureStorageConnectionStringValidator:
     def test_malformed_success_response_stays_unconfirmed(self):
         validator = AzureStorageConnectionStringValidator()
         connection_string = (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=acmestorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=acmestorage;AccountKey={'A' * 86}=="
         )
         response = MagicMock()
         response.status_code = 200
@@ -953,9 +929,7 @@ class TestAzureStorageConnectionStringValidator:
     def test_key_based_auth_disabled_returns_unconfirmed(self):
         validator = AzureStorageConnectionStringValidator()
         connection_string = (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=acmestorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=acmestorage;AccountKey={'A' * 86}=="
         )
         response = MagicMock()
         response.status_code = 403
@@ -1189,7 +1163,9 @@ class TestGitLabKeyScan:
         assert findings[0]["backend"] == "gitlab"
         assert findings[0]["key_value"] == secret
         assert findings[0]["repo_name"] == "acme/repo"
-        assert findings[0]["source_url"] == "https://gitlab.com/acme/repo/-/blob/main/config/prod.env"
+        assert (
+            findings[0]["source_url"] == "https://gitlab.com/acme/repo/-/blob/main/config/prod.env"
+        )
         assert any(
             params == {"scope": "blobs", "search": f"{pattern.regex.pattern[:40]} example.com"}
             for _, params in calls
@@ -1334,7 +1310,9 @@ class TestKeyStorage:
             "repo_name": "example/repo",
             "key_value": "ghp_faketoken1234567890123456789012345",
         }
-        with patch("forge.utils.intel.secret_finder._encrypt", return_value="ENC:sealed") as mock_encrypt:
+        with patch(
+            "forge.utils.intel.secret_finder._encrypt", return_value="ENC:sealed"
+        ) as mock_encrypt:
             inserted = _store_key_finding(
                 con=con,
                 engagement_id=1,
@@ -1389,9 +1367,7 @@ class TestKeyStorage:
             "github_pat_classic",
         )
         con = sqlite3.connect(engagement_db)
-        row = con.execute(
-            "SELECT validation_detail FROM key_scanner_findings LIMIT 1"
-        ).fetchone()
+        row = con.execute("SELECT validation_detail FROM key_scanner_findings LIMIT 1").fetchone()
         con.close()
 
         assert row is not None
@@ -1598,9 +1574,9 @@ class TestKeyStorage:
         finding.pattern_name = "azure_storage_key"
         content = (
             "AZURE_STORAGE_CONNECTION_STRING="
-            "\"DefaultEndpointsProtocol=https;"
+            '"DefaultEndpointsProtocol=https;'
             "AccountName=acmestorage;"
-            f"AccountKey={'A' * 86}==\""
+            f'AccountKey={"A" * 86}=="'
         )
 
         with (

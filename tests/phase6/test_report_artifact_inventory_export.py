@@ -56,8 +56,7 @@ def _artifact_inventory_db(tmp_path: Path) -> Path:
                         "payload_count": 4,
                         "downloaded_from_remote": True,
                         "source_url": (
-                            "https://downloads.acme.example/mobile/app.apk"
-                            "?api_key=raw-secret"
+                            "https://downloads.acme.example/mobile/app.apk?api_key=raw-secret"
                         ),
                         "local_path": r"C:\Users\bryan\Downloads\raw-secret\app.apk",
                         "token": "never-export-this-token",
@@ -90,9 +89,7 @@ def test_phase6_exports_scrubbed_artifact_inventory(tmp_path: Path) -> None:
 
     report_path = synth.generate(ENGAGEMENT_ID)
     payload = json.loads(report_path.with_suffix(".json").read_text(encoding="utf-8"))
-    csv_rows = list(
-        csv.DictReader(report_path.with_suffix(".csv").open(encoding="utf-8"))
-    )
+    csv_rows = list(csv.DictReader(report_path.with_suffix(".csv").open(encoding="utf-8")))
     ctx = ContextBuilder(db_path, ENGAGEMENT_ID).build()
     raw_rows = ReportSynthesizer._raw_export_csv_rows(ctx)
 

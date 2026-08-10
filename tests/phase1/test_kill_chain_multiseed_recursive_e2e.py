@@ -31,7 +31,9 @@ SUPABASE_JWT = (
 )
 
 
-def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     data_dir = tmp_path / ".forge_data"
     db_path = data_dir / "engagements" / f"{EID}.db"
     write_local_artifact_fixtures(tmp_path, supabase_jwt=SUPABASE_JWT)
@@ -124,11 +126,18 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         label = str(kwargs.get("progress_label") or "")
         if "DNS enrichment" in label:
             return [
-                {"root_domain": item, "queried_hosts": [str(item)], "cname_targets": ["static.acme.test"]}
+                {
+                    "root_domain": item,
+                    "queried_hosts": [str(item)],
+                    "cname_targets": ["static.acme.test"],
+                }
                 for item in items
             ]
         if "whois/RDAP" in label:
-            return [{"root_domain": item, "rdap": {"registrant_emails": ["ops@acme.test"]}} for item in items]
+            return [
+                {"root_domain": item, "rdap": {"registrant_emails": ["ops@acme.test"]}}
+                for item in items
+            ]
         if "Wayback CDX" in label:
             urls = ["https://app.acme.test/config", "https://static.acme.test/portal"]
             return [{"root_domain": item, "urls": urls, "url_metadata": {}} for item in items]
@@ -169,7 +178,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
                     con.execute(
                         "INSERT OR IGNORE INTO hosts "
                         "(engagement_id, ip, hostname, os_family, host_context) "
-                        'VALUES (?, ?, ?, \'unknown\', \'{"source":"mock"}\')',
+                        "VALUES (?, ?, ?, 'unknown', '{\"source\":\"mock\"}')",
                         (EID, ip(host), host),
                     )
             elif argv[:2] == ["osint", "harvest"]:
@@ -207,7 +216,13 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             "mobile_ios_app",
             "mobile_ios_app_store_id",
         }
-        status = "UNSUPPORTED" if kind in unsupported_asset_types else "UNVERIFIED" if ref.startswith("dead-") else "VALIDATED"
+        status = (
+            "UNSUPPORTED"
+            if kind in unsupported_asset_types
+            else "UNVERIFIED"
+            if ref.startswith("dead-")
+            else "VALIDATED"
+        )
         methods = {
             "firebase": "firebase_database_shallow_read",
             "supabase": "supabase_rest_root",
@@ -265,7 +280,12 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         with sqlite3.connect(db_path) as con:
             results = [validate_asset(con, str(kind), str(ref)) for kind, ref in targets]
             con.commit()
-        return {"attempted": len(results), "succeeded": len(results), "failed": 0, "results": results}
+        return {
+            "attempted": len(results),
+            "succeeded": len(results),
+            "failed": 0,
+            "results": results,
+        }
 
     def sweep_assets(engagement_id, db_path_arg, limit=16, **kwargs):  # noqa: ANN001, ANN003
         del engagement_id, db_path_arg, kwargs
@@ -279,21 +299,35 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ).fetchall()
             results = [validate_asset(con, str(kind), str(ref)) for kind, ref in rows]
             con.commit()
-        counts = {status: sum(row["validation_status"] == status for row in results) for status in {"VALIDATED", "UNVERIFIED"}}
-        return {"attempted": len(results), "succeeded": len(results), "failed": 0, "status_counts": counts}
+        counts = {
+            status: sum(row["validation_status"] == status for row in results)
+            for status in {"VALIDATED", "UNVERIFIED"}
+        }
+        return {
+            "attempted": len(results),
+            "succeeded": len(results),
+            "failed": 0,
+            "status_counts": counts,
+        }
 
     monkeypatch.setattr(cli, "_run_html_fetch_batch", html_batch)
     monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
-    monkeypatch.setattr(cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips])
+    monkeypatch.setattr(
+        cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips]
+    )
     monkeypatch.setattr(cli, "_run_forge_module_subprocess", fake_module)
     monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", validate_batch)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_asset_validations", sweep_assets)
-    monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_validations", lambda *_, **__: {"attempted": 0})
+    monkeypatch.setattr(
+        cloud_validate, "sweep_pending_cloud_validations", lambda *_, **__: {"attempted": 0}
+    )
     monkeypatch.setattr(ReportSynthesizer, "_ensure_provider_loaded", lambda self: None)
     monkeypatch.setattr(
         ReportSynthesizer,
         "_infer",
-        lambda self, _prompt: (_ for _ in ()).throw(ProviderUnavailableError("mock quota exhausted")),
+        lambda self, _prompt: (_ for _ in ()).throw(
+            ProviderUnavailableError("mock quota exhausted")
+        ),
     )
 
     cli.kill_chain(
@@ -330,12 +364,19 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert report_payload["report_lineage"]["rendered_provider"] == "template"
     assert report_payload["report_lineage"]["requested_provider"] == "auto"
     assert report_payload["report_lineage"]["fallback_reason"] == "mock quota exhausted"
-    assert report_payload["report_lineage"]["findings_checksum"] == report_payload["findings_checksum"]
-    graph = json.loads((tmp_path / "reports" / f"{EID}_attack_graph.json").read_text(encoding="utf-8"))
+    assert (
+        report_payload["report_lineage"]["findings_checksum"] == report_payload["findings_checksum"]
+    )
+    graph = json.loads(
+        (tmp_path / "reports" / f"{EID}_attack_graph.json").read_text(encoding="utf-8")
+    )
 
     with sqlite3.connect(db_path) as con:
         con.row_factory = sqlite3.Row
-        seeds = {(row["seed_value"], row["seed_type"]) for row in con.execute("SELECT seed_value, seed_type FROM engagement_seeds")}
+        seeds = {
+            (row["seed_value"], row["seed_type"])
+            for row in con.execute("SELECT seed_value, seed_type FROM engagement_seeds")
+        }
         assert {
             ("acme.test", "domain"),
             ("ops@acme.test", "email"),
@@ -497,7 +538,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("https://agent.acme.test/{tenant}/a2a", "url") not in seeds
         assert ("https://api-catalog.acme.test/catalog?signature=hidden", "url") not in seeds
         assert ("https://api-catalog.acme.test/{workspace}/catalog", "url") not in seeds
-        assert ("https://resources.acme.test/.well-known/open-resource-discovery?token=hidden", "url") not in seeds
+        assert (
+            "https://resources.acme.test/.well-known/open-resource-discovery?token=hidden",
+            "url",
+        ) not in seeds
         assert ("https://resources.acme.test/{tenant}/open-resource-discovery", "url") not in seeds
         assert ("https://mercure.acme.test/.well-known/mercure?api_key=hidden", "url") not in seeds
         assert ("https://mercure.acme.test/subscribe?token=hidden", "url") not in seeds
@@ -506,7 +550,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("https://webweaver.acme.test/api?token=hidden", "url") not in seeds
         assert ("https://webweaver.acme.test/docs?api_key=hidden", "url") not in seeds
         assert ("https://webweaver.acme.test/{tenant}/api", "url") not in seeds
-        assert ("https://identity-service.acme.test/.well-known/did.json?token=hidden", "url") not in seeds
+        assert (
+            "https://identity-service.acme.test/.well-known/did.json?token=hidden",
+            "url",
+        ) not in seeds
         assert ("https://identity-service.acme.test/{tenant}/did.json", "url") not in seeds
         assert ("https://keybase.io/acmeserviceproof?api_key=hidden", "url") not in seeds
         assert ("https://keybase.io/{tenant}", "url") not in seeds
@@ -523,10 +570,14 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             "engagement_seeds": "seed_type, seed_value",
             "cloud_assets": "asset_type, identifier",
         }.items():
-            duplicates = con.execute(f"SELECT {columns}, COUNT(*) n FROM {table} GROUP BY {columns} HAVING n > 1").fetchall()
+            duplicates = con.execute(
+                f"SELECT {columns}, COUNT(*) n FROM {table} GROUP BY {columns} HAVING n > 1"
+            ).fetchall()
             assert duplicates == []
 
-        artifact = con.execute("SELECT status FROM artifact_queue WHERE local_path LIKE '%client-config.js'").fetchone()
+        artifact = con.execute(
+            "SELECT status FROM artifact_queue WHERE local_path LIKE '%client-config.js'"
+        ).fetchone()
         assert artifact is not None
         assert artifact["status"] == "parsed"
         opensearch_artifact = con.execute(
@@ -534,7 +585,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         ).fetchone()
         assert opensearch_artifact is not None
         assert opensearch_artifact["status"] == "parsed"
-        assert json.loads(opensearch_artifact["metadata_json"])["format"] == "opensearch-description"
+        assert (
+            json.loads(opensearch_artifact["metadata_json"])["format"] == "opensearch-description"
+        )
         saml_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE local_path LIKE '%saml-metadata.xml'"
         ).fetchone()
@@ -596,7 +649,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
             ).fetchone()
             assert public_metadata_artifact is not None
             assert public_metadata_artifact["status"] == "parsed"
-            assert json.loads(public_metadata_artifact["metadata_json"])["format"] == expected_format
+            assert (
+                json.loads(public_metadata_artifact["metadata_json"])["format"] == expected_format
+            )
         openid_artifact = con.execute(
             "SELECT status, metadata_json FROM artifact_queue WHERE source_url=?",
             (openid_url,),
@@ -628,7 +683,10 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert json_feed_artifact["status"] == "parsed"
         assert json.loads(json_feed_artifact["metadata_json"])["format"] == "json-feed"
 
-        assets = {(row["asset_type"], row["identifier"]) for row in con.execute("SELECT asset_type, identifier FROM cloud_assets")}
+        assets = {
+            (row["asset_type"], row["identifier"])
+            for row in con.execute("SELECT asset_type, identifier FROM cloud_assets")
+        }
         assert {
             ("firebase", "artifact-firebase-prod"),
             ("firebase", "web-firebase-prod"),
@@ -673,7 +731,9 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert ("mobile_ios_app", "not-an-app-id") not in assets
         statuses = {
             (row["asset_type"], row["identifier"]): row["validation_status"]
-            for row in con.execute("SELECT asset_type, identifier, validation_status FROM cloud_validation_results")
+            for row in con.execute(
+                "SELECT asset_type, identifier, validation_status FROM cloud_validation_results"
+            )
         }
         assert statuses[("firebase", "web-firebase-prod")] == "VALIDATED"
         assert statuses[("firebase", "dead-firebase-prod")] == "UNVERIFIED"
@@ -710,13 +770,22 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.portal")] == "UNSUPPORTED"
         assert statuses[("mobile_ios_app", "abcde12345.com.acme.credentials")] == "UNSUPPORTED"
 
-        findings = con.execute("SELECT title, target_url, parameter, evidence FROM vulnerability_findings").fetchall()
+        findings = con.execute(
+            "SELECT title, target_url, parameter, evidence FROM vulnerability_findings"
+        ).fetchall()
         titles = {row["title"] for row in findings}
         assert {"Validated Firebase data exposure", "Validated Supabase data exposure"} <= titles
-        assert not any("dead-firebase-prod" in " ".join(str(value or "") for value in row) for row in findings)
+        assert not any(
+            "dead-firebase-prod" in " ".join(str(value or "") for value in row) for row in findings
+        )
 
         loops = {row[0] for row in con.execute("SELECT DISTINCT loop_name FROM seed_runs")}
-        assert {"fanout_a_subdomains", "fanout_e_chain", "fanout_d5_url_seed_html", "fanout_j_cloud_scan"} <= loops
+        assert {
+            "fanout_a_subdomains",
+            "fanout_e_chain",
+            "fanout_d5_url_seed_html",
+            "fanout_j_cloud_scan",
+        } <= loops
         audit_actions = {row[0] for row in con.execute("SELECT action FROM audit_log")}
         assert {"kill_chain_start", "kill_chain_complete"} <= audit_actions
 
@@ -730,9 +799,14 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         assert all(delta == 0 for delta in metadata["last_iteration_delta"].values())
 
     assert any(call[:2] == ["osint", "social"] for call in calls)
-    finding_nodes = [node for node in graph["nodes"] if node.get("source_table") == "vulnerability_findings"]
+    finding_nodes = [
+        node for node in graph["nodes"] if node.get("source_table") == "vulnerability_findings"
+    ]
     assert finding_nodes
-    assert all((node.get("metadata") or {}).get("validation_status") == "VALIDATED" for node in finding_nodes)
+    assert all(
+        (node.get("metadata") or {}).get("validation_status") == "VALIDATED"
+        for node in finding_nodes
+    )
     assert any(
         node.get("source_table") == "cloud_assets"
         and (node.get("metadata") or {}).get("identifier") == "manifestvault"
@@ -826,7 +900,8 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     )
     assert not any(
         node.get("source_table") == "vulnerability_findings"
-        and (node.get("metadata") or {}).get("resource_id") in {
+        and (node.get("metadata") or {}).get("resource_id")
+        in {
             "com.acme.portal",
             "abcde12345.com.acme.portal",
             "abcde12345.com.acme.credentials",
@@ -874,8 +949,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert "plugin.acme.test/acme_plugin" not in finding_report
     assert "com.acme.portal" not in finding_report
     assert any(
-        item.get("identifier") == "manifestvault"
-        and item.get("validation_status") == "VALIDATED"
+        item.get("identifier") == "manifestvault" and item.get("validation_status") == "VALIDATED"
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
     assert any(
@@ -884,8 +958,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
     assert any(
-        item.get("identifier") == "llmse2evault"
-        and item.get("validation_status") == "VALIDATED"
+        item.get("identifier") == "llmse2evault" and item.get("validation_status") == "VALIDATED"
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
     assert any(
@@ -894,8 +967,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
     assert any(
-        item.get("identifier") == "ai-e2e-firebase"
-        and item.get("validation_status") == "VALIDATED"
+        item.get("identifier") == "ai-e2e-firebase" and item.get("validation_status") == "VALIDATED"
         for item in report_payload["context"]["cloud_validation_inventory"]
     )
     assert any(
@@ -905,8 +977,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     )
     for identifier in VALIDATED_PUBLIC_METADATA_IDENTIFIERS:
         assert any(
-            item.get("identifier") == identifier
-            and item.get("validation_status") == "VALIDATED"
+            item.get("identifier") == identifier and item.get("validation_status") == "VALIDATED"
             for item in report_payload["context"]["cloud_validation_inventory"]
         )
     assert any(
@@ -918,8 +989,7 @@ def test_kill_chain_multiseed_recursive_discovery_stabilizes_with_validated_outp
     assert exported_findings
     assert all(finding["validation_status"] == "VALIDATED" for finding in exported_findings)
     assert not any(
-        "dead-firebase-prod" in json.dumps(finding, sort_keys=True)
-        for finding in exported_findings
+        "dead-firebase-prod" in json.dumps(finding, sort_keys=True) for finding in exported_findings
     )
     with report_csv_path.open(encoding="utf-8", newline="") as handle:
         csv_rows = list(csv.DictReader(handle))

@@ -106,9 +106,7 @@ def _mut_append(xs: list[AuditEntry]) -> None:
 
 
 def _mut_extend(xs: list[AuditEntry]) -> None:
-    xs.extend(
-        [AuditEntry(correlation_id="poison-extend", event_type=AuditEventType.ERROR)] * 2
-    )
+    xs.extend([AuditEntry(correlation_id="poison-extend", event_type=AuditEventType.ERROR)] * 2)
 
 
 def _mut_pop(xs: list[AuditEntry]) -> None:
@@ -203,9 +201,9 @@ class TestEntriesReturnsDefensiveCopy:
                 "Mutating .entries altered the content visible on the next "
                 "read; .entries must return a defensive copy (Requirement 7.2)."
             )
-            assert all(
-                "poison" not in (e.correlation_id or "") for e in after
-            ), "Snapshot mutation injected a poisoned entry into the store."
+            assert all("poison" not in (e.correlation_id or "") for e in after), (
+                "Snapshot mutation injected a poisoned entry into the store."
+            )
 
         asyncio.run(run())
 
@@ -263,9 +261,7 @@ class TestNoPublicModifyOrDeleteApi:
 
     def test_entries_property_has_no_setter_or_deleter(self) -> None:
         descriptor = inspect.getattr_static(AuditLogger, "entries")
-        assert isinstance(descriptor, property), (
-            "entries must be exposed as a read-only property."
-        )
+        assert isinstance(descriptor, property), "entries must be exposed as a read-only property."
         assert descriptor.fset is None, (
             "entries property defines a setter; callers could swap out the "
             "audit log wholesale (Requirement 7.2)."

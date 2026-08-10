@@ -18,6 +18,7 @@ Use in FORGE:
   Phase 3 (evasion) consults malapi to flag API calls that should be
   obfuscated or avoided in generated payloads.
 """
+
 from __future__ import annotations
 
 import json
@@ -119,12 +120,14 @@ def _extract_from_html_bs4(html: str) -> list[dict[str, Any]]:
         if node.name == "a" and "map-item-link" in classes:
             api_name = node.get_text(strip=True)
             if api_name:
-                entries.append({
-                    "api": api_name,
-                    "category": current_category,
-                    "description": "",
-                    "mitre": [],
-                })
+                entries.append(
+                    {
+                        "api": api_name,
+                        "category": current_category,
+                        "description": "",
+                        "mitre": [],
+                    }
+                )
     return _dedupe_entries(entries)
 
 
@@ -148,12 +151,14 @@ def _extract_from_html_regex(html: str) -> list[dict[str, Any]]:
             continue
         api_name = tag_re.sub("", api_raw).strip()
         if api_name:
-            entries.append({
-                "api": api_name,
-                "category": current_category,
-                "description": "",
-                "mitre": [],
-            })
+            entries.append(
+                {
+                    "api": api_name,
+                    "category": current_category,
+                    "description": "",
+                    "mitre": [],
+                }
+            )
     return _dedupe_entries(entries)
 
 
@@ -173,15 +178,15 @@ def _normalise(entry: dict[str, Any]) -> dict[str, Any] | None:
     api_name = (entry.get("api") or entry.get("name") or "").strip()
     if not api_name:
         return None
-    category    = (entry.get("category") or "misc").strip()
+    category = (entry.get("category") or "misc").strip()
     description = (entry.get("description") or "").strip()
-    attacks     = entry.get("attack") or entry.get("attacks") or []
-    mitre       = entry.get("mitre") or entry.get("mitre_ids") or []
+    attacks = entry.get("attack") or entry.get("attacks") or []
+    mitre = entry.get("mitre") or entry.get("mitre_ids") or []
     return {
-        "api_name":    api_name,
-        "category":    category,
+        "api_name": api_name,
+        "category": category,
         "description": description,
-        "mitre_ids":   json.dumps(mitre if isinstance(mitre, list) else [mitre]),
+        "mitre_ids": json.dumps(mitre if isinstance(mitre, list) else [mitre]),
     }
 
 
@@ -202,11 +207,13 @@ def _bulk_insert(conn: sqlite3.Connection, rows: list[dict]) -> int:
 def _http_get(url: str, cfg: ForgeConfig) -> bytes:
     try:
         from curl_cffi import requests as cffi_requests  # noqa: PLC0415
+
         proxies = {"https": cfg.proxy} if cfg.proxy else None
         resp = cffi_requests.get(url, impersonate=cfg.curl_profile, proxies=proxies, timeout=30)
         resp.raise_for_status()
         return resp.content
     except ImportError:
         import urllib.request  # noqa: PLC0415
+
         with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310
             return r.read()

@@ -74,7 +74,7 @@ def _extract_response(raw: str) -> str:
     if idx == -1:
         # Fallback: return last non-empty content
         return clean.strip()
-    tail = clean[idx + len(marker):] if clean[idx:].startswith(marker) else clean[idx + 2:]
+    tail = clean[idx + len(marker) :] if clean[idx:].startswith(marker) else clean[idx + 2 :]
     return tail.strip()
 
 

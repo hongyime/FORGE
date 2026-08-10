@@ -22,9 +22,7 @@ def test_goreleaser_config_children_use_bounded_workers_and_preserve_order(
                 ]
             }
         ],
-        "docker_manifests": [
-            {"name_template": "quay.io/acme/forgecli:{{ .Tag }}"}
-        ],
+        "docker_manifests": [{"name_template": "quay.io/acme/forgecli:{{ .Tag }}"}],
         "blobs": [
             {"provider": "s3", "bucket": "acme-goreleaser-bucket"},
             {"provider": "gs", "bucket": "acme-goreleaser-gcs"},

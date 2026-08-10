@@ -41,7 +41,9 @@ def test_shell_history_redacts_sensitive_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     history = fake_home / ".bash_history"
-    history.write_text("export PASSWORD=supersecret\naws configure set aws_access_key_id AKIA1234567890ABCDEF\n")
+    history.write_text(
+        "export PASSWORD=supersecret\naws configure set aws_access_key_id AKIA1234567890ABCDEF\n"
+    )
     stage = tmp_path / "stage"
     stage.mkdir()
     collector = ShellHistoryCollector(tmp_eng_db, 1, staging_dir=stage)
@@ -65,7 +67,9 @@ def test_gcp_collector_discovers_adc_service_account_and_project(
     gcloud_dir = fake_home / ".config" / "gcloud"
     (gcloud_dir / "configurations").mkdir(parents=True)
     (gcloud_dir / "active_config").write_text("default")
-    (gcloud_dir / "configurations" / "config_default").write_text("[core]\nproject = demo-project\n")
+    (gcloud_dir / "configurations" / "config_default").write_text(
+        "[core]\nproject = demo-project\n"
+    )
     service_account_key = gcloud_dir / "svc.json"
     service_account_key.write_text(json.dumps({"type": "service_account"}))
     adc = fake_home / "adc.json"
@@ -103,7 +107,9 @@ def test_docker_collector_discovers_context_and_helpers(
 
     assert any(artifact.artifact_subtype == "config_json" for artifact in artifacts)
     assert any(artifact.artifact_subtype == "registry_mappings" for artifact in artifacts)
-    helper_artifact = next(artifact for artifact in artifacts if artifact.artifact_subtype == "credential_helper")
+    helper_artifact = next(
+        artifact for artifact in artifacts if artifact.artifact_subtype == "credential_helper"
+    )
     assert helper_artifact.report_safe_summary_fields == {
         "registry": "index.docker.io",
         "helper": "wincred",
@@ -122,7 +128,9 @@ def test_azure_collector_persists_only_report_safe_metadata(
     artifact = next(collector.discover())
     record = collector.collect(artifact)
 
-    assert artifact.report_safe_summary_fields == {"variable_names": ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]}
+    assert artifact.report_safe_summary_fields == {
+        "variable_names": ["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
+    }
     assert record is not None
     con = sqlite3.connect(tmp_eng_db)
     row = con.execute("SELECT report_safe_summary FROM exfiltrated_data").fetchone()
@@ -273,12 +281,18 @@ def test_smtp_ssl_and_npm_collectors_discover_and_collect_expected_artifacts(
 
     npm_record = npm_collector.collect(npm_artifact)
     thunderbird_artifact = next(
-        artifact for artifact in smtp_artifacts if artifact.artifact_subtype == "thunderbird_profile"
+        artifact
+        for artifact in smtp_artifacts
+        if artifact.artifact_subtype == "thunderbird_profile"
     )
     smtp_record = smtp_collector.collect(thunderbird_artifact)
-    ssl_key_artifact = next(artifact for artifact in ssl_artifacts if artifact.artifact_subtype == "key")
+    ssl_key_artifact = next(
+        artifact for artifact in ssl_artifacts if artifact.artifact_subtype == "key"
+    )
     ssl_record = ssl_collector.collect(ssl_key_artifact)
-    ssl_pem_artifact = next(artifact for artifact in ssl_artifacts if artifact.artifact_subtype == "pem")
+    ssl_pem_artifact = next(
+        artifact for artifact in ssl_artifacts if artifact.artifact_subtype == "pem"
+    )
     skipped_pem_record = ssl_collector.collect(ssl_pem_artifact)
 
     assert npm_record is not None

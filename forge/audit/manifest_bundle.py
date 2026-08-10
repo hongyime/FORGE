@@ -246,10 +246,7 @@ def _pretty_json_bytes(payload: dict[str, Any]) -> bytes:
 
 
 def _checksum_lines(files: dict[str, bytes]) -> str:
-    lines = [
-        f"{hashlib.sha256(data).hexdigest()}  {name}"
-        for name, data in sorted(files.items())
-    ]
+    lines = [f"{hashlib.sha256(data).hexdigest()}  {name}" for name, data in sorted(files.items())]
     return "\n".join(lines) + "\n"
 
 
@@ -269,8 +266,7 @@ def _signature_bytes(
         "signed_at": signed_at,
         "signer_id": signer_id or "unspecified",
         "signed_files": {
-            name: hashlib.sha256(data).hexdigest()
-            for name, data in sorted(files.items())
+            name: hashlib.sha256(data).hexdigest() for name, data in sorted(files.items())
         },
     }
     signature = hmac.new(key, _canonical_json(payload).encode("utf-8"), hashlib.sha256)

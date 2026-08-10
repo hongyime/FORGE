@@ -20,23 +20,29 @@ from forge.utils.intel.provider_urls import provider_url_seed_type
 class TestProviderUrlSeedType:
     """provider_url_seed_type should agree with the orchestrator classifier."""
 
-    @pytest.mark.parametrize("url", [
-        "https://myapp.supabase.co/rest/v1/foo",
-        "https://myapp.firebaseio.com/.json",
-        "https://bucket.s3.amazonaws.com/o",
-        "https://bucket.s3.us-east-1.amazonaws.com/o",
-        "https://acct.blob.core.windows.net/ct/b",
-        "https://myapp.vercel.app/api/health",
-        "https://myapp.netlify.app/",
-        "https://myapp.pages.dev/",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://myapp.supabase.co/rest/v1/foo",
+            "https://myapp.firebaseio.com/.json",
+            "https://bucket.s3.amazonaws.com/o",
+            "https://bucket.s3.us-east-1.amazonaws.com/o",
+            "https://acct.blob.core.windows.net/ct/b",
+            "https://myapp.vercel.app/api/health",
+            "https://myapp.netlify.app/",
+            "https://myapp.pages.dev/",
+        ],
+    )
     def test_provider_url_becomes_cloud_ref(self, url: str) -> None:
         assert provider_url_seed_type(url) == "cloud_ref"
 
-    @pytest.mark.parametrize("url", [
-        "https://example.com/path",
-        "https://portal.example.com/",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://example.com/path",
+            "https://portal.example.com/",
+        ],
+    )
     def test_non_provider_url_stays_url(self, url: str) -> None:
         assert provider_url_seed_type(url) == "url"
 
@@ -109,7 +115,9 @@ class TestScopeManifestSeedTargets:
     def test_cloud_validate_scope_emits_url_and_hostname(self) -> None:
         from forge.phase4.cloud_validate import _validation_scope_seed_targets
 
-        targets = _validation_scope_seed_targets("https://acct.blob.core.windows.net/ct", "cloud_ref")
+        targets = _validation_scope_seed_targets(
+            "https://acct.blob.core.windows.net/ct", "cloud_ref"
+        )
         assert "https://acct.blob.core.windows.net/ct" in targets
         assert "acct.blob.core.windows.net" in targets
 

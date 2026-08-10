@@ -144,20 +144,22 @@ def test_llama_cpp_is_always_last_in_both_chains() -> None:
     backends = [
         _backend("planner_only", tiers={Tier.PLANNER}, primary=Tier.PLANNER),
     ]
-    backends.append(DiscoveredBackend(
-        backend_name="llama_cpp",
-        family="llama_cpp",
-        endpoint="/dev/null",
-        model_id="qwen.gguf",
-        api_key_present=False,
-        tier_assignment=TierAssignment(
+    backends.append(
+        DiscoveredBackend(
+            backend_name="llama_cpp",
+            family="llama_cpp",
+            endpoint="/dev/null",
             model_id="qwen.gguf",
-            tiers=frozenset({Tier.EXECUTOR}),  # EXECUTOR only per cost table
-            primary_tier=Tier.EXECUTOR,
-            reason="test",
-            summary="",
-        ),
-    ))
+            api_key_present=False,
+            tier_assignment=TierAssignment(
+                model_id="qwen.gguf",
+                tiers=frozenset({Tier.EXECUTOR}),  # EXECUTOR only per cost table
+                primary_tier=Tier.EXECUTOR,
+                reason="test",
+                summary="",
+            ),
+        )
+    )
     factory = {
         "planner_only": _MockProvider("planner_only"),
         "llama_cpp": _MockProvider("llama_cpp"),
@@ -249,7 +251,9 @@ async def test_health_check_includes_model_ids() -> None:
     backstop = _MockProvider("llama_cpp")
     metadata = {
         "planner1": _backend("planner1", tiers={Tier.PLANNER}, primary=Tier.PLANNER),
-        "llama_cpp": _backend("llama_cpp", family="llama_cpp", tiers={Tier.EXECUTOR}, primary=Tier.EXECUTOR),
+        "llama_cpp": _backend(
+            "llama_cpp", family="llama_cpp", tiers={Tier.EXECUTOR}, primary=Tier.EXECUTOR
+        ),
     }
     router = TieredRouter(
         planner_chain=[("planner1", planner), ("llama_cpp", backstop)],
@@ -283,27 +287,30 @@ def test_chain_summary_lists_every_backend() -> None:
         _backend("planner1", tiers={Tier.PLANNER}, primary=Tier.PLANNER),
         _backend("executor1", tiers={Tier.EXECUTOR}, primary=Tier.EXECUTOR),
     ]
-    backends.append(DiscoveredBackend(
-        backend_name="llama_cpp",
-        family="llama_cpp",
-        endpoint="/dev/null",
-        model_id="qwen.gguf",
-        api_key_present=False,
-        tier_assignment=TierAssignment(
+    backends.append(
+        DiscoveredBackend(
+            backend_name="llama_cpp",
+            family="llama_cpp",
+            endpoint="/dev/null",
             model_id="qwen.gguf",
-            tiers=frozenset({Tier.EXECUTOR}),
-            primary_tier=Tier.EXECUTOR,
-            reason="test",
-            summary="",
-        ),
-    ))
+            api_key_present=False,
+            tier_assignment=TierAssignment(
+                model_id="qwen.gguf",
+                tiers=frozenset({Tier.EXECUTOR}),
+                primary_tier=Tier.EXECUTOR,
+                reason="test",
+                summary="",
+            ),
+        )
+    )
     factory = {
         "planner1": _MockProvider("planner1"),
         "executor1": _MockProvider("executor1"),
         "llama_cpp": _MockProvider("llama_cpp"),
     }
-    result = DiscoveryResult(backends=backends, skipped=[("openai", "no_key")],
-                              duration_s=1.4, paid_allowed=False)
+    result = DiscoveryResult(
+        backends=backends, skipped=[("openai", "no_key")], duration_s=1.4, paid_allowed=False
+    )
     router = build_router_from_discovery(result, provider_factory=factory)
     summary = router.chain_summary
     assert "PLANNER chain" in summary

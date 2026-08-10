@@ -135,9 +135,7 @@ def _validate_endpoint_url(url: str, allow_private_networks: bool = False) -> No
         )
     hostname = parsed.hostname
     if not hostname:
-        raise SsrfBlockedError(
-            f"REST_API endpoint {url!r} has no hostname component"
-        )
+        raise SsrfBlockedError(f"REST_API endpoint {url!r} has no hostname component")
 
     # Short-circuit when the operator has explicitly opted-in. We still
     # require a parsable hostname above so config errors surface.
@@ -147,9 +145,7 @@ def _validate_endpoint_url(url: str, allow_private_networks: bool = False) -> No
     try:
         infos = socket.getaddrinfo(hostname, None)
     except socket.gaierror as exc:
-        raise SsrfBlockedError(
-            f"REST_API endpoint {url!r} did not resolve: {exc}"
-        ) from exc
+        raise SsrfBlockedError(f"REST_API endpoint {url!r} did not resolve: {exc}") from exc
 
     seen: list[str] = []
     for info in infos:
@@ -173,9 +169,7 @@ def _validate_endpoint_url(url: str, allow_private_networks: bool = False) -> No
                     f"is in blocked network {net}"
                 )
     if not seen:
-        raise SsrfBlockedError(
-            f"REST_API endpoint {url!r} produced no usable IP addresses"
-        )
+        raise SsrfBlockedError(f"REST_API endpoint {url!r} produced no usable IP addresses")
 
 
 async def _read_stream_bounded(
@@ -245,9 +239,7 @@ class PluginExecutor:
                 self._settings = PlatformSettings()
             except Exception:  # noqa: BLE001 - defensive default
                 self._settings = PlatformSettings.model_construct()
-        self._docker_limits: dict[str, int | float] = self._resolve_docker_limits(
-            docker_limits
-        )
+        self._docker_limits: dict[str, int | float] = self._resolve_docker_limits(docker_limits)
 
     def _resolve_docker_limits(
         self, override: dict[str, int | float] | None
@@ -306,8 +298,7 @@ class PluginExecutor:
         except asyncio.TimeoutError as exc:
             duration_ms = (time.perf_counter() - start) * 1000.0
             message = (
-                f"Plugin {metadata.name!r} exceeded "
-                f"{timeout:.1f}s timeout (mode={mode.value})"
+                f"Plugin {metadata.name!r} exceeded {timeout:.1f}s timeout (mode={mode.value})"
             )
             await self._audit_failure(
                 correlation_id=cid,
@@ -332,9 +323,7 @@ class PluginExecutor:
         except Exception as exc:  # noqa: BLE001 - normalise all backend failures
             duration_ms = (time.perf_counter() - start) * 1000.0
             error_detail = f"{exc.__class__.__name__}: {exc}"
-            fq_error_class = (
-                f"{exc.__class__.__module__}.{exc.__class__.__qualname__}"
-            )
+            fq_error_class = f"{exc.__class__.__module__}.{exc.__class__.__qualname__}"
             await self._audit_failure(
                 correlation_id=cid,
                 tool_name=metadata.name,
@@ -396,15 +385,12 @@ class PluginExecutor:
             return await self._exec_docker(plugin, params)
         raise ValueError(f"Unsupported execution mode: {mode!r}")
 
-    async def _exec_in_process(
-        self, plugin: Plugin, params: dict[str, object]
-    ) -> PluginResult:
+    async def _exec_in_process(self, plugin: Plugin, params: dict[str, object]) -> PluginResult:
         """Invoke ``plugin.execute`` directly in the host event loop."""
         result = await plugin.execute(dict(params))
         if not isinstance(result, PluginResult):
             raise TypeError(
-                "In-process plugin returned non-PluginResult "
-                f"(got {type(result).__name__})"
+                f"In-process plugin returned non-PluginResult (got {type(result).__name__})"
             )
         return result
 
@@ -426,9 +412,7 @@ class PluginExecutor:
         """
         env: dict[str, str] = {
             "PATH": os.environ.get("PATH", ""),
-            "HOME": os.environ.get(
-                "HOME", os.environ.get("USERPROFILE", "")
-            ),
+            "HOME": os.environ.get("HOME", os.environ.get("USERPROFILE", "")),
             "LANG": os.environ.get("LANG", "C"),
             "TZ": os.environ.get("TZ", "UTC"),
         }
@@ -442,15 +426,11 @@ class PluginExecutor:
                 env[str(k)] = str(v)
         return env
 
-    async def _exec_subprocess(
-        self, plugin: Plugin, params: dict[str, object]
-    ) -> PluginResult:
+    async def _exec_subprocess(self, plugin: Plugin, params: dict[str, object]) -> PluginResult:
         """Spawn a CLI tool and parse its stdout JSON into a PluginResult."""
         cmd_obj = params.get("cmd")
         if not isinstance(cmd_obj, list) or not cmd_obj:
-            raise ValueError(
-                "SUBPROCESS plugin requires params['cmd'] to be a non-empty list"
-            )
+            raise ValueError("SUBPROCESS plugin requires params['cmd'] to be a non-empty list")
         cmd: list[str] = [str(token) for token in cmd_obj]
 
         cwd_obj = params.get("cwd")
@@ -521,12 +501,8 @@ class PluginExecutor:
                 except Exception:  # noqa: BLE001 - best-effort
                     pass
 
-        stdout_task = asyncio.create_task(
-            _read_stream_bounded(proc.stdout, MAX_STDOUT_BYTES)
-        )
-        stderr_task = asyncio.create_task(
-            _read_stream_bounded(proc.stderr, MAX_STDERR_BYTES)
-        )
+        stdout_task = asyncio.create_task(_read_stream_bounded(proc.stdout, MAX_STDOUT_BYTES))
+        stderr_task = asyncio.create_task(_read_stream_bounded(proc.stderr, MAX_STDERR_BYTES))
         # Wait for both bounded readers concurrently. If either overflows
         # the child must be killed BEFORE we drain the other stream — a
         # full pipe would otherwise deadlock the child and stall this
@@ -575,15 +551,11 @@ class PluginExecutor:
     # REST_API
     # ------------------------------------------------------------------
 
-    async def _exec_rest_api(
-        self, plugin: Plugin, params: dict[str, object]
-    ) -> PluginResult:
+    async def _exec_rest_api(self, plugin: Plugin, params: dict[str, object]) -> PluginResult:
         """POST ``params`` (minus ``endpoint``) to a remote tool endpoint."""
         endpoint_obj = params.get("endpoint")
         if not isinstance(endpoint_obj, str) or not endpoint_obj:
-            raise ValueError(
-                "REST_API plugin requires params['endpoint'] to be a non-empty string"
-            )
+            raise ValueError("REST_API plugin requires params['endpoint'] to be a non-empty string")
         endpoint: str = endpoint_obj
 
         # Fix 2 (P0-7): SSRF allowlist BEFORE any I/O.
@@ -601,9 +573,7 @@ class PluginExecutor:
         method = str(method_obj).upper() if method_obj is not None else "POST"
 
         body: dict[str, object] = {
-            k: v
-            for k, v in params.items()
-            if k not in {"endpoint", "headers", "method"}
+            k: v for k, v in params.items() if k not in {"endpoint", "headers", "method"}
         }
 
         client = await self._get_http_client(plugin.metadata.timeout_seconds)
@@ -631,9 +601,7 @@ class PluginExecutor:
                         preview_buf.extend(chunk)
                         if len(preview_buf) >= 200:
                             break
-                    preview = bytes(preview_buf[:200]).decode(
-                        "utf-8", errors="replace"
-                    )
+                    preview = bytes(preview_buf[:200]).decode("utf-8", errors="replace")
                     raise RuntimeError(
                         f"REST_API call to {endpoint!r} returned HTTP "
                         f"{response.status_code}: {preview!r}"
@@ -649,8 +617,7 @@ class PluginExecutor:
                     body_buf.extend(chunk)
         except _httpx.TimeoutException as exc:
             raise PluginTimeoutError(
-                f"REST_API call to {endpoint!r} timed out after "
-                f"{plugin.metadata.timeout_seconds}s"
+                f"REST_API call to {endpoint!r} timed out after {plugin.metadata.timeout_seconds}s"
             ) from exc
 
         if not body_buf:
@@ -684,7 +651,8 @@ class PluginExecutor:
             "docker",
             "run",
             "--rm",
-            "--name", container_name,
+            "--name",
+            container_name,
             "--network=none",
             "--read-only",
             "-i",
@@ -706,22 +674,16 @@ class PluginExecutor:
             argv.extend(str(token) for token in cmd)
         return argv
 
-    async def _exec_docker(
-        self, plugin: Plugin, params: dict[str, object]
-    ) -> PluginResult:
+    async def _exec_docker(self, plugin: Plugin, params: dict[str, object]) -> PluginResult:
         """Run a tool inside a hardened Docker sandbox."""
         image_obj = params.get("image")
         if not isinstance(image_obj, str) or not image_obj:
-            raise ValueError(
-                "DOCKER plugin requires params['image'] to be a non-empty string"
-            )
+            raise ValueError("DOCKER plugin requires params['image'] to be a non-empty string")
         image: str = image_obj
 
         env_obj = params.get("env")
         env_dict: dict[str, object] | None = (
-            {str(k): v for k, v in env_obj.items()}
-            if isinstance(env_obj, dict)
-            else None
+            {str(k): v for k, v in env_obj.items()} if isinstance(env_obj, dict) else None
         )
 
         cmd_obj = params.get("cmd")
@@ -736,7 +698,9 @@ class PluginExecutor:
         container_name = f"forge-plugin-{uuid.uuid4().hex[:12]}"
 
         argv: list[str] = self._build_docker_argv(
-            image=image, env=env_dict, cmd=cmd_list,
+            image=image,
+            env=env_dict,
+            cmd=cmd_list,
             container_name=container_name,
         )
 
@@ -810,9 +774,7 @@ class PluginExecutor:
         try:
             await asyncio.wait_for(proc.wait(), timeout=2.0)
         except (asyncio.TimeoutError, Exception):  # noqa: BLE001
-            _LOG.debug(
-                "PluginExecutor: child %s did not exit after kill", proc.pid
-            )
+            _LOG.debug("PluginExecutor: child %s did not exit after kill", proc.pid)
 
     @staticmethod
     async def _docker_kill_container(container_name: str) -> None:
@@ -826,7 +788,9 @@ class PluginExecutor:
         """
         try:
             kill_proc = await asyncio.create_subprocess_exec(
-                "docker", "kill", container_name,
+                "docker",
+                "kill",
+                container_name,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -865,10 +829,7 @@ class PluginExecutor:
             # callers (the chaos harness's ``scenario_plugin_sigkill``)
             # can do a proper ``isinstance(err, ForgeError)`` check
             # rather than round-tripping through a string class name.
-            error_msg = (
-                f"{tool_name!r} exited with code {returncode}: "
-                f"{stderr_text[:512]}"
-            )
+            error_msg = f"{tool_name!r} exited with code {returncode}: {stderr_text[:512]}"
             error_exc: BaseException
             if returncode < 0 and sys.platform != "win32":
                 fq_error_class = "builtins.ProcessLookupError"
@@ -877,9 +838,7 @@ class PluginExecutor:
                 # chaos harness's scenario 3 documentation).
                 error_exc = ProcessLookupError(error_msg)
             else:
-                fq_error_class = (
-                    "forge.core.errors.PluginSubprocessKilledError"
-                )
+                fq_error_class = "forge.core.errors.PluginSubprocessKilledError"
                 error_exc = PluginSubprocessKilledError(error_msg)
             return PluginResult(
                 success=False,

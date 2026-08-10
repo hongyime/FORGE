@@ -19,6 +19,7 @@ OPSEC (PRD §12.7.3):
   - --output-json file registered with cleanup.py immediately after creation.
   - No external calls at any point (purely stdlib: zipfile + plistlib + json).
 """
+
 from __future__ import annotations
 
 import base64
@@ -56,14 +57,15 @@ _NESTED_ANDROID_BUNDLE_MAX_DEPTH = 3
 
 # ── Data model ─────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class FirebaseProject:
-    project_id:  str
-    api_key_enc: Optional[str]   # age-encrypted; None if not found
-    rtdb_url:    Optional[str]
-    bundle_id:   Optional[str]   # iOS bundle ID if available
+    project_id: str
+    api_key_enc: Optional[str]  # age-encrypted; None if not found
+    rtdb_url: Optional[str]
+    bundle_id: Optional[str]  # iOS bundle ID if available
     source_file: str
-    extract_path: str            # internal path within the archive
+    extract_path: str  # internal path within the archive
     storage_bucket: Optional[str] = None
 
 
@@ -77,6 +79,7 @@ class SupabaseConfig:
 
 
 # ── Extractor ──────────────────────────────────────────────────────────────────
+
 
 class FirebaseExtractor:
     """
@@ -148,8 +151,8 @@ class FirebaseExtractor:
 
     def store(
         self,
-        projects:     list[FirebaseProject],
-        db_path:      Path,
+        projects: list[FirebaseProject],
+        db_path: Path,
         engagement_id: int,
     ) -> int:
         """
@@ -185,7 +188,11 @@ class FirebaseExtractor:
                     """INSERT OR IGNORE INTO cloud_assets
                        (engagement_id, asset_type, identifier, provider_identifier, source)
                        VALUES (?, 'gcs', ?, ?, 'firebase_extract_storage_bucket')""",
-                    (engagement_id, project_entry["storage_bucket"], project_entry["storage_bucket"]),
+                    (
+                        engagement_id,
+                        project_entry["storage_bucket"],
+                        project_entry["storage_bucket"],
+                    ),
                 )
             count += 1
         con.commit()
@@ -252,10 +259,7 @@ class FirebaseExtractor:
         bounded_workers = min(_MOBILE_CONFIG_PARSE_MAX_WORKERS, len(items))
         ordered_results: list[Any | None] = [None] * len(items)
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-            future_map = {
-                executor.submit(builder, item): index
-                for index, item in enumerate(items)
-            }
+            future_map = {executor.submit(builder, item): index for index, item in enumerate(items)}
             for future in as_completed(future_map):
                 index = future_map[future]
                 try:
@@ -339,12 +343,16 @@ class FirebaseExtractor:
                     projects.append(
                         FirebaseProject(
                             project_id=project_id,
-                            api_key_enc=self._encrypt(api_key if isinstance(api_key, str) else None),
+                            api_key_enc=self._encrypt(
+                                api_key if isinstance(api_key, str) else None
+                            ),
                             rtdb_url=data.get("databaseURL"),
                             bundle_id=None,
                             source_file=url,
                             extract_path=endpoint,
-                            storage_bucket=self._normalize_storage_bucket(data.get("storageBucket")),
+                            storage_bucket=self._normalize_storage_bucket(
+                                data.get("storageBucket")
+                            ),
                         )
                     )
         except Exception as exc:
@@ -451,7 +459,9 @@ class FirebaseExtractor:
 
             key_enc = encrypt_string(config.anon_key)
         except Exception as exc:  # noqa: BLE001
-            _LOG.warning("Supabase anon key encryption unavailable for %s: %s", config.project_ref, exc)
+            _LOG.warning(
+                "Supabase anon key encryption unavailable for %s: %s", config.project_ref, exc
+            )
             key_enc = None
         return {
             "project_ref": config.project_ref,
@@ -729,7 +739,9 @@ class FirebaseExtractor:
             self._google_services_json_parse_job,
             default_factory=lambda: None,
         )
-        projects.extend(project for project in parsed_projects if isinstance(project, FirebaseProject))
+        projects.extend(
+            project for project in parsed_projects if isinstance(project, FirebaseProject)
+        )
         return projects
 
     def _google_services_json_parse_job(
@@ -772,9 +784,7 @@ class FirebaseExtractor:
             _LOG.debug("google-services.json parse error (%s): %s", path_in_zip, exc)
         return None
 
-    def _scan_strings_xml(
-        self, zf: zipfile.ZipFile, apk_path: Path
-    ) -> list[FirebaseProject]:
+    def _scan_strings_xml(self, zf: zipfile.ZipFile, apk_path: Path) -> list[FirebaseProject]:
         projects: list[FirebaseProject] = []
         seen_ids: set[str] = set()
         text_jobs: list[tuple[str, str, str]] = []
@@ -935,7 +945,9 @@ class FirebaseExtractor:
             self._googleservice_plist_parse_job,
             default_factory=lambda: None,
         )
-        projects.extend(project for project in parsed_projects if isinstance(project, FirebaseProject))
+        projects.extend(
+            project for project in parsed_projects if isinstance(project, FirebaseProject)
+        )
         return projects
 
     def _googleservice_plist_parse_job(
@@ -963,9 +975,7 @@ class FirebaseExtractor:
             _LOG.debug("GoogleService-Info.plist parse error (%s): %s", path_in_zip, exc)
         return None
 
-    def _scan_plist_files(
-        self, zf: zipfile.ZipFile, ipa_path: Path
-    ) -> list[FirebaseProject]:
+    def _scan_plist_files(self, zf: zipfile.ZipFile, ipa_path: Path) -> list[FirebaseProject]:
         projects: list[FirebaseProject] = []
         seen_ids: set[str] = set()
         text_jobs: list[tuple[str, str, str]] = []
@@ -1033,6 +1043,7 @@ class FirebaseExtractor:
             return "__UNENCRYPTED_PLACEHOLDER__"
         try:
             from forge.opsec.crypto import encrypt_string
+
             return encrypt_string(raw_key, self._age_pubkey)
         except ImportError:
             _LOG.warning("forge.opsec.crypto unavailable; key not encrypted")
@@ -1042,6 +1053,7 @@ class FirebaseExtractor:
     def _register_cleanup(path: Path) -> None:
         try:
             from forge.shared.cleanup import register_cleanup_file
+
             register_cleanup_file(path)
         except ImportError:
             pass
@@ -1077,7 +1089,9 @@ class FirebaseExtractor:
             rtdb_url=project.rtdb_url,
             bundle_id=project.bundle_id,
             source_file=str(apk_path),
-            extract_path=FirebaseExtractor._join_extract_prefix(nested_prefix, project.extract_path),
+            extract_path=FirebaseExtractor._join_extract_prefix(
+                nested_prefix, project.extract_path
+            ),
             storage_bucket=project.storage_bucket,
         )
 
@@ -1233,7 +1247,9 @@ class FirebaseExtractor:
         return (cfg.project_ref, cfg.anon_key)
 
     @staticmethod
-    def _firebase_dedupe_key(project: FirebaseProject) -> tuple[str, Optional[str], Optional[str]] | None:
+    def _firebase_dedupe_key(
+        project: FirebaseProject,
+    ) -> tuple[str, Optional[str], Optional[str]] | None:
         return (project.project_id, project.rtdb_url, project.source_file)
 
     @staticmethod

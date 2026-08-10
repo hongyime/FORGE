@@ -81,8 +81,7 @@ class AgentRegistry:
         except KeyError as exc:
             available = ", ".join(sorted(self._agents)) or "<none>"
             raise KeyError(
-                f"No agent registered with role {role!r}. "
-                f"Available roles: {available}."
+                f"No agent registered with role {role!r}. Available roles: {available}."
             ) from exc
 
     def agents_for_topic(self, topic: str) -> list[Agent]:
@@ -155,10 +154,7 @@ class AgentRegistry:
         except Exception as exc:  # noqa: BLE001
             self._reject(
                 role=role,
-                reason=(
-                    "Failed to read agent.subscribed_topics: "
-                    f"{exc.__class__.__name__}: {exc}"
-                ),
+                reason=(f"Failed to read agent.subscribed_topics: {exc.__class__.__name__}: {exc}"),
             )
         if not isinstance(topics, list) or not topics:
             self._reject(
@@ -182,8 +178,7 @@ class AgentRegistry:
             self._reject(
                 role=role,
                 reason=(
-                    f"Agent role {role!r} is already registered. "
-                    "Pass replace=True to overwrite."
+                    f"Agent role {role!r} is already registered. Pass replace=True to overwrite."
                 ),
             )
 

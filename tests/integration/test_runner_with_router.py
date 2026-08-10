@@ -37,6 +37,7 @@ def _has_any_llm() -> bool:
     build.
     """
     import shutil
+
     if shutil.which("claude") or shutil.which("claude.cmd"):
         return True
     if shutil.which("codex") or shutil.which("codex.cmd"):
@@ -54,6 +55,7 @@ def _enable_router_and_reset(monkeypatch: pytest.MonkeyPatch) -> None:
     # Removing the stub here ensures the real LlamaCppProvider import path
     # works (or fails cleanly) for our discovery-based router build.
     import sys
+
     if "llama_cpp" in sys.modules:
         # Only nuke the entry if it has no Llama attribute (i.e. it's the
         # synthetic stub). Real installed module would have it.

@@ -6,6 +6,7 @@ Coverage target: 80%  (PRD §15.1)
 Strategy: fixture JSON files stand in for theHarvester subprocess output.
 No live subprocess calls; subprocess.run is fully mocked.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,6 +27,7 @@ from forge.utils.intel.contact_enum import (
 
 
 # ─── fixtures ────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def clean_harvester_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -61,9 +63,9 @@ def engagement_db(tmp_path: Path) -> Path:
 @pytest.fixture()
 def harvester_json(tmp_path: Path) -> Path:
     payload = {
-        "emails":   ["alice@example.com", "bob@example.com", "charlie@example.com"],
-        "hosts":    ["mail.example.com", "vpn.example.com"],
-        "ips":      ["93.184.216.34"],
+        "emails": ["alice@example.com", "bob@example.com", "charlie@example.com"],
+        "hosts": ["mail.example.com", "vpn.example.com"],
+        "ips": ["93.184.216.34"],
         "linkedin": [],
     }
     f = tmp_path / "harvest_out.json"
@@ -86,6 +88,7 @@ def malformed_harvester_json(tmp_path: Path) -> Path:
 
 
 # ─── mock subprocess helpers ──────────────────────────────────────────────────
+
 
 def _mock_version_ok() -> MagicMock:
     m = MagicMock()
@@ -119,6 +122,7 @@ def _mock_run_ok(output_path: Path) -> MagicMock:
 # ═══════════════════════════════════════════════════════════════════════════
 # Tool version check
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestToolVersionCheck:
     def test_version_ok_passes(self):
@@ -205,6 +209,7 @@ class TestToolVersionCheck:
 # JSON parser
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseHarvesterJson:
     def test_extracts_emails(self, harvester_json):
         result = _parse_harvester_json(harvester_json)
@@ -234,6 +239,7 @@ class TestParseHarvesterJson:
 # Temp file cleanup
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestTempfileCleanup:
     def test_tempfile_deleted_after_parse(self, tmp_path, engagement_db):
         created_paths: list[Path] = []
@@ -246,20 +252,27 @@ class TestTempfileCleanup:
                 created_paths.append(p)
             return original_open(path, *a, **kw)
 
-        with patch("subprocess.run") as mock_run, \
-             patch("forge.utils.intel.contact_enum.assert_tool_version",
-                   return_value=["theHarvester"]):
+        with (
+            patch("subprocess.run") as mock_run,
+            patch(
+                "forge.utils.intel.contact_enum.assert_tool_version", return_value=["theHarvester"]
+            ),
+        ):
+
             def fake_run(cmd, **kw):
                 # Write fixture JSON to the output path arg
                 for i, arg in enumerate(cmd):
                     if arg in ("-f", "--filename") and i + 1 < len(cmd):
                         p = Path(str(cmd[i + 1]) + ".json")
                         p.parent.mkdir(parents=True, exist_ok=True)
-                        p.write_text(json.dumps({
-                            "emails": ["alice@example.com"], "hosts": [], "ips": []
-                        }))
-                m = MagicMock(); m.returncode = 0; m.stdout = ""
+                        p.write_text(
+                            json.dumps({"emails": ["alice@example.com"], "hosts": [], "ips": []})
+                        )
+                m = MagicMock()
+                m.returncode = 0
+                m.stdout = ""
                 return m
+
             mock_run.side_effect = fake_run
 
             run_harvester(engagement_db, 1, "example.com", sources=["google"], dry_run=False)
@@ -273,6 +286,7 @@ class TestTempfileCleanup:
 # run_harvester — DB integration
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRunHarvester:
     def _patch_harvester(self, emails: list[str]):
         def fake_run(cmd, **kw):
@@ -281,18 +295,26 @@ class TestRunHarvester:
                     p = Path(str(cmd[i + 1]) + ".json")
                     p.parent.mkdir(parents=True, exist_ok=True)
                     p.write_text(json.dumps({"emails": emails, "hosts": [], "ips": []}))
-            m = MagicMock(); m.returncode = 0; m.stdout = ""
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = ""
             return m
+
         return fake_run
 
     def test_emails_inserted_to_db(self, engagement_db):
-        with patch("subprocess.run", side_effect=self._patch_harvester(
-            ["alice@example.com", "bob@example.com"]
-        )), patch("forge.utils.intel.contact_enum.assert_tool_version",
-                  return_value=["theHarvester"]):
+        with (
+            patch(
+                "subprocess.run",
+                side_effect=self._patch_harvester(["alice@example.com", "bob@example.com"]),
+            ),
+            patch(
+                "forge.utils.intel.contact_enum.assert_tool_version", return_value=["theHarvester"]
+            ),
+        ):
             run_harvester(engagement_db, 1, "example.com", sources=["google"])
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM emails WHERE source='theharvester'").fetchone()[0]
         con.close()
         assert count == 2
@@ -305,37 +327,48 @@ class TestRunHarvester:
         con.commit()
         con.close()
 
-        with patch("subprocess.run", side_effect=self._patch_harvester(
-            ["alice@example.com", "new@example.com"]
-        )), patch("forge.utils.intel.contact_enum.assert_tool_version",
-                  return_value=["theHarvester"]):
+        with (
+            patch(
+                "subprocess.run",
+                side_effect=self._patch_harvester(["alice@example.com", "new@example.com"]),
+            ),
+            patch(
+                "forge.utils.intel.contact_enum.assert_tool_version", return_value=["theHarvester"]
+            ),
+        ):
             run_harvester(engagement_db, 1, "example.com", sources=["google"])
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
         con.close()
-        assert count == 2   # alice already existed; only new@example.com added
+        assert count == 2  # alice already existed; only new@example.com added
 
     def test_scope_gate_enforced(self, engagement_db):
         from forge.opsec.scope_gate import ScopeViolationError
+
         with pytest.raises(ScopeViolationError):
             run_harvester(engagement_db, 1, "notinscope.io", sources=["google"])
 
     def test_dry_run_no_subprocess_call(self, engagement_db):
-        with patch("subprocess.run") as mock_sub, \
-             patch("forge.utils.intel.contact_enum.assert_tool_version",
-                   return_value=["theHarvester"]):
-            run_harvester(engagement_db, 1, "example.com",
-                          sources=["google"], dry_run=True)
+        with (
+            patch("subprocess.run") as mock_sub,
+            patch(
+                "forge.utils.intel.contact_enum.assert_tool_version", return_value=["theHarvester"]
+            ),
+        ):
+            run_harvester(engagement_db, 1, "example.com", sources=["google"], dry_run=True)
         mock_sub.assert_not_called()
 
     def test_audit_log_written(self, engagement_db):
-        with patch("subprocess.run", side_effect=self._patch_harvester([])), \
-             patch("forge.utils.intel.contact_enum.assert_tool_version",
-                   return_value=["theHarvester"]):
+        with (
+            patch("subprocess.run", side_effect=self._patch_harvester([])),
+            patch(
+                "forge.utils.intel.contact_enum.assert_tool_version", return_value=["theHarvester"]
+            ),
+        ):
             run_harvester(engagement_db, 1, "example.com", sources=["google"])
 
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         count = con.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
         con.close()
         assert count >= 1
@@ -349,14 +382,19 @@ class TestRunHarvester:
                 if arg in ("-f", "--filename") and i + 1 < len(cmd):
                     p = Path(str(cmd[i + 1]) + ".json")
                     p.parent.mkdir(parents=True, exist_ok=True)
-                    p.write_text(json.dumps({"emails": ["proxied@example.com"], "hosts": [], "ips": []}))
+                    p.write_text(
+                        json.dumps({"emails": ["proxied@example.com"], "hosts": [], "ips": []})
+                    )
             m = MagicMock()
             m.returncode = 0
             return m
 
-        with patch("subprocess.run", side_effect=fake_run), \
-             patch("forge.utils.intel.contact_enum.assert_tool_version",
-                   return_value=["theHarvester"]):
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch(
+                "forge.utils.intel.contact_enum.assert_tool_version", return_value=["theHarvester"]
+            ),
+        ):
             run_harvester(
                 engagement_db,
                 1,
@@ -370,15 +408,15 @@ class TestRunHarvester:
         assert observed_envs[0]["ALL_PROXY"] == "socks5://127.0.0.1:9050"
 
     def test_source_tagged_theharvester(self, engagement_db):
-        with patch("subprocess.run", side_effect=self._patch_harvester(
-            ["tagged@example.com"]
-        )), patch("forge.utils.intel.contact_enum.assert_tool_version",
-                  return_value=["theHarvester"]):
+        with (
+            patch("subprocess.run", side_effect=self._patch_harvester(["tagged@example.com"])),
+            patch(
+                "forge.utils.intel.contact_enum.assert_tool_version", return_value=["theHarvester"]
+            ),
+        ):
             run_harvester(engagement_db, 1, "example.com", sources=["google"])
 
         con = sqlite3.connect(engagement_db)
-        src = con.execute(
-            "SELECT source FROM emails WHERE email='tagged@example.com'"
-        ).fetchone()
+        src = con.execute("SELECT source FROM emails WHERE email='tagged@example.com'").fetchone()
         con.close()
         assert src[0] == "theharvester"

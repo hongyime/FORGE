@@ -151,12 +151,8 @@ class TestStaticContract:
         assert result == {}
 
     @pytest.mark.asyncio
-    async def test_missing_directory_returns_empty_dict(
-        self, tmp_path: Path
-    ) -> None:
-        loader = PluginLoader(
-            plugin_dir=str(tmp_path / "ghost"), audit=AuditLogger()
-        )
+    async def test_missing_directory_returns_empty_dict(self, tmp_path: Path) -> None:
+        loader = PluginLoader(plugin_dir=str(tmp_path / "ghost"), audit=AuditLogger())
         result = await loader.discover_and_load()
         assert result == {}
 
@@ -198,24 +194,16 @@ class TestDiscoveryWithMixedInputs:
 
         # Drop valid plugin sources
         for i, name in enumerate(valid_names):
-            (tmp_path / f"good_{i}.py").write_text(
-                _valid_plugin_src(name), encoding="utf-8"
-            )
+            (tmp_path / f"good_{i}.py").write_text(_valid_plugin_src(name), encoding="utf-8")
         # Drop broken-metadata modules
         for i in range(n_broken_metadata):
-            (tmp_path / f"bad_meta_{i}.py").write_text(
-                _BROKEN_METADATA_SRC, encoding="utf-8"
-            )
+            (tmp_path / f"bad_meta_{i}.py").write_text(_BROKEN_METADATA_SRC, encoding="utf-8")
         # Drop import-error modules
         for i in range(n_import_errors):
-            (tmp_path / f"bad_import_{i}.py").write_text(
-                _IMPORT_ERROR_SRC, encoding="utf-8"
-            )
+            (tmp_path / f"bad_import_{i}.py").write_text(_IMPORT_ERROR_SRC, encoding="utf-8")
         # Drop garbage non-Python files (must be ignored)
         for i in range(n_garbage_files):
-            (tmp_path / f"garbage_{i}.txt").write_text(
-                "not a plugin", encoding="utf-8"
-            )
+            (tmp_path / f"garbage_{i}.txt").write_text("not a plugin", encoding="utf-8")
 
         audit = AuditLogger()
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=audit)
@@ -230,27 +218,17 @@ class TestDiscoveryWithMixedInputs:
         )
 
         # Audit log: STATE_TRANSITION count equals number of valid plugins.
-        loads = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.STATE_TRANSITION
-        ]
-        warnings = [
-            e for e in audit.entries if e.event_type == AuditEventType.WARNING
-        ]
+        loads = [e for e in audit.entries if e.event_type == AuditEventType.STATE_TRANSITION]
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
         assert len(loads) == len(valid_names)
         assert len(warnings) >= n_broken_metadata + n_import_errors
 
     @pytest.mark.asyncio
     async def test_recursive_subdirectory_scan(self, tmp_path: Path) -> None:
-        (tmp_path / "root.py").write_text(
-            _valid_plugin_src("root_tool"), encoding="utf-8"
-        )
+        (tmp_path / "root.py").write_text(_valid_plugin_src("root_tool"), encoding="utf-8")
         nested = tmp_path / "nested" / "deeper"
         nested.mkdir(parents=True)
-        (nested / "deep.py").write_text(
-            _valid_plugin_src("deep_tool"), encoding="utf-8"
-        )
+        (nested / "deep.py").write_text(_valid_plugin_src("deep_tool"), encoding="utf-8")
 
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=AuditLogger())
         registry = await loader.discover_and_load()
@@ -262,9 +240,7 @@ class TestDiscoveryWithMixedInputs:
         (tmp_path / "__init__.py").write_text(
             _valid_plugin_src("should_not_load"), encoding="utf-8"
         )
-        (tmp_path / "real.py").write_text(
-            _valid_plugin_src("real_tool"), encoding="utf-8"
-        )
+        (tmp_path / "real.py").write_text(_valid_plugin_src("real_tool"), encoding="utf-8")
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=AuditLogger())
         registry = await loader.discover_and_load()
         assert set(registry.keys()) == {"real_tool"}
@@ -279,15 +255,9 @@ class TestDuplicateDetection:
     """Duplicate names within a single scan: first wins, second logs WARNING."""
 
     @pytest.mark.asyncio
-    async def test_duplicate_plugin_names_emit_warning(
-        self, tmp_path: Path
-    ) -> None:
-        (tmp_path / "first.py").write_text(
-            _valid_plugin_src("dup_tool"), encoding="utf-8"
-        )
-        (tmp_path / "second.py").write_text(
-            _valid_plugin_src("dup_tool"), encoding="utf-8"
-        )
+    async def test_duplicate_plugin_names_emit_warning(self, tmp_path: Path) -> None:
+        (tmp_path / "first.py").write_text(_valid_plugin_src("dup_tool"), encoding="utf-8")
+        (tmp_path / "second.py").write_text(_valid_plugin_src("dup_tool"), encoding="utf-8")
 
         audit = AuditLogger()
         loader = PluginLoader(plugin_dir=str(tmp_path), audit=audit)
@@ -297,9 +267,7 @@ class TestDuplicateDetection:
         assert set(registry.keys()) == {"dup_tool"}
 
         # The duplicate emits a WARNING with "Duplicate" in the reason.
-        warnings = [
-            e for e in audit.entries if e.event_type == AuditEventType.WARNING
-        ]
-        assert any(
-            "Duplicate" in (w.error_detail or "") for w in warnings
-        ), "Duplicate plugin name must produce a Duplicate-tagged WARNING"
+        warnings = [e for e in audit.entries if e.event_type == AuditEventType.WARNING]
+        assert any("Duplicate" in (w.error_detail or "") for w in warnings), (
+            "Duplicate plugin name must produce a Duplicate-tagged WARNING"
+        )

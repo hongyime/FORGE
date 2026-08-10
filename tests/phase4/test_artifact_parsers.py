@@ -31,13 +31,13 @@ class TestMSIParser:
         # CFBF header: magic(8) + clsid(16) + minor_version(2) + major_version(2)
         # + byte_order(2) + sector_shift(2) + mini_sector_shift(2) + ...
         header = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 16
-        header += struct.pack("<HH", 0x003e, 0x0003)  # minor + major
-        header += struct.pack("<H", 0xfffe)  # byte_order
-        header += struct.pack("<H", 9)   # sector_shift (2^9 = 512)
-        header += struct.pack("<H", 6)   # mini_sector_shift (2^6 = 64)
-        header += b"\x00" * 6            # reserved
-        header += struct.pack("<L", 1)   # n_dir_sectors
-        header += struct.pack("<L", 2)   # n_fat_sectors
+        header += struct.pack("<HH", 0x003E, 0x0003)  # minor + major
+        header += struct.pack("<H", 0xFFFE)  # byte_order
+        header += struct.pack("<H", 9)  # sector_shift (2^9 = 512)
+        header += struct.pack("<H", 6)  # mini_sector_shift (2^6 = 64)
+        header += b"\x00" * 6  # reserved
+        header += struct.pack("<L", 1)  # n_dir_sectors
+        header += struct.pack("<L", 2)  # n_fat_sectors
         header += b"\x00" * 512
         f.write_bytes(header)
 
@@ -57,9 +57,9 @@ class TestDMGParser:
         # UDIF trailer: magic(4) + version(4) + header_size(4) + flags(4) + ...
         padding = b"\x00" * 1024
         trailer = b"koly"
-        trailer += struct.pack(">I", 4)   # version 4
-        trailer += struct.pack(">I", 512) # header size
-        trailer += struct.pack(">I", 0)   # flags
+        trailer += struct.pack(">I", 4)  # version 4
+        trailer += struct.pack(">I", 512)  # header size
+        trailer += struct.pack(">I", 0)  # flags
         trailer += b"\x00" * (512 - 16)
         f.write_bytes(padding + trailer)
         parser = DMGParser()
@@ -76,13 +76,13 @@ class TestRPMParser:
         # RPM lead: magic(4) + major(1) + minor(1) + type(2) + arch(2) + name(66) + osnum(2) + sig(2) + reserved(16)
         header = b"\xed\xab\xee\xdb"
         header += bytes([3, 0])  # major=3, minor=0
-        header += struct.pack(">H", 0)   # type=binary
-        header += struct.pack(">H", 1)   # arch=i386
+        header += struct.pack(">H", 0)  # type=binary
+        header += struct.pack(">H", 1)  # arch=i386
         name_padded = b"acme-pkg-1.0.0-1.x86_64" + b"\x00" * (66 - 23)
         header += name_padded
-        header += struct.pack(">H", 1)   # os_num
-        header += struct.pack(">H", 5)   # sig_type
-        header += b"\x00" * 16           # reserved
+        header += struct.pack(">H", 1)  # os_num
+        header += struct.pack(">H", 5)  # sig_type
+        header += b"\x00" * 16  # reserved
         f.write_bytes(header)
 
         meta = RPMParser().parse(f)
@@ -160,9 +160,9 @@ class TestPSTParser:
         # !BDN + CRC(4) + magic_client(2) + wVer(2) + wVerClient(2)
         header = b"!BDN"
         header += struct.pack("<I", 0xDEADBEEF)  # CRC
-        header += b"SM"                           # magic_client
-        header += struct.pack("<H", 23)           # wVer (unicode PST)
-        header += struct.pack("<H", 19)           # wVerClient
+        header += b"SM"  # magic_client
+        header += struct.pack("<H", 23)  # wVer (unicode PST)
+        header += struct.pack("<H", 19)  # wVerClient
         header += b"\x00" * 100
         f.write_bytes(header)
         meta = PSTParser().parse(f)
@@ -224,12 +224,20 @@ class TestDispatch:
         assert len(PARSERS) == 9
         formats = {p.format for p in PARSERS}
         assert formats == {
-            "msi", "dmg", "rpm", "war_ear", "pdf_attachments",
-            "ole_office", "outlook_mailbox", "keepass_kdbx", "pkcs12",
+            "msi",
+            "dmg",
+            "rpm",
+            "war_ear",
+            "pdf_attachments",
+            "ole_office",
+            "outlook_mailbox",
+            "keepass_kdbx",
+            "pkcs12",
         }
 
     def test_metadata_is_json_serialisable(self, tmp_path: Path) -> None:
         import json
+
         f = tmp_path / "doc.pdf"
         f.write_bytes(b"%PDF-1.5\n")
         meta = parse_artifact(f)

@@ -101,9 +101,7 @@ def _current_alembic_revision(db_url: str) -> str | None:
         if "alembic_version" not in insp.get_table_names():
             return None
         with engine.connect() as conn:
-            row = conn.exec_driver_sql(
-                "SELECT version_num FROM alembic_version"
-            ).fetchone()
+            row = conn.exec_driver_sql("SELECT version_num FROM alembic_version").fetchone()
             if row is None:
                 return None
             return str(row[0])
@@ -145,6 +143,7 @@ def bootstrap_database(db_url: str) -> BootstrapResult:
     schema: str | None = None
     if "?" in db_url:
         from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse  # noqa: PLC0415
+
         parsed = urlparse(db_url)
         params = parse_qsl(parsed.query)
         keep: list[tuple[str, str]] = []

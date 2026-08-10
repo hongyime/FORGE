@@ -24,6 +24,7 @@ CVEs surfaced by /shodan/host land in audit_log under phase='phase4',
 module='shodan_lookup', action='cve_enrich' so the exploit correlator
 (Phase 4 J) can pick them up during its NVD + Exploit-DB join.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -88,8 +89,7 @@ def _hostname_in_domain_scope(hostname: str, domain: str) -> bool:
 def _service_web_scheme(service: dict[str, Any]) -> str:
     port = service.get("port")
     service_text = " ".join(
-        str(service.get(key) or "").lower()
-        for key in ("protocol", "service", "version", "banner")
+        str(service.get(key) or "").lower() for key in ("protocol", "service", "version", "banner")
     )
     if isinstance(port, int):
         if port in _SHODAN_HTTPS_PORTS:
@@ -234,7 +234,9 @@ def _shodan_service_http_urls(
         return []
     raw_values: list[tuple[str, str]] = []
     for field in ("location", "redirect"):
-        raw_values.extend((field, value) for value in _shodan_http_url_value_candidates(http.get(field)))
+        raw_values.extend(
+            (field, value) for value in _shodan_http_url_value_candidates(http.get(field))
+        )
 
     candidates: list[tuple[str, str]] = []
     for field, raw_value in raw_values:
@@ -245,7 +247,10 @@ def _shodan_service_http_urls(
             text = f"{scheme}:{text}"
         raw_urls: list[str] = []
         if text.startswith("/"):
-            raw_urls.extend(f"{_shodan_service_base_url(scheme, port, hostname)}{text}" for hostname in hostnames)
+            raw_urls.extend(
+                f"{_shodan_service_base_url(scheme, port, hostname)}{text}"
+                for hostname in hostnames
+            )
         elif "://" in text:
             raw_urls.append(text)
         for raw_url in raw_urls:
@@ -439,6 +444,7 @@ def _shodan_get(client: Any, url: str, *, params: dict[str, Any]) -> Any:
 # Lookup: /shodan/host/{ip}
 # ---------------------------------------------------------------------------
 
+
 def lookup_shodan_host(
     ip: str,
     engagement_id: int,
@@ -491,9 +497,11 @@ def lookup_shodan_host(
             timeout=timeout,
             follow_redirects=True,
             headers={
-                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                               "AppleWebKit/537.36 (KHTML, like Gecko) "
-                               "Chrome/120.0.0.0 Safari/537.36"),
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
                 "Accept": "application/json",
             },
             verify=False,  # noqa: S501
@@ -538,13 +546,15 @@ def lookup_shodan_host(
         port = entry.get("port")
         if not isinstance(port, int):
             continue
-        services.append({
-            "port":     port,
-            "protocol": (entry.get("transport") or "tcp").lower(),
-            "service":  entry.get("product") or entry.get("_shodan", {}).get("module") or "",
-            "version":  entry.get("version") or "",
-            "banner":   (entry.get("data") or "")[:512],
-        })
+        services.append(
+            {
+                "port": port,
+                "protocol": (entry.get("transport") or "tcp").lower(),
+                "service": entry.get("product") or entry.get("_shodan", {}).get("module") or "",
+                "version": entry.get("version") or "",
+                "banner": (entry.get("data") or "")[:512],
+            }
+        )
 
     # Shodan `vulns` can be dict {cve: {details}} or list [cve, ...]
     vulns_raw = data.get("vulns") or {}
@@ -557,16 +567,16 @@ def lookup_shodan_host(
 
     result["found"] = True
     result["host"] = {
-        "ip":        data.get("ip_str") or result["ip"],
-        "org":       data.get("org", "") or "",
-        "isp":       data.get("isp", "") or "",
-        "country":   data.get("country_name", "") or "",
-        "asn":       data.get("asn", "") or "",
-        "os":        data.get("os", "") or "",
+        "ip": data.get("ip_str") or result["ip"],
+        "org": data.get("org", "") or "",
+        "isp": data.get("isp", "") or "",
+        "country": data.get("country_name", "") or "",
+        "asn": data.get("asn", "") or "",
+        "os": data.get("os", "") or "",
         "hostnames": list(data.get("hostnames") or []),
-        "ports":     sorted(int(p) for p in (data.get("ports") or []) if isinstance(p, int)),
-        "services":  services,
-        "cves":      cves,
+        "ports": sorted(int(p) for p in (data.get("ports") or []) if isinstance(p, int)),
+        "services": services,
+        "cves": cves,
     }
     return result
 
@@ -574,6 +584,7 @@ def lookup_shodan_host(
 # ---------------------------------------------------------------------------
 # Lookup: /dns/resolve + capped /shodan/host enrichment
 # ---------------------------------------------------------------------------
+
 
 def lookup_shodan_domain(
     domain: str,
@@ -620,9 +631,11 @@ def lookup_shodan_domain(
             timeout=timeout,
             follow_redirects=True,
             headers={
-                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                               "AppleWebKit/537.36 (KHTML, like Gecko) "
-                               "Chrome/120.0.0.0 Safari/537.36"),
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
                 "Accept": "application/json",
             },
             verify=False,  # noqa: S501
@@ -651,12 +664,14 @@ def lookup_shodan_domain(
             for host, ip in resolved.items():
                 if ip and isinstance(ip, str):
                     ips_seen.add(ip)
-                    result["records"].append({
-                        "subdomain": host,
-                        "type": "A",
-                        "value": ip,
-                        "last_seen": "",
-                    })
+                    result["records"].append(
+                        {
+                            "subdomain": host,
+                            "type": "A",
+                            "value": ip,
+                            "last_seen": "",
+                        }
+                    )
             # For each resolved IP, hit /shodan/host to discover every
             # OTHER hostname Shodan has observed on that IP - reveals
             # subdomains + neighbouring hosted domains.
@@ -683,7 +698,7 @@ def lookup_shodan_domain(
             # Convert unique hostnames -> bare-label subdomain list
             for h in other_hostnames:
                 if h.endswith("." + result["domain"]):
-                    label = h[:-(len(result["domain"]) + 1)]
+                    label = h[: -(len(result["domain"]) + 1)]
                     if label and label not in result["subdomains"]:
                         result["subdomains"].append(label)
             if r.status_code != 200:
@@ -704,6 +719,7 @@ def lookup_shodan_domain(
 # ---------------------------------------------------------------------------
 # Persist
 # ---------------------------------------------------------------------------
+
 
 def persist_shodan_findings(
     target: str,
@@ -772,9 +788,12 @@ def persist_shodan_findings(
                             "INSERT OR IGNORE INTO hosts "
                             "(engagement_id, ip, hostname, os_family, host_context, in_scope) "
                             "VALUES (?, ?, ?, 'unknown', ?, 1)",
-                            (engagement_id, value, fqdn,
-                             json.dumps({"discovery": "shodan_dns_a",
-                                         "record_type": rtype})),
+                            (
+                                engagement_id,
+                                value,
+                                fqdn,
+                                json.dumps({"discovery": "shodan_dns_a", "record_type": rtype}),
+                            ),
                         )
                         if con.total_changes > prev:
                             stats["hosts_inserted"] += 1
@@ -821,14 +840,19 @@ def persist_shodan_findings(
                     "INSERT INTO audit_log "
                     "(engagement_id, phase, module, action, target, result, operator) "
                     "VALUES (?, 'phase2', 'shodan_lookup', 'lookup', ?, ?, ?)",
-                    (engagement_id, domain,
-                     json.dumps({
-                         "source":     "shodan_dns",
-                         "subdomains": len(domain_result.get("subdomains", []) or []),
-                         "records":    len(domain_result.get("records", []) or []),
-                         "tags":       domain_result.get("tags", []) or [],
-                     }),
-                     "kill_chain"),
+                    (
+                        engagement_id,
+                        domain,
+                        json.dumps(
+                            {
+                                "source": "shodan_dns",
+                                "subdomains": len(domain_result.get("subdomains", []) or []),
+                                "records": len(domain_result.get("records", []) or []),
+                                "tags": domain_result.get("tags", []) or [],
+                            }
+                        ),
+                        "kill_chain",
+                    ),
                 )
             except sqlite3.OperationalError:
                 pass
@@ -859,14 +883,20 @@ def persist_shodan_findings(
                             "INSERT INTO hosts "
                             "(engagement_id, ip, hostname, os_family, host_context, in_scope) "
                             "VALUES (?, ?, ?, 'unknown', ?, 1)",
-                            (engagement_id, ip, primary_hostname,
-                             json.dumps({
-                                 "discovery": "shodan_host",
-                                 "org":       host.get("org", ""),
-                                 "isp":       host.get("isp", ""),
-                                 "country":   host.get("country", ""),
-                                 "asn":       host.get("asn", ""),
-                             })),
+                            (
+                                engagement_id,
+                                ip,
+                                primary_hostname,
+                                json.dumps(
+                                    {
+                                        "discovery": "shodan_host",
+                                        "org": host.get("org", ""),
+                                        "isp": host.get("isp", ""),
+                                        "country": host.get("country", ""),
+                                        "asn": host.get("asn", ""),
+                                    }
+                                ),
+                            ),
                         )
                         host_id = cur.lastrowid
                         stats["hosts_inserted"] += 1
@@ -892,10 +922,14 @@ def persist_shodan_findings(
                             "  service_name=excluded.service_name, "
                             "  banner=excluded.banner, "
                             "  version=excluded.version",
-                            (host_id, port, proto,
-                             svc.get("service") or "unknown",
-                             (svc.get("banner") or "")[:512],
-                             svc.get("version") or ""),
+                            (
+                                host_id,
+                                port,
+                                proto,
+                                svc.get("service") or "unknown",
+                                (svc.get("banner") or "")[:512],
+                                svc.get("version") or "",
+                            ),
                         )
                         if con.total_changes > prev:
                             stats["services_inserted"] += 1
@@ -929,14 +963,19 @@ def persist_shodan_findings(
                         "INSERT INTO audit_log "
                         "(engagement_id, phase, module, action, target, result, operator) "
                         "VALUES (?, 'phase4', 'shodan_lookup', 'cve_enrich', ?, ?, ?)",
-                        (engagement_id, ip or cve,
-                         json.dumps({
-                             "source": "shodan_host",
-                             "cve":    cve,
-                             "ip":     ip,
-                             "port":   host.get("ports", []),
-                         }),
-                         "kill_chain"),
+                        (
+                            engagement_id,
+                            ip or cve,
+                            json.dumps(
+                                {
+                                    "source": "shodan_host",
+                                    "cve": cve,
+                                    "ip": ip,
+                                    "port": host.get("ports", []),
+                                }
+                            ),
+                            "kill_chain",
+                        ),
                     )
                 except sqlite3.OperationalError:
                     pass
@@ -947,19 +986,24 @@ def persist_shodan_findings(
                     "INSERT INTO audit_log "
                     "(engagement_id, phase, module, action, target, result, operator) "
                     "VALUES (?, 'phase2', 'shodan_lookup', 'lookup', ?, ?, ?)",
-                    (engagement_id, ip or target,
-                     json.dumps({
-                         "source":    "shodan_host",
-                         "org":       host.get("org", ""),
-                         "isp":       host.get("isp", ""),
-                         "country":   host.get("country", ""),
-                         "ports":     host.get("ports", []),
-                         "services":  len(host.get("services", []) or []),
-                         "url_seeds": stats["url_seeds_inserted"],
-                         "cve_count": len(cves),
-                         "hostnames": hostnames[:8],
-                     }),
-                     "kill_chain"),
+                    (
+                        engagement_id,
+                        ip or target,
+                        json.dumps(
+                            {
+                                "source": "shodan_host",
+                                "org": host.get("org", ""),
+                                "isp": host.get("isp", ""),
+                                "country": host.get("country", ""),
+                                "ports": host.get("ports", []),
+                                "services": len(host.get("services", []) or []),
+                                "url_seeds": stats["url_seeds_inserted"],
+                                "cve_count": len(cves),
+                                "hostnames": hostnames[:8],
+                            }
+                        ),
+                        "kill_chain",
+                    ),
                 )
             except sqlite3.OperationalError:
                 pass

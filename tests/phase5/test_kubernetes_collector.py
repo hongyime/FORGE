@@ -76,7 +76,8 @@ def test_discover_service_account_artifacts(
         path.write_text("x")
 
     artifacts = [
-        artifact for artifact in collector.discover()
+        artifact
+        for artifact in collector.discover()
         if artifact.artifact_family == "kubernetes_credentials"
     ]
 
@@ -99,7 +100,8 @@ def test_discover_kubernetes_env_vars(
     monkeypatch.setenv("KUBERNETES_SERVICE_PORT", "443")
 
     artifacts = [
-        artifact for artifact in collector.discover()
+        artifact
+        for artifact in collector.discover()
         if artifact.artifact_family == "kubernetes_context"
     ]
 
@@ -179,8 +181,14 @@ def test_discover_inventory_and_pivot_mapping(
 
     artifacts = list(collector.discover())
 
-    inventory = next(artifact for artifact in artifacts if artifact.artifact_family == "kubernetes_inventory")
-    pivot = next(artifact for artifact in artifacts if artifact.artifact_family == "kubernetes_pivot_opportunity")
+    inventory = next(
+        artifact for artifact in artifacts if artifact.artifact_family == "kubernetes_inventory"
+    )
+    pivot = next(
+        artifact
+        for artifact in artifacts
+        if artifact.artifact_family == "kubernetes_pivot_opportunity"
+    )
 
     assert inventory.report_safe_summary_fields["pod_count"] == 1
     assert pivot.source_path == "default/builder"

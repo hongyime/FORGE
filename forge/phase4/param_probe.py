@@ -322,7 +322,9 @@ class IDORScanner:
         prefixes = list(dict.fromkeys(prefixes))
         if not domains and not ip_ranges and not prefixes:
             return None
-        return ScopeGate(EngagementScope(domains=domains, ip_ranges=ip_ranges, urls=prefixes)).is_in_scope
+        return ScopeGate(
+            EngagementScope(domains=domains, ip_ranges=ip_ranges, urls=prefixes)
+        ).is_in_scope
 
     def _scope_filter(
         self,

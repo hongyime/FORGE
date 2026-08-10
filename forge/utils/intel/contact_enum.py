@@ -49,9 +49,7 @@ class ToolVersionError(RuntimeError):
 
 def _split_configured_command(value: str) -> list[str]:
     return [
-        part.strip("\"'")
-        for part in shlex.split(value, posix=os.name != "nt")
-        if part.strip("\"'")
+        part.strip("\"'") for part in shlex.split(value, posix=os.name != "nt") if part.strip("\"'")
     ]
 
 
@@ -246,10 +244,13 @@ def run_contact_enum(
     tmp_path = tmp_base  # kept for cleanup compatibility
 
     def _cleanup():
-        for p in (tmp_base, tmp_base.with_suffix(".json"),
-                  tmp_base.with_suffix(".xml"),
-                  Path(str(tmp_base) + ".json"),
-                  Path(str(tmp_base) + ".xml")):
+        for p in (
+            tmp_base,
+            tmp_base.with_suffix(".json"),
+            tmp_base.with_suffix(".xml"),
+            Path(str(tmp_base) + ".json"),
+            Path(str(tmp_base) + ".xml"),
+        ):
             try:
                 p.unlink(missing_ok=True)
             except Exception:

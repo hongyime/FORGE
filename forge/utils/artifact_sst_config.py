@@ -122,7 +122,9 @@ def _is_bucket_key(key: str, context: str) -> bool:
 
 def _is_endpoint_key(key: str, context: str) -> bool:
     context_key = _fingerprint(context)
-    if key in _ENDPOINT_KEYS or any(marker in key for marker in ("domain", "url", "endpoint", "hostname")):
+    if key in _ENDPOINT_KEYS or any(
+        marker in key for marker in ("domain", "url", "endpoint", "hostname")
+    ):
         return True
     if key != "name":
         return False

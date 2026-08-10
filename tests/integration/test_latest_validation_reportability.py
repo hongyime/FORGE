@@ -141,13 +141,9 @@ def test_latest_cloud_validation_row_wins_for_linked_key_reportability(
         output_path=reports_dir / "dashboard.html",
     )
     detail_payload = json.loads(
-        (
-            reports_dir
-            / "dashboard"
-            / "data"
-            / "engagements"
-            / f"{SLUG}.json"
-        ).read_text(encoding="utf-8")
+        (reports_dir / "dashboard" / "data" / "engagements" / f"{SLUG}.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert detail_payload["counts"]["key_scanner_findings"] == 0
     assert detail_payload["severity_summary"]["HIGH"] == 0

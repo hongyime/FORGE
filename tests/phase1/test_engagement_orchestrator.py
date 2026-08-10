@@ -71,34 +71,48 @@ def _phase1_permissive_scope_manifest(
     manifest_dir = tmp_path_factory.mktemp("phase1_permissive_scope")
     manifest_path = manifest_dir / "manifest.json"
     manifest_path.write_text(
-        json.dumps({
-            # Intentionally NO "roe_id" key — see docstring.
-            "domains": [
-                "acme.example", "*.acme.example",
-                "beta.example", "*.beta.example",
-                "gamma.example", "*.gamma.example",
-                "sequence-one.example",
-                "*.example",
-            ],
-            "urls": [
-                "https://portal.acme.example/",
-                "https://ops.acme.example/",
-                "https://acme.example/",
-            ],
-            "authorized_seeds": [
-                "acme.example",
-                "@rootuser", "@alicehandle", "@primeuser",
-                "+15559876543", "+15551230000", "+15550909090",
-                "+15553334444", "+15550001111", "+15550102030",
-                "+15550111222",
-                "Alice Example", "Acme Corp",
-                "security@acme.example", "alice.smith@acme.example",
-            ],
-        }),
+        json.dumps(
+            {
+                # Intentionally NO "roe_id" key — see docstring.
+                "domains": [
+                    "acme.example",
+                    "*.acme.example",
+                    "beta.example",
+                    "*.beta.example",
+                    "gamma.example",
+                    "*.gamma.example",
+                    "sequence-one.example",
+                    "*.example",
+                ],
+                "urls": [
+                    "https://portal.acme.example/",
+                    "https://ops.acme.example/",
+                    "https://acme.example/",
+                ],
+                "authorized_seeds": [
+                    "acme.example",
+                    "@rootuser",
+                    "@alicehandle",
+                    "@primeuser",
+                    "+15559876543",
+                    "+15551230000",
+                    "+15550909090",
+                    "+15553334444",
+                    "+15550001111",
+                    "+15550102030",
+                    "+15550111222",
+                    "Alice Example",
+                    "Acme Corp",
+                    "security@acme.example",
+                    "alice.smith@acme.example",
+                ],
+            }
+        ),
         encoding="utf-8",
     )
     monkeypatch.setenv("FORGE_ROE_ID", "ROE-PHASE1-TEST-AUTOUSE")
     monkeypatch.setenv("FORGE_SCOPE_MANIFEST", str(manifest_path))
+
 
 from forge.db.migrations import run_migrations
 from forge.db.schema import apply_schema
@@ -292,7 +306,9 @@ def _asar_bytes(members: list[tuple[str, bytes]]) -> bytes:
     header_json = json.dumps({"files": header_files}, separators=(",", ":")).encode()
     padding = b"\x00" * ((4 - (len(header_json) % 4)) % 4)
     header_size = 4 + len(header_json) + len(padding)
-    return struct.pack("<II", header_size, len(header_json)) + header_json + padding + bytes(content)
+    return (
+        struct.pack("<II", header_size, len(header_json)) + header_json + padding + bytes(content)
+    )
 
 
 def test_synthesis_engine_backfills_scope_and_promotes_discovered_seeds(tmp_path: Path) -> None:
@@ -991,8 +1007,28 @@ def test_synthesis_engine_parallelizes_seed_confidence_seed_entries_and_preserve
             """,
             [
                 (2001, 1001, "acme.example", "domain", "scope", "pending", 0, 0.96, "{}"),
-                (2002, 1001, "app.acme.example", "subdomain", "discovered", "pending", 1, 0.78, "{}"),
-                (2003, 1001, "security@acme.example", "email", "discovered", "pending", 1, 0.82, "{}"),
+                (
+                    2002,
+                    1001,
+                    "app.acme.example",
+                    "subdomain",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.78,
+                    "{}",
+                ),
+                (
+                    2003,
+                    1001,
+                    "security@acme.example",
+                    "email",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.82,
+                    "{}",
+                ),
                 (2004, 1001, "security", "username", "cross_reference", "pending", 2, 0.72, "{}"),
                 (2005, 1001, "203.0.113.10", "ipv4", "discovered", "pending", 1, 0.76, "{}"),
             ],
@@ -1087,8 +1123,28 @@ def test_synthesis_engine_parallelizes_seed_confidence_relation_entries_and_pres
             """,
             [
                 (2101, 1001, "acme.example", "domain", "scope", "pending", 0, 0.96, "{}"),
-                (2102, 1001, "app.acme.example", "subdomain", "discovered", "pending", 1, 0.78, "{}"),
-                (2103, 1001, "security@acme.example", "email", "discovered", "pending", 1, 0.82, "{}"),
+                (
+                    2102,
+                    1001,
+                    "app.acme.example",
+                    "subdomain",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.78,
+                    "{}",
+                ),
+                (
+                    2103,
+                    1001,
+                    "security@acme.example",
+                    "email",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.82,
+                    "{}",
+                ),
                 (2104, 1001, "security", "username", "cross_reference", "pending", 2, 0.72, "{}"),
                 (2105, 1001, "203.0.113.10", "ipv4", "discovered", "pending", 1, 0.76, "{}"),
             ],
@@ -1118,7 +1174,9 @@ def test_synthesis_engine_parallelizes_seed_confidence_relation_entries_and_pres
         "2105:2102": 0.02,
         "2104:2101": 0.04,
     }
-    original_seed_confidence_relation_entry = EngagementSynthesisEngine._seed_confidence_relation_entry
+    original_seed_confidence_relation_entry = (
+        EngagementSynthesisEngine._seed_confidence_relation_entry
+    )
 
     def _fake_seed_confidence_relation_entry(
         row: Any,
@@ -1191,8 +1249,28 @@ def test_synthesis_engine_parallelizes_seed_confidence_update_entries_and_preser
             """,
             [
                 (2201, 1001, "acme.example", "domain", "scope", "pending", 0, 0.96, "{}"),
-                (2202, 1001, "app.acme.example", "subdomain", "discovered", "pending", 1, 0.78, "{}"),
-                (2203, 1001, "security@acme.example", "email", "discovered", "pending", 1, 0.82, "{}"),
+                (
+                    2202,
+                    1001,
+                    "app.acme.example",
+                    "subdomain",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.78,
+                    "{}",
+                ),
+                (
+                    2203,
+                    1001,
+                    "security@acme.example",
+                    "email",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.82,
+                    "{}",
+                ),
                 (2204, 1001, "security", "username", "cross_reference", "pending", 2, 0.72, "{}"),
                 (2205, 1001, "203.0.113.10", "ipv4", "discovered", "pending", 1, 0.76, "{}"),
             ],
@@ -1296,7 +1374,17 @@ def test_synthesis_engine_creates_conflict_relations_for_identity_collisions(
                 (2401, 1001, "+15559876543", "phone", "operator", "pending", 0, 1.0, "{}"),
                 (2402, 1001, "Alice Example", "name", "cross_reference", "pending", 1, 0.4, "{}"),
                 (2403, 1001, "Bob Builder", "name", "cross_reference", "pending", 1, 0.4, "{}"),
-                (2404, 1001, "Acme Research", "company", "cross_reference", "pending", 1, 0.4, "{}"),
+                (
+                    2404,
+                    1001,
+                    "Acme Research",
+                    "company",
+                    "cross_reference",
+                    "pending",
+                    1,
+                    0.4,
+                    "{}",
+                ),
                 (2405, 1001, "Builder Labs", "company", "cross_reference", "pending", 1, 0.4, "{}"),
             ],
         )
@@ -1339,8 +1427,7 @@ def test_synthesis_engine_creates_conflict_relations_for_identity_collisions(
             """
         ).fetchall()
         conflict_pairs = {
-            (str(row["source_seed"]), str(row["target_seed"]))
-            for row in relation_rows
+            (str(row["source_seed"]), str(row["target_seed"])) for row in relation_rows
         }
         assert ("Acme Research", "Builder Labs") in conflict_pairs
         assert ("Alice Example", "Bob Builder") in conflict_pairs
@@ -1378,7 +1465,9 @@ def test_synthesis_engine_creates_conflict_relations_for_identity_collisions(
     output_path = reports_dir / "dashboard.html"
     generate_dashboard(data_dir=data_dir, reports_dir=reports_dir, output_path=output_path)
 
-    detail_json = reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    detail_json = (
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
+    )
     detail_payload = json.loads(detail_json.read_text(encoding="utf-8"))
     relation_rows = detail_payload["sections"]["seed_relations"]
     assert any(
@@ -1410,8 +1499,28 @@ def test_synthesis_engine_parallelizes_seed_id_rows_and_preserves_mapping(
             """,
             [
                 (2301, 1001, "acme.example", "domain", "scope", "pending", 0, 1.0, "{}"),
-                (2302, 1001, "app.acme.example", "subdomain", "discovered", "pending", 1, 0.78, "{}"),
-                (2303, 1001, "security@acme.example", "email", "discovered", "pending", 1, 0.82, "{}"),
+                (
+                    2302,
+                    1001,
+                    "app.acme.example",
+                    "subdomain",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.78,
+                    "{}",
+                ),
+                (
+                    2303,
+                    1001,
+                    "security@acme.example",
+                    "email",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.82,
+                    "{}",
+                ),
                 (2304, 1001, "security", "username", "cross_reference", "pending", 2, 0.72, "{}"),
                 (2305, 1001, "203.0.113.10", "ipv4", "discovered", "pending", 1, 0.76, "{}"),
             ],
@@ -1488,8 +1597,28 @@ def test_synthesis_engine_parallelizes_seed_depth_rows_and_preserves_mapping(
             """,
             [
                 (2401, 1001, "acme.example", "domain", "scope", "pending", 0, 1.0, "{}"),
-                (2402, 1001, "app.acme.example", "subdomain", "discovered", "pending", 1, 0.78, "{}"),
-                (2403, 1001, "security@acme.example", "email", "discovered", "pending", 2, 0.82, "{}"),
+                (
+                    2402,
+                    1001,
+                    "app.acme.example",
+                    "subdomain",
+                    "discovered",
+                    "pending",
+                    1,
+                    0.78,
+                    "{}",
+                ),
+                (
+                    2403,
+                    1001,
+                    "security@acme.example",
+                    "email",
+                    "discovered",
+                    "pending",
+                    2,
+                    0.82,
+                    "{}",
+                ),
                 (2404, 1001, "security", "username", "cross_reference", "pending", 3, 0.72, "{}"),
                 (2405, 1001, "203.0.113.10", "ipv4", "discovered", "pending", 1, 0.76, "{}"),
             ],
@@ -1712,7 +1841,9 @@ def test_synthesis_engine_derives_social_profile_seeds_and_relations(tmp_path: P
             ORDER BY seed_type, seed_value
             """
         ).fetchall()
-        seed_map = {(str(row["seed_value"]), str(row["seed_type"])): str(row["source"]) for row in rows}
+        seed_map = {
+            (str(row["seed_value"]), str(row["seed_type"])): str(row["source"]) for row in rows
+        }
         assert ("secops", "username") in seed_map
         assert ("alice-example", "username") in seed_map
         assert ("alice-su", "username") in seed_map
@@ -1776,7 +1907,11 @@ def test_synthesis_engine_derives_social_profile_seeds_and_relations(tmp_path: P
         assert ("security@acme.example", "alice-su", "same_entity") in relation_types
         assert ("security@acme.example", "press@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "+15559876543", "same_entity") in relation_types
-        assert ("security@acme.example", "downloads.acme.example", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "downloads.acme.example",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "rawops", "same_entity") in relation_types
         assert ("security@acme.example", "identityops", "same_entity") in relation_types
         assert ("security@acme.example", "person-link", "same_entity") in relation_types
@@ -1785,15 +1920,35 @@ def test_synthesis_engine_derives_social_profile_seeds_and_relations(tmp_path: P
         assert ("security@acme.example", "accountpublicops", "same_entity") in relation_types
         assert ("security@acme.example", "usernamevalueops", "same_entity") in relation_types
         assert ("security@acme.example", "rawops@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "identityops@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "person-link@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "nested-contact@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "nested-list-contact@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "identityops@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "person-link@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "nested-contact@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "nested-list-contact@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "rawops.acme.example", "related_asset") in relation_types
         assert ("security@acme.example", "identity.acme.example", "related_asset") in relation_types
         assert ("security@acme.example", "people.acme.example", "related_asset") in relation_types
         assert ("security@acme.example", "contact.acme.example", "related_asset") in relation_types
-        assert ("security@acme.example", "contact-list.acme.example", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "contact-list.acme.example",
+            "related_asset",
+        ) in relation_types
 
         email_rows = con.execute(
             """
@@ -2659,87 +2814,87 @@ def test_synthesis_engine_promotes_link_in_bio_profile_urls_to_username_seeds() 
 
 def test_synthesis_engine_infers_social_profile_platforms_from_url_alias_fields() -> None:
     payload = [
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://github.com/aliasdev",
-                            "display_name": "Alias Dev",
-                        },
-                        {
-                            "source": "epieos",
-                            "canonicalUrl": "https://www.linkedin.com/company/acme-alias-labs",
-                        },
-                        {
-                            "source": "epieos",
-                            "webUrl": "https://solo.to/aliassolo",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://acme-docs.gitbook.io/security-guide",
-                        },
-                        {
-                            "source": "epieos",
-                            "canonicalUrl": "https://acme-readme.readme.io/reference/auth",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://www.figma.com/@acmedesign",
-                            "display_name": "Acme Design",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://www.figma.com/community/file/123456/design-system",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://www.indiehackers.com/acmefounder",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://www.polywork.com/acmeops",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://contra.com/acmeconsultant",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://adplist.org/mentors/acme-mentor",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "https://contra.com/discover/designers",
-                        },
-                        {
-                            "source": "epieos",
-                            "profileLink": "github.com/schemelessdev",
-                        },
-                        {
-                            "source": "epieos",
-                            "canonicalUrl": "www.linkedin.com/company/schemeless-labs",
-                        },
-                        {
-                            "source": "epieos",
-                            "webUrl": "linktr.ee/schemelesslink",
-                        },
-                        {
-                            "source": "epieos",
-                            "publicUrl": "github.com/publicurlops",
-                        },
-                        {
-                            "source": "epieos",
-                            "account_url": "linktr.ee/accounturlops",
-                        },
-                        {
-                            "source": "epieos",
-                            "uri": "www.linkedin.com/company/uri-labs",
-                        },
-                        {
-                            "source": "epieos",
-                            "sameAs": [
-                                "github.com/sameasdev",
-                                "https://www.linkedin.com/in/same-as-person",
-                            ],
-                        },
+        {
+            "source": "epieos",
+            "profileLink": "https://github.com/aliasdev",
+            "display_name": "Alias Dev",
+        },
+        {
+            "source": "epieos",
+            "canonicalUrl": "https://www.linkedin.com/company/acme-alias-labs",
+        },
+        {
+            "source": "epieos",
+            "webUrl": "https://solo.to/aliassolo",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://acme-docs.gitbook.io/security-guide",
+        },
+        {
+            "source": "epieos",
+            "canonicalUrl": "https://acme-readme.readme.io/reference/auth",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://www.figma.com/@acmedesign",
+            "display_name": "Acme Design",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://www.figma.com/community/file/123456/design-system",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://www.indiehackers.com/acmefounder",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://www.polywork.com/acmeops",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://contra.com/acmeconsultant",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://adplist.org/mentors/acme-mentor",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "https://contra.com/discover/designers",
+        },
+        {
+            "source": "epieos",
+            "profileLink": "github.com/schemelessdev",
+        },
+        {
+            "source": "epieos",
+            "canonicalUrl": "www.linkedin.com/company/schemeless-labs",
+        },
+        {
+            "source": "epieos",
+            "webUrl": "linktr.ee/schemelesslink",
+        },
+        {
+            "source": "epieos",
+            "publicUrl": "github.com/publicurlops",
+        },
+        {
+            "source": "epieos",
+            "account_url": "linktr.ee/accounturlops",
+        },
+        {
+            "source": "epieos",
+            "uri": "www.linkedin.com/company/uri-labs",
+        },
+        {
+            "source": "epieos",
+            "sameAs": [
+                "github.com/sameasdev",
+                "https://www.linkedin.com/in/same-as-person",
+            ],
+        },
     ]
     seed_rows = _social_profile_candidate_map(
         _social_profile_candidates_from_payload(payload, source="epieos:alias-url-fields")
@@ -3000,7 +3155,9 @@ def test_synthesis_engine_social_profile_anchor_keeps_existing_at_username_paren
         con.close()
 
 
-def test_synthesis_engine_promotes_linkedin_school_and_showcase_profiles_as_company_pivots() -> None:
+def test_synthesis_engine_promotes_linkedin_school_and_showcase_profiles_as_company_pivots() -> (
+    None
+):
     payload = [
         {
             "source": "name_search",
@@ -3036,7 +3193,9 @@ def test_synthesis_engine_promotes_linkedin_school_and_showcase_profiles_as_comp
     assert ("Alice Example", "labs.acme.example", "related_asset") in relations
 
 
-def test_synthesis_engine_promotes_matrix_identity_ids_to_recursive_user_and_homeserver_seeds() -> None:
+def test_synthesis_engine_promotes_matrix_identity_ids_to_recursive_user_and_homeserver_seeds() -> (
+    None
+):
     payload = [
         {
             "platform": "matrix",
@@ -3076,7 +3235,9 @@ def test_synthesis_engine_promotes_matrix_identity_ids_to_recursive_user_and_hom
     assert ("security@acme.example", "chat.acme.example", "related_asset") in relations
 
 
-def test_synthesis_engine_promotes_federated_acct_ids_to_recursive_user_and_instance_seeds() -> None:
+def test_synthesis_engine_promotes_federated_acct_ids_to_recursive_user_and_instance_seeds() -> (
+    None
+):
     payload = [
         {
             "platform": "mastodon",
@@ -4628,10 +4789,18 @@ def test_synthesis_engine_parallelizes_social_profile_pivot_batch_entries_and_pr
             "emails": [("ops@acme.example", "email", "same_entity", 0.77, {"family": family})],
             "phones": [("+15550001111", "phone", "same_entity", 0.76, {"family": family})],
             "urls": [
-                ("https://portal.acme.example/login", "url", "related_asset", 0.74, {"family": family}),
+                (
+                    "https://portal.acme.example/login",
+                    "url",
+                    "related_asset",
+                    0.74,
+                    {"family": family},
+                ),
                 "skip-me",
             ],
-            "hosts": [("portal.acme.example", "subdomain", "related_asset", 0.73, {"family": family})],
+            "hosts": [
+                ("portal.acme.example", "subdomain", "related_asset", 0.73, {"family": family})
+            ],
             "domain": [("acme.example", "domain", "related_asset", 0.72, {"family": family})],
         }[family]
 
@@ -4740,10 +4909,18 @@ def test_synthesis_engine_parallelizes_social_profile_pivot_family_entries_and_p
             "emails": [("ops@acme.example", "email", "same_entity", 0.77, {"family": family})],
             "phones": [("+15550001111", "phone", "same_entity", 0.76, {"family": family})],
             "urls": [
-                ("https://portal.acme.example/login", "url", "related_asset", 0.74, {"family": family}),
+                (
+                    "https://portal.acme.example/login",
+                    "url",
+                    "related_asset",
+                    0.74,
+                    {"family": family},
+                ),
                 "skip-me",
             ],
-            "hosts": [("portal.acme.example", "subdomain", "related_asset", 0.73, {"family": family})],
+            "hosts": [
+                ("portal.acme.example", "subdomain", "related_asset", 0.73, {"family": family})
+            ],
             "domain": [("acme.example", "domain", "related_asset", 0.72, {"family": family})],
         }[family]
 
@@ -6403,7 +6580,10 @@ def test_synthesis_engine_promotes_bluesky_custom_domain_handles_as_domain_pivot
     }
     assert ("ops.acme.example", "username") in bsky_social_pivot_map
     assert ("ops.acme.example", "domain") in bsky_social_pivot_map
-    assert bsky_social_pivot_map[("ops.acme.example", "domain")]["rule"] == "social_profile_domain_handle"
+    assert (
+        bsky_social_pivot_map[("ops.acme.example", "domain")]["rule"]
+        == "social_profile_domain_handle"
+    )
 
     weak_name_search_pivots = engine._extract_social_profile_pivots(
         {"platform": "bluesky", "handle": "alice.blue"},
@@ -6569,10 +6749,22 @@ def test_synthesis_engine_parallelizes_legacy_social_profile_rows_and_preserves_
             """,
             [
                 (1001, "one@acme.example", "github", "https://github.com/one", "One Example"),
-                (1001, "two@acme.example", "linkedin", "https://linkedin.example/two", "Two Example"),
+                (
+                    1001,
+                    "two@acme.example",
+                    "linkedin",
+                    "https://linkedin.example/two",
+                    "Two Example",
+                ),
                 (1001, "three@acme.example", "twitter", "https://x.com/three", "Three Example"),
                 (1001, "four@acme.example", "", "https://profiles.example/four", "Four Example"),
-                (1001, "five@acme.example", "mastodon", "https://mastodon.social/@five", "Five Example"),
+                (
+                    1001,
+                    "five@acme.example",
+                    "mastodon",
+                    "https://mastodon.social/@five",
+                    "Five Example",
+                ),
             ],
         )
         con.commit()
@@ -6979,7 +7171,9 @@ def test_synthesis_engine_parallelizes_artifact_seed_rows_and_supports_local_mob
         con.close()
 
     assert peak == 4
-    assert [(item.seed_value, item.seed_type, item.parent_value) for item in values] == expected_values
+    assert [
+        (item.seed_value, item.seed_type, item.parent_value) for item in values
+    ] == expected_values
     assert (local_apk.as_posix(), "apk_url", None) in expected_values
 
 
@@ -7256,10 +7450,34 @@ def test_synthesis_engine_parallelizes_artifact_seed_candidate_batch_entries_and
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (1001, "https://downloads.acme.example/app.apk", "", "apk", "crawler", "queued", "{}"),
-                (1001, "https://acme.example/report.pdf", "", "document", "crawler", "queued", "{}"),
+                (
+                    1001,
+                    "https://downloads.acme.example/app.apk",
+                    "",
+                    "apk",
+                    "crawler",
+                    "queued",
+                    "{}",
+                ),
+                (
+                    1001,
+                    "https://acme.example/report.pdf",
+                    "",
+                    "document",
+                    "crawler",
+                    "queued",
+                    "{}",
+                ),
                 (1001, "", local_apk.as_posix(), "apk", "local", "queued", "{}"),
-                (1001, "https://www.threads.net/@threadblue", "", "other", "crawler", "queued", "{}"),
+                (
+                    1001,
+                    "https://www.threads.net/@threadblue",
+                    "",
+                    "other",
+                    "crawler",
+                    "queued",
+                    "{}",
+                ),
                 (
                     1001,
                     "https://storage.googleapis.com/acme-public/file.txt",
@@ -7366,7 +7584,9 @@ def test_synthesis_engine_parallelizes_artifact_seed_candidate_batch_entries_and
         con.close()
 
     assert peak == 4
-    assert [(item.seed_value, item.seed_type, item.parent_value) for item in values] == expected_values
+    assert [
+        (item.seed_value, item.seed_type, item.parent_value) for item in values
+    ] == expected_values
 
 
 def test_synthesis_engine_parallelizes_derive_candidate_family_merges_and_preserves_order(
@@ -8161,7 +8381,9 @@ def test_synthesis_engine_parallelizes_federated_identity_key_scans_and_preserve
     ]
 
 
-def test_synthesis_engine_raw_link_values_reuses_direct_url_aliases_without_stringifying_lists() -> None:
+def test_synthesis_engine_raw_link_values_reuses_direct_url_aliases_without_stringifying_lists() -> (
+    None
+):
     values = EngagementSynthesisEngine._social_profile_raw_link_values(
         {
             "profileUrl": "https://github.com/profile-url-alias",
@@ -8292,15 +8514,21 @@ def test_synthesis_engine_parallelizes_social_profile_url_key_scans_and_preserve
 
 
 def test_synthesis_engine_suppresses_numeric_sip_contacts_as_email_values() -> None:
-    assert EngagementSynthesisEngine._social_profile_email_values(
-        "sip:+15557654332@voice.acme.example"
-    ) == []
-    assert EngagementSynthesisEngine._social_profile_email_values(
-        "sips:+15557654333@secure-voice.acme.example"
-    ) == []
-    assert EngagementSynthesisEngine._social_profile_email_values(
-        "sip:sip.ops@acme.example"
-    ) == ["sip.ops@acme.example"]
+    assert (
+        EngagementSynthesisEngine._social_profile_email_values(
+            "sip:+15557654332@voice.acme.example"
+        )
+        == []
+    )
+    assert (
+        EngagementSynthesisEngine._social_profile_email_values(
+            "sips:+15557654333@secure-voice.acme.example"
+        )
+        == []
+    )
+    assert EngagementSynthesisEngine._social_profile_email_values("sip:sip.ops@acme.example") == [
+        "sip.ops@acme.example"
+    ]
 
 
 def test_synthesis_engine_parallelizes_social_profile_embedded_container_key_scans(
@@ -8501,9 +8729,7 @@ def test_synthesis_engine_parallelizes_mailto_query_keys_and_preserves_order(
         "cc": 0.01,
         "bcc": 0.03,
     }
-    original_candidates = (
-        EngagementSynthesisEngine._social_profile_mailto_query_email_candidates
-    )
+    original_candidates = EngagementSynthesisEngine._social_profile_mailto_query_email_candidates
 
     def _tracking_mailto_query_candidates(
         cls,
@@ -10023,9 +10249,7 @@ def test_synthesis_engine_promotes_explicit_mastodon_custom_instance_profiles_wi
                             "https://mstdn.acme.example/@mirror",
                             "https://github.com/notmastodon",
                         ],
-                        "identifier": {
-                            "url": "https://community.example.org/users/schemaactor"
-                        },
+                        "identifier": {"url": "https://community.example.org/users/schemaactor"},
                         "display_name": "Custom Masto",
                         "external_url": "https://research.acme.example/blog",
                     }
@@ -10348,9 +10572,18 @@ def test_synthesis_engine_promotes_epieos_matrix_federated_and_nostr_identities(
         assert ("wf.acme.example", "subdomain") in seed_rows
         assert ("public-room", "username") not in seed_rows
         assert seed_rows[("matrixblue", "username")]["platform"] == "matrix"
-        assert seed_rows[("matrix.acme.example", "subdomain")]["rule"] == "social_profile_matrix_homeserver"
-        assert seed_rows[("social.acme.example", "subdomain")]["rule"] == "social_profile_federated_instance"
-        assert seed_rows[("wf.acme.example", "subdomain")]["rule"] == "social_profile_federated_instance"
+        assert (
+            seed_rows[("matrix.acme.example", "subdomain")]["rule"]
+            == "social_profile_matrix_homeserver"
+        )
+        assert (
+            seed_rows[("social.acme.example", "subdomain")]["rule"]
+            == "social_profile_federated_instance"
+        )
+        assert (
+            seed_rows[("wf.acme.example", "subdomain")]["rule"]
+            == "social_profile_federated_instance"
+        )
 
         relation_rows = {
             (str(row[0]), str(row[1]), str(row[2]))
@@ -10758,7 +10991,11 @@ def test_synthesis_engine_extracts_contact_links_from_social_profile_urls(tmp_pa
         assert ("security@acme.example", "multi.bcc@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "query.to@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "query.cc@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "facetime.ops@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "facetime.ops@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "voice.ops@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "sip.ops@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "secure.ops@acme.example", "same_entity") in relation_types
@@ -11284,8 +11521,16 @@ def test_synthesis_engine_promotes_top_level_social_contact_aliases(tmp_path: Pa
                 """
             ).fetchall()
         }
-        assert ("security@acme.example", "direct.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "contact.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "direct.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "contact.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15559876543", "same_entity") in relation_types
         assert ("security@acme.example", "+15552223333", "same_entity") in relation_types
     finally:
@@ -11405,9 +11650,21 @@ def test_synthesis_engine_mines_raw_social_profile_contact_data_methods(
         }
         assert ("security@acme.example", "contactdatamethods", "same_entity") in relation_types
         assert ("security@acme.example", "data.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "method.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "point.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "points.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "method.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "point.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "points.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15557654344", "same_entity") in relation_types
         assert ("security@acme.example", "+15553034445", "same_entity") in relation_types
         assert ("security@acme.example", "+15553034446", "same_entity") in relation_types
@@ -11534,10 +11791,26 @@ def test_synthesis_engine_mines_string_social_profile_contact_and_related_contai
                 """
             ).fetchall()
         }
-        assert ("security@acme.example", "string.contact@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "method.string@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "known.string@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "team.string@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "string.contact@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "method.string@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "known.string@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "team.string@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15556060001", "same_entity") in relation_types
         assert ("security@acme.example", "+15556060002", "same_entity") in relation_types
         assert ("security@acme.example", "+15556060003", "same_entity") in relation_types
@@ -11551,7 +11824,11 @@ def test_synthesis_engine_mines_string_social_profile_contact_and_related_contai
             "https://known-string.acme.example/profile",
             "related_asset",
         ) in relation_types
-        assert ("security@acme.example", "team-string.acme.example", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "team-string.acme.example",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
@@ -11665,12 +11942,28 @@ def test_synthesis_engine_mines_raw_social_profile_related_person_containers(
         assert ("security@acme.example", "relatedcontainerops", "same_entity") in relation_types
         assert ("security@acme.example", "known-alias", "same_entity") in relation_types
         assert ("security@acme.example", "colleague-alias", "same_entity") in relation_types
-        assert ("security@acme.example", "known.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "colleague.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "known.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "colleague.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "team.alias@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "+15554040001", "same_entity") in relation_types
-        assert ("security@acme.example", "https://known.acme.example/profile", "related_asset") in relation_types
-        assert ("security@acme.example", "https://team.acme.example/member", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://known.acme.example/profile",
+            "related_asset",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "https://team.acme.example/member",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "known.acme.example", "related_asset") in relation_types
         assert ("security@acme.example", "team.acme.example", "related_asset") in relation_types
     finally:
@@ -11768,11 +12061,23 @@ def test_synthesis_engine_extracts_display_form_social_email_aliases(tmp_path: P
             ).fetchall()
         }
         assert ("security@acme.example", "mail.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "primary.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "secondary.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "primary.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "secondary.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "work.alias@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "list.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "value.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "value.alias@acme.example",
+            "same_entity",
+        ) in relation_types
     finally:
         con.close()
 
@@ -11971,7 +12276,9 @@ def test_synthesis_engine_extracts_extended_social_handle_aliases(tmp_path: Path
         con.close()
 
 
-def test_synthesis_engine_mines_social_profile_bio_text_for_recursive_pivots(tmp_path: Path) -> None:
+def test_synthesis_engine_mines_social_profile_bio_text_for_recursive_pivots(
+    tmp_path: Path,
+) -> None:
     db_path = tmp_path / "engagement.db"
     _bootstrap_engagement(db_path)
 
@@ -12063,7 +12370,11 @@ def test_synthesis_engine_mines_social_profile_bio_text_for_recursive_pivots(tmp
         }
         assert ("security@acme.example", "biohunter", "same_entity") in relation_types
         assert ("security@acme.example", "bio.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "contact.bio@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "contact.bio@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15553334444", "same_entity") in relation_types
         assert ("security@acme.example", "+15554445555", "same_entity") in relation_types
         assert (
@@ -12391,7 +12702,11 @@ def test_synthesis_engine_mines_work_history_identity_containers(tmp_path: Path)
         }
         assert ("security@acme.example", "Career Labs", "same_entity") in relation_types
         assert ("security@acme.example", "Acme University", "same_entity") in relation_types
-        assert ("security@acme.example", "jobs@career.acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "jobs@career.acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15557070001", "same_entity") in relation_types
         assert (
             "security@acme.example",
@@ -12404,7 +12719,11 @@ def test_synthesis_engine_mines_work_history_identity_containers(tmp_path: Path)
             "related_asset",
         ) in relation_types
         assert ("security@acme.example", "career.acme.example", "related_asset") in relation_types
-        assert ("security@acme.example", "university.acme.example", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "university.acme.example",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
@@ -12604,9 +12923,7 @@ def test_synthesis_engine_mines_schema_identifier_profile_url_aliases(tmp_path: 
         {
             "source": "raw_provider",
             "platform": "linkedin",
-            "identifier": {
-                "url": "https://www.linkedin.com/in/schema-identifier"
-            },
+            "identifier": {"url": "https://www.linkedin.com/in/schema-identifier"},
             "identifiers": [
                 "https://gitlab.com/schema-list-id",
                 "not-a-url",
@@ -12769,9 +13086,17 @@ def test_synthesis_engine_mines_parsed_epieos_extended_text_aliases(tmp_path: Pa
                 """
             ).fetchall()
         }
-        assert ("security@acme.example", "summary.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "summary.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15552223333", "same_entity") in relation_types
-        assert ("security@acme.example", "https://docs.acme.example/profile", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://docs.acme.example/profile",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "docs.acme.example", "related_asset") in relation_types
     finally:
         con.close()
@@ -12898,14 +13223,34 @@ def test_synthesis_engine_mines_parsed_epieos_contact_containers(tmp_path: Path)
                 """
             ).fetchall()
         }
-        assert ("security@acme.example", "contact.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "point.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "points.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "contact.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "point.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "points.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15553030001", "same_entity") in relation_types
         assert ("security@acme.example", "+15553030003", "same_entity") in relation_types
         assert ("security@acme.example", "+15553030004", "same_entity") in relation_types
-        assert ("security@acme.example", "https://contact.acme.example/help", "related_asset") in relation_types
-        assert ("security@acme.example", "https://point.acme.example/help", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://contact.acme.example/help",
+            "related_asset",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "https://point.acme.example/help",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "status.acme.example", "related_asset") in relation_types
         assert ("security@acme.example", "point.acme.example", "related_asset") in relation_types
     finally:
@@ -13014,10 +13359,22 @@ def test_synthesis_engine_mines_parsed_epieos_related_person_containers(tmp_path
         assert ("security@acme.example", "relatedcontainerops", "same_entity") in relation_types
         assert ("security@acme.example", "known-alias", "same_entity") in relation_types
         assert ("security@acme.example", "team-handle", "same_entity") in relation_types
-        assert ("security@acme.example", "known.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "known.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "team.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "https://known.acme.example/profile", "related_asset") in relation_types
-        assert ("security@acme.example", "https://team.acme.example/member", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://known.acme.example/profile",
+            "related_asset",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "https://team.acme.example/member",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "known.acme.example", "related_asset") in relation_types
         assert ("security@acme.example", "team.acme.example", "related_asset") in relation_types
     finally:
@@ -13130,8 +13487,16 @@ def test_synthesis_engine_mines_parsed_epieos_account_containers(tmp_path: Path)
             ).fetchall()
         }
         assert ("security@acme.example", "accountcontainerops", "same_entity") in relation_types
-        assert ("security@acme.example", "https://gitlab.com/account-alias", "related_asset") in relation_types
-        assert ("security@acme.example", "account-links.acme.example", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://gitlab.com/account-alias",
+            "related_asset",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "account-links.acme.example",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
@@ -13175,7 +13540,9 @@ def test_synthesis_engine_mines_raw_social_profile_account_containers(tmp_path: 
                             {
                                 "links": [
                                     {"url": "https://www.linkedin.com/in/raw-social"},
-                                    {"url": "mailto:social.alias@acme.example?cc=social.cc@acme.example"},
+                                    {
+                                        "url": "mailto:social.alias@acme.example?cc=social.cc@acme.example"
+                                    },
                                 ],
                             },
                         ],
@@ -13270,11 +13637,23 @@ def test_synthesis_engine_mines_raw_social_profile_account_containers(tmp_path: 
         assert ("security@acme.example", "rawaccountops", "same_entity") in relation_types
         assert ("security@acme.example", "rawhandlealias", "same_entity") in relation_types
         assert ("security@acme.example", "raw-social", "same_entity") in relation_types
-        assert ("security@acme.example", "social.alias@acme.example", "same_entity") in relation_types
-        assert ("security@acme.example", "connected.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "social.alias@acme.example",
+            "same_entity",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "connected.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15553031111", "same_entity") in relation_types
         assert ("security@acme.example", "+15553032222", "same_entity") in relation_types
-        assert ("security@acme.example", "https://account-links.acme.example/profile", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://account-links.acme.example/profile",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "same.acme.example", "related_asset") in relation_types
     finally:
         con.close()
@@ -13381,7 +13760,11 @@ def test_synthesis_engine_mines_search_result_envelope_aliases(tmp_path: Path) -
         assert ("security@acme.example", "entry-owner", "same_entity") in relation_types
         assert ("security@acme.example", "hit.alias@acme.example", "same_entity") in relation_types
         assert ("security@acme.example", "+15553033333", "same_entity") in relation_types
-        assert ("security@acme.example", "https://search.acme.example/profile", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://search.acme.example/profile",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
@@ -13487,7 +13870,11 @@ def test_synthesis_engine_mines_common_provider_response_envelopes(tmp_path: Pat
         assert ("security@acme.example", "response-owner", "same_entity") in relation_types
         assert ("security@acme.example", "payload-owner", "same_entity") in relation_types
         assert ("security@acme.example", "value-owner", "same_entity") in relation_types
-        assert ("security@acme.example", "https://payload.acme.example/profile", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://payload.acme.example/profile",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
@@ -13592,9 +13979,17 @@ def test_synthesis_engine_mines_identity_connection_envelopes(tmp_path: Path) ->
         assert ("security@acme.example", "element-owner", "same_entity") in relation_types
         assert ("security@acme.example", "connection-owner", "same_entity") in relation_types
         assert ("security@acme.example", "member-owner", "same_entity") in relation_types
-        assert ("security@acme.example", "element.alias@acme.example", "same_entity") in relation_types
+        assert (
+            "security@acme.example",
+            "element.alias@acme.example",
+            "same_entity",
+        ) in relation_types
         assert ("security@acme.example", "+15553035555", "same_entity") in relation_types
-        assert ("security@acme.example", "https://member.acme.example/profile", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://member.acme.example/profile",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
@@ -13705,7 +14100,11 @@ def test_synthesis_engine_mines_raw_social_profile_plural_url_aliases(tmp_path: 
         }
         assert ("security@acme.example", "pluralroot", "same_entity") in relation_types
         assert ("security@acme.example", "plural-profile", "same_entity") in relation_types
-        assert ("security@acme.example", "https://external.acme.example/status", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://external.acme.example/status",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "external.acme.example", "related_asset") in relation_types
     finally:
         con.close()
@@ -14261,11 +14660,27 @@ def test_synthesis_engine_mines_raw_social_profile_singular_site_homepage_aliase
             ).fetchall()
         }
         assert ("security@acme.example", "singularroot", "same_entity") in relation_types
-        assert ("security@acme.example", "https://portal.acme.example/status", "related_asset") in relation_types
-        assert ("security@acme.example", "https://site.acme.example/about", "related_asset") in relation_types
-        assert ("security@acme.example", "https://cdn.acme.example/assets/app.js", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "https://portal.acme.example/status",
+            "related_asset",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "https://site.acme.example/about",
+            "related_asset",
+        ) in relation_types
+        assert (
+            "security@acme.example",
+            "https://cdn.acme.example/assets/app.js",
+            "related_asset",
+        ) in relation_types
         assert ("security@acme.example", "docs.acme.example", "related_asset") in relation_types
-        assert ("security@acme.example", "nested-site.acme.example", "related_asset") in relation_types
+        assert (
+            "security@acme.example",
+            "nested-site.acme.example",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
@@ -14438,13 +14853,23 @@ def test_phone_dork_url_persistence_feeds_synthesis_url_host_and_social_handle_s
         assert ("+15559876543", "phone.blue", "same_entity") in relation_types
         assert ("+15559876543", "phonethread", "same_entity") in relation_types
         assert ("+15559876543", "phoneops", "same_entity") in relation_types
-        assert ("+15559876543", "https://portal.acme.example/login", "related_asset") in relation_types
-        assert ("+15559876543", "https://downloads.acme.example/client.apk", "related_asset") in relation_types
+        assert (
+            "+15559876543",
+            "https://portal.acme.example/login",
+            "related_asset",
+        ) in relation_types
+        assert (
+            "+15559876543",
+            "https://downloads.acme.example/client.apk",
+            "related_asset",
+        ) in relation_types
     finally:
         con.close()
 
 
-def test_artifact_queue_processor_extracts_mobile_configs_and_feedback_seeds(tmp_path: Path) -> None:
+def test_artifact_queue_processor_extracts_mobile_configs_and_feedback_seeds(
+    tmp_path: Path,
+) -> None:
     db_path = tmp_path / "engagement.db"
     artifact_root = tmp_path / "artifacts"
     artifact_root.mkdir()
@@ -14543,9 +14968,7 @@ def test_artifact_queue_processor_extracts_mobile_configs_and_feedback_seeds(tmp
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "mobile-owner@acme.example" in emails
     finally:
@@ -14748,9 +15171,7 @@ def test_artifact_queue_processor_derives_supabase_ref_from_key_only_artifact(
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "keyonly-owner@acme.example" in emails
 
@@ -14864,9 +15285,7 @@ def test_artifact_queue_processor_extracts_source_map_artifacts(tmp_path: Path) 
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "sourcemap-owner@acme.example" in emails
         assert "nested-sourcemap@acme.example" in emails
@@ -15516,11 +15935,7 @@ def test_artifact_queue_processor_extracts_document_and_archive_findings(tmp_pat
 
     legacy_doc_path = artifact_root / "legacy-memo.doc"
     legacy_doc_path.write_bytes(
-        (
-            b"Legacy engagement memo\n"
-            b"support@acme.example\n"
-            b"https://legacy.acme.example/memo\n"
-        )
+        (b"Legacy engagement memo\nsupport@acme.example\nhttps://legacy.acme.example/memo\n")
     )
 
     pdf_path = artifact_root / "metadata-report.pdf"
@@ -15625,9 +16040,7 @@ def test_artifact_queue_processor_extracts_document_and_archive_findings(tmp_pat
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "security@acme.example" in emails
         assert "blue@acme.example" in emails
@@ -15740,23 +16153,63 @@ def test_artifact_queue_processor_extracts_document_and_archive_findings(tmp_pat
             ).fetchall()
         }
         assert ("https://github.com/secopsacme", "secopsacme", "derived_from") in relation_types
-        assert ("https://x.com/intent/user?screen_name=blueintent", "blueintent", "derived_from") in relation_types
-        assert ("https://bluewriter.medium.com/signal-boost", "bluewriter", "derived_from") in relation_types
+        assert (
+            "https://x.com/intent/user?screen_name=blueintent",
+            "blueintent",
+            "derived_from",
+        ) in relation_types
+        assert (
+            "https://bluewriter.medium.com/signal-boost",
+            "bluewriter",
+            "derived_from",
+        ) in relation_types
         assert ("https://dev.to/bluedev/latest-post", "bluedev", "derived_from") in relation_types
-        assert ("https://www.reddit.com/user/bluered/comments", "bluered", "derived_from") in relation_types
+        assert (
+            "https://www.reddit.com/user/bluered/comments",
+            "bluered",
+            "derived_from",
+        ) in relation_types
         assert ("https://about.me/blueabout", "blueabout", "derived_from") in relation_types
         assert ("https://bsky.app/profile/blue.ops", "blue.ops", "derived_from") in relation_types
         assert ("https://gitlab.com/secopsforge", "secopsforge", "derived_from") in relation_types
-        assert ("https://bitbucket.org/bluebucket/platform-repo", "bluebucket", "derived_from") in relation_types
-        assert ("https://mastodon.social/@bluefed/112233", "bluefed", "derived_from") in relation_types
-        assert ("https://www.facebook.com/secopsacme", "secopsacme", "derived_from") in relation_types
+        assert (
+            "https://bitbucket.org/bluebucket/platform-repo",
+            "bluebucket",
+            "derived_from",
+        ) in relation_types
+        assert (
+            "https://mastodon.social/@bluefed/112233",
+            "bluefed",
+            "derived_from",
+        ) in relation_types
+        assert (
+            "https://www.facebook.com/secopsacme",
+            "secopsacme",
+            "derived_from",
+        ) in relation_types
         assert ("https://www.threads.net/@blueacme", "blueacme", "derived_from") in relation_types
-        assert ("https://github.com/settings/profile", "settings", "derived_from") not in relation_types
-        assert ("https://bitbucket.org/product/features", "product", "derived_from") not in relation_types
+        assert (
+            "https://github.com/settings/profile",
+            "settings",
+            "derived_from",
+        ) not in relation_types
+        assert (
+            "https://bitbucket.org/product/features",
+            "product",
+            "derived_from",
+        ) not in relation_types
         assert ("https://mastodon.social/about", "about", "derived_from") not in relation_types
         assert ("https://medium.com/topic/security", "topic", "derived_from") not in relation_types
-        assert ("https://www.linkedin.com/company/acme-corp", "Acme Corp", "derived_from") in relation_types
-        assert ("https://www.linkedin.com/in/alice-example", "Alice Example", "derived_from") in relation_types
+        assert (
+            "https://www.linkedin.com/company/acme-corp",
+            "Acme Corp",
+            "derived_from",
+        ) in relation_types
+        assert (
+            "https://www.linkedin.com/in/alice-example",
+            "Alice Example",
+            "derived_from",
+        ) in relation_types
         assert ("https://github.com/vcfops", "vcfops", "derived_from") in relation_types
 
         artifact_meta = {
@@ -15845,9 +16298,18 @@ def test_artifact_queue_processor_promotes_alternate_storage_url_forms(tmp_path:
                 """
             ).fetchall()
         }
-        assert ("https://acme-site-bucket.s3-website-us-east-1.amazonaws.com/index.html", "url") in seeds
-        assert ("https://storage.cloud.google.com/acme-browser-bucket/reports/final.pdf", "url") in seeds
-        assert ("https://nyc3.digitaloceanspaces.com/acme-path-space/archive/final.json", "url") in seeds
+        assert (
+            "https://acme-site-bucket.s3-website-us-east-1.amazonaws.com/index.html",
+            "url",
+        ) in seeds
+        assert (
+            "https://storage.cloud.google.com/acme-browser-bucket/reports/final.pdf",
+            "url",
+        ) in seeds
+        assert (
+            "https://nyc3.digitaloceanspaces.com/acme-path-space/archive/final.json",
+            "url",
+        ) in seeds
         assert (
             "https://firebasestorage.googleapis.com/v0/b/acme-firestorage.appspot.com/o/reports%2Ffinal.pdf?alt=media",
             "url",
@@ -15930,9 +16392,7 @@ def test_artifact_queue_processor_extracts_extensionless_graphql_configs(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "graphql-owner@acme.example" in emails
         assert "nested-graphql-owner@acme.example" in emails
@@ -16071,7 +16531,10 @@ def test_artifact_queue_processor_extracts_ai_agent_config_artifacts(
         encoding="utf-8",
     )
 
-    assert _classify_remote_artifact_url("https://repo.acme.example/.cursor/rules/security.mdc") == "config"
+    assert (
+        _classify_remote_artifact_url("https://repo.acme.example/.cursor/rules/security.mdc")
+        == "config"
+    )
     assert _classify_remote_artifact_url("https://repo.acme.example/.mcp.json") == "config"
 
     processor = ArtifactQueueProcessor(db_path, 1001)
@@ -16086,9 +16549,7 @@ def test_artifact_queue_processor_extracts_ai_agent_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "mcp-owner@acme.example",
@@ -16146,7 +16607,10 @@ def test_artifact_queue_processor_extracts_ai_agent_config_artifacts(
         }
         assert artifact_meta[mcp_path.resolve().as_posix()]["format"] == "mcp-config"
         assert artifact_meta[cursor_rule_path.resolve().as_posix()]["format"] == "cursor-rules"
-        assert artifact_meta[claude_desktop_path.resolve().as_posix()]["format"] == "claude-desktop-config"
+        assert (
+            artifact_meta[claude_desktop_path.resolve().as_posix()]["format"]
+            == "claude-desktop-config"
+        )
         assert artifact_meta[codex_path.resolve().as_posix()]["format"] == "codex-config"
         assert artifact_meta[windsurf_path.resolve().as_posix()]["format"] == "windsurf-rules"
     finally:
@@ -16244,9 +16708,7 @@ def test_artifact_queue_processor_extracts_certificate_key_and_profile_text_arti
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "certops@acme.example" in emails
         assert "support-cert@acme.example" in emails
@@ -16345,7 +16807,7 @@ def test_artifact_queue_processor_extracts_script_and_infra_config_artifacts(
         $env:SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtleW9ubHl2YXVsdCIsInJvbGUiOiJhbm9uIn0.signature654"
         $env:SLACK_BOT_TOKEN = "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
         $env:MAILCHIMP_API_KEY = "1234567890abcdef1234567890abcdef-us1"
-        $env:AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=scriptblobacct;AccountKey={'A' * 86}=="
+        $env:AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=scriptblobacct;AccountKey={"A" * 86}=="
         $env:GCS_BACKUP = "gs://acme-script-gcs/states/default.json"
         """.strip(),
         encoding="utf-8",
@@ -16434,9 +16896,7 @@ def test_artifact_queue_processor_extracts_script_and_infra_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "scriptops@acme.example" in emails
         assert "powershell@acme.example" in emails
@@ -16569,9 +17029,7 @@ def test_artifact_queue_processor_extracts_procfile_variant_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "procfile-web@acme.example" in emails
         assert "procfile-worker@acme.example" in emails
@@ -16671,7 +17129,10 @@ def test_artifact_queue_processor_extracts_scheduler_cron_artifacts(
     assert _artifact_format_label(cron_job_path) == "cron-config"
     assert _artifact_format_label(crontab_path) == "cron-config"
     assert _artifact_format_label("cron.daily/report.cron") == "cron-config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/etc/cron.d/acme-backup") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/etc/cron.d/acme-backup")
+        == "config"
+    )
     assert (
         _select_remote_artifact_filename(
             42,
@@ -16694,9 +17155,7 @@ def test_artifact_queue_processor_extracts_scheduler_cron_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "cron-owner@acme.example" in emails
         assert "crontab-owner@acme.example" in emails
@@ -16763,6 +17222,7 @@ def test_artifact_queue_processor_extracts_bitbucket_pipelines_resource_refs(
 ) -> None:
     run_bitbucket_pipelines_resource_refs(tmp_path)
 
+
 def test_artifact_queue_processor_extracts_codebuild_buildspec_secret_refs(
     tmp_path: Path,
 ) -> None:
@@ -16779,6 +17239,7 @@ def test_artifact_queue_processor_extracts_gitlab_ci_include_refs(
     tmp_path: Path,
 ) -> None:
     run_gitlab_ci_include_refs(tmp_path)
+
 
 def test_artifact_queue_processor_extracts_container_orchestration_metadata_artifacts(
     tmp_path: Path,
@@ -17069,9 +17530,7 @@ def test_artifact_queue_processor_extracts_container_orchestration_metadata_arti
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "container-owner@acme.example",
@@ -17413,9 +17872,7 @@ def test_artifact_queue_processor_extracts_patch_and_diff_configs(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "patch-owner@acme.example",
@@ -17586,9 +18043,7 @@ def test_artifact_queue_processor_extracts_oci_image_layout_metadata_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "oci-layout-owner@acme.example" in emails
         assert "oci-image-owner@acme.example" in emails
@@ -17659,23 +18114,17 @@ def test_artifact_queue_processor_extracts_structured_terraform_state_cloud_asse
                     {
                         "type": "aws_s3_bucket",
                         "name": "artifacts",
-                        "instances": [
-                            {"attributes": {"bucket": "acme-tfstate-bucket"}}
-                        ],
+                        "instances": [{"attributes": {"bucket": "acme-tfstate-bucket"}}],
                     },
                     {
                         "type": "google_storage_bucket",
                         "name": "backups",
-                        "instances": [
-                            {"attributes": {"name": "acme-tfstate-gcs"}}
-                        ],
+                        "instances": [{"attributes": {"name": "acme-tfstate-gcs"}}],
                     },
                     {
                         "type": "google_firebase_project",
                         "name": "mobile",
-                        "instances": [
-                            {"attributes": {"project": "tfstatefirebase"}}
-                        ],
+                        "instances": [{"attributes": {"project": "tfstatefirebase"}}],
                     },
                     {
                         "type": "azurerm_storage_container",
@@ -17739,9 +18188,7 @@ def test_artifact_queue_processor_extracts_structured_terraform_state_cloud_asse
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "tfstate-owner@acme.example" in emails
 
@@ -17867,9 +18314,7 @@ def test_artifact_queue_processor_extracts_structured_iac_text_cloud_assets(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "iac-owner@acme.example" in emails
 
@@ -18068,9 +18513,7 @@ def test_artifact_queue_processor_extracts_opentofu_terragrunt_and_tf_json_artif
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "terraformrc@acme.example" in emails
         assert "tofurc@acme.example" in emails
@@ -18146,7 +18589,9 @@ def test_artifact_queue_processor_extracts_opentofu_terragrunt_and_tf_json_artif
         assert artifact_meta[s3_backend_path.resolve().as_posix()]["format"] == "terraform-backend"
         assert artifact_meta[do_backend_path.resolve().as_posix()]["format"] == "terraform-backend"
         assert artifact_meta[gcs_backend_path.resolve().as_posix()]["format"] == "terraform-backend"
-        assert artifact_meta[azure_backend_path.resolve().as_posix()]["format"] == "terraform-backend"
+        assert (
+            artifact_meta[azure_backend_path.resolve().as_posix()]["format"] == "terraform-backend"
+        )
         assert artifact_meta[tf_json_path.resolve().as_posix()]["format"] == "terraform"
     finally:
         con.close()
@@ -18313,9 +18758,7 @@ def test_artifact_queue_processor_extracts_non_terraform_iac_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "bicep-owner@acme.example" in emails
         assert "cfn-owner@acme.example" in emails
@@ -18435,12 +18878,18 @@ def test_iac_manifest_artifact_format_labels_are_source_aware() -> None:
     assert _classify_artifact_name("prod.pkrvars.hcl") == "config"
     assert _classify_artifact_name("serverless") == "config"
     assert _classify_artifact_name("cdk.json") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Pulumi.dev.yaml") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/Pulumi.dev.yaml") == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/web.pkr.hcl") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/prod.pkrvars.hcl") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/prod.pkrvars.hcl") == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/serverless") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/cdk.json") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/cloudbuild.yaml") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/cloudbuild.yaml") == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/circle.yml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.drone.yml") == "config"
 
@@ -18754,9 +19203,7 @@ def test_artifact_queue_processor_extracts_structured_yaml_cloud_assets(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "yaml-owner@acme.example" in emails
         assert "nested-yaml-owner@acme.example" in emails
@@ -18864,7 +19311,9 @@ def test_artifact_queue_processor_extracts_structured_yaml_cloud_assets(
         }
         assert artifact_meta[yaml_path.resolve().as_posix()]["format"] == "kubernetes-manifest"
         assert artifact_meta[compose_path.resolve().as_posix()]["format"] == "docker-compose"
-        assert artifact_meta[external_secret_path.resolve().as_posix()]["format"] == "external-secret"
+        assert (
+            artifact_meta[external_secret_path.resolve().as_posix()]["format"] == "external-secret"
+        )
         assert artifact_meta[gitops_path.resolve().as_posix()]["format"] == "argocd-application"
         assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
         assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 1
@@ -18989,9 +19438,7 @@ def test_artifact_queue_processor_extracts_structured_key_value_config_cloud_ass
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "ini-owner@acme.example" in emails
         assert "props-owner@acme.example" in emails
@@ -19416,7 +19863,9 @@ def test_artifact_queue_processor_extracts_observability_config_targets(
             ).fetchall()
         }
         assert artifact_meta[prometheus_path.resolve().as_posix()]["format"] == "prometheus-config"
-        assert artifact_meta[alertmanager_path.resolve().as_posix()]["format"] == "alertmanager-config"
+        assert (
+            artifact_meta[alertmanager_path.resolve().as_posix()]["format"] == "alertmanager-config"
+        )
         assert artifact_meta[grafana_path.resolve().as_posix()]["format"] == "grafana-config"
         assert artifact_meta[otel_path.resolve().as_posix()]["format"] == "otel-config"
         assert artifact_meta[tempo_path.resolve().as_posix()]["format"] == "tempo-config"
@@ -19555,9 +20004,7 @@ def test_artifact_queue_processor_extracts_structured_json_config_cloud_assets(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "json-owner@acme.example" in emails
         assert "envjson-owner@acme.example" in emails
@@ -19746,9 +20193,7 @@ def test_artifact_queue_processor_promotes_bare_managed_hosting_config_hosts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "managed-host-owner@acme.example" in emails
         assert "managed-env-owner@acme.example" in emails
@@ -20014,7 +20459,10 @@ def test_artifact_queue_processor_extracts_deploy_platform_config_artifacts(
         assert ("https://render-api.onrender.com/health", "url") in seeds
         assert ("https://acme-fly.fly.dev/api", "url") in seeds
         assert ("https://acme-railway.up.railway.app/status", "url") in seeds
-        assert ("https://calm-coast-012345.2.azurestaticapps.net/api/status?view=ops", "url") in seeds
+        assert (
+            "https://calm-coast-012345.2.azurestaticapps.net/api/status?view=ops",
+            "url",
+        ) in seeds
         assert ("https://apphosting-portal.web.app/status?view=ops", "url") in seeds
         assert ("https://main.damplify123.amplifyapp.com", "url") in seeds
         assert all("token=hidden" not in seed for seed, _ in seeds)
@@ -20078,8 +20526,14 @@ def test_artifact_queue_processor_extracts_deploy_platform_config_artifacts(
         assert artifact_meta[render_path.resolve().as_posix()]["format"] == "render-config"
         assert artifact_meta[fly_path.resolve().as_posix()]["format"] == "fly-config"
         assert artifact_meta[railway_path.resolve().as_posix()]["format"] == "railway-config"
-        assert artifact_meta[staticwebapp_path.resolve().as_posix()]["format"] == "azure-static-web-app-config"
-        assert artifact_meta[apphosting_path.resolve().as_posix()]["format"] == "firebase-app-hosting-config"
+        assert (
+            artifact_meta[staticwebapp_path.resolve().as_posix()]["format"]
+            == "azure-static-web-app-config"
+        )
+        assert (
+            artifact_meta[apphosting_path.resolve().as_posix()]["format"]
+            == "firebase-app-hosting-config"
+        )
         assert artifact_meta[amplify_path.resolve().as_posix()]["format"] == "amplify-config"
     finally:
         con.close()
@@ -20132,7 +20586,9 @@ def test_artifact_queue_processor_extracts_heroku_static_deploy_config_artifacts
                     "AZURE_BLOB_CONTAINER": {"value": "releases"},
                     "DO_SPACES_BUCKET": {"value": "heroku-json-space"},
                     "DO_SPACES_REGION": {"value": "nyc3"},
-                    "HEROKU_APP_URL": {"value": "acme-json.herokuapp.com/status?token=hidden&view=ops"},
+                    "HEROKU_APP_URL": {
+                        "value": "acme-json.herokuapp.com/status?token=hidden&view=ops"
+                    },
                     "SUPPORT_EMAIL": {"value": "heroku-json-owner@acme.example"},
                 },
             },
@@ -20233,8 +20689,12 @@ def test_artifact_queue_processor_extracts_heroku_static_deploy_config_artifacts
             ).fetchall()
         }
         assert artifact_meta[heroku_yml_path.resolve().as_posix()]["format"] == "heroku-config"
-        assert artifact_meta[heroku_app_json_path.resolve().as_posix()]["format"] == "heroku-app-json"
-        assert artifact_meta[static_json_path.resolve().as_posix()]["format"] == "static-json-config"
+        assert (
+            artifact_meta[heroku_app_json_path.resolve().as_posix()]["format"] == "heroku-app-json"
+        )
+        assert (
+            artifact_meta[static_json_path.resolve().as_posix()]["format"] == "static-json-config"
+        )
     finally:
         con.close()
 
@@ -20281,7 +20741,10 @@ def test_artifact_queue_processor_extracts_static_hosting_control_files(
         json.dumps(
             {
                 "version": 1,
-                "include": ["/reports/*", "https://routes.acme.example/status?token=hidden&view=ops"],
+                "include": [
+                    "/reports/*",
+                    "https://routes.acme.example/status?token=hidden&view=ops",
+                ],
                 "exclude": ["/src/*", "/*"],
                 "routes": [{"pattern": "/settings/security"}],
             },
@@ -20367,9 +20830,14 @@ def test_artifact_queue_processor_extracts_static_hosting_control_files(
                 """
             ).fetchall()
         }
-        assert artifact_meta["https://acme.example/_redirects"]["format"] == "static-hosting-redirects"
+        assert (
+            artifact_meta["https://acme.example/_redirects"]["format"] == "static-hosting-redirects"
+        )
         assert artifact_meta["https://acme.example/_headers"]["format"] == "static-hosting-headers"
-        assert artifact_meta["https://acme.example/_routes.json"]["format"] == "cloudflare-pages-routes"
+        assert (
+            artifact_meta["https://acme.example/_routes.json"]["format"]
+            == "cloudflare-pages-routes"
+        )
     finally:
         con.close()
 
@@ -20632,9 +21100,7 @@ def test_artifact_queue_processor_extracts_cloudflare_wrangler_config_assets(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "wrangler-owner@acme.example" in emails
         assert "jsonc-worker@acme.example" in emails
@@ -20814,9 +21280,7 @@ def test_artifact_queue_processor_extracts_yaml_env_string_lists_and_configmap_d
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "compose-list-owner@acme.example" in emails
         assert "configmap-owner@acme.example" in emails
@@ -20895,16 +21359,16 @@ def test_artifact_queue_processor_decodes_yaml_secret_data_env_maps(
           name: app-secret
         type: Opaque
         data:
-          FIREBASE_PROJECT_ID: {base64.b64encode(b'secretfirebase').decode('ascii')}
-          NEXT_PUBLIC_SUPABASE_PROJECT_REF: {base64.b64encode(b'secretvault').decode('ascii')}
-          AWS_S3_BUCKET: {base64.b64encode(b'secret-s3-bucket').decode('ascii')}
-          GOOGLE_STORAGE_BUCKET: {base64.b64encode(b'secret-gcs-bucket').decode('ascii')}
-          AZURE_BLOB_ACCOUNT: {base64.b64encode(b'secretblobacct').decode('ascii')}
-          AZURE_BLOB_CONTAINER: {base64.b64encode(b'secrets').decode('ascii')}
-          DIGITALOCEAN_SPACES_BUCKET: {base64.b64encode(b'secret-space-public').decode('ascii')}
-          DIGITALOCEAN_SPACES_REGION: {base64.b64encode(b'lon1').decode('ascii')}
-          SUPPORT_EMAIL: {base64.b64encode(b'secret-owner@acme.example').decode('ascii')}
-          PORTAL_URL: {base64.b64encode(b'https://secret.acme.example/portal').decode('ascii')}
+          FIREBASE_PROJECT_ID: {base64.b64encode(b"secretfirebase").decode("ascii")}
+          NEXT_PUBLIC_SUPABASE_PROJECT_REF: {base64.b64encode(b"secretvault").decode("ascii")}
+          AWS_S3_BUCKET: {base64.b64encode(b"secret-s3-bucket").decode("ascii")}
+          GOOGLE_STORAGE_BUCKET: {base64.b64encode(b"secret-gcs-bucket").decode("ascii")}
+          AZURE_BLOB_ACCOUNT: {base64.b64encode(b"secretblobacct").decode("ascii")}
+          AZURE_BLOB_CONTAINER: {base64.b64encode(b"secrets").decode("ascii")}
+          DIGITALOCEAN_SPACES_BUCKET: {base64.b64encode(b"secret-space-public").decode("ascii")}
+          DIGITALOCEAN_SPACES_REGION: {base64.b64encode(b"lon1").decode("ascii")}
+          SUPPORT_EMAIL: {base64.b64encode(b"secret-owner@acme.example").decode("ascii")}
+          PORTAL_URL: {base64.b64encode(b"https://secret.acme.example/portal").decode("ascii")}
         """
         ).strip(),
         encoding="utf-8",
@@ -20922,9 +21386,7 @@ def test_artifact_queue_processor_decodes_yaml_secret_data_env_maps(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "secret-owner@acme.example" in emails
 
@@ -21133,7 +21595,10 @@ def test_artifact_queue_processor_extracts_secret_provider_class_artifacts(
 def test_secret_provider_class_artifact_format_labels_are_source_aware() -> None:
     assert _artifact_format_label("secretproviderclass.yaml") == "secret-provider-class"
     assert _artifact_format_label("secret-provider-class.yml") == "secret-provider-class"
-    assert _classify_remote_artifact_url("https://artifacts.acme.example/secretproviderclass.yaml") == "config"
+    assert (
+        _classify_remote_artifact_url("https://artifacts.acme.example/secretproviderclass.yaml")
+        == "config"
+    )
     assert (
         _select_remote_artifact_filename(
             42,
@@ -21272,7 +21737,10 @@ def test_artifact_queue_processor_extracts_ecs_task_definition_artifacts(
 def test_ecs_task_definition_artifact_format_labels_are_source_aware() -> None:
     assert _artifact_format_label("ecs-task-definition.json") == "ecs-task-definition"
     assert _artifact_format_label("task-definition.yaml") == "ecs-task-definition"
-    assert _classify_remote_artifact_url("https://artifacts.acme.example/ecs-task-definition.json") == "config"
+    assert (
+        _classify_remote_artifact_url("https://artifacts.acme.example/ecs-task-definition.json")
+        == "config"
+    )
     assert (
         _select_remote_artifact_filename(
             42,
@@ -21306,7 +21774,9 @@ def test_artifact_queue_processor_extracts_lambda_config_artifacts(
                 },
                 "Layers": [{"Arn": "arn:aws:lambda:us-east-1:123456789012:layer:shared:3"}],
                 "FileSystemConfigs": [
-                    {"Arn": "arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-123"}
+                    {
+                        "Arn": "arn:aws:elasticfilesystem:us-east-1:123456789012:access-point/fsap-123"
+                    }
                 ],
                 "DeadLetterConfig": {"TargetArn": "arn:aws:sqs:us-east-1:123456789012:portal-dlq"},
                 "Environment": {
@@ -21385,15 +21855,24 @@ def test_artifact_queue_processor_extracts_lambda_config_artifacts(
                 """
             ).fetchall()
         }
-        assert artifact_meta[lambda_path.resolve().as_posix()]["format"] == "lambda-function-configuration"
+        assert (
+            artifact_meta[lambda_path.resolve().as_posix()]["format"]
+            == "lambda-function-configuration"
+        )
     finally:
         con.close()
 
 
 def test_lambda_config_artifact_format_labels_are_source_aware() -> None:
-    assert _artifact_format_label("lambda-function-configuration.json") == "lambda-function-configuration"
+    assert (
+        _artifact_format_label("lambda-function-configuration.json")
+        == "lambda-function-configuration"
+    )
     assert _artifact_format_label("function-url-config.yaml") == "lambda-function-url-config"
-    assert _classify_remote_artifact_url("https://artifacts.acme.example/lambda-config.json") == "config"
+    assert (
+        _classify_remote_artifact_url("https://artifacts.acme.example/lambda-config.json")
+        == "config"
+    )
     assert (
         _select_remote_artifact_filename(
             42,
@@ -21638,13 +22117,15 @@ def test_artifact_queue_processor_extracts_dockerconfigjson_registry_pivots(
         "auths": {
             "https://registry2.acme.example/team": {
                 "email": "registry2-owner@acme.example",
-                "auth": base64.b64encode(b"robot-two@acme.example:do-not-store-either").decode("ascii"),
+                "auth": base64.b64encode(b"robot-two@acme.example:do-not-store-either").decode(
+                    "ascii"
+                ),
             }
         },
         "credHelpers": {
             "ghcr.io": "desktop",
             "registry3.acme.example/team": "ecr-login",
-        }
+        },
     }
     standalone_path = artifact_root / ".dockerconfigjson"
     standalone_path.write_text(json.dumps(standalone_docker_config), encoding="utf-8")
@@ -21652,7 +22133,9 @@ def test_artifact_queue_processor_extracts_dockerconfigjson_registry_pivots(
     legacy_dockercfg = {
         "legacy-registry.acme.example": {
             "email": "legacy-registry-owner@acme.example",
-            "auth": base64.b64encode(b"legacy-robot@acme.example:legacy-do-not-store").decode("ascii"),
+            "auth": base64.b64encode(b"legacy-robot@acme.example:legacy-do-not-store").decode(
+                "ascii"
+            ),
         }
     }
     legacy_path = artifact_root / ".dockercfg"
@@ -21670,9 +22153,7 @@ def test_artifact_queue_processor_extracts_dockerconfigjson_registry_pivots(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "registry-bot@acme.example" in emails
         assert "registry-owner@acme.example" in emails
@@ -21824,26 +22305,14 @@ def test_docker_auth_structured_env_scan_uses_bounded_static_workers_and_preserv
     candidates = ArtifactQueueProcessor._docker_auth_structured_candidates_from_env_map(
         {
             "DOCKER_ALPHA_CONFIG": json.dumps(
-                {
-                    "auths": {
-                        "registry-alpha.acme.example": {"email": "alpha@acme.example"}
-                    }
-                }
+                {"auths": {"registry-alpha.acme.example": {"email": "alpha@acme.example"}}}
             ),
             "CONTAINER_REGISTRY_BETA": json.dumps(
-                {
-                    "auths": {
-                        "registry-beta.acme.example": {"email": "beta@acme.example"}
-                    }
-                }
+                {"auths": {"registry-beta.acme.example": {"email": "beta@acme.example"}}}
             ),
             "IGNORED_VALUE": "registry-ignored.acme.example",
             "INLINE_AUTH_JSON": json.dumps(
-                {
-                    "auths": {
-                        "registry-inline.acme.example": {"email": "inline@acme.example"}
-                    }
-                }
+                {"auths": {"registry-inline.acme.example": {"email": "inline@acme.example"}}}
             ),
         }
     )
@@ -21978,9 +22447,7 @@ def test_artifact_queue_processor_extracts_mobile_source_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "pbxproj-owner@acme.example" in emails
         assert "strings-owner@acme.example" in emails
@@ -22044,7 +22511,9 @@ def test_artifact_queue_processor_extracts_mobile_source_text_artifacts(
         assert artifact_meta[pbxproj_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[strings_path.resolve().as_posix()]["format"] == "strings"
         assert artifact_meta[strings_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[settings_gradle_path.resolve().as_posix()]["format"] == "gradle-settings"
+        assert (
+            artifact_meta[settings_gradle_path.resolve().as_posix()]["format"] == "gradle-settings"
+        )
         assert artifact_meta[bundle_path.resolve().as_posix()]["format"] == "zip"
         assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 6
     finally:
@@ -22158,9 +22627,7 @@ def test_artifact_queue_processor_extracts_backend_source_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "python-owner@acme.example",
@@ -22382,9 +22849,7 @@ def test_artifact_queue_processor_extracts_notebook_and_data_science_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "notebook-owner@acme.example",
@@ -22551,9 +23016,7 @@ def test_artifact_queue_processor_extracts_native_source_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "native-c-owner@acme.example",
@@ -22719,9 +23182,7 @@ def test_artifact_queue_processor_extracts_service_unit_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "service-owner@acme.example",
@@ -22910,9 +23371,7 @@ def test_artifact_queue_processor_extracts_dotnet_project_metadata_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "csproj-owner@acme.example",
@@ -23104,9 +23563,7 @@ def test_artifact_queue_processor_extracts_ide_workspace_metadata_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "jetbrains-owner@acme.example",
@@ -23360,21 +23817,27 @@ def test_artifact_queue_processor_extracts_build_system_text_artifacts(
 
     con = sqlite3.connect(db_path)
     try:
-        assert _classify_remote_artifact_url(
-            "https://downloads.acme.example/.devcontainer/devcontainer.json"
-        ) == "config"
+        assert (
+            _classify_remote_artifact_url(
+                "https://downloads.acme.example/.devcontainer/devcontainer.json"
+            )
+            == "config"
+        )
         assert _artifact_format_label(".devcontainer/devcontainer.json") == "devcontainer"
         assert _artifact_format_label("devcontainer-feature.json") == "devcontainer-feature"
-        assert _classify_remote_artifact_url("https://downloads.acme.example/.gitpod.yml") == "config"
+        assert (
+            _classify_remote_artifact_url("https://downloads.acme.example/.gitpod.yml") == "config"
+        )
         assert _artifact_format_label(".gitpod.yml") == "gitpod"
-        assert _classify_remote_artifact_url("https://downloads.acme.example/docker-bake.hcl") == "config"
+        assert (
+            _classify_remote_artifact_url("https://downloads.acme.example/docker-bake.hcl")
+            == "config"
+        )
         assert _artifact_format_label("docker-bake.hcl") == "docker-bake"
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "build-owner@acme.example",
@@ -23584,9 +24047,7 @@ def test_artifact_queue_processor_extracts_ownership_security_metadata_artifacts
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "codeowners-owner@acme.example",
@@ -23821,9 +24282,7 @@ def test_artifact_queue_processor_extracts_runtime_toolchain_metadata_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "node-owner@acme.example",
@@ -24111,9 +24570,7 @@ def test_artifact_queue_processor_extracts_web_server_proxy_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "htaccess-owner@acme.example",
@@ -24340,9 +24797,7 @@ def test_artifact_queue_processor_extracts_frontend_tooling_dotfile_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "eslint-owner@acme.example",
@@ -24535,9 +24990,7 @@ def test_artifact_queue_processor_extracts_browser_test_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "playwright-owner@acme.example",
@@ -24747,7 +25200,10 @@ def test_artifact_queue_processor_extracts_frontend_framework_config_artifacts(
                 "owner": "vercel-owner@acme.example",
                 "rewrites": [
                     {"source": "/api/(.*)", "destination": "vercel-api.acme.example/status"},
-                    {"source": "/tenant/(.*)", "destination": "https://${tenant}.acme.example/status"},
+                    {
+                        "source": "/tenant/(.*)",
+                        "destination": "https://${tenant}.acme.example/status",
+                    },
                 ],
             },
             indent=2,
@@ -24816,9 +25272,7 @@ def test_artifact_queue_processor_extracts_frontend_framework_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "vite-owner@acme.example",
@@ -25074,9 +25528,7 @@ def test_artifact_queue_processor_extracts_quality_release_dotfile_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "sentry-owner@acme.example",
@@ -25326,9 +25778,7 @@ def test_artifact_queue_processor_extracts_repo_maintenance_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "dependabot-owner@acme.example",
@@ -25396,13 +25846,12 @@ def test_artifact_queue_processor_extracts_repo_maintenance_config_artifacts(
                 """
             ).fetchall()
         }
-        assert artifact_meta[renovate_json5_path.resolve().as_posix()]["format"] == "renovate-config"
+        assert (
+            artifact_meta[renovate_json5_path.resolve().as_posix()]["format"] == "renovate-config"
+        )
         assert artifact_meta[dependabot_path.resolve().as_posix()]["format"] == "dependabot-config"
         assert artifact_meta[renovaterc_path.resolve().as_posix()]["format"] == "renovaterc"
-        assert (
-            artifact_meta[hadolintignore_path.resolve().as_posix()]["format"]
-            == "hadolintignore"
-        )
+        assert artifact_meta[hadolintignore_path.resolve().as_posix()]["format"] == "hadolintignore"
         assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
         assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 2
     finally:
@@ -25462,9 +25911,7 @@ def test_artifact_queue_processor_extracts_gitmodules_configs(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "gitmodules-owner@acme.example" in emails
         assert "nested-gitmodules-owner@acme.example" in emails
@@ -25570,9 +26017,7 @@ def test_artifact_queue_processor_extracts_gitreview_configs(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "gitreview-owner@acme.example" in emails
         assert "nested-gitreview-owner@acme.example" in emails
@@ -25737,9 +26182,7 @@ def test_artifact_queue_processor_extracts_frontend_component_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "mjs-owner@acme.example",
@@ -25965,9 +26408,7 @@ def test_artifact_queue_processor_extracts_package_automation_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "podfile-owner@acme.example",
@@ -26042,8 +26483,14 @@ def test_artifact_queue_processor_extracts_package_automation_text_artifacts(
         assert artifact_meta[podfile_path.resolve().as_posix()]["format"] == "cocoapods-podfile"
         assert artifact_meta[fastfile_path.resolve().as_posix()]["format"] == "fastfile"
         assert artifact_meta[cartfile_path.resolve().as_posix()]["format"] == "carthage-cartfile"
-        assert artifact_meta[cartfile_resolved_path.resolve().as_posix()]["format"] == "carthage-resolved"
-        assert artifact_meta[package_resolved_path.resolve().as_posix()]["format"] == "swift-package-resolved"
+        assert (
+            artifact_meta[cartfile_resolved_path.resolve().as_posix()]["format"]
+            == "carthage-resolved"
+        )
+        assert (
+            artifact_meta[package_resolved_path.resolve().as_posix()]["format"]
+            == "swift-package-resolved"
+        )
         assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
         assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 4
     finally:
@@ -26281,9 +26728,7 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "pypirc-owner@acme.example",
@@ -26400,9 +26845,16 @@ def test_artifact_queue_processor_extracts_package_manager_credential_configs(
         assert artifact_meta[uv_toml_path.resolve().as_posix()]["format"] == "uv-config"
         assert artifact_meta[pdm_toml_path.resolve().as_posix()]["format"] == "pdm-config"
         assert artifact_meta[pdm_lock_path.resolve().as_posix()]["format"] == "pdm-lock"
-        assert artifact_meta[requirements_in_path.resolve().as_posix()]["format"] == "python-requirements-input"
-        assert artifact_meta[requirements_path.resolve().as_posix()]["format"] == "python-requirements"
-        assert artifact_meta[constraints_path.resolve().as_posix()]["format"] == "python-constraints"
+        assert (
+            artifact_meta[requirements_in_path.resolve().as_posix()]["format"]
+            == "python-requirements-input"
+        )
+        assert (
+            artifact_meta[requirements_path.resolve().as_posix()]["format"] == "python-requirements"
+        )
+        assert (
+            artifact_meta[constraints_path.resolve().as_posix()]["format"] == "python-constraints"
+        )
         assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
         assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 2
     finally:
@@ -26493,13 +26945,19 @@ def test_artifact_queue_processor_extracts_os_package_repository_artifacts(
     assert _classify_artifact_name(Path("yum.repos.d/acme.repo")) == "config"
     assert _classify_artifact_name(Path("apk/repositories")) == "config"
     assert _classify_artifact_name(Path("pacman.d/mirrorlist")) == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/sources.list.d/acme.list") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/sources.list.d/acme.list")
+        == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/acme.list") is None
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/sources.list.d/acme.list",
-        "config",
-    ) == "acme.list"
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/sources.list.d/acme.list",
+            "config",
+        )
+        == "acme.list"
+    )
     assert _suffix_from_content_type("text/x-yum-repo") == ".repo"
     assert _suffix_from_content_type("text/x-apt-sources-list") == ".list"
 
@@ -26570,8 +27028,13 @@ def test_artifact_queue_processor_extracts_os_package_repository_artifacts(
         assert artifact_meta[apt_sources_path.resolve().as_posix()]["format"] == "os-package-repo"
         assert artifact_meta[apt_fragment_path.resolve().as_posix()]["format"] == "os-package-repo"
         assert artifact_meta[yum_repo_path.resolve().as_posix()]["format"] == "os-package-repo"
-        assert artifact_meta[apk_repositories_path.resolve().as_posix()]["format"] == "os-package-repo"
-        assert artifact_meta[pacman_mirrorlist_path.resolve().as_posix()]["format"] == "os-package-repo"
+        assert (
+            artifact_meta[apk_repositories_path.resolve().as_posix()]["format"] == "os-package-repo"
+        )
+        assert (
+            artifact_meta[pacman_mirrorlist_path.resolve().as_posix()]["format"]
+            == "os-package-repo"
+        )
     finally:
         con.close()
 
@@ -26728,12 +27191,17 @@ def test_artifact_queue_processor_labels_aws_cli_config_artifacts(
     assert _classify_artifact_name(Path(".aws/credentials")) == "config"
     assert _classify_artifact_name(Path("notes/credentials")) == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.aws/config") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.aws/credentials") == "config"
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/.aws/credentials",
-        "config",
-    ) == "credentials"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.aws/credentials") == "config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/.aws/credentials",
+            "config",
+        )
+        == "credentials"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -26861,12 +27329,18 @@ def test_artifact_queue_processor_labels_azure_cli_config_artifacts(
     assert _classify_artifact_name(Path(".azure/azureProfile.json")) == "config"
     assert _classify_artifact_name(Path(".azure/clouds.config")) == "config"
     assert _classify_artifact_name(Path(".azure/msal_token_cache.json")) == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.azure/azureProfile.json") == "config"
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/.azure/azureProfile.json",
-        "config",
-    ) == "azureProfile.json"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.azure/azureProfile.json")
+        == "config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/.azure/azureProfile.json",
+            "config",
+        )
+        == "azureProfile.json"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -26972,11 +27446,14 @@ def test_artifact_queue_processor_labels_oci_cli_config_artifacts(
     assert _classify_artifact_name(Path("notes/oci_cli_rc")) is None
     assert _classify_remote_artifact_url("https://downloads.acme.example/.oci/config") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/oci_cli_rc") is None
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/.oci/oci_cli_rc",
-        "config",
-    ) == "oci_cli_rc"
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/.oci/oci_cli_rc",
+            "config",
+        )
+        == "oci_cli_rc"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -27072,12 +27549,18 @@ def test_artifact_queue_processor_labels_rclone_config_artifacts(
     assert _classify_artifact_name(Path(".config/rclone/rclone.conf")) == "config"
     assert _classify_artifact_name(Path("rclone/rclone.conf")) == "config"
     assert _classify_artifact_name(Path("42-rclone.conf")) == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.config/rclone/rclone.conf") == "config"
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/.config/rclone/rclone.conf",
-        "config",
-    ) == "rclone.conf"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.config/rclone/rclone.conf")
+        == "config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/.config/rclone/rclone.conf",
+            "config",
+        )
+        == "rclone.conf"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -27180,12 +27663,20 @@ def test_artifact_queue_processor_derives_kopia_repository_config_cloud_assets(
 
     assert _classify_artifact_name(Path(".config/kopia/repository.config")) == "config"
     assert _classify_artifact_name(Path("42-repository.config")) == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.config/kopia/repository.config") == "config"
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/.config/kopia/repository.config",
-        "config",
-    ) == "repository.config"
+    assert (
+        _classify_remote_artifact_url(
+            "https://downloads.acme.example/.config/kopia/repository.config"
+        )
+        == "config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/.config/kopia/repository.config",
+            "config",
+        )
+        == "repository.config"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -27236,7 +27727,9 @@ def test_artifact_queue_processor_derives_kopia_repository_config_cloud_assets(
                 """
             ).fetchall()
         }
-        assert artifact_meta[repository_config_path.resolve().as_posix()]["format"] == "kopia-config"
+        assert (
+            artifact_meta[repository_config_path.resolve().as_posix()]["format"] == "kopia-config"
+        )
 
         persisted_text = json.dumps(
             {
@@ -27280,11 +27773,14 @@ def test_artifact_queue_processor_derives_restic_repository_env_cloud_assets(
     assert _classify_artifact_name(Path("restic.env")) == "config"
     assert _classify_artifact_name(Path("42-restic.env")) == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/restic.env") == "config"
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/restic.env",
-        "config",
-    ) == "restic.env"
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/restic.env",
+            "config",
+        )
+        == "restic.env"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -27390,21 +27886,32 @@ def test_artifact_queue_processor_derives_borg_repository_security_metadata(
         encoding="utf-8",
     )
 
-    assert _classify_artifact_name(Path(".config/borg/security/abcdef1234567890/location")) == "config"
+    assert (
+        _classify_artifact_name(Path(".config/borg/security/abcdef1234567890/location")) == "config"
+    )
     assert _classify_artifact_name(Path("borg/repository/config")) == "config"
-    assert _classify_remote_artifact_url(
-        "https://downloads.acme.example/.config/borg/security/abcdef1234567890/location"
-    ) == "config"
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/.config/borg/security/abcdef1234567890/location",
-        "config",
-    ) == "borg.location"
-    assert _select_remote_artifact_filename(
-        43,
-        "https://downloads.acme.example/borg/repository/config",
-        "config",
-    ) == "borg.repository.config"
+    assert (
+        _classify_remote_artifact_url(
+            "https://downloads.acme.example/.config/borg/security/abcdef1234567890/location"
+        )
+        == "config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/.config/borg/security/abcdef1234567890/location",
+            "config",
+        )
+        == "borg.location"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            43,
+            "https://downloads.acme.example/borg/repository/config",
+            "config",
+        )
+        == "borg.repository.config"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -27456,7 +27963,10 @@ def test_artifact_queue_processor_derives_borg_repository_security_metadata(
             ).fetchall()
         }
         assert artifact_meta[location_path.resolve().as_posix()]["format"] == "borg-location"
-        assert artifact_meta[repository_config_path.resolve().as_posix()]["format"] == "borg-repository-config"
+        assert (
+            artifact_meta[repository_config_path.resolve().as_posix()]["format"]
+            == "borg-repository-config"
+        )
 
         persisted_text = json.dumps(
             {
@@ -27513,12 +28023,18 @@ def test_artifact_queue_processor_derives_duplicacy_preferences_cloud_assets(
 
     assert _classify_artifact_name(Path(".duplicacy/preferences")) == "config"
     assert _classify_artifact_name(Path("duplicacy.preferences")) == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/.duplicacy/preferences") == "config"
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/.duplicacy/preferences",
-        "config",
-    ) == "duplicacy.preferences"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/.duplicacy/preferences")
+        == "config"
+    )
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/.duplicacy/preferences",
+            "config",
+        )
+        == "duplicacy.preferences"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -27568,7 +28084,10 @@ def test_artifact_queue_processor_derives_duplicacy_preferences_cloud_assets(
                 """
             ).fetchall()
         }
-        assert artifact_meta[preferences_path.resolve().as_posix()]["format"] == "duplicacy-preferences"
+        assert (
+            artifact_meta[preferences_path.resolve().as_posix()]["format"]
+            == "duplicacy-preferences"
+        )
 
         persisted_text = json.dumps(
             {
@@ -27801,9 +28320,7 @@ def test_artifact_queue_processor_strips_package_index_url_credentials(
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "pip-index-token-do-not-store@pip.acme.example" not in emails
         assert "extra-index-token-do-not-store@pip-extra.acme.example" not in emails
@@ -28082,9 +28599,7 @@ def test_artifact_queue_processor_extracts_network_dsn_hosts_without_credentials
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "dsn-owner@acme.example" in emails
         for fake_email in {
@@ -28309,7 +28824,10 @@ def test_orm_config_artifact_format_labels_are_source_aware() -> None:
     assert _artifact_format_label("flyway.conf") == "flyway-config"
     assert _artifact_format_label("data-source.ts") == "ts"
     assert _classify_artifact_name("schema.prisma") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/prisma/schema.prisma") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/prisma/schema.prisma")
+        == "config"
+    )
     assert (
         _select_remote_artifact_filename(
             42,
@@ -28469,7 +28987,9 @@ def test_artifact_queue_processor_extracts_framework_config_artifacts(tmp_path: 
         assert artifact_meta[spring_path.resolve().as_posix()]["format"] == "spring-config"
         assert artifact_meta[dotnet_path.resolve().as_posix()]["format"] == "dotnet-appsettings"
         assert artifact_meta[alembic_path.resolve().as_posix()]["format"] == "alembic-config"
-        assert artifact_meta[laravel_path.resolve().as_posix()]["format"] == "laravel-database-config"
+        assert (
+            artifact_meta[laravel_path.resolve().as_posix()]["format"] == "laravel-database-config"
+        )
         assert artifact_meta[django_path.resolve().as_posix()]["format"] == "django-settings"
 
         db_dump = "\n".join(con.iterdump())
@@ -28498,9 +29018,12 @@ def test_framework_config_artifact_format_labels_are_source_aware() -> None:
     assert _artifact_format_label("django/acme/settings.py") == "django-settings"
     assert _artifact_format_label("djangonaut/settings.py") == "py"
     assert _artifact_format_label("settings.py") == "py"
-    assert _classify_remote_artifact_url(
-        "https://downloads.acme.example/src/main/resources/application.properties"
-    ) == "config"
+    assert (
+        _classify_remote_artifact_url(
+            "https://downloads.acme.example/src/main/resources/application.properties"
+        )
+        == "config"
+    )
     assert (
         _select_remote_artifact_filename(
             42,
@@ -28991,9 +29514,16 @@ def test_artifact_queue_processor_extracts_dns_zone_artifacts(tmp_path: Path) ->
             ),
         )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/zones/acme.zone") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/bind/db.acme.example") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/named.conf.local") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/zones/acme.zone") == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/bind/db.acme.example")
+        == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/named.conf.local") == "config"
+    )
     assert _suffix_from_content_type("text/dns") == ".zone"
     assert _suffix_from_content_type("application/x-zone-file") == ".zone"
 
@@ -29218,10 +29748,13 @@ def test_artifact_tunnel_config_structured_payload_uses_bounded_workers_and_pres
         "https://origin-tunnel.acme.example",
         "https://ngrok-public.acme.example/app",
     ]
-    assert processor._tunnel_config_structured_payload_text(
-        payload,
-        source_hint="config.yml",
-    ) == ""
+    assert (
+        processor._tunnel_config_structured_payload_text(
+            payload,
+            source_hint="config.yml",
+        )
+        == ""
+    )
 
 
 def test_artifact_queue_processor_extracts_tunnel_config_artifacts(tmp_path: Path) -> None:
@@ -29359,10 +29892,16 @@ def test_artifact_queue_processor_extracts_tunnel_config_artifacts(tmp_path: Pat
         }
         assert artifact_meta[ngrok_path.resolve().as_posix()]["format"] == "ngrok-config"
         assert artifact_meta[ngrok_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[cloudflared_path.resolve().as_posix()]["format"] == "cloudflared-config"
+        assert (
+            artifact_meta[cloudflared_path.resolve().as_posix()]["format"] == "cloudflared-config"
+        )
         assert artifact_meta[cloudflared_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[tailscale_path.resolve().as_posix()]["format"] == "tailscale-serve-config"
-        assert artifact_meta[localtunnel_path.resolve().as_posix()]["format"] == "localtunnel-config"
+        assert (
+            artifact_meta[tailscale_path.resolve().as_posix()]["format"] == "tailscale-serve-config"
+        )
+        assert (
+            artifact_meta[localtunnel_path.resolve().as_posix()]["format"] == "localtunnel-config"
+        )
     finally:
         con.close()
 
@@ -29536,13 +30075,19 @@ def test_artifact_queue_processor_extracts_cloud_init_artifacts(tmp_path: Path) 
 
     assert _classify_artifact_name(Path("cloud-init/user-data")) == "config"
     assert _classify_artifact_name(Path("notes/user-data")) is None
-    assert _classify_remote_artifact_url("https://downloads.acme.example/cloud-init/user-data") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/cloud-init/user-data")
+        == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/user-data") is None
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/cloud-init/user-data",
-        "config",
-    ) == "user-data"
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/cloud-init/user-data",
+            "config",
+        )
+        == "user-data"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -29740,13 +30285,18 @@ def test_artifact_queue_processor_extracts_os_installer_artifacts(tmp_path: Path
     assert _classify_artifact_name(Path("preseed/preseed")) == "config"
     assert _classify_artifact_name(Path("notes/preseed")) is None
     assert _classify_remote_artifact_url("https://downloads.acme.example/kickstart/ks") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/preseed/preseed") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/preseed/preseed") == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/preseed") is None
-    assert _select_remote_artifact_filename(
-        42,
-        "https://downloads.acme.example/kickstart/ks",
-        "config",
-    ) == "ks"
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/kickstart/ks",
+            "config",
+        )
+        == "ks"
+    )
     assert _suffix_from_content_type("text/x-kickstart") == ".ks"
     assert _suffix_from_content_type("text/x-preseed") == ".preseed"
 
@@ -29848,7 +30398,7 @@ def test_artifact_queue_processor_extracts_ignition_and_butane_artifacts(tmp_pat
                                     ).decode("ascii")
                                 )
                             },
-                        }
+                        },
                     ]
                 },
             },
@@ -29992,8 +30542,12 @@ def test_artifact_queue_processor_extracts_dhcp_lease_artifacts(tmp_path: Path) 
         )
 
     assert _classify_remote_artifact_url("https://downloads.acme.example/dhcpd.leases") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/dnsmasq.leases") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/kea-leases4.csv") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/dnsmasq.leases") == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/kea-leases4.csv") == "config"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -30096,7 +30650,9 @@ def test_artifact_queue_processor_extracts_hosts_file_artifacts(tmp_path: Path) 
         )
 
     assert _classify_remote_artifact_url("https://downloads.acme.example/etc/hosts") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/windows/lmhosts") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/windows/lmhosts") == "config"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -30260,9 +30816,7 @@ def test_artifact_queue_processor_extracts_diagram_design_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "drawio-owner@acme.example",
@@ -30444,9 +30998,7 @@ def test_artifact_queue_processor_extracts_apple_resource_metadata_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "storyboard-owner@acme.example",
@@ -30650,9 +31202,7 @@ def test_artifact_queue_processor_extracts_game_engine_metadata_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "unity-owner@acme.example",
@@ -30764,9 +31314,7 @@ def test_artifact_queue_processor_extracts_cargo_credentials_without_suffix(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "cargo-creds-owner@acme.example" in emails
 
@@ -30989,9 +31537,7 @@ def test_artifact_queue_processor_extracts_jvm_build_metadata_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "sbt-owner@acme.example",
@@ -31488,7 +32034,9 @@ def test_artifact_mobile_and_deploy_runtime_config_promotes_hostonly_urls_with_b
         </widget>
         """
     ).strip()
-    vercel_payload = '{"rewrites":[{"source":"/api/(.*)","destination":"vercel-api.acme.example/status"}]}'
+    vercel_payload = (
+        '{"rewrites":[{"source":"/api/(.*)","destination":"vercel-api.acme.example/status"}]}'
+    )
     netlify_payload = '[[redirects]]\nfrom = "/api/*"\nto = "netlify-edge.acme.example/status"\n'
 
     assert processor._js_runtime_text_structured_payload_text(
@@ -31570,14 +32118,20 @@ def test_artifact_nomad_job_orchestration_payload_uses_bounded_workers_and_prese
     assert _artifact_format_label("jobs/api.hcl") != "nomad-job"
     assert _artifact_format_label("nomad/api.hcl") == "nomad-job"
     assert _artifact_format_label("nomad/jobs/api.nomad.hcl") == "nomad-job"
-    assert processor._orchestration_structured_payload_text(
-        payload,
-        source_hint="notes/app.hcl",
-    ) == ""
-    assert processor._orchestration_structured_payload_text(
-        payload,
-        source_hint="jobs/api.hcl",
-    ) == ""
+    assert (
+        processor._orchestration_structured_payload_text(
+            payload,
+            source_hint="notes/app.hcl",
+        )
+        == ""
+    )
+    assert (
+        processor._orchestration_structured_payload_text(
+            payload,
+            source_hint="jobs/api.hcl",
+        )
+        == ""
+    )
 
     result = processor._orchestration_structured_payload_text(
         payload,
@@ -32424,7 +32978,9 @@ def test_artifact_pact_contract_payload_depth_guard_skips_deep_url_values() -> N
     values = pact_contract_candidate_values(
         payload,
         json.dumps(payload),
-        normalize_url=lambda value: f"https://{value}" if "." in value and not str(value).startswith("http") else str(value),
+        normalize_url=lambda value: (
+            f"https://{value}" if "." in value and not str(value).startswith("http") else str(value)
+        ),
         document_values=lambda _document: [],
         fallback_values=lambda _text: [],
         is_urlish_key=lambda key: str(key).lower().endswith("url"),
@@ -32856,9 +33412,7 @@ def test_artifact_queue_processor_extracts_native_build_config_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "cmake-owner@acme.example",
@@ -33041,9 +33595,7 @@ def test_artifact_queue_processor_extracts_template_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "template-owner@acme.example",
@@ -33195,9 +33747,7 @@ def test_artifact_queue_processor_extracts_http_and_graphql_text_artifacts(
             {
                 "schema": "graphql-json.acme.example/schema",
                 "extensions": {
-                    "endpoints": {
-                        "prod": {"url": "graphql-json-endpoint.acme.example/graphql"}
-                    }
+                    "endpoints": {"prod": {"url": "graphql-json-endpoint.acme.example/graphql"}}
                 },
             },
             indent=2,
@@ -33271,9 +33821,7 @@ def test_artifact_queue_processor_extracts_http_and_graphql_text_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "http-owner@acme.example" in emails
         assert "http-body@acme.example" in emails
@@ -33342,7 +33890,9 @@ def test_artifact_queue_processor_extracts_http_and_graphql_text_artifacts(
         assert artifact_meta[hurl_path.resolve().as_posix()]["format"] == "hurl"
         assert artifact_meta[graphql_rc_path.resolve().as_posix()]["format"] == "graphql-config"
         assert artifact_meta[graphql_config_path.resolve().as_posix()]["format"] == "graphql-config"
-        assert artifact_meta[graphql_codegen_path.resolve().as_posix()]["format"] == "graphql-codegen"
+        assert (
+            artifact_meta[graphql_codegen_path.resolve().as_posix()]["format"] == "graphql-codegen"
+        )
         assert artifact_meta[apollo_config_path.resolve().as_posix()]["format"] == "apollo-config"
     finally:
         con.close()
@@ -33732,7 +34282,10 @@ def test_artifact_queue_processor_extracts_api_spec_and_client_collection_artifa
                             {"command": "open", "target": "/login"},
                             {"command": "click", "target": "css=.submit"},
                             {"command": "openWindow", "target": "reports.acme.example/dashboard"},
-                            {"command": "open", "target": "https://${tenant}.acme.example/template"},
+                            {
+                                "command": "open",
+                                "target": "https://${tenant}.acme.example/template",
+                            },
                         ],
                     }
                 ],
@@ -33845,9 +34398,7 @@ def test_artifact_queue_processor_extracts_api_spec_and_client_collection_artifa
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "openapi-owner@acme.example" in emails
         assert "apib-owner@acme.example" in emails
@@ -33987,11 +34538,18 @@ def test_artifact_queue_processor_extracts_api_spec_and_client_collection_artifa
         assert artifact_meta[arazzo_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[overlay_path.resolve().as_posix()]["format"] == "openapi-overlay"
         assert artifact_meta[overlay_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[postman_env_path.resolve().as_posix()]["format"] == "postman-environment"
+        assert (
+            artifact_meta[postman_env_path.resolve().as_posix()]["format"] == "postman-environment"
+        )
         assert artifact_meta[postman_env_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[hoppscotch_path.resolve().as_posix()]["format"] == "hoppscotch-collection"
+        assert (
+            artifact_meta[hoppscotch_path.resolve().as_posix()]["format"] == "hoppscotch-collection"
+        )
         assert artifact_meta[hoppscotch_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[thunder_path.resolve().as_posix()]["format"] == "thunder-client-collection"
+        assert (
+            artifact_meta[thunder_path.resolve().as_posix()]["format"]
+            == "thunder-client-collection"
+        )
         assert artifact_meta[thunder_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[soapui_path.resolve().as_posix()]["format"] == "soapui-project"
         assert artifact_meta[soapui_path.resolve().as_posix()]["payload_count"] >= 1
@@ -34001,7 +34559,9 @@ def test_artifact_queue_processor_extracts_api_spec_and_client_collection_artifa
         assert artifact_meta[artillery_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[dredd_path.resolve().as_posix()]["format"] == "dredd-config"
         assert artifact_meta[dredd_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[schemathesis_path.resolve().as_posix()]["format"] == "schemathesis-config"
+        assert (
+            artifact_meta[schemathesis_path.resolve().as_posix()]["format"] == "schemathesis-config"
+        )
         assert artifact_meta[schemathesis_path.resolve().as_posix()]["payload_count"] >= 1
         assert artifact_meta[pactum_path.resolve().as_posix()]["format"] == "pactum-config"
         assert artifact_meta[pactum_path.resolve().as_posix()]["payload_count"] >= 1
@@ -34063,11 +34623,17 @@ def test_artifact_queue_processor_extracts_pact_contract_artifacts(
                     },
                     {
                         "description": "full URL request is preserved",
-                        "request": {"method": "POST", "url": "https://pact-live.acme.example/events"},
+                        "request": {
+                            "method": "POST",
+                            "url": "https://pact-live.acme.example/events",
+                        },
                     },
                     {
                         "description": "templated request is filtered",
-                        "request": {"method": "GET", "url": "https://${tenant}.acme.example/template"},
+                        "request": {
+                            "method": "GET",
+                            "url": "https://${tenant}.acme.example/template",
+                        },
                     },
                 ],
                 "messages": [
@@ -34108,7 +34674,10 @@ def test_artifact_queue_processor_extracts_pact_contract_artifacts(
     assert _classify_artifact_name(pact_path) == "config"
     assert _artifact_format_label(pact_path) == "pact-contract"
     assert _artifact_format_label("pacts/acme-web-acme-api.json") == "pact-contract"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/pacts/acme-web-acme-api") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/pacts/acme-web-acme-api")
+        == "config"
+    )
     assert (
         _select_remote_artifact_filename(
             42,
@@ -34132,9 +34701,7 @@ def test_artifact_queue_processor_extracts_pact_contract_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "pact-owner@acme.example" in emails
         assert "pact-mobile-owner@acme.example" in emails
@@ -34296,9 +34863,7 @@ def test_artifact_queue_processor_extracts_interface_schema_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "proto-owner@acme.example" in emails
         assert "async-owner@acme.example" in emails
@@ -34409,9 +34974,7 @@ def test_artifact_queue_processor_extracts_log_and_trace_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "log-owner@acme.example" in emails
         assert "trace-owner@acme.example" in emails
@@ -34560,9 +35123,7 @@ def test_artifact_queue_processor_extracts_crash_diagnostic_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         for expected_email in {
             "crash-owner@acme.example",
@@ -34697,9 +35258,7 @@ def test_artifact_queue_processor_extracts_passive_scan_output_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "scan-owner@acme.example" in emails
         assert "nested-scan-owner@acme.example" in emails
@@ -34883,7 +35442,9 @@ def test_artifact_queue_processor_extracts_recon_tool_output_artifacts(
         assert artifact_meta[httpx_path.resolve().as_posix()]["format"] == "httpx-output"
         assert artifact_meta[katana_path.resolve().as_posix()]["format"] == "katana-output"
         assert artifact_meta[gau_path.resolve().as_posix()]["format"] == "gau-output"
-        assert artifact_meta[waybackurls_path.resolve().as_posix()]["format"] == "waybackurls-output"
+        assert (
+            artifact_meta[waybackurls_path.resolve().as_posix()]["format"] == "waybackurls-output"
+        )
 
         db_dump = "\n".join(con.iterdump())
         assert "httpx-token-do-not-store" not in db_dump
@@ -34962,7 +35523,11 @@ def test_artifact_queue_processor_extracts_imported_scanner_json_outputs(
         json.dumps(
             {
                 "target": "https://dirsearch.acme.example",
-                "results": [{"url": "https://dirsearch.acme.example/.env?api_key=dir-token-do-not-store&download=1"}],
+                "results": [
+                    {
+                        "url": "https://dirsearch.acme.example/.env?api_key=dir-token-do-not-store&download=1"
+                    }
+                ],
                 "owner": "dirsearch-owner@acme.example",
             }
         ),
@@ -35868,9 +36433,7 @@ def test_artifact_queue_processor_extracts_sarif_scan_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "sarif-owner@acme.example" in emails
 
@@ -35986,9 +36549,7 @@ def test_artifact_queue_processor_extracts_sbom_and_security_tool_output_artifac
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "sbom-owner@acme.example" in emails
         assert "nuclei-owner@acme.example" in emails
@@ -36128,9 +36689,7 @@ def test_artifact_queue_processor_extracts_supply_chain_attestation_and_vex_arti
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "provenance-owner@acme.example" in emails
         assert "vex-owner@acme.example" in emails
@@ -36293,9 +36852,7 @@ def test_artifact_queue_processor_extracts_ci_test_and_coverage_report_artifacts
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "coverage-owner@acme.example" in emails
         assert "lcov-owner@acme.example" in emails
@@ -36520,9 +37077,7 @@ def test_artifact_queue_processor_extracts_dependency_lock_and_manifest_artifact
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "dependencyowner@acme.example" in emails
         assert "pip-owner@acme.example" in emails
@@ -36645,10 +37200,7 @@ def test_artifact_queue_processor_extracts_ssh_artifacts_for_recursive_hosts(
 
     authorized_keys = artifact_root / "authorized_keys"
     authorized_keys.write_text(
-        (
-            "ssh-ed25519 AAAAauthorized deploy@acme.example "
-            "https://jump.acme.example/admin\n"
-        ),
+        ("ssh-ed25519 AAAAauthorized deploy@acme.example https://jump.acme.example/admin\n"),
         encoding="utf-8",
     )
 
@@ -36681,9 +37233,7 @@ def test_artifact_queue_processor_extracts_ssh_artifacts_for_recursive_hosts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "deploy@acme.example" in emails
         assert "edge-owner@acme.example" in emails
@@ -36852,13 +37402,17 @@ def test_artifact_queue_processor_extracts_package_archive_artifacts(
 
     crate_path = artifact_root / "acme-crate-1.0.0.crate"
     with tarfile.open(crate_path, "w:gz") as tf:
-        payload = dedent(
-            """
+        payload = (
+            dedent(
+                """
             crate-owner@acme.example
             https://crate.acme.example/docs
             https://crate-space.sgp1.digitaloceanspaces.com/releases/latest.json
             """
-        ).strip().encode("utf-8")
+            )
+            .strip()
+            .encode("utf-8")
+        )
         info = tarfile.TarInfo("acme-crate-1.0.0/src/config.rs")
         info.size = len(payload)
         tf.addfile(info, BytesIO(payload))
@@ -36876,9 +37430,7 @@ def test_artifact_queue_processor_extracts_package_archive_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "wheel-owner@acme.example" in emails
         assert "nupkg-owner@acme.example" in emails
@@ -36902,7 +37454,10 @@ def test_artifact_queue_processor_extracts_package_archive_artifacts(
         assert ("https://vsix.acme.example/extension", "url") in seeds
         assert ("https://vsixblob.blob.core.windows.net/public/extension.json", "url") in seeds
         assert ("https://crate.acme.example/docs", "url") in seeds
-        assert ("https://crate-space.sgp1.digitaloceanspaces.com/releases/latest.json", "url") in seeds
+        assert (
+            "https://crate-space.sgp1.digitaloceanspaces.com/releases/latest.json",
+            "url",
+        ) in seeds
         assert ("wheel-owner@acme.example", "email") in seeds
         assert ("crate-owner@acme.example", "email") in seeds
 
@@ -36950,15 +37505,19 @@ def test_artifact_queue_processor_extracts_debian_and_ipk_package_artifacts(
     _bootstrap_engagement(db_path)
 
     deb_path = artifact_root / "acme-agent_1.0.0_all.deb"
-    deb_config = dedent(
-        """
+    deb_config = (
+        dedent(
+            """
         OWNER=deb-owner@acme.example
         API_BASE=https://deb.acme.example/api
         FIREBASE_URL=https://deb-firebase.firebaseio.com
         SUPABASE_URL=https://debworkspace.supabase.co
         RELEASE_BUCKET=s3://acme-deb-bucket/releases/acme-agent.deb
         """
-    ).strip().encode("utf-8")
+        )
+        .strip()
+        .encode("utf-8")
+    )
     _write_ar_archive(
         deb_path,
         [
@@ -36975,20 +37534,26 @@ def test_artifact_queue_processor_extracts_debian_and_ipk_package_artifacts(
     )
 
     ipk_path = artifact_root / "acme-router_1.0.0_all.ipk"
-    ipk_config = dedent(
-        """
+    ipk_config = (
+        dedent(
+            """
         OWNER=ipk-owner@acme.example
         ADMIN_URL=https://ipk.acme.example/admin
         GCS=gs://acme-ipk-gcs/feeds/latest.ipk
         """
-    ).strip().encode("utf-8")
+        )
+        .strip()
+        .encode("utf-8")
+    )
     _write_ar_archive(
         ipk_path,
         [
             ("debian-binary", b"2.0\n"),
             (
                 "control.tar.gz",
-                _tar_bytes("control", b"Package: acme-router\nMaintainer: ipk-maintainer@acme.example\n"),
+                _tar_bytes(
+                    "control", b"Package: acme-router\nMaintainer: ipk-maintainer@acme.example\n"
+                ),
             ),
             ("data.tar.xz", _tar_bytes("etc/config/acme", ipk_config, mode="w:xz")),
         ],
@@ -37006,9 +37571,7 @@ def test_artifact_queue_processor_extracts_debian_and_ipk_package_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "deb-owner@acme.example" in emails
         assert "deb-maintainer@acme.example" in emails
@@ -37071,8 +37634,9 @@ def test_artifact_queue_processor_extracts_cpio_package_artifacts(
     _bootstrap_engagement(db_path)
 
     cpio_path = artifact_root / "initramfs.cpio"
-    cpio_config = dedent(
-        """
+    cpio_config = (
+        dedent(
+            """
         OWNER=cpio-owner@acme.example
         API_BASE=https://cpio.acme.example/api
         FIREBASE_URL=https://cpio-firebase.firebaseio.com
@@ -37080,7 +37644,10 @@ def test_artifact_queue_processor_extracts_cpio_package_artifacts(
         RELEASE_BUCKET=s3://acme-cpio-bucket/releases/initramfs.cpio
         GCS=gs://acme-cpio-gcs/reports/latest.json
         """
-    ).strip().encode("utf-8")
+        )
+        .strip()
+        .encode("utf-8")
+    )
     cpio_path.write_bytes(
         _cpio_newc_bytes(
             [
@@ -37102,9 +37669,7 @@ def test_artifact_queue_processor_extracts_cpio_package_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "cpio-owner@acme.example" in emails
         assert "cpio-maintainer@acme.example" in emails
@@ -37176,7 +37741,9 @@ def test_artifact_queue_processor_extracts_electron_asar_static_artifacts(
                         const gcs = "gs://acme-asar-gcs/reports/latest.json";
                         const nextArtifact = "https://downloads.acme.example/client.apk";
                         """
-                    ).strip().encode("utf-8"),
+                    )
+                    .strip()
+                    .encode("utf-8"),
                 ),
                 (
                     "resources/package.json",
@@ -37199,9 +37766,7 @@ def test_artifact_queue_processor_extracts_electron_asar_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "asar-owner@acme.example" in emails
         assert "asar-package@acme.example" in emails
@@ -37292,9 +37857,7 @@ def test_artifact_queue_processor_extracts_nested_electron_asar_static_artifacts
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "nested-asar-owner@acme.example" in emails
 
@@ -37363,16 +37926,15 @@ def test_artifact_queue_processor_extracts_rpm_package_static_artifacts(
                         RELEASE_BUCKET=s3://acme-rpm-bucket/releases/acme-agent.rpm
                         GCS=gs://acme-rpm-gcs/reports/latest.json
                         """
-                    ).strip().encode("utf-8"),
+                    )
+                    .strip()
+                    .encode("utf-8"),
                 )
             ]
         )
     )
     rpm_path.write_bytes(
-        b"\xed\xab\xee\xdb"
-        b"rpm-header-owner@acme.example\x00"
-        b"payload follows\x00"
-        + compressed_payload
+        b"\xed\xab\xee\xdbrpm-header-owner@acme.example\x00payload follows\x00" + compressed_payload
     )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
@@ -37387,9 +37949,7 @@ def test_artifact_queue_processor_extracts_rpm_package_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "rpm-header-owner@acme.example" in emails
         assert "rpm-owner@acme.example" in emails
@@ -37470,9 +38030,7 @@ def test_artifact_queue_processor_extracts_terraform_plan_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "tfplan-owner@acme.example" in emails
 
@@ -37592,9 +38150,7 @@ def test_artifact_queue_processor_extracts_columnar_data_export_static_artifacts
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "parquet-owner@acme.example" in emails
         assert "orc-owner@acme.example" in emails
@@ -37733,9 +38289,7 @@ def test_artifact_queue_processor_extracts_model_binary_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "onnx-owner@acme.example" in emails
         assert "safetensors-owner@acme.example" in emails
@@ -37877,9 +38431,7 @@ def test_artifact_queue_processor_extracts_compiled_mobile_jvm_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "dex-owner@acme.example" in emails
         assert "class-owner@acme.example" in emails
@@ -37994,9 +38546,7 @@ def test_artifact_queue_processor_extracts_keras_model_archive_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "keras-config@acme.example" in emails
         assert "keras-weights@acme.example" in emails
@@ -38076,14 +38626,11 @@ def test_artifact_queue_processor_extracts_installer_binary_static_artifacts(
             SUPABASE_URL=https://pkgworkspace.supabase.co
             GCS=gs://acme-pkg-gcs/installers/latest.json
             """
-        ).strip().encode("utf-8")
+        )
+        .strip()
+        .encode("utf-8")
     )
-    pkg_path.write_bytes(
-        b"xar!"
-        b"pkg-header-owner@acme.example\x00"
-        b"payload follows\x00"
-        + pkg_payload
-    )
+    pkg_path.write_bytes(b"xar!pkg-header-owner@acme.example\x00payload follows\x00" + pkg_payload)
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -38097,9 +38644,7 @@ def test_artifact_queue_processor_extracts_installer_binary_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "msi-owner@acme.example" in emails
         assert "pkg-header-owner@acme.example" in emails
@@ -38199,9 +38744,7 @@ def test_artifact_queue_processor_extracts_wasm_binary_string_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "wasm-owner@acme.example" in emails
         assert "nested-wasm-owner@acme.example" in emails
@@ -38274,9 +38817,7 @@ def test_artifact_queue_processor_extracts_keystore_binary_string_artifacts(
 
     pkcs12_path = artifact_root / "client.p12"
     pkcs12_path.write_bytes(
-        b"\x30\x82\x01\x0a"
-        b"pkcs12-owner@acme.example\x00"
-        b"gs://acme-pkcs12-gcs/archive/client.p12\x00"
+        b"\x30\x82\x01\x0apkcs12-owner@acme.example\x00gs://acme-pkcs12-gcs/archive/client.p12\x00"
     )
 
     bundle_path = artifact_root / "keystore-bundle.zip"
@@ -38303,9 +38844,7 @@ def test_artifact_queue_processor_extracts_keystore_binary_string_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "keystore-owner@acme.example" in emails
         assert "pkcs12-owner@acme.example" in emails
@@ -38382,9 +38921,7 @@ def test_artifact_queue_processor_extracts_certificate_binary_string_artifacts(
 
     crl_path = artifact_root / "revoked.crl"
     crl_path.write_bytes(
-        b"\x30\x82\x02\x0b"
-        b"crl-owner@acme.example\x00"
-        b"gs://acme-crl-gcs/revoked/latest.crl\x00"
+        b"\x30\x82\x02\x0bcrl-owner@acme.example\x00gs://acme-crl-gcs/revoked/latest.crl\x00"
     )
 
     bundle_path = artifact_root / "cert-bundle.zip"
@@ -38411,9 +38948,7 @@ def test_artifact_queue_processor_extracts_certificate_binary_string_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "der-owner@acme.example" in emails
         assert "crl-owner@acme.example" in emails
@@ -38490,9 +39025,7 @@ def test_artifact_queue_processor_extracts_dump_binary_string_artifacts(
 
     hprof_path = artifact_root / "prod.hprof"
     hprof_path.write_bytes(
-        b"JAVA PROFILE 1.0.2\x00"
-        b"hprof-owner@acme.example\x00"
-        b"gs://acme-hprof-gcs/prod/prod.hprof\x00"
+        b"JAVA PROFILE 1.0.2\x00hprof-owner@acme.example\x00gs://acme-hprof-gcs/prod/prod.hprof\x00"
     )
 
     pprof_path = artifact_root / "cpu.pprof"
@@ -38554,9 +39087,7 @@ def test_artifact_queue_processor_extracts_dump_binary_string_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "redis-owner@acme.example" in emails
         assert "hprof-owner@acme.example" in emails
@@ -38650,7 +39181,9 @@ def test_artifact_queue_processor_extracts_7z_archive_static_artifacts(
             b"GCS=gs://acme-seven-gcs/reports/latest.json",
         ]
     )
-    nested_payload = b'{"support":"nested-seven@acme.example","portal":"https://nested-seven.acme.example"}'
+    nested_payload = (
+        b'{"support":"nested-seven@acme.example","portal":"https://nested-seven.acme.example"}'
+    )
     with py7zr.SevenZipFile(seven_path, "w") as archive:
         archive.writestr(config_payload, "configs/service.env")
         archive.writestr(nested_payload, "configs/nested.json")
@@ -38667,9 +39200,7 @@ def test_artifact_queue_processor_extracts_7z_archive_static_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "seven-owner@acme.example" in emails
         assert "nested-seven@acme.example" in emails
@@ -38761,9 +39292,7 @@ def test_artifact_queue_processor_extracts_native_binary_string_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "native-owner@acme.example" in emails
         assert "dll-owner@acme.example" in emails
@@ -38857,9 +39386,7 @@ def test_artifact_queue_processor_extracts_firmware_binary_string_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "firmware-owner@acme.example" in emails
         assert "elf-owner@acme.example" in emails
@@ -38942,11 +39469,7 @@ def test_artifact_queue_processor_extracts_firmware_image_binary_string_artifact
         )
         zf.writestr(
             "images/rootfs.img",
-            (
-                b"IMGFS\x00"
-                b"img-owner@acme.example\x00"
-                b"https://img.acme.example/pivot\x00"
-            ),
+            (b"IMGFS\x00img-owner@acme.example\x00https://img.acme.example/pivot\x00"),
         )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
@@ -38961,9 +39484,7 @@ def test_artifact_queue_processor_extracts_firmware_image_binary_string_artifact
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "fw-owner@acme.example" in emails
         assert "rom-owner@acme.example" in emails
@@ -39063,7 +39584,10 @@ def test_artifact_queue_processor_promotes_managed_hosting_urls_as_provider_spec
         assert ("netlify", "acme-edge") in cloud_assets
         assert ("amplify", "acme-amplify") in cloud_assets
         assert ("gcp_appspot", "acmeportal") in cloud_assets
-        assert ("gcp_cloudfunctions", "https://us-central1-acmehub.cloudfunctions.net/ping") in cloud_assets
+        assert (
+            "gcp_cloudfunctions",
+            "https://us-central1-acmehub.cloudfunctions.net/ping",
+        ) in cloud_assets
         assert ("gcp_cloud_run", "api-prod-abc.a.run.app") in cloud_assets
         assert ("github_pages", "acme.github.io") in cloud_assets
         assert ("gitlab_pages", "security.gitlab.io") in cloud_assets
@@ -39169,9 +39693,7 @@ def test_artifact_queue_processor_extracts_zip_backed_bundle_archives(tmp_path: 
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "bundle-owner@acme.example" in emails
         assert "war-owner@acme.example" in emails
@@ -39244,9 +39766,7 @@ def test_artifact_queue_processor_extracts_disk_image_binary_string_artifacts(
 
     iso_path = artifact_root / "support-tools.iso"
     iso_path.write_bytes(
-        b"CD001\x00"
-        b"iso-owner@acme.example\x00"
-        b"gs://acme-iso-gcs/releases/support-tools.iso\x00"
+        b"CD001\x00iso-owner@acme.example\x00gs://acme-iso-gcs/releases/support-tools.iso\x00"
     )
 
     bundle_path = artifact_root / "disk-image-bundle.zip"
@@ -39261,8 +39781,14 @@ def test_artifact_queue_processor_extracts_disk_image_binary_string_artifacts(
             ),
         )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/AcmeInstaller.dmg") == "document"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/support-tools.iso?dl=1") == "document"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/AcmeInstaller.dmg")
+        == "document"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/support-tools.iso?dl=1")
+        == "document"
+    )
     assert _suffix_from_content_type("application/x-apple-diskimage") == ".dmg"
     assert _suffix_from_content_type("application/x-iso9660-image") == ".iso"
 
@@ -39278,9 +39804,7 @@ def test_artifact_queue_processor_extracts_disk_image_binary_string_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "dmg-owner@acme.example" in emails
         assert "iso-owner@acme.example" in emails
@@ -39357,9 +39881,7 @@ def test_artifact_queue_processor_extracts_virtual_disk_artifacts(
 
     qcow_path = artifact_root / "worker.qcow2"
     qcow_path.write_bytes(
-        b"QFI\xfb\x00"
-        b"qcow-owner@acme.example\x00"
-        b"gs://acme-qcow-gcs/images/worker.qcow2\x00"
+        b"QFI\xfb\x00qcow-owner@acme.example\x00gs://acme-qcow-gcs/images/worker.qcow2\x00"
     )
 
     ova_path = artifact_root / "export.ova"
@@ -39399,10 +39921,17 @@ def test_artifact_queue_processor_extracts_virtual_disk_artifacts(
         encoding="utf-8",
     )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/vm-system.vhdx") == "document"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/worker.qcow2?dl=1") == "document"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/vm-system.vhdx") == "document"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/worker.qcow2?dl=1")
+        == "document"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/export.ova") == "archive"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/descriptor.ovf") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/descriptor.ovf") == "config"
+    )
     assert _suffix_from_content_type("application/x-vhdx") == ".vhdx"
     assert _suffix_from_content_type("application/x-qcow2") == ".qcow2"
     assert _suffix_from_content_type("application/x-virtualbox-ova") == ".ova"
@@ -39420,9 +39949,7 @@ def test_artifact_queue_processor_extracts_virtual_disk_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "vhdx-owner@acme.example" in emails
         assert "qcow-owner@acme.example" in emails
@@ -39572,9 +40099,16 @@ def test_artifact_queue_processor_extracts_virtual_machine_config_artifacts(
             ),
         )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/workstation.vmx") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/virtualbox.vbox") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/virtualbox.vbox-prev") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/workstation.vmx") == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/virtualbox.vbox") == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/virtualbox.vbox-prev")
+        == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/team.vmxf") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/guest.pvs") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/Vagrantfile") == "config"
@@ -39596,9 +40130,7 @@ def test_artifact_queue_processor_extracts_virtual_machine_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "vmx-owner@acme.example" in emails
         assert "vbox-owner@acme.example" in emails
@@ -39757,9 +40289,13 @@ def test_artifact_queue_processor_extracts_shortcut_link_artifacts(
     )
 
     assert _classify_remote_artifact_url("https://downloads.acme.example/portal.url") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/portal.website") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/portal.website") == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/team.webloc") == "config"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/launch.desktop") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/launch.desktop") == "config"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/legacy.lnk") == "document"
     assert _suffix_from_content_type("application/x-ms-shortcut") == ".lnk"
     assert _suffix_from_content_type("application/x-mswinurl") == ".url"
@@ -39779,9 +40315,7 @@ def test_artifact_queue_processor_extracts_shortcut_link_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "shortcut-owner@acme.example" in emails
         assert "website-owner@acme.example" in emails
@@ -39895,8 +40429,14 @@ def test_artifact_queue_processor_extracts_shell_history_artifacts(
         )
 
     assert _classify_artifact_name(bash_path) == "config"
-    assert _classify_remote_artifact_url("https://repo.acme.example/home/.bash_history?raw=1") == "config"
-    assert _classify_remote_artifact_url("https://repo.acme.example/ConsoleHost_history.txt") == "config"
+    assert (
+        _classify_remote_artifact_url("https://repo.acme.example/home/.bash_history?raw=1")
+        == "config"
+    )
+    assert (
+        _classify_remote_artifact_url("https://repo.acme.example/ConsoleHost_history.txt")
+        == "config"
+    )
     assert _artifact_format_label(bash_path) == "shell-history"
     assert _artifact_format_label(powershell_path) == "shell-history"
     assert _artifact_format_label("42-.zsh_history") == "shell-history"
@@ -39914,9 +40454,7 @@ def test_artifact_queue_processor_extracts_shell_history_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "shell-owner@acme.example" in emails
         assert "pshistory-owner@acme.example" in emails
@@ -39996,7 +40534,10 @@ def test_artifact_queue_processor_extracts_windows_registry_export_artifacts(
         ).encode("utf-16")
     )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/client-settings.reg") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/client-settings.reg")
+        == "config"
+    )
     assert _suffix_from_content_type("application/x-ms-regedit") == ".reg"
     assert _suffix_from_content_type("text/x-ms-regedit") == ".reg"
 
@@ -40012,9 +40553,7 @@ def test_artifact_queue_processor_extracts_windows_registry_export_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "registry-owner@acme.example" in emails
 
@@ -40112,8 +40651,16 @@ def test_artifact_queue_processor_extracts_windows_registry_hive_artifacts(
             ),
         )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Users/Alice/NTUSER.DAT") == "document"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Windows/System32/config/SOFTWARE") == "document"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/Users/Alice/NTUSER.DAT")
+        == "document"
+    )
+    assert (
+        _classify_remote_artifact_url(
+            "https://downloads.acme.example/Windows/System32/config/SOFTWARE"
+        )
+        == "document"
+    )
     assert _classify_remote_artifact_url("https://downloads.acme.example/config/SOFTWARE") is None
     assert _classify_artifact_name(ntuser_path) == "document"
     assert _classify_artifact_name(software_path) == "document"
@@ -40142,9 +40689,7 @@ def test_artifact_queue_processor_extracts_windows_registry_hive_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "ntuser-owner@acme.example" in emails
         assert "software-owner@acme.example" in emails
@@ -40197,7 +40742,9 @@ def test_artifact_queue_processor_extracts_windows_registry_hive_artifacts(
         }
         assert artifact_meta[ntuser_path.resolve().as_posix()]["format"] == "windows-registry-hive"
         assert artifact_meta[ntuser_path.resolve().as_posix()]["parser"] == "document"
-        assert artifact_meta[software_path.resolve().as_posix()]["format"] == "windows-registry-hive"
+        assert (
+            artifact_meta[software_path.resolve().as_posix()]["format"] == "windows-registry-hive"
+        )
         assert artifact_meta[software_path.resolve().as_posix()]["parser"] == "document"
         assert artifact_meta[bundle_path.resolve().as_posix()]["payload_count"] >= 1
     finally:
@@ -40233,8 +40780,13 @@ def test_artifact_queue_processor_extracts_windows_event_trace_artifacts(
         b"https://etl-firebase.firebaseio.com\x00"
     )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/security.evtx") == "document"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/network.etl?download=1") == "document"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/security.evtx") == "document"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/network.etl?download=1")
+        == "document"
+    )
     assert _suffix_from_content_type("application/x-ms-evtx") == ".evtx"
     assert _suffix_from_content_type("application/vnd.ms-eventlog") == ".evtx"
     assert _suffix_from_content_type("application/x-ms-trace-log") == ".etl"
@@ -40251,9 +40803,7 @@ def test_artifact_queue_processor_extracts_windows_event_trace_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "event-owner@acme.example" in emails
         assert "etl-owner@acme.example" in emails
@@ -40349,9 +40899,20 @@ def test_artifact_queue_processor_extracts_windows_execution_history_artifacts(
         b"https://customvault.supabase.co/rest/v1/jumplist\x00"
     )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/ACME-PORTAL.EXE-12345678.pf") == "document"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/team.automaticDestinations-ms") == "document"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/ops.customDestinations-ms") == "document"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/ACME-PORTAL.EXE-12345678.pf")
+        == "document"
+    )
+    assert (
+        _classify_remote_artifact_url(
+            "https://downloads.acme.example/team.automaticDestinations-ms"
+        )
+        == "document"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/ops.customDestinations-ms")
+        == "document"
+    )
     assert _suffix_from_content_type("application/x-ms-prefetch") == ".pf"
     assert _suffix_from_content_type("application/x-ms-jumplist") == ".automaticdestinations-ms"
     assert _suffix_from_content_type("application/x-ms-destinations") == ".customdestinations-ms"
@@ -40368,9 +40929,7 @@ def test_artifact_queue_processor_extracts_windows_execution_history_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "prefetch-owner@acme.example" in emails
         assert "jumplist-owner@acme.example" in emails
@@ -40430,7 +40989,10 @@ def test_artifact_queue_processor_extracts_windows_execution_history_artifacts(
         assert artifact_meta[prefetch_path.resolve().as_posix()]["format"] == "pf"
         assert artifact_meta[prefetch_path.resolve().as_posix()]["parser"] == "document"
         assert artifact_meta[prefetch_path.resolve().as_posix()]["payload_count"] >= 1
-        assert artifact_meta[automatic_path.resolve().as_posix()]["format"] == "automaticdestinations-ms"
+        assert (
+            artifact_meta[automatic_path.resolve().as_posix()]["format"]
+            == "automaticdestinations-ms"
+        )
         assert artifact_meta[automatic_path.resolve().as_posix()]["parser"] == "document"
         assert artifact_meta[custom_path.resolve().as_posix()]["format"] == "customdestinations-ms"
         assert artifact_meta[custom_path.resolve().as_posix()]["parser"] == "document"
@@ -40493,8 +41055,14 @@ def test_artifact_queue_processor_extracts_browser_extension_packages(
     crx_path = artifact_root / "chrome-helper.crx"
     crx_path.write_bytes(crx_header + crx_zip.getvalue())
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/chrome-helper.crx") == "archive"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/firefox-helper.xpi") == "archive"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/chrome-helper.crx")
+        == "archive"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/firefox-helper.xpi")
+        == "archive"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -40510,9 +41078,7 @@ def test_artifact_queue_processor_extracts_browser_extension_packages(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "xpi-owner@acme.example" in emails
         assert "crx-owner@acme.example" in emails
@@ -40633,9 +41199,7 @@ def test_artifact_queue_processor_extracts_nested_mobile_configs_from_archive_bu
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "nested-bundle-owner@acme.example" in emails
 
@@ -40736,9 +41300,7 @@ def test_artifact_queue_processor_extracts_nested_archive_style_mobile_bundle_fr
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "nested-xapk-owner@acme.example" in emails
 
@@ -40846,9 +41408,7 @@ def test_artifact_queue_processor_extracts_nested_mobile_configs_from_7z_archive
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "nested-7z-owner@acme.example" in emails
 
@@ -41888,9 +42448,7 @@ def test_artifact_queue_processor_extracts_android_app_bundle_findings(
 
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "aab-owner@acme.example" in emails
 
@@ -41976,9 +42534,7 @@ def test_artifact_queue_processor_extracts_opendocument_findings(tmp_path: Path)
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "odf-owner@acme.example" in emails
         assert "odf-meta@acme.example" in emails
@@ -42119,9 +42675,7 @@ def test_artifact_queue_processor_extracts_opendocument_spreadsheet_and_presenta
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "sheet-owner@acme.example" in emails
         assert "sheet-meta@acme.example" in emails
@@ -42235,9 +42789,7 @@ def test_artifact_queue_processor_extracts_epub_findings(tmp_path: Path) -> None
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "epub-owner@acme.example" in emails
         assert "epub-meta@acme.example" in emails
@@ -42328,9 +42880,7 @@ def test_artifact_queue_processor_extracts_mhtml_findings(tmp_path: Path) -> Non
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "mhtml-owner@acme.example" in emails
         assert "ops@acme.example" in emails
@@ -42464,9 +43014,7 @@ def test_artifact_queue_processor_extracts_eml_bodies_and_nested_attachments(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "analyst@acme.example" in emails
         assert "security@acme.example" in emails
@@ -43498,9 +44046,7 @@ def test_artifact_queue_processor_extracts_emlx_bodies_and_nested_attachments(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "emlx-analyst@acme.example" in emails
         assert "emlx-security@acme.example" in emails
@@ -43580,9 +44126,7 @@ def test_artifact_queue_processor_extracts_msg_bodies_and_nested_msg_attachments
             return {
                 ("__substg1.0_0037001F",): _msg_utf16("Nested Outlook Brief"),
                 ("__substg1.0_0C1F001F",): _msg_utf16("nested-msg-sender@acme.example"),
-                (
-                    "__substg1.0_1000001F",
-                ): _msg_utf16(
+                ("__substg1.0_1000001F",): _msg_utf16(
                     "Escalate to nested-msg-owner@acme.example and review "
                     "https://nested-outlook.acme.example/portal "
                     "Bucket: gs://nested-msg-gcs/reports/latest.json"
@@ -43591,12 +44135,8 @@ def test_artifact_queue_processor_extracts_msg_bodies_and_nested_msg_attachments
         return {
             ("__substg1.0_0037001F",): _msg_utf16("Outlook Security Brief"),
             ("__substg1.0_0C1F001F",): _msg_utf16("msg-sender@acme.example"),
-            (
-                "__substg1.0_007D001F",
-            ): _msg_utf16("X-Owner: header-msg@acme.example"),
-            (
-                "__substg1.0_1000001F",
-            ): _msg_utf16(
+            ("__substg1.0_007D001F",): _msg_utf16("X-Owner: header-msg@acme.example"),
+            ("__substg1.0_1000001F",): _msg_utf16(
                 "Owner: outlook-owner@acme.example\n"
                 "Portal: https://outlook.acme.example/brief\n"
                 "Firebase: https://outlook-firebase.firebaseio.com\n"
@@ -43662,9 +44202,7 @@ def test_artifact_queue_processor_extracts_msg_bodies_and_nested_msg_attachments
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "msg-sender@acme.example" in emails
         assert "header-msg@acme.example" in emails
@@ -43788,9 +44326,7 @@ def test_artifact_queue_processor_extracts_saz_http_transcript_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "saz-owner@acme.example" in emails
         assert "saz-body@acme.example" in emails
@@ -43869,7 +44405,10 @@ def test_artifact_queue_processor_extracts_charles_session_json_artifacts(
                         "response": {
                             "status": 302,
                             "headers": [
-                                {"name": "Location", "value": "/login?session_token=hidden&next=home"},
+                                {
+                                    "name": "Location",
+                                    "value": "/login?session_token=hidden&next=home",
+                                },
                             ],
                             "body": {
                                 "support": "charles-body@acme.example",
@@ -43914,9 +44453,7 @@ def test_artifact_queue_processor_extracts_charles_session_json_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "charles-owner@acme.example" in emails
         assert "charles-body@acme.example" in emails
@@ -44046,9 +44583,7 @@ def test_artifact_queue_processor_extracts_burp_site_map_xml_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "burp-request@acme.example" in emails
         assert "burp-body@acme.example" in emails
@@ -45090,9 +45625,9 @@ def test_artifact_queue_processor_extracts_har_entries_and_base64_bodies(
                         "content": {
                             "mimeType": "application/json",
                             "encoding": "base64",
-                            "text": base64.b64encode(
-                                decoded_response_body.encode("utf-8")
-                            ).decode("ascii"),
+                            "text": base64.b64encode(decoded_response_body.encode("utf-8")).decode(
+                                "ascii"
+                            ),
                         },
                     },
                 }
@@ -45121,9 +45656,9 @@ def test_artifact_queue_processor_extracts_har_entries_and_base64_bodies(
                         "content": {
                             "mimeType": "application/json",
                             "encoding": "base64",
-                            "text": base64.b64encode(
-                                nested_response_body.encode("utf-8")
-                            ).decode("ascii"),
+                            "text": base64.b64encode(nested_response_body.encode("utf-8")).decode(
+                                "ascii"
+                            ),
                         },
                     },
                 }
@@ -45147,9 +45682,7 @@ def test_artifact_queue_processor_extracts_har_entries_and_base64_bodies(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "har-page@acme.example" in emails
         assert "har-header@acme.example" in emails
@@ -45282,9 +45815,7 @@ def test_artifact_queue_processor_extracts_warc_and_compressed_warc_payloads(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "warc-header@acme.example" in emails
         assert "warc-owner@acme.example" in emails
@@ -45333,7 +45864,9 @@ def test_artifact_queue_processor_extracts_warc_and_compressed_warc_payloads(
         assert artifact_meta[warc_path.resolve().as_posix()]["format"] == "warc"
         assert artifact_meta[warc_path.resolve().as_posix()]["metadata_payload_count"] >= 2
         assert artifact_meta[compressed_warc_path.resolve().as_posix()]["format"] == "gz"
-        assert artifact_meta[compressed_warc_path.resolve().as_posix()]["metadata_payload_count"] >= 2
+        assert (
+            artifact_meta[compressed_warc_path.resolve().as_posix()]["metadata_payload_count"] >= 2
+        )
     finally:
         con.close()
 
@@ -46023,7 +46556,9 @@ def _classic_pcap_bytes(packet_payloads: list[bytes]) -> bytes:
 def _pcapng_block(block_type: int, body: bytes) -> bytes:
     padded_body = body + (b"\x00" * ((4 - (len(body) % 4)) % 4))
     block_length = 12 + len(padded_body)
-    return struct.pack("<II", block_type, block_length) + padded_body + struct.pack("<I", block_length)
+    return (
+        struct.pack("<II", block_type, block_length) + padded_body + struct.pack("<I", block_length)
+    )
 
 
 def _pcapng_bytes(packet_payloads: list[bytes]) -> bytes:
@@ -46088,9 +46623,7 @@ def test_artifact_queue_processor_extracts_pcap_and_nested_pcapng_payloads(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "pcap-owner@acme.example" in emails
         assert "nested-pcap-owner@acme.example" in emails
@@ -46146,7 +46679,9 @@ def test_artifact_queue_processor_parallelizes_pcap_payload_families_and_preserv
 ) -> None:
     db_path = tmp_path / "engagement.db"
     pcap_path = tmp_path / "parallel-capture.pcap"
-    pcap_path.write_bytes(_classic_pcap_bytes([b"GET https://parallel-pcap.acme.example HTTP/1.1\r\n\r\n"]))
+    pcap_path.write_bytes(
+        _classic_pcap_bytes([b"GET https://parallel-pcap.acme.example HTTP/1.1\r\n\r\n"])
+    )
     active = 0
     peak = 0
     lock = threading.Lock()
@@ -46269,9 +46804,7 @@ def test_artifact_queue_processor_extracts_saz_session_archive_findings(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "saz-header@acme.example" in emails
         assert "saz-post@acme.example" in emails
@@ -46388,9 +46921,7 @@ def test_artifact_queue_processor_extracts_mbox_messages_and_nested_attachments(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "mbox-analyst@acme.example" in emails
         assert "mbox-owner@acme.example" in emails
@@ -47943,7 +48474,11 @@ def test_firebase_extractor_parallelizes_supabase_key_candidate_expansion_and_pr
     ]
 
     def _encode_supabase_key(payload: dict[str, str]) -> str:
-        encoded = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii").rstrip("=")
+        encoded = (
+            base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8"))
+            .decode("ascii")
+            .rstrip("=")
+        )
         return f"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.{encoded}.signature"
 
     keys = {
@@ -48034,7 +48569,9 @@ def test_firebase_extractor_parallelizes_supabase_dedupe_keys_and_preserves_firs
         SupabaseConfig("alpha", "https://alpha.supabase.co", "anon-alpha", "two.apk", "two.js"),
         SupabaseConfig("bravo", "https://bravo.supabase.co", "anon-bravo", "three.apk", "three.js"),
         SupabaseConfig("bravo", "https://bravo.supabase.co", "anon-bravo", "four.apk", "four.js"),
-        SupabaseConfig("charlie", "https://charlie.supabase.co", "anon-charlie", "five.apk", "five.js"),
+        SupabaseConfig(
+            "charlie", "https://charlie.supabase.co", "anon-charlie", "five.apk", "five.js"
+        ),
     ]
     delays = {
         "alpha:anon-alpha:one.js": 0.05,
@@ -48082,9 +48619,15 @@ def test_firebase_extractor_parallelizes_firebase_dedupe_keys_and_preserves_firs
 ) -> None:
     projects = [
         FirebaseProject("alpha", None, "https://alpha.firebaseio.com", None, "one.apk", "one.json"),
-        FirebaseProject("alpha", "enc-two", "https://alpha.firebaseio.com", None, "one.apk", "two.json"),
-        FirebaseProject("bravo", None, "https://bravo.firebaseio.com", None, "three.apk", "three.json"),
-        FirebaseProject("bravo", "enc-four", "https://bravo.firebaseio.com", None, "three.apk", "four.json"),
+        FirebaseProject(
+            "alpha", "enc-two", "https://alpha.firebaseio.com", None, "one.apk", "two.json"
+        ),
+        FirebaseProject(
+            "bravo", None, "https://bravo.firebaseio.com", None, "three.apk", "three.json"
+        ),
+        FirebaseProject(
+            "bravo", "enc-four", "https://bravo.firebaseio.com", None, "three.apk", "four.json"
+        ),
         FirebaseProject("charlie", None, None, None, "five.apk", "five.json"),
     ]
     delays = {
@@ -48100,7 +48643,9 @@ def test_firebase_extractor_parallelizes_firebase_dedupe_keys_and_preserves_firs
     original_key = FirebaseExtractor._firebase_dedupe_key
 
     def _tracking_key(project):  # noqa: ANN001
-        signature = f"{project.project_id}:{project.rtdb_url}:{project.source_file}:{project.extract_path}"
+        signature = (
+            f"{project.project_id}:{project.rtdb_url}:{project.source_file}:{project.extract_path}"
+        )
         nonlocal active, peak
         with lock:
             active += 1
@@ -48121,7 +48666,10 @@ def test_firebase_extractor_parallelizes_firebase_dedupe_keys_and_preserves_firs
     deduped = FirebaseExtractor._dedupe_firebase_projects(projects)
 
     assert peak == 4
-    assert [(project.project_id, project.rtdb_url, project.source_file, project.extract_path) for project in deduped] == [
+    assert [
+        (project.project_id, project.rtdb_url, project.source_file, project.extract_path)
+        for project in deduped
+    ] == [
         ("alpha", "https://alpha.firebaseio.com", "one.apk", "one.json"),
         ("bravo", "https://bravo.firebaseio.com", "three.apk", "three.json"),
         ("charlie", None, "five.apk", "five.json"),
@@ -48135,11 +48683,37 @@ def test_firebase_extractor_parallelizes_store_entry_prep_and_preserves_insert_o
     db_path = tmp_path / "firebase_store.db"
     extractor = FirebaseExtractor()
     projects = [
-        FirebaseProject("alpha", None, "https://alpha.firebaseio.com", None, "one.apk", "one.json", "alpha.appspot.com"),
-        FirebaseProject("alpha", "enc-two", "https://alpha.firebaseio.com", None, "one.apk", "two.json", "ignored.appspot.com"),
+        FirebaseProject(
+            "alpha",
+            None,
+            "https://alpha.firebaseio.com",
+            None,
+            "one.apk",
+            "one.json",
+            "alpha.appspot.com",
+        ),
+        FirebaseProject(
+            "alpha",
+            "enc-two",
+            "https://alpha.firebaseio.com",
+            None,
+            "one.apk",
+            "two.json",
+            "ignored.appspot.com",
+        ),
         FirebaseProject("bravo", None, None, None, "three.apk", "three.json", None),
-        FirebaseProject("bravo", "enc-four", None, None, "three.apk", "four.json", "ignored-bravo.appspot.com"),
-        FirebaseProject("charlie", None, "https://charlie.firebaseio.com", None, "five.apk", "five.json", "charlie.appspot.com"),
+        FirebaseProject(
+            "bravo", "enc-four", None, None, "three.apk", "four.json", "ignored-bravo.appspot.com"
+        ),
+        FirebaseProject(
+            "charlie",
+            None,
+            "https://charlie.firebaseio.com",
+            None,
+            "five.apk",
+            "five.json",
+            "charlie.appspot.com",
+        ),
     ]
     delays = {
         "alpha:one.apk:one.json": 0.05,
@@ -48189,7 +48763,9 @@ def test_firebase_extractor_parallelizes_store_entry_prep_and_preserves_insert_o
 
     assert peak == 4
     assert count == 3
-    assert [(str(row["asset_type"]), str(row["identifier"]), str(row["source"])) for row in cloud_assets] == [
+    assert [
+        (str(row["asset_type"]), str(row["identifier"]), str(row["source"])) for row in cloud_assets
+    ] == [
         ("firebase", "alpha", "firebase_extract"),
         ("gcs", "alpha.appspot.com", "firebase_extract_storage_bucket"),
         ("firebase", "bravo", "firebase_extract"),
@@ -48205,11 +48781,35 @@ def test_firebase_extractor_parallelizes_emit_json_rows_and_preserves_output_ord
     extractor = FirebaseExtractor()
     output_path = tmp_path / "firebase_projects.json"
     projects = [
-        FirebaseProject("alpha", "enc-alpha", "https://alpha.firebaseio.com", None, "one.apk", "one.json", "alpha.appspot.com"),
+        FirebaseProject(
+            "alpha",
+            "enc-alpha",
+            "https://alpha.firebaseio.com",
+            None,
+            "one.apk",
+            "one.json",
+            "alpha.appspot.com",
+        ),
         FirebaseProject("bravo", None, None, "com.bravo.app", "two.apk", "two.json", None),
-        FirebaseProject("charlie", "enc-charlie", "https://charlie.firebaseio.com", None, "three.apk", "three.json", "charlie.appspot.com"),
+        FirebaseProject(
+            "charlie",
+            "enc-charlie",
+            "https://charlie.firebaseio.com",
+            None,
+            "three.apk",
+            "three.json",
+            "charlie.appspot.com",
+        ),
         FirebaseProject("delta", None, None, None, "four.apk", "four.json", None),
-        FirebaseProject("echo", "enc-echo", "https://echo.firebaseio.com", "com.echo.app", "five.apk", "five.json", "echo.appspot.com"),
+        FirebaseProject(
+            "echo",
+            "enc-echo",
+            "https://echo.firebaseio.com",
+            "com.echo.app",
+            "five.apk",
+            "five.json",
+            "echo.appspot.com",
+        ),
     ]
     delays = {
         "alpha": 0.05,
@@ -48273,16 +48873,42 @@ def test_firebase_extractor_parallelizes_mobile_config_export_rows_and_preserves
     extractor = FirebaseExtractor()
     output_path = tmp_path / "mobile_config.json"
     projects = [
-        FirebaseProject("alpha", "enc-alpha", "https://alpha.firebaseio.com", None, "one.apk", "one.json", "alpha.appspot.com"),
+        FirebaseProject(
+            "alpha",
+            "enc-alpha",
+            "https://alpha.firebaseio.com",
+            None,
+            "one.apk",
+            "one.json",
+            "alpha.appspot.com",
+        ),
         FirebaseProject("bravo", None, None, None, "two.apk", "two.json", None),
-        FirebaseProject("charlie", "enc-charlie", "https://charlie.firebaseio.com", "com.charlie.app", "three.apk", "three.json", "charlie.appspot.com"),
+        FirebaseProject(
+            "charlie",
+            "enc-charlie",
+            "https://charlie.firebaseio.com",
+            "com.charlie.app",
+            "three.apk",
+            "three.json",
+            "charlie.appspot.com",
+        ),
         FirebaseProject("delta", None, None, None, "four.apk", "four.json", None),
-        FirebaseProject("echo", "enc-echo", "https://echo.firebaseio.com", None, "five.apk", "five.json", "echo.appspot.com"),
+        FirebaseProject(
+            "echo",
+            "enc-echo",
+            "https://echo.firebaseio.com",
+            None,
+            "five.apk",
+            "five.json",
+            "echo.appspot.com",
+        ),
     ]
     configs = [
         SupabaseConfig("alpha", "https://alpha.supabase.co", "anon-alpha", "one.apk", "alpha.js"),
         SupabaseConfig("bravo", "https://bravo.supabase.co", "", "two.apk", "bravo.js"),
-        SupabaseConfig("charlie", "https://charlie.supabase.co", "anon-charlie", "three.apk", "charlie.js"),
+        SupabaseConfig(
+            "charlie", "https://charlie.supabase.co", "anon-charlie", "three.apk", "charlie.js"
+        ),
         SupabaseConfig("delta", "https://delta.supabase.co", "", "four.apk", "delta.js"),
         SupabaseConfig("echo", "https://echo.supabase.co", "anon-echo", "five.apk", "echo.js"),
     ]
@@ -48410,7 +49036,9 @@ def test_firebase_extractor_parallelizes_web_snippet_projects_and_preserves_orde
     original_helper = FirebaseExtractor._firebase_web_snippet_project
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str = "", payload: dict[str, object] | None = None) -> None:
+        def __init__(
+            self, status_code: int, text: str = "", payload: dict[str, object] | None = None
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self._payload = payload
@@ -48459,7 +49087,11 @@ def test_firebase_extractor_parallelizes_web_snippet_projects_and_preserves_orde
                 active -= 1
 
     monkeypatch.setattr("forge.phase4.mobile_config_parse.httpx.Client", _FakeClient)
-    monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda self, raw_key: None if raw_key is None else f"enc:{raw_key}")
+    monkeypatch.setattr(
+        FirebaseExtractor,
+        "_encrypt",
+        lambda self, raw_key: None if raw_key is None else f"enc:{raw_key}",
+    )
     monkeypatch.setattr(
         FirebaseExtractor,
         "_firebase_web_snippet_project",
@@ -48469,7 +49101,13 @@ def test_firebase_extractor_parallelizes_web_snippet_projects_and_preserves_orde
     projects = extractor.extract_web_config(url)
 
     assert peak == 4
-    assert [project.project_id for project in projects] == ["alpha", "bravo", "charlie", "delta", "echo"]
+    assert [project.project_id for project in projects] == [
+        "alpha",
+        "bravo",
+        "charlie",
+        "delta",
+        "echo",
+    ]
     assert [project.api_key_enc for project in projects] == [
         "enc:key-alpha",
         "enc:key-bravo",
@@ -48490,10 +49128,16 @@ def test_firebase_extractor_parallelizes_supabase_store_entry_prep_and_preserves
     extractor = FirebaseExtractor()
     configs = [
         SupabaseConfig("alpha", "https://alpha.supabase.co", "anon-alpha", "one.apk", "alpha.js"),
-        SupabaseConfig("alpha", "https://alpha.supabase.co", "anon-alpha", "two.apk", "alpha-duplicate.js"),
+        SupabaseConfig(
+            "alpha", "https://alpha.supabase.co", "anon-alpha", "two.apk", "alpha-duplicate.js"
+        ),
         SupabaseConfig("bravo", "https://bravo.supabase.co", "anon-bravo", "three.apk", "bravo.js"),
-        SupabaseConfig("bravo", "https://bravo.supabase.co", "anon-bravo", "four.apk", "bravo-duplicate.js"),
-        SupabaseConfig("charlie", "https://charlie.supabase.co", "anon-charlie", "five.apk", "charlie.js"),
+        SupabaseConfig(
+            "bravo", "https://bravo.supabase.co", "anon-bravo", "four.apk", "bravo-duplicate.js"
+        ),
+        SupabaseConfig(
+            "charlie", "https://charlie.supabase.co", "anon-charlie", "five.apk", "charlie.js"
+        ),
     ]
     delays = {
         "alpha:one.apk:alpha.js": 0.05,
@@ -48551,12 +49195,16 @@ def test_firebase_extractor_parallelizes_supabase_store_entry_prep_and_preserves
 
     assert peak == 3
     assert count == 3
-    assert [(str(row["asset_type"]), str(row["identifier"]), str(row["source"])) for row in cloud_assets] == [
+    assert [
+        (str(row["asset_type"]), str(row["identifier"]), str(row["source"])) for row in cloud_assets
+    ] == [
         ("supabase", "alpha", "mobile_config_parse"),
         ("supabase", "bravo", "mobile_config_parse"),
         ("supabase", "charlie", "mobile_config_parse"),
     ]
-    assert [(str(row["domain"]), str(row["source_url"]), str(row["repo_name"])) for row in key_rows] == [
+    assert [
+        (str(row["domain"]), str(row["source_url"]), str(row["repo_name"])) for row in key_rows
+    ] == [
         ("alpha", "one.apk", "one.apk"),
         ("bravo", "three.apk", "three.apk"),
         ("charlie", "five.apk", "five.apk"),
@@ -48610,7 +49258,9 @@ def test_firebase_extractor_parallelizes_supabase_ipa_member_planning_and_preser
     def _fake_extract_supabase_from_text(self, text, source_file, extract_path):  # noqa: ANN001
         del self, text
         ref = Path(extract_path).stem.lower()
-        return [SupabaseConfig(ref, f"https://{ref}.supabase.co", "anon", source_file, extract_path)]
+        return [
+            SupabaseConfig(ref, f"https://{ref}.supabase.co", "anon", source_file, extract_path)
+        ]
 
     monkeypatch.setattr(
         FirebaseExtractor,
@@ -48626,7 +49276,13 @@ def test_firebase_extractor_parallelizes_supabase_ipa_member_planning_and_preser
     configs = extractor.extract_supabase_ipa(ipa_path)
 
     assert peak == 4
-    assert [config.project_ref for config in configs] == ["alpha", "bravo", "charlie", "delta", "echo"]
+    assert [config.project_ref for config in configs] == [
+        "alpha",
+        "bravo",
+        "charlie",
+        "delta",
+        "echo",
+    ]
     assert [config.extract_path for config in configs] == [
         "Payload/Alpha.plist",
         "Payload/Bravo.json",
@@ -48699,16 +49355,26 @@ def test_firebase_extractor_parallelizes_supabase_android_member_planning_and_pr
     def _fake_extract_supabase_from_text(self, text, source_file, extract_path):  # noqa: ANN001
         del self, text
         ref = Path(extract_path).stem.lower().replace("-supabase", "")
-        return [SupabaseConfig(ref, f"https://{ref}.supabase.co", "anon", source_file, extract_path)]
+        return [
+            SupabaseConfig(ref, f"https://{ref}.supabase.co", "anon", source_file, extract_path)
+        ]
 
     def _fake_extract_nested(self, data, apk_path_arg, *, nested_prefix, depth):  # noqa: ANN001
         del self, data, apk_path_arg, depth
         ref = Path(nested_prefix).stem.lower()
-        return [SupabaseConfig(ref, f"https://{ref}.supabase.co", "anon", str(apk_path), nested_prefix)]
+        return [
+            SupabaseConfig(ref, f"https://{ref}.supabase.co", "anon", str(apk_path), nested_prefix)
+        ]
 
-    monkeypatch.setattr(FirebaseExtractor, "_supabase_android_text_member_entry", _tracking_text_entry)
-    monkeypatch.setattr(FirebaseExtractor, "_supabase_android_nested_bundle_entry", _tracking_nested_entry)
-    monkeypatch.setattr(FirebaseExtractor, "_extract_supabase_from_text", _fake_extract_supabase_from_text)
+    monkeypatch.setattr(
+        FirebaseExtractor, "_supabase_android_text_member_entry", _tracking_text_entry
+    )
+    monkeypatch.setattr(
+        FirebaseExtractor, "_supabase_android_nested_bundle_entry", _tracking_nested_entry
+    )
+    monkeypatch.setattr(
+        FirebaseExtractor, "_extract_supabase_from_text", _fake_extract_supabase_from_text
+    )
     monkeypatch.setattr(
         FirebaseExtractor,
         "_extract_supabase_android_bundle_configs_from_bytes",
@@ -48851,7 +49517,7 @@ def test_firebase_extractor_parallelizes_strings_xml_member_planning_and_preserv
                 name,
                 (
                     "<resources>"
-                    f"<string name=\"firebase_url\">https://{project_id}-default-rtdb.firebaseio.com</string>"
+                    f'<string name="firebase_url">https://{project_id}-default-rtdb.firebaseio.com</string>'
                     "</resources>"
                 ),
             )
@@ -49003,11 +49669,51 @@ def test_firebase_extractor_parallelizes_rebase_project_entries_and_preserves_or
 ) -> None:
     apk_path = tmp_path / "sample.apk"
     projects = [
-        FirebaseProject("alpha", "enc:key-alpha", "https://alpha.firebaseio.com", None, "nested.apk", "base/google-services.json", "alpha.appspot.com"),
-        FirebaseProject("bravo", "enc:key-bravo", "https://bravo.firebaseio.com", None, "nested.apk", "feature/google-services.json", "bravo.appspot.com"),
-        FirebaseProject("charlie", "enc:key-charlie", "https://charlie.firebaseio.com", None, "nested.apk", "dynamic/google-services.json", "charlie.appspot.com"),
-        FirebaseProject("delta", "enc:key-delta", "https://delta.firebaseio.com", None, "nested.apk", "instant/google-services.json", "delta.appspot.com"),
-        FirebaseProject("echo", "enc:key-echo", "https://echo.firebaseio.com", None, "nested.apk", "split/google-services.json", "echo.appspot.com"),
+        FirebaseProject(
+            "alpha",
+            "enc:key-alpha",
+            "https://alpha.firebaseio.com",
+            None,
+            "nested.apk",
+            "base/google-services.json",
+            "alpha.appspot.com",
+        ),
+        FirebaseProject(
+            "bravo",
+            "enc:key-bravo",
+            "https://bravo.firebaseio.com",
+            None,
+            "nested.apk",
+            "feature/google-services.json",
+            "bravo.appspot.com",
+        ),
+        FirebaseProject(
+            "charlie",
+            "enc:key-charlie",
+            "https://charlie.firebaseio.com",
+            None,
+            "nested.apk",
+            "dynamic/google-services.json",
+            "charlie.appspot.com",
+        ),
+        FirebaseProject(
+            "delta",
+            "enc:key-delta",
+            "https://delta.firebaseio.com",
+            None,
+            "nested.apk",
+            "instant/google-services.json",
+            "delta.appspot.com",
+        ),
+        FirebaseProject(
+            "echo",
+            "enc:key-echo",
+            "https://echo.firebaseio.com",
+            None,
+            "nested.apk",
+            "split/google-services.json",
+            "echo.appspot.com",
+        ),
     ]
     delays = {
         "alpha": 0.05,
@@ -49180,7 +49886,7 @@ def test_firebase_extractor_parallelizes_plist_fallback_member_planning_and_pres
             zf.writestr(
                 name,
                 (
-                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    '<?xml version="1.0" encoding="UTF-8"?>'
                     "<plist><dict>"
                     f"<string>https://{project_id}-default-rtdb.firebaseio.com</string>"
                     "</dict></plist>"
@@ -49419,7 +50125,11 @@ def test_artifact_queue_processor_parallelizes_top_level_text_artifact_scan_stag
     lock = threading.Lock()
 
     base_payload = (str(archive_path), "base.txt", "base-owner@acme.example")
-    nested_payload = (str(archive_path), "packages/client.apk!payload.txt", "nested-owner@acme.example")
+    nested_payload = (
+        str(archive_path),
+        "packages/client.apk!payload.txt",
+        "nested-owner@acme.example",
+    )
 
     def _track_stage(stage: str) -> None:
         nonlocal active, peak
@@ -49590,10 +50300,12 @@ def test_artifact_queue_processor_parallelizes_nested_member_mobile_bundle_famil
     )
 
     processor = ArtifactQueueProcessor(db_path, 1001, max_workers=2)
-    payloads, firebase_projects, supabase_configs = processor._extract_mobile_configs_from_member_bytes(
-        b"apk-binary",
-        source_archive,
-        member_name,
+    payloads, firebase_projects, supabase_configs = (
+        processor._extract_mobile_configs_from_member_bytes(
+            b"apk-binary",
+            source_archive,
+            member_name,
+        )
     )
 
     assert peak == 2
@@ -49605,9 +50317,7 @@ def test_artifact_queue_processor_parallelizes_nested_member_mobile_bundle_famil
         f"{member_name}!google-services.json"
     ]
     assert [config.project_ref for config in supabase_configs] == ["nestedmobilesupa"]
-    assert [config.extract_path for config in supabase_configs] == [
-        f"{member_name}!supabase.js"
-    ]
+    assert [config.extract_path for config in supabase_configs] == [f"{member_name}!supabase.js"]
 
 
 def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_preserves_order(
@@ -49657,7 +50367,9 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
             peak_payload = max(peak_payload, active_payload)
         try:
             time.sleep(payload_delays[payload[1]])
-            return original_payload_entry(payload, source_path=source_archive, member_name="packages/client.apk")
+            return original_payload_entry(
+                payload, source_path=source_archive, member_name="packages/client.apk"
+            )
         finally:
             with lock:
                 active_payload -= 1
@@ -49670,7 +50382,9 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
             peak_project = max(peak_project, active_project)
         try:
             time.sleep(project_delays[project.project_id])
-            return original_project_entry(project, source_path=source_archive, member_name="packages/client.apk")
+            return original_project_entry(
+                project, source_path=source_archive, member_name="packages/client.apk"
+            )
         finally:
             with lock:
                 active_project -= 1
@@ -49683,7 +50397,9 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
             peak_config = max(peak_config, active_config)
         try:
             time.sleep(config_delays[config.project_ref])
-            return original_config_entry(config, source_path=source_archive, member_name="packages/client.apk")
+            return original_config_entry(
+                config, source_path=source_archive, member_name="packages/client.apk"
+            )
         finally:
             with lock:
                 active_config -= 1
@@ -49707,18 +50423,38 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
             ]
         if family == "firebase":
             return [
-                FirebaseProject("firebase-1", None, None, None, str(path), "google-services-1.json"),
-                FirebaseProject("firebase-2", None, None, None, str(path), "google-services-2.json"),
-                FirebaseProject("firebase-3", None, None, None, str(path), "google-services-3.json"),
-                FirebaseProject("firebase-4", None, None, None, str(path), "google-services-4.json"),
-                FirebaseProject("firebase-5", None, None, None, str(path), "google-services-5.json"),
+                FirebaseProject(
+                    "firebase-1", None, None, None, str(path), "google-services-1.json"
+                ),
+                FirebaseProject(
+                    "firebase-2", None, None, None, str(path), "google-services-2.json"
+                ),
+                FirebaseProject(
+                    "firebase-3", None, None, None, str(path), "google-services-3.json"
+                ),
+                FirebaseProject(
+                    "firebase-4", None, None, None, str(path), "google-services-4.json"
+                ),
+                FirebaseProject(
+                    "firebase-5", None, None, None, str(path), "google-services-5.json"
+                ),
             ]
         return [
-            SupabaseConfig("supabase-1", "https://supabase-1.supabase.co", "anon", str(path), "supabase-1.js"),
-            SupabaseConfig("supabase-2", "https://supabase-2.supabase.co", "anon", str(path), "supabase-2.js"),
-            SupabaseConfig("supabase-3", "https://supabase-3.supabase.co", "anon", str(path), "supabase-3.js"),
-            SupabaseConfig("supabase-4", "https://supabase-4.supabase.co", "anon", str(path), "supabase-4.js"),
-            SupabaseConfig("supabase-5", "https://supabase-5.supabase.co", "anon", str(path), "supabase-5.js"),
+            SupabaseConfig(
+                "supabase-1", "https://supabase-1.supabase.co", "anon", str(path), "supabase-1.js"
+            ),
+            SupabaseConfig(
+                "supabase-2", "https://supabase-2.supabase.co", "anon", str(path), "supabase-2.js"
+            ),
+            SupabaseConfig(
+                "supabase-3", "https://supabase-3.supabase.co", "anon", str(path), "supabase-3.js"
+            ),
+            SupabaseConfig(
+                "supabase-4", "https://supabase-4.supabase.co", "anon", str(path), "supabase-4.js"
+            ),
+            SupabaseConfig(
+                "supabase-5", "https://supabase-5.supabase.co", "anon", str(path), "supabase-5.js"
+            ),
         ]
 
     monkeypatch.setattr(
@@ -49743,10 +50479,12 @@ def test_artifact_queue_processor_parallelizes_nested_member_rebase_entries_and_
     )
 
     processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
-    payloads, firebase_projects, supabase_configs = processor._extract_mobile_configs_from_member_bytes(
-        b"apk-binary",
-        source_archive,
-        member_name,
+    payloads, firebase_projects, supabase_configs = (
+        processor._extract_mobile_configs_from_member_bytes(
+            b"apk-binary",
+            source_archive,
+            member_name,
+        )
     )
 
     assert peak_payload == 4
@@ -50163,10 +50901,7 @@ def test_artifact_text_email_and_phone_extractors_use_bounded_workers_and_preser
     )
     phone_batch = processor._collect_generic_text_discovery_family(
         "phones",
-        text=(
-            "+1 555 000 1000 +1 555 000 2000 +1 555 000 3000 "
-            "+1 555 000 2000 +1 555 000 4000"
-        ),
+        text=("+1 555 000 1000 +1 555 000 2000 +1 555 000 3000 +1 555 000 2000 +1 555 000 4000"),
         source_file=str(tmp_path / "artifact.txt"),
     )
 
@@ -51114,9 +51849,17 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_merge_fami
         elif family == "phones":
             batch.phones = ["+15551234567", "+15551234567", "+15557654321"]
         elif family == "ips":
-            batch.ip_seeds = [("203.0.113.10", "ipv4"), ("203.0.113.10", "ipv4"), ("2001:db8::10", "ipv6")]
+            batch.ip_seeds = [
+                ("203.0.113.10", "ipv4"),
+                ("203.0.113.10", "ipv4"),
+                ("2001:db8::10", "ipv6"),
+            ]
         elif family == "urls":
-            batch.urls = ["https://portal.acme.example", "https://portal.acme.example", "https://cdn.acme.example"]
+            batch.urls = [
+                "https://portal.acme.example",
+                "https://portal.acme.example",
+                "https://cdn.acme.example",
+            ]
         elif family == "keys":
             batch.key_findings = [
                 {
@@ -51384,10 +52127,18 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_persistenc
         del self, con, metadata
         stored_cloud_assets.append((str(asset_type), str(identifier), str(source)))
 
-    monkeypatch.setattr(ArtifactQueueProcessor, "_artifact_text_email_persistence_entry", _tracking_email_entry)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_artifact_text_phone_persistence_entry", _tracking_phone_entry)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_artifact_text_ip_persistence_entry", _tracking_ip_entry)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_artifact_text_url_persistence_entry", _tracking_url_entry)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_artifact_text_email_persistence_entry", _tracking_email_entry
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_artifact_text_phone_persistence_entry", _tracking_phone_entry
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_artifact_text_ip_persistence_entry", _tracking_ip_entry
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_artifact_text_url_persistence_entry", _tracking_url_entry
+    )
     monkeypatch.setattr(
         ArtifactQueueProcessor,
         "_artifact_text_key_finding_persistence_entry",
@@ -51400,10 +52151,16 @@ def test_artifact_queue_processor_parallelizes_generic_text_discovery_persistenc
     )
     monkeypatch.setattr(ArtifactQueueProcessor, "_insert_email", _fake_insert_email)
     monkeypatch.setattr(ArtifactQueueProcessor, "_insert_seed", _fake_insert_seed)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_store_artifact_url_seed", _fake_store_artifact_url_seed)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_store_artifact_url_seed", _fake_store_artifact_url_seed
+    )
     monkeypatch.setattr(ArtifactQueueProcessor, "_store_key_finding", _fake_store_key_finding)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_store_cloud_asset_reference", _fake_store_cloud_asset_reference)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_store_cloud_asset_reference", _fake_store_cloud_asset_reference
+    )
 
     con = sqlite3.connect(db_path)
     try:
@@ -51524,15 +52281,27 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_prep_and_preser
             if family == "related_seeds":
                 return {
                     "related_seed_entries": [
-                        {"seed_value": "portal.example.com", "seed_type": "subdomain", "confidence": 0.64},
+                        {
+                            "seed_value": "portal.example.com",
+                            "seed_type": "subdomain",
+                            "confidence": 0.64,
+                        },
                         {"seed_value": "example.com", "seed_type": "domain", "confidence": 0.6},
                     ]
                 }
             if family == "cloud_assets":
                 return {
                     "cloud_asset_entries": [
-                        {"asset_type": "aws_s3", "identifier": "ops-bucket", "source": "artifact_url_extract"},
-                        {"asset_type": "gcs", "identifier": "mirror-bucket", "source": "artifact_url_extract"},
+                        {
+                            "asset_type": "aws_s3",
+                            "identifier": "ops-bucket",
+                            "source": "artifact_url_extract",
+                        },
+                        {
+                            "asset_type": "gcs",
+                            "identifier": "mirror-bucket",
+                            "source": "artifact_url_extract",
+                        },
                     ]
                 }
             return {}
@@ -51556,7 +52325,9 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_prep_and_preser
         metadata,
     ):
         del self, con, source_seed_id, confidence
-        link_calls.append((str(target_value), str(target_type), None if metadata is None else dict(metadata)))
+        link_calls.append(
+            (str(target_value), str(target_type), None if metadata is None else dict(metadata))
+        )
 
     def _fake_lookup_seed_id(self, con, seed_value, seed_type):  # noqa: ANN001
         del self, con
@@ -51593,12 +52364,18 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_prep_and_preser
         del self, con
         cloud_asset_calls.append((str(asset_type), str(identifier), str(source)))
 
-    monkeypatch.setattr(ArtifactQueueProcessor, "_artifact_url_seed_family_entry", _tracking_family_entry)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_artifact_url_seed_family_entry", _tracking_family_entry
+    )
     monkeypatch.setattr(ArtifactQueueProcessor, "_insert_seed", _fake_insert_seed)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed
+    )
     monkeypatch.setattr(ArtifactQueueProcessor, "_lookup_seed_id", _fake_lookup_seed_id)
     monkeypatch.setattr(ArtifactQueueProcessor, "_insert_relation", _fake_insert_relation)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_store_cloud_asset_reference", _fake_store_cloud_asset_reference)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_store_cloud_asset_reference", _fake_store_cloud_asset_reference
+    )
 
     con = sqlite3.connect(db_path)
     try:
@@ -51729,8 +52506,16 @@ def test_artifact_queue_processor_parallelizes_artifact_url_seed_family_merges_a
         if family == "cloud_assets":
             return {
                 "cloud_asset_entries": [
-                    {"asset_type": "aws_s3", "identifier": "ops-bucket", "source": "artifact_url_extract"},
-                    {"asset_type": "gcs", "identifier": "mirror-bucket", "source": "artifact_url_extract"},
+                    {
+                        "asset_type": "aws_s3",
+                        "identifier": "ops-bucket",
+                        "source": "artifact_url_extract",
+                    },
+                    {
+                        "asset_type": "gcs",
+                        "identifier": "mirror-bucket",
+                        "source": "artifact_url_extract",
+                    },
                 ]
             }
         return {}
@@ -51953,9 +52738,27 @@ def test_artifact_queue_processor_parallelizes_social_profile_url_pivot_entries_
         ("Alice Example", "name"),
     ]
     assert relation_calls == [
-        (10, 11, "derived_from", 0.78, {"rule": "artifact_social_url_extract", "platform": "linkedin"}),
-        (10, 12, "derived_from", 0.76, {"rule": "artifact_social_url_extract", "platform": "linkedin"}),
-        (10, 13, "derived_from", 0.74, {"rule": "artifact_social_url_extract", "platform": "linkedin"}),
+        (
+            10,
+            11,
+            "derived_from",
+            0.78,
+            {"rule": "artifact_social_url_extract", "platform": "linkedin"},
+        ),
+        (
+            10,
+            12,
+            "derived_from",
+            0.76,
+            {"rule": "artifact_social_url_extract", "platform": "linkedin"},
+        ),
+        (
+            10,
+            13,
+            "derived_from",
+            0.74,
+            {"rule": "artifact_social_url_extract", "platform": "linkedin"},
+        ),
     ]
 
 
@@ -52011,7 +52814,9 @@ def test_artifact_queue_processor_parallelizes_cloud_asset_url_entries_and_prese
         "_cloud_asset_url_entry",
         staticmethod(_tracking_entry),
     )
-    monkeypatch.setattr(ArtifactQueueProcessor, "_store_cloud_asset_reference", _fake_store_cloud_asset_reference)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_store_cloud_asset_reference", _fake_store_cloud_asset_reference
+    )
 
     con = sqlite3.connect(db_path)
     try:
@@ -52089,11 +52894,19 @@ def test_artifact_queue_processor_parallelizes_cloud_asset_url_matcher_families_
 
     assert peak == 4
     assert entries == [
-        {"asset_type": "supabase", "identifier": "acme-workspace", "source": "artifact_url_extract"},
+        {
+            "asset_type": "supabase",
+            "identifier": "acme-workspace",
+            "source": "artifact_url_extract",
+        },
         {"asset_type": "aws_s3", "identifier": "ops-bucket", "source": "artifact_url_extract"},
         {"asset_type": "do_spaces", "identifier": "nyc3/assets", "source": "artifact_url_extract"},
         {"asset_type": "gcs", "identifier": "mirror-bucket", "source": "artifact_url_extract"},
-        {"asset_type": "azure_blob", "identifier": "auditblob/public", "source": "artifact_url_extract"},
+        {
+            "asset_type": "azure_blob",
+            "identifier": "auditblob/public",
+            "source": "artifact_url_extract",
+        },
     ]
 
 
@@ -52325,8 +53138,7 @@ def test_artifact_queue_processor_parallelizes_per_payload_structured_extractors
     source_file = str(tmp_path / "artifact.txt")
     expected_families = list(ArtifactQueueProcessor._STRUCTURED_DISCOVERY_FAMILIES)
     delays = {
-        family: 0.01 + ((index % 7) * 0.003)
-        for index, family in enumerate(expected_families)
+        family: 0.01 + ((index % 7) * 0.003) for index, family in enumerate(expected_families)
     }
     active = 0
     peak = 0
@@ -56297,9 +57109,21 @@ def test_artifact_queue_processor_parallelizes_sqlite_row_payloads_and_preserves
 
     assert peak == 3
     assert payloads == [
-        (str(tmp_path / "parallel-rows.sqlite"), "parallel-rows.sqlite#sqlite-row-credentials-1", "row-1"),
-        (str(tmp_path / "parallel-rows.sqlite"), "parallel-rows.sqlite#sqlite-row-credentials-2", "row-2"),
-        (str(tmp_path / "parallel-rows.sqlite"), "parallel-rows.sqlite#sqlite-row-credentials-3", "row-3"),
+        (
+            str(tmp_path / "parallel-rows.sqlite"),
+            "parallel-rows.sqlite#sqlite-row-credentials-1",
+            "row-1",
+        ),
+        (
+            str(tmp_path / "parallel-rows.sqlite"),
+            "parallel-rows.sqlite#sqlite-row-credentials-2",
+            "row-2",
+        ),
+        (
+            str(tmp_path / "parallel-rows.sqlite"),
+            "parallel-rows.sqlite#sqlite-row-credentials-3",
+            "row-3",
+        ),
     ]
 
 
@@ -56607,9 +57431,7 @@ def test_artifact_queue_processor_extracts_folded_calendar_contact_seed_pivots(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         seeds = {
             (row[0], row[1])
@@ -57409,7 +58231,11 @@ def test_artifact_queue_processor_parallelizes_ole_stream_extraction_and_preserv
         (str(tmp_path / "parallel.doc"), "parallel.doc#ole-metadata", "subject=Parallel OLE"),
         (str(tmp_path / "parallel.doc"), "parallel.doc#ole-stream:StreamOne", "StreamOne-payload"),
         (str(tmp_path / "parallel.doc"), "parallel.doc#ole-stream:StreamTwo", "StreamTwo-payload"),
-        (str(tmp_path / "parallel.doc"), "parallel.doc#ole-stream:StreamThree", "StreamThree-payload"),
+        (
+            str(tmp_path / "parallel.doc"),
+            "parallel.doc#ole-stream:StreamThree",
+            "StreamThree-payload",
+        ),
     ]
 
 
@@ -57548,12 +58374,36 @@ def test_artifact_queue_processor_parallelizes_ole_stream_job_planning_and_prese
 
     assert peak >= 4
     assert payloads == [
-        (str(tmp_path / "parallel-planning.doc"), "parallel-planning.doc#ole-metadata", "subject=Parallel OLE"),
-        (str(tmp_path / "parallel-planning.doc"), "parallel-planning.doc#ole-stream:StreamOne", "StreamOne-payload"),
-        (str(tmp_path / "parallel-planning.doc"), "parallel-planning.doc#ole-stream:StreamTwo", "StreamTwo-payload"),
-        (str(tmp_path / "parallel-planning.doc"), "parallel-planning.doc#ole-stream:StreamThree", "StreamThree-payload"),
-        (str(tmp_path / "parallel-planning.doc"), "parallel-planning.doc#ole-stream:StreamFour", "StreamFour-payload"),
-        (str(tmp_path / "parallel-planning.doc"), "parallel-planning.doc#ole-stream:StreamFive", "StreamFive-payload"),
+        (
+            str(tmp_path / "parallel-planning.doc"),
+            "parallel-planning.doc#ole-metadata",
+            "subject=Parallel OLE",
+        ),
+        (
+            str(tmp_path / "parallel-planning.doc"),
+            "parallel-planning.doc#ole-stream:StreamOne",
+            "StreamOne-payload",
+        ),
+        (
+            str(tmp_path / "parallel-planning.doc"),
+            "parallel-planning.doc#ole-stream:StreamTwo",
+            "StreamTwo-payload",
+        ),
+        (
+            str(tmp_path / "parallel-planning.doc"),
+            "parallel-planning.doc#ole-stream:StreamThree",
+            "StreamThree-payload",
+        ),
+        (
+            str(tmp_path / "parallel-planning.doc"),
+            "parallel-planning.doc#ole-stream:StreamFour",
+            "StreamFour-payload",
+        ),
+        (
+            str(tmp_path / "parallel-planning.doc"),
+            "parallel-planning.doc#ole-stream:StreamFive",
+            "StreamFive-payload",
+        ),
     ]
 
 
@@ -57782,9 +58632,21 @@ def test_artifact_queue_processor_parallelizes_ole_summary_and_stream_families_a
         assert [job.stream_name for job in stream_jobs] == ["StreamOne", "StreamTwo", "StreamThree"]
         _track_family("streams")
         return [
-            (str(tmp_path / "parallel-family.doc"), "parallel-family.doc#ole-stream:StreamOne", "one"),
-            (str(tmp_path / "parallel-family.doc"), "parallel-family.doc#ole-stream:StreamTwo", "two"),
-            (str(tmp_path / "parallel-family.doc"), "parallel-family.doc#ole-stream:StreamThree", "three"),
+            (
+                str(tmp_path / "parallel-family.doc"),
+                "parallel-family.doc#ole-stream:StreamOne",
+                "one",
+            ),
+            (
+                str(tmp_path / "parallel-family.doc"),
+                "parallel-family.doc#ole-stream:StreamTwo",
+                "two",
+            ),
+            (
+                str(tmp_path / "parallel-family.doc"),
+                "parallel-family.doc#ole-stream:StreamThree",
+                "three",
+            ),
         ]
 
     monkeypatch.setitem(
@@ -57816,7 +58678,11 @@ def test_artifact_queue_processor_parallelizes_ole_summary_and_stream_families_a
         (str(tmp_path / "parallel-family.doc"), "parallel-family.doc#ole-metadata", "summary"),
         (str(tmp_path / "parallel-family.doc"), "parallel-family.doc#ole-stream:StreamOne", "one"),
         (str(tmp_path / "parallel-family.doc"), "parallel-family.doc#ole-stream:StreamTwo", "two"),
-        (str(tmp_path / "parallel-family.doc"), "parallel-family.doc#ole-stream:StreamThree", "three"),
+        (
+            str(tmp_path / "parallel-family.doc"),
+            "parallel-family.doc#ole-stream:StreamThree",
+            "three",
+        ),
     ]
 
 
@@ -58126,9 +58992,21 @@ def test_artifact_queue_processor_parallelizes_ole_stream_subextractors_and_pres
 
     assert peak == 3
     assert payloads == [
-        (str(tmp_path / "parallel-subextractors.doc"), "parallel-subextractors.doc#ole-stream:ArchiveStream", "string-payload"),
-        (str(tmp_path / "parallel-subextractors.doc"), "parallel-subextractors.doc/ArchiveStream#nested", "nested-payload"),
-        (str(tmp_path / "parallel-subextractors.doc"), "parallel-subextractors.doc/ArchiveStream#embedded", "embedded-payload"),
+        (
+            str(tmp_path / "parallel-subextractors.doc"),
+            "parallel-subextractors.doc#ole-stream:ArchiveStream",
+            "string-payload",
+        ),
+        (
+            str(tmp_path / "parallel-subextractors.doc"),
+            "parallel-subextractors.doc/ArchiveStream#nested",
+            "nested-payload",
+        ),
+        (
+            str(tmp_path / "parallel-subextractors.doc"),
+            "parallel-subextractors.doc/ArchiveStream#embedded",
+            "embedded-payload",
+        ),
     ]
 
 
@@ -58238,7 +59116,11 @@ def test_artifact_queue_processor_parallelizes_ole_stream_payload_family_entries
 
     assert peak == 3
     assert payloads == [
-        (source_file, "parallel-stream-family-entries.doc#ole-stream:ArchiveStream", "string-payload"),
+        (
+            source_file,
+            "parallel-stream-family-entries.doc#ole-stream:ArchiveStream",
+            "string-payload",
+        ),
         (source_file, "parallel-stream-family-entries.doc/ArchiveStream#nested", "nested-payload"),
     ]
 
@@ -58731,7 +59613,9 @@ def test_artifact_queue_processor_parallelizes_xml_text_and_meta_families_and_pr
 ) -> None:
     db_path = tmp_path / "engagement.db"
     source_file = str(tmp_path / "document.xml")
-    xml_bytes = b"<document><title>Executive Brief</title><owner>xml-owner@acme.example</owner></document>"
+    xml_bytes = (
+        b"<document><title>Executive Brief</title><owner>xml-owner@acme.example</owner></document>"
+    )
     active = 0
     peak = 0
     lock = threading.Lock()
@@ -58800,7 +59684,9 @@ def test_artifact_queue_processor_parallelizes_xml_member_payload_family_entries
 ) -> None:
     db_path = tmp_path / "engagement.db"
     source_file = str(tmp_path / "document-family-entries.xml")
-    xml_bytes = b"<document><title>Executive Brief</title><owner>xml-owner@acme.example</owner></document>"
+    xml_bytes = (
+        b"<document><title>Executive Brief</title><owner>xml-owner@acme.example</owner></document>"
+    )
     active = 0
     peak = 0
     entered = 0
@@ -59136,7 +60022,7 @@ def test_artifact_queue_processor_parallelizes_relationship_line_entries_and_pre
 
     processor = ArtifactQueueProcessor(db_path, 1001, max_workers=8)
     payload = processor._relationship_payload(
-        '<Relationships>'
+        "<Relationships>"
         '<Relationship Id="rId1" Target="media/one.png" Type="first"/>'
         '<Relationship Id="rId2" Target="media/two.png" Type="second"/>'
         '<Relationship Id="rId3" Target="media/three.png" Type="third"/>'
@@ -59218,7 +60104,9 @@ def test_artifact_queue_processor_parallelizes_msg_property_stream_processing_an
                     attachment_updates=[],
                 )
             return types.SimpleNamespace(
-                payloads=[(job.source_file, f"{job.member_name}#msg-html_body.html", "html-payload")],
+                payloads=[
+                    (job.source_file, f"{job.member_name}#msg-html_body.html", "html-payload")
+                ],
                 summary_lines=[],
                 attachment_storage="",
                 attachment_updates=[],
@@ -59326,7 +60214,9 @@ def test_artifact_queue_processor_parallelizes_msg_property_job_planning_and_pre
         if job.prop_id == "1013":
             assert job.label == "html_body"
             return types.SimpleNamespace(
-                payloads=[(job.source_file, f"{job.member_name}#msg-html_body.html", "html-payload")],
+                payloads=[
+                    (job.source_file, f"{job.member_name}#msg-html_body.html", "html-payload")
+                ],
                 summary_lines=[],
                 attachment_storage="",
                 attachment_updates=[],
@@ -59461,7 +60351,9 @@ def test_artifact_queue_processor_parallelizes_msg_property_entry_planning_and_p
             )
         if job.prop_id == "1013":
             return types.SimpleNamespace(
-                payloads=[(job.source_file, f"{job.member_name}#msg-html_body.html", "html-payload")],
+                payloads=[
+                    (job.source_file, f"{job.member_name}#msg-html_body.html", "html-payload")
+                ],
                 summary_lines=[],
                 attachment_storage="",
                 attachment_updates=[],
@@ -60137,9 +61029,7 @@ def test_artifact_queue_processor_extracts_msg_bodies_and_nested_attachments(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "msg-analyst@acme.example" in emails
         assert "msg-owner@acme.example" in emails
@@ -60238,9 +61128,7 @@ def test_artifact_queue_processor_ocrs_image_and_embedded_media_payloads(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "ocr-analyst@acme.example" in emails
         assert "embedded-analyst@acme.example" in emails
@@ -60329,9 +61217,7 @@ def test_artifact_queue_processor_ocrs_modern_image_formats_and_embedded_heic_pa
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "avif-analyst@acme.example" in emails
         assert "heic-analyst@acme.example" in emails
@@ -60416,9 +61302,7 @@ def test_artifact_queue_processor_extracts_image_metadata_without_ocr(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "metadata-owner@acme.example" in emails
         assert "embedded-meta@acme.example" in emails
@@ -60514,9 +61398,7 @@ def test_artifact_queue_processor_ocrs_svg_embedded_data_uri_images(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "svg-raster-analyst@acme.example" in emails
 
@@ -60590,9 +61472,7 @@ def test_artifact_queue_processor_ocrs_scanned_pdf_pages(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "scanned-analyst@acme.example" in emails
 
@@ -61267,7 +62147,10 @@ def test_artifact_queue_processor_parallelizes_plist_payload_fragments_and_prese
         del prefix
         assert isinstance(value, dict)
         _track_family("values")
-        return ["OwnerEmail=plist-owner@acme.example", "PortalURL=https://plist.acme.example/portal"]
+        return [
+            "OwnerEmail=plist-owner@acme.example",
+            "PortalURL=https://plist.acme.example/portal",
+        ]
 
     monkeypatch.setattr(
         ArtifactQueueProcessor,
@@ -61941,9 +62824,7 @@ def test_artifact_queue_processor_ocrs_nested_scanned_pdf_from_archive(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "nested-scan@acme.example" in emails
 
@@ -61995,7 +62876,9 @@ def test_artifact_queue_processor_extracts_utf16_ole_style_binary_strings(
         zf.writestr(
             "docs/embedded-legacy.doc",
             b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
-            + "embedded-owner@acme.example https://embedded-ole.acme.example/brief".encode("utf-16le"),
+            + "embedded-owner@acme.example https://embedded-ole.acme.example/brief".encode(
+                "utf-16le"
+            ),
         )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
@@ -62010,9 +62893,7 @@ def test_artifact_queue_processor_extracts_utf16_ole_style_binary_strings(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "ole-owner@acme.example" in emails
         assert "embedded-owner@acme.example" in emails
@@ -62095,9 +62976,7 @@ def test_artifact_queue_processor_carves_buried_archives_from_legacy_binary_arti
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "buried-owner@acme.example" in emails
         assert "buried-gzip@acme.example" in emails
@@ -62190,9 +63069,7 @@ def test_artifact_queue_processor_extracts_rtf_findings(tmp_path: Path) -> None:
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "rtf-owner@acme.example" in emails
         assert "nested-owner@acme.example" in emails
@@ -62324,9 +63201,7 @@ def test_artifact_queue_processor_extracts_sqlite_database_findings(tmp_path: Pa
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "sqlite-owner@acme.example" in emails
         assert "nested-sqlite@acme.example" in emails
@@ -62508,9 +63383,7 @@ def test_artifact_queue_processor_extracts_browser_profile_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "history-owner@acme.example" in emails
         assert "topsites-owner@acme.example" in emails
@@ -62626,9 +63499,7 @@ def test_artifact_queue_processor_extracts_browser_webcache_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "webcache-owner@acme.example" in emails
         assert "nested-webcache@acme.example" in emails
@@ -62700,7 +63571,12 @@ def test_artifact_browser_state_structured_payload_extracts_cookie_origins_and_s
     payload = json.dumps(
         {
             "cookies": [
-                {"name": "sid", "value": "secret-do-not-promote", "domain": ".cookie.acme.example", "path": "/"},
+                {
+                    "name": "sid",
+                    "value": "secret-do-not-promote",
+                    "domain": ".cookie.acme.example",
+                    "path": "/",
+                },
                 {"name": "local", "value": "ignored", "domain": "localhost", "path": "/"},
             ],
             "origins": [
@@ -62869,7 +63745,9 @@ def test_artifact_queue_processor_extracts_browser_state_artifacts(
                 """
             ).fetchall()
         }
-        assert artifact_meta[state_path.resolve().as_posix()]["format"] == "playwright-storage-state"
+        assert (
+            artifact_meta[state_path.resolve().as_posix()]["format"] == "playwright-storage-state"
+        )
         assert artifact_meta[state_path.resolve().as_posix()]["parser"] == "config"
     finally:
         con.close()
@@ -62961,9 +63839,7 @@ def test_artifact_queue_processor_extracts_browser_text_config_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "preferences-owner@acme.example" in emails
         assert "secure-preferences@acme.example" in emails
@@ -63018,9 +63894,15 @@ def test_artifact_queue_processor_extracts_browser_text_config_artifacts(
         }
         assert artifact_meta[preferences_path.resolve().as_posix()]["format"] == "preferences"
         assert artifact_meta[preferences_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[secure_preferences_path.resolve().as_posix()]["format"] == "secure preferences"
+        assert (
+            artifact_meta[secure_preferences_path.resolve().as_posix()]["format"]
+            == "secure preferences"
+        )
         assert artifact_meta[secure_preferences_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[network_state_path.resolve().as_posix()]["format"] == "network persistent state"
+        assert (
+            artifact_meta[network_state_path.resolve().as_posix()]["format"]
+            == "network persistent state"
+        )
         assert artifact_meta[network_state_path.resolve().as_posix()]["parser"] == "config"
     finally:
         con.close()
@@ -63076,9 +63958,7 @@ def test_artifact_queue_processor_extracts_binary_plist_and_mobileconfig_finding
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "plist-owner@acme.example" in emails
         assert "mobileconfig@acme.example" in emails
@@ -63182,7 +64062,10 @@ def test_artifact_queue_processor_extracts_safari_webarchive_payloads(
             ),
         )
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/capture.webarchive") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/capture.webarchive")
+        == "config"
+    )
 
     processor = ArtifactQueueProcessor(db_path, 1001)
     queued = processor.ingest_local_artifacts([artifact_root])
@@ -63198,9 +64081,7 @@ def test_artifact_queue_processor_extracts_safari_webarchive_payloads(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "webarchive-owner@acme.example" in emails
         assert "nested-webarchive@acme.example" in emails
@@ -63275,18 +64156,14 @@ def test_artifact_queue_processor_extracts_provisioning_profiles_and_entitlement
         sort_keys=True,
     )
     mobileprovision_path.write_bytes(
-        b"-----BEGIN CMS-----\n"
-        + embedded_profile_xml
-        + b"\n-----END CMS-----\n"
+        b"-----BEGIN CMS-----\n" + embedded_profile_xml + b"\n-----END CMS-----\n"
     )
 
     entitlements_path = artifact_root / "Runner.entitlements"
     entitlements_path.write_bytes(
         plistlib.dumps(
             {
-                "com.apple.developer.associated-domains": [
-                    "applinks:entitlements.acme.example"
-                ],
+                "com.apple.developer.associated-domains": ["applinks:entitlements.acme.example"],
                 "SupportEmail": "entitlements@acme.example",
                 "SupportPortal": "https://entitlements.acme.example/app",
                 "BackupBucket": "gs://entitlements-gcs-private/releases/final.json",
@@ -63325,9 +64202,7 @@ def test_artifact_queue_processor_extracts_provisioning_profiles_and_entitlement
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "mobileprovision@acme.example" in emails
         assert "entitlements@acme.example" in emails
@@ -63374,8 +64249,12 @@ def test_artifact_queue_processor_extracts_provisioning_profiles_and_entitlement
                 """
             ).fetchall()
         }
-        assert artifact_meta[mobileprovision_path.resolve().as_posix()]["format"] == "mobileprovision"
-        assert artifact_meta[mobileprovision_path.resolve().as_posix()]["metadata_payload_count"] >= 2
+        assert (
+            artifact_meta[mobileprovision_path.resolve().as_posix()]["format"] == "mobileprovision"
+        )
+        assert (
+            artifact_meta[mobileprovision_path.resolve().as_posix()]["metadata_payload_count"] >= 2
+        )
         assert artifact_meta[entitlements_path.resolve().as_posix()]["format"] == "entitlements"
         assert artifact_meta[entitlements_path.resolve().as_posix()]["metadata_payload_count"] >= 2
         assert artifact_meta[archive_path.resolve().as_posix()]["format"] == "zip"
@@ -63392,8 +64271,12 @@ def test_artifact_queue_processor_extracts_xcarchive_and_dsym_bundles(
     artifact_root.mkdir()
     _bootstrap_engagement(db_path)
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Acme.xcarchive") == "archive"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Runner.app.dSYM") == "archive"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/Acme.xcarchive") == "archive"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/Runner.app.dSYM") == "archive"
+    )
 
     xcarchive_path = artifact_root / "Acme.xcarchive"
     app_info_plist = plistlib.dumps(
@@ -63452,9 +64335,7 @@ def test_artifact_queue_processor_extracts_xcarchive_and_dsym_bundles(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "xcarchive-release@acme.example" in emails
         assert "xcarchive-profile@acme.example" in emails
@@ -63519,9 +64400,18 @@ def test_artifact_queue_processor_extracts_xcframework_and_privacy_manifests(
     artifact_root.mkdir()
     _bootstrap_engagement(db_path)
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Acme.xcframework") == "archive"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Legacy.framework") == "archive"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/PrivacyInfo.xcprivacy") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/Acme.xcframework")
+        == "archive"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/Legacy.framework")
+        == "archive"
+    )
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/PrivacyInfo.xcprivacy")
+        == "config"
+    )
 
     xcframework_path = artifact_root / "Acme.xcframework"
     sdk_info_plist = plistlib.dumps(
@@ -63579,9 +64469,7 @@ def test_artifact_queue_processor_extracts_xcframework_and_privacy_manifests(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "xcframework-sdk@acme.example" in emails
         assert "privacy-sdk@acme.example" in emails
@@ -63646,7 +64534,10 @@ def test_artifact_queue_processor_extracts_xcresult_bundles(
     artifact_root.mkdir()
     _bootstrap_engagement(db_path)
 
-    assert _classify_remote_artifact_url("https://downloads.acme.example/TestRun.xcresult") == "archive"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/TestRun.xcresult")
+        == "archive"
+    )
 
     xcresult_path = artifact_root / "TestRun.xcresult"
     info_plist = plistlib.dumps(
@@ -63694,9 +64585,7 @@ def test_artifact_queue_processor_extracts_xcresult_bundles(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "xcresult-owner@acme.example" in emails
         assert "xcresult-log@acme.example" in emails
@@ -63760,7 +64649,10 @@ def test_artifact_queue_processor_extracts_apple_app_extension_and_resource_bund
 
     assert _classify_remote_artifact_url("https://downloads.acme.example/Runner.app") == "archive"
     assert _classify_remote_artifact_url("https://downloads.acme.example/Share.appex") == "archive"
-    assert _classify_remote_artifact_url("https://downloads.acme.example/Resources.bundle") == "archive"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/Resources.bundle")
+        == "archive"
+    )
 
     app_path = artifact_root / "Runner.app"
     app_info = plistlib.dumps(
@@ -63832,9 +64724,7 @@ def test_artifact_queue_processor_extracts_apple_app_extension_and_resource_bund
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "app-bundle@acme.example" in emails
         assert "appex-nested@acme.example" in emails
@@ -63950,9 +64840,7 @@ def test_artifact_queue_processor_extracts_bzip2_txz_and_buried_xz_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "compressed-owner@acme.example" in emails
         assert "nested-owner@acme.example" in emails
@@ -64060,9 +64948,7 @@ def test_artifact_queue_processor_extracts_zstd_tzst_and_buried_zst_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "zstd-owner@acme.example" in emails
         assert "tar-zstd-owner@acme.example" in emails
@@ -64158,9 +65044,7 @@ def test_artifact_queue_processor_extracts_brotli_and_tar_brotli_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "brotli-owner@acme.example" in emails
         assert "tar-brotli-owner@acme.example" in emails
@@ -64265,9 +65149,7 @@ def test_artifact_queue_processor_extracts_lz4_tar_lz4_and_buried_lz4_artifacts(
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "lz4-owner@acme.example" in emails
         assert "tar-lz4-owner@acme.example" in emails
@@ -64345,9 +65227,7 @@ def test_artifact_queue_processor_parallelizes_local_artifact_record_prep_and_pr
     original_local_artifact_record = ArtifactQueueProcessor._local_artifact_record
     expected_records = [
         record
-        for record in (
-            original_local_artifact_record(processor, path) for path in candidate_paths
-        )
+        for record in (original_local_artifact_record(processor, path) for path in candidate_paths)
         if record is not None
     ]
 
@@ -64355,8 +65235,7 @@ def test_artifact_queue_processor_parallelizes_local_artifact_record_prep_and_pr
     peak = 0
     lock = threading.Lock()
     delays = {
-        f"config-{index}.env": delay
-        for index, delay in enumerate((0.05, 0.01, 0.03, 0.02, 0.04))
+        f"config-{index}.env": delay for index, delay in enumerate((0.05, 0.01, 0.03, 0.02, 0.04))
     }
 
     def _tracking_local_artifact_record(self, path: Path):  # noqa: ANN001
@@ -64396,16 +65275,12 @@ def test_artifact_queue_processor_parallelizes_local_artifact_record_prep_and_pr
     finally:
         con.close()
 
-    assert [
-        (str(row["source_url"]), str(row["artifact_type"]))
-        for row in rows
-    ] == [
+    assert [(str(row["source_url"]), str(row["artifact_type"])) for row in rows] == [
         (normalized_path, artifact_type)
         for normalized_path, artifact_type, _metadata in expected_records
     ]
     assert [
-        json.loads(str(row["metadata_json"] or "{}")).get("local_file_size")
-        for row in rows
+        json.loads(str(row["metadata_json"] or "{}")).get("local_file_size") for row in rows
     ] == [
         metadata["local_file_size"]
         for _normalized_path, _artifact_type, metadata in expected_records
@@ -64438,9 +65313,27 @@ def test_artifact_queue_processor_parallelizes_queue_row_dispatch_and_preserves_
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (1, 1001, local_env.as_posix(), local_env.as_posix(), "config", "local_filesystem", "downloaded", "{}"),
+                (
+                    1,
+                    1001,
+                    local_env.as_posix(),
+                    local_env.as_posix(),
+                    "config",
+                    "local_filesystem",
+                    "downloaded",
+                    "{}",
+                ),
                 (2, 1001, remote_one, "", "config", "crawler", "queued", "{}"),
-                (3, 1001, local_yaml.as_posix(), local_yaml.as_posix(), "config", "local_filesystem", "downloaded", "{}"),
+                (
+                    3,
+                    1001,
+                    local_yaml.as_posix(),
+                    local_yaml.as_posix(),
+                    "config",
+                    "local_filesystem",
+                    "downloaded",
+                    "{}",
+                ),
                 (4, 1001, "", "", "other", "crawler", "queued", "{}"),
                 (5, 1001, remote_two, "", "apk", "crawler", "queued", "{}"),
             ],
@@ -64488,8 +65381,7 @@ def test_artifact_queue_processor_parallelizes_queue_row_dispatch_and_preserves_
     ):  # noqa: ANN001
         del self, progress_label, progress_callback
         captured_requests.extend(
-            (request.artifact_id, request.source_url, request.artifact_type)
-            for request in requests
+            (request.artifact_id, request.source_url, request.artifact_type) for request in requests
         )
         return [
             ArtifactDownloadResult(
@@ -64873,8 +65765,12 @@ def test_artifact_queue_processor_parallelizes_firebase_project_persistence_prep
         _tracking_entry,
     )
     monkeypatch.setattr(ArtifactQueueProcessor, "_insert_seed", _fake_insert_seed)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_store_artifact_url_seed", _fake_store_artifact_url_seed)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_store_artifact_url_seed", _fake_store_artifact_url_seed
+    )
     monkeypatch.setattr(ArtifactQueueProcessor, "_store_key_finding", _fake_store_key_finding)
 
     con = sqlite3.connect(db_path)
@@ -65061,9 +65957,13 @@ def test_artifact_queue_processor_parallelizes_supabase_config_persistence_prep_
         "_supabase_config_persistence_entry",
         _tracking_entry,
     )
-    monkeypatch.setattr(ArtifactQueueProcessor, "_store_artifact_url_seed", _fake_store_artifact_url_seed)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_store_artifact_url_seed", _fake_store_artifact_url_seed
+    )
     monkeypatch.setattr(ArtifactQueueProcessor, "_insert_seed", _fake_insert_seed)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_link_artifact_source_seed", _fake_link_artifact_source_seed
+    )
     monkeypatch.setattr(ArtifactQueueProcessor, "_store_key_finding", _fake_store_key_finding)
 
     con = sqlite3.connect(db_path)
@@ -65152,9 +66052,7 @@ def test_artifact_queue_processor_parallelizes_parse_stage_while_preserving_proc
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "parallel-0@acme.example" in emails
         assert "parallel-1@acme.example" in emails
@@ -65227,9 +66125,7 @@ def test_artifact_queue_processor_parallelizes_remote_acquisition_stage_while_pr
     try:
         emails = {
             row[0]
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "remote-0@acme.example" in emails
         assert "remote-1@acme.example" in emails
@@ -65316,9 +66212,7 @@ def test_artifact_queue_processor_emits_stage_progress_for_remote_download_and_p
         if label == "1.K3 artifact processing / remote download"
     ]
     parse_events = [
-        metrics
-        for label, metrics in progress_events
-        if label == "1.K3 artifact processing / parse"
+        metrics for label, metrics in progress_events if label == "1.K3 artifact processing / parse"
     ]
     assert download_events
     assert parse_events
@@ -65754,12 +66648,15 @@ def test_kill_chain_dry_run_records_d3_d4_provider_skips_without_dispatch(
     monkeypatch.setenv("FORGE_ENV", "test")
     monkeypatch.delenv("FORGE_ROE_ID", raising=False)
 
-    def _provider_dispatch_must_not_run(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _provider_dispatch_must_not_run(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         provider_specs = [
             spec
             for spec in specs
-            if tuple(str(arg) for arg in spec.cmd_argv[:2]) in {
+            if tuple(str(arg) for arg in spec.cmd_argv[:2])
+            in {
                 ("osint", "shodan"),
                 ("osint", "urlscan"),
             }
@@ -65799,7 +66696,9 @@ def test_kill_chain_dry_run_records_d3_d4_provider_skips_without_dispatch(
     finally:
         con.close()
 
-    run_map = {(str(row[0]), str(row[1])): (str(row[2]), json.loads(str(row[3] or "{}"))) for row in rows}
+    run_map = {
+        (str(row[0]), str(row[1])): (str(row[2]), json.loads(str(row[3] or "{}"))) for row in rows
+    }
     assert set(run_map) == {
         ("acme.example", "fanout_d3_shodan"),
         ("acme.example", "fanout_d4_urlscan"),
@@ -66119,7 +67018,9 @@ def test_kill_chain_forces_template_report_fallback_when_report_subprocess_fails
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
     monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
-    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr(
+        "forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs]
+    )
 
     from forge.cli import kill_chain
 
@@ -66231,7 +67132,9 @@ def test_kill_chain_marks_failed_when_report_and_template_fallback_fail(
         raise RuntimeError("simulated template fallback failure")
 
     monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
-    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr(
+        "forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs]
+    )
     monkeypatch.setattr("forge.phase6.report_synthesizer.synthesise", _fallback_boom)
 
     from forge.cli import kill_chain
@@ -66335,7 +67238,9 @@ def test_kill_chain_marks_failed_when_template_fallback_returns_empty_artifact(
         return path
 
     monkeypatch.setattr("forge.cli._run_forge_module_subprocess", _fake_module_subprocess)
-    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr(
+        "forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs]
+    )
     monkeypatch.setattr("forge.phase6.report_synthesizer.synthesise", _empty_fallback)
 
     from forge.cli import kill_chain
@@ -66742,11 +67647,15 @@ def test_kill_chain_active_port_child_receives_scope_manifest(
             report_path.write_text("# Final report\n", encoding="utf-8")
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del max_workers, progress_label, progress_callback
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del specs, run_module, max_workers, progress_label, progress_callback
         return []
 
@@ -66770,14 +67679,10 @@ def test_kill_chain_active_port_child_receives_scope_manifest(
         report_provider="template",
     )
 
-    port_commands = [
-        argv for argv in module_invocations if argv[:2] == ["recon", "ports"]
-    ]
+    port_commands = [argv for argv in module_invocations if argv[:2] == ["recon", "ports"]]
     assert len(port_commands) == 1
     assert "--scope-manifest" in port_commands[0]
-    assert port_commands[0][port_commands[0].index("--scope-manifest") + 1] == str(
-        manifest_path
-    )
+    assert port_commands[0][port_commands[0].index("--scope-manifest") + 1] == str(manifest_path)
 
 
 def test_kill_chain_scope_manifest_denies_out_of_scope_recursive_url_without_fetch(
@@ -66826,7 +67731,9 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_recursive_url_without_fet
             return ["<html><body>app ok</body></html>" for _ in urls]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -66897,11 +67804,7 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_recursive_url_without_fet
         report_provider="template",
     )
 
-    d5_fetch_urls = [
-        url
-        for label, url in fetched_by_label
-        if label == "1.D5 URL surface fetch"
-    ]
+    d5_fetch_urls = [url for label, url in fetched_by_label if label == "1.D5 URL surface fetch"]
     assert "https://acme.example/app/dashboard" in d5_fetch_urls
     assert "https://acme.example/admin" not in d5_fetch_urls
 
@@ -67017,7 +67920,9 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_remote_artifact_download(
             return ["" for _ in urls]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -67110,13 +68015,15 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_remote_artifact_download(
         }
         assert artifact_rows["https://acme.example/app/config.json"][0] == "parsed"
         assert artifact_rows["https://evil.example/bootstrap.apk"][0] == "skipped"
-        assert "scope_manifest_denied_remote_artifact" in artifact_rows[
-            "https://evil.example/bootstrap.apk"
-        ][1]
+        assert (
+            "scope_manifest_denied_remote_artifact"
+            in artifact_rows["https://evil.example/bootstrap.apk"][1]
+        )
         assert artifact_rows["https://acme.example/admin/secrets.json"][0] == "skipped"
-        assert "scope_manifest_denied_remote_artifact" in artifact_rows[
-            "https://acme.example/admin/secrets.json"
-        ][1]
+        assert (
+            "scope_manifest_denied_remote_artifact"
+            in artifact_rows["https://acme.example/admin/secrets.json"][1]
+        )
 
         audit_rows = con.execute(
             """
@@ -67159,10 +68066,7 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_cloud_validation_pivot(
     validation_items: list[tuple[str, str]] = []
     callback_scope_checks: list[tuple[str, str, bool]] = []
     root_html = (
-        "<html><body>"
-        "https://allowed.supabase.co "
-        "https://denied.firebaseio.com"
-        "</body></html>"
+        "<html><body>https://allowed.supabase.co https://denied.firebaseio.com</body></html>"
     )
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -67177,7 +68081,9 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_cloud_validation_pivot(
             return ["" for _ in urls]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -67429,11 +68335,17 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_key_validation_source(
         return subprocess.CompletedProcess([str(item) for item in cmd], 0, stdout="ok\n", stderr="")
 
     def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
-        if progress_label in {"1.D cloud+HTML fetch", "1.D2 passive text fetch", "1.D5 URL surface fetch"}:
+        if progress_label in {
+            "1.D cloud+HTML fetch",
+            "1.D2 passive text fetch",
+            "1.D5 URL surface fetch",
+        }:
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -67470,9 +68382,15 @@ def test_kill_chain_scope_manifest_denies_out_of_scope_key_validation_source(
     monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
 
     from forge.phase4 import cloud_validate
-    from forge.utils.intel.secret_finder import StripeKeyValidator, ValidationResult, ValidationState
+    from forge.utils.intel.secret_finder import (
+        StripeKeyValidator,
+        ValidationResult,
+        ValidationState,
+    )
 
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda _value: "sk_live_fakekey12345678901234567890")
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda _value: "sk_live_fakekey12345678901234567890"
+    )
 
     def _fake_stripe_validate(self, key, proxy=None, **kwargs):  # noqa: ANN001, ARG001
         validation_calls.append(str(key))
@@ -67729,11 +68647,15 @@ def test_kill_chain_ip_shodan_child_receives_scope_manifest(
             report_path.write_text("# Final report\n", encoding="utf-8")
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del max_workers, progress_label, progress_callback
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         module_batch_argvs.extend(tuple(str(arg) for arg in spec.cmd_argv) for spec in specs)
         return [0] * len(specs)
@@ -67760,15 +68682,12 @@ def test_kill_chain_ip_shodan_child_receives_scope_manifest(
         report_provider="template",
     )
 
-    shodan_commands = [
-        argv for argv in module_batch_argvs if argv[:2] == ("osint", "shodan")
-    ]
+    shodan_commands = [argv for argv in module_batch_argvs if argv[:2] == ("osint", "shodan")]
     assert shodan_commands
     assert all("--scope-manifest" in argv for argv in shodan_commands)
-    assert {
-        argv[argv.index("--scope-manifest") + 1]
-        for argv in shodan_commands
-    } == {str(manifest_path)}
+    assert {argv[argv.index("--scope-manifest") + 1] for argv in shodan_commands} == {
+        str(manifest_path)
+    }
 
 
 def test_kill_chain_resume_reuses_seed_run_state_between_dry_runs(
@@ -67842,7 +68761,9 @@ def test_kill_chain_parallel_batches_email_fanout_per_email(
         batch_calls.append((tuple(spec.label for spec in specs), int(max_workers)))
         return [0] * len(specs)
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
@@ -67867,7 +68788,8 @@ def test_kill_chain_parallel_batches_email_fanout_per_email(
 
     batch_label_sets = [labels for labels, _ in batch_calls]
     assert any(
-        labels == (
+        labels
+        == (
             "1.E1 xposed (alpha@acme.example)",
             "1.E2 holehe (alpha@acme.example)",
             "1.E3 epieos social (alpha@acme.example)",
@@ -67880,7 +68802,8 @@ def test_kill_chain_parallel_batches_email_fanout_per_email(
         for labels in batch_label_sets
     )
     assert any(
-        labels == (
+        labels
+        == (
             "1.E3.5 gravatar (alpha@acme.example)",
             "1.E3.7 ghunt google (alpha@acme.example)",
             "1.E3.5 gravatar (beta@acme.example)",
@@ -67890,7 +68813,8 @@ def test_kill_chain_parallel_batches_email_fanout_per_email(
         for labels, max_workers in batch_calls
     )
     assert any(
-        labels == (
+        labels
+        == (
             "1.E1.5 emailrep (alpha@acme.example)",
             "1.E1.5 emailrep (beta@acme.example)",
         )
@@ -67938,7 +68862,8 @@ def test_kill_chain_parallel_batches_email_fanout_per_email(
         for label, item_count, max_workers in parse_batch_calls
     )
     assert any(
-        labels == (
+        labels
+        == (
             "1.E1.5 emailrep (alpha@acme.example)",
             "1.E1.5 emailrep (beta@acme.example)",
         )
@@ -67974,7 +68899,9 @@ def test_kill_chain_parallel_batches_email_fanout_per_email(
         for label, item_count, max_workers in parse_batch_calls
     )
     assert any(
-        label == "1.E inferred username processed-set update" and max_workers == 1 and item_count >= 2
+        label == "1.E inferred username processed-set update"
+        and max_workers == 1
+        and item_count >= 2
         for label, item_count, max_workers in parse_batch_calls
     )
 
@@ -68342,12 +69269,20 @@ def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fano
                 return type(
                     "_Resp",
                     (),
-                    {"status_code": 200, "text": "", "headers": {"content-type": "application/xml"}},
+                    {
+                        "status_code": 200,
+                        "text": "",
+                        "headers": {"content-type": "application/xml"},
+                    },
                 )()
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/xml"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/xml"},
+                },
             )()
 
         def get(self, url: str, **kwargs):  # noqa: ANN003
@@ -68370,7 +69305,11 @@ def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fano
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/xml"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/xml"},
+                },
             )()
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -68394,9 +69333,11 @@ def test_kill_chain_routes_related_url_seed_through_initial_domain_and_host_fano
             ),
             -1,
         )
-        command_argv = module_argv[min(index for index in (graph_index, report_index) if index >= 0) :] if (
-            graph_index >= 0 or report_index >= 0
-        ) else module_argv
+        command_argv = (
+            module_argv[min(index for index in (graph_index, report_index) if index >= 0) :]
+            if (graph_index >= 0 or report_index >= 0)
+            else module_argv
+        )
 
         def _flag_value(flag: str) -> str | None:
             prefix = f"{flag}="
@@ -68642,12 +69583,20 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
                 return type(
                     "_Resp",
                     (),
-                    {"status_code": 200, "text": "", "headers": {"content-type": "application/xml"}},
+                    {
+                        "status_code": 200,
+                        "text": "",
+                        "headers": {"content-type": "application/xml"},
+                    },
                 )()
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/xml"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/xml"},
+                },
             )()
 
         def get(self, url: str, **kwargs):  # noqa: ANN003
@@ -68730,7 +69679,11 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/xml"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/xml"},
+                },
             )()
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -68799,9 +69752,7 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
         assert "r2.cloudflarestorage.com" not in list(metadata.get("root_domains") or [])
         assert "github.io" not in list(metadata.get("root_domains") or [])
         assert "gitlab.io" not in list(metadata.get("root_domains") or [])
-        validation_batch_metrics = (
-            metadata.get("queue_metrics", {}).get("validation_batch", {})
-        )
+        validation_batch_metrics = metadata.get("queue_metrics", {}).get("validation_batch", {})
         assert int(validation_batch_metrics.get("completed", 0)) >= 13
         assert metadata.get("active_validation_stage_label")
         assert float(metadata.get("active_validation_eta_seconds") or 0.0) >= 0.0
@@ -68823,7 +69774,10 @@ def test_kill_chain_validates_direct_cloud_url_related_seeds_without_provider_ro
         assert ("netlify", "acme-legacy") in cloud_assets
         assert ("amplify", "acme-amplify") in cloud_assets
         assert ("gcp_appspot", "acmeportal") in cloud_assets
-        assert ("gcp_cloudfunctions", "https://us-central1-acmehub.cloudfunctions.net/ping") in cloud_assets
+        assert (
+            "gcp_cloudfunctions",
+            "https://us-central1-acmehub.cloudfunctions.net/ping",
+        ) in cloud_assets
         assert ("cloudflare_pages", "acme-pages") in cloud_assets
         assert ("cloudflare_worker", "worker.acme.workers.dev") in cloud_assets
         assert ("cloudflare_r2", "pub-direct.r2.dev") in cloud_assets
@@ -68927,12 +69881,20 @@ def test_kill_chain_html_mines_s3_website_and_browser_gcs_refs_for_validation(
                 return type(
                     "_Resp",
                     (),
-                    {"status_code": 200, "text": "", "headers": {"content-type": "application/xml"}},
+                    {
+                        "status_code": 200,
+                        "text": "",
+                        "headers": {"content-type": "application/xml"},
+                    },
                 )()
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/xml"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/xml"},
+                },
             )()
 
         def get(self, url: str, **kwargs):  # noqa: ANN003
@@ -68985,7 +69947,11 @@ def test_kill_chain_html_mines_s3_website_and_browser_gcs_refs_for_validation(
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/xml"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/xml"},
+                },
             )()
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -69067,7 +70033,11 @@ def test_kill_chain_html_mines_s3_website_and_browser_gcs_refs_for_validation(
         ) in validation_rows
         assert ("cloudflare_r2", "pub-html.r2.dev", "ACCESSIBLE_BUT_NO_DATA") in validation_rows
         assert ("github_pages", "acme-html.github.io", "ACCESSIBLE_BUT_NO_DATA") in validation_rows
-        assert ("gitlab_pages", "security-html.gitlab.io", "ACCESSIBLE_BUT_NO_DATA") in validation_rows
+        assert (
+            "gitlab_pages",
+            "security-html.gitlab.io",
+            "ACCESSIBLE_BUT_NO_DATA",
+        ) in validation_rows
     finally:
         con.close()
 
@@ -69113,12 +70083,20 @@ def test_kill_chain_mixed_html_seed_growth_and_cloud_validation_flow(
                 return type(
                     "_Resp",
                     (),
-                    {"status_code": 200, "text": "", "headers": {"content-type": "application/xml"}},
+                    {
+                        "status_code": 200,
+                        "text": "",
+                        "headers": {"content-type": "application/xml"},
+                    },
                 )()
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/xml"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/xml"},
+                },
             )()
 
         def get(self, url: str, **kwargs):  # noqa: ANN003
@@ -69180,7 +70158,11 @@ def test_kill_chain_mixed_html_seed_growth_and_cloud_validation_flow(
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/json"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/json"},
+                },
             )()
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -69225,9 +70207,7 @@ def test_kill_chain_mixed_html_seed_growth_and_cloud_validation_flow(
     try:
         emails = {
             str(row[0])
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "alice.smith@acme.example" in emails
 
@@ -69327,8 +70307,14 @@ def test_kill_chain_mixed_html_seed_growth_and_cloud_validation_flow(
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("validation_batch", {}).get("completed", 0)) >= 3
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 3
+        assert (
+            int(metadata.get("queue_metrics", {}).get("validation_batch", {}).get("completed", 0))
+            >= 3
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 3
+        )
     finally:
         con.close()
 
@@ -69375,7 +70361,11 @@ def test_kill_chain_passive_text_mining_promotes_robots_and_sitemap_urls_without
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/json"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/json"},
+                },
             )()
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -69426,7 +70416,9 @@ def test_kill_chain_passive_text_mining_promotes_robots_and_sitemap_urls_without
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -69526,9 +70518,7 @@ def test_kill_chain_passive_text_mining_promotes_robots_and_sitemap_urls_without
     try:
         emails = {
             str(row[0])
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "crawl.ops@acme.example" in emails
 
@@ -69682,7 +70672,9 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -69783,10 +70775,14 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
         if progress_label == "1.D2 passive text fetch":
             return ["" for _ in specs]
         if progress_label == "1.D5 URL surface fetch":
-            return [careers_html if spec.url == "https://acme.example/careers" else "" for spec in specs]
+            return [
+                careers_html if spec.url == "https://acme.example/careers" else "" for spec in specs
+            ]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -69829,7 +70825,9 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
     monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts
+    )
     from forge.phase4 import cloud_validate
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _UrlSeedCloudClient)
@@ -69856,9 +70854,7 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
     try:
         emails = {
             str(row[0])
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "urlseed@acme.example" in emails
 
@@ -69892,7 +70888,7 @@ def test_kill_chain_discovered_url_seeds_reenter_same_iteration_surface_mining(
         seed_runs = {
             (str(row[0]), str(row[1])): str(row[2])
             for row in con.execute(
-            """
+                """
                 SELECT es.seed_value, sr.loop_name, sr.status
                 FROM seed_runs sr
                 JOIN engagement_seeds es ON es.id=sr.seed_id
@@ -69997,11 +70993,7 @@ def test_kill_chain_framework_manifest_artifact_recurses_into_second_iteration_c
     monkeypatch.setenv("FORGE_ENV", "test")
 
     fetched_urls: list[str] = []
-    root_html = (
-        "<html><body>"
-        '<script src="/assets/manifest.js"></script>'
-        "</body></html>"
-    )
+    root_html = '<html><body><script src="/assets/manifest.js"></script></body></html>'
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
         del kwargs
@@ -70043,7 +71035,11 @@ def test_kill_chain_framework_manifest_artifact_recurses_into_second_iteration_c
 
         if module_argv[:2] == ["report", "generate"]:
             output = _flag_value("--output")
-            report_path = tmp_path / output if output else tmp_path / "reports" / "engagement_1001_kill_chain_stub.md"
+            report_path = (
+                tmp_path / output
+                if output
+                else tmp_path / "reports" / "engagement_1001_kill_chain_stub.md"
+            )
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(
                 "# Stubbed report for multi-artifact runtime-trim fixture\n",
@@ -70070,7 +71066,9 @@ def test_kill_chain_framework_manifest_artifact_recurses_into_second_iteration_c
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         if progress_callback is not None and progress_label:
@@ -70104,7 +71102,9 @@ def test_kill_chain_framework_manifest_artifact_recurses_into_second_iteration_c
         return []
 
     class _FakeCloudResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -70256,7 +71256,9 @@ def test_kill_chain_framework_manifest_artifact_recurses_into_second_iteration_c
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
     monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts
+    )
     from forge.phase4 import cloud_validate
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _SecondOrderCloudClient)
@@ -70303,9 +71305,7 @@ def test_kill_chain_framework_manifest_artifact_recurses_into_second_iteration_c
 
         emails = {
             str(row[0])
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "second-order-owner@acme.example" in emails
 
@@ -70412,7 +71412,9 @@ def test_kill_chain_framework_manifest_artifact_recurses_into_second_iteration_c
             ).fetchall()
         }
         assert artifact_rows["https://acme.example/assets/manifest.js"] == "parsed"
-        assert artifact_rows["https://acme.example/static/chunks/second-order-a1b2c3d4.js"] == "parsed"
+        assert (
+            artifact_rows["https://acme.example/static/chunks/second-order-a1b2c3d4.js"] == "parsed"
+        )
     finally:
         con.close()
 
@@ -70476,16 +71478,8 @@ def test_kill_chain_artifact_extracted_assets_validate_and_seed_next_iteration_u
         encoding="utf-8",
     )
 
-    root_html = (
-        "<html><body>"
-        f"<a href='{downloads_url}'>Downloads</a>"
-        "</body></html>"
-    )
-    downloads_html = (
-        "<html><body>"
-        f"<a href='{first_apk_url}'>Mobile app</a>"
-        "</body></html>"
-    )
+    root_html = f"<html><body><a href='{downloads_url}'>Downloads</a></body></html>"
+    downloads_html = f"<html><body><a href='{first_apk_url}'>Mobile app</a></body></html>"
     followup_html = "<html><body>followup-owner@acme.example</body></html>"
 
     def _write_zip(path: Path, members: dict[str, str]) -> None:
@@ -70545,7 +71539,9 @@ def test_kill_chain_artifact_extracted_assets_validate_and_seed_next_iteration_u
             return [page_map.get(str(spec.url), "") for spec in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -70655,7 +71651,9 @@ def test_kill_chain_artifact_extracted_assets_validate_and_seed_next_iteration_u
         return results
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -70689,7 +71687,9 @@ def test_kill_chain_artifact_extracted_assets_validate_and_seed_next_iteration_u
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
     monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts
+    )
     from forge.phase4 import cloud_validate
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _ScopedCloudClient)
@@ -70713,9 +71713,7 @@ def test_kill_chain_artifact_extracted_assets_validate_and_seed_next_iteration_u
     )
 
     d5_fetches = {
-        (label, url)
-        for label, url in fetched_by_label
-        if label.endswith("D5 URL surface fetch")
+        (label, url) for label, url in fetched_by_label if label.endswith("D5 URL surface fetch")
     }
     assert ("1.D5 URL surface fetch", downloads_url) in d5_fetches
     assert ("2.D5 URL surface fetch", followup_url) in d5_fetches
@@ -70740,7 +71738,10 @@ def test_kill_chain_artifact_extracted_assets_validate_and_seed_next_iteration_u
         assert artifact_rows[second_apk_url] == "parsed"
 
         seed_runs = {
-            str(row["seed_value"]): (str(row["status"]), json.loads(str(row["metadata_json"] or "{}")))
+            str(row["seed_value"]): (
+                str(row["status"]),
+                json.loads(str(row["metadata_json"] or "{}")),
+            )
             for row in con.execute(
                 """
                 SELECT es.seed_value, sr.status, sr.metadata_json
@@ -70823,11 +71824,7 @@ def test_kill_chain_html_discovery_builds_graph_family_and_template_report(
     monkeypatch.setenv("FORGE_ENV", "test")
 
     fetched_urls: list[str] = []
-    root_html = (
-        "<html><body>"
-        '<a href="/careers">Careers</a>'
-        "</body></html>"
-    )
+    root_html = '<html><body><a href="/careers">Careers</a></body></html>'
     careers_html = (
         "<html><body>"
         '<a href="mailto:urlseed@acme.example">Jobs</a>'
@@ -70836,7 +71833,9 @@ def test_kill_chain_html_discovery_builds_graph_family_and_template_report(
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -70910,10 +71909,14 @@ def test_kill_chain_html_discovery_builds_graph_family_and_template_report(
         if progress_label == "1.D2 passive text fetch":
             return ["" for _ in specs]
         if progress_label == "1.D5 URL surface fetch":
-            return [careers_html if spec.url == "https://acme.example/careers" else "" for spec in specs]
+            return [
+                careers_html if spec.url == "https://acme.example/careers" else "" for spec in specs
+            ]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -70981,9 +71984,7 @@ def test_kill_chain_html_discovery_builds_graph_family_and_template_report(
     try:
         emails = {
             str(row[0])
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "urlseed@acme.example" in emails
 
@@ -71046,7 +72047,11 @@ def test_kill_chain_html_discovery_builds_graph_family_and_template_report(
     assert graph_json_path.is_file()
     assert dashboard_path.is_file()
 
-    edge_csv_lines = [line.strip() for line in edges_csv_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    edge_csv_lines = [
+        line.strip()
+        for line in edges_csv_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert edge_csv_lines[0] == "Source,Target,Weight,Relation,MetadataJSON"
     assert any(line.rsplit(",", 1)[-1].strip() for line in edge_csv_lines[1:])
 
@@ -71100,7 +72105,9 @@ def test_kill_chain_html_artifact_urls_feed_remote_artifact_queue_and_static_ana
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -71236,8 +72243,7 @@ def test_kill_chain_html_artifact_urls_feed_remote_artifact_queue_and_static_ana
             SELECT status, local_path, discovered_from
             FROM artifact_queue
             WHERE engagement_id=1001 AND source_url=?
-            """
-            ,
+            """,
             (artifact_url,),
         ).fetchone()
         assert artifact_row is not None
@@ -71313,7 +72319,9 @@ def test_kill_chain_html_remote_artifact_drives_validation_findings_and_second_i
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -71372,7 +72380,9 @@ def test_kill_chain_html_remote_artifact_drives_validation_findings_and_second_i
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -71472,7 +72482,9 @@ def test_kill_chain_html_remote_artifact_drives_validation_findings_and_second_i
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _RemoteApkCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
 
     from forge.cli import kill_chain
 
@@ -71604,9 +72616,17 @@ def test_kill_chain_html_remote_artifact_drives_validation_findings_and_second_i
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
     finally:
         con.close()
 
@@ -71626,19 +72646,13 @@ def test_kill_chain_html_url_surface_remote_artifact_builds_graph_family_and_tem
     fetched_urls: list[str] = []
     careers_url = "https://acme.example/careers"
     artifact_url = "https://acme.example/mobile/acme-client.apk?download=1"
-    root_html = (
-        "<html><body>"
-        '<a href="/careers">Careers</a>'
-        "</body></html>"
-    )
-    careers_html = (
-        "<html><body>"
-        f'<a href="{artifact_url}">Download mobile client</a>'
-        "</body></html>"
-    )
+    root_html = '<html><body><a href="/careers">Careers</a></body></html>'
+    careers_html = f'<html><body><a href="{artifact_url}">Download mobile client</a></body></html>'
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -71731,7 +72745,9 @@ def test_kill_chain_html_url_surface_remote_artifact_builds_graph_family_and_tem
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -71822,7 +72838,9 @@ def test_kill_chain_html_url_surface_remote_artifact_builds_graph_family_and_tem
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _RemoteArtifactGraphCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
 
     from forge.cli import kill_chain
 
@@ -71958,9 +72976,17 @@ def test_kill_chain_html_url_surface_remote_artifact_builds_graph_family_and_tem
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
     finally:
         con.close()
 
@@ -71979,7 +73005,11 @@ def test_kill_chain_html_url_surface_remote_artifact_builds_graph_family_and_tem
     assert graph_json_path.is_file()
     assert dashboard_path.is_file()
 
-    edge_csv_lines = [line.strip() for line in edges_csv_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    edge_csv_lines = [
+        line.strip()
+        for line in edges_csv_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert edge_csv_lines[0] == "Source,Target,Weight,Relation,MetadataJSON"
     assert any(line.rsplit(",", 1)[-1].strip() for line in edge_csv_lines[1:])
 
@@ -72009,19 +73039,13 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
     fetched_urls: list[str] = []
     careers_url = "https://acme.example/careers"
     artifact_url = "https://acme.example/mobile/acme-keys.apk?download=1"
-    root_html = (
-        "<html><body>"
-        '<a href="/careers">Careers</a>'
-        "</body></html>"
-    )
-    careers_html = (
-        "<html><body>"
-        f'<a href="{artifact_url}">Download client</a>'
-        "</body></html>"
-    )
+    root_html = '<html><body><a href="/careers">Careers</a></body></html>'
+    careers_html = f'<html><body><a href="{artifact_url}">Download client</a></body></html>'
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -72114,7 +73138,9 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -72182,7 +73208,7 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
                     AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
                     SLACK_BOT_TOKEN=xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx
                     MAILCHIMP_API_KEY=1234567890abcdef1234567890abcdef-us1
-                    AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=remoteartifactblob;AccountKey={'A' * 86}==
+                    AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=remoteartifactblob;AccountKey={"A" * 86}==
                     """.strip(),
                 )
         assert request.source_url == artifact_url
@@ -72441,9 +73467,17 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 5
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 5
+        )
     finally:
         con.close()
 
@@ -72462,7 +73496,11 @@ def test_kill_chain_html_remote_artifact_mixed_key_validation_builds_graph_famil
     assert graph_json_path.is_file()
     assert dashboard_path.is_file()
 
-    edge_csv_lines = [line.strip() for line in edges_csv_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    edge_csv_lines = [
+        line.strip()
+        for line in edges_csv_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert edge_csv_lines[0] == "Source,Target,Weight,Relation,MetadataJSON"
     assert any(line.rsplit(",", 1)[-1].strip() for line in edge_csv_lines[1:])
 
@@ -72496,19 +73534,15 @@ def test_kill_chain_html_remote_msg_artifact_builds_validation_graph_and_templat
     fetched_urls: list[str] = []
     briefings_url = "https://acme.example/briefings"
     artifact_url = "https://acme.example/exports/engagement-briefing.msg?download=1"
-    root_html = (
-        "<html><body>"
-        '<a href="/briefings">Briefings</a>'
-        "</body></html>"
-    )
+    root_html = '<html><body><a href="/briefings">Briefings</a></body></html>'
     briefings_html = (
-        "<html><body>"
-        f'<a href="{artifact_url}">Download briefing package</a>'
-        "</body></html>"
+        f'<html><body><a href="{artifact_url}">Download briefing package</a></body></html>'
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -72601,7 +73635,9 @@ def test_kill_chain_html_remote_msg_artifact_builds_validation_graph_and_templat
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -72669,9 +73705,7 @@ def test_kill_chain_html_remote_msg_artifact_builds_validation_graph_and_templat
                 ("__substg1.0_0037001F",): _msg_utf16("Remote MSG Briefing"),
                 ("__substg1.0_0C1F001F",): _msg_utf16("msg-sender@acme.example"),
                 ("__substg1.0_007D001F",): _msg_utf16("X-Owner: header-msg@acme.example"),
-                (
-                    "__substg1.0_1000001F",
-                ): _msg_utf16(
+                ("__substg1.0_1000001F",): _msg_utf16(
                     "Reach remote-msg-owner@acme.example and review "
                     "https://msg.acme.example/brief "
                     "Firebase: https://remote-msg-firebase.firebaseio.com"
@@ -72849,9 +73883,17 @@ def test_kill_chain_html_remote_msg_artifact_builds_validation_graph_and_templat
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
     finally:
         con.close()
 
@@ -72870,7 +73912,11 @@ def test_kill_chain_html_remote_msg_artifact_builds_validation_graph_and_templat
     assert graph_json_path.is_file()
     assert dashboard_path.is_file()
 
-    edge_csv_lines = [line.strip() for line in edges_csv_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    edge_csv_lines = [
+        line.strip()
+        for line in edges_csv_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert edge_csv_lines[0] == "Source,Target,Weight,Relation,MetadataJSON"
     assert any(line.rsplit(",", 1)[-1].strip() for line in edge_csv_lines[1:])
 
@@ -72919,19 +73965,13 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
     fetched_urls: list[str] = []
     careers_url = "https://acme.example/careers"
     artifact_url = "https://acme.example/mobile/acme-combined.apk?download=1"
-    root_html = (
-        "<html><body>"
-        '<a href="/careers">Careers</a>'
-        "</body></html>"
-    )
-    careers_html = (
-        "<html><body>"
-        f'<a href="{artifact_url}">Download client</a>'
-        "</body></html>"
-    )
+    root_html = '<html><body><a href="/careers">Careers</a></body></html>'
+    careers_html = f'<html><body><a href="{artifact_url}">Download client</a></body></html>'
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -73018,7 +74058,9 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
             return [careers_html if spec.url == careers_url else "" for spec in specs]
         return ["" for _ in specs]
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -73086,7 +74128,7 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
                     AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
                     SLACK_BOT_TOKEN=xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx
                     MAILCHIMP_API_KEY=1234567890abcdef1234567890abcdef-us1
-                    AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=remotecombinedblob;AccountKey={'A' * 86}==
+                    AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=remotecombinedblob;AccountKey={"A" * 86}==
                     """.strip(),
                 )
         assert request.source_url == artifact_url
@@ -73237,7 +74279,10 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
             ).fetchall()
         }
         assert artifact_rows[local_artifact_path.resolve().as_posix()]["status"] == "parsed"
-        assert artifact_rows[local_artifact_path.resolve().as_posix()]["discovered_from"] == "local_filesystem"
+        assert (
+            artifact_rows[local_artifact_path.resolve().as_posix()]["discovered_from"]
+            == "local_filesystem"
+        )
         assert artifact_rows[artifact_url]["status"] == "parsed"
         assert artifact_rows[artifact_url]["artifact_type"] == "apk"
         assert artifact_rows[artifact_url]["local_path"].endswith("acme-combined.apk")
@@ -73410,15 +74455,23 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 2
-        artifact_cumulative_metrics = (
-            metadata.get("queue_metrics", {}).get("artifact_processor_cumulative", {})
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 2
+        )
+        artifact_cumulative_metrics = metadata.get("queue_metrics", {}).get(
+            "artifact_processor_cumulative", {}
         )
         assert int(artifact_cumulative_metrics.get("local_intake_queued", 0)) >= 1
         assert int(artifact_cumulative_metrics.get("processed", 0)) >= 2
         assert int(artifact_cumulative_metrics.get("invocations", 0)) >= 2
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 6
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 6
+        )
     finally:
         con.close()
 
@@ -73437,7 +74490,11 @@ def test_kill_chain_combines_local_and_remote_artifacts_for_validation_graph_and
     assert graph_json_path.is_file()
     assert dashboard_path.is_file()
 
-    edge_csv_lines = [line.strip() for line in edges_csv_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    edge_csv_lines = [
+        line.strip()
+        for line in edges_csv_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert edge_csv_lines[0] == "Source,Target,Weight,Relation,MetadataJSON"
     assert any(line.rsplit(",", 1)[-1].strip() for line in edge_csv_lines[1:])
 
@@ -73506,24 +74563,15 @@ def test_kill_chain_combines_multiple_local_and_remote_artifacts_in_one_engageme
     artifact_url_one = "https://acme.example/mobile/acme-multi-one.apk?download=1"
     artifact_url_two = "https://acme.example/mobile/acme-multi-two.apk?download=1"
     root_html = (
-        "<html><body>"
-        '<a href="/careers">Careers</a>'
-        '<a href="/downloads">Downloads</a>'
-        "</body></html>"
+        '<html><body><a href="/careers">Careers</a><a href="/downloads">Downloads</a></body></html>'
     )
-    careers_html = (
-        "<html><body>"
-        f'<a href="{artifact_url_one}">Remote client one</a>'
-        "</body></html>"
-    )
-    downloads_html = (
-        "<html><body>"
-        f'<a href="{artifact_url_two}">Remote client two</a>'
-        "</body></html>"
-    )
+    careers_html = f'<html><body><a href="{artifact_url_one}">Remote client one</a></body></html>'
+    downloads_html = f'<html><body><a href="{artifact_url_two}">Remote client two</a></body></html>'
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -73628,7 +74676,9 @@ def test_kill_chain_combines_multiple_local_and_remote_artifacts_in_one_engageme
             return [page_map.get(spec.url, "") for spec in specs]
         return ["" for _ in specs]
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -73668,7 +74718,15 @@ def test_kill_chain_combines_multiple_local_and_remote_artifacts_in_one_engageme
         _emit(len(items))
         return results
 
-    def _write_remote_mobile_artifact(path: Path, *, firebase_project: str, supabase_ref: str, owner_email: str, portal_url: str, include_keys: bool) -> None:
+    def _write_remote_mobile_artifact(
+        path: Path,
+        *,
+        firebase_project: str,
+        supabase_ref: str,
+        owner_email: str,
+        portal_url: str,
+        include_keys: bool,
+    ) -> None:
         with zipfile.ZipFile(path, "w") as zf:
             zf.writestr(
                 "google-services.json",
@@ -73684,7 +74742,7 @@ def test_kill_chain_combines_multiple_local_and_remote_artifacts_in_one_engageme
             runtime_lines = [
                 f'export const SUPABASE_URL = "https://{supabase_ref}.supabase.co";',
                 (
-                    'export const SUPABASE_ANON_KEY = '
+                    "export const SUPABASE_ANON_KEY = "
                     f'"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6I{supabase_ref.replace("-", "")[:16]}iLCJyb2xlIjoiYW5vbiJ9.signaturemulti";'
                 ),
                 f"CONTACT_EMAIL={owner_email}",
@@ -73850,8 +74908,12 @@ def test_kill_chain_combines_multiple_local_and_remote_artifacts_in_one_engageme
         assert artifact_rows[local_artifact_beta.resolve().as_posix()]["status"] == "parsed"
         assert artifact_rows[artifact_url_one]["status"] == "parsed"
         assert artifact_rows[artifact_url_two]["status"] == "parsed"
-        assert artifact_rows[artifact_url_one]["metadata"]["download_filename"] == "acme-multi-one.apk"
-        assert artifact_rows[artifact_url_two]["metadata"]["download_filename"] == "acme-multi-two.apk"
+        assert (
+            artifact_rows[artifact_url_one]["metadata"]["download_filename"] == "acme-multi-one.apk"
+        )
+        assert (
+            artifact_rows[artifact_url_two]["metadata"]["download_filename"] == "acme-multi-two.apk"
+        )
 
         cloud_assets = {
             (str(row[0]), str(row[1]))
@@ -73974,15 +75036,23 @@ def test_kill_chain_combines_multiple_local_and_remote_artifacts_in_one_engageme
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 4
-        artifact_cumulative_metrics = (
-            metadata.get("queue_metrics", {}).get("artifact_processor_cumulative", {})
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 4
+        )
+        artifact_cumulative_metrics = metadata.get("queue_metrics", {}).get(
+            "artifact_processor_cumulative", {}
         )
         assert int(artifact_cumulative_metrics.get("local_intake_queued", 0)) >= 2
         assert int(artifact_cumulative_metrics.get("processed", 0)) >= 4
         assert int(artifact_cumulative_metrics.get("invocations", 0)) >= 2
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 6
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 6
+        )
     finally:
         con.close()
 
@@ -74001,7 +75071,11 @@ def test_kill_chain_combines_multiple_local_and_remote_artifacts_in_one_engageme
     assert graph_json_path.is_file()
     assert dashboard_path.is_file()
 
-    edge_csv_lines = [line.strip() for line in edges_csv_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    edge_csv_lines = [
+        line.strip()
+        for line in edges_csv_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert edge_csv_lines[0] == "Source,Target,Weight,Relation,MetadataJSON"
     assert any(line.rsplit(",", 1)[-1].strip() for line in edge_csv_lines[1:])
 
@@ -74038,7 +75112,9 @@ def test_kill_chain_html_remote_mobile_bundle_drives_validation_findings_and_sec
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -74097,7 +75173,9 @@ def test_kill_chain_html_remote_mobile_bundle_drives_validation_findings_and_sec
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -74201,7 +75279,9 @@ def test_kill_chain_html_remote_mobile_bundle_drives_validation_findings_and_sec
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _RemoteBundleCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
 
     from forge.cli import kill_chain
 
@@ -74344,9 +75424,17 @@ def test_kill_chain_html_remote_mobile_bundle_drives_validation_findings_and_sec
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
     finally:
         con.close()
 
@@ -74372,7 +75460,9 @@ def test_kill_chain_html_remote_archive_with_nested_mobile_bundle_drives_validat
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -74431,7 +75521,9 @@ def test_kill_chain_html_remote_archive_with_nested_mobile_bundle_drives_validat
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -74529,7 +75621,9 @@ def test_kill_chain_html_remote_archive_with_nested_mobile_bundle_drives_validat
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _RemoteArchiveCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
 
     from forge.cli import kill_chain
 
@@ -74664,9 +75758,17 @@ def test_kill_chain_html_remote_archive_with_nested_mobile_bundle_drives_validat
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
     finally:
         con.close()
 
@@ -74692,7 +75794,9 @@ def test_kill_chain_html_remote_apkm_bundle_drives_validation_findings_and_secon
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -74751,7 +75855,9 @@ def test_kill_chain_html_remote_apkm_bundle_drives_validation_findings_and_secon
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -74855,7 +75961,9 @@ def test_kill_chain_html_remote_apkm_bundle_drives_validation_findings_and_secon
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _RemoteApkmBundleCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
 
     from forge.cli import kill_chain
 
@@ -74990,9 +76098,17 @@ def test_kill_chain_html_remote_apkm_bundle_drives_validation_findings_and_secon
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
     finally:
         con.close()
 
@@ -75018,7 +76134,9 @@ def test_kill_chain_html_remote_aab_bundle_drives_validation_findings_and_second
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -75077,7 +76195,9 @@ def test_kill_chain_html_remote_aab_bundle_drives_validation_findings_and_second
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -75177,7 +76297,9 @@ def test_kill_chain_html_remote_aab_bundle_drives_validation_findings_and_second
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _RemoteAabBundleCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
 
     from forge.cli import kill_chain
 
@@ -75312,9 +76434,17 @@ def test_kill_chain_html_remote_aab_bundle_drives_validation_findings_and_second
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
     finally:
         con.close()
 
@@ -75421,7 +76551,9 @@ def test_kill_chain_html_public_profile_urls_feed_recursive_identity_and_company
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -75499,12 +76631,24 @@ def test_kill_chain_html_public_profile_urls_feed_recursive_identity_and_company
         assert ("https://github.com/rootforge/platform-repo", "url", "discovered") in seed_rows
         assert ("https://github.com/orgs/acme-red-team/people", "url", "discovered") in seed_rows
         assert ("https://gitlab.com/secopsforge", "url", "discovered") in seed_rows
-        assert ("https://gitlab.com/groups/acme-blue/-/group_members", "url", "discovered") in seed_rows
+        assert (
+            "https://gitlab.com/groups/acme-blue/-/group_members",
+            "url",
+            "discovered",
+        ) in seed_rows
         assert ("https://bitbucket.org/rootbucket/platform-repo", "url", "discovered") in seed_rows
         assert ("https://www.linkedin.com/in/alice-example", "url", "discovered") in seed_rows
         assert ("https://www.linkedin.com/company/acme-corp", "url", "discovered") in seed_rows
-        assert ("https://www.facebook.com/pages/Acme-Facebook/123456789", "url", "discovered") in seed_rows
-        assert ("https://www.facebook.com/people/Alice-Facebook/1000123456789/", "url", "discovered") in seed_rows
+        assert (
+            "https://www.facebook.com/pages/Acme-Facebook/123456789",
+            "url",
+            "discovered",
+        ) in seed_rows
+        assert (
+            "https://www.facebook.com/people/Alice-Facebook/1000123456789/",
+            "url",
+            "discovered",
+        ) in seed_rows
         assert ("https://x.com/intent/user?screen_name=opsroot", "url", "discovered") in seed_rows
         assert ("https://bluewriter.medium.com/signal-boost", "url", "discovered") in seed_rows
         assert ("https://www.npmjs.com/~rootnpm", "url", "discovered") in seed_rows
@@ -75513,18 +76657,46 @@ def test_kill_chain_html_public_profile_urls_feed_recursive_identity_and_company
         assert ("https://pypi.org/org/acme-py", "url", "discovered") in seed_rows
         assert ("https://huggingface.co/rootml", "url", "discovered") in seed_rows
         assert ("https://huggingface.co/organizations/acme-ml", "url", "discovered") in seed_rows
-        assert ("https://www.flickr.com/photos/rootflickr/1234567890/", "url", "discovered") in seed_rows
+        assert (
+            "https://www.flickr.com/photos/rootflickr/1234567890/",
+            "url",
+            "discovered",
+        ) in seed_rows
         assert ("https://vimeo.com/rootvideo/securitybriefing", "url", "discovered") in seed_rows
         assert ("https://www.last.fm/user/rj/library", "url", "discovered") in seed_rows
-        assert ("https://acmeband.bandcamp.com/album/security-briefing", "url", "discovered") in seed_rows
+        assert (
+            "https://acmeband.bandcamp.com/album/security-briefing",
+            "url",
+            "discovered",
+        ) in seed_rows
         assert ("https://bandcamp.com/acmefan/collection", "url", "discovered") in seed_rows
         assert ("https://www.kaggle.com/rootkaggle/code", "url", "discovered") in seed_rows
-        assert ("https://speakerdeck.com/rootspeaker/security-briefing", "url", "discovered") in seed_rows
-        assert ("https://www.slideshare.net/rootslides/security-briefing", "url", "discovered") in seed_rows
-        assert ("https://soundcloud.com/rootsound/security-briefing", "url", "discovered") in seed_rows
-        assert ("https://www.mixcloud.com/rootmix/security-briefing/", "url", "discovered") in seed_rows
+        assert (
+            "https://speakerdeck.com/rootspeaker/security-briefing",
+            "url",
+            "discovered",
+        ) in seed_rows
+        assert (
+            "https://www.slideshare.net/rootslides/security-briefing",
+            "url",
+            "discovered",
+        ) in seed_rows
+        assert (
+            "https://soundcloud.com/rootsound/security-briefing",
+            "url",
+            "discovered",
+        ) in seed_rows
+        assert (
+            "https://www.mixcloud.com/rootmix/security-briefing/",
+            "url",
+            "discovered",
+        ) in seed_rows
         assert ("https://letterboxd.com/rootfilm/films/reviews/", "url", "discovered") in seed_rows
-        assert ("https://www.pinterest.com/rootpins/security-briefing/", "url", "discovered") in seed_rows
+        assert (
+            "https://www.pinterest.com/rootpins/security-briefing/",
+            "url",
+            "discovered",
+        ) in seed_rows
         assert ("https://tryhackme.com/p/rootthm", "url", "discovered") in seed_rows
         assert ("https://steamcommunity.com/id/rootsteam", "url", "discovered") in seed_rows
         assert ("rootforge", "username", "cross_reference") in seed_rows
@@ -75594,58 +76766,210 @@ def test_kill_chain_html_public_profile_urls_feed_recursive_identity_and_company
                 """
             ).fetchall()
         }
-        assert ("https://github.com/rootforge/platform-repo", "rootforge", "derived_from") in relation_rows
-        assert ("https://github.com/orgs/acme-red-team/people", "Acme Red Team", "derived_from") in relation_rows
+        assert (
+            "https://github.com/rootforge/platform-repo",
+            "rootforge",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://github.com/orgs/acme-red-team/people",
+            "Acme Red Team",
+            "derived_from",
+        ) in relation_rows
         assert ("https://gitlab.com/secopsforge", "secopsforge", "derived_from") in relation_rows
-        assert ("https://gitlab.com/groups/acme-blue/-/group_members", "Acme Blue", "derived_from") in relation_rows
-        assert ("https://bitbucket.org/rootbucket/platform-repo", "rootbucket", "derived_from") in relation_rows
-        assert ("https://x.com/intent/user?screen_name=opsroot", "opsroot", "derived_from") in relation_rows
-        assert ("https://www.linkedin.com/in/alice-example", "Alice Example", "derived_from") in relation_rows
-        assert ("https://www.linkedin.com/company/acme-corp", "Acme Corp", "derived_from") in relation_rows
-        assert ("https://www.facebook.com/pages/Acme-Facebook/123456789", "Acme Facebook", "derived_from") in relation_rows
-        assert ("https://www.facebook.com/people/Alice-Facebook/1000123456789/", "Alice Facebook", "derived_from") in relation_rows
-        assert ("https://bluewriter.medium.com/signal-boost", "bluewriter", "derived_from") in relation_rows
+        assert (
+            "https://gitlab.com/groups/acme-blue/-/group_members",
+            "Acme Blue",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://bitbucket.org/rootbucket/platform-repo",
+            "rootbucket",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://x.com/intent/user?screen_name=opsroot",
+            "opsroot",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.linkedin.com/in/alice-example",
+            "Alice Example",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.linkedin.com/company/acme-corp",
+            "Acme Corp",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.facebook.com/pages/Acme-Facebook/123456789",
+            "Acme Facebook",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.facebook.com/people/Alice-Facebook/1000123456789/",
+            "Alice Facebook",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://bluewriter.medium.com/signal-boost",
+            "bluewriter",
+            "derived_from",
+        ) in relation_rows
         assert ("https://www.npmjs.com/~rootnpm", "rootnpm", "derived_from") in relation_rows
         assert ("https://www.npmjs.com/org/acme-npm", "Acme Npm", "derived_from") in relation_rows
         assert ("https://pypi.org/user/rootpy", "rootpy", "derived_from") in relation_rows
         assert ("https://pypi.org/org/acme-py", "Acme Py", "derived_from") in relation_rows
         assert ("https://huggingface.co/rootml", "rootml", "derived_from") in relation_rows
-        assert ("https://huggingface.co/organizations/acme-ml", "Acme Ml", "derived_from") in relation_rows
-        assert ("https://www.flickr.com/photos/rootflickr/1234567890/", "rootflickr", "derived_from") in relation_rows
-        assert ("https://vimeo.com/rootvideo/securitybriefing", "rootvideo", "derived_from") in relation_rows
+        assert (
+            "https://huggingface.co/organizations/acme-ml",
+            "Acme Ml",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.flickr.com/photos/rootflickr/1234567890/",
+            "rootflickr",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://vimeo.com/rootvideo/securitybriefing",
+            "rootvideo",
+            "derived_from",
+        ) in relation_rows
         assert ("https://www.last.fm/user/rj/library", "rj", "derived_from") in relation_rows
-        assert ("https://acmeband.bandcamp.com/album/security-briefing", "acmeband", "derived_from") in relation_rows
-        assert ("https://bandcamp.com/acmefan/collection", "acmefan", "derived_from") in relation_rows
-        assert ("https://www.kaggle.com/rootkaggle/code", "rootkaggle", "derived_from") in relation_rows
-        assert ("https://speakerdeck.com/rootspeaker/security-briefing", "rootspeaker", "derived_from") in relation_rows
-        assert ("https://www.slideshare.net/rootslides/security-briefing", "rootslides", "derived_from") in relation_rows
-        assert ("https://soundcloud.com/rootsound/security-briefing", "rootsound", "derived_from") in relation_rows
-        assert ("https://www.mixcloud.com/rootmix/security-briefing/", "rootmix", "derived_from") in relation_rows
-        assert ("https://letterboxd.com/rootfilm/films/reviews/", "rootfilm", "derived_from") in relation_rows
-        assert ("https://www.pinterest.com/rootpins/security-briefing/", "rootpins", "derived_from") in relation_rows
+        assert (
+            "https://acmeband.bandcamp.com/album/security-briefing",
+            "acmeband",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://bandcamp.com/acmefan/collection",
+            "acmefan",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.kaggle.com/rootkaggle/code",
+            "rootkaggle",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://speakerdeck.com/rootspeaker/security-briefing",
+            "rootspeaker",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.slideshare.net/rootslides/security-briefing",
+            "rootslides",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://soundcloud.com/rootsound/security-briefing",
+            "rootsound",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.mixcloud.com/rootmix/security-briefing/",
+            "rootmix",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://letterboxd.com/rootfilm/films/reviews/",
+            "rootfilm",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.pinterest.com/rootpins/security-briefing/",
+            "rootpins",
+            "derived_from",
+        ) in relation_rows
         assert ("https://tryhackme.com/p/rootthm", "rootthm", "derived_from") in relation_rows
-        assert ("https://steamcommunity.com/id/rootsteam", "rootsteam", "derived_from") in relation_rows
+        assert (
+            "https://steamcommunity.com/id/rootsteam",
+            "rootsteam",
+            "derived_from",
+        ) in relation_rows
         assert ("https://medium.com/topic/security", "topic", "derived_from") not in relation_rows
-        assert ("https://www.npmjs.com/package/not-a-profile", "not-a-profile", "derived_from") not in relation_rows
-        assert ("https://huggingface.co/rootml/model-one", "rootml", "derived_from") not in relation_rows
-        assert ("https://www.flickr.com/photos/tags/security/", "tags", "derived_from") not in relation_rows
+        assert (
+            "https://www.npmjs.com/package/not-a-profile",
+            "not-a-profile",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://huggingface.co/rootml/model-one",
+            "rootml",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.flickr.com/photos/tags/security/",
+            "tags",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://vimeo.com/123456789", "123456789", "derived_from") not in relation_rows
-        assert ("https://vimeo.com/channels/staffpicks", "channels", "derived_from") not in relation_rows
+        assert (
+            "https://vimeo.com/channels/staffpicks",
+            "channels",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://www.last.fm/music/Acme", "music", "derived_from") not in relation_rows
         assert ("https://bandcamp.com/discover", "discover", "derived_from") not in relation_rows
-        assert ("https://daily.bandcamp.com/features/security", "daily", "derived_from") not in relation_rows
-        assert ("https://www.kaggle.com/competitions", "competitions", "derived_from") not in relation_rows
+        assert (
+            "https://daily.bandcamp.com/features/security",
+            "daily",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.kaggle.com/competitions",
+            "competitions",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://speakerdeck.com/explore", "explore", "derived_from") not in relation_rows
-        assert ("https://www.slideshare.net/category/technology", "category", "derived_from") not in relation_rows
+        assert (
+            "https://www.slideshare.net/category/technology",
+            "category",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://soundcloud.com/discover", "discover", "derived_from") not in relation_rows
-        assert ("https://www.mixcloud.com/discover/electronic/", "discover", "derived_from") not in relation_rows
-        assert ("https://www.mixcloud.com/settings/account/", "settings", "derived_from") not in relation_rows
-        assert ("https://letterboxd.com/film/security-briefing/", "film", "derived_from") not in relation_rows
-        assert ("https://letterboxd.com/search/security/", "search", "derived_from") not in relation_rows
-        assert ("https://www.pinterest.com/pin/1234567890/", "pin", "derived_from") not in relation_rows
-        assert ("https://www.pinterest.com/123456789/", "123456789", "derived_from") not in relation_rows
-        assert ("https://tryhackme.com/room/profilesroom", "profilesroom", "derived_from") not in relation_rows
-        assert ("https://steamcommunity.com/profiles/76561198000000000", "76561198000000000", "derived_from") not in relation_rows
+        assert (
+            "https://www.mixcloud.com/discover/electronic/",
+            "discover",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.mixcloud.com/settings/account/",
+            "settings",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://letterboxd.com/film/security-briefing/",
+            "film",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://letterboxd.com/search/security/",
+            "search",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.pinterest.com/pin/1234567890/",
+            "pin",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.pinterest.com/123456789/",
+            "123456789",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://tryhackme.com/room/profilesroom",
+            "profilesroom",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://steamcommunity.com/profiles/76561198000000000",
+            "76561198000000000",
+            "derived_from",
+        ) not in relation_rows
 
         run_rows = con.execute(
             """
@@ -75739,7 +77063,9 @@ def test_kill_chain_html_phone_pivots_feed_recursive_phone_fanout(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -75847,12 +77173,7 @@ def test_kill_chain_html_ip_pivots_feed_recursive_ip_fanout(
     monkeypatch.setenv("FORGE_ENV", "test")
 
     fetched_urls: list[str] = []
-    html_blob = (
-        "<html><body>"
-        "API server 203.0.113.77 "
-        "Telemetry node [2001:db8::77] "
-        "</body></html>"
-    )
+    html_blob = "<html><body>API server 203.0.113.77 Telemetry node [2001:db8::77] </body></html>"
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
         del kwargs
@@ -75875,7 +77196,9 @@ def test_kill_chain_html_ip_pivots_feed_recursive_ip_fanout(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -76022,7 +77345,9 @@ def test_kill_chain_local_yaml_secret_artifacts_feed_validation_and_email_fanout
     fetched_urls: list[str] = []
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -76170,10 +77495,25 @@ def test_kill_chain_local_yaml_secret_artifacts_feed_validation_and_email_fanout
                 """
             ).fetchall()
         }
-        assert ("firebase", "yaml-firebase-prod", "VALIDATED", "firebase_database_node_read") in validation_rows
-        assert ("supabase", "yamlsupabase", "ACCESSIBLE_BUT_NO_DATA", "supabase_settings") in validation_rows
+        assert (
+            "firebase",
+            "yaml-firebase-prod",
+            "VALIDATED",
+            "firebase_database_node_read",
+        ) in validation_rows
+        assert (
+            "supabase",
+            "yamlsupabase",
+            "ACCESSIBLE_BUT_NO_DATA",
+            "supabase_settings",
+        ) in validation_rows
         assert ("gcs", "yaml-gcs-public", "VALIDATED", "gcs_list_bucket") in validation_rows
-        assert ("azure_blob", "yamlblobacct/public", "ACCESSIBLE_BUT_NO_DATA", "azure_blob_list_container") in validation_rows
+        assert (
+            "azure_blob",
+            "yamlblobacct/public",
+            "ACCESSIBLE_BUT_NO_DATA",
+            "azure_blob_list_container",
+        ) in validation_rows
 
         findings = {
             (str(row[0]), str(row[1]), str(row[2]), str(row[3]))
@@ -76233,8 +77573,18 @@ def test_kill_chain_local_yaml_secret_artifacts_feed_validation_and_email_fanout
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 2
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("ACCESSIBLE_BUT_NO_DATA", 0)) >= 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 2
+        )
+        assert (
+            int(
+                metadata.get("queue_metrics", {})
+                .get("cloud_validation", {})
+                .get("ACCESSIBLE_BUT_NO_DATA", 0)
+            )
+            >= 2
+        )
     finally:
         con.close()
 
@@ -76291,7 +77641,9 @@ def test_kill_chain_local_key_value_config_artifacts_feed_validation_and_email_f
     fetched_urls: list[str] = []
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -76450,12 +77802,32 @@ def test_kill_chain_local_key_value_config_artifacts_feed_validation_and_email_f
                 """
             ).fetchall()
         }
-        assert ("firebase", "inifirebase", "VALIDATED", "firebase_database_shallow_read") in validation_rows
-        assert ("firebase", "nestedpropsfirebase", "VALIDATED", "firebase_database_shallow_read") in validation_rows
+        assert (
+            "firebase",
+            "inifirebase",
+            "VALIDATED",
+            "firebase_database_shallow_read",
+        ) in validation_rows
+        assert (
+            "firebase",
+            "nestedpropsfirebase",
+            "VALIDATED",
+            "firebase_database_shallow_read",
+        ) in validation_rows
         assert ("supabase", "inisupabase", "VALIDATED", "supabase_rest_root") in validation_rows
-        assert ("supabase", "nestedpropssupabase", "VALIDATED", "supabase_rest_root") in validation_rows
+        assert (
+            "supabase",
+            "nestedpropssupabase",
+            "VALIDATED",
+            "supabase_rest_root",
+        ) in validation_rows
         assert ("gcs", "inigcsbucket", "VALIDATED", "gcs_list_bucket") in validation_rows
-        assert ("azure_blob", "iniblobacct/public", "VALIDATED", "azure_blob_list_container") in validation_rows
+        assert (
+            "azure_blob",
+            "iniblobacct/public",
+            "VALIDATED",
+            "azure_blob_list_container",
+        ) in validation_rows
 
         findings = {
             (str(row[0]), str(row[1]), str(row[2]))
@@ -76512,7 +77884,10 @@ def test_kill_chain_local_key_value_config_artifacts_feed_validation_and_email_f
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 6
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 6
+        )
     finally:
         con.close()
 
@@ -76582,7 +77957,9 @@ def test_kill_chain_local_json_config_artifacts_feed_validation_and_email_fanout
     fetched_urls: list[str] = []
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -76605,7 +77982,9 @@ def test_kill_chain_local_json_config_artifacts_feed_validation_and_email_fanout
             if url == "https://jsonfirebase.firebaseio.com/.json":
                 return _FakeResponse(200, '{"records":[{"id":1,"email":"json-db@acme.example"}]}')
             if url == "https://nestedjsonfirebase.firebaseio.com/.json":
-                return _FakeResponse(200, '{"records":[{"id":2,"email":"nested-json-db@acme.example"}]}')
+                return _FakeResponse(
+                    200, '{"records":[{"id":2,"email":"nested-json-db@acme.example"}]}'
+                )
             if url == "https://jsonsupabase.supabase.co/auth/v1/settings":
                 return _FakeResponse(
                     200,
@@ -76741,12 +78120,32 @@ def test_kill_chain_local_json_config_artifacts_feed_validation_and_email_fanout
                 """
             ).fetchall()
         }
-        assert ("firebase", "jsonfirebase", "VALIDATED", "firebase_database_shallow_read") in validation_rows
-        assert ("firebase", "nestedjsonfirebase", "VALIDATED", "firebase_database_shallow_read") in validation_rows
+        assert (
+            "firebase",
+            "jsonfirebase",
+            "VALIDATED",
+            "firebase_database_shallow_read",
+        ) in validation_rows
+        assert (
+            "firebase",
+            "nestedjsonfirebase",
+            "VALIDATED",
+            "firebase_database_shallow_read",
+        ) in validation_rows
         assert ("supabase", "jsonsupabase", "VALIDATED", "supabase_rest_root") in validation_rows
-        assert ("supabase", "nestedjsonsupabase", "VALIDATED", "supabase_rest_root") in validation_rows
+        assert (
+            "supabase",
+            "nestedjsonsupabase",
+            "VALIDATED",
+            "supabase_rest_root",
+        ) in validation_rows
         assert ("gcs", "jsongcsbucket", "VALIDATED", "gcs_list_bucket") in validation_rows
-        assert ("azure_blob", "jsonblobacct/public", "VALIDATED", "azure_blob_list_container") in validation_rows
+        assert (
+            "azure_blob",
+            "jsonblobacct/public",
+            "VALIDATED",
+            "azure_blob_list_container",
+        ) in validation_rows
 
         findings = {
             (str(row[0]), str(row[1]), str(row[2]))
@@ -76803,7 +78202,10 @@ def test_kill_chain_local_json_config_artifacts_feed_validation_and_email_fanout
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 6
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 6
+        )
     finally:
         con.close()
 
@@ -76882,7 +78284,9 @@ def test_kill_chain_local_opendocument_artifacts_feed_validation_graph_and_templ
     fetched_urls: list[str] = []
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -76988,7 +78392,9 @@ def test_kill_chain_local_opendocument_artifacts_feed_validation_graph_and_templ
         fetched_urls.extend(spec.url for spec in specs)
         return ["" for _ in specs]
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -77225,12 +78631,25 @@ def test_kill_chain_local_opendocument_artifacts_feed_validation_graph_and_templ
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 2
-        assert int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 3
-        assert int(
-            metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("ACCESSIBLE_BUT_NO_DATA", 0)
-        ) >= 1
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 2
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0))
+            >= 1
+        )
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 3
+        )
+        assert (
+            int(
+                metadata.get("queue_metrics", {})
+                .get("cloud_validation", {})
+                .get("ACCESSIBLE_BUT_NO_DATA", 0)
+            )
+            >= 1
+        )
     finally:
         con.close()
 
@@ -77283,19 +78702,19 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
             SLACK_BOT_TOKEN=xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx
             MAILCHIMP_API_KEY=1234567890abcdef1234567890abcdef-us1
-            OPENAI_API_KEY=sk-proj-{'O' * 48}
-            ANTHROPIC_API_KEY=sk-ant-api03-{'C' * 48}
-            HF_TOKEN=hf_{'H' * 36}
-            DISCORD_BOT_TOKEN={'M' * 24}.{'A' * 6}.{'B' * 27}
-            TELEGRAM_BOT_TOKEN=1234567890:{'T' * 35}
-            NOTION_TOKEN=ntn_{'N' * 40}
+            OPENAI_API_KEY=sk-proj-{"O" * 48}
+            ANTHROPIC_API_KEY=sk-ant-api03-{"C" * 48}
+            HF_TOKEN=hf_{"H" * 36}
+            DISCORD_BOT_TOKEN={"M" * 24}.{"A" * 6}.{"B" * 27}
+            TELEGRAM_BOT_TOKEN=1234567890:{"T" * 35}
+            NOTION_TOKEN=ntn_{"N" * 40}
             DD_API_KEY=0123456789abcdef0123456789abcdef
-            CLOUDFLARE_API_TOKEN={'C' * 40}
-            VERCEL_TOKEN={'V' * 40}
-            NETLIFY_AUTH_TOKEN={'N' * 40}
-            POSTHOG_PERSONAL_API_KEY=phx_{'P' * 40}
-            SENTRY_AUTH_TOKEN={'S' * 40}
-            AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=killchainblob;AccountKey={'A' * 86}==
+            CLOUDFLARE_API_TOKEN={"C" * 40}
+            VERCEL_TOKEN={"V" * 40}
+            NETLIFY_AUTH_TOKEN={"N" * 40}
+            POSTHOG_PERSONAL_API_KEY=phx_{"P" * 40}
+            SENTRY_AUTH_TOKEN={"S" * 40}
+            AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=killchainblob;AccountKey={"A" * 86}==
             """
         ).strip(),
         encoding="utf-8",
@@ -77617,8 +79036,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             """
         ).fetchall()
         validation_map = {
-            (str(row[0]), str(row[3])): (str(row[1]), str(row[2]))
-            for row in validation_rows
+            (str(row[0]), str(row[3])): (str(row[1]), str(row[2])) for row in validation_rows
         }
         assert validation_map[("aws", "aws_sts_get_caller_identity")][1] == "VALIDATED"
         assert validation_map[("mailchimp", "mailchimp_ping_api")] == ("us1", "UNVERIFIED")
@@ -77649,9 +79067,7 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
             "3c90c3cc-0d44-4b50-8888-8dd25736052a",
             "VALIDATED",
         )
-        datadog_identifier, datadog_status = validation_map[
-            ("datadog", "datadog_api_key_validate")
-        ]
+        datadog_identifier, datadog_status = validation_map[("datadog", "datadog_api_key_validate")]
         assert datadog_identifier.endswith("operator-keys.env")
         assert datadog_status == "UNVERIFIED"
         assert validation_map[("cloudflare", "cloudflare_token_verify")] == (
@@ -77795,7 +79211,10 @@ def test_kill_chain_local_generic_secret_artifacts_feed_mixed_key_validation(
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 11
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 11
+        )
     finally:
         con.close()
 
@@ -78177,7 +79596,9 @@ def test_kill_chain_local_api_and_security_output_artifacts_feed_recursive_graph
         fetched_urls.extend(spec.url for spec in specs)
         return ["" for _spec in specs]
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -78739,7 +80160,9 @@ def test_kill_chain_local_long_tail_key_artifacts_feed_validation_and_auto_templ
         assert key_map[("sendgrid", "sendgrid_api_key")]["validation_state"] == "ACTIVE"
         assert key_map[("twilio", "twilio_account_sid")]["validation_state"] == "ACTIVE"
         assert key_map[("twilio", "twilio_auth_token")]["validation_state"] == "UNCONFIRMED"
-        assert str(key_map[("github", "github_pat_classic")]["source_url"]).endswith("operator-longtail.env")
+        assert str(key_map[("github", "github_pat_classic")]["source_url"]).endswith(
+            "operator-longtail.env"
+        )
 
         validation_rows = con.execute(
             """
@@ -78750,8 +80173,7 @@ def test_kill_chain_local_long_tail_key_artifacts_feed_validation_and_auto_templ
             """
         ).fetchall()
         validation_map = {
-            (str(row[0]), str(row[3]), str(row[2])): str(row[1])
-            for row in validation_rows
+            (str(row[0]), str(row[3]), str(row[2])): str(row[1]) for row in validation_rows
         }
         assert validation_map[("github", "github_user_api", "VALIDATED")] == "acmebot"
         assert (
@@ -78819,7 +80241,10 @@ def test_kill_chain_local_long_tail_key_artifacts_feed_validation_and_auto_templ
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 4
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 4
+        )
     finally:
         con.close()
 
@@ -78925,14 +80350,18 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
         zf.writestr("packages/client.xapk", xapk_bytes.getvalue())
 
     tar_archive_path = artifact_root / "archive-configs.tar"
-    tar_env_payload = dedent(
-        """
+    tar_env_payload = (
+        dedent(
+            """
         SUPABASE_URL=https://tarconfig.supabase.co
         SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcmNvbmZpZyIsInJvbGUiOiJhbm9uIn0.signaturetar
         CONTACT_EMAIL=tar-owner@acme.example
         PORTAL_URL=https://tar.acme.example/console
         """
-    ).strip().encode("utf-8")
+        )
+        .strip()
+        .encode("utf-8")
+    )
     with tarfile.open(tar_archive_path, "w") as tf:
         info = tarfile.TarInfo("configs/runtime.env")
         info.size = len(tar_env_payload)
@@ -78952,7 +80381,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
             SENDGRID_API_KEY=SG.ABCDEFGHIJKLMNOPQRSTUV.ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg
             TWILIO_ACCOUNT_SID=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3
             TWILIO_AUTH_TOKEN=abcdef1234567890abcdef1234567890
-            AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=localkeyblob;AccountKey={'A' * 86}==
+            AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=localkeyblob;AccountKey={"A" * 86}==
             """
         ).strip(),
         encoding="utf-8",
@@ -78961,7 +80390,9 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
     fetched_urls: list[str] = []
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -79039,10 +80470,7 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
             if url == "https://api.github.com/user":
                 return _FakeResponse(
                     200,
-                    (
-                        '{"id":738251,"login":"acmebot",'
-                        '"html_url":"https://github.com/acmebot"}'
-                    ),
+                    ('{"id":738251,"login":"acmebot","html_url":"https://github.com/acmebot"}'),
                 )
             if url == "https://api.stripe.com/v1/balance":
                 return _FakeResponse(200, '{"object":"balance"}')
@@ -79050,7 +80478,10 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
                 return _FakeResponse(200, '{"email":"sender@delta-client.io"}')
             if url == "https://api.sendgrid.com/v3/scopes":
                 return _FakeResponse(200, '["mail.send"]')
-            if url == "https://api.twilio.com/2010-04-01/Accounts/AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3.json":
+            if (
+                url
+                == "https://api.twilio.com/2010-04-01/Accounts/AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3.json"
+            ):
                 return _FakeResponse(
                     200,
                     '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3","status":"active"}',
@@ -79073,7 +80504,10 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
                 return _FakeResponse(200, '{"email":"sender@delta-client.io"}')
             if url == "https://api.sendgrid.com/v3/scopes":
                 return _FakeResponse(200, '["mail.send"]')
-            if url == "https://api.twilio.com/2010-04-01/Accounts/AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3.json":
+            if (
+                url
+                == "https://api.twilio.com/2010-04-01/Accounts/AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3.json"
+            ):
                 return _FakeResponse(
                     200,
                     '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3","status":"active"}',
@@ -79127,7 +80561,9 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
         fetched_urls.extend(spec.url for spec in specs)
         return ["" for _ in specs]
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -79516,7 +80952,10 @@ def test_kill_chain_combines_local_yaml_rtf_nested_mobile_and_key_artifacts_for_
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 8
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 8
+        )
     finally:
         con.close()
 
@@ -79661,7 +81100,9 @@ def test_kill_chain_multi_iteration_mixes_local_artifacts_social_recursion_and_a
         )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -79904,7 +81345,9 @@ def test_kill_chain_multi_iteration_mixes_local_artifacts_social_recursion_and_a
                 payloads.append("")
         return payloads
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -80053,13 +81496,33 @@ def test_kill_chain_multi_iteration_mixes_local_artifacts_social_recursion_and_a
                 """
             ).fetchall()
         }
-        assert ("firebase", "local-yaml-firebase", "VALIDATED", "firebase_database_shallow_read") in validation_rows
-        assert ("firebase", "nested-xapk-firebase", "VALIDATED", "firebase_database_shallow_read") in validation_rows
+        assert (
+            "firebase",
+            "local-yaml-firebase",
+            "VALIDATED",
+            "firebase_database_shallow_read",
+        ) in validation_rows
+        assert (
+            "firebase",
+            "nested-xapk-firebase",
+            "VALIDATED",
+            "firebase_database_shallow_read",
+        ) in validation_rows
         assert ("supabase", "localyamlref", "VALIDATED", "supabase_rest_root") in validation_rows
         assert ("supabase", "nestedxapk", "VALIDATED", "supabase_rest_root") in validation_rows
         assert ("gcs", "local-yaml-gcs", "VALIDATED", "gcs_list_bucket") in validation_rows
-        assert ("azure_blob", "localyamlblob/public", "VALIDATED", "azure_blob_list_container") in validation_rows
-        assert ("aws", "742931608514", "VALIDATED", "aws_sts_get_caller_identity") in validation_rows
+        assert (
+            "azure_blob",
+            "localyamlblob/public",
+            "VALIDATED",
+            "azure_blob_list_container",
+        ) in validation_rows
+        assert (
+            "aws",
+            "742931608514",
+            "VALIDATED",
+            "aws_sts_get_caller_identity",
+        ) in validation_rows
 
         run_rows = con.execute(
             """
@@ -80082,7 +81545,12 @@ def test_kill_chain_multi_iteration_mixes_local_artifacts_social_recursion_and_a
         assert str(run_map[("threadblue", "fanout_e5_chain")]["status"]) == "completed"
         assert str(run_map[("Alice Example", "fanout_m_seed_name")]["status"]) == "completed"
         assert str(run_map[("Acme Corp", "fanout_n_seed_company")]["status"]) == "completed"
-        assert json.loads(str(run_map[("ops-root", "fanout_e5_chain")]["metadata_json"] or "{}"))["iteration"] == 2
+        assert (
+            json.loads(str(run_map[("ops-root", "fanout_e5_chain")]["metadata_json"] or "{}"))[
+                "iteration"
+            ]
+            == 2
+        )
 
         findings = {
             (str(row[0]), str(row[1]), str(row[2]))
@@ -80094,9 +81562,21 @@ def test_kill_chain_multi_iteration_mixes_local_artifacts_social_recursion_and_a
                 """
             ).fetchall()
         }
-        assert ("DETERMINISTIC_CLOUD_EXPOSURE", "HIGH", "Validated Firebase data exposure") in findings
-        assert ("DETERMINISTIC_CLOUD_EXPOSURE", "HIGH", "Validated Supabase data exposure") in findings
-        assert ("DETERMINISTIC_KEY_EXPOSURE", "HIGH", "Validated exposed aws credential reference") in findings
+        assert (
+            "DETERMINISTIC_CLOUD_EXPOSURE",
+            "HIGH",
+            "Validated Firebase data exposure",
+        ) in findings
+        assert (
+            "DETERMINISTIC_CLOUD_EXPOSURE",
+            "HIGH",
+            "Validated Supabase data exposure",
+        ) in findings
+        assert (
+            "DETERMINISTIC_KEY_EXPOSURE",
+            "HIGH",
+            "Validated exposed aws credential reference",
+        ) in findings
 
         run_row = con.execute(
             """
@@ -80112,7 +81592,14 @@ def test_kill_chain_multi_iteration_mixes_local_artifacts_social_recursion_and_a
         assert int(run_row["current_iteration"]) == 2
         assert int(run_row["max_iterations"]) == 2
         run_metadata = json.loads(str(run_row["metadata_json"] or "{}"))
-        assert int(run_metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 7
+        assert (
+            int(
+                run_metadata.get("queue_metrics", {})
+                .get("cloud_validation", {})
+                .get("VALIDATED", 0)
+            )
+            >= 7
+        )
 
         snapshot_row = con.execute(
             """
@@ -80157,16 +81644,11 @@ def test_kill_chain_multi_iteration_mixes_local_artifacts_social_recursion_and_a
     assert report_path.with_suffix(".pdf").is_file()
 
     graph_payload = json.loads(graph_json_path.read_text(encoding="utf-8"))
-    graph_nodes = [
-        node
-        for node in graph_payload.get("nodes", [])
-        if isinstance(node, dict)
-    ]
+    graph_nodes = [node for node in graph_payload.get("nodes", []) if isinstance(node, dict)]
     cloud_nodes_by_identifier = {
         str((node.get("metadata") or {}).get("identifier") or ""): node
         for node in graph_nodes
-        if node.get("source_table") == "cloud_assets"
-        and isinstance(node.get("metadata"), dict)
+        if node.get("source_table") == "cloud_assets" and isinstance(node.get("metadata"), dict)
     }
     finding_nodes_by_resource = {
         str((node.get("metadata") or {}).get("resource_id") or ""): node
@@ -80295,7 +81777,9 @@ def test_kill_chain_multi_iteration_combines_local_and_remote_artifacts_social_r
         )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -80442,16 +81926,14 @@ def test_kill_chain_multi_iteration_combines_local_and_remote_artifacts_social_r
         payloads: list[str] = []
         for spec in specs:
             if spec.url in {"https://yaml.acme.example", "https://yaml.acme.example/console"}:
-                payloads.append(
-                    "<html>"
-                    f"<a href='{artifact_url}'>Remote mobile client</a>"
-                    "</html>"
-                )
+                payloads.append(f"<html><a href='{artifact_url}'>Remote mobile client</a></html>")
             else:
                 payloads.append("")
         return payloads
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -80545,7 +82027,9 @@ def test_kill_chain_multi_iteration_combines_local_and_remote_artifacts_social_r
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _CombinedAutoCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
     monkeypatch.setattr(ReportSynthesizer, "_ensure_provider_loaded", lambda self: None)
     monkeypatch.setattr(
         ReportSynthesizer,
@@ -80628,7 +82112,10 @@ def test_kill_chain_multi_iteration_combines_local_and_remote_artifacts_social_r
         assert str(remote_artifact_row["artifact_type"]) == "apk"
         assert str(remote_artifact_row["discovered_from"]) == "crawl_results"
         assert str(remote_artifact_row["local_path"]).endswith("remote-auto.apk")
-        assert json.loads(str(remote_artifact_row["metadata_json"] or "{}"))["download_filename"] == "remote-auto.apk"
+        assert (
+            json.loads(str(remote_artifact_row["metadata_json"] or "{}"))["download_filename"]
+            == "remote-auto.apk"
+        )
 
         cloud_assets = {
             (str(row[0]), str(row[1]))
@@ -80694,10 +82181,19 @@ def test_kill_chain_multi_iteration_combines_local_and_remote_artifacts_social_r
         assert str(run_map[("ops-root", "fanout_e5_chain")]["status"]) == "completed"
         assert str(run_map[("Alice Example", "fanout_m_seed_name")]["status"]) == "completed"
         assert str(run_map[("Acme Corp", "fanout_n_seed_company")]["status"]) == "completed"
-        assert str(run_map[("remote-auto-owner@acme.example", "fanout_e_chain")]["status"]) == "completed"
-        assert json.loads(
-            str(run_map[("remote-auto-owner@acme.example", "fanout_e_chain")]["metadata_json"] or "{}")
-        )["iteration"] >= 2
+        assert (
+            str(run_map[("remote-auto-owner@acme.example", "fanout_e_chain")]["status"])
+            == "completed"
+        )
+        assert (
+            json.loads(
+                str(
+                    run_map[("remote-auto-owner@acme.example", "fanout_e_chain")]["metadata_json"]
+                    or "{}"
+                )
+            )["iteration"]
+            >= 2
+        )
 
         run_row = con.execute(
             """
@@ -80710,14 +82206,31 @@ def test_kill_chain_multi_iteration_combines_local_and_remote_artifacts_social_r
         ).fetchone()
         assert run_row is not None
         run_metadata = json.loads(str(run_row["metadata_json"] or "{}"))
-        assert int(run_metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 2
-        artifact_cumulative_metrics = (
-            run_metadata.get("queue_metrics", {}).get("artifact_processor_cumulative", {})
+        assert (
+            int(run_metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0))
+            >= 2
+        )
+        artifact_cumulative_metrics = run_metadata.get("queue_metrics", {}).get(
+            "artifact_processor_cumulative", {}
         )
         assert int(artifact_cumulative_metrics.get("processed", 0)) >= 2
         assert int(artifact_cumulative_metrics.get("invocations", 0)) >= 1
-        assert int(run_metadata.get("queue_metrics", {}).get("artifact_processor", {}).get("completed", 0)) >= 1
-        assert int(run_metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 3
+        assert (
+            int(
+                run_metadata.get("queue_metrics", {})
+                .get("artifact_processor", {})
+                .get("completed", 0)
+            )
+            >= 1
+        )
+        assert (
+            int(
+                run_metadata.get("queue_metrics", {})
+                .get("cloud_validation", {})
+                .get("VALIDATED", 0)
+            )
+            >= 3
+        )
     finally:
         con.close()
 
@@ -80782,10 +82295,7 @@ def test_kill_chain_second_hop_pages_chain_multiple_remote_artifacts_under_auto_
     artifact_url_one = "https://acme.example/mobile/chain-one.apk?download=1"
     artifact_url_two = "https://acme.example/mobile/chain-two.apk?download=1"
     root_html = (
-        "<html><body>"
-        '<a href="/careers">Careers</a>'
-        '<a href="/downloads">Downloads</a>'
-        "</body></html>"
+        '<html><body><a href="/careers">Careers</a><a href="/downloads">Downloads</a></body></html>'
     )
     careers_html = (
         "<html><body>"
@@ -80813,7 +82323,9 @@ def test_kill_chain_second_hop_pages_chain_multiple_remote_artifacts_under_auto_
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -80834,7 +82346,9 @@ def test_kill_chain_second_hop_pages_chain_multiple_remote_artifacts_under_auto_
         def get(self, url: str, **kwargs):  # noqa: ANN003
             del kwargs
             if url == "https://local-chain-firebase.firebaseio.com/.json":
-                return _FakeResponse(200, '{"records":[{"id":1,"email":"local-chain-db@acme.example"}]}')
+                return _FakeResponse(
+                    200, '{"records":[{"id":1,"email":"local-chain-db@acme.example"}]}'
+                )
             if url == "https://chain-one-firebase.firebaseio.com/.json":
                 return _FakeResponse(200, '{"users":[{"email":"chain-one-owner@acme.example"}]}')
             if url == "https://chain-two-firebase.firebaseio.com/.json":
@@ -80931,7 +82445,9 @@ def test_kill_chain_second_hop_pages_chain_multiple_remote_artifacts_under_auto_
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -81069,7 +82585,9 @@ def test_kill_chain_second_hop_pages_chain_multiple_remote_artifacts_under_auto_
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _SecondHopChainCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
     monkeypatch.setattr(ReportSynthesizer, "_ensure_provider_loaded", lambda self: None)
     monkeypatch.setattr(
         ReportSynthesizer,
@@ -81145,24 +82663,40 @@ def test_kill_chain_second_hop_pages_chain_multiple_remote_artifacts_under_auto_
             ).fetchall()
         }
         assert len(artifact_rows) == 3
-        assert int(
-            con.execute(
-                """
+        assert (
+            int(
+                con.execute(
+                    """
                 SELECT COUNT(*)
                 FROM artifact_queue
                 WHERE engagement_id=1001
                   AND discovered_from='engagement_seed'
                 """
-            ).fetchone()[0]
-        ) == 0
+                ).fetchone()[0]
+            )
+            == 0
+        )
         assert str(artifact_rows[local_artifact_path.resolve().as_posix()]["status"]) == "parsed"
-        assert str(artifact_rows[local_artifact_path.resolve().as_posix()]["discovered_from"]) == "local_filesystem"
+        assert (
+            str(artifact_rows[local_artifact_path.resolve().as_posix()]["discovered_from"])
+            == "local_filesystem"
+        )
         assert str(artifact_rows[artifact_url_one]["status"]) == "parsed"
         assert str(artifact_rows[artifact_url_one]["discovered_from"]) == "crawl_results"
-        assert json.loads(str(artifact_rows[artifact_url_one]["metadata_json"] or "{}"))["download_filename"] == "chain-one.apk"
+        assert (
+            json.loads(str(artifact_rows[artifact_url_one]["metadata_json"] or "{}"))[
+                "download_filename"
+            ]
+            == "chain-one.apk"
+        )
         assert str(artifact_rows[artifact_url_two]["status"]) == "parsed"
         assert str(artifact_rows[artifact_url_two]["discovered_from"]) == "crawl_results"
-        assert json.loads(str(artifact_rows[artifact_url_two]["metadata_json"] or "{}"))["download_filename"] == "chain-two.apk"
+        assert (
+            json.loads(str(artifact_rows[artifact_url_two]["metadata_json"] or "{}"))[
+                "download_filename"
+            ]
+            == "chain-two.apk"
+        )
 
         cloud_assets = {
             (str(row[0]), str(row[1]))
@@ -81232,14 +82766,19 @@ def test_kill_chain_second_hop_pages_chain_multiple_remote_artifacts_under_auto_
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row["metadata_json"] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 3
-        artifact_cumulative_metrics = (
-            metadata.get("queue_metrics", {}).get("artifact_processor_cumulative", {})
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 3
+        )
+        artifact_cumulative_metrics = metadata.get("queue_metrics", {}).get(
+            "artifact_processor_cumulative", {}
         )
         assert int(artifact_cumulative_metrics.get("local_intake_queued", 0)) >= 1
         assert int(artifact_cumulative_metrics.get("processed", 0)) >= 3
         assert int(artifact_cumulative_metrics.get("invocations", 0)) >= 2
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 5
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 5
+        )
     finally:
         con.close()
 
@@ -81308,10 +82847,7 @@ def test_kill_chain_pause_resume_second_hop_pages_chain_multiple_remote_artifact
     artifact_url_one = "https://acme.example/mobile/chain-one.apk?download=1"
     artifact_url_two = "https://acme.example/mobile/chain-two.apk?download=1"
     root_html = (
-        "<html><body>"
-        '<a href="/careers">Careers</a>'
-        '<a href="/downloads">Downloads</a>'
-        "</body></html>"
+        '<html><body><a href="/careers">Careers</a><a href="/downloads">Downloads</a></body></html>'
     )
     careers_html = (
         "<html><body>"
@@ -81339,7 +82875,9 @@ def test_kill_chain_pause_resume_second_hop_pages_chain_multiple_remote_artifact
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -81360,7 +82898,9 @@ def test_kill_chain_pause_resume_second_hop_pages_chain_multiple_remote_artifact
         def get(self, url: str, **kwargs):  # noqa: ANN003
             del kwargs
             if url == "https://local-chain-firebase.firebaseio.com/.json":
-                return _FakeResponse(200, '{"records":[{"id":1,"email":"local-chain-db@acme.example"}]}')
+                return _FakeResponse(
+                    200, '{"records":[{"id":1,"email":"local-chain-db@acme.example"}]}'
+                )
             if url == "https://chain-one-firebase.firebaseio.com/.json":
                 return _FakeResponse(200, '{"users":[{"email":"chain-one-owner@acme.example"}]}')
             if url == "https://chain-two-firebase.firebaseio.com/.json":
@@ -81457,7 +82997,9 @@ def test_kill_chain_pause_resume_second_hop_pages_chain_multiple_remote_artifact
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -81625,7 +83167,9 @@ def test_kill_chain_pause_resume_second_hop_pages_chain_multiple_remote_artifact
 
     monkeypatch.setattr(cloud_validate.httpx, "Client", _SecondHopChainCloudClient)
     monkeypatch.setattr(FirebaseExtractor, "_encrypt", lambda _self, raw_key: raw_key)
-    monkeypatch.setattr(cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None)
+    monkeypatch.setattr(
+        cloud_validate, "_decrypt_secret", lambda value: str(value or "").strip() or None
+    )
     monkeypatch.setattr(ReportSynthesizer, "_ensure_provider_loaded", lambda self: None)
     monkeypatch.setattr(
         ReportSynthesizer,
@@ -81703,16 +83247,19 @@ def test_kill_chain_pause_resume_second_hop_pages_chain_multiple_remote_artifact
             ).fetchall()
         }
         assert len(artifact_rows) == 3
-        assert int(
-            con.execute(
-                """
+        assert (
+            int(
+                con.execute(
+                    """
                 SELECT COUNT(*)
                 FROM artifact_queue
                 WHERE engagement_id=1001
                   AND discovered_from='engagement_seed'
                 """
-            ).fetchone()[0]
-        ) == 0
+                ).fetchone()[0]
+            )
+            == 0
+        )
         assert str(artifact_rows[local_artifact_path.resolve().as_posix()]["status"]) == "parsed"
         assert str(artifact_rows[artifact_url_one]["status"]) == "parsed"
         assert str(artifact_rows[artifact_url_two]["status"]) == "parsed"
@@ -81770,13 +83317,18 @@ def test_kill_chain_pause_resume_second_hop_pages_chain_multiple_remote_artifact
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row["metadata_json"] or "{}"))
-        artifact_cumulative_metrics = (
-            metadata.get("queue_metrics", {}).get("artifact_processor_cumulative", {})
+        artifact_cumulative_metrics = metadata.get("queue_metrics", {}).get(
+            "artifact_processor_cumulative", {}
         )
-        assert int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 3
+        assert (
+            int(metadata.get("queue_metrics", {}).get("artifact_queue", {}).get("parsed", 0)) >= 3
+        )
         assert int(artifact_cumulative_metrics.get("processed", 0)) >= 3
         assert int(artifact_cumulative_metrics.get("invocations", 0)) >= 3
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= 5
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= 5
+        )
     finally:
         con.close()
 
@@ -81810,7 +83362,9 @@ def test_kill_chain_drains_multiple_pending_cloud_validation_batches(
     batch_size = 18
     azure_account_names = [f"drainblob{i:02d}" for i in range(batch_size)]
     s3_bucket_names = [f"drain-bucket-{i:02d}" for i in range(batch_size)]
-    for index, (account_name, bucket_name) in enumerate(zip(azure_account_names, s3_bucket_names, strict=True)):
+    for index, (account_name, bucket_name) in enumerate(
+        zip(azure_account_names, s3_bucket_names, strict=True)
+    ):
         lines = [
             f"AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName={account_name};AccountKey={'A' * 86}==",
             f"BACKUP_BUCKET=s3://{bucket_name}/reports/{index}.json",
@@ -81835,7 +83389,9 @@ def test_kill_chain_drains_multiple_pending_cloud_validation_batches(
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
-    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr(
+        "forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs]
+    )
 
     from forge.phase4.cloud_validate import CloudValidationResult, S3Validator  # noqa: PLC0415
     from forge.utils.intel.secret_finder import (  # noqa: PLC0415
@@ -81972,7 +83528,10 @@ def test_kill_chain_drains_multiple_pending_cloud_validation_batches(
         ).fetchone()
         assert metadata_row is not None
         metadata = json.loads(str(metadata_row[0] or "{}"))
-        assert int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0)) >= batch_size * 2
+        assert (
+            int(metadata.get("queue_metrics", {}).get("cloud_validation", {}).get("VALIDATED", 0))
+            >= batch_size * 2
+        )
     finally:
         con.close()
 
@@ -82005,7 +83564,9 @@ def test_kill_chain_default_local_artifact_roots_include_artifacts_directory(
     )
 
     class _FakeResponse:
-        def __init__(self, status_code: int, text: str, content_type: str = "application/json") -> None:
+        def __init__(
+            self, status_code: int, text: str, content_type: str = "application/json"
+        ) -> None:
             self.status_code = status_code
             self.text = text
             self.headers = {"content-type": content_type}
@@ -82193,19 +83754,19 @@ def test_kill_chain_mixed_cloud_validation_gates_decoys_from_report(
                             'export const sourceMapOwner = "cloud-sourcemap-owner@acme.example";',
                             'export const sourceMapPortal = "https://cloud-sourcemap.acme.example/portal";',
                             (
-                                'export const sourceMapDecoyBucket = '
+                                "export const sourceMapDecoyBucket = "
                                 '"s3://source-map-decoy-bucket/sample/test-data.json";'
                             ),
                             (
-                                'export const sourceMapDecoyGcs = '
+                                "export const sourceMapDecoyGcs = "
                                 '"gs://source-map-decoy-gcs/sample/test-data.json";'
                             ),
                             (
-                                'export const sourceMapDecoyAzure = '
+                                "export const sourceMapDecoyAzure = "
                                 '"https://sourcemapdecoyblob.blob.core.windows.net/public/sample/test-data.csv";'
                             ),
                             (
-                                'export const sourceMapDecoySpaces = '
+                                "export const sourceMapDecoySpaces = "
                                 '"https://source-map-decoy-space.nyc3.digitaloceanspaces.com/sample/test-data.json";'
                             ),
                         ]
@@ -82425,7 +83986,9 @@ def test_kill_chain_mixed_cloud_validation_gates_decoys_from_report(
 
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -82458,7 +84021,9 @@ def test_kill_chain_mixed_cloud_validation_gates_decoys_from_report(
         return []
 
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
-    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr(
+        "forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs]
+    )
     monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
     from forge.phase4 import cloud_validate
 
@@ -82615,16 +84180,11 @@ def test_kill_chain_mixed_cloud_validation_gates_decoys_from_report(
     assert "sourcemapdecoyblob/public" in graph_text
     assert "nyc3/source-map-decoy-space" in graph_text
 
-    graph_nodes = [
-        node
-        for node in graph_payload.get("nodes", [])
-        if isinstance(node, dict)
-    ]
+    graph_nodes = [node for node in graph_payload.get("nodes", []) if isinstance(node, dict)]
     cloud_nodes_by_identifier = {
         str((node.get("metadata") or {}).get("identifier") or ""): node
         for node in graph_nodes
-        if node.get("source_table") == "cloud_assets"
-        and isinstance(node.get("metadata"), dict)
+        if node.get("source_table") == "cloud_assets" and isinstance(node.get("metadata"), dict)
     }
     finding_nodes_by_resource = {
         str((node.get("metadata") or {}).get("resource_id") or ""): node
@@ -82861,7 +84421,9 @@ def test_kill_chain_raw_export_fallback_preserves_validated_finding_gate(
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
-    monkeypatch.setattr("forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs])
+    monkeypatch.setattr(
+        "forge.cli._run_html_fetch_batch", lambda specs, *_args, **_kwargs: ["" for _ in specs]
+    )
 
     from forge.phase4 import cloud_validate
     from forge.phase6.report_synthesizer import ReportSynthesizer
@@ -82994,34 +84556,25 @@ def test_kill_chain_raw_export_fallback_preserves_validated_finding_gate(
     with raw_csv_files[-1].open(encoding="utf-8", newline="") as handle:
         raw_csv_rows = list(csv.DictReader(handle))
     assert raw_csv_rows
-    raw_csv_finding_rows = [
-        row for row in raw_csv_rows if row["record_type"] == "finding"
-    ]
+    raw_csv_finding_rows = [row for row in raw_csv_rows if row["record_type"] == "finding"]
     raw_csv_validation_rows = [
         row for row in raw_csv_rows if row["record_type"] == "cloud_validation"
     ]
-    assert all(
-        row["cloud_identifier"] != "raw-export-decoy-lab"
-        for row in raw_csv_finding_rows
-    )
+    assert all(row["cloud_identifier"] != "raw-export-decoy-lab" for row in raw_csv_finding_rows)
     assert any(
         row["cloud_identifier"] == "raw-export-decoy-lab"
         and row["validation_status"] == "HONEYPOT_SUSPECTED"
         for row in raw_csv_validation_rows
     )
-    assert {row["findings_checksum"] for row in raw_csv_rows} == {
-        payload["findings_checksum"]
-    }
+    assert {row["findings_checksum"] for row in raw_csv_rows} == {payload["findings_checksum"]}
     assert {row["report_requested_provider"] for row in raw_csv_rows} == {"template"}
     assert {row["report_rendered_provider"] for row in raw_csv_rows} == {"raw_export"}
     assert {row["report_format"] for row in raw_csv_rows} == {"raw_export"}
     assert all(
-        "simulated companion export failure" in row["fallback_reason"]
-        for row in raw_csv_rows
+        "simulated companion export failure" in row["fallback_reason"] for row in raw_csv_rows
     )
     assert all(
-        "simulated companion export failure" in row["report_write_error"]
-        for row in raw_csv_rows
+        "simulated companion export failure" in row["report_write_error"] for row in raw_csv_rows
     )
 
 
@@ -83092,7 +84645,11 @@ def test_kill_chain_html_mines_managed_hosting_aliases_without_firebase_false_va
             return type(
                 "_Resp",
                 (),
-                {"status_code": 404, "text": "missing", "headers": {"content-type": "application/json"}},
+                {
+                    "status_code": 404,
+                    "text": "missing",
+                    "headers": {"content-type": "application/json"},
+                },
             )()
 
     def _fake_subprocess_run(cmd, **kwargs):  # noqa: ANN001
@@ -83148,7 +84705,10 @@ def test_kill_chain_html_mines_managed_hosting_aliases_without_firebase_false_va
         assert ("netlify", "acme-edge") in cloud_assets
         assert ("amplify", "acme-amplify") in cloud_assets
         assert ("gcp_appspot", "acmeportal") in cloud_assets
-        assert ("gcp_cloudfunctions", "https://us-central1-acmehub.cloudfunctions.net/ping") in cloud_assets
+        assert (
+            "gcp_cloudfunctions",
+            "https://us-central1-acmehub.cloudfunctions.net/ping",
+        ) in cloud_assets
 
         validation_rows = {
             (row[0], row[1], row[2])
@@ -83354,7 +84914,9 @@ def test_kill_chain_dns_cname_persists_subdomain_seed_even_when_host_insert_coll
 
     original_callable_batch = forge_cli._run_callable_batch
 
-    def _capturing_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _capturing_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         callable_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return original_callable_batch(
             items,
@@ -83524,10 +85086,7 @@ def test_kill_chain_html_discovered_unresolved_host_marks_placeholder_metadata(
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
     def _fake_html_batch(specs, *_args, **_kwargs):  # noqa: ANN001
-        return [
-            "https://admin.acme.example/login"
-            for _ in specs
-        ]
+        return ["https://admin.acme.example/login" for _ in specs]
 
     def _fake_gethostbyname(hostname: str) -> str:
         if hostname == "admin.acme.example":
@@ -83730,7 +85289,8 @@ def test_kill_chain_depth_limit_skips_over_depth_persisted_recursive_seeds(
             assert metadata["seed_depth"] == 2
             assert metadata["synthesis_depth_limit"] == 1
         assert not any(
-            str(row["seed_value"]) in {seed_value for seed_value, _seed_type, _loop in over_depth_seeds}
+            str(row["seed_value"])
+            in {seed_value for seed_value, _seed_type, _loop in over_depth_seeds}
             and str(row["status"]) == "completed"
             for row in rows
         )
@@ -84200,10 +85760,22 @@ def test_kill_chain_dry_run_promotes_operator_social_url_seeds_into_recursive_id
         assert ("https://github.com/rootuser", "rootuser", "derived_from") in relation_rows
         assert ("https://t.me/rootrelay", "rootrelay", "derived_from") in relation_rows
         assert ("https://keybase.io/rootvault", "rootvault", "derived_from") in relation_rows
-        assert ("https://x.com/intent/user?screen_name=rootintent", "rootintent", "derived_from") in relation_rows
-        assert ("https://rootwriter.medium.com/dispatch-note", "rootwriter", "derived_from") in relation_rows
+        assert (
+            "https://x.com/intent/user?screen_name=rootintent",
+            "rootintent",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://rootwriter.medium.com/dispatch-note",
+            "rootwriter",
+            "derived_from",
+        ) in relation_rows
         assert ("https://dev.to/rootdev/latest-post", "rootdev", "derived_from") in relation_rows
-        assert ("https://www.reddit.com/user/rootreddit/comments", "rootreddit", "derived_from") in relation_rows
+        assert (
+            "https://www.reddit.com/user/rootreddit/comments",
+            "rootreddit",
+            "derived_from",
+        ) in relation_rows
         assert ("https://about.me/rootabout", "rootabout", "derived_from") in relation_rows
         assert ("https://bsky.app/profile/ops.blue", "ops.blue", "derived_from") in relation_rows
         assert (
@@ -84212,36 +85784,120 @@ def test_kill_chain_dry_run_promotes_operator_social_url_seeds_into_recursive_id
             "derived_from",
         ) in relation_rows
         assert ("https://gitlab.com/rootforge", "rootforge", "derived_from") in relation_rows
-        assert ("https://bitbucket.org/rootbucket/platform-repo", "rootbucket", "derived_from") in relation_rows
-        assert ("https://codeberg.org/rootberg/platform-repo", "rootberg", "derived_from") in relation_rows
+        assert (
+            "https://bitbucket.org/rootbucket/platform-repo",
+            "rootbucket",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://codeberg.org/rootberg/platform-repo",
+            "rootberg",
+            "derived_from",
+        ) in relation_rows
         assert ("https://codepen.io/rootpen/pen/abc123", "rootpen", "derived_from") in relation_rows
-        assert ("https://git.sr.ht/~rootsrht/platform-repo", "rootsrht", "derived_from") in relation_rows
+        assert (
+            "https://git.sr.ht/~rootsrht/platform-repo",
+            "rootsrht",
+            "derived_from",
+        ) in relation_rows
         assert ("https://launchpad.net/~rootlp", "rootlp", "derived_from") in relation_rows
-        assert ("https://sourceforge.net/u/rootsf/profile/", "rootsf", "derived_from") in relation_rows
-        assert ("https://hub.docker.com/u/rootdocker", "rootdocker", "derived_from") in relation_rows
-        assert ("https://hub.docker.com/r/rootimage/api", "rootimage", "derived_from") in relation_rows
+        assert (
+            "https://sourceforge.net/u/rootsf/profile/",
+            "rootsf",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://hub.docker.com/u/rootdocker",
+            "rootdocker",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://hub.docker.com/r/rootimage/api",
+            "rootimage",
+            "derived_from",
+        ) in relation_rows
         assert ("https://hackerone.com/roothacker", "roothacker", "derived_from") in relation_rows
         assert ("https://bugcrowd.com/rootbug", "rootbug", "derived_from") in relation_rows
-        assert ("https://stackoverflow.com/users/12345/rootstack", "rootstack", "derived_from") in relation_rows
-        assert ("https://security.stackexchange.com/users/67890/rootsec", "rootsec", "derived_from") in relation_rows
-        assert ("https://superuser.com/users/24680/rootsuper", "rootsuper", "derived_from") in relation_rows
-        assert ("https://mastodon.social/@rootmasto/445566", "rootmasto", "derived_from") in relation_rows
-        assert ("https://infosec.exchange/users/rootexchange", "rootexchange", "derived_from") in relation_rows
-        assert ("https://mastodon.online/@rootonline/112233", "rootonline", "derived_from") in relation_rows
+        assert (
+            "https://stackoverflow.com/users/12345/rootstack",
+            "rootstack",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://security.stackexchange.com/users/67890/rootsec",
+            "rootsec",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://superuser.com/users/24680/rootsuper",
+            "rootsuper",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://mastodon.social/@rootmasto/445566",
+            "rootmasto",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://infosec.exchange/users/rootexchange",
+            "rootexchange",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://mastodon.online/@rootonline/112233",
+            "rootonline",
+            "derived_from",
+        ) in relation_rows
         assert ("https://mas.to/users/rootmas", "rootmas", "derived_from") in relation_rows
         assert ("https://mstdn.party/web/rootparty", "rootparty", "derived_from") in relation_rows
-        assert ("https://chaos.social/@rootchaos/112233", "rootchaos", "derived_from") in relation_rows
-        assert ("https://techhub.social/users/roottech", "roottech", "derived_from") in relation_rows
+        assert (
+            "https://chaos.social/@rootchaos/112233",
+            "rootchaos",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://techhub.social/users/roottech",
+            "roottech",
+            "derived_from",
+        ) in relation_rows
         assert ("https://www.facebook.com/rootintel", "rootintel", "derived_from") in relation_rows
-        assert ("https://www.threads.net/@rootthreads", "rootthreads", "derived_from") in relation_rows
-        assert ("https://www.twitch.tv/rootstream/videos", "rootstream", "derived_from") in relation_rows
-        assert ("https://rootintel.substack.com/p/dispatch", "rootintel", "derived_from") in relation_rows
+        assert (
+            "https://www.threads.net/@rootthreads",
+            "rootthreads",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.twitch.tv/rootstream/videos",
+            "rootstream",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://rootintel.substack.com/p/dispatch",
+            "rootintel",
+            "derived_from",
+        ) in relation_rows
         assert ("https://substack.com/@rootnote", "rootnote", "derived_from") in relation_rows
-        assert ("https://www.instagram.com/rootinsta/reels/", "rootinsta", "derived_from") in relation_rows
-        assert ("https://www.instagram.com/stories/rootstory/445566/", "rootstory", "derived_from") in relation_rows
-        assert ("https://www.youtube.com/@rootchannel", "rootchannel", "derived_from") in relation_rows
+        assert (
+            "https://www.instagram.com/rootinsta/reels/",
+            "rootinsta",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.instagram.com/stories/rootstory/445566/",
+            "rootstory",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.youtube.com/@rootchannel",
+            "rootchannel",
+            "derived_from",
+        ) in relation_rows
         assert ("https://youtu.be/rootvideoid", "rootvideoid", "derived_from") not in relation_rows
-        assert ("https://www.tiktok.com/@roottok/video/123456", "roottok", "derived_from") in relation_rows
+        assert (
+            "https://www.tiktok.com/@roottok/video/123456",
+            "roottok",
+            "derived_from",
+        ) in relation_rows
         assert ("https://linktr.ee/rootlinks", "rootlinks", "derived_from") in relation_rows
         assert ("https://beacons.ai/rootbeacon", "rootbeacon", "derived_from") in relation_rows
         assert ("https://bio.link/rootbio", "rootbio", "derived_from") in relation_rows
@@ -84265,19 +85921,67 @@ def test_kill_chain_dry_run_promotes_operator_social_url_seeds_into_recursive_id
         assert ("https://www.npmjs.com/~rootnpm", "rootnpm", "derived_from") in relation_rows
         assert ("https://pypi.org/user/rootpy/", "rootpy", "derived_from") in relation_rows
         assert ("https://huggingface.co/rootml", "rootml", "derived_from") in relation_rows
-        assert ("https://www.flickr.com/photos/rootflickr/1234567890/", "rootflickr", "derived_from") in relation_rows
-        assert ("https://vimeo.com/rootvideo/securitybriefing", "rootvideo", "derived_from") in relation_rows
+        assert (
+            "https://www.flickr.com/photos/rootflickr/1234567890/",
+            "rootflickr",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://vimeo.com/rootvideo/securitybriefing",
+            "rootvideo",
+            "derived_from",
+        ) in relation_rows
         assert ("https://www.last.fm/user/rj/library", "rj", "derived_from") in relation_rows
-        assert ("https://acmeband.bandcamp.com/album/security-briefing", "acmeband", "derived_from") in relation_rows
-        assert ("https://bandcamp.com/acmefan/collection", "acmefan", "derived_from") in relation_rows
-        assert ("https://www.kaggle.com/rootkaggle/code", "rootkaggle", "derived_from") in relation_rows
-        assert ("https://speakerdeck.com/rootspeaker/security-briefing", "rootspeaker", "derived_from") in relation_rows
-        assert ("https://www.slideshare.net/rootslides/security-briefing", "rootslides", "derived_from") in relation_rows
-        assert ("https://soundcloud.com/rootsound/security-briefing", "rootsound", "derived_from") in relation_rows
-        assert ("https://www.mixcloud.com/rootmix/security-briefing/", "rootmix", "derived_from") in relation_rows
-        assert ("https://letterboxd.com/rootfilm/films/reviews/", "rootfilm", "derived_from") in relation_rows
-        assert ("https://www.pinterest.com/rootpins/security-briefing/", "rootpins", "derived_from") in relation_rows
-        assert ("https://www.artstation.com/rootartist", "rootartist", "derived_from") in relation_rows
+        assert (
+            "https://acmeband.bandcamp.com/album/security-briefing",
+            "acmeband",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://bandcamp.com/acmefan/collection",
+            "acmefan",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.kaggle.com/rootkaggle/code",
+            "rootkaggle",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://speakerdeck.com/rootspeaker/security-briefing",
+            "rootspeaker",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.slideshare.net/rootslides/security-briefing",
+            "rootslides",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://soundcloud.com/rootsound/security-briefing",
+            "rootsound",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.mixcloud.com/rootmix/security-briefing/",
+            "rootmix",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://letterboxd.com/rootfilm/films/reviews/",
+            "rootfilm",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.pinterest.com/rootpins/security-briefing/",
+            "rootpins",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://www.artstation.com/rootartist",
+            "rootartist",
+            "derived_from",
+        ) in relation_rows
         assert (
             "https://rootportfolio.artstation.com/projects/security-briefing",
             "rootportfolio",
@@ -84288,51 +85992,155 @@ def test_kill_chain_dry_run_promotes_operator_social_url_seeds_into_recursive_id
             "rootdeviant",
             "derived_from",
         ) in relation_rows
-        assert ("https://rootlegacy.deviantart.com/gallery", "rootlegacy", "derived_from") in relation_rows
+        assert (
+            "https://rootlegacy.deviantart.com/gallery",
+            "rootlegacy",
+            "derived_from",
+        ) in relation_rows
         assert ("https://tryhackme.com/p/rootthm", "rootthm", "derived_from") in relation_rows
-        assert ("https://steamcommunity.com/id/rootsteam", "rootsteam", "derived_from") in relation_rows
-        assert ("https://github.com/settings/profile", "settings", "derived_from") not in relation_rows
-        assert ("https://www.instagram.com/reels/audio/123456789/", "reels", "derived_from") not in relation_rows
-        assert ("https://www.instagram.com/reel/C0example/", "reel", "derived_from") not in relation_rows
-        assert ("https://bitbucket.org/product/features", "product", "derived_from") not in relation_rows
-        assert ("https://codeberg.org/explore/repos", "explore", "derived_from") not in relation_rows
+        assert (
+            "https://steamcommunity.com/id/rootsteam",
+            "rootsteam",
+            "derived_from",
+        ) in relation_rows
+        assert (
+            "https://github.com/settings/profile",
+            "settings",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.instagram.com/reels/audio/123456789/",
+            "reels",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.instagram.com/reel/C0example/",
+            "reel",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://bitbucket.org/product/features",
+            "product",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://codeberg.org/explore/repos",
+            "explore",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://codepen.io/pen", "pen", "derived_from") not in relation_rows
         assert ("https://sr.ht/projects", "projects", "derived_from") not in relation_rows
-        assert ("https://launchpad.net/projects/example", "projects", "derived_from") not in relation_rows
-        assert ("https://sourceforge.net/projects/example", "projects", "derived_from") not in relation_rows
+        assert (
+            "https://launchpad.net/projects/example",
+            "projects",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://sourceforge.net/projects/example",
+            "projects",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://mastodon.social/about", "about", "derived_from") not in relation_rows
         assert ("https://mastodon.online/about", "about", "derived_from") not in relation_rows
         assert ("https://social.coop/about", "about", "derived_from") not in relation_rows
         assert ("https://medium.com/topic/security", "topic", "derived_from") not in relation_rows
-        assert ("https://www.twitch.tv/directory/category/security", "directory", "derived_from") not in relation_rows
+        assert (
+            "https://www.twitch.tv/directory/category/security",
+            "directory",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://substack.com/home", "home", "derived_from") not in relation_rows
         assert ("https://hackerone.com/programs", "programs", "derived_from") not in relation_rows
         assert ("https://bugcrowd.com/directory", "directory", "derived_from") not in relation_rows
-        assert ("https://stackoverflow.com/questions/12345/example", "questions", "derived_from") not in relation_rows
-        assert ("https://superuser.com/questions/12345/example", "questions", "derived_from") not in relation_rows
-        assert ("https://hub.docker.com/search?q=security", "search", "derived_from") not in relation_rows
-        assert ("https://hub.docker.com/r/library/nginx", "library", "derived_from") not in relation_rows
-        assert ("https://www.flickr.com/photos/tags/security/", "tags", "derived_from") not in relation_rows
+        assert (
+            "https://stackoverflow.com/questions/12345/example",
+            "questions",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://superuser.com/questions/12345/example",
+            "questions",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://hub.docker.com/search?q=security",
+            "search",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://hub.docker.com/r/library/nginx",
+            "library",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.flickr.com/photos/tags/security/",
+            "tags",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://vimeo.com/123456789", "123456789", "derived_from") not in relation_rows
-        assert ("https://vimeo.com/channels/staffpicks", "channels", "derived_from") not in relation_rows
+        assert (
+            "https://vimeo.com/channels/staffpicks",
+            "channels",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://www.last.fm/music/Acme", "music", "derived_from") not in relation_rows
         assert ("https://bandcamp.com/discover", "discover", "derived_from") not in relation_rows
-        assert ("https://daily.bandcamp.com/features/security", "daily", "derived_from") not in relation_rows
-        assert ("https://www.kaggle.com/competitions", "competitions", "derived_from") not in relation_rows
+        assert (
+            "https://daily.bandcamp.com/features/security",
+            "daily",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.kaggle.com/competitions",
+            "competitions",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://speakerdeck.com/explore", "explore", "derived_from") not in relation_rows
-        assert ("https://www.slideshare.net/category/technology", "category", "derived_from") not in relation_rows
+        assert (
+            "https://www.slideshare.net/category/technology",
+            "category",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://soundcloud.com/discover", "discover", "derived_from") not in relation_rows
-        assert ("https://www.mixcloud.com/discover/electronic/", "discover", "derived_from") not in relation_rows
-        assert ("https://www.mixcloud.com/settings/account/", "settings", "derived_from") not in relation_rows
+        assert (
+            "https://www.mixcloud.com/discover/electronic/",
+            "discover",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.mixcloud.com/settings/account/",
+            "settings",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://taplink.cc/pricing", "pricing", "derived_from") not in relation_rows
         assert ("https://support.taplink.ws", "support", "derived_from") not in relation_rows
         assert ("https://msha.ke/login", "login", "derived_from") not in relation_rows
         assert ("https://muckrack.com/search", "search", "derived_from") not in relation_rows
-        assert ("https://letterboxd.com/film/security-briefing/", "film", "derived_from") not in relation_rows
-        assert ("https://letterboxd.com/search/security/", "search", "derived_from") not in relation_rows
-        assert ("https://www.pinterest.com/pin/1234567890/", "pin", "derived_from") not in relation_rows
-        assert ("https://www.pinterest.com/123456789/", "123456789", "derived_from") not in relation_rows
-        assert ("https://www.artstation.com/artwork/abc123", "artwork", "derived_from") not in relation_rows
+        assert (
+            "https://letterboxd.com/film/security-briefing/",
+            "film",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://letterboxd.com/search/security/",
+            "search",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.pinterest.com/pin/1234567890/",
+            "pin",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.pinterest.com/123456789/",
+            "123456789",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.artstation.com/artwork/abc123",
+            "artwork",
+            "derived_from",
+        ) not in relation_rows
         assert (
             "https://www.artstation.com/marketplace/p/security-asset",
             "marketplace",
@@ -84343,11 +86151,27 @@ def test_kill_chain_dry_run_promotes_operator_social_url_seeds_into_recursive_id
             "help",
             "derived_from",
         ) not in relation_rows
-        assert ("https://www.deviantart.com/users/login", "users", "derived_from") not in relation_rows
-        assert ("https://www.deviantart.com/tag/security", "tag", "derived_from") not in relation_rows
+        assert (
+            "https://www.deviantart.com/users/login",
+            "users",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://www.deviantart.com/tag/security",
+            "tag",
+            "derived_from",
+        ) not in relation_rows
         assert ("https://help.deviantart.com", "help", "derived_from") not in relation_rows
-        assert ("https://tryhackme.com/room/profilesroom", "profilesroom", "derived_from") not in relation_rows
-        assert ("https://steamcommunity.com/profiles/76561198000000000", "76561198000000000", "derived_from") not in relation_rows
+        assert (
+            "https://tryhackme.com/room/profilesroom",
+            "profilesroom",
+            "derived_from",
+        ) not in relation_rows
+        assert (
+            "https://steamcommunity.com/profiles/76561198000000000",
+            "76561198000000000",
+            "derived_from",
+        ) not in relation_rows
         assert (
             "https://www.linkedin.com/company/acme-corp",
             "Acme Corp",
@@ -84582,7 +86406,9 @@ def test_kill_chain_parallel_batches_recursive_seed_and_instagram_fanouts(
         batch_calls.append((tuple(spec.label for spec in specs), int(max_workers)))
         return [0] * len(specs)
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
@@ -84616,14 +86442,16 @@ def test_kill_chain_parallel_batches_recursive_seed_and_instagram_fanouts(
 
     batch_label_sets = [labels for labels, _ in batch_calls]
     assert any(
-        labels == (
+        labels
+        == (
             "1.E5 sherlock (@alphaig)",
             "1.E5 sherlock (@betaig)",
         )
         for labels in batch_label_sets
     )
     assert any(
-        labels == (
+        labels
+        == (
             "1.E5.5 instagram (@alphaig)",
             "1.E5.5 instagram (@betaig)",
         )
@@ -84654,14 +86482,16 @@ def test_kill_chain_parallel_batches_recursive_seed_and_instagram_fanouts(
         for labels in batch_label_sets
     )
     assert any(
-        labels == (
+        labels
+        == (
             "1.M name fan-out (Alice Example)",
             "1.M name fan-out (Bob Example)",
         )
         for labels in batch_label_sets
     )
     assert any(
-        labels == (
+        labels
+        == (
             "1.N company fan-out (Acme Corp)",
             "1.N company fan-out (Orbit LLC)",
         )
@@ -84836,7 +86666,10 @@ def test_kill_chain_persists_localpart_username_pivots_with_email_provenance(
         ).fetchone()
         assert relation_row is not None
         assert str(relation_row["relation_type"]) == "derived_from"
-        assert json.loads(str(relation_row["evidence_json"] or "{}"))["rule"] == "email_localpart_username"
+        assert (
+            json.loads(str(relation_row["evidence_json"] or "{}"))["rule"]
+            == "email_localpart_username"
+        )
 
         run_rows = con.execute(
             """
@@ -85002,7 +86835,9 @@ def test_kill_chain_multi_iteration_recurses_social_profile_seeds_without_live_n
             assert str(row["source"]) == "cross_reference"
             assert int(row["depth"]) == 2
 
-        e5_metadata = json.loads(str(run_map[("ops-root", "fanout_e5_chain")]["metadata_json"] or "{}"))
+        e5_metadata = json.loads(
+            str(run_map[("ops-root", "fanout_e5_chain")]["metadata_json"] or "{}")
+        )
         assert e5_metadata["iteration"] == 2
 
         relation_rows = con.execute(
@@ -85021,7 +86856,9 @@ def test_kill_chain_multi_iteration_recurses_social_profile_seeds_without_live_n
             """
         ).fetchall()
         relation_map = {
-            (str(row["source_seed_value"]), str(row["target_seed_value"])): str(row["relation_type"])
+            (str(row["source_seed_value"]), str(row["target_seed_value"])): str(
+                row["relation_type"]
+            )
             for row in relation_rows
         }
         assert relation_map[("@rootuser", "+15550001111")] == "same_entity"
@@ -85248,7 +87085,11 @@ def test_kill_chain_multi_iteration_recurses_name_search_social_profiles_without
             "aliceabout",
             "alicethread",
         ):
-            row = next(item for item in rows if str(item["seed_value"]) == handle and str(item["loop_name"]) == "fanout_e5_chain")
+            row = next(
+                item
+                for item in rows
+                if str(item["seed_value"]) == handle and str(item["loop_name"]) == "fanout_e5_chain"
+            )
             assert str(row["source"]) == "cross_reference"
             assert int(row["depth"]) == 2
             metadata = json.loads(str(row["metadata_json"] or "{}"))
@@ -85411,7 +87252,9 @@ def test_kill_chain_social_handle_recursion_reads_encrypted_canonical_social_pro
         assert str(run_map[("Alice Example", "fanout_m_seed_name")]["status"]) == "completed"
         assert str(run_map[("Acme Corp", "fanout_n_seed_company")]["status"]) == "completed"
 
-        e5_metadata = json.loads(str(run_map[("ops-root", "fanout_e5_chain")]["metadata_json"] or "{}"))
+        e5_metadata = json.loads(
+            str(run_map[("ops-root", "fanout_e5_chain")]["metadata_json"] or "{}")
+        )
         assert e5_metadata["iteration"] == 2
     finally:
         con.close()
@@ -85548,7 +87391,9 @@ def test_kill_chain_parallel_batches_keyscan_targets(
     batch_calls: list[tuple[tuple[str, ...], int]] = []
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
@@ -85577,7 +87422,8 @@ def test_kill_chain_parallel_batches_keyscan_targets(
     )
 
     assert any(
-        labels == (
+        labels
+        == (
             "1.F keyscan (acme.example)",
             "1.F keyscan (beta.example)",
         )
@@ -85664,12 +87510,16 @@ def test_kill_chain_parallel_batches_html_parse_stages(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -85719,7 +87569,9 @@ def test_kill_chain_parallel_batches_html_parse_stages(
             ]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -85759,7 +87611,9 @@ def test_kill_chain_parallel_batches_html_parse_stages(
         _emit(len(items))
         return results
 
-    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_ptr_lookup_batch(
+        ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del lookup_func, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -86269,7 +88123,9 @@ def test_kill_chain_main_surface_mining_uses_batched_d1_d2_results(
     monkeypatch.setenv("FORGE_DATA_DIR", str(tmp_path / ".forge_data"))
     monkeypatch.setenv("FORGE_ENV", "test")
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del max_workers, progress_callback
         label = str(progress_label or "")
         if label == "1.D1 HTML parse":
@@ -86307,7 +88163,9 @@ def test_kill_chain_main_surface_mining_uses_batched_d1_d2_results(
             ]
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -86329,7 +88187,9 @@ def test_kill_chain_main_surface_mining_uses_batched_d1_d2_results(
             return ["User-agent: *\nDisallow: /private\n" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -86430,12 +88290,16 @@ def test_kill_chain_d5_surface_mining_batches_persistence_across_url_entries(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -86488,7 +88352,9 @@ def test_kill_chain_d5_surface_mining_batches_persistence_across_url_entries(
             return payloads
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -86817,7 +88683,9 @@ def test_kill_chain_d5_consumes_provider_url_seeds_and_preserves_provenance(
             return [page_map.get(url, "") for url in urls]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -86870,7 +88738,9 @@ def test_kill_chain_d5_consumes_provider_url_seeds_and_preserves_provenance(
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
     monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts
+    )
 
     from forge.cli import kill_chain
 
@@ -86888,11 +88758,7 @@ def test_kill_chain_d5_consumes_provider_url_seeds_and_preserves_provenance(
         report_provider="template",
     )
 
-    d5_fetch_urls = {
-        url
-        for label, url in fetched_by_label
-        if label == "1.D5 URL surface fetch"
-    }
+    d5_fetch_urls = {url for label, url in fetched_by_label if label == "1.D5 URL surface fetch"}
     assert set(provider_urls) <= d5_fetch_urls
 
     con = sqlite3.connect(db_path)
@@ -86900,15 +88766,16 @@ def test_kill_chain_d5_consumes_provider_url_seeds_and_preserves_provenance(
     try:
         emails = {
             str(row["email"])
-            for row in con.execute(
-                "SELECT email FROM emails WHERE engagement_id=1001"
-            ).fetchall()
+            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
         }
         assert "shodan-owner@acme.example" in emails
         assert "urlscan-owner@acme.example" in emails
 
         seed_runs = {
-            str(row["seed_value"]): (str(row["status"]), json.loads(str(row["metadata_json"] or "{}")))
+            str(row["seed_value"]): (
+                str(row["status"]),
+                json.loads(str(row["metadata_json"] or "{}")),
+            )
             for row in con.execute(
                 """
                 SELECT es.seed_value, sr.status, sr.metadata_json
@@ -86925,7 +88792,9 @@ def test_kill_chain_d5_consumes_provider_url_seeds_and_preserves_provenance(
         assert seed_runs["https://portal.acme.example/login"][1]["iteration"] == 1
 
         seeds = {
-            (str(row["seed_value"]), str(row["seed_type"])): json.loads(str(row["metadata_json"] or "{}"))
+            (str(row["seed_value"]), str(row["seed_type"])): json.loads(
+                str(row["metadata_json"] or "{}")
+            )
             for row in con.execute(
                 """
                 SELECT seed_value, seed_type, metadata_json
@@ -86942,20 +88811,21 @@ def test_kill_chain_d5_consumes_provider_url_seeds_and_preserves_provenance(
             "https://downloads.acme.example/mobile/provider-client.apk?download=1",
             "apk_url",
         ) in seeds
-        assert seeds[("https://shodan-api.acme.example/health", "url")]["provider_sources"] == ["shodan"]
-        assert seeds[("https://portal.acme.example/login", "url")]["provider_sources"] == ["urlscan"]
-        assert seeds[("https://shodan-api.acme.example/static/app.js", "url")]["provider_sources"] == [
+        assert seeds[("https://shodan-api.acme.example/health", "url")]["provider_sources"] == [
             "shodan"
         ]
-        assert (
-            seeds[
-                (
-                    "https://downloads.acme.example/mobile/provider-client.apk?download=1",
-                    "apk_url",
-                )
-            ]["provider_sources"]
-            == ["urlscan"]
-        )
+        assert seeds[("https://portal.acme.example/login", "url")]["provider_sources"] == [
+            "urlscan"
+        ]
+        assert seeds[("https://shodan-api.acme.example/static/app.js", "url")][
+            "provider_sources"
+        ] == ["shodan"]
+        assert seeds[
+            (
+                "https://downloads.acme.example/mobile/provider-client.apk?download=1",
+                "apk_url",
+            )
+        ]["provider_sources"] == ["urlscan"]
         assert (
             seeds[
                 (
@@ -86979,10 +88849,9 @@ def test_kill_chain_d5_consumes_provider_url_seeds_and_preserves_provenance(
         assert crawl_rows["https://shodan-api.acme.example/static/app.js"]["provider_sources"] == [
             "shodan"
         ]
-        assert (
-            crawl_rows["https://downloads.acme.example/mobile/provider-client.apk?download=1"]["provider_sources"]
-            == ["urlscan"]
-        )
+        assert crawl_rows["https://downloads.acme.example/mobile/provider-client.apk?download=1"][
+            "provider_sources"
+        ] == ["urlscan"]
 
         artifact_row = con.execute(
             """
@@ -87011,12 +88880,16 @@ def test_kill_chain_parallel_batches_discovered_url_persist_prep(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -87046,17 +88919,16 @@ def test_kill_chain_parallel_batches_discovered_url_persist_prep(
             ]
         if progress_label == "1.D2 passive text fetch":
             return [
-                (
-                    "See https://docs.acme.example/guide "
-                    "and https://cdn.acme.example/app.apk"
-                )
+                ("See https://docs.acme.example/guide and https://cdn.acme.example/app.apk")
                 for _ in specs
             ]
         if progress_label == "1.D5 URL surface fetch":
             return ["<html></html>" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -87213,12 +89085,16 @@ def test_kill_chain_parallel_batches_recursive_seed_load_prep(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -87549,12 +89425,16 @@ def test_kill_chain_parallel_batches_cloud_target_prep(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -87588,7 +89468,9 @@ def test_kill_chain_parallel_batches_cloud_target_prep(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -87799,12 +89681,16 @@ def test_kill_chain_parallel_batches_cloud_ref_prep(
     parse_batch_calls: list[tuple[str, int, int]] = []
     cloud_validation_items: list[tuple[str, str]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -87848,7 +89734,9 @@ def test_kill_chain_parallel_batches_cloud_ref_prep(
             return payloads
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -88048,12 +89936,16 @@ def test_kill_chain_parallel_batches_wayback_host_parse(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -88077,7 +89969,9 @@ def test_kill_chain_parallel_batches_wayback_host_parse(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -88345,7 +90239,9 @@ def test_kill_chain_wayback_commoncrawl_preserves_url_level_archive_source(
 
     original_callable_batch = cli_module._run_callable_batch
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         if progress_label == "1.I Wayback CDX":
             return original_callable_batch(
                 items,
@@ -88422,9 +90318,15 @@ def test_kill_chain_wayback_commoncrawl_preserves_url_level_archive_source(
     monkeypatch.setattr(subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr("forge.cli._run_html_fetch_batch", _fake_html_batch)
     monkeypatch.setattr("forge.cli._run_callable_batch", _fake_callable_batch)
-    monkeypatch.setattr("forge.utils.intel.wayback_lookup.search_wayback_urls", _fake_wayback_search)
-    monkeypatch.setattr("forge.utils.intel.commoncrawl_lookup.search_commoncrawl_urls", _fake_commoncrawl_search)
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts)
+    monkeypatch.setattr(
+        "forge.utils.intel.wayback_lookup.search_wayback_urls", _fake_wayback_search
+    )
+    monkeypatch.setattr(
+        "forge.utils.intel.commoncrawl_lookup.search_commoncrawl_urls", _fake_commoncrawl_search
+    )
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifacts", _fake_download_remote_artifacts
+    )
 
     from forge.cli import kill_chain
 
@@ -88521,12 +90423,16 @@ def test_kill_chain_parallel_batches_root_domain_prep(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -88737,7 +90643,9 @@ def test_kill_chain_parallel_batches_module_seed_run_dry_run_finalize(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
@@ -88822,7 +90730,10 @@ def test_kill_chain_parallel_batches_module_seed_run_dry_run_finalize(
     finally:
         con.close()
 
-    by_loop = {str(loop_name): (str(status), json.loads(metadata_json or "{}")) for loop_name, status, metadata_json in rows}
+    by_loop = {
+        str(loop_name): (str(status), json.loads(metadata_json or "{}"))
+        for loop_name, status, metadata_json in rows
+    }
     assert by_loop["fanout_k_seed_username"][0] == "skipped"
     assert by_loop["fanout_k_seed_username"][1]["mode"] == "dry_run"
     assert by_loop["fanout_l_seed_phone"][0] == "skipped"
@@ -88864,12 +90775,16 @@ def test_kill_chain_parallel_batches_domain_resume_skip_logs(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -88959,12 +90874,16 @@ def test_kill_chain_parallel_batches_no_pending_root_domain_logs(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -88980,7 +90899,11 @@ def test_kill_chain_parallel_batches_no_pending_root_domain_logs(
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
     def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
-        if progress_label in {"1.D cloud+HTML fetch", "1.D2 passive text fetch", "1.D5 URL surface fetch"}:
+        if progress_label in {
+            "1.D cloud+HTML fetch",
+            "1.D2 passive text fetch",
+            "1.D5 URL surface fetch",
+        }:
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
@@ -89041,12 +90964,16 @@ def test_kill_chain_parallel_batches_no_domain_skip_logs(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -89133,7 +91060,9 @@ def test_kill_chain_parallel_batches_recursive_no_pending_seed_logs(
     parse_batch_calls: list[tuple[str, int, int]] = []
     failed_seed_types_applied = False
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         nonlocal failed_seed_types_applied
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
@@ -89153,7 +91082,9 @@ def test_kill_chain_parallel_batches_recursive_no_pending_seed_logs(
             failed_seed_types_applied = True
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -89169,11 +91100,17 @@ def test_kill_chain_parallel_batches_recursive_no_pending_seed_logs(
         return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
 
     def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
-        if progress_label in {"1.D cloud+HTML fetch", "1.D2 passive text fetch", "1.D5 URL surface fetch"}:
+        if progress_label in {
+            "1.D cloud+HTML fetch",
+            "1.D2 passive text fetch",
+            "1.D5 URL surface fetch",
+        }:
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers, progress_callback
         if progress_label == "1.G DNS enrichment":
             return [
@@ -89191,7 +91128,9 @@ def test_kill_chain_parallel_batches_recursive_no_pending_seed_logs(
             return [{"root_domain": str(item), "urls": []} for item in items]
         raise AssertionError(f"unexpected callable batch label: {progress_label}")
 
-    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_ptr_lookup_batch(
+        ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del lookup_func, max_workers, progress_label, progress_callback
         return [(str(ip), "") for ip in ips]
 
@@ -89276,12 +91215,16 @@ def test_kill_chain_parallel_batches_d5_url_dry_run_finalize(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -89369,7 +91312,9 @@ def test_kill_chain_parallel_batches_module_seed_run_success_failure_finalize(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
@@ -89497,12 +91442,16 @@ def test_kill_chain_parallel_batches_passive_domain_prep(
     parse_batch_calls: list[tuple[str, int, int]] = []
     module_batch_argvs: list[tuple[str, ...]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         module_batch_argvs.extend(tuple(str(arg) for arg in spec.cmd_argv) for spec in specs)
         return [0] * len(specs)
@@ -89527,7 +91476,9 @@ def test_kill_chain_parallel_batches_passive_domain_prep(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -89637,10 +91588,9 @@ def test_kill_chain_parallel_batches_passive_domain_prep(
     ]
     assert provider_argvs
     assert all("--scope-manifest" in argv for argv in provider_argvs)
-    assert {
-        argv[argv.index("--scope-manifest") + 1]
-        for argv in provider_argvs
-    } == {str(manifest_path)}
+    assert {argv[argv.index("--scope-manifest") + 1] for argv in provider_argvs} == {
+        str(manifest_path)
+    }
 
 
 def test_engagement_provider_matrix_recursion_preserves_caps_and_exports(
@@ -89930,7 +91880,9 @@ def test_engagement_provider_matrix_recursion_preserves_caps_and_exports(
 
     original_callable_batch = cli_module._run_callable_batch
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         if progress_label and progress_label.endswith("I Wayback CDX"):
             return original_callable_batch(
                 items,
@@ -90132,7 +92084,10 @@ def test_engagement_provider_matrix_recursion_preserves_caps_and_exports(
                     (
                         f"198.19.0.{archive_host_index}",
                         host,
-                        json.dumps({"discovery": "historical_cdx", "root_domain": root_domain}, sort_keys=True),
+                        json.dumps(
+                            {"discovery": "historical_cdx", "root_domain": root_domain},
+                            sort_keys=True,
+                        ),
                     ),
                 )
                 archive_host_index += 1
@@ -90339,13 +92294,19 @@ def test_engagement_provider_matrix_recursion_preserves_caps_and_exports(
         for node in graph_payload.get("nodes", [])
         if isinstance(node, dict)
     }
-    assert graph_nodes_by_hostname["shodan-api.acme.example"]["metadata"]["provider_sources"] == ["shodan"]
-    assert graph_nodes_by_hostname["portal.acme.example"]["metadata"]["provider_sources"] == ["urlscan"]
+    assert graph_nodes_by_hostname["shodan-api.acme.example"]["metadata"]["provider_sources"] == [
+        "shodan"
+    ]
+    assert graph_nodes_by_hostname["portal.acme.example"]["metadata"]["provider_sources"] == [
+        "urlscan"
+    ]
     assert graph_nodes_by_hostname["archive.acme.example"]["metadata"]["provider_sources"] == [
         "wayback",
         "commoncrawl",
     ]
-    assert graph_nodes_by_hostname["archive.acme.example"]["metadata"]["discovery"] == "historical_cdx"
+    assert (
+        graph_nodes_by_hostname["archive.acme.example"]["metadata"]["discovery"] == "historical_cdx"
+    )
     assert "provider_sources" in graphml_text
     assert "fixture_provider" in graphml_text
     assert "provider_sources" in mtgx_graphml
@@ -90389,12 +92350,16 @@ def test_kill_chain_parallel_batches_dns_rdap_result_parse(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -90418,7 +92383,9 @@ def test_kill_chain_parallel_batches_dns_rdap_result_parse(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -90760,12 +92727,16 @@ def test_kill_chain_parallel_batches_social_profile_handle_parse(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -90856,7 +92827,9 @@ def test_kill_chain_parallel_batches_social_profile_handle_parse(
         for label, item_count, max_workers in parse_batch_calls
     )
     assert any(
-        label == "1.E5 handled username processed-set update" and max_workers == 1 and item_count >= 3
+        label == "1.E5 handled username processed-set update"
+        and max_workers == 1
+        and item_count >= 3
         for label, item_count, max_workers in parse_batch_calls
     )
 
@@ -90937,12 +92910,16 @@ def test_kill_chain_parallel_batches_single_row_social_profile_entry_parse(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -91038,12 +93015,16 @@ def test_kill_chain_parallel_batches_single_entry_social_profile_handle_parse(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -91089,12 +93070,16 @@ def test_kill_chain_parallel_batches_email_load_prep(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -91111,22 +93096,16 @@ def test_kill_chain_parallel_batches_email_load_prep(
 
     def _fake_html_batch(specs, *_args, progress_label=None, **_kwargs):  # noqa: ANN001
         if progress_label == "1.D cloud+HTML fetch":
-            return [
-                (
-                    "<html>"
-                    "admin@acme.example "
-                    "security@acme.example"
-                    "</html>"
-                )
-                for _ in specs
-            ]
+            return [("<html>admin@acme.example security@acme.example</html>") for _ in specs]
         if progress_label == "1.D2 passive text fetch":
             return ["" for _ in specs]
         if progress_label == "1.D5 URL surface fetch":
             return ["<html>ops@acme.example</html>" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
 
         def _emit(completed: int) -> None:
@@ -91220,12 +93199,16 @@ def test_kill_chain_parallel_batches_email_localpart_parse(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -91278,12 +93261,16 @@ def test_kill_chain_parallel_batches_artifact_classify(
 
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
-    def _fake_module_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_module_batch(
+        specs, run_module, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del run_module, max_workers, progress_label, progress_callback
         return [0] * len(specs)
 
@@ -91365,7 +93352,9 @@ def test_kill_chain_parallel_batches_credential_validation_services(
     batch_calls: list[tuple[tuple[str, ...], int]] = []
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
@@ -91394,7 +93383,8 @@ def test_kill_chain_parallel_batches_credential_validation_services(
     )
 
     assert any(
-        labels == (
+        labels
+        == (
             "cred validate (ssh)",
             "cred validate (smb)",
             "cred validate (rdp)",
@@ -91404,7 +93394,8 @@ def test_kill_chain_parallel_batches_credential_validation_services(
         for labels, _ in batch_calls
     )
     assert any(
-        labels == (
+        labels
+        == (
             "cred validate (ssh)",
             "cred validate (smb)",
             "cred validate (rdp)",
@@ -91431,18 +93422,22 @@ def test_kill_chain_dry_run_skips_network_capable_prereport_finalizers(
     batch_calls: list[tuple[tuple[str, ...], tuple[tuple[str, ...], ...], int]] = []
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
 
     def _fake_batch(specs, run_module, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
         del run_module, progress_label, progress_callback
-        batch_calls.append((
-            tuple(spec.label for spec in specs),
-            tuple(tuple(spec.cmd_argv) for spec in specs),
-            int(max_workers),
-        ))
+        batch_calls.append(
+            (
+                tuple(spec.label for spec in specs),
+                tuple(tuple(spec.cmd_argv) for spec in specs),
+                int(max_workers),
+            )
+        )
         return [0] * len(specs)
 
     monkeypatch.setattr("forge.cli._run_inprocess_batch", _fake_inprocess_batch)
@@ -91524,7 +93519,9 @@ def test_kill_chain_parallel_batches_detected_prereqs_when_auto_run_enabled(
     batch_calls: list[tuple[tuple[str, ...], int, tuple[tuple[str, ...], ...]]] = []
     parse_batch_calls: list[tuple[str, int, int]] = []
 
-    def _fake_inprocess_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_inprocess_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del progress_callback
         parse_batch_calls.append((str(progress_label or ""), len(items), int(max_workers)))
         return [worker(item) for item in items]
@@ -91560,7 +93557,8 @@ def test_kill_chain_parallel_batches_detected_prereqs_when_auto_run_enabled(
     )
 
     assert any(
-        labels == (
+        labels
+        == (
             "prereq: osint dehashed (Module 2-C)",
             "prereq: osint breach (Module 2-A)",
             "prereq: cloud aws (Module 4)",
@@ -91570,7 +93568,8 @@ def test_kill_chain_parallel_batches_detected_prereqs_when_auto_run_enabled(
         for labels, _max_workers, _argvs in batch_calls
     )
     assert any(
-        labels == (
+        labels
+        == (
             "prereq: osint dehashed (Module 2-C)",
             "prereq: osint breach (Module 2-A)",
             "prereq: cloud aws (Module 4)",
@@ -91614,14 +93613,17 @@ def test_kill_chain_parallel_batches_detected_prereqs_when_auto_run_enabled(
         assert metadata["prereq_auto_run_count"] >= 5
         assert metadata["prereq_auto_run_failures"] == 0
 
-        assert con.execute(
-            """
+        assert (
+            con.execute(
+                """
             SELECT COUNT(*)
             FROM audit_log
             WHERE engagement_id=1001
               AND action='prereq_auto_run'
             """
-        ).fetchone()[0] == 1
+            ).fetchone()[0]
+            == 1
+        )
         audit_count = int(
             con.execute(
                 """
@@ -91642,9 +93644,7 @@ def test_kill_chain_parallel_batches_detected_prereqs_when_auto_run_enabled(
         assert manifest_row is not None
         manifest = json.loads(str(manifest_row[0] or "{}"))
         audit_digest = next(
-            item
-            for item in manifest["database"]["tables"]
-            if item["table"] == "audit_log"
+            item for item in manifest["database"]["tables"] if item["table"] == "audit_log"
         )
         assert audit_digest["row_count"] == audit_count
     finally:
@@ -91961,11 +93961,9 @@ def test_kill_chain_dry_run_queues_seed_artifact_urls_and_processes_remote_apk(
             assert run_metadata.get("parallel_fanout") == 4
             assert run_metadata.get("artifact_processor_worker_cap") == 1
             assert run_metadata.get("artifact_processor_max_workers") == 1
-            artifact_queue_metrics = (
-                run_metadata.get("queue_metrics", {}).get("artifact_queue", {})
-            )
-            artifact_stage_metrics = (
-                run_metadata.get("queue_metrics", {}).get("artifact_processor", {})
+            artifact_queue_metrics = run_metadata.get("queue_metrics", {}).get("artifact_queue", {})
+            artifact_stage_metrics = run_metadata.get("queue_metrics", {}).get(
+                "artifact_processor", {}
             )
             assert int(artifact_queue_metrics.get("parsed", 0)) >= 1
             assert int(artifact_stage_metrics.get("completed", 0)) >= 1
@@ -91978,6 +93976,7 @@ def test_kill_chain_dry_run_queues_seed_artifact_urls_and_processes_remote_apk(
         server.shutdown()
         thread.join(timeout=5)
         server.server_close()
+
 
 def test_artifact_queue_processor_downloads_extensionless_remote_dex_using_content_type(
     tmp_path: Path,
@@ -92077,15 +94076,19 @@ def test_kill_chain_dry_run_queues_seed_debian_package_url_and_processes_remote_
     served_root = tmp_path / "served-debian-packages"
     served_root.mkdir()
     remote_deb = served_root / "acme-agent_1.0.0_all.deb"
-    config_payload = dedent(
-        """
+    config_payload = (
+        dedent(
+            """
         OWNER=remote-deb-owner@acme.example
         API_BASE=https://remote-deb.acme.example/api
         FIREBASE_URL=https://remote-deb-firebase.firebaseio.com
         SUPABASE_URL=https://remotedeb.supabase.co
         RELEASE_BUCKET=s3://remote-deb-bucket/releases/acme-agent.deb
         """
-    ).strip().encode("utf-8")
+        )
+        .strip()
+        .encode("utf-8")
+    )
     _write_ar_archive(
         remote_deb,
         [
@@ -92234,7 +94237,9 @@ def test_kill_chain_dry_run_queues_seed_rpm_package_url_and_processes_remote_art
                         RELEASE_BUCKET=s3://remote-rpm-bucket/releases/acme-agent.rpm
                         GCS=gs://remote-rpm-gcs/reports/latest.json
                         """
-                    ).strip().encode("utf-8"),
+                    )
+                    .strip()
+                    .encode("utf-8"),
                 )
             ]
         )
@@ -92242,8 +94247,7 @@ def test_kill_chain_dry_run_queues_seed_rpm_package_url_and_processes_remote_art
     remote_rpm.write_bytes(
         b"\xed\xab\xee\xdb"
         b"remote-rpm-header-owner@acme.example\x00"
-        b"payload follows\x00"
-        + compressed_payload
+        b"payload follows\x00" + compressed_payload
     )
 
     class _QuietHandler(SimpleHTTPRequestHandler):
@@ -92381,7 +94385,9 @@ def test_kill_chain_dry_run_queues_extensionless_rpm_seed_from_content_type_meta
                         SUPABASE_URL=https://extensionlessrpm.supabase.co
                         RELEASE_BUCKET=s3://extensionless-rpm-bucket/releases/acme-agent.rpm
                         """
-                    ).strip().encode("utf-8"),
+                    )
+                    .strip()
+                    .encode("utf-8"),
                 )
             ]
         )
@@ -92389,8 +94395,7 @@ def test_kill_chain_dry_run_queues_extensionless_rpm_seed_from_content_type_meta
     remote_rpm.write_bytes(
         b"\xed\xab\xee\xdb"
         b"extensionless-rpm-header-owner@acme.example\x00"
-        b"payload follows\x00"
-        + compressed_payload
+        b"payload follows\x00" + compressed_payload
     )
 
     class _RpmHandler(SimpleHTTPRequestHandler):
@@ -92939,8 +94944,7 @@ def test_kill_chain_dry_run_processes_remote_apple_app_site_association_seed(
     thread.start()
     try:
         source_url = (
-            f"http://127.0.0.1:{server.server_address[1]}"
-            "/.well-known/apple-app-site-association"
+            f"http://127.0.0.1:{server.server_address[1]}/.well-known/apple-app-site-association"
         )
 
         from forge.cli import kill_chain
@@ -93084,10 +95088,7 @@ def test_kill_chain_dry_run_processes_remote_openid_configuration_seed(
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        source_url = (
-            f"http://127.0.0.1:{server.server_address[1]}"
-            "/.well-known/openid-configuration"
-        )
+        source_url = f"http://127.0.0.1:{server.server_address[1]}/.well-known/openid-configuration"
 
         from forge.cli import kill_chain
 
@@ -93234,8 +95235,7 @@ def test_kill_chain_dry_run_processes_remote_oauth_authorization_server_seed(
     thread.start()
     try:
         source_url = (
-            f"http://127.0.0.1:{server.server_address[1]}"
-            "/.well-known/oauth-authorization-server"
+            f"http://127.0.0.1:{server.server_address[1]}/.well-known/oauth-authorization-server"
         )
 
         from forge.cli import kill_chain
@@ -93375,9 +95375,7 @@ def test_kill_chain_dry_run_processes_remote_oauth_resource_metadata_seeds(
                         "authorization_endpoint": "https://login.acme.example/oauth/authorize",
                     }
                 },
-                "trust_marks": [
-                    {"trust_mark": "https://trust.acme.example/marks/security"}
-                ],
+                "trust_marks": [{"trust_mark": "https://trust.acme.example/marks/security"}],
                 "contacts": ["federation-owner@acme.example"],
                 "firebase": {
                     "type": "firebase",
@@ -93495,7 +95493,10 @@ def test_kill_chain_dry_run_processes_remote_oauth_resource_metadata_seeds(
                 ).fetchall()
             }
             assert ("https://api.acme.example/", "url") in seeds
-            assert ("https://auth.acme.example/.well-known/oauth-authorization-server", "url") in seeds
+            assert (
+                "https://auth.acme.example/.well-known/oauth-authorization-server",
+                "url",
+            ) in seeds
             assert ("https://api.acme.example/.well-known/jwks.json", "url") in seeds
             assert ("https://docs.acme.example/oauth-resource", "url") in seeds
             assert ("resource-owner@acme.example", "email") in seeds
@@ -93802,7 +95803,9 @@ def test_kill_chain_dry_run_processes_remote_well_known_metadata_seeds(
               </script>
             </html>
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/.well-known/host-meta": dedent(
             """
             <?xml version="1.0" encoding="UTF-8"?>
@@ -93813,7 +95816,9 @@ def test_kill_chain_dry_run_processes_remote_well_known_metadata_seeds(
               <Link rel="profile" href="https://profiles.acme.example/host-meta" />
             </XRD>
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/.well-known/host-meta.json": json.dumps(
             {
                 "links": [
@@ -93875,7 +95880,9 @@ def test_kill_chain_dry_run_processes_remote_well_known_metadata_seeds(
             contact: mta-owner@acme.example
             policy_url: https://mail.acme.example/.well-known/mta-sts.txt
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/.well-known/security.txt": dedent(
             """
             Contact: mailto:securitytxt-owner@acme.example
@@ -93885,7 +95892,9 @@ def test_kill_chain_dry_run_processes_remote_well_known_metadata_seeds(
             Supabase: https://securitytxtvault.supabase.co
             Firebase: https://securitytxt-firebase.firebaseio.com
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
     }
 
     class _DownloadHandler(SimpleHTTPRequestHandler):
@@ -93918,7 +95927,9 @@ def test_kill_chain_dry_run_processes_remote_well_known_metadata_seeds(
     thread.start()
     try:
         base_url = f"http://127.0.0.1:{server.server_address[1]}"
-        webfinger_url = f"{base_url}/.well-known/webfinger?resource=acct:webfinger-owner@acme.example"
+        webfinger_url = (
+            f"{base_url}/.well-known/webfinger?resource=acct:webfinger-owner@acme.example"
+        )
         matrix_url = f"{base_url}/.well-known/matrix/server"
         change_password_url = f"{base_url}/.well-known/change-password"
         host_meta_url = f"{base_url}/.well-known/host-meta"
@@ -94062,7 +96073,11 @@ def test_kill_chain_dry_run_processes_remote_well_known_metadata_seeds(
             assert (matrix_url, "matrix-owner@acme.example", "derived_from") in relations
             assert (change_password_url, "change-owner@acme.example", "derived_from") in relations
             assert (host_meta_url, "hostmeta-owner@acme.example", "derived_from") in relations
-            assert (host_meta_json_url, "hostmeta-json-owner@acme.example", "derived_from") in relations
+            assert (
+                host_meta_json_url,
+                "hostmeta-json-owner@acme.example",
+                "derived_from",
+            ) in relations
             assert (nodeinfo_url, "nodeinfo-owner@acme.example", "derived_from") in relations
             assert (did_url, "did-owner@acme.example", "derived_from") in relations
             assert (mta_sts_url, "mta-owner@acme.example", "derived_from") in relations
@@ -94091,21 +96106,27 @@ def test_kill_chain_dry_run_processes_remote_root_metadata_seeds(
             Site: https://humans.acme.example/team
             Firebase: https://humans-firebase.firebaseio.com
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/ads.txt": dedent(
             """
             # Owner: ads-owner@acme.example
             # Portal: https://ads.acme.example/publisher
             google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/app-ads.txt": dedent(
             """
             # Contact: appads-owner@acme.example
             # Dashboard: https://appads.acme.example/mobile
             appnexus.com, 12345, DIRECT
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/sellers.json": json.dumps(
             {
                 "contact_email": "sellers-owner@acme.example",
@@ -94121,14 +96142,18 @@ def test_kill_chain_dry_run_processes_remote_root_metadata_seeds(
             Docs: https://llms.acme.example/context
             Supabase: https://llmsvault.supabase.co
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/ai.txt": dedent(
             """
             contact: ai-owner@acme.example
             policy: https://ai.acme.example/policy
             storage: s3://acme-ai-metadata/context.json
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/ai-plugin.json": json.dumps(
             {
                 "schema_version": "v1",
@@ -94170,7 +96195,9 @@ def test_kill_chain_dry_run_processes_remote_root_metadata_seeds(
               </msapplication>
             </browserconfig>
             """
-        ).strip().encode("utf-8"),
+        )
+        .strip()
+        .encode("utf-8"),
         "/.well-known/assetlinks.json": json.dumps(
             [
                 {

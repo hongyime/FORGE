@@ -38,11 +38,14 @@ def test_jwks_urls_resolve_source_gated_certificate_pivots() -> None:
         "https://login.acme.example/certs/signing-key-1.pem",
         "https://keys.acme.example/.well-known/tenant-jwks.json",
     ]
-    assert jwks_urls(
-        payload,
-        source_label="json",
-        base_url="https://login.acme.example/generic.json",
-    ) == []
+    assert (
+        jwks_urls(
+            payload,
+            source_label="json",
+            base_url="https://login.acme.example/generic.json",
+        )
+        == []
+    )
 
 
 def test_artifact_url_family_routes_jwks_metadata_without_generic_json_noise(

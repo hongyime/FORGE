@@ -157,10 +157,13 @@ def test_artifact_container_image_urls_promote_jenkinsfile_docker_images() -> No
         "https://ghcr.io/acme/jenkins-agent",
         "https://registry.jenkins.acme.example/tools/deploy",
     ]
-    assert _extract_artifact_container_image_urls(
-        "image 'ghcr.io/acme/source-gated:latest'",
-        source_hint="README.md",
-    ) == []
+    assert (
+        _extract_artifact_container_image_urls(
+            "image 'ghcr.io/acme/source-gated:latest'",
+            source_hint="README.md",
+        )
+        == []
+    )
 
 
 def test_artifact_container_image_urls_promote_earthfile_save_image_outputs() -> None:

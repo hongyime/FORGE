@@ -193,10 +193,10 @@ def test_collect_crtsh_subdomains_paces_and_retries_429(
 
         def read(self) -> bytes:
             return (
-                b'['
+                b"["
                 b'{"name_value":"www.example.com\\n*.api.example.com"},'
                 b'{"name_value":"not a hostname"}'
-                b']'
+                b"]"
             )
 
     responses: list[object] = [

@@ -128,9 +128,7 @@ class PluginLoader:
         try:
             return self._plugins[tool_name]
         except KeyError as exc:
-            raise KeyError(
-                f"No plugin registered with name {tool_name!r}"
-            ) from exc
+            raise KeyError(f"No plugin registered with name {tool_name!r}") from exc
 
     # ------------------------------------------------------------------
     # Internals
@@ -191,9 +189,7 @@ class PluginLoader:
         """Load a Python file as a module via importlib.util."""
         spec = importlib.util.spec_from_file_location(module_name, path)
         if spec is None or spec.loader is None:
-            raise PluginValidationError(
-                f"Cannot create import spec for {path}"
-            )
+            raise PluginValidationError(f"Cannot create import spec for {path}")
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         try:
@@ -238,8 +234,7 @@ class PluginLoader:
             ) from exc
         if not isinstance(metadata, PluginMetadata):
             raise PluginValidationError(
-                "metadata is not a PluginMetadata instance "
-                f"(got {type(metadata).__name__})"
+                f"metadata is not a PluginMetadata instance (got {type(metadata).__name__})"
             )
         if not metadata.name.strip():
             raise PluginValidationError("PluginMetadata.name is blank")
@@ -265,9 +260,7 @@ class PluginLoader:
                 correlation_id=correlation_id,
                 event_type=AuditEventType.STATE_TRANSITION,
                 tool_name=metadata.name,
-                output_summary=(
-                    f"Plugin loaded: {metadata.name} v{metadata.version}"
-                ),
+                output_summary=(f"Plugin loaded: {metadata.name} v{metadata.version}"),
                 success=True,
             )
         )

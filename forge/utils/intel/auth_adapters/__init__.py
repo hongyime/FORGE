@@ -5,6 +5,7 @@ Canonical: forge/phase2/auth_adapters/__init__.py
 BaseAuthAdapter ABC consumed by Module 2-B CredentialValidator.
 All adapters are fully async and return (success: bool, error: Optional[str]).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

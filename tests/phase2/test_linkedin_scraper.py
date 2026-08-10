@@ -158,7 +158,9 @@ def test_linkedin_default_concurrency_can_be_raised_by_env(monkeypatch) -> None:
 def test_run_dork_applies_search_dork_delay(monkeypatch) -> None:
     monkeypatch.setenv("FORGE_SEARCH_DORK_REQUEST_DELAY_SECONDS", "0.4")
     sleeps: list[float] = []
-    monkeypatch.setattr(linkedin_scraper.time, "sleep", lambda seconds: sleeps.append(float(seconds)))
+    monkeypatch.setattr(
+        linkedin_scraper.time, "sleep", lambda seconds: sleeps.append(float(seconds))
+    )
     monkeypatch.setattr(linkedin_scraper, "_ddg_html_search", lambda *_args, **_kwargs: "x" * 600)
     monkeypatch.setattr(
         linkedin_scraper,

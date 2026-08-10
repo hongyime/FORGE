@@ -48,7 +48,9 @@ def _resource_values(value: object, *, resource_key: bool = False) -> list[str]:
         values = []
         for key, item in value.items():
             key_text = str(key or "").strip().lower().replace("_", "")
-            is_resource = resource_key or key_text in _RESOURCE_KEYS or key_text.endswith("resource")
+            is_resource = (
+                resource_key or key_text in _RESOURCE_KEYS or key_text.endswith("resource")
+            )
             values.extend(_resource_values(item, resource_key=is_resource))
         return values
     return []
@@ -80,4 +82,6 @@ def _resolve_url(value: object, *, base_url: str) -> str:
     except ValueError:
         netloc = host
     path = unquote(parsed_resolved.path or "/")
-    return strip_sensitive_url_query(parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl())
+    return strip_sensitive_url_query(
+        parsed_resolved._replace(netloc=netloc, path=path, fragment="").geturl()
+    )

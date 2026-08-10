@@ -126,11 +126,7 @@ def test_dashboard_merges_cloud_alias_nodes_in_imported_graph_payload(
     )
 
     detail_path = (
-        reports_dir
-        / "dashboard"
-        / "data"
-        / "engagements"
-        / "engagement-1001-acme-example.json"
+        reports_dir / "dashboard" / "data" / "engagements" / "engagement-1001-acme-example.json"
     )
     detail_payload = json.loads(detail_path.read_text(encoding="utf-8"))
     graph_payload = detail_payload["graph_payload"]

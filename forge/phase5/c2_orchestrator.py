@@ -4,6 +4,7 @@ Classification: DESTRUCTIVE — requires operator approval.
 FORGE_SAFE_MODE=1 blocks all C2 operations.
 Manages agent sessions, tasks, and beacon callbacks.
 """
+
 from __future__ import annotations
 
 import logging
@@ -61,6 +62,7 @@ class C2Orchestrator:
             return False
 
         import datetime
+
         session = AgentSession(
             agent_id=agent_id,
             host_ip=host_ip,

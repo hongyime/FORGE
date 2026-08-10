@@ -7,6 +7,7 @@ Age-encrypts plaintext passwords before DB storage.
 Authorization: DeHashed is a paid service. Operator must hold valid subscription.
 Mandatory confirmation prompt before first API call.
 """
+
 from __future__ import annotations
 
 import base64
@@ -19,7 +20,12 @@ from typing import Any, Optional
 
 from forge.opsec.crypto import encrypt_string
 from forge.opsec.rate_limiter import AdaptiveRateLimiter
-from forge.opsec.resilience import _SHUTDOWN, _interruptible_sleep, wait_for_internet, with_internet_retry
+from forge.opsec.resilience import (
+    _SHUTDOWN,
+    _interruptible_sleep,
+    wait_for_internet,
+    with_internet_retry,
+)
 from forge.opsec.scope_gate import assert_in_scope
 
 _LOG = logging.getLogger(__name__)
@@ -52,7 +58,9 @@ def _get_credentials(conn: sqlite3.Connection, engagement_id: int) -> tuple[str,
     return data.get("api_email", ""), data.get("api_key", "")
 
 
-def _is_cache_valid(conn: sqlite3.Connection, engagement_id: int, query_type: str, query_value: str, ttl_hours: int) -> bool:
+def _is_cache_valid(
+    conn: sqlite3.Connection, engagement_id: int, query_type: str, query_value: str, ttl_hours: int
+) -> bool:
     row = conn.execute(
         """SELECT last_synced FROM dehashed_sync_state
            WHERE engagement_id=? AND query_type=? AND query_value=?""",
@@ -61,15 +69,19 @@ def _is_cache_valid(conn: sqlite3.Connection, engagement_id: int, query_type: st
     if not row:
         return False
     import datetime
+
     last = datetime.datetime.fromisoformat(row[0])
     age = (datetime.datetime.utcnow() - last).total_seconds() / 3600
     return age < ttl_hours
 
 
-def _fetch_page(api_email: str, api_key: str, query_type: str, query_value: str, page: int) -> dict[str, Any]:
+def _fetch_page(
+    api_email: str, api_key: str, query_type: str, query_value: str, page: int
+) -> dict[str, Any]:
     """Fetch one page of results from DeHashed API."""
     try:
         from curl_cffi import requests as cffi_requests
+
         token = base64.b64encode(f"{api_email}:{api_key}".encode()).decode()
         url = f"{_DEHASHED_API}?query={query_type}:{query_value}&page={page}&size=100"
         _RATE_LIMITER.wait(url)
@@ -121,6 +133,7 @@ def query_dehashed(
     # Mandatory confirmation
     try:
         import questionary
+
         if not questionary.confirm(
             f"[DEHASHED] Query DeHashed API for {query_type}={query_value}? "
             f"This call is logged by DeHashed and billed to your account."
@@ -141,7 +154,9 @@ def query_dehashed(
             break
 
         try:
-            data = with_internet_retry(_fetch_page, api_email, api_key, query_type, query_value, page)
+            data = with_internet_retry(
+                _fetch_page, api_email, api_key, query_type, query_value, page
+            )
         except Exception as e:
             _LOG.error("DeHashed page %d failed: %s", page, e)
             break
@@ -164,15 +179,17 @@ def query_dehashed(
             if not email:
                 continue
             pw_enc = encrypt_string(pw) if pw else None
-            batch.append({
-                "engagement_id": engagement_id,
-                "email": email,
-                "password_hash": pw_hash or None,
-                "password_plaintext_enc": pw_enc,
-                "hash_type": None,
-                "breach_name": entry.get("database_name", "dehashed"),
-                "source": "dehashed",
-            })
+            batch.append(
+                {
+                    "engagement_id": engagement_id,
+                    "email": email,
+                    "password_hash": pw_hash or None,
+                    "password_plaintext_enc": pw_enc,
+                    "hash_type": None,
+                    "breach_name": entry.get("database_name", "dehashed"),
+                    "source": "dehashed",
+                }
+            )
 
         if batch and not dry_run:
             eng_db_conn.executemany(

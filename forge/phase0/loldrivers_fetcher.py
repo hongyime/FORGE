@@ -28,6 +28,7 @@ Use in FORGE:
   known vulnerable driver SHA-256 hashes for BYOVD (Bring Your Own
   Vulnerable Driver) escalation paths.
 """
+
 from __future__ import annotations
 
 import json
@@ -100,11 +101,11 @@ def _normalise(entry: dict[str, Any]) -> dict[str, Any] | None:
     known_exploited = 1 if "malicious" in [t.lower() for t in tags] else 0
 
     return {
-        "name":            name,
-        "vendor":          vendor,
+        "name": name,
+        "vendor": vendor,
         "known_exploited": known_exploited,
-        "sha256_hashes":   json.dumps(sha256_list),
-        "cve_ids":         json.dumps(cve_list),
+        "sha256_hashes": json.dumps(sha256_list),
+        "cve_ids": json.dumps(cve_list),
     }
 
 
@@ -127,11 +128,13 @@ def _bulk_insert(conn: sqlite3.Connection, rows: list[dict]) -> int:
 def _http_get(url: str, cfg: ForgeConfig) -> bytes:
     try:
         from curl_cffi import requests as cffi_requests  # noqa: PLC0415
+
         proxies = {"https": cfg.proxy} if cfg.proxy else None
         resp = cffi_requests.get(url, impersonate=cfg.curl_profile, proxies=proxies, timeout=30)
         resp.raise_for_status()
         return resp.content
     except ImportError:
         import urllib.request  # noqa: PLC0415
+
         with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310
             return r.read()

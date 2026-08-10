@@ -96,7 +96,9 @@ def run_menu() -> None:
             else:
                 _run_cli(argv)
         except KeyboardInterrupt:
-            _CONSOLE.print("[yellow]Execution interrupted. Partial command output may exist.[/yellow]")
+            _CONSOLE.print(
+                "[yellow]Execution interrupted. Partial command output may exist.[/yellow]"
+            )
             _save_state(state_path, state)
             continue
         engagement = _extract_engagement(argv)
@@ -151,7 +153,16 @@ def _build_command(choice: str, state: MenuState) -> list[str]:
         engagement = _ask_engagement(state)
         technique = _ask_text("Technique", default="standard").strip() or "standard"
         os_name = _ask_select("Target OS", choices=["windows", "linux", "macos"], default="windows")
-        return ["evasion", "generate", "--engagement", engagement, "--technique", technique, "--os", os_name]
+        return [
+            "evasion",
+            "generate",
+            "--engagement",
+            engagement,
+            "--technique",
+            technique,
+            "--os",
+            os_name,
+        ]
     if choice == "phase4-correlate":
         engagement = _ask_engagement(state)
         host = _ask_text("Optional host filter (blank for all)", default="").strip()
@@ -163,7 +174,16 @@ def _build_command(choice: str, state: MenuState) -> list[str]:
         engagement = _ask_engagement(state)
         target = _ask_required("Target host/IP")
         technique = _ask_text("Technique", default="smb_exec").strip() or "smb_exec"
-        return ["post", "lateral", "--engagement", engagement, "--target", target, "--technique", technique]
+        return [
+            "post",
+            "lateral",
+            "--engagement",
+            engagement,
+            "--target",
+            target,
+            "--technique",
+            technique,
+        ]
     if choice == "phase6-report":
         engagement = _ask_engagement(state)
         output = _ask_text("Output file or dir (blank for default)", default="").strip()
@@ -190,89 +210,89 @@ def _select_main_action() -> str | None:
     top = cast(
         str | None,
         questionary.select(
-        _menu_prompt("Choose a workflow (arrow keys):"),
-        choices=[
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Setup/Environment",
-                    "prepare runtime",
-                    "mode choice",
-                    "LOW",
+            _menu_prompt("Choose a workflow (arrow keys):"),
+            choices=[
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Setup/Environment",
+                        "prepare runtime",
+                        "mode choice",
+                        "LOW",
+                    ),
+                    value="open-setup",
                 ),
-                value="open-setup",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Recon/OSINT",
-                    "collect intelligence",
-                    "scope fields",
-                    "MED",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Recon/OSINT",
+                        "collect intelligence",
+                        "scope fields",
+                        "MED",
+                    ),
+                    value="open-recon",
                 ),
-                value="open-recon",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "OFFENSIVE",
-                    "Execute/Report",
-                    "run exploit, movement, reporting",
-                    "target parameters",
-                    "HIGH",
+                questionary.Choice(
+                    title=_choice_title(
+                        "OFFENSIVE",
+                        "Execute/Report",
+                        "run exploit, movement, reporting",
+                        "target parameters",
+                        "HIGH",
+                    ),
+                    value="open-exec",
                 ),
-                value="open-exec",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Data Utilities",
-                    "inspect database tables",
-                    "row options",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Data Utilities",
+                        "inspect database tables",
+                        "row options",
+                        "LOW",
+                    ),
+                    value="open-data",
                 ),
-                value="open-data",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "State History",
-                    "review actions",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "State History",
+                        "review actions",
+                        "none",
+                        "LOW",
+                    ),
+                    value="state-show",
                 ),
-                value="state-show",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "State Undo",
-                    "remove last log entry",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "State Undo",
+                        "remove last log entry",
+                        "none",
+                        "LOW",
+                    ),
+                    value="state-undo",
                 ),
-                value="state-undo",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Pause/Save",
-                    "checkpoint menu state",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Pause/Save",
+                        "checkpoint menu state",
+                        "none",
+                        "LOW",
+                    ),
+                    value="pause",
                 ),
-                value="pause",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Exit",
-                    "close menu",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Exit",
+                        "close menu",
+                        "none",
+                        "LOW",
+                    ),
+                    value="exit",
                 ),
-                value="exit",
-            ),
-        ],
+            ],
         ).ask(),
     )
     if top == "open-setup":
@@ -290,49 +310,49 @@ def _select_setup_action() -> str | None:
     return cast(
         str | None,
         questionary.select(
-        _menu_prompt("Setup and Environment:"),
-        choices=[
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Setup Core",
-                    "minimal install",
-                    "none",
-                    "LOW",
+            _menu_prompt("Setup and Environment:"),
+            choices=[
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Setup Core",
+                        "minimal install",
+                        "none",
+                        "LOW",
+                    ),
+                    value="setup-core-safe",
                 ),
-                value="setup-core-safe",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "OFFENSIVE",
-                    "Setup Full",
-                    "full install",
-                    "none",
-                    "MED",
+                questionary.Choice(
+                    title=_choice_title(
+                        "OFFENSIVE",
+                        "Setup Full",
+                        "full install",
+                        "none",
+                        "MED",
+                    ),
+                    value="setup-full-offensive",
                 ),
-                value="setup-full-offensive",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Repair Environment",
-                    "rebuild virtual environment",
-                    "confirm and dev choice",
-                    "MED",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Repair Environment",
+                        "rebuild virtual environment",
+                        "confirm and dev choice",
+                        "MED",
+                    ),
+                    value="repair-env",
                 ),
-                value="repair-env",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Back",
-                    "return one level up",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Back",
+                        "return one level up",
+                        "none",
+                        "LOW",
+                    ),
+                    value=None,
                 ),
-                value=None,
-            ),
-        ],
+            ],
         ).ask(),
     )
 
@@ -341,79 +361,79 @@ def _select_recon_action() -> str | None:
     return cast(
         str | None,
         questionary.select(
-        _menu_prompt("Recon and OSINT:"),
-        choices=[
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Sync Knowledge Base",
-                    "refresh knowledge base",
-                    "optional force",
-                    "LOW",
+            _menu_prompt("Recon and OSINT:"),
+            choices=[
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Sync Knowledge Base",
+                        "refresh knowledge base",
+                        "optional force",
+                        "LOW",
+                    ),
+                    value="phase0-sync-all",
                 ),
-                value="phase0-sync-all",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "View Knowledge Base Status",
-                    "verify KB health",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "View Knowledge Base Status",
+                        "verify KB health",
+                        "none",
+                        "LOW",
+                    ),
+                    value="phase0-status",
                 ),
-                value="phase0-status",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Run Guided Recon Collection",
-                    "guided recon",
-                    "engagement ID",
-                    "MED",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Run Guided Recon Collection",
+                        "guided recon",
+                        "engagement ID",
+                        "MED",
+                    ),
+                    value="phase1-wizard",
                 ),
-                value="phase1-wizard",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Discover Subdomains",
-                    "enumerate hosts",
-                    "engagement and domain",
-                    "MED",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Discover Subdomains",
+                        "enumerate hosts",
+                        "engagement and domain",
+                        "MED",
+                    ),
+                    value="phase1-subdomains",
                 ),
-                value="phase1-subdomains",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Search Breach Database",
-                    "query breach database",
-                    "engagement, DB path, format",
-                    "MED",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Search Breach Database",
+                        "query breach database",
+                        "engagement, DB path, format",
+                        "MED",
+                    ),
+                    value="phase2-breach",
                 ),
-                value="phase2-breach",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Scan Domain for Exposed Keys",
-                    "detect exposed keys",
-                    "engagement and domain",
-                    "MED",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Scan Domain for Exposed Keys",
+                        "detect exposed keys",
+                        "engagement and domain",
+                        "MED",
+                    ),
+                    value="phase2-keyscan",
                 ),
-                value="phase2-keyscan",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Back",
-                    "return one level up",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Back",
+                        "return one level up",
+                        "none",
+                        "LOW",
+                    ),
+                    value=None,
                 ),
-                value=None,
-            ),
-        ],
+            ],
         ).ask(),
     )
 
@@ -422,59 +442,59 @@ def _select_exec_action() -> str | None:
     return cast(
         str | None,
         questionary.select(
-        _menu_prompt("Execution and Reporting:"),
-        choices=[
-            questionary.Choice(
-                title=_choice_title(
-                    "OFFENSIVE",
-                    "Generate Evasion Payload",
-                    "build payload",
-                    "engagement, technique, target OS",
-                    "HIGH",
+            _menu_prompt("Execution and Reporting:"),
+            choices=[
+                questionary.Choice(
+                    title=_choice_title(
+                        "OFFENSIVE",
+                        "Generate Evasion Payload",
+                        "build payload",
+                        "engagement, technique, target OS",
+                        "HIGH",
+                    ),
+                    value="phase3-payload",
                 ),
-                value="phase3-payload",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "OFFENSIVE",
-                    "Map Vulnerabilities to Exploits",
-                    "map vulnerabilities to exploits",
-                    "engagement and optional host",
-                    "HIGH",
+                questionary.Choice(
+                    title=_choice_title(
+                        "OFFENSIVE",
+                        "Map Vulnerabilities to Exploits",
+                        "map vulnerabilities to exploits",
+                        "engagement and optional host",
+                        "HIGH",
+                    ),
+                    value="phase4-correlate",
                 ),
-                value="phase4-correlate",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "OFFENSIVE",
-                    "Run Lateral Movement Helper",
-                    "move laterally",
-                    "engagement, target, technique",
-                    "HIGH",
+                questionary.Choice(
+                    title=_choice_title(
+                        "OFFENSIVE",
+                        "Run Lateral Movement Helper",
+                        "move laterally",
+                        "engagement, target, technique",
+                        "HIGH",
+                    ),
+                    value="phase5-lateral",
                 ),
-                value="phase5-lateral",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Generate Engagement Report",
-                    "generate deliverable",
-                    "engagement and optional output",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Generate Engagement Report",
+                        "generate deliverable",
+                        "engagement and optional output",
+                        "LOW",
+                    ),
+                    value="phase6-report",
                 ),
-                value="phase6-report",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Back",
-                    "return one level up",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Back",
+                        "return one level up",
+                        "none",
+                        "LOW",
+                    ),
+                    value=None,
                 ),
-                value=None,
-            ),
-        ],
+            ],
         ).ask(),
     )
 
@@ -483,29 +503,29 @@ def _select_data_action() -> str | None:
     return cast(
         str | None,
         questionary.select(
-        _menu_prompt("Data Utilities:"),
-        choices=[
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "View Data",
-                    "inspect database tables",
-                    "all rows or row limit",
-                    "LOW",
+            _menu_prompt("Data Utilities:"),
+            choices=[
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "View Data",
+                        "inspect database tables",
+                        "all rows or row limit",
+                        "LOW",
+                    ),
+                    value="view-all-data",
                 ),
-                value="view-all-data",
-            ),
-            questionary.Choice(
-                title=_choice_title(
-                    "SAFE",
-                    "Back",
-                    "return one level up",
-                    "none",
-                    "LOW",
+                questionary.Choice(
+                    title=_choice_title(
+                        "SAFE",
+                        "Back",
+                        "return one level up",
+                        "none",
+                        "LOW",
+                    ),
+                    value=None,
                 ),
-                value=None,
-            ),
-        ],
+            ],
         ).ask(),
     )
 
@@ -634,7 +654,14 @@ def _run_launcher_action(choice: str, argv: list[str]) -> None:
         if not confirm:
             _CONSOLE.print("Repair cancelled.")
             return
-        shutil_result = subprocess.run([sys.executable, "-c", "import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)", venv_path])
+        shutil_result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)",
+                venv_path,
+            ]
+        )
         if shutil_result.returncode != 0:
             _CONSOLE.print("[red]Failed to remove virtual environment.[/red]")
             return

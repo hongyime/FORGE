@@ -227,8 +227,7 @@ class PolicyEngine:
         )
         if decision is PolicyDecision.DENY:
             raise GovernanceDeniedError(
-                f"Governance policy denied tool {tool_name!r} "
-                f"(risk_level={risk_level!r})"
+                f"Governance policy denied tool {tool_name!r} (risk_level={risk_level!r})"
             )
         return decision
 
@@ -279,9 +278,7 @@ class PolicyEngine:
             input_params=dict(params),
             output_summary=summary,
             success=decision is not PolicyDecision.DENY,
-            error_detail=(
-                "policy_denied" if decision is PolicyDecision.DENY else None
-            ),
+            error_detail=("policy_denied" if decision is PolicyDecision.DENY else None),
         )
         coro = self.audit_logger.log(entry)
         try:
@@ -308,9 +305,7 @@ def _default_decision(risk_level: str | None) -> PolicyDecision:
     return PolicyDecision.APPROVE
 
 
-def _conditions_satisfied(
-    conditions: dict[str, object], params: dict[str, object]
-) -> bool:
+def _conditions_satisfied(conditions: dict[str, object], params: dict[str, object]) -> bool:
     """Return True iff every key/value in *conditions* matches *params*."""
     if not conditions:
         return True

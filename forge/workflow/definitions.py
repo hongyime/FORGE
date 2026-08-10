@@ -105,15 +105,11 @@ class WorkflowDefinition(BaseModel):
 
     @field_validator("stages")
     @classmethod
-    def _stages_must_have_unique_names(
-        cls, v: list[WorkflowStage]
-    ) -> list[WorkflowStage]:
+    def _stages_must_have_unique_names(cls, v: list[WorkflowStage]) -> list[WorkflowStage]:
         """Duplicate stage names break status lookup and resumption."""
         seen: set[str] = set()
         for stage in v:
             if stage.name in seen:
-                raise ValueError(
-                    f"Duplicate stage name {stage.name!r} in WorkflowDefinition"
-                )
+                raise ValueError(f"Duplicate stage name {stage.name!r} in WorkflowDefinition")
             seen.add(stage.name)
         return v

@@ -12,6 +12,7 @@ OPSEC (PRD §12.3.8):
   - All queried usernames must derive from engagement-scope email addresses/names.
   - Tool preference order: whatsmyname → sherlock (both optional; socket fallback minimal).
 """
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -36,11 +37,11 @@ from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-confi
 
 _LOG = logging.getLogger(__name__)
 
-_DEFAULT_RATE      = 0.5    # req/s (1 req per 2s)
-_MIN_DELAY         = 0.5    # seconds
-_JITTER_SIGMA      = 0.5    # ±50% Gaussian jitter
-_CONFIRMED         = "CONFIRMED"
-_UNCONFIRMED       = "UNCONFIRMED"
+_DEFAULT_RATE = 0.5  # req/s (1 req per 2s)
+_MIN_DELAY = 0.5  # seconds
+_JITTER_SIGMA = 0.5  # ±50% Gaussian jitter
+_CONFIRMED = "CONFIRMED"
+_UNCONFIRMED = "UNCONFIRMED"
 
 _USERNAME_PROFILES_DDL = """
 CREATE TABLE IF NOT EXISTS username_profiles (
@@ -86,9 +87,7 @@ def _handle_finder_max_workers_default() -> int:
 
 def _split_configured_command(value: str) -> list[str]:
     return [
-        part.strip("\"'")
-        for part in shlex.split(value, posix=os.name != "nt")
-        if part.strip("\"'")
+        part.strip("\"'") for part in shlex.split(value, posix=os.name != "nt") if part.strip("\"'")
     ]
 
 
@@ -168,7 +167,9 @@ class HandleFinder:
         self._base_delay = base_delay
         self._proxies: list[str] = []
         if proxy_file and Path(proxy_file).exists():
-            self._proxies = [l.strip() for l in Path(proxy_file).read_text().splitlines() if l.strip()]
+            self._proxies = [
+                l.strip() for l in Path(proxy_file).read_text().splitlines() if l.strip()
+            ]
         self._proxy_index = 0
 
     def _jittered_delay(self) -> float:
@@ -213,6 +214,7 @@ class HandleFinder:
         folder. We use a temp dir and read whatever it produces.
         """
         import tempfile
+
         command = _tool_command("maigret")
         if not command:
             return []
@@ -221,11 +223,15 @@ class HandleFinder:
         try:
             subprocess.run(
                 [
-                    *command, username,
+                    *command,
+                    username,
                     "--no-progressbar",
-                    "--timeout", "10",
-                    "-J", "simple",
-                    "--folderoutput", tmp_dir,
+                    "--timeout",
+                    "10",
+                    "-J",
+                    "simple",
+                    "--folderoutput",
+                    tmp_dir,
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -250,11 +256,13 @@ class HandleFinder:
                                 else info.get("status", "")
                             ).upper()
                             if status in {"CLAIMED", "CONFIRMED", "FOUND"}:
-                                results.append({
-                                    "platform": site,
-                                    "uri": info.get("url_user", ""),
-                                    "status": "CONFIRMED",
-                                })
+                                results.append(
+                                    {
+                                        "platform": site,
+                                        "uri": info.get("url_user", ""),
+                                        "status": "CONFIRMED",
+                                    }
+                                )
                     except (json.JSONDecodeError, OSError):
                         continue
             return results
@@ -262,6 +270,7 @@ class HandleFinder:
             return []
         finally:
             import shutil as _sh
+
             try:
                 _sh.rmtree(tmp_dir, ignore_errors=True)
             except Exception:
@@ -272,7 +281,9 @@ class HandleFinder:
         for row in rows:
             platform = str(row.get("platform") or row.get("name") or "unknown").lower()
             profile_url = str(row.get("uri") or row.get("uri_check") or row.get("url") or "")
-            raw_status = str(row.get("status") or ("CONFIRMED" if row.get("found") else "UNCONFIRMED")).upper()
+            raw_status = str(
+                row.get("status") or ("CONFIRMED" if row.get("found") else "UNCONFIRMED")
+            ).upper()
             if raw_status in {"CONFIRMED", "CLAIMED", "FOUND"}:
                 status = ProfileStatus.CONFIRMED
             elif raw_status in {"NOT_FOUND", "MISS"}:
@@ -312,6 +323,7 @@ class HandleFinder:
 # ---------------------------------------------------------------------------
 # Tool detection
 # ---------------------------------------------------------------------------
+
 
 def _find_tool(name: str) -> Optional[str]:
     """Locate an external tool binary, searching PATH, OSINT venvs, then active venv.
@@ -355,6 +367,7 @@ def _run_sherlock(username: str, timeout: int = 120, proxy: Optional[str] = None
     Returns list of {platform, url} dicts.
     """
     import tempfile, os
+
     command = _tool_command("sherlock")
     if not command:
         return []
@@ -379,11 +392,13 @@ def _run_sherlock(username: str, timeout: int = 120, proxy: Optional[str] = None
         results = []
         for platform, info in data.items():
             if isinstance(info, dict) and info.get("status") == "Claimed":
-                results.append({
-                    "platform": platform,
-                    "uri":      info.get("url", ""),
-                    "status":   "CONFIRMED",
-                })
+                results.append(
+                    {
+                        "platform": platform,
+                        "uri": info.get("url", ""),
+                        "status": "CONFIRMED",
+                    }
+                )
         return results
     except (json.JSONDecodeError, KeyError, Exception) as exc:
         _LOG.debug("sherlock error: %s", exc)
@@ -444,10 +459,7 @@ def _run_handle_finder_batch(
         else max(1, min(int(max_workers or 1), 4))
     )
     if len(usernames) == 1 or worker_count <= 1:
-        return [
-            _worker((index, uname))[1]
-            for index, uname in enumerate(usernames)
-        ]
+        return [_worker((index, uname))[1] for index, uname in enumerate(usernames)]
 
     # P2-B04: use the canonical bounded worker-pool primitive so error
     # handling / concurrency cap / deterministic ordering stay consistent
@@ -476,17 +488,18 @@ def _run_handle_finder_batch(
 # Orchestrator
 # ---------------------------------------------------------------------------
 
+
 def run_handle_finder(
     db_path: Path,
     engagement_id: int,
     username: Optional[str] = None,
     usernames: Optional[list[str]] = None,
-    proxy_file: Optional[Path]  = None,
-    dry_run: bool               = False,
-    operator: str               = "operator",
-    backend: Optional[str]      = None,
-    proxy: Optional[str]        = None,
-    max_workers: int | None     = None,
+    proxy_file: Optional[Path] = None,
+    dry_run: bool = False,
+    operator: str = "operator",
+    backend: Optional[str] = None,
+    proxy: Optional[str] = None,
+    max_workers: int | None = None,
 ) -> int:
     """
     Enumerate username across platforms; write results to username_profiles.
@@ -507,7 +520,8 @@ def run_handle_finder(
     if dry_run:
         _LOG.info(
             "[DRY-RUN] handle_finder: would enumerate usernames '%s' (backend=%s)",
-            ",".join(names), backend or "auto",
+            ",".join(names),
+            backend or "auto",
         )
         con.close()
         return 0
@@ -518,7 +532,7 @@ def run_handle_finder(
             backend = _select_backend()
         except RuntimeError:
             backend = "whatsmyname"  # HandleFinder default; will silently return []
-    ts      = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(timezone.utc).isoformat()
     written = 0
 
     total_findings = 0
@@ -547,7 +561,15 @@ def run_handle_finder(
                               source_tool=excluded.source_tool,
                               discovered_at=excluded.discovered_at
                 """,
-                (engagement_id, p.username, p.platform, p.profile_url, p.status.value, p.source_tool, ts),
+                (
+                    engagement_id,
+                    p.username,
+                    p.platform,
+                    p.profile_url,
+                    p.status.value,
+                    p.source_tool,
+                    ts,
+                ),
             )
             if cur.rowcount:
                 written += 1

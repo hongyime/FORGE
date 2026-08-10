@@ -151,9 +151,7 @@ def test_safe_write_bytes_refuses_forbidden(tmp_path: Path) -> None:
 
 
 @pytest.fixture()
-def isolated_forbidden(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[Path, Path]:
+def isolated_forbidden(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     """Replace ``FORBIDDEN_PATHS`` with two tempdir sentinels.
 
     Returns the tuple of sentinel paths so tests can create / touch them
@@ -329,9 +327,7 @@ def _sample_results() -> list[ChaosScenarioResult]:
     ]
 
 
-def test_write_json_results_round_trip(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_write_json_results_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """JSON writer output MUST parse back to the same field values."""
     dest = tmp_path / "chaos_results.json"
     monkeypatch.setattr(evidence_chaos, "CHAOS_RESULTS_JSON", dest)
@@ -350,9 +346,7 @@ def test_write_json_results_round_trip(
         assert entry["fault_injected_at_stage"] == source.fault_injected_at_stage
 
 
-def test_write_junit_results_round_trip(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_write_junit_results_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """JUnit writer output MUST parse back to the same field values."""
     dest = tmp_path / "chaos_results.xml"
     monkeypatch.setattr(evidence_chaos, "CHAOS_RESULTS_XML", dest)

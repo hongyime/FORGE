@@ -62,9 +62,7 @@ from forge.core.errors import (
 # ``save_checkpoint`` to translate the raw OperationalError into a
 # typed ``CheckpointDiskFullError``. Requirement 7 of
 # ``.kiro/specs/chaos-harness-hardening/requirements.md``.
-_SQLITE_DISK_FULL_RE = re.compile(
-    r"database or disk is full|disk i/o error", re.IGNORECASE
-)
+_SQLITE_DISK_FULL_RE = re.compile(r"database or disk is full|disk i/o error", re.IGNORECASE)
 
 
 def _is_disk_full_exc(exc: BaseException) -> bool:
@@ -86,6 +84,7 @@ def _is_disk_full_exc(exc: BaseException) -> bool:
         if orig is not None and _is_disk_full_exc(orig):
             return True
     return False
+
 
 if TYPE_CHECKING:
     pass
@@ -178,10 +177,14 @@ class WorkflowHistoryRow(_Base):
     __tablename__ = "workflow_history"
 
     id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True,
+        Integer,
+        primary_key=True,
+        autoincrement=True,
     )
     workflow_id: Mapped[str] = mapped_column(
-        String(64), nullable=False, index=True,
+        String(64),
+        nullable=False,
+        index=True,
     )
     event_type: Mapped[str] = mapped_column(String(32), nullable=False)
     from_stage_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -191,6 +194,7 @@ class WorkflowHistoryRow(_Base):
     actor: Mapped[str | None] = mapped_column(String(128), nullable=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     recorded_at: Mapped[float] = mapped_column(Float, nullable=False)
+
 
 def _to_async_url(db_url: str) -> str:
     """Translate sync URL schemes to their async equivalents.
@@ -311,7 +315,9 @@ class StateStore:
             if _is_sqlite(self._db_url):
                 _install_sqlite_pragmas(self._engine)
             self._sessionmaker = async_sessionmaker(
-                self._engine, expire_on_commit=False, class_=AsyncSession,
+                self._engine,
+                expire_on_commit=False,
+                class_=AsyncSession,
             )
         return self._sessionmaker
 
@@ -375,9 +381,7 @@ class StateStore:
         # runaway producer cannot blow up the row mid-write.
         results_size = len(results_json.encode("utf-8"))
         if results_size > MAX_INTERMEDIATE_RESULTS_BYTES:
-            raise CheckpointTooLargeError(
-                workflow_id, results_size, MAX_INTERMEDIATE_RESULTS_BYTES
-            )
+            raise CheckpointTooLargeError(workflow_id, results_size, MAX_INTERMEDIATE_RESULTS_BYTES)
 
         # Requirement 7 of chaos-harness-hardening: translate any
         # underlying disk-full / ENOSPC condition observed during the
@@ -605,9 +609,7 @@ class StateStore:
             Number of rows deleted.
         """
         if workflow_id is None and older_than_seconds is None:
-            raise ValueError(
-                "purge_history requires workflow_id and/or older_than_seconds"
-            )
+            raise ValueError("purge_history requires workflow_id and/or older_than_seconds")
         sm = self._ensure_engine()
         async with sm() as session:
             async with session.begin():
@@ -649,15 +651,11 @@ class StateStore:
         """
         sm = self._ensure_engine()
         async with sm() as session:
-            stmt = select(WorkflowStateRow).where(
-                WorkflowStateRow.is_complete.is_(False)
-            )
+            stmt = select(WorkflowStateRow).where(WorkflowStateRow.is_complete.is_(False))
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
-    async def get_last_valid_checkpoint(
-        self, workflow_id: str
-    ) -> WorkflowStateRow | None:
+    async def get_last_valid_checkpoint(self, workflow_id: str) -> WorkflowStateRow | None:
         """Return the most recent valid checkpoint for ``workflow_id``.
 
         The current schema stores a single mutable row per workflow, so a

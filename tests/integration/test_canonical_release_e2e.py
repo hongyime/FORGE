@@ -144,7 +144,9 @@ def _assert_live_launch(
     command = launched["command"]
     assert command[1:5] == ["-m", "forge.cli", "--no-tor", "kill-chain"]
     assert "--dry-run" not in command
-    assert ["--roe-id", ROE_ID] == command[command.index("--roe-id") : command.index("--roe-id") + 2]
+    assert ["--roe-id", ROE_ID] == command[
+        command.index("--roe-id") : command.index("--roe-id") + 2
+    ]
     assert command[command.index("--scope-manifest") + 1] == scope_manifest.as_posix()
     assert command.count("--related-seed") == 3
 
@@ -555,10 +557,11 @@ def _assert_detail_surfaces(detail: dict[str, Any], report_path: Path) -> str:
     relation_json = json.dumps(sections["seed_relations"])
     assert "artifact-owner@canonical.example" in relation_json
     assert "canonicalops" in relation_json
-    assert {
-        row["Loop"]
-        for row in sections["seed_runs"]
-    } >= {"fanout_a_web_mining", "fanout_e_identity_chain", "fanout_k_artifact_static"}
+    assert {row["Loop"] for row in sections["seed_runs"]} >= {
+        "fanout_a_web_mining",
+        "fanout_e_identity_chain",
+        "fanout_k_artifact_static",
+    }
     assert any(row["Service"] == "github" for row in sections["account_existence"])
 
     validation_rows = sections["cloud_validation_results"]
@@ -655,7 +658,9 @@ def _assert_report_inclusion_audit(db_path: Path, engagement_id: int, report_pat
 
 
 def _assert_cleanup_helper_is_scoped(tmp_path: Path) -> None:
-    runner_path = Path(__file__).resolve().parents[2] / "scripts" / "run_phase1_orchestrator_partitions.py"
+    runner_path = (
+        Path(__file__).resolve().parents[2] / "scripts" / "run_phase1_orchestrator_partitions.py"
+    )
     spec = spec_from_file_location("phase1_partition_runner", runner_path)
     assert spec is not None and spec.loader is not None
     runner = module_from_spec(spec)
@@ -708,7 +713,9 @@ def _assert_no_id_reuse_after_deleted_db(
 
     assert [path.name for path in db_root.glob("*.db") if path.stem.isdigit()] == []
     with sqlite3.connect(db_root / "master.db") as con:
-        max_id = int(con.execute("SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence").fetchone()[0])
+        max_id = int(
+            con.execute("SELECT COALESCE(MAX(id), 0) FROM engagement_id_sequence").fetchone()[0]
+        )
     assert max_id == second_id
 
 
@@ -760,7 +767,9 @@ def test_canonical_release_e2e_proves_all_surfaces_and_cleanup(
             item["identifier"] == "canonical-firebase-prod"
             for item in assets_response.json()["cloud_assets"]
         )
-        vuln_response = client.get(f"/api/engagements/{engagement_id}/vuln-summary", headers=_headers())
+        vuln_response = client.get(
+            f"/api/engagements/{engagement_id}/vuln-summary", headers=_headers()
+        )
         assert vuln_response.status_code == 200, vuln_response.text
         assert vuln_response.json()["vulnerability_findings"]["HIGH"] >= 2
 

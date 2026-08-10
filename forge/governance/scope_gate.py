@@ -111,8 +111,7 @@ class ScopeGate:
         data = json.loads(raw)
         if not isinstance(data, dict):
             raise ValueError(
-                f"{_SCOPE_ENV_VAR} must decode to a JSON object, got "
-                f"{type(data).__name__}"
+                f"{_SCOPE_ENV_VAR} must decode to a JSON object, got {type(data).__name__}"
             )
         return cls(EngagementScope(**data), audit_logger=audit_logger)
 
@@ -187,9 +186,7 @@ class ScopeGate:
                     return False
         return True
 
-    def _ip_in_scope(
-        self, target_ip: ipaddress.IPv4Address | ipaddress.IPv6Address
-    ) -> bool:
+    def _ip_in_scope(self, target_ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
         return any(target_ip in net for net in self._networks)
 
     def _domain_in_scope(self, host: str) -> bool:
@@ -211,9 +208,7 @@ class ScopeGate:
                     return True
         return False
 
-    def _emit_decision(
-        self, target: str, allowed: bool, correlation_id: str | None
-    ) -> None:
+    def _emit_decision(self, target: str, allowed: bool, correlation_id: str | None) -> None:
         if self.audit_logger is None:
             return
         entry = AuditEntry(
@@ -221,9 +216,7 @@ class ScopeGate:
             event_type=AuditEventType.SCOPE_DECISION,
             tool_name="scope_gate",
             input_params={"target": target},
-            output_summary=(
-                f"scope_decision: {'allow' if allowed else 'deny'} target={target!r}"
-            ),
+            output_summary=(f"scope_decision: {'allow' if allowed else 'deny'} target={target!r}"),
             success=allowed,
             error_detail=None if allowed else "out_of_scope",
         )

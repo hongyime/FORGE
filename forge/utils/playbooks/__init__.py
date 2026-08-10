@@ -103,12 +103,15 @@ class PlaybookEngine:
         context: Mapping[str, Any] | None = None,
     ):
         steps = [
-            PlaybookStep("exploit:spray", {
-                "credential_id": credential_id,
-                "wordlist": "data/wordlists/rockyou.txt",
-                "usernames": "data/wordlists/seclists/usernames.txt",
-                "requires_approval": True
-            })
+            PlaybookStep(
+                "exploit:spray",
+                {
+                    "credential_id": credential_id,
+                    "wordlist": "data/wordlists/rockyou.txt",
+                    "usernames": "data/wordlists/seclists/usernames.txt",
+                    "requires_approval": True,
+                },
+            )
         ]
         self._execute_steps(engagement_id, steps, context=context)
 
@@ -131,7 +134,7 @@ class PlaybookEngine:
         self.scheduler.schedule(
             ScheduledTask(
                 engagement_id=engagement_id,
-                task_key=f"validate:key:{int(key_id)}:{int(time.time()*1000)}",
+                task_key=f"validate:key:{int(key_id)}:{int(time.time() * 1000)}",
                 payload=payload,
             )
         )
@@ -143,18 +146,20 @@ class PlaybookEngine:
         context: Mapping[str, Any] | None = None,
     ):
         steps = [
-            PlaybookStep("recon:crawl_stealth", {
-                "target": target,
-                "use_tor": True,
-                "jitter_min_ms": 10000,
-                "jitter_max_ms": 30000,
-                "engine": "playwright"
-            }),
-            PlaybookStep("recon:searxng_passive", {
-                "target": target,
-                "searxng_url": "http://searxng:8080",
-                "use_tor": True
-            })
+            PlaybookStep(
+                "recon:crawl_stealth",
+                {
+                    "target": target,
+                    "use_tor": True,
+                    "jitter_min_ms": 10000,
+                    "jitter_max_ms": 30000,
+                    "engine": "playwright",
+                },
+            ),
+            PlaybookStep(
+                "recon:searxng_passive",
+                {"target": target, "searxng_url": "http://searxng:8080", "use_tor": True},
+            ),
         ]
         self._execute_steps(engagement_id, steps, context=context)
 
@@ -166,16 +171,14 @@ class PlaybookEngine:
         context: Mapping[str, Any] | None = None,
     ):
         steps = [
-            PlaybookStep("exploit:safe_check", {
-                "vuln_id": vuln_id,
-                "target": target,
-                "validation_method": "time_based_sleep"
-            }),
-            PlaybookStep("exploit:weaponize", {
-                "vuln_id": vuln_id,
-                "target": target,
-                "requires_approval": True
-            })
+            PlaybookStep(
+                "exploit:safe_check",
+                {"vuln_id": vuln_id, "target": target, "validation_method": "time_based_sleep"},
+            ),
+            PlaybookStep(
+                "exploit:weaponize",
+                {"vuln_id": vuln_id, "target": target, "requires_approval": True},
+            ),
         ]
         self._execute_steps(engagement_id, steps, context=context)
 
@@ -192,7 +195,7 @@ class PlaybookEngine:
         first_step = steps[0]
         task_type = _task_type_from_action(first_step.action)
         target = first_step.params.get("target", first_step.params.get("domain", "default"))
-        task_key = f"{task_type}:{target}:{int(time.time()*1000)}"
+        task_key = f"{task_type}:{target}:{int(time.time() * 1000)}"
         payload = inherit_roe_scope_context(
             context or {},
             {"task_type": task_type, **first_step.params},

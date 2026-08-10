@@ -410,9 +410,16 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     assert artifact_meta[gitleaks_path.resolve().as_posix()]["format"] == "gitleaks-config"
     assert artifact_meta[kics_path.resolve().as_posix()]["format"] == "kics-config"
     assert artifact_meta[osv_path.resolve().as_posix()]["format"] == "osv-scanner-config"
-    assert artifact_meta[trufflehog_config_path.resolve().as_posix()]["format"] == "trufflehog-config"
-    assert artifact_meta[detect_secrets_config_path.resolve().as_posix()]["format"] == "detect-secrets-config"
-    assert artifact_meta[secretlint_config_path.resolve().as_posix()]["format"] == "secretlint-config"
+    assert (
+        artifact_meta[trufflehog_config_path.resolve().as_posix()]["format"] == "trufflehog-config"
+    )
+    assert (
+        artifact_meta[detect_secrets_config_path.resolve().as_posix()]["format"]
+        == "detect-secrets-config"
+    )
+    assert (
+        artifact_meta[secretlint_config_path.resolve().as_posix()]["format"] == "secretlint-config"
+    )
 
     db_dump = _db_dump(db_path)
     assert "sonar-token-do-not-store" not in db_dump

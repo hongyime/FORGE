@@ -195,13 +195,11 @@ class ProviderRegistry:
             raise ValueError("Provider name must be a non-empty string.")
         if not callable(factory):
             raise TypeError(
-                f"Provider factory for {name!r} must be callable, "
-                f"got {type(factory).__name__}."
+                f"Provider factory for {name!r} must be callable, got {type(factory).__name__}."
             )
         if not replace and name in self._factories:
             raise ValueError(
-                f"Provider {name!r} is already registered. "
-                "Pass replace=True to overwrite."
+                f"Provider {name!r} is already registered. Pass replace=True to overwrite."
             )
 
         self._factories[name] = factory
@@ -243,8 +241,7 @@ class ProviderRegistry:
         if factory is None:
             available = ", ".join(sorted(self._factories)) or "<none>"
             raise KeyError(
-                f"No provider registered under name {name!r}. "
-                f"Available providers: {available}."
+                f"No provider registered under name {name!r}. Available providers: {available}."
             )
 
         candidate = factory()

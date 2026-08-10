@@ -61,7 +61,10 @@ def _safe_tar_extractall(tar: tarfile.TarFile, dest: Path) -> None:
     dest_resolved = dest.resolve()
     for member in tar.getmembers():
         member_dest = (dest_resolved / member.name).resolve()
-        if not str(member_dest).startswith(str(dest_resolved) + os.sep) and member_dest != dest_resolved:
+        if (
+            not str(member_dest).startswith(str(dest_resolved) + os.sep)
+            and member_dest != dest_resolved
+        ):
             raise RuntimeError(
                 f"Refusing unsafe tar member (path traversal attempt): {member.name!r}"
             )
@@ -229,6 +232,7 @@ class TorManager:
     def _is_port_open(host: str, port: int) -> bool:
         """Check if a port is currently open and listening."""
         import socket
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1)
             try:
@@ -255,7 +259,7 @@ class TorManager:
             return True
 
         _LOG.info("Starting Tor daemon from %s...", self._tor_exe)
-        
+
         # Start Tor with stdout/stderr piped so we can monitor bootstrap
         try:
             self._process = subprocess.Popen(
@@ -264,7 +268,7 @@ class TorManager:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
         except Exception as e:
             _LOG.error("Failed to start Tor: %s", e)
@@ -272,7 +276,7 @@ class TorManager:
 
         if wait_for_bootstrap:
             return self._wait_for_bootstrap()
-        
+
         return True
 
     def _wait_for_bootstrap(self, timeout: int = 60) -> bool:
@@ -287,12 +291,12 @@ class TorManager:
             line = self._process.stdout.readline()
             if not line:
                 break
-            
+
             # Tor log format: [notice] Bootstrapped 100% (done): Done
             if "Bootstrapped 100% (done)" in line:
                 _LOG.info("Tor is ready (100% bootstrapped).")
                 return True
-            
+
             if "ERROR" in line.upper():
                 _LOG.error("Tor error: %s", line.strip())
                 return False

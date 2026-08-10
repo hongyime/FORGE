@@ -304,9 +304,7 @@ def test_remote_helm_index_queues_and_recurses_into_packaged_chart(
             (str(row["asset_type"]), str(row["identifier"])): json.loads(
                 str(row["metadata_json"] or "{}")
             )
-            for row in con.execute(
-                "SELECT asset_type, identifier, metadata_json FROM cloud_assets"
-            )
+            for row in con.execute("SELECT asset_type, identifier, metadata_json FROM cloud_assets")
         }
         assert ("firebase", "helm-firebase") in cloud_assets
         assert ("aws_s3", "helm-chart-bucket") in cloud_assets

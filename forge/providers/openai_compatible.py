@@ -157,17 +157,14 @@ class OpenAICompatibleProvider:
                 system=request.system,
                 stop=request.stop,
             )
-            body = await self._post_json(
-                "/chat/completions", self._build_chat_payload(instructed)
-            )
+            body = await self._post_json("/chat/completions", self._build_chat_payload(instructed))
 
         text = self._extract_message_text(body)
         try:
             return dict(json.loads(text))
         except (json.JSONDecodeError, TypeError) as exc:
             raise ProviderUnavailableError(
-                f"{self._backend_name}: structured_output returned non-JSON: "
-                f"{text[:200]!r} ({exc})"
+                f"{self._backend_name}: structured_output returned non-JSON: {text[:200]!r} ({exc})"
             ) from exc
 
     async def embed(self, text: str) -> list[float]:
@@ -314,8 +311,7 @@ class OpenAICompatibleProvider:
 
         if len(resp.content) > _MAX_RESPONSE_BYTES:
             raise ProviderUnavailableError(
-                f"{self._backend_name}: response exceeds "
-                f"{_MAX_RESPONSE_BYTES} byte cap"
+                f"{self._backend_name}: response exceeds {_MAX_RESPONSE_BYTES} byte cap"
             )
 
         try:
@@ -326,9 +322,7 @@ class OpenAICompatibleProvider:
                 f"{self._backend_name}: response is not JSON: {preview!r}"
             ) from exc
 
-    def _parse_chat_response(
-        self, body: dict[str, Any], *, t0: float
-    ) -> CompletionResponse:
+    def _parse_chat_response(self, body: dict[str, Any], *, t0: float) -> CompletionResponse:
         text = self._extract_message_text(body)
         usage = body.get("usage") or {}
         model_id = str(body.get("model") or self._model)
@@ -350,9 +344,7 @@ class OpenAICompatibleProvider:
             )
         first = choices[0]
         if not isinstance(first, dict):
-            raise ProviderUnavailableError(
-                f"choices[0] not an object: {first!r}"
-            )
+            raise ProviderUnavailableError(f"choices[0] not an object: {first!r}")
         msg = first.get("message")
         if isinstance(msg, dict):
             content = msg.get("content")
@@ -364,9 +356,7 @@ class OpenAICompatibleProvider:
         # LM Studio builds) return ``text`` instead of ``message.content``.
         if isinstance(first.get("text"), str):
             return str(first["text"])
-        raise ProviderUnavailableError(
-            f"unrecognised choice shape: {first!r}"
-        )
+        raise ProviderUnavailableError(f"unrecognised choice shape: {first!r}")
 
     @staticmethod
     def _extract_text_blocks(content: list[Any]) -> str:

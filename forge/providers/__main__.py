@@ -1,4 +1,5 @@
 """Module entry point for ``python -m forge.providers``."""
+
 from forge.providers.cli import main
 
 if __name__ == "__main__":

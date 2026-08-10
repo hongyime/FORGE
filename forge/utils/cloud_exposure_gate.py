@@ -123,8 +123,7 @@ def is_deterministic_cloud_exposure(
 
     normalized_title = str(title or "").strip().lower()
     return normalized_title.startswith(_TITLE_PREFIXES) and (
-        normalized_title.endswith(_TITLE_SUFFIXES)
-        or " data exposure" in normalized_title
+        normalized_title.endswith(_TITLE_SUFFIXES) or " data exposure" in normalized_title
     )
 
 
@@ -222,10 +221,7 @@ def cloud_validation_requires_stable_proof(asset_type: str, validation_method: s
     return (
         method in PROVIDER_KEY_VALIDATION_METHODS.get(asset, frozenset())
         or method in CLOUD_DATA_VALIDATION_METHODS.get(asset, frozenset())
-    ) or (
-        asset in STORAGE_CLOUD_ASSET_TYPES
-        and method in STORAGE_LISTING_VALIDATION_METHODS
-    )
+    ) or (asset in STORAGE_CLOUD_ASSET_TYPES and method in STORAGE_LISTING_VALIDATION_METHODS)
 
 
 def _has_stable_validation_proof(validation_method: str, *proof_values: object) -> bool:
@@ -259,9 +255,10 @@ def is_reportable_cloud_validation(
     notes: object = None,
     require_stable_proof: bool = False,
 ) -> bool:
-    reportable = (
-        str(validation_status or "").strip().upper() == "VALIDATED"
-        and is_reportable_cloud_validation_method(asset_type, validation_method)
+    reportable = str(
+        validation_status or ""
+    ).strip().upper() == "VALIDATED" and is_reportable_cloud_validation_method(
+        asset_type, validation_method
     )
     if not reportable:
         return False
@@ -321,14 +318,17 @@ def effective_validation_status(
     stored_status = str(validation_status or "").strip().upper()
     if stored_status != "VALIDATED":
         return stored_status
-    if effective_cloud_validation_status(
-        asset_type,
-        stored_status,
-        validation_method,
-        evidence=evidence,
-        notes=notes,
-        require_stable_proof=require_stable_proof,
-    ) == "VALIDATED":
+    if (
+        effective_cloud_validation_status(
+            asset_type,
+            stored_status,
+            validation_method,
+            evidence=evidence,
+            notes=notes,
+            require_stable_proof=require_stable_proof,
+        )
+        == "VALIDATED"
+    ):
         return "VALIDATED"
     if require_stable_proof and _has_stable_validation_proof(validation_method, evidence, notes):
         return "VALIDATED"

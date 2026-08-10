@@ -33,10 +33,7 @@ _FORBIDDEN_METADATA_KEYS = {
 
 def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
     try:
-        return {
-            row[1]
-            for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()
-        }
+        return {row[1] for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()}
     except sqlite3.OperationalError:
         return set()
 
@@ -126,7 +123,7 @@ def load_artifact_inventory(
     try:
         rows = con.execute(
             f"""
-            SELECT {', '.join(select_parts)}
+            SELECT {", ".join(select_parts)}
             FROM artifact_queue
             WHERE engagement_id=?
             ORDER BY COALESCE(updated_at, queued_at, '') DESC, id DESC

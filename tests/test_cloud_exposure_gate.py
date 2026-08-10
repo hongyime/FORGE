@@ -68,12 +68,15 @@ def test_cloud_exposure_gate_is_shared_by_graph_and_report(
 def test_key_provider_validation_status_does_not_become_cloud_reportable() -> None:
     evidence = "AWS STS GetCallerIdentity ok: AccountId=742931608514"
 
-    assert effective_validation_status(
-        "aws",
-        "VALIDATED",
-        "aws_sts_get_caller_identity",
-        evidence=evidence,
-    ) == "VALIDATED"
+    assert (
+        effective_validation_status(
+            "aws",
+            "VALIDATED",
+            "aws_sts_get_caller_identity",
+            evidence=evidence,
+        )
+        == "VALIDATED"
+    )
     assert not is_reportable_cloud_validation(
         "aws",
         "VALIDATED",

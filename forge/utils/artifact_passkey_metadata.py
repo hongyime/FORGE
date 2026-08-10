@@ -50,7 +50,9 @@ def _endpoint_values(value: object, *, endpoint_key: bool = False) -> list[str]:
         values = []
         for key, item in value.items():
             key_text = str(key or "").strip().lower().replace("_", "-")
-            is_endpoint = endpoint_key or key_text in _ENDPOINT_KEYS or key_text.endswith("-endpoint")
+            is_endpoint = (
+                endpoint_key or key_text in _ENDPOINT_KEYS or key_text.endswith("-endpoint")
+            )
             values.extend(_endpoint_values(item, endpoint_key=is_endpoint))
         return values
     return []

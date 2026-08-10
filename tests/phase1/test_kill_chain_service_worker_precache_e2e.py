@@ -107,7 +107,9 @@ def test_kill_chain_multiseed_service_worker_precache_recurses_to_validated_repo
     assert report_payload["requested_provider"] == "auto"
     assert report_payload["fallback_reason"] == FALLBACK_REASON
     assert report_payload["report_lineage"]["rendered_provider"] == "template"
-    assert report_payload["report_lineage"]["findings_checksum"] == report_payload["findings_checksum"]
+    assert (
+        report_payload["report_lineage"]["findings_checksum"] == report_payload["findings_checksum"]
+    )
     assert str(report_payload["findings_checksum"]).startswith("sha256:")
     assert f"LLM fallback engaged: {FALLBACK_REASON}" in report_text
 
@@ -259,7 +261,9 @@ def _install_remote_artifact_mock(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
             },
         )
 
-    monkeypatch.setattr(ArtifactQueueProcessor, "_download_remote_artifact_request", download_remote_artifact)
+    monkeypatch.setattr(
+        ArtifactQueueProcessor, "_download_remote_artifact_request", download_remote_artifact
+    )
 
 
 def _install_module_mock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -314,7 +318,9 @@ def _install_module_mock(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
         return [worker(item) for item in items]
 
     monkeypatch.setattr(cli, "_run_callable_batch", callable_batch)
-    monkeypatch.setattr(cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips])
+    monkeypatch.setattr(
+        cli, "_run_ptr_lookup_batch", lambda ips, *_args, **_kwargs: [(str(ip_), "") for ip_ in ips]
+    )
 
 
 def _install_cloud_validation_mock(monkeypatch: pytest.MonkeyPatch, db_path: Path) -> None:
@@ -366,7 +372,12 @@ def _install_cloud_validation_mock(monkeypatch: pytest.MonkeyPatch, db_path: Pat
         with sqlite3.connect(db_path) as con:
             results = [validate_asset(con, str(kind), str(ref)) for kind, ref in targets]
             con.commit()
-        return {"attempted": len(results), "succeeded": len(results), "failed": 0, "results": results}
+        return {
+            "attempted": len(results),
+            "succeeded": len(results),
+            "failed": 0,
+            "results": results,
+        }
 
     def sweep_assets(engagement_id, db_path_arg, limit=16, **kwargs):  # noqa: ANN001, ANN003
         del engagement_id, db_path_arg, kwargs
@@ -387,11 +398,18 @@ def _install_cloud_validation_mock(monkeypatch: pytest.MonkeyPatch, db_path: Pat
             ).fetchall()
             results = [validate_asset(con, str(kind), str(ref)) for kind, ref in rows]
             con.commit()
-        return {"attempted": len(results), "succeeded": len(results), "failed": 0, "results": results}
+        return {
+            "attempted": len(results),
+            "succeeded": len(results),
+            "failed": 0,
+            "results": results,
+        }
 
     monkeypatch.setattr(cloud_validate, "run_cloud_asset_validate_batch", validate_batch)
     monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_asset_validations", sweep_assets)
-    monkeypatch.setattr(cloud_validate, "sweep_pending_cloud_validations", lambda *_, **__: {"attempted": 0})
+    monkeypatch.setattr(
+        cloud_validate, "sweep_pending_cloud_validations", lambda *_, **__: {"attempted": 0}
+    )
 
 
 def _latest_report(reports_dir: Path) -> Path:
@@ -430,7 +448,10 @@ def _assert_artifacts(con: sqlite3.Connection) -> None:
 
 
 def _assert_recursive_seeds_and_relations(con: sqlite3.Connection) -> None:
-    seeds = {(row["seed_value"], row["seed_type"]) for row in con.execute("SELECT seed_value, seed_type FROM engagement_seeds")}
+    seeds = {
+        (row["seed_value"], row["seed_type"])
+        for row in con.execute("SELECT seed_value, seed_type FROM engagement_seeds")
+    }
     assert {
         ("acme.test", "domain"),
         ("ops@acme.test", "email"),
@@ -467,7 +488,11 @@ def _assert_recursive_seeds_and_relations(con: sqlite3.Connection) -> None:
     }
     assert (MANIFEST_URL, SERVICE_WORKER_URL, "derived_from") in relations
     assert (SERVICE_WORKER_URL, PRECACHE_URL, "derived_from") in relations
-    assert (SERVICE_WORKER_URL, "https://sw-firebase-prod.firebaseio.com", "derived_from") in relations
+    assert (
+        SERVICE_WORKER_URL,
+        "https://sw-firebase-prod.firebaseio.com",
+        "derived_from",
+    ) in relations
     assert (PRECACHE_URL, REPORT_CHUNK_URL, "derived_from") in relations
     assert (PRECACHE_URL, DASHBOARD_CHUNK_URL, "derived_from") in relations
     assert (REPORT_CHUNK_URL, "sw-report-owner@acme.test", "derived_from") in relations
@@ -532,7 +557,10 @@ def _assert_recursive_seed_runs_processed(con: sqlite3.Connection) -> None:
 
 
 def _assert_validation_and_findings(con: sqlite3.Connection) -> None:
-    assets = {(row["asset_type"], row["identifier"]) for row in con.execute("SELECT asset_type, identifier FROM cloud_assets")}
+    assets = {
+        (row["asset_type"], row["identifier"])
+        for row in con.execute("SELECT asset_type, identifier FROM cloud_assets")
+    }
     assert {
         ("firebase", "sw-firebase-prod"),
         ("firebase", "sw-report-firebase"),
@@ -544,7 +572,9 @@ def _assert_validation_and_findings(con: sqlite3.Connection) -> None:
 
     statuses = {
         (row["asset_type"], row["identifier"]): row["validation_status"]
-        for row in con.execute("SELECT asset_type, identifier, validation_status FROM cloud_validation_results")
+        for row in con.execute(
+            "SELECT asset_type, identifier, validation_status FROM cloud_validation_results"
+        )
     }
     assert statuses[("firebase", "sw-firebase-prod")] == "VALIDATED"
     assert statuses[("firebase", "sw-report-firebase")] == "VALIDATED"
@@ -563,9 +593,13 @@ def _assert_validation_and_findings(con: sqlite3.Connection) -> None:
         "supabase://swreportvault",
         "firebase://sw-dashboard-firebase",
     } <= finding_targets
-    assert all(row["severity"] == "HIGH" for row in findings if row["target_url"] in finding_targets)
+    assert all(
+        row["severity"] == "HIGH" for row in findings if row["target_url"] in finding_targets
+    )
     assert not any("sw-precache-logs" in json.dumps(dict(row), sort_keys=True) for row in findings)
-    assert not any("sw-precache-public" in json.dumps(dict(row), sort_keys=True) for row in findings)
+    assert not any(
+        "sw-precache-public" in json.dumps(dict(row), sort_keys=True) for row in findings
+    )
 
 
 def _assert_seed_to_report_traceability(
@@ -688,7 +722,9 @@ def _assert_seed_to_report_traceability(
     )
 
 
-def _assert_report_exports(report_path: Path, report_text: str, report_payload: dict[str, Any]) -> None:
+def _assert_report_exports(
+    report_path: Path, report_text: str, report_payload: dict[str, Any]
+) -> None:
     finding_section = report_text.split("### 5.1 Validated findings", 1)[1].split(
         "## 6. Validation Boundaries",
         1,
@@ -700,7 +736,9 @@ def _assert_report_exports(report_path: Path, report_text: str, report_payload: 
     exported_findings = report_payload["context"]["exploits"]["exploited"]
     assert exported_findings
     assert all(finding["validation_status"] == "VALIDATED" for finding in exported_findings)
-    assert not any("sw-precache-logs" in json.dumps(finding, sort_keys=True) for finding in exported_findings)
+    assert not any(
+        "sw-precache-logs" in json.dumps(finding, sort_keys=True) for finding in exported_findings
+    )
     assert any(
         item.get("identifier") == "sw-precache-logs"
         and item.get("validation_status") == "UNSUPPORTED"

@@ -776,9 +776,7 @@ class TestParseEpieosResponse:
                     "name": "Schema Identifier",
                 },
                 "linkedin": {
-                    "identifier": {
-                        "profile_url": "https://www.linkedin.com/in/schema-identifier"
-                    },
+                    "identifier": {"profile_url": "https://www.linkedin.com/in/schema-identifier"},
                     "id": "9876543210",
                 },
             }
@@ -808,8 +806,7 @@ class TestParseEpieosResponse:
                     "username": "mailaliasops",
                     "mail": "Mail Alias <mail.alias@acme.example>",
                     "primaryEmail": (
-                        "Primary Alias <primary.alias@acme.example>, "
-                        "secondary.alias@acme.example"
+                        "Primary Alias <primary.alias@acme.example>, secondary.alias@acme.example"
                     ),
                     "work_email": "Work Alias <work.alias@acme.example>",
                     "emails": [
@@ -1349,7 +1346,9 @@ class TestParseEpieosResponse:
 
         rows = {row["platform"]: row for row in results}
 
-        assert rows["matrix"]["profile_url"] == "https://matrix.to/#/@matrixblue:matrix.acme.example"
+        assert (
+            rows["matrix"]["profile_url"] == "https://matrix.to/#/@matrixblue:matrix.acme.example"
+        )
         assert rows["matrix"]["username"] == "matrixblue"
         assert rows["matrix"]["mxid"] == "@matrixblue:matrix.acme.example"
         assert rows["activitypub"]["profile_url"] == "https://social.acme.example/@fedblue"
@@ -1454,8 +1453,7 @@ class TestParseEpieosResponse:
             {"value": "https://points.acme.example/runbook"},
         ]
         assert github["bio"] == (
-            "Escalation escalation.alias@acme.example "
-            "https://status.acme.example/runbook"
+            "Escalation escalation.alias@acme.example https://status.acme.example/runbook"
         )
 
     def test_preserves_related_person_containers_for_recursive_synthesis(self):
@@ -1544,17 +1542,11 @@ class TestParseEpieosResponse:
         assert github is not None
         assert github["email"] == "email.ops@acme.example"
         assert github["emails"] == [{"value": "email.ops@acme.example"}]
-        assert "+15557654332@voice.acme.example" not in {
-            item["value"] for item in github["emails"]
-        }
+        assert "+15557654332@voice.acme.example" not in {item["value"] for item in github["emails"]}
 
     def test_extracts_phone_query_contact_uri_values(self):
-        assert _epieos_phone_values("whatsapp://send?phone=15557654328") == [
-            "+15557654328"
-        ]
-        assert _epieos_phone_values("tg://resolve?phone=%2B15557654329") == [
-            "+15557654329"
-        ]
+        assert _epieos_phone_values("whatsapp://send?phone=15557654328") == ["+15557654328"]
+        assert _epieos_phone_values("tg://resolve?phone=%2B15557654329") == ["+15557654329"]
 
     def test_preserves_phone_query_contact_uri_values_in_nested_contact_containers(self):
         results = _parse_epieos_response(
@@ -1723,9 +1715,7 @@ class TestParseEpieosResponse:
             "+15557654341",
             "+15557654342",
         ]
-        assert _epieos_phone_values("sms:?body=hello&to=%2B15557654340") == [
-            "+15557654340"
-        ]
+        assert _epieos_phone_values("sms:?body=hello&to=%2B15557654340") == ["+15557654340"]
         assert _epieos_phone_values("mmsto:+15557654339") == ["+15557654339"]
 
     def test_preserves_sms_mms_contact_uri_values_in_nested_contact_containers(self):
@@ -1824,14 +1814,17 @@ class TestParseEpieosResponse:
         assert rows["github_org"]["profile_url"] == "https://github.com/orgs/acme-red-team"
         assert rows["gitlab_group"]["profile_url"] == "https://gitlab.com/groups/acme-blue"
         assert (
-            rows["huggingface_org"]["profile_url"]
-            == "https://huggingface.co/organizations/acme-ml"
+            rows["huggingface_org"]["profile_url"] == "https://huggingface.co/organizations/acme-ml"
         )
         assert rows["docker_org"]["profile_url"] == "https://hub.docker.com/orgs/acme-docker"
         assert rows["npm_org"]["profile_url"] == "https://www.npmjs.com/org/acme-npm"
         assert rows["pypi_org"]["profile_url"] == "https://pypi.org/org/acme-py"
-        assert rows["facebook_page"]["profile_url"] == "https://www.facebook.com/pages/acme-facebook"
-        assert rows["wellfound_company"]["profile_url"] == "https://wellfound.com/company/acme-startup"
+        assert (
+            rows["facebook_page"]["profile_url"] == "https://www.facebook.com/pages/acme-facebook"
+        )
+        assert (
+            rows["wellfound_company"]["profile_url"] == "https://wellfound.com/company/acme-startup"
+        )
         assert rows["angellist_company"]["profile_url"] == "https://angel.co/company/acme-angels"
         for platform in {
             "angellist_company",
@@ -1866,7 +1859,10 @@ class TestParseEpieosResponse:
         linkedin = next((r for r in results if r["platform"] == "linkedin"), None)
 
         assert facebook is not None
-        assert facebook["profile_url"] == "https://www.facebook.com/people/Alice-Example/1000123456789/"
+        assert (
+            facebook["profile_url"]
+            == "https://www.facebook.com/people/Alice-Example/1000123456789/"
+        )
         assert facebook["username"] == "Alice-Example"
         assert linkedin is not None
         assert linkedin["profile_url"] == "https://www.linkedin.com/in/alice-example"
@@ -2491,7 +2487,9 @@ class TestParseEpieosResponse:
 
         github = next((r for r in results if r["platform"] == "github"), None)
         youtube_channel = next((r for r in results if r["platform"] == "youtube"), None)
-        youtube_custom = next((r for r in custom_youtube_results if r["platform"] == "youtube"), None)
+        youtube_custom = next(
+            (r for r in custom_youtube_results if r["platform"] == "youtube"), None
+        )
         orcid = next((r for r in results if r["platform"] == "orcid"), None)
         researchgate = next((r for r in results if r["platform"] == "researchgate"), None)
         credly = next((r for r in results if r["platform"] == "credly"), None)
@@ -2502,10 +2500,14 @@ class TestParseEpieosResponse:
         unsplash = next((r for r in results if r["platform"] == "unsplash"), None)
         unsplash_photo = next((r for r in results if r["platform"] == "unsplash_photo"), None)
         fivehundredpx = next((r for r in results if r["platform"] == "fivehundredpx"), None)
-        fivehundredpx_photo = next((r for r in results if r["platform"] == "fivehundredpx_photo"), None)
+        fivehundredpx_photo = next(
+            (r for r in results if r["platform"] == "fivehundredpx_photo"), None
+        )
         artstation = next((r for r in results if r["platform"] == "artstation"), None)
         artstation_site = next((r for r in results if r["platform"] == "artstation_site"), None)
-        artstation_artwork = next((r for r in results if r["platform"] == "artstation_artwork"), None)
+        artstation_artwork = next(
+            (r for r in results if r["platform"] == "artstation_artwork"), None
+        )
         artstation_marketplace = next(
             (r for r in results if r["platform"] == "artstation_marketplace"),
             None,
@@ -2519,14 +2521,19 @@ class TestParseEpieosResponse:
         launchpad = next((r for r in results if r["platform"] == "launchpad"), None)
         launchpad_project = next((r for r in results if r["platform"] == "launchpad_project"), None)
         sourceforge = next((r for r in results if r["platform"] == "sourceforge"), None)
-        sourceforge_project = next((r for r in results if r["platform"] == "sourceforge_project"), None)
+        sourceforge_project = next(
+            (r for r in results if r["platform"] == "sourceforge_project"), None
+        )
         spotify_artist = next((r for r in results if r["platform"] == "spotify_artist"), None)
 
         assert github is not None
         assert github["profile_url"] == "https://github.com/aliceops"
         assert github["username"] == "aliceops"
         assert youtube_channel is not None
-        assert youtube_channel["profile_url"] == "https://www.youtube.com/channel/UC1234567890123456789012"
+        assert (
+            youtube_channel["profile_url"]
+            == "https://www.youtube.com/channel/UC1234567890123456789012"
+        )
         assert youtube_channel["username"] == "UC1234567890123456789012"
         assert youtube_custom is not None
         assert youtube_custom["profile_url"] == "https://www.youtube.com/@aliceops"
@@ -2585,7 +2592,10 @@ class TestParseEpieosResponse:
         assert artstation["profile_url"] == "https://www.artstation.com/aliceartist"
         assert artstation["username"] == "aliceartist"
         assert artstation_site is not None
-        assert artstation_site["profile_url"] == "https://aliceportfolio.artstation.com/projects/security-briefing"
+        assert (
+            artstation_site["profile_url"]
+            == "https://aliceportfolio.artstation.com/projects/security-briefing"
+        )
         assert artstation_site["username"] == "aliceportfolio"
         assert artstation_artwork is None
         assert artstation_marketplace is None
@@ -2817,7 +2827,10 @@ class TestParseEpieosResponse:
         assert stackoverflow["profile_url"] == "https://superuser.com/users/24680/alice-su"
         assert stackoverflow["username"] == "alice-su"
         assert google_scholar is not None
-        assert google_scholar["profile_url"] == "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+        assert (
+            google_scholar["profile_url"]
+            == "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+        )
         assert google_scholar["username"] == "qc6CJjYAAAAJ"
         assert academia is not None
         assert academia["profile_url"] == "https://www.academia.edu/AliceAcademic"
@@ -2860,19 +2873,22 @@ class TestParseEpieosResponse:
         assert stackoverflow_uri["username"] == "uri-alias"
         assert twitter is None
         assert stackexchange_reserved is not None
-        assert stackexchange_reserved["profile_url"] == "https://superuser.com/questions/12345/example"
+        assert (
+            stackexchange_reserved["profile_url"] == "https://superuser.com/questions/12345/example"
+        )
         assert "username" not in stackexchange_reserved
         reserved_code_host_platforms = {row["platform"] for row in reserved_code_host_results}
-        assert {"github", "gitlab", "bitbucket", "codeberg"}.issubset(
-            reserved_code_host_platforms
+        assert {"github", "gitlab", "bitbucket", "codeberg"}.issubset(reserved_code_host_platforms)
+        assert (
+            not {
+                "google_scholar",
+                "academia",
+                "semantic_scholar",
+                "zenodo",
+                "figshare",
+            }
+            & reserved_code_host_platforms
         )
-        assert not {
-            "google_scholar",
-            "academia",
-            "semantic_scholar",
-            "zenodo",
-            "figshare",
-        } & reserved_code_host_platforms
         assert all("username" not in row for row in reserved_code_host_results)
 
     def test_constructs_academic_profile_urls_from_author_id_aliases(self):
@@ -2915,7 +2931,10 @@ class TestParseEpieosResponse:
         figshare = next((r for r in results if r["platform"] == "figshare"), None)
 
         assert google_scholar is not None
-        assert google_scholar["profile_url"] == "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+        assert (
+            google_scholar["profile_url"]
+            == "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+        )
         assert google_scholar["username"] == "qc6CJjYAAAAJ"
         assert semantic_scholar is not None
         assert (
@@ -3178,7 +3197,9 @@ class TestParseEpieosResponse:
         assert hashnode["username"] == "acmehash"
 
         assert intigriti is not None
-        assert intigriti["profile_url"] == "https://app.intigriti.com/researcher/profile/acmeintigriti"
+        assert (
+            intigriti["profile_url"] == "https://app.intigriti.com/researcher/profile/acmeintigriti"
+        )
         assert intigriti["username"] == "acmeintigriti"
 
         assert dockerhub is not None
@@ -3278,7 +3299,10 @@ class TestParseEpieosResponse:
         assert medium["username"] == "bluewriter"
 
         assert facebook is not None
-        assert facebook["profile_url"] == "https://www.facebook.com/people/Acme-Facebook/1000123456789/"
+        assert (
+            facebook["profile_url"]
+            == "https://www.facebook.com/people/Acme-Facebook/1000123456789/"
+        )
         assert facebook["username"] == "Acme-Facebook"
 
         assert flickr is not None
@@ -3401,7 +3425,10 @@ class TestParseEpieosResponse:
         assert researchgate["username"] == "Acme-Research"
 
         assert google_scholar is not None
-        assert google_scholar["profile_url"] == "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+        assert (
+            google_scholar["profile_url"]
+            == "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"
+        )
         assert google_scholar["username"] == "qc6CJjYAAAAJ"
 
         assert gravatar is not None
@@ -3948,14 +3975,22 @@ class TestParseEpieosResponse:
         twitter = next((r for r in results if r["platform"] == "twitter"), None)
         github = next((r for r in results if r["platform"] == "github"), None)
         github_sponsors = next((r for r in results if r["platform"] == "github_sponsors"), None)
-        github_sponsors_user = next((r for r in results if r["platform"] == "github_sponsors_user"), None)
+        github_sponsors_user = next(
+            (r for r in results if r["platform"] == "github_sponsors_user"), None
+        )
         bugcrowd = next((r for r in results if r["platform"] == "bugcrowd"), None)
         hackerone = next((r for r in results if r["platform"] == "hackerone"), None)
         hashnode_reserved = next((r for r in results if r["platform"] == "hashnode_reserved"), None)
         hashnode_user = next((r for r in results if r["platform"] == "hashnode_user"), None)
-        mastodon_online_user = next((r for r in results if r["platform"] == "mastodon_online_user"), None)
-        mastodon_masto_reserved = next((r for r in results if r["platform"] == "mastodon_masto_reserved"), None)
-        mastodon_custom_user = next((r for r in results if r["platform"] == "mastodon_custom_user"), None)
+        mastodon_online_user = next(
+            (r for r in results if r["platform"] == "mastodon_online_user"), None
+        )
+        mastodon_masto_reserved = next(
+            (r for r in results if r["platform"] == "mastodon_masto_reserved"), None
+        )
+        mastodon_custom_user = next(
+            (r for r in results if r["platform"] == "mastodon_custom_user"), None
+        )
         mastodon_custom_users_route = next(
             (r for r in results if r["platform"] == "mastodon_custom_users_route"),
             None,
@@ -4001,13 +4036,17 @@ class TestParseEpieosResponse:
         nuget = next((r for r in results if r["platform"] == "nuget"), None)
         nuget_user = next((r for r in results if r["platform"] == "nuget_user"), None)
         openbugbounty = next((r for r in results if r["platform"] == "openbugbounty"), None)
-        openbugbounty_user = next((r for r in results if r["platform"] == "openbugbounty_user"), None)
+        openbugbounty_user = next(
+            (r for r in results if r["platform"] == "openbugbounty_user"), None
+        )
         hexpm = next((r for r in results if r["platform"] == "hexpm"), None)
         hexpm_user = next((r for r in results if r["platform"] == "hexpm_user"), None)
         huggingface = next((r for r in results if r["platform"] == "huggingface"), None)
         codeberg = next((r for r in results if r["platform"] == "codeberg"), None)
         sourcehut = next((r for r in results if r["platform"] == "sourcehut"), None)
-        sourcehut_reserved = next((r for r in results if r["platform"] == "sourcehut_reserved"), None)
+        sourcehut_reserved = next(
+            (r for r in results if r["platform"] == "sourcehut_reserved"), None
+        )
         snapchat = next((r for r in results if r["platform"] == "snapchat"), None)
         snapchat_user = next((r for r in results if r["platform"] == "snapchat_user"), None)
         snapchat_root = next((r for r in results if r["platform"] == "snapchat_root"), None)
@@ -4024,13 +4063,17 @@ class TestParseEpieosResponse:
         )
         keybase_user = next((r for r in results if r["platform"] == "keybase_user"), None)
         dockerhub = next((r for r in results if r["platform"] == "dockerhub"), None)
-        dockerhub_reserved = next((r for r in results if r["platform"] == "dockerhub_reserved"), None)
+        dockerhub_reserved = next(
+            (r for r in results if r["platform"] == "dockerhub_reserved"), None
+        )
         dockerhub_library = next((r for r in results if r["platform"] == "dockerhub_library"), None)
         instagram_story = next((r for r in results if r["platform"] == "instagram_story"), None)
         instagram_reels = next((r for r in results if r["platform"] == "instagram_reels"), None)
         replit_reserved = next((r for r in results if r["platform"] == "replit_reserved"), None)
         replit_user = next((r for r in results if r["platform"] == "replit_user"), None)
-        codesandbox_reserved = next((r for r in results if r["platform"] == "codesandbox_reserved"), None)
+        codesandbox_reserved = next(
+            (r for r in results if r["platform"] == "codesandbox_reserved"), None
+        )
         codesandbox_user = next((r for r in results if r["platform"] == "codesandbox_user"), None)
         devpost_reserved = next((r for r in results if r["platform"] == "devpost_reserved"), None)
         devpost_user = next((r for r in results if r["platform"] == "devpost_user"), None)
@@ -4061,7 +4104,9 @@ class TestParseEpieosResponse:
         steam_profile_id = next((r for r in results if r["platform"] == "steam_profile_id"), None)
         steam_user = next((r for r in results if r["platform"] == "steam_user"), None)
         opencollective = next((r for r in results if r["platform"] == "opencollective"), None)
-        opencollective_user = next((r for r in results if r["platform"] == "opencollective_user"), None)
+        opencollective_user = next(
+            (r for r in results if r["platform"] == "opencollective_user"), None
+        )
         liberapay = next((r for r in results if r["platform"] == "liberapay"), None)
         liberapay_user = next((r for r in results if r["platform"] == "liberapay_user"), None)
         calendly = next((r for r in results if r["platform"] == "calendly"), None)
@@ -4882,7 +4927,9 @@ class TestRunSocialScraper:
                 "forge.utils.intel.social_scraper.EpieosClient.query_many",
                 return_value={"alice@example.com": _parse_epieos_response(_rich_epieos_payload())},
             ),
-            patch("forge.utils.intel.social_scraper.encrypt_string", side_effect=lambda value: value),
+            patch(
+                "forge.utils.intel.social_scraper.encrypt_string", side_effect=lambda value: value
+            ),
         ):
             run_social_scraper(db, 1)
 

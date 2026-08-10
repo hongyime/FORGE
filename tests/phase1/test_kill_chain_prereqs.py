@@ -52,7 +52,9 @@ def _capture_flow(
         run_module_batch=run_module_batch,
         run_module=run_module,
         make_dispatch_spec=lambda argv, label: {"cmd_argv": argv, "label": label},
-        harden_child_argv=lambda argv: hardened.append([str(item) for item in argv]) or [*argv, "--hardened"],
+        harden_child_argv=lambda argv: (
+            hardened.append([str(item) for item in argv]) or [*argv, "--hardened"]
+        ),
         progress_callback=None,
         is_tty=is_tty,
         input_func=lambda _prompt: next(input_iter),
@@ -214,7 +216,9 @@ def test_handle_kill_chain_prerequisite_flow_prompt_mode_runs_selected_entries()
         inputs=["y"],
     )
 
-    assert result["run_calls"] == [(["cloud", "aws", "--engagement", "1001"], "prereq: safe runnable")]
+    assert result["run_calls"] == [
+        (["cloud", "aws", "--engagement", "1001"], "prereq: safe runnable")
+    ]
     assert result["prompt_audits"] == ["offered=1 ran=1"]
     assert result["completed"][-1]["prereq_execution_mode"] == "prompted"
     assert result["completed"][-1]["prereq_prompted_ran"] == 1

@@ -51,10 +51,7 @@ class FindingSpec:
 
 def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
     try:
-        return {
-            str(row[1])
-            for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()
-        }
+        return {str(row[1]) for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()}
     except sqlite3.OperationalError:
         return set()
 
@@ -210,7 +207,9 @@ class DeterministicFindingEngine:
             run_migrations(con)
             columns = _table_columns(con, "vulnerability_findings")
             validation_columns = _table_columns(con, "cloud_validation_results")
-            checked_expr = "COALESCE(checked_at, '')" if "checked_at" in validation_columns else "''"
+            checked_expr = (
+                "COALESCE(checked_at, '')" if "checked_at" in validation_columns else "''"
+            )
             id_expr = "id" if "id" in validation_columns else "0"
             validation_index = self._validation_index(con)
 
@@ -352,7 +351,10 @@ class DeterministicFindingEngine:
             return None
 
         if validation_status == "VALIDATED":
-            if asset_type == "firebase" and validation_method in CLOUD_DATA_VALIDATION_METHODS["firebase"]:
+            if (
+                asset_type == "firebase"
+                and validation_method in CLOUD_DATA_VALIDATION_METHODS["firebase"]
+            ):
                 severity = "HIGH"
                 title = "Validated Firebase data exposure"
                 description = (
@@ -368,14 +370,20 @@ class DeterministicFindingEngine:
                 )
             elif _is_low_signal_public_cloud_metadata(asset_type, validation_method):
                 return None
-            elif asset_type in STORAGE_CLOUD_ASSET_TYPES and validation_method in STORAGE_LISTING_VALIDATION_METHODS:
+            elif (
+                asset_type in STORAGE_CLOUD_ASSET_TYPES
+                and validation_method in STORAGE_LISTING_VALIDATION_METHODS
+            ):
                 severity = "HIGH"
                 title = _storage_listing_title(asset_type)
                 description = (
                     f"Deterministic validation confirmed that `{identifier}` allowed unauthenticated enumeration "
                     f"of real object metadata through `{validation_method}`."
                 )
-            elif asset_type in STORAGE_CLOUD_ASSET_TYPES and validation_method in STORAGE_METADATA_VALIDATION_METHODS:
+            elif (
+                asset_type in STORAGE_CLOUD_ASSET_TYPES
+                and validation_method in STORAGE_METADATA_VALIDATION_METHODS
+            ):
                 severity = "LOW"
                 title = f"Externally reachable {_asset_label(asset_type)} detected"
                 description = (
@@ -397,7 +405,8 @@ class DeterministicFindingEngine:
             severity=severity,
             title=title,
             description=_truncate(description, 1024),
-            evidence=evidence or _truncate(f"validation_method={validation_method} status={validation_status}", 512),
+            evidence=evidence
+            or _truncate(f"validation_method={validation_method} status={validation_status}", 512),
             cloud_provider=_cloud_provider(asset_type),
             resource_id=identifier,
             compliance_control="ACCESS_CONTROL",
@@ -440,7 +449,11 @@ class DeterministicFindingEngine:
         )
         if validation_detail:
             description = f"{description} {validation_detail}"
-        target_url = source_url or repo_name or (f"{service}://{domain}" if domain else f"{service}://unknown")
+        target_url = (
+            source_url
+            or repo_name
+            or (f"{service}://{domain}" if domain else f"{service}://unknown")
+        )
         evidence_parts = [
             f"key={key_redacted}" if key_redacted else f"pattern={pattern_name}",
             f"backend={source_backend}" if source_backend else "",
@@ -533,7 +546,9 @@ class DeterministicFindingEngine:
             return 0, 0
 
         assignments = ", ".join(
-            f"{key}=?" for key in payload.keys() if key not in {"engagement_id", "vuln_type", "target_url", "parameter"}
+            f"{key}=?"
+            for key in payload.keys()
+            if key not in {"engagement_id", "vuln_type", "target_url", "parameter"}
         )
         update_values = [
             value

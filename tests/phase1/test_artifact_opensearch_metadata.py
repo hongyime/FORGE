@@ -59,7 +59,9 @@ def test_opensearch_description_urls_resolve_source_gated_passive_templates() ->
     assert opensearch_description_artifact_label("config.xml") == ""
     assert opensearch_description_artifact_label("opensearch.xml") == "opensearch-description"
     assert (
-        opensearch_description_artifact_label("https://www.acme.example/.well-known/opensearch.xml?v=1")
+        opensearch_description_artifact_label(
+            "https://www.acme.example/.well-known/opensearch.xml?v=1"
+        )
         == "opensearch-description"
     )
 

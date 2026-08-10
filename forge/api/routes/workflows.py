@@ -76,9 +76,7 @@ _BUILTIN_DEFINITIONS: dict[str, WorkflowDefinition] = {
 }
 
 
-def _resolve_definition(
-    name: str, engine: WorkflowEngine
-) -> WorkflowDefinition:
+def _resolve_definition(name: str, engine: WorkflowEngine) -> WorkflowDefinition:
     """Return the requested definition or raise 404."""
     if name in _BUILTIN_DEFINITIONS:
         return _BUILTIN_DEFINITIONS[name]
@@ -109,9 +107,7 @@ async def start_workflow(
 ) -> StartWorkflowResponse:
     """Create a workflow instance and publish its first stage message."""
     definition = _resolve_definition(request.definition_name, engine)
-    workflow_id = await engine.start_workflow(
-        definition=definition, params=request.params
-    )
+    workflow_id = await engine.start_workflow(definition=definition, params=request.params)
     return StartWorkflowResponse(workflow_id=workflow_id)
 
 
@@ -186,6 +182,7 @@ async def fail_workflow_stage(
             detail=f"workflow_not_found:{workflow_id}",
         ) from exc
     return {"workflow_id": workflow_id, "failed": False, "retried": True}
+
 
 @router.get(
     "/{workflow_id}/history",

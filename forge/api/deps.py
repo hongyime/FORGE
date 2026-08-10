@@ -172,6 +172,7 @@ def get_router() -> "TieredRouter | None":
             # or evidence harness). Run discovery on a worker thread with
             # its own loop so we don't conflict.
             import concurrent.futures  # noqa: PLC0415
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
                 fut = ex.submit(asyncio.run, discover_backends())
                 result = fut.result(timeout=30.0)
@@ -192,7 +193,9 @@ def get_router_provider(tier: "Tier") -> "LLMProvider | None":
     if router is None:
         return None
     from forge.providers.router import RouterAsProvider  # noqa: PLC0415
+
     return RouterAsProvider(router, tier=tier)
+
 
 def reset_dependencies() -> None:
     """Clear every dependency cache.

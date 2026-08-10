@@ -18,9 +18,7 @@ class ScheduledTask:
     priority: int = 100
 
 
-UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES = frozenset(
-    {"safe_check", "spray", "weaponize"}
-)
+UNSUPPORTED_OFFENSIVE_SCHEDULED_TASK_TYPES = frozenset({"safe_check", "spray", "weaponize"})
 UNSUPPORTED_SCHEDULED_TASK_REASON = "unsupported_scheduled_task"
 
 
@@ -78,7 +76,9 @@ class TaskScheduler:
     def schedule(self, task: ScheduledTask) -> None:
         assert_scheduled_task_type_supported(task.payload.get("task_type"))
         con = get_engagement_db(self._db_path)
-        max_attempts = _positive_int(task.payload.get("max_attempts")) or self._resolved_max_task_attempts()
+        max_attempts = (
+            _positive_int(task.payload.get("max_attempts")) or self._resolved_max_task_attempts()
+        )
         try:
             con.execute(
                 """

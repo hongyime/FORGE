@@ -99,8 +99,7 @@ def test_parse_process_result_negative_returncode_carries_process_lookup_error()
     )
     assert result.success is False
     assert isinstance(result.error_exc, ProcessLookupError), (
-        f"expected ProcessLookupError instance, got "
-        f"{type(result.error_exc).__name__}"
+        f"expected ProcessLookupError instance, got {type(result.error_exc).__name__}"
     )
     # The string ``error_class`` MUST match the instance so the JSON
     # transport and the in-process field stay in agreement.
@@ -123,8 +122,7 @@ def test_parse_process_result_positive_returncode_carries_forge_error() -> None:
     )
     assert result.success is False
     assert isinstance(result.error_exc, PluginSubprocessKilledError), (
-        f"expected PluginSubprocessKilledError instance, got "
-        f"{type(result.error_exc).__name__}"
+        f"expected PluginSubprocessKilledError instance, got {type(result.error_exc).__name__}"
     )
     # ForgeError subclass check — the load-bearing invariant for the
     # chaos harness's scenario 3.
@@ -268,8 +266,7 @@ def test_executor_execute_preserves_original_exception_instance() -> None:
 
     assert result.success is False
     assert result.error_exc is marker, (
-        "expected the original exception INSTANCE to be preserved, "
-        f"got {result.error_exc!r}"
+        f"expected the original exception INSTANCE to be preserved, got {result.error_exc!r}"
     )
     # ``error_class`` (string, for JSON transport) must agree.
     assert result.error_class == "builtins.FileNotFoundError"

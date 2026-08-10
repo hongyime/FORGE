@@ -150,11 +150,7 @@ def epieos_is_mastodon_like_host(hostname: str) -> bool:
     host = normalize_profile_hostname(hostname)
     if not host:
         return False
-    return (
-        host in _MASTODON_LIKE_HOSTS
-        or host.startswith("mastodon.")
-        or host.startswith("mstdn.")
-    )
+    return host in _MASTODON_LIKE_HOSTS or host.startswith("mastodon.") or host.startswith("mstdn.")
 
 
 def _iter_supported_hosts(
@@ -183,7 +179,9 @@ def epieos_is_supported_profile_host(
     host = normalize_profile_hostname(hostname)
     if not host:
         return False
-    if any(epieos_host_matches(host, supported) for supported in _iter_supported_hosts(platform_hosts)):
+    if any(
+        epieos_host_matches(host, supported) for supported in _iter_supported_hosts(platform_hosts)
+    ):
         return True
     if host == "t.me" or host.endswith(".t.me"):
         return True

@@ -79,7 +79,10 @@ class _AwsClientReferenceClient:
         assert not forbidden_headers.intersection(headers)
         self.kwargs_seen.append(dict(kwargs))
         self.calls.append(url)
-        if url == "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_AbCd12345/.well-known/openid-configuration":
+        if (
+            url
+            == "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_AbCd12345/.well-known/openid-configuration"
+        ):
             return _FakeResponse(
                 200,
                 json.dumps(
@@ -461,7 +464,7 @@ class _MixedBatchClient:
                     '["http://localhost:3000","https://demo.example.com"],'
                     '"mailer_autoconfirm":false}'
                 ),
-                )
+            )
         return _FakeResponse(404, "missing")
 
     def head(self, url: str, **kwargs) -> _FakeResponse:  # noqa: ANN003
@@ -2294,10 +2297,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_stripe_secret_key
 @pytest.mark.parametrize(
     "validation_detail",
     [
-        (
-            "Stripe balance accessible: mode=live currencies=none "
-            "balances=available:0,pending:0"
-        ),
+        ("Stripe balance accessible: mode=live currencies=none balances=available:0,pending:0"),
         "Stripe balance accessible: mode=live currencies=usd",
     ],
 )
@@ -2440,8 +2440,7 @@ def test_sweep_pending_cloud_validations_downgrades_stripe_secret_mode_mismatch(
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
             detail=(
-                "Stripe balance accessible: mode=test currencies=usd "
-                "balances=available:1,pending:0"
+                "Stripe balance accessible: mode=test currencies=usd balances=available:1,pending:0"
             ),
         ),
     )
@@ -2896,10 +2895,7 @@ def test_sweep_pending_cloud_validations_downgrades_handle_provider_active_resul
     results_by_service = {str(row["asset_type"]): row for row in summary["results"]}
     assert results_by_service["github"]["validation_method"] == "github_user_api"
     assert results_by_service["gitlab"]["validation_method"] == "gitlab_current_user_api"
-    assert {
-        str(row["validation_status"])
-        for row in results_by_service.values()
-    } == {"UNVERIFIED"}
+    assert {str(row["validation_status"]) for row in results_by_service.values()} == {"UNVERIFIED"}
 
     con = sqlite3.connect(db_path)
     try:
@@ -3910,15 +3906,11 @@ def test_sweep_pending_cloud_validations_processes_social_messaging_and_collabor
     assert summary["status_counts"] == {"VALIDATED": 9, "UNVERIFIED": 1}
 
     results_by_service = {str(row["asset_type"]): row for row in summary["results"]}
-    assert results_by_service["cloudflare"]["identifier"] == (
-        "abcdef1234567890abcdef1234567890"
-    )
+    assert results_by_service["cloudflare"]["identifier"] == ("abcdef1234567890abcdef1234567890")
     assert results_by_service["huggingface"]["identifier"] == "acme-mlops"
     assert results_by_service["discord"]["identifier"] == "739251864203918576"
     assert results_by_service["telegram"]["identifier"] == "725419863"
-    assert results_by_service["notion"]["identifier"] == (
-        "3c90c3cc-0d44-4b50-8888-8dd25736052a"
-    )
+    assert results_by_service["notion"]["identifier"] == ("3c90c3cc-0d44-4b50-8888-8dd25736052a")
     assert results_by_service["datadog"]["identifier"] == "observability.env"
     assert results_by_service["datadog"]["validation_status"] == "UNVERIFIED"
     assert results_by_service["vercel"]["identifier"] == "usr_abcdefghijklmnop"
@@ -4285,9 +4277,7 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
         "validate",
         lambda self, key, proxy=None, **kwargs: ValidationResult(  # noqa: ARG005
             state=ValidationState.ACTIVE,
-            detail=(
-                "Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a"
-            ),
+            detail=("Notion users me ok: user_id=3c90c3cc-0d44-4b50-8888-8dd25736052a"),
         ),
     )
 
@@ -4313,10 +4303,7 @@ def test_sweep_pending_cloud_validations_downgrades_newer_provider_active_result
     assert results_by_service["netlify"]["validation_method"] == "netlify_current_user"
     assert results_by_service["posthog"]["validation_method"] == "posthog_users_me"
     assert results_by_service["sentry"]["validation_method"] == "sentry_list_organizations"
-    assert {
-        str(row["validation_status"])
-        for row in results_by_service.values()
-    } == {"UNVERIFIED"}
+    assert {str(row["validation_status"]) for row in results_by_service.values()} == {"UNVERIFIED"}
 
     con = sqlite3.connect(db_path)
     try:
@@ -4560,9 +4547,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_gitlab_pat_rows_w
             """
         ).fetchone()
         assert key_row[0] == "ACTIVE"
-        assert str(key_row[1] or "").startswith(
-            "VALIDATED:gitlab_current_user_api:"
-        )
+        assert str(key_row[1] or "").startswith("VALIDATED:gitlab_current_user_api:")
 
         findings = con.execute(
             """
@@ -5207,7 +5192,10 @@ def test_sweep_pending_cloud_validations_processes_colocated_twilio_pair_without
     )
 
     def _fake_twilio_validate(self, key, auth_token=None, proxy=None, **kwargs):  # noqa: ANN001, ARG001
-        if key == "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3" and auth_token == "abcdef1234567890abcdef1234567890":
+        if (
+            key == "AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3"
+            and auth_token == "abcdef1234567890abcdef1234567890"
+        ):
             return ValidationResult(
                 state=ValidationState.ACTIVE,
                 detail=(
@@ -5435,7 +5423,9 @@ def test_sweep_pending_cloud_validations_skips_context_only_twilio_token_rows(
     monkeypatch.setattr(
         TwilioKeyValidator,
         "validate",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("context-only token row should not validate")),  # noqa: ARG005
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("context-only token row should not validate")
+        ),  # noqa: ARG005
     )
 
     summary = cloud_validate.sweep_pending_cloud_validations(
@@ -5847,9 +5837,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_azure_connection_
         cloud_validate,
         "_decrypt_secret",
         lambda _value: (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=acmestorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=acmestorage;AccountKey={'A' * 86}=="
         ),
     )
 
@@ -5908,9 +5896,7 @@ def test_sweep_pending_cloud_validations_processes_validatable_azure_connection_
             """
         ).fetchone()
         assert key_row[0] == "ACTIVE"
-        assert str(key_row[1] or "").startswith(
-            "VALIDATED:azure_blob_list_containers_shared_key:"
-        )
+        assert str(key_row[1] or "").startswith("VALIDATED:azure_blob_list_containers_shared_key:")
 
         findings = con.execute(
             """
@@ -5957,9 +5943,7 @@ def test_sweep_pending_cloud_validations_downgrades_azure_mismatched_account_pro
         cloud_validate,
         "_decrypt_secret",
         lambda _value: (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=acmestorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=acmestorage;AccountKey={'A' * 86}=="
         ),
     )
 
@@ -6018,9 +6002,7 @@ def test_sweep_pending_cloud_validations_downgrades_azure_mismatched_account_pro
             """
         ).fetchone()
         assert key_row[0] == "UNCONFIRMED"
-        assert str(key_row[1] or "").startswith(
-            "UNVERIFIED:azure_blob_list_containers_shared_key:"
-        )
+        assert str(key_row[1] or "").startswith("UNVERIFIED:azure_blob_list_containers_shared_key:")
 
         findings = con.execute(
             """
@@ -6060,9 +6042,7 @@ def test_sweep_pending_cloud_validations_downgrades_azure_empty_container_listin
         cloud_validate,
         "_decrypt_secret",
         lambda _value: (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=emptystorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=emptystorage;AccountKey={'A' * 86}=="
         ),
     )
 
@@ -6121,9 +6101,7 @@ def test_sweep_pending_cloud_validations_downgrades_azure_empty_container_listin
             """
         ).fetchone()
         assert key_row[0] == "UNCONFIRMED"
-        assert str(key_row[1] or "").startswith(
-            "UNVERIFIED:azure_blob_list_containers_shared_key:"
-        )
+        assert str(key_row[1] or "").startswith("UNVERIFIED:azure_blob_list_containers_shared_key:")
 
         findings = con.execute(
             """
@@ -6163,9 +6141,7 @@ def test_sweep_pending_cloud_validations_downgrades_azure_placeholder_account_pr
         cloud_validate,
         "_decrypt_secret",
         lambda _value: (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=aaaaaaaaaaaa;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=aaaaaaaaaaaa;AccountKey={'A' * 86}=="
         ),
     )
 
@@ -6224,9 +6200,7 @@ def test_sweep_pending_cloud_validations_downgrades_azure_placeholder_account_pr
             """
         ).fetchone()
         assert key_row[0] == "UNCONFIRMED"
-        assert str(key_row[1] or "").startswith(
-            "UNVERIFIED:azure_blob_list_containers_shared_key:"
-        )
+        assert str(key_row[1] or "").startswith("UNVERIFIED:azure_blob_list_containers_shared_key:")
 
         findings = con.execute(
             """
@@ -6273,9 +6247,7 @@ def test_sweep_pending_cloud_validations_only_unattempted_skips_previously_attem
         cloud_validate,
         "_decrypt_secret",
         lambda _value: (
-            "DefaultEndpointsProtocol=https;"
-            "AccountName=onlynewstorage;"
-            f"AccountKey={'A' * 86}=="
+            f"DefaultEndpointsProtocol=https;AccountName=onlynewstorage;AccountKey={'A' * 86}=="
         ),
     )
 
@@ -6290,12 +6262,16 @@ def test_sweep_pending_cloud_validations_only_unattempted_skips_previously_attem
     monkeypatch.setattr(
         StripeKeyValidator,
         "validate",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("previous stripe row should not retry")),  # noqa: ARG005
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("previous stripe row should not retry")
+        ),  # noqa: ARG005
     )
     monkeypatch.setattr(
         SlackTokenValidator,
         "validate",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("previous slack row should not retry")),  # noqa: ARG005
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("previous slack row should not retry")
+        ),  # noqa: ARG005
     )
     monkeypatch.setattr(
         AzureStorageConnectionStringValidator,
@@ -6546,7 +6522,12 @@ def test_run_cloud_asset_validate_batch_processes_aws_client_references_without_
         "UNSUPPORTED": 2,
     }
     assert [
-        (item["asset_type"], item["identifier"], item["provider_identifier"], item["validation_status"])
+        (
+            item["asset_type"],
+            item["identifier"],
+            item["provider_identifier"],
+            item["validation_status"],
+        )
         for item in summary["results"]
     ] == [
         (
@@ -6788,7 +6769,11 @@ def test_run_cloud_asset_validate_batch_records_managed_alias_reachability_witho
         ).fetchall()
         assert validation_rows == [
             ("amplify", "main.d3m0amplify.amplifyapp.com", "ACCESSIBLE_BUT_NO_DATA"),
-            ("azure_static_web_app", "calm-coast-012345.2.azurestaticapps.net", "ACCESSIBLE_BUT_NO_DATA"),
+            (
+                "azure_static_web_app",
+                "calm-coast-012345.2.azurestaticapps.net",
+                "ACCESSIBLE_BUT_NO_DATA",
+            ),
             ("cloudflare_pages", "acme-pages", "ACCESSIBLE_BUT_NO_DATA"),
             ("cloudflare_r2", "accountid.r2.cloudflarestorage.com", "ACCESSIBLE_BUT_NO_DATA"),
             ("cloudflare_r2", "acme-r2-assets", "UNSUPPORTED"),
@@ -7000,7 +6985,12 @@ def test_sweep_pending_cloud_asset_validations_processes_aws_client_references(
         "UNSUPPORTED": 2,
     }
     assert [
-        (item["asset_type"], item["identifier"], item["provider_identifier"], item["validation_status"])
+        (
+            item["asset_type"],
+            item["identifier"],
+            item["provider_identifier"],
+            item["validation_status"],
+        )
         for item in summary["results"]
     ] == [
         (
@@ -7040,8 +7030,18 @@ def test_sweep_pending_cloud_asset_validations_processes_aws_client_references(
             """
         ).fetchall()
         assert validation_rows == [
-            ("aws_cognito_user_pool", "us-east-1_abcd12345", "us-east-1_AbCd12345", "ACCESSIBLE_BUT_NO_DATA"),
-            ("aws_appsync_api", "us-east-1/abc123456789", "us-east-1/abc123456789", "ACCESSIBLE_BUT_NO_DATA"),
+            (
+                "aws_cognito_user_pool",
+                "us-east-1_abcd12345",
+                "us-east-1_AbCd12345",
+                "ACCESSIBLE_BUT_NO_DATA",
+            ),
+            (
+                "aws_appsync_api",
+                "us-east-1/abc123456789",
+                "us-east-1/abc123456789",
+                "ACCESSIBLE_BUT_NO_DATA",
+            ),
             (
                 "aws_cognito_identity_pool",
                 "us-east-1:11111111-2222-3333-4444-555555555555",
@@ -8631,7 +8631,10 @@ def test_run_cloud_asset_validate_persists_gcs_bucket_result(
             WHERE engagement_id=1001
             """
         ).fetchone()
-        assert finding_row == ("HIGH", "Validated public Google Cloud Storage bucket listing exposure")
+        assert finding_row == (
+            "HIGH",
+            "Validated public Google Cloud Storage bucket listing exposure",
+        )
     finally:
         con.close()
 
@@ -8672,7 +8675,10 @@ def test_run_cloud_asset_validate_persists_gcs_json_bucket_result(
             WHERE engagement_id=1001
             """
         ).fetchone()
-        assert finding_row == ("HIGH", "Validated public Google Cloud Storage bucket listing exposure")
+        assert finding_row == (
+            "HIGH",
+            "Validated public Google Cloud Storage bucket listing exposure",
+        )
     finally:
         con.close()
 
@@ -8713,7 +8719,10 @@ def test_run_cloud_asset_validate_persists_digitalocean_spaces_bucket_result(
             WHERE engagement_id=1001
             """
         ).fetchone()
-        assert finding_row == ("HIGH", "Validated public DigitalOcean Spaces bucket listing exposure")
+        assert finding_row == (
+            "HIGH",
+            "Validated public DigitalOcean Spaces bucket listing exposure",
+        )
     finally:
         con.close()
 
@@ -9922,9 +9931,24 @@ def test_sweep_pending_cloud_validations_defaults_to_sequential_key_workers(
                 (?, 1001, ?, 'firebase', 'firebase_web_config', 'crawler', ?, 'webapp', ?, 'UNCONFIRMED')
             """,
             [
-                (31, "asset-one", "https://asset-one.firebaseapp.com/__/firebase/init.json", "AIza...one"),
-                (32, "asset-two", "https://asset-two.firebaseapp.com/__/firebase/init.json", "AIza...two"),
-                (33, "asset-three", "https://asset-three.firebaseapp.com/__/firebase/init.json", "AIza...three"),
+                (
+                    31,
+                    "asset-one",
+                    "https://asset-one.firebaseapp.com/__/firebase/init.json",
+                    "AIza...one",
+                ),
+                (
+                    32,
+                    "asset-two",
+                    "https://asset-two.firebaseapp.com/__/firebase/init.json",
+                    "AIza...two",
+                ),
+                (
+                    33,
+                    "asset-three",
+                    "https://asset-three.firebaseapp.com/__/firebase/init.json",
+                    "AIza...three",
+                ),
             ],
         )
         con.commit()
@@ -10472,11 +10496,19 @@ def test_extract_identifier_supports_alternate_storage_url_forms() -> None:
     assert cloud_validate._extract_identifier("aws_s3", s3_hosted) == "acme-site-bucket"
     assert cloud_validate._extract_identifier("aws_s3", s3_path_style) == "acme-path-bucket"
     assert cloud_validate._extract_identifier("gcs", gcs_browser) == "acme-browser-bucket"
-    assert cloud_validate._extract_identifier("gcs", firebase_storage) == "acme-firestorage.appspot.com"
+    assert (
+        cloud_validate._extract_identifier("gcs", firebase_storage)
+        == "acme-firestorage.appspot.com"
+    )
     assert cloud_validate._extract_identifier("azure_blob", azure_dfs) == "acmedatalake/raw"
-    assert cloud_validate._extract_identifier("azure_blob", azure_dfs_source) == "sourcedatalake/events"
+    assert (
+        cloud_validate._extract_identifier("azure_blob", azure_dfs_source)
+        == "sourcedatalake/events"
+    )
     assert cloud_validate._extract_identifier("azure_blob", azure_static) == "acmestatic/$web"
-    assert cloud_validate._extract_identifier("azure_blob", azure_static_source) == "sourcestatic/$web"
+    assert (
+        cloud_validate._extract_identifier("azure_blob", azure_static_source) == "sourcestatic/$web"
+    )
 
 
 def test_sweep_pending_cloud_asset_validations_processes_unvalidated_assets(

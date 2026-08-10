@@ -106,9 +106,7 @@ def _register_known_agents(
 
         # ReportingAgent synthesizes the engagement narrative -> planner tier.
         report_llm = _gr(_Tier.PLANNER)
-        registry.register(
-            ReportingAgent(llm_provider=report_llm, audit=audit)
-        )
+        registry.register(ReportingAgent(llm_provider=report_llm, audit=audit))
         _LOG.info("Registered ReportingAgent")
     except ImportError:
         _LOG.warning("ReportingAgent not available; skipping registration")
@@ -153,6 +151,7 @@ async def run() -> None:
 
         bus = cast(MessageBus, create_message_bus(redis_url=settings.redis_url))
         if hasattr(bus, "close"):
+
             async def _close_bus() -> None:
                 try:
                     await bus.close()
@@ -178,9 +177,7 @@ async def run() -> None:
             audit=audit,
         )
 
-        workflow_engine = WorkflowEngine(
-            bus=bus, state_store=state_store, audit=audit
-        )
+        workflow_engine = WorkflowEngine(bus=bus, state_store=state_store, audit=audit)
 
         # P1-7: resume failure is FATAL. A worker that cannot reconcile
         # prior state must NOT come up healthy and start consuming new

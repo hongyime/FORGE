@@ -28,6 +28,7 @@ Failure modes:
 
 This module NEVER raises. Returns {'found': False} on any error.
 """
+
 from __future__ import annotations
 
 import json
@@ -160,9 +161,11 @@ def lookup_instagram(
     if not handle:
         return result
 
-    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-          "AppleWebKit/537.36 (KHTML, like Gecko) "
-          "Chrome/120.0.0.0 Safari/537.36")
+    ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
 
     try:
         with httpx.Client(
@@ -223,14 +226,16 @@ def lookup_instagram(
     if isinstance(raw_links, list):
         for lnk in raw_links:
             if isinstance(lnk, dict) and lnk.get("url"):
-                bio_links.append({
-                    "title": str(lnk.get("title", "") or ""),
-                    "url":   str(lnk.get("url", "") or ""),
-                })
+                bio_links.append(
+                    {
+                        "title": str(lnk.get("title", "") or ""),
+                        "url": str(lnk.get("url", "") or ""),
+                    }
+                )
 
     # Mine emails and URLs from biography, external_url, and bio_link URLs
-    bio_text = biography + " " + external_url + " " + " ".join(
-        (l.get("url", "") or "") for l in bio_links
+    bio_text = (
+        biography + " " + external_url + " " + " ".join((l.get("url", "") or "") for l in bio_links)
     )
     emails_in_bio = _extract_emails(bio_text)
     urls_in_bio = _extract_urls(bio_text)
@@ -242,17 +247,18 @@ def lookup_instagram(
 
     result["found"] = True
     profile = {
-        "full_name":      str(user.get("full_name", "") or ""),
-        "biography":      biography,
-        "external_url":   external_url,
-        "is_verified":    bool(user.get("is_verified", False)),
-        "is_business":    bool(user.get("is_business_account", False)
-                              or user.get("is_business", False)),
+        "full_name": str(user.get("full_name", "") or ""),
+        "biography": biography,
+        "external_url": external_url,
+        "is_verified": bool(user.get("is_verified", False)),
+        "is_business": bool(
+            user.get("is_business_account", False) or user.get("is_business", False)
+        ),
         "follower_count": follower_count,
-        "bio_links":      bio_links,
-        "emails_in_bio":  emails_in_bio,
-        "urls_in_bio":    urls_in_bio,
-        "pk":             str(user.get("pk", "") or user.get("id", "") or ""),
+        "bio_links": bio_links,
+        "emails_in_bio": emails_in_bio,
+        "urls_in_bio": urls_in_bio,
+        "pk": str(user.get("pk", "") or user.get("id", "") or ""),
         "profile_pic_url": str(user.get("profile_pic_url", "") or ""),
     }
     if business_email:
@@ -316,10 +322,12 @@ def persist_instagram_findings(
         if emails:
             try:
                 existing = {
-                    r[0].lower() for r in con.execute(
+                    r[0].lower()
+                    for r in con.execute(
                         "SELECT email FROM emails WHERE engagement_id=?",
                         (engagement_id,),
-                    ).fetchall() if r[0]
+                    ).fetchall()
+                    if r[0]
                 }
             except sqlite3.OperationalError:
                 existing = set()
@@ -340,19 +348,19 @@ def persist_instagram_findings(
 
         # ---------- social_profiles summary row ----------
         summary_payload = {
-            "source":         "instagram",
-            "handle":         handle,
-            "full_name":      profile.get("full_name", ""),
-            "biography":      (profile.get("biography", "") or "")[:500],
-            "external_url":   profile.get("external_url", ""),
-            "is_verified":    bool(profile.get("is_verified", False)),
-            "is_business":    bool(profile.get("is_business", False)),
+            "source": "instagram",
+            "handle": handle,
+            "full_name": profile.get("full_name", ""),
+            "biography": (profile.get("biography", "") or "")[:500],
+            "external_url": profile.get("external_url", ""),
+            "is_verified": bool(profile.get("is_verified", False)),
+            "is_business": bool(profile.get("is_business", False)),
             "follower_count": int(profile.get("follower_count", 0) or 0),
-            "bio_links":      profile.get("bio_links", []) or [],
-            "emails_in_bio":  profile.get("emails_in_bio", []) or [],
-            "urls_in_bio":    profile.get("urls_in_bio", []) or [],
-            "pk":             profile.get("pk", ""),
-            "profile_url":    f"https://www.instagram.com/{handle}/",
+            "bio_links": profile.get("bio_links", []) or [],
+            "emails_in_bio": profile.get("emails_in_bio", []) or [],
+            "urls_in_bio": profile.get("urls_in_bio", []) or [],
+            "pk": profile.get("pk", ""),
+            "profile_url": f"https://www.instagram.com/{handle}/",
         }
         for key in ("business_email", "business_phone"):
             if profile.get(key):

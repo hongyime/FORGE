@@ -132,11 +132,32 @@ def test_install_applies_to_httpx_logger_end_to_end(caplog: pytest.LogCaptureFix
 def test_query_regex_covers_all_documented_params() -> None:
     """Regression guard: every param listed as sensitive must match."""
     sensitive = (
-        "key", "api_key", "token", "access_token", "client_secret",
-        "X-Amz-Credential", "X-Amz-Signature", "X-Amz-Security-Token",
-        "X-Goog-Credential", "X-Goog-Signature", "X-Goog-Algorithm",
-        "X-Goog-SignedHeaders", "AWSAccessKeyId", "Signature", "sig",
-        "se", "sp", "sv", "sr", "spr", "skoid", "sktid", "skt", "ske", "sks", "skv",
+        "key",
+        "api_key",
+        "token",
+        "access_token",
+        "client_secret",
+        "X-Amz-Credential",
+        "X-Amz-Signature",
+        "X-Amz-Security-Token",
+        "X-Goog-Credential",
+        "X-Goog-Signature",
+        "X-Goog-Algorithm",
+        "X-Goog-SignedHeaders",
+        "AWSAccessKeyId",
+        "Signature",
+        "sig",
+        "se",
+        "sp",
+        "sv",
+        "sr",
+        "spr",
+        "skoid",
+        "sktid",
+        "skt",
+        "ske",
+        "sks",
+        "skv",
     )
     filt = SecretQueryRedactionFilter()
     for param in sensitive:

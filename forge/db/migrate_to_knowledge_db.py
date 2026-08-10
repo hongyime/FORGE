@@ -1,4 +1,5 @@
 """Migrate existing .db files to consolidated knowledge.db."""
+
 import sqlite3
 import os
 import sys

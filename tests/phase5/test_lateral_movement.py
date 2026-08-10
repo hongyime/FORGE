@@ -16,6 +16,7 @@ Test categories:
   9. LateralMovementCredential — model validates auth_type / field requirements
 10. EXECUTOR_MAP       — all expected techniques present
 """
+
 from __future__ import annotations
 
 import re
@@ -42,17 +43,20 @@ from forge.phase5 import lateral_movement
 
 # ── 1. Scope gate ─────────────────────────────────────────────────────────────
 
+
 def test_out_of_scope_target_raises_scope_violation(
     tmp_eng_db: Path,
     mock_cred_password: Any,
 ) -> None:
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=False,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=False,
     )
     with pytest.raises(ScopeViolationError):
         executor.execute(
-            target="192.168.99.99",   # not in 10.0.0.0/24
+            target="192.168.99.99",  # not in 10.0.0.0/24
             technique="smb",
             command="whoami",
             cred=mock_cred_password,
@@ -66,17 +70,22 @@ def test_in_scope_target_passes_scope_check(
 ) -> None:
     _ = patch_confirm
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=True,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=True,
     )
     # SMB will fail (no real target) but scope check must pass
-    with mock.patch("forge.utils.post.remote_exec.EXECUTOR_MAP", {
-        "smb": mock.MagicMock(return_value=mock.MagicMock(
-            execute=mock.MagicMock(return_value=(True, "ok"))
-        ))
-    }):
+    with mock.patch(
+        "forge.utils.post.remote_exec.EXECUTOR_MAP",
+        {
+            "smb": mock.MagicMock(
+                return_value=mock.MagicMock(execute=mock.MagicMock(return_value=(True, "ok")))
+            )
+        },
+    ):
         result = executor.execute(
-            target="10.0.0.50",   # in scope
+            target="10.0.0.50",  # in scope
             technique="smb",
             command="whoami",
             cred=mock_cred_password,
@@ -85,6 +94,7 @@ def test_in_scope_target_passes_scope_check(
 
 
 # ── 2. Time window ────────────────────────────────────────────────────────────
+
 
 def test_time_window_blocks_outside_hours() -> None:
     with mock.patch("forge.utils.post.remote_exec.datetime") as mock_dt:
@@ -108,19 +118,23 @@ def test_executor_blocks_movement_at_3am(
     mock_cred_password: Any,
 ) -> None:
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
+        db_path=tmp_eng_db,
+        engagement_id=1,
         window=(dtime(9, 0), dtime(17, 0)),
     )
     with mock.patch("forge.utils.post.remote_exec.datetime") as mock_dt:
         mock_dt.now.return_value.time.return_value = dtime(3, 0)
         with pytest.raises(RuntimeError, match="[Ww]indow|[Bb]locked"):
             executor.execute(
-                target="10.0.0.50", technique="smb",
-                command="whoami", cred=mock_cred_password,
+                target="10.0.0.50",
+                technique="smb",
+                command="whoami",
+                cred=mock_cred_password,
             )
 
 
 # ── 3. Rate limiter ───────────────────────────────────────────────────────────
+
 
 def test_rate_limiter_raises_after_max_attempts() -> None:
     _rate_log.clear()
@@ -147,6 +161,7 @@ def test_rate_limiter_resets_after_window() -> None:
 
 # ── 4. Safe mode ──────────────────────────────────────────────────────────────
 
+
 def test_safe_mode_blocks_non_whitelisted_command() -> None:
     with pytest.raises(ValueError, match="[Ss]afe mode"):
         _validate_command("net user /add hacker P@ss", safe_mode=True)
@@ -167,6 +182,7 @@ def test_unsafe_mode_permits_arbitrary_command() -> None:
 
 # ── 5. Kerberos gate ─────────────────────────────────────────────────────────
 
+
 def test_ntlm_auth_logs_warning_without_allow_ntlm(
     tmp_eng_db: Path,
     mock_cred_password: Any,
@@ -175,17 +191,28 @@ def test_ntlm_auth_logs_warning_without_allow_ntlm(
 ) -> None:
     _ = patch_confirm
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=True, allow_ntlm=False,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=True,
+        allow_ntlm=False,
     )
-    with mock.patch("forge.utils.post.remote_exec.EXECUTOR_MAP", {
-        "winrm": mock.MagicMock(return_value=mock.MagicMock(
-            execute=mock.MagicMock(return_value=(True, "ok"))
-        ))
-    }), caplog.at_level("WARNING"):
+    with (
+        mock.patch(
+            "forge.utils.post.remote_exec.EXECUTOR_MAP",
+            {
+                "winrm": mock.MagicMock(
+                    return_value=mock.MagicMock(execute=mock.MagicMock(return_value=(True, "ok")))
+                )
+            },
+        ),
+        caplog.at_level("WARNING"),
+    ):
         executor.execute(
-            target="10.0.0.50", technique="winrm",
-            command="whoami", cred=mock_cred_password,
+            target="10.0.0.50",
+            technique="winrm",
+            command="whoami",
+            cred=mock_cred_password,
         )
     assert "ntlm" in caplog.text.lower() or "kerberos" in caplog.text.lower()
 
@@ -193,7 +220,7 @@ def test_ntlm_auth_logs_warning_without_allow_ntlm(
 # ── 6. Command validation: banned patterns ────────────────────────────────────
 
 _CMD_EXE_BANNED = re.compile(r"cmd\.exe\s+/c", re.IGNORECASE)
-_SVCCTL_BANNED  = re.compile(r"svcctl", re.IGNORECASE)
+_SVCCTL_BANNED = re.compile(r"svcctl", re.IGNORECASE)
 
 
 def test_cmd_exe_slash_c_raises_value_error() -> None:
@@ -210,12 +237,10 @@ def test_build_command_no_banned_patterns(
     tmp_eng_db: Path,
     mock_cred_password: Any,
 ) -> None:
-    executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1, window=None
-    )
+    executor = LateralMovementExecutor(db_path=tmp_eng_db, engagement_id=1, window=None)
     cmd = executor.build_command("smb", "10.0.0.50", mock_cred_password)
     assert not _CMD_EXE_BANNED.search(cmd), "cmd.exe /c in built command."
-    assert not _SVCCTL_BANNED.search(cmd),  "svcctl in built command."
+    assert not _SVCCTL_BANNED.search(cmd), "svcctl in built command."
 
 
 def test_spray_credentials_requires_roe_before_approval(
@@ -274,6 +299,7 @@ def test_spray_credentials_scope_denies_before_approval(
 
 # ── 7. Operator confirmation ──────────────────────────────────────────────────
 
+
 def test_operator_cancel_returns_not_confirmed(
     tmp_eng_db: Path,
     mock_cred_password: Any,
@@ -281,12 +307,16 @@ def test_operator_cancel_returns_not_confirmed(
 ) -> None:
     _ = patch_confirm_deny
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=True,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=True,
     )
     result = executor.execute(
-        target="10.0.0.50", technique="smb",
-        command="whoami", cred=mock_cred_password,
+        target="10.0.0.50",
+        technique="smb",
+        command="whoami",
+        cred=mock_cred_password,
     )
     assert result["success"] is False
     assert result["operator_confirmed"] is False
@@ -294,20 +324,25 @@ def test_operator_cancel_returns_not_confirmed(
 
 def test_confirm_called_before_execution(tmp_eng_db: Path, mock_cred_password: Any) -> None:
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=True,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=True,
     )
     confirm_mock = mock.MagicMock()
     confirm_mock.ask.return_value = False
     with mock.patch("questionary.confirm", return_value=confirm_mock):
         executor.execute(
-            target="10.0.0.50", technique="smb",
-            command="whoami", cred=mock_cred_password,
+            target="10.0.0.50",
+            technique="smb",
+            command="whoami",
+            cred=mock_cred_password,
         )
     confirm_mock.ask.assert_called_once()
 
 
 # ── 8. Audit log ──────────────────────────────────────────────────────────────
+
 
 def test_audit_log_written_after_execution(
     tmp_eng_db: Path,
@@ -316,19 +351,26 @@ def test_audit_log_written_after_execution(
 ) -> None:
     _ = patch_confirm
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=True,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=True,
     )
-    with mock.patch("forge.utils.post.remote_exec.EXECUTOR_MAP", {
-        "ssh": mock.MagicMock(return_value=mock.MagicMock(
-            execute=mock.MagicMock(return_value=(True, "root"))
-        ))
-    }):
+    with mock.patch(
+        "forge.utils.post.remote_exec.EXECUTOR_MAP",
+        {
+            "ssh": mock.MagicMock(
+                return_value=mock.MagicMock(execute=mock.MagicMock(return_value=(True, "root")))
+            )
+        },
+    ):
         executor.execute(
-            target="10.0.0.50", technique="ssh",
-            command="whoami", cred=mock_cred_password,
+            target="10.0.0.50",
+            technique="ssh",
+            command="whoami",
+            cred=mock_cred_password,
         )
-    con  = sqlite3.connect(tmp_eng_db)
+    con = sqlite3.connect(tmp_eng_db)
     rows = con.execute("SELECT action FROM audit_log").fetchall()
     con.close()
     actions = [r[0] for r in rows]
@@ -342,19 +384,26 @@ def test_audit_log_never_stores_password(
 ) -> None:
     _ = patch_confirm
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=True,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=True,
     )
-    with mock.patch("forge.utils.post.remote_exec.EXECUTOR_MAP", {
-        "ssh": mock.MagicMock(return_value=mock.MagicMock(
-            execute=mock.MagicMock(return_value=(False, "error"))
-        ))
-    }):
+    with mock.patch(
+        "forge.utils.post.remote_exec.EXECUTOR_MAP",
+        {
+            "ssh": mock.MagicMock(
+                return_value=mock.MagicMock(execute=mock.MagicMock(return_value=(False, "error")))
+            )
+        },
+    ):
         executor.execute(
-            target="10.0.0.50", technique="ssh",
-            command="whoami", cred=mock_cred_password,
+            target="10.0.0.50",
+            technique="ssh",
+            command="whoami",
+            cred=mock_cred_password,
         )
-    con      = sqlite3.connect(tmp_eng_db)
+    con = sqlite3.connect(tmp_eng_db)
     all_data = str(con.execute("SELECT * FROM audit_log").fetchall())
     con.close()
     assert "P@ssw0rd!" not in all_data, "Password must not appear in audit_log."
@@ -366,17 +415,22 @@ def test_kubernetes_technique_uses_scope_target(
 ) -> None:
     _ = patch_confirm
     executor = LateralMovementExecutor(
-        db_path=tmp_eng_db, engagement_id=1,
-        window=None, safe_mode=False,
+        db_path=tmp_eng_db,
+        engagement_id=1,
+        window=None,
+        safe_mode=False,
     )
     cred = mock.MagicMock()
     cred.auth_type = "token"
     cred.scope_target = "10.0.0.50"
-    with mock.patch("forge.utils.post.remote_exec.EXECUTOR_MAP", {
-        "kubernetes": mock.MagicMock(return_value=mock.MagicMock(
-            execute=mock.MagicMock(return_value=(True, "ok"))
-        ))
-    }):
+    with mock.patch(
+        "forge.utils.post.remote_exec.EXECUTOR_MAP",
+        {
+            "kubernetes": mock.MagicMock(
+                return_value=mock.MagicMock(execute=mock.MagicMock(return_value=(True, "ok")))
+            )
+        },
+    ):
         result = executor.execute(
             target="default/api-pod",
             technique="kubernetes",
@@ -388,11 +442,15 @@ def test_kubernetes_technique_uses_scope_target(
 
 # ── 9. LateralMovementCredential ─────────────────────────────────────────────
 
+
 def test_kerberos_cred_requires_ccache_path() -> None:
     from forge.contracts.models import LateralMovementCredential
+
     with pytest.raises(ValueError, match="ccache_path"):
         LateralMovementCredential(
-            credential_id=1, username="user", domain="CORP",
+            credential_id=1,
+            username="user",
+            domain="CORP",
             auth_type="kerberos",
             # ccache_path deliberately omitted
         )
@@ -400,9 +458,12 @@ def test_kerberos_cred_requires_ccache_path() -> None:
 
 def test_password_cred_requires_password_field() -> None:
     from forge.contracts.models import LateralMovementCredential
+
     with pytest.raises(ValueError, match="password"):
         LateralMovementCredential(
-            credential_id=1, username="user", domain="CORP",
+            credential_id=1,
+            username="user",
+            domain="CORP",
             auth_type="password",
             # password deliberately omitted
         )
@@ -410,9 +471,12 @@ def test_password_cred_requires_password_field() -> None:
 
 def test_certificate_cred_requires_cert_and_key(tmp_path: Path) -> None:
     from forge.contracts.models import LateralMovementCredential
+
     with pytest.raises(ValueError, match="cert_path|key_path"):
         LateralMovementCredential(
-            credential_id=1, username="user", domain="CORP",
+            credential_id=1,
+            username="user",
+            domain="CORP",
             auth_type="certificate",
             cert_path=tmp_path / "cert.pem",
             # key_path deliberately omitted
@@ -425,6 +489,7 @@ def test_valid_kerberos_cred_accepted(mock_cred_kerberos: Any) -> None:
 
 
 # ── 10. EXECUTOR_MAP coverage ─────────────────────────────────────────────────
+
 
 def test_all_expected_techniques_in_executor_map() -> None:
     required = {"smb", "wmi", "winrm", "ssh", "dcom", "kubernetes"}

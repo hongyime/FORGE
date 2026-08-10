@@ -10,6 +10,7 @@ Test strategy:
   - All run_breach_query tests assert: no plaintext in audit_log/query_audit,
     encryption applied, deduplication enforced.
 """
+
 from __future__ import annotations
 
 import gzip
@@ -32,6 +33,7 @@ from forge.utils.intel.data_connector import (
 
 
 # ─── shared engagement DB fixture ───────────────────────────────────────────
+
 
 @pytest.fixture()
 def engagement_db(tmp_path: Path) -> Path:
@@ -72,6 +74,7 @@ def engagement_db(tmp_path: Path) -> Path:
 
 # ─── SQLiteBreachAdapter fixtures ───────────────────────────────────────────
 
+
 @pytest.fixture()
 def sqlite_db(tmp_path: Path) -> Path:
     db = tmp_path / "breach.db"
@@ -84,10 +87,16 @@ def sqlite_db(tmp_path: Path) -> Path:
     con.executemany(
         "INSERT INTO breaches VALUES (?,?,?,?,?)",
         [
-            (1, "alice@example.com", "P@ssw0rd!",                             None,   "Breach2023"),
-            (2, "alice@example.com", "aad3b435b51404eeaad3b435b51404ee",      "ntlm", "Breach2023"),
-            (3, "alice@example.com", "da39a3ee5e6b4b0d3255bfef95601890afd80709", "sha1", "Breach2023"),
-            (4, "bob@example.com",   "hunter2",                               None,   "OtherBreach"),
+            (1, "alice@example.com", "P@ssw0rd!", None, "Breach2023"),
+            (2, "alice@example.com", "aad3b435b51404eeaad3b435b51404ee", "ntlm", "Breach2023"),
+            (
+                3,
+                "alice@example.com",
+                "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                "sha1",
+                "Breach2023",
+            ),
+            (4, "bob@example.com", "hunter2", None, "OtherBreach"),
         ],
     )
     con.commit()
@@ -108,17 +117,21 @@ def sqlite_db_no_index(tmp_path: Path) -> Path:
 
 # ─── BaseQueryAdapter fixtures ───────────────────────────────────────────────
 
+
 @pytest.fixture()
 def bq_db(tmp_path: Path) -> Path:
     db = tmp_path / "bq.db"
     con = sqlite3.connect(db)
     con.execute("CREATE TABLE data (id INTEGER PRIMARY KEY, email TEXT, password TEXT)")
     con.execute("CREATE INDEX idx_email ON data(email)")
-    con.executemany("INSERT INTO data VALUES (?,?,?)", [
-        (1, "victim@example.com", "ClearP@ss"),
-        (2, "victim@example.com", "5f4dcc3b5aa765d61d8327deb882cf99"),
-        (3, "other@example.com",  "$2b$12$abc123defghijklmnopqrstuabc123defghijklmnopq"),
-    ])
+    con.executemany(
+        "INSERT INTO data VALUES (?,?,?)",
+        [
+            (1, "victim@example.com", "ClearP@ss"),
+            (2, "victim@example.com", "5f4dcc3b5aa765d61d8327deb882cf99"),
+            (3, "other@example.com", "$2b$12$abc123defghijklmnopqrstuabc123defghijklmnopq"),
+        ],
+    )
     con.commit()
     con.close()
     return db
@@ -138,13 +151,14 @@ def bq_db_invalid(tmp_path: Path) -> Path:
 def bq_db_missing_col(tmp_path: Path) -> Path:
     db = tmp_path / "misscol.db"
     con = sqlite3.connect(db)
-    con.execute("CREATE TABLE data (id INTEGER PRIMARY KEY, email TEXT)")   # no password col
+    con.execute("CREATE TABLE data (id INTEGER PRIMARY KEY, email TEXT)")  # no password col
     con.commit()
     con.close()
     return db
 
 
 # ─── TextBreachAdapter fixtures ──────────────────────────────────────────────
+
 
 @pytest.fixture()
 def text_file(tmp_path: Path) -> Path:
@@ -179,27 +193,31 @@ def reversed_text_file(tmp_path: Path) -> Path:
 # _classify_password
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestClassifyPassword:
-    @pytest.mark.parametrize("raw,exp_plain,exp_hash", [
-        ("P@ssw0rd!",                                   "P@ssw0rd!", None),
-        ("aad3b435b51404eeaad3b435b51404ee",            None, "ntlm"),
-        ("da39a3ee5e6b4b0d3255bfef95601890afd80709",    None, "sha1"),
-        ("e3b0c44298fc1c149afbf4c8996fb924" + "2" * 32, None, "sha256"),
-        ("$2b$12$abcdefghijk",                          None, "bcrypt"),
-        ("$2a$10$abcdefghijk",                          None, "bcrypt"),
-        ("$1$salt$hash",                                None, "md5crypt"),
-        ("$6$salt$longhash",                            None, "sha512crypt"),
-        ("",                                            None, None),
-    ])
+    @pytest.mark.parametrize(
+        "raw,exp_plain,exp_hash",
+        [
+            ("P@ssw0rd!", "P@ssw0rd!", None),
+            ("aad3b435b51404eeaad3b435b51404ee", None, "ntlm"),
+            ("da39a3ee5e6b4b0d3255bfef95601890afd80709", None, "sha1"),
+            ("e3b0c44298fc1c149afbf4c8996fb924" + "2" * 32, None, "sha256"),
+            ("$2b$12$abcdefghijk", None, "bcrypt"),
+            ("$2a$10$abcdefghijk", None, "bcrypt"),
+            ("$1$salt$hash", None, "md5crypt"),
+            ("$6$salt$longhash", None, "sha512crypt"),
+            ("", None, None),
+        ],
+    )
     def test_classify(self, raw, exp_plain, exp_hash):
         plain, ht = _classify_password(raw)
         assert plain == exp_plain
-        assert ht    == exp_hash
+        assert ht == exp_hash
 
     def test_bcrypt_plaintext_none(self):
         plain, ht = _classify_password("$2b$12$test")
         assert plain is None
-        assert ht    == "bcrypt"
+        assert ht == "bcrypt"
 
     def test_ntlm_exactly_32_hex(self):
         _, ht = _classify_password("a" * 32)
@@ -213,6 +231,7 @@ class TestClassifyPassword:
 # ═══════════════════════════════════════════════════════════════════════════
 # SQLiteBreachAdapter
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestSQLiteBreachAdapter:
     def test_missing_file_raises(self, tmp_path):
@@ -230,22 +249,22 @@ class TestSQLiteBreachAdapter:
         assert len(records) == 3
 
     def test_plaintext_classified_correctly(self, sqlite_db):
-        adapter    = SQLiteBreachAdapter(sqlite_db)
-        records    = list(adapter.records({"alice@example.com"}))
+        adapter = SQLiteBreachAdapter(sqlite_db)
+        records = list(adapter.records({"alice@example.com"}))
         plaintexts = [r for r in records if r.plaintext == "P@ssw0rd!"]
         assert len(plaintexts) == 1
 
     def test_ntlm_hash_classified(self, sqlite_db):
         adapter = SQLiteBreachAdapter(sqlite_db)
         records = list(adapter.records({"alice@example.com"}))
-        ntlm    = [r for r in records if r.hash_type == "ntlm"]
+        ntlm = [r for r in records if r.hash_type == "ntlm"]
         assert len(ntlm) == 1
         assert ntlm[0].plaintext is None
 
     def test_sha1_hash_classified(self, sqlite_db):
         adapter = SQLiteBreachAdapter(sqlite_db)
         records = list(adapter.records({"alice@example.com"}))
-        sha1    = [r for r in records if r.hash_type == "sha1"]
+        sha1 = [r for r in records if r.hash_type == "sha1"]
         assert len(sha1) == 1
 
     def test_no_results_for_missing_email(self, sqlite_db):
@@ -256,12 +275,13 @@ class TestSQLiteBreachAdapter:
     def test_multi_target_lookup(self, sqlite_db):
         adapter = SQLiteBreachAdapter(sqlite_db)
         records = list(adapter.records({"alice@example.com", "bob@example.com"}))
-        emails  = {r.email for r in records}
+        emails = {r.email for r in records}
         assert "alice@example.com" in emails
-        assert "bob@example.com"   in emails
+        assert "bob@example.com" in emails
 
     def test_no_index_warning_logged(self, sqlite_db_no_index, caplog):
         import logging
+
         with caplog.at_level(logging.WARNING):
             SQLiteBreachAdapter(sqlite_db_no_index)
         assert any("index" in m.lower() or "slow" in m.lower() for m in caplog.messages)
@@ -273,14 +293,15 @@ class TestSQLiteBreachAdapter:
 
     def test_query_bulk_grouping(self, sqlite_db):
         adapter = SQLiteBreachAdapter(sqlite_db)
-        result  = dict(adapter.query_bulk({"alice@example.com", "bob@example.com"}))
+        result = dict(adapter.query_bulk({"alice@example.com", "bob@example.com"}))
         assert len(result["alice@example.com"]) == 3
-        assert len(result["bob@example.com"])   == 1
+        assert len(result["bob@example.com"]) == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BaseQueryAdapter
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestBaseQueryAdapter:
     def test_valid_schema_succeeds(self, bq_db):
@@ -297,21 +318,21 @@ class TestBaseQueryAdapter:
             BaseQueryAdapter(bq_db_missing_col)
 
     def test_plaintext_detection(self, bq_db):
-        adapter  = BaseQueryAdapter(bq_db)
-        records  = list(adapter.records({"victim@example.com"}))
-        pt_recs  = [r for r in records if r.plaintext == "ClearP@ss"]
+        adapter = BaseQueryAdapter(bq_db)
+        records = list(adapter.records({"victim@example.com"}))
+        pt_recs = [r for r in records if r.plaintext == "ClearP@ss"]
         assert len(pt_recs) == 1
 
     def test_md5_hash_detected(self, bq_db):
         adapter = BaseQueryAdapter(bq_db)
         records = list(adapter.records({"victim@example.com"}))
-        hashes  = [r for r in records if r.hash_value is not None]
+        hashes = [r for r in records if r.hash_value is not None]
         assert len(hashes) >= 1
 
     def test_bcrypt_skipped_plaintext_none(self, bq_db):
         adapter = BaseQueryAdapter(bq_db)
         records = list(adapter.records({"other@example.com"}))
-        bcrypt  = [r for r in records if r.hash_type == "bcrypt"]
+        bcrypt = [r for r in records if r.hash_type == "bcrypt"]
         assert len(bcrypt) == 1
         assert bcrypt[0].plaintext is None
 
@@ -329,6 +350,7 @@ class TestBaseQueryAdapter:
 # ═══════════════════════════════════════════════════════════════════════════
 # TextBreachAdapter
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestTextBreachAdapter:
     def test_finds_email_record(self, text_file):
@@ -378,6 +400,7 @@ class TestTextBreachAdapter:
 # _detect_adapter
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestDetectAdapter:
     def test_db_extension_returns_sqlite(self, sqlite_db):
         adapter = _detect_adapter(sqlite_db)
@@ -415,11 +438,12 @@ class TestDetectAdapter:
 # run_breach_query
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestRunBreachQuery:
     def test_inserts_credentials(self, engagement_db, sqlite_db):
-        con      = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         inserted = run_breach_query(sqlite_db, 1, con, ["alice@example.com"])
-        count    = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
+        count = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
         con.close()
         assert inserted >= 1
         assert count >= 1
@@ -427,9 +451,9 @@ class TestRunBreachQuery:
     def test_dedup_no_double_insert(self, engagement_db, sqlite_db):
         con = sqlite3.connect(engagement_db)
         run_breach_query(sqlite_db, 1, con, ["alice@example.com"])
-        c1  = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
+        c1 = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
         run_breach_query(sqlite_db, 1, con, ["alice@example.com"])
-        c2  = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
+        c2 = con.execute("SELECT COUNT(*) FROM credentials").fetchone()[0]
         con.close()
         assert c1 == c2
 
@@ -444,11 +468,11 @@ class TestRunBreachQuery:
         """Passwords must NEVER appear in query_audit."""
         con = sqlite3.connect(engagement_db)
         run_breach_query(sqlite_db, 1, con, ["alice@example.com"])
-        rows   = con.execute("SELECT * FROM query_audit").fetchall()
+        rows = con.execute("SELECT * FROM query_audit").fetchall()
         as_str = str(rows).lower()
         con.close()
         assert "p@ssw0rd" not in as_str
-        assert "hunter2"  not in as_str
+        assert "hunter2" not in as_str
 
     def test_password_stored_encrypted(self, engagement_db, sqlite_db):
         """password_plaintext_enc must not equal the original plaintext."""
@@ -463,10 +487,10 @@ class TestRunBreachQuery:
                 assert enc != "P@ssw0rd!", "Plaintext stored unencrypted!"
 
     def test_uses_emails_from_db_when_none_supplied(self, engagement_db, sqlite_db):
-        con      = sqlite3.connect(engagement_db)
-        inserted = run_breach_query(sqlite_db, 1, con)   # no target_emails kwarg
+        con = sqlite3.connect(engagement_db)
+        inserted = run_breach_query(sqlite_db, 1, con)  # no target_emails kwarg
         con.close()
-        assert inserted >= 0   # ran without error; alice is in DB emails table
+        assert inserted >= 0  # ran without error; alice is in DB emails table
 
     def test_zero_targets_returns_zero(self, engagement_db, sqlite_db):
         con = sqlite3.connect(engagement_db)
@@ -485,7 +509,7 @@ class TestRunBreachQuery:
 
     def test_hash_only_records_stored(self, engagement_db, sqlite_db):
         """Records with only a hash (no plaintext) must still be inserted."""
-        con   = sqlite3.connect(engagement_db)
+        con = sqlite3.connect(engagement_db)
         run_breach_query(sqlite_db, 1, con, ["alice@example.com"])
         hrows = con.execute(
             "SELECT * FROM credentials WHERE email='alice@example.com' AND password_hash IS NOT NULL"

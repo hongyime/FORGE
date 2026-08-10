@@ -13,9 +13,7 @@ def test_api_application_metadata_helpers_strip_sensitive_query_parameters() -> 
     cases = [
         (
             agent_card_urls,
-            json.dumps(
-                {"url": "https://agent.acme.test/a2a?token=hidden&view=public"}
-            ),
+            json.dumps({"url": "https://agent.acme.test/a2a?token=hidden&view=public"}),
             "https://agent.acme.test/.well-known/agent-card.json",
             "https://agent.acme.test/a2a?view=public",
             "https://agent.acme.test/a2a?token=hidden&view=public",
@@ -23,16 +21,7 @@ def test_api_application_metadata_helpers_strip_sensitive_query_parameters() -> 
         (
             api_catalog_urls,
             json.dumps(
-                {
-                    "apis": [
-                        {
-                            "url": (
-                                "https://api.acme.test/catalog?"
-                                "api_key=hidden&view=public"
-                            )
-                        }
-                    ]
-                }
+                {"apis": [{"url": ("https://api.acme.test/catalog?api_key=hidden&view=public")}]}
             ),
             "https://api.acme.test/.well-known/api-catalog",
             "https://api.acme.test/catalog?view=public",
@@ -41,11 +30,7 @@ def test_api_application_metadata_helpers_strip_sensitive_query_parameters() -> 
         (
             open_resource_discovery_urls,
             json.dumps(
-                {
-                    "resources": [
-                        "https://resources.acme.test/ord?signature=hidden&view=public"
-                    ]
-                }
+                {"resources": ["https://resources.acme.test/ord?signature=hidden&view=public"]}
             ),
             "https://resources.acme.test/.well-known/open-resource-discovery",
             "https://resources.acme.test/ord?view=public",
@@ -61,12 +46,7 @@ def test_api_application_metadata_helpers_strip_sensitive_query_parameters() -> 
         (
             webweaver_urls,
             json.dumps(
-                {
-                    "endpoint": (
-                        "https://webweaver.acme.test/api?"
-                        "api_key=hidden&view=public"
-                    )
-                }
+                {"endpoint": ("https://webweaver.acme.test/api?api_key=hidden&view=public")}
             ),
             "https://webweaver.acme.test/.well-known/webweaver.json",
             "https://webweaver.acme.test/api?view=public",

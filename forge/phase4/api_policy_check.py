@@ -157,12 +157,8 @@ class SupabaseScanner:
         auto_discover_enabled = self._is_enabled(
             auto_discover, "FORGE_SUPABASE_AUTO_DISCOVERY", True
         )
-        mobile_extract_enabled = self._is_enabled(
-            mobile_extract, "FORGE_MOBILE_ASSETS_SCAN", True
-        )
-        repo_scavenge_enabled = self._is_enabled(
-            repo_scavenge, "FORGE_REPO_KEY_SCAVENGE", True
-        )
+        mobile_extract_enabled = self._is_enabled(mobile_extract, "FORGE_MOBILE_ASSETS_SCAN", True)
+        repo_scavenge_enabled = self._is_enabled(repo_scavenge, "FORGE_REPO_KEY_SCAVENGE", True)
 
         def next_anon_key() -> Optional[str]:
             nonlocal anon_idx
@@ -196,7 +192,9 @@ class SupabaseScanner:
             if discovered:
                 anon_keys = self._merge_unique(anon_keys, [discovered])
         if not anon_keys and mobile_extract_enabled:
-            anon_keys = self._merge_unique(anon_keys, self._extract_mobile_supabase_keys(con, project_ref))
+            anon_keys = self._merge_unique(
+                anon_keys, self._extract_mobile_supabase_keys(con, project_ref)
+            )
         if not anon_keys and repo_scavenge_enabled and not dry_run:
             anon_keys = self._merge_unique(anon_keys, self._scavenge_public_repos(project_ref))
         if not anon_keys:

@@ -12,11 +12,12 @@ Channel selection guidance:
   SMB    — named pipes from Phase 0 LOLBin DB; atsvc/winreg only.
   ICMP   — 64-byte payload fragments; vary sequence/identifier per packet.
 """
+
 from __future__ import annotations
 
 from forge.utils.post.channels.http_channel import HTTPChannel
-from forge.utils.post.channels.dns_channel  import DNSChannel
-from forge.utils.post.channels.smb_channel  import SMBChannel
+from forge.utils.post.channels.dns_channel import DNSChannel
+from forge.utils.post.channels.smb_channel import SMBChannel
 from forge.utils.post.channels.icmp_channel import ICMPChannel
 
 __all__ = ["HTTPChannel", "DNSChannel", "SMBChannel", "ICMPChannel"]

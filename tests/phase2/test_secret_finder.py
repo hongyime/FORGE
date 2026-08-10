@@ -2,6 +2,7 @@
 tests/phase2/test_secret_finder.py
 Unit tests for Module 2-J: secret_finder.py
 """
+
 from __future__ import annotations
 
 import base64
@@ -58,26 +59,47 @@ def _discord_token_for_bot_id(bot_id: str) -> str:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def pattern_file(tmp_path: Path) -> Path:
     f = tmp_path / "api_key_patterns.json"
-    f.write_text(json.dumps({
-        "version": "1.0",
-        "patterns": [
-            {"name": "aws_access_key_id", "service": "aws",
-             "regex": "AKIA[0-9A-Z]{16}", "confidence": "high",
-             "validation_method": "AwsKeyValidator"},
-            {"name": "github_pat_classic", "service": "github",
-             "regex": "ghp_[A-Za-z0-9]{36}", "confidence": "high",
-             "validation_method": "GithubPatValidator"},
-            {"name": "mailchimp_api_key", "service": "mailchimp",
-             "regex": "[0-9a-fA-F]{32}-us[0-9]{1,2}", "confidence": "high",
-             "validation_method": "MailchimpKeyValidator"},
-            {"name": "stripe_live_key", "service": "stripe",
-             "regex": "sk_live_[0-9a-zA-Z]{24,}", "confidence": "high",
-             "validation_method": "StripeKeyValidator"},
-        ]
-    }))
+    f.write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "patterns": [
+                    {
+                        "name": "aws_access_key_id",
+                        "service": "aws",
+                        "regex": "AKIA[0-9A-Z]{16}",
+                        "confidence": "high",
+                        "validation_method": "AwsKeyValidator",
+                    },
+                    {
+                        "name": "github_pat_classic",
+                        "service": "github",
+                        "regex": "ghp_[A-Za-z0-9]{36}",
+                        "confidence": "high",
+                        "validation_method": "GithubPatValidator",
+                    },
+                    {
+                        "name": "mailchimp_api_key",
+                        "service": "mailchimp",
+                        "regex": "[0-9a-fA-F]{32}-us[0-9]{1,2}",
+                        "confidence": "high",
+                        "validation_method": "MailchimpKeyValidator",
+                    },
+                    {
+                        "name": "stripe_live_key",
+                        "service": "stripe",
+                        "regex": "sk_live_[0-9a-zA-Z]{24,}",
+                        "confidence": "high",
+                        "validation_method": "StripeKeyValidator",
+                    },
+                ],
+            }
+        )
+    )
     return f
 
 
@@ -112,6 +134,7 @@ def engagement_db(tmp_path: Path) -> Path:
 # load_key_patterns
 # ---------------------------------------------------------------------------
 
+
 def test_load_key_patterns(pattern_file):
     patterns = load_key_patterns(pattern_file)
     assert len(patterns) == 4
@@ -128,21 +151,37 @@ def test_load_key_patterns_missing_file(tmp_path):
 
 def test_load_validatable_primary_patterns_skips_context_required(tmp_path: Path):
     pattern_file = tmp_path / "api_key_patterns.json"
-    pattern_file.write_text(json.dumps({
-        "version": "1.0",
-        "patterns": [
-            {"name": "twilio_account_sid", "service": "twilio",
-             "regex": "AC[a-z0-9]{32}", "confidence": "medium",
-             "validation_method": "TwilioKeyValidator"},
-            {"name": "twilio_auth_token", "service": "twilio",
-             "regex": "[a-z0-9]{32}", "confidence": "low",
-             "validation_method": "TwilioKeyValidator",
-             "context_required": "twilio_account_sid"},
-            {"name": "mailchimp_api_key", "service": "mailchimp",
-             "regex": "[0-9a-fA-F]{32}-us[0-9]{1,2}", "confidence": "high",
-             "validation_method": "MailchimpKeyValidator"},
-        ],
-    }))
+    pattern_file.write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "patterns": [
+                    {
+                        "name": "twilio_account_sid",
+                        "service": "twilio",
+                        "regex": "AC[a-z0-9]{32}",
+                        "confidence": "medium",
+                        "validation_method": "TwilioKeyValidator",
+                    },
+                    {
+                        "name": "twilio_auth_token",
+                        "service": "twilio",
+                        "regex": "[a-z0-9]{32}",
+                        "confidence": "low",
+                        "validation_method": "TwilioKeyValidator",
+                        "context_required": "twilio_account_sid",
+                    },
+                    {
+                        "name": "mailchimp_api_key",
+                        "service": "mailchimp",
+                        "regex": "[0-9a-fA-F]{32}-us[0-9]{1,2}",
+                        "confidence": "high",
+                        "validation_method": "MailchimpKeyValidator",
+                    },
+                ],
+            }
+        )
+    )
 
     patterns = load_validatable_primary_patterns(pattern_file)
     names = {pattern.name for pattern in patterns}
@@ -153,18 +192,14 @@ def test_load_validatable_primary_patterns_skips_context_required(tmp_path: Path
 
 def test_default_google_api_key_pattern_is_validatable() -> None:
     patterns = load_validatable_primary_patterns()
-    google_pattern = next(
-        pattern for pattern in patterns if pattern.name == "google_api_key"
-    )
+    google_pattern = next(pattern for pattern in patterns if pattern.name == "google_api_key")
     assert google_pattern.service == "google"
     assert google_pattern.validation_method == "GoogleApiKeyValidator"
 
 
 def test_default_gitlab_pat_pattern_is_validatable() -> None:
     patterns = load_validatable_primary_patterns()
-    gitlab_pattern = next(
-        pattern for pattern in patterns if pattern.name == "gitlab_pat"
-    )
+    gitlab_pattern = next(pattern for pattern in patterns if pattern.name == "gitlab_pat")
     assert gitlab_pattern.service == "gitlab"
     assert gitlab_pattern.validation_method == "GitlabPatValidator"
 
@@ -224,8 +259,10 @@ def test_default_collaboration_observability_provider_patterns_are_validatable()
 # _redact
 # ---------------------------------------------------------------------------
 
+
 def test_redact_long():
     assert _redact("AKIAIOSFODNN7EXAMPLE") == "AKIA...IPLE"
+
 
 def test_redact_short():
     assert _redact("abc") == "****"
@@ -234,6 +271,7 @@ def test_redact_short():
 # ---------------------------------------------------------------------------
 # Validators — mock HTTP responses
 # ---------------------------------------------------------------------------
+
 
 def test_github_pat_validator_active(monkeypatch):
     class _GithubClient:
@@ -629,8 +667,10 @@ def test_github_pat_validator_forbidden_stays_unconfirmed(monkeypatch):
 
 
 def test_github_pat_validator_revoked(monkeypatch):
-    with patch("forge.utils.intel.secret_finder.GithubPatValidator.validate",
-               return_value=ValidationResult(state=ValidationState.REVOKED, detail="401 Unauthorized")):
+    with patch(
+        "forge.utils.intel.secret_finder.GithubPatValidator.validate",
+        return_value=ValidationResult(state=ValidationState.REVOKED, detail="401 Unauthorized"),
+    ):
         result = GithubPatValidator().validate("ghp_" + "b" * 36)
     assert result.state == ValidationState.REVOKED
 
@@ -1030,8 +1070,7 @@ def test_stripe_validator_active_includes_balance_evidence(monkeypatch):
     result = StripeKeyValidator().validate("sk_live_" + "x" * 24)
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "Stripe balance accessible: mode=live currencies=sgd,usd "
-        "balances=available:1,pending:1"
+        "Stripe balance accessible: mode=live currencies=sgd,usd balances=available:1,pending:1"
     )
 
 
@@ -1233,8 +1272,7 @@ def test_twilio_validator_account_detail_omits_friendly_name() -> None:
     )
 
     assert detail == (
-        "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 "
-        "status=active type=Full"
+        "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 status=active type=Full"
     )
     assert "Sensitive" not in detail
 
@@ -1287,10 +1325,7 @@ def test_twilio_validator_matching_sid_and_status_is_active(monkeypatch):
 
     response = MagicMock()
     response.status_code = 200
-    response.text = (
-        '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3",'
-        '"status":"active","type":"Full"}'
-    )
+    response.text = '{"sid":"AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3","status":"active","type":"Full"}'
     fake_requests = types.SimpleNamespace(Session=_SessionFactory())
     monkeypatch.setitem(sys.modules, "curl_cffi", types.SimpleNamespace(requests=fake_requests))
     monkeypatch.setitem(sys.modules, "curl_cffi.requests", fake_requests)
@@ -1306,8 +1341,7 @@ def test_twilio_validator_matching_sid_and_status_is_active(monkeypatch):
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 "
-        "status=active type=Full"
+        "Twilio account accessible: sid=AC6f8a2c9d4e1b73f5a0c8d2e9f4a6b1c3 status=active type=Full"
     )
 
 
@@ -1433,7 +1467,9 @@ def test_azure_storage_connection_string_validator_low_signal_account_stays_unco
     def _unexpected_call(*args, **kwargs):  # noqa: ANN002, ANN003
         nonlocal called
         called = True
-        raise AssertionError("Azure validation should not call provider for low-signal account names")
+        raise AssertionError(
+            "Azure validation should not call provider for low-signal account names"
+        )
 
     monkeypatch.setattr("forge.utils.intel.secret_finder.key_validation_get", _unexpected_call)
 
@@ -1445,7 +1481,9 @@ def test_azure_storage_connection_string_validator_low_signal_account_stays_unco
     )
 
     assert result.state == ValidationState.UNCONFIRMED
-    assert result.detail == "Azure storage account name shape is invalid for deterministic validation"
+    assert (
+        result.detail == "Azure storage account name shape is invalid for deterministic validation"
+    )
     assert called is False
 
 
@@ -1860,9 +1898,7 @@ def test_sendgrid_validator_non_empty_scope_list_is_active_without_scope_names(m
     )
 
     assert result.state == ValidationState.ACTIVE
-    assert str(result.detail or "").startswith(
-        "SendGrid scopes accessible: count=2 scope_hash="
-    )
+    assert str(result.detail or "").startswith("SendGrid scopes accessible: count=2 scope_hash=")
     assert "mail.send" not in (result.detail or "")
     assert "alerts.read" not in (result.detail or "")
 
@@ -1946,8 +1982,7 @@ def test_sendgrid_validator_profile_detail_hashes_stable_username_when_email_res
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == (
-        "SendGrid profile ok: proof=profile profile_hash=8ecbc8a5b9747e47 "
-        "username_present=true"
+        "SendGrid profile ok: proof=profile profile_hash=8ecbc8a5b9747e47 username_present=true"
     )
     assert "email_present=true" not in (result.detail or "")
     assert "sender@example.com" not in (result.detail or "")
@@ -2285,9 +2320,7 @@ def test_openai_key_validator_active_lists_models(monkeypatch):
     result = OpenAIKeyValidator().validate("sk-proj-" + "A" * 48)
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == (
-        "OpenAI models ok: models=2 sample=gpt-4o-mini,text-embedding-3-small"
-    )
+    assert result.detail == ("OpenAI models ok: models=2 sample=gpt-4o-mini,text-embedding-3-small")
 
 
 def test_openai_key_validator_200_without_models_stays_unconfirmed(monkeypatch):
@@ -2745,7 +2778,9 @@ def test_discord_bot_token_validator_active_uses_current_user(monkeypatch):
     result = DiscordBotTokenValidator().validate(_discord_token_for_bot_id("739251864203918576"))
 
     assert result.state == ValidationState.ACTIVE
-    assert result.detail == "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true"
+    assert (
+        result.detail == "Discord bot auth ok: bot_id=739251864203918576 bot_profile_present=true"
+    )
     assert "sensitive-bot-name" not in (result.detail or "")
 
 
@@ -2941,9 +2976,7 @@ def test_discord_bot_token_validator_unauthorized_is_revoked(monkeypatch):
             return response
 
     monkeypatch.setattr("httpx.Client", _DiscordClient)
-    result = DiscordBotTokenValidator().validate(
-        "N" * 24 + "." + "C" * 6 + "." + "D" * 27
-    )
+    result = DiscordBotTokenValidator().validate("N" * 24 + "." + "C" * 6 + "." + "D" * 27)
 
     assert result.state == ValidationState.REVOKED
     assert result.detail == "HTTP 401"
@@ -3389,7 +3422,10 @@ def test_notion_token_validator_200_with_placeholder_uuid_stays_unconfirmed(monk
             del url, headers
             response = MagicMock()
             response.status_code = 200
-            response.json.return_value = {"object": "user", "id": "00000000-0000-0000-0000-000000000000"}
+            response.json.return_value = {
+                "object": "user",
+                "id": "00000000-0000-0000-0000-000000000000",
+            }
             return response
 
     monkeypatch.setattr("httpx.Client", _NotionClient)
@@ -4439,9 +4475,7 @@ def test_slack_token_validator_active_requires_actor_and_team(monkeypatch):
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.ACTIVE
     assert result.detail == "Slack auth ok: actor_id=U7A3C9K2 team_id=T9B2D6F4"
@@ -4491,9 +4525,7 @@ def test_slack_token_validator_rate_limited_stays_unconfirmed(monkeypatch):
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "HTTP 429"
@@ -4520,9 +4552,7 @@ def test_slack_token_validator_actor_only_response_stays_unconfirmed(monkeypatch
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Slack auth response missing actor/team identifiers"
@@ -4548,9 +4578,7 @@ def test_slack_token_validator_team_only_response_stays_unconfirmed(monkeypatch)
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Slack auth response missing actor/team identifiers"
@@ -4581,9 +4609,7 @@ def test_slack_token_validator_placeholder_ids_stay_unconfirmed(monkeypatch):
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Slack auth response missing actor/team identifiers"
@@ -4614,9 +4640,7 @@ def test_slack_token_validator_repeated_letter_ids_stay_unconfirmed(monkeypatch)
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Slack auth response missing actor/team identifiers"
@@ -4646,9 +4670,7 @@ def test_slack_token_validator_short_synthetic_ids_stay_unconfirmed(monkeypatch)
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Slack auth response missing actor/team identifiers"
@@ -4678,9 +4700,7 @@ def test_slack_token_validator_sequential_numeric_ids_stay_unconfirmed(monkeypat
             return response
 
     monkeypatch.setattr("httpx.Client", _SlackClient)
-    result = SlackTokenValidator().validate(
-        "xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx"
-    )
+    result = SlackTokenValidator().validate("xoxb-12345678901-12345678901-AbCdEfGhIjKlMnOpQrStUvWx")
 
     assert result.state == ValidationState.UNCONFIRMED
     assert result.detail == "Slack auth response missing actor/team identifiers"
@@ -4689,6 +4709,7 @@ def test_slack_token_validator_sequential_numeric_ids_stay_unconfirmed(monkeypat
 # ---------------------------------------------------------------------------
 # _store_key_finding
 # ---------------------------------------------------------------------------
+
 
 def _make_finding(pattern_name="aws_access_key_id", service="aws", key="AKIAIOSFODNN7EXAMPLE"):
     pat = KeyPattern(
@@ -4700,12 +4721,12 @@ def _make_finding(pattern_name="aws_access_key_id", service="aws", key="AKIAIOSF
         validation_method="AwsKeyValidator",
     )
     return {
-        "pattern":    pat,
-        "key_value":  key,
+        "pattern": pat,
+        "key_value": key,
         "source_url": "https://github.com/org/repo/blob/main/config.py",
-        "repo_name":  "org/repo",
-        "file_path":  "config.py",
-        "backend":    "github",
+        "repo_name": "org/repo",
+        "file_path": "config.py",
+        "backend": "github",
     }
 
 
@@ -4725,15 +4746,13 @@ def test_store_key_finding_inserts(engagement_db):
 
     finding = _make_finding()
     vresult = ValidationResult(state=ValidationState.ACTIVE, detail="AccountId: 742931608514")
-    saved   = _store_key_finding(con, 1, "example.com", finding, vresult)
+    saved = _store_key_finding(con, 1, "example.com", finding, vresult)
     assert saved is True
 
-    row = con.execute(
-        "SELECT validation_state, key_redacted FROM key_scanner_findings"
-    ).fetchone()
+    row = con.execute("SELECT validation_state, key_redacted FROM key_scanner_findings").fetchone()
     assert row[0] == "ACTIVE"
-    assert "AKIA" in row[1]   # redacted contains prefix
-    assert row[1] != "AKIAIOSFODNN7EXAMPLE"   # not full key
+    assert "AKIA" in row[1]  # redacted contains prefix
+    assert row[1] != "AKIAIOSFODNN7EXAMPLE"  # not full key
     con.close()
 
 
@@ -4782,13 +4801,14 @@ def test_store_key_finding_encrypted_key(engagement_db):
     _store_key_finding(con, 1, "example.com", finding, vresult)
 
     row = con.execute("SELECT key_enc FROM key_scanner_findings").fetchone()
-    assert row[0] != "AKIAIOSFODNN7EXAMPLE"   # must be encrypted
+    assert row[0] != "AKIAIOSFODNN7EXAMPLE"  # must be encrypted
     con.close()
 
 
 # ---------------------------------------------------------------------------
 # run_key_scanner — scope + proxy enforcement
 # ---------------------------------------------------------------------------
+
 
 def test_run_key_scanner_requires_validation_proxy(engagement_db):
     with pytest.raises(RuntimeError, match="validation-proxy"):
@@ -4800,8 +4820,12 @@ def test_run_key_scanner_no_validate_skips_proxy_check(engagement_db):
     with patch("forge.utils.intel.secret_finder.load_key_patterns", return_value=[]):
         with patch("forge.utils.intel.secret_finder.Session"):
             result = run_key_scanner(
-                engagement_db, 1, "example.com",
-                no_validate=True, validation_proxy=None, dry_run=False,
+                engagement_db,
+                1,
+                "example.com",
+                no_validate=True,
+                validation_proxy=None,
+                dry_run=False,
             )
     assert result == 0
 
@@ -4809,8 +4833,11 @@ def test_run_key_scanner_no_validate_skips_proxy_check(engagement_db):
 def test_run_key_scanner_scope_violation(engagement_db):
     with pytest.raises((ValueError, RuntimeError)):
         run_key_scanner(
-            engagement_db, 1, "outsidescope.com",
-            no_validate=True, dry_run=False,
+            engagement_db,
+            1,
+            "outsidescope.com",
+            no_validate=True,
+            dry_run=False,
         )
 
 
@@ -4820,7 +4847,10 @@ def test_run_key_scanner_dry_run_zero(engagement_db, pattern_file, monkeypatch):
         lambda *a, **kw: load_key_patterns(pattern_file),
     )
     result = run_key_scanner(
-        engagement_db, 1, "example.com",
-        no_validate=True, dry_run=True,
+        engagement_db,
+        1,
+        "example.com",
+        no_validate=True,
+        dry_run=True,
     )
     assert result == 0

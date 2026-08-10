@@ -74,7 +74,9 @@ def _install_host_surface_test_mocks(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         _emit_done_progress(
             items,
@@ -98,7 +100,9 @@ def _install_host_surface_test_mocks(
             return [{"root_domain": str(item), "urls": []} for item in items]
         raise AssertionError(f"unexpected callable batch label: {progress_label}")
 
-    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_ptr_lookup_batch(
+        ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del lookup_func, max_workers
         _emit_done_progress(
             ips,
@@ -308,7 +312,9 @@ def test_kill_chain_known_host_surface_backlog_advances_beyond_first_batch(
     finally:
         con.close()
 
-    completed_hosts = {str(seed_value) for seed_value, status, _meta in rows if status == "completed"}
+    completed_hosts = {
+        str(seed_value) for seed_value, status, _meta in rows if status == "completed"
+    }
     assert len(completed_hosts) == 40
     assert "host37.acme.example" in completed_hosts
     assert "host38.acme.example" not in completed_hosts
@@ -510,7 +516,9 @@ def test_kill_chain_skips_over_depth_persisted_recursive_seeds(
             d5_fetches.extend(str(spec.url) for spec in specs)
         return ["" for _ in specs]
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -543,7 +551,9 @@ def test_kill_chain_skips_over_depth_persisted_recursive_seeds(
             return [{"root_domain": str(item), "urls": []} for item in items]
         raise AssertionError(f"unexpected callable batch label: {progress_label}")
 
-    def _fake_ptr_lookup_batch(ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_ptr_lookup_batch(
+        ips, lookup_func, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del lookup_func, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -1099,7 +1109,9 @@ def test_kill_chain_retries_failed_executable_cloud_scan_refs_only(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -1279,7 +1291,9 @@ def test_kill_chain_retries_failed_artifact_queue_rows_and_keeps_pending_work(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -1404,7 +1418,9 @@ def test_kill_chain_mixed_case_unsupported_cloud_ref_is_resume_stable(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -1551,7 +1567,9 @@ def test_kill_chain_cloud_asset_pending_count_is_alias_aware(
         del progress_label
         return ["" for _ in specs]
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -1569,7 +1587,10 @@ def test_kill_chain_cloud_asset_pending_count_is_alias_aware(
             )
         label = str(progress_label or "")
         if label.endswith(".G DNS enrichment"):
-            return [{"root_domain": str(item), "queried_hosts": [], "cname_targets": [], "signals": []} for item in items]
+            return [
+                {"root_domain": str(item), "queried_hosts": [], "cname_targets": [], "signals": []}
+                for item in items
+            ]
         if label.endswith(".H whois/RDAP"):
             return [{"root_domain": str(item), "rdap": {}} for item in items]
         if label.endswith(".I Wayback CDX"):
@@ -1641,14 +1662,18 @@ def test_kill_chain_retries_failed_email_seed_rows(
     def _fake_module_subprocess(cmd_argv, **kwargs):  # noqa: ANN001
         del kwargs
         module_argv = tuple(str(item) for item in cmd_argv)
-        if module_argv[:2] in {
-            ("osint", "xposed"),
-            ("osint", "accounts"),
-            ("osint", "social"),
-            ("osint", "gravatar"),
-            ("osint", "google"),
-            ("osint", "emailrep"),
-        } and "--emails" in module_argv:
+        if (
+            module_argv[:2]
+            in {
+                ("osint", "xposed"),
+                ("osint", "accounts"),
+                ("osint", "social"),
+                ("osint", "gravatar"),
+                ("osint", "google"),
+                ("osint", "emailrep"),
+            }
+            and "--emails" in module_argv
+        ):
             email = module_argv[module_argv.index("--emails") + 1]
             email_attempts.append((module_argv[1], email))
             if email == "retry@acme.example":
@@ -1759,7 +1784,9 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -1856,7 +1883,9 @@ def test_kill_chain_retries_failed_keyscan_targets_and_orgs_only(
     assert all("simulated keyscan failure" in str(row[2] or "") for row in failed_rows)
     assert all(json.loads(str(row[3] or "{}"))["returncode"] == 1 for row in failed_rows)
     assert all(json.loads(str(row[3] or "{}"))["origin"] == "keyscan_org" for row in failed_rows)
-    assert all(json.loads(str(row[3] or "{}"))["query_domain"] == "acme.example" for row in failed_rows)
+    assert all(
+        json.loads(str(row[3] or "{}"))["query_domain"] == "acme.example" for row in failed_rows
+    )
     assert all(json.loads(str(row[3] or "{}"))["github_org"] == "failorg" for row in failed_rows)
     assert completed_rows == [(ok_key, "completed")]
 
@@ -1917,7 +1946,9 @@ def test_kill_chain_resume_retries_failed_github_org_keyscan_without_rediscovery
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         _emit_done_progress(
             items,
@@ -2148,7 +2179,9 @@ def test_kill_chain_keyscan_org_targets_are_per_root_domain(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(
@@ -2279,7 +2312,9 @@ def test_kill_chain_retries_empty_d5_url_fetches_only(
             return ["" for _ in specs]
         raise AssertionError(f"unexpected html batch label: {progress_label}")
 
-    def _fake_callable_batch(items, worker, *, max_workers, progress_label=None, progress_callback=None):  # noqa: ANN001
+    def _fake_callable_batch(
+        items, worker, *, max_workers, progress_label=None, progress_callback=None
+    ):  # noqa: ANN001
         del worker, max_workers
         if progress_callback is not None and progress_label:
             progress_callback(

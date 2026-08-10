@@ -19,6 +19,7 @@ Initialisation:
   (forge/cli.py root callback). All query functions raise KBQueryError
   if called before init_kb().
 """
+
 from __future__ import annotations
 
 import random
@@ -82,12 +83,11 @@ def init_kb(
 # Connection helpers
 # ---------------------------------------------------------------------------
 
+
 def _ro_conn(db_path: Path) -> sqlite3.Connection:
     """Open a read-only URI connection to *db_path*."""
     if not db_path.exists():
-        raise KBQueryError(
-            f"KB database not found: {db_path}. Run `forge kb sync` first."
-        )
+        raise KBQueryError(f"KB database not found: {db_path}. Run `forge kb sync` first.")
     uri = db_path.as_uri() + "?mode=ro"
     conn = direct_connect(uri, uri=True, timeout=5.0)
     conn.row_factory = sqlite3.Row
@@ -116,6 +116,7 @@ def _exploitdb_conn() -> sqlite3.Connection:
 # ---------------------------------------------------------------------------
 # Evasion artifact queries (Phase 5 consumers)
 # ---------------------------------------------------------------------------
+
 
 def get_schtask_name(stealth_rank_max: int = 5) -> str:
     """
@@ -156,9 +157,7 @@ def get_pipe_name(avoid_sysmon: bool = True) -> str:
             f"ORDER BY stealth_rank ASC LIMIT 5"
         ).fetchall()
     if not rows:
-        raise KBQueryError(
-            "plausible_pipe_names is empty — run `forge kb sync`."
-        )
+        raise KBQueryError("plausible_pipe_names is empty — run `forge kb sync`.")
     return validate_kb_string(random.choice(rows)["pipe_name"], "pipe_name")
 
 
@@ -209,6 +208,7 @@ def get_service_name(stealth_rank_max: int = 4) -> tuple[str, str]:
 # LOLBin queries (Phase 1, 3 consumers)
 # ---------------------------------------------------------------------------
 
+
 def get_lolbin(
     os_family: str,
     category: str,
@@ -231,9 +231,7 @@ def get_lolbin(
             (os_family, category, stealth_rank_max),
         ).fetchone()
     if not row:
-        raise KBQueryError(
-            f"No LOLBin found for os_family='{os_family}' category='{category}'."
-        )
+        raise KBQueryError(f"No LOLBin found for os_family='{os_family}' category='{category}'.")
     return dict(row)
 
 
@@ -303,6 +301,7 @@ def get_lots_host(cdn_hint: Optional[str] = None) -> dict:
 # Exploit-DB queries (Phase 4 consumer)
 # ---------------------------------------------------------------------------
 
+
 def search_exploits(query: str, platform: Optional[str] = None) -> list[dict]:
     """
     Full-text search the Exploit-DB cache using FTS5.
@@ -355,6 +354,7 @@ def get_exploit_path(exploit_id: int) -> Optional[str]:
 # NVD queries (Phase 4 consumer)
 # ---------------------------------------------------------------------------
 
+
 @lru_cache(maxsize=512)
 def get_cvss(cve_id: str) -> Optional[float]:
     """
@@ -399,6 +399,7 @@ def get_cve(cve_id: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 # Custom exception
 # ---------------------------------------------------------------------------
+
 
 class KBQueryError(RuntimeError):
     """Raised when a KB query fails due to empty tables or missing initialisation."""

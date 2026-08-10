@@ -25,8 +25,14 @@ def test_long_tail_package_url_registry_candidates() -> None:
         long_tail_package_url_registry_candidate("pub", "flutter_secure_storage")
         == "https://pub.dev/packages/flutter_secure_storage"
     )
-    assert long_tail_package_url_registry_candidate("hex", "phoenix") == "https://hex.pm/packages/phoenix"
-    assert long_tail_package_url_registry_candidate("cran", "dplyr") == "https://cran.r-project.org/package=dplyr"
+    assert (
+        long_tail_package_url_registry_candidate("hex", "phoenix")
+        == "https://hex.pm/packages/phoenix"
+    )
+    assert (
+        long_tail_package_url_registry_candidate("cran", "dplyr")
+        == "https://cran.r-project.org/package=dplyr"
+    )
     assert (
         long_tail_package_url_registry_candidate("huggingface", "bigscience/bloom")
         == "https://huggingface.co/bigscience/bloom"
@@ -41,7 +47,10 @@ def test_package_url_registry_candidate_handles_core_and_long_tail_ecosystems() 
         )
         == "https://www.npmjs.com/package/@acme/portal-ui"
     )
-    assert package_url_registry_candidate("pypi", "acme-client@0.9.0") == "https://pypi.org/project/acme-client/"
+    assert (
+        package_url_registry_candidate("pypi", "acme-client@0.9.0")
+        == "https://pypi.org/project/acme-client/"
+    )
     assert (
         package_url_registry_candidate("maven", "com.acme/portal-core@1.4.0")
         == "https://central.sonatype.com/artifact/com.acme/portal-core"
@@ -69,7 +78,10 @@ def test_cyclonedx_long_tail_package_urls_become_recursive_seeds(tmp_path: Path)
                 "components": [
                     {"name": "swift-nio", "purl": "pkg:swift/apple/swift-nio@2.62.0"},
                     {"name": "Alamofire", "purl": "pkg:cocoapods/Alamofire@5.8.1"},
-                    {"name": "flutter_secure_storage", "purl": "pkg:pub/flutter_secure_storage@9.2.4"},
+                    {
+                        "name": "flutter_secure_storage",
+                        "purl": "pkg:pub/flutter_secure_storage@9.2.4",
+                    },
                     {"name": "phoenix", "purl": "pkg:hex/phoenix@1.7.14"},
                     {"name": "dplyr", "purl": "pkg:cran/dplyr@1.1.4"},
                 ],

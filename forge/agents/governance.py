@@ -111,17 +111,13 @@ class GovernanceAgent:
         """Topics consumed by the governance agent."""
         return [INBOUND_TOPIC]
 
-    async def receive_message(
-        self, message: AgentMessage
-    ) -> list[AgentMessage]:
+    async def receive_message(self, message: AgentMessage) -> list[AgentMessage]:
         """Evaluate one review request and publish the decision."""
         payload = message.payload or {}
 
         tool_name_raw = payload.get("tool_name")
         if not isinstance(tool_name_raw, str) or not tool_name_raw:
-            raise ValueError(
-                "GovernanceAgent: payload['tool_name'] must be a non-empty string"
-            )
+            raise ValueError("GovernanceAgent: payload['tool_name'] must be a non-empty string")
         tool_name: str = tool_name_raw
 
         tool_params_raw = payload.get("tool_params", {})
@@ -130,14 +126,10 @@ class GovernanceAgent:
         )
 
         risk_level_raw = payload.get("risk_level")
-        risk_level: str | None = (
-            str(risk_level_raw) if isinstance(risk_level_raw, str) else None
-        )
+        risk_level: str | None = str(risk_level_raw) if isinstance(risk_level_raw, str) else None
 
         workflow_id_raw = payload.get("workflow_id")
-        workflow_id: str | None = (
-            str(workflow_id_raw) if isinstance(workflow_id_raw, str) else None
-        )
+        workflow_id: str | None = str(workflow_id_raw) if isinstance(workflow_id_raw, str) else None
 
         cid = message.correlation_id
 

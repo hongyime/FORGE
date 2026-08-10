@@ -42,8 +42,10 @@ def verify_audit_log(path: Path | str) -> VerificationResult:
     p = Path(path)
     if not p.exists():
         return VerificationResult(
-            ok=False, lines_checked=0,
-            failure_line=None, failure_reason=f"file not found: {p}",
+            ok=False,
+            lines_checked=0,
+            failure_line=None,
+            failure_reason=f"file not found: {p}",
         )
 
     expected_prev = "0" * 64
@@ -59,16 +61,20 @@ def verify_audit_log(path: Path | str) -> VerificationResult:
                 wrapper = json.loads(raw)
             except json.JSONDecodeError as exc:
                 return VerificationResult(
-                    ok=False, lines_checked=line_no,
+                    ok=False,
+                    lines_checked=line_no,
                     failure_line=line_no,
                     failure_reason=f"invalid JSON: {exc}",
                 )
 
             if not isinstance(wrapper, dict) or not {
-                "entry", "prev_hash", "entry_hash",
+                "entry",
+                "prev_hash",
+                "entry_hash",
             } <= set(wrapper):
                 return VerificationResult(
-                    ok=False, lines_checked=line_no,
+                    ok=False,
+                    lines_checked=line_no,
                     failure_line=line_no,
                     failure_reason="missing wrapper keys (entry/prev_hash/entry_hash)",
                 )
@@ -79,7 +85,8 @@ def verify_audit_log(path: Path | str) -> VerificationResult:
 
             if stated_prev != expected_prev:
                 return VerificationResult(
-                    ok=False, lines_checked=line_no,
+                    ok=False,
+                    lines_checked=line_no,
                     failure_line=line_no,
                     failure_reason=(
                         f"prev_hash mismatch: expected {expected_prev[:12]}..., "
@@ -102,7 +109,8 @@ def verify_audit_log(path: Path | str) -> VerificationResult:
                 chained_b = (stated_prev + entry_json_sorted).encode("utf-8")
                 if hashlib.sha256(chained_b).hexdigest() != stated_hash:
                     return VerificationResult(
-                        ok=False, lines_checked=line_no,
+                        ok=False,
+                        lines_checked=line_no,
                         failure_line=line_no,
                         failure_reason=(
                             f"entry_hash mismatch: stated {stated_hash[:12]}..., "

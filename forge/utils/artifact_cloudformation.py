@@ -187,9 +187,15 @@ def _looks_like_template(document: Any) -> bool:
     resources = _child(document, "Resources")
     if not resources:
         return False
-    if any(_fingerprint(key) in {"awstemplateformatversion", "transform", "outputs"} for key in document):
+    if any(
+        _fingerprint(key) in {"awstemplateformatversion", "transform", "outputs"}
+        for key in document
+    ):
         return True
-    return any(_resource_type(resource).startswith(("aws::", "serverless::")) for resource in resources.values())
+    return any(
+        _resource_type(resource).startswith(("aws::", "serverless::"))
+        for resource in resources.values()
+    )
 
 
 def _looks_like_serverless(document: Mapping[str, Any]) -> bool:
@@ -323,8 +329,7 @@ def _output_candidates(output: Mapping[str, Any]) -> list[str]:
 def _lambda_code_bucket_candidates(properties: Mapping[str, Any]) -> list[str]:
     code = _child(properties, "Code", "CodeUri")
     bucket = _static_bucket(
-        _ref(code, "S3Bucket", "Bucket")
-        or _ref(properties, "CodeBucket", "DeploymentBucket")
+        _ref(code, "S3Bucket", "Bucket") or _ref(properties, "CodeBucket", "DeploymentBucket")
     )
     return [f"s3://{bucket}"] if bucket else []
 
@@ -413,7 +418,11 @@ def _child(mapping: Mapping[str, Any], *keys: str) -> Mapping[str, Any]:
 def _list(mapping: Mapping[str, Any], *keys: str) -> list[Any]:
     wanted = {_fingerprint(key) for key in keys}
     for key, value in mapping.items():
-        if _fingerprint(key) in wanted and isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        if (
+            _fingerprint(key) in wanted
+            and isinstance(value, Sequence)
+            and not isinstance(value, (str, bytes, bytearray))
+        ):
             return list(value)
     return []
 

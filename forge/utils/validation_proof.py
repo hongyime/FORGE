@@ -280,7 +280,11 @@ def _has_sequential_numeric_identifier_token(value: object) -> bool:
     candidate = str(value or "").strip().lower()
     compact = re.sub(r"[^0-9]+", "", candidate)
     alnum_compact = re.sub(r"[^a-z0-9]+", "", candidate)
-    if alnum_compact and alnum_compact.isdigit() and _looks_sequential_numeric_identifier(alnum_compact):
+    if (
+        alnum_compact
+        and alnum_compact.isdigit()
+        and _looks_sequential_numeric_identifier(alnum_compact)
+    ):
         return True
     if compact and compact == alnum_compact and _looks_sequential_numeric_identifier(compact):
         return True
@@ -549,10 +553,7 @@ def _stable_currency_summary(value: object) -> str:
 
 def _profile_hash_is_stable(proof: str) -> bool:
     hash_match = re.search(r"\bprofile_hash=([a-f0-9]{16,64})\b", proof, re.IGNORECASE)
-    return bool(
-        hash_match
-        and not _looks_repeated_compact_identifier(hash_match.group(1))
-    )
+    return bool(hash_match and not _looks_repeated_compact_identifier(hash_match.group(1)))
 
 
 def _stable_slack_identifier(value: object, prefixes: tuple[str, ...]) -> str:
@@ -564,7 +565,7 @@ def _stable_slack_identifier(value: object, prefixes: tuple[str, ...]) -> str:
     prefix = next((item.upper() for item in prefixes if normalized.startswith(item.upper())), "")
     if not prefix or not re.fullmatch(rf"{prefix}[A-Z0-9]{{5,32}}", normalized):
         return ""
-    suffix = normalized[len(prefix):]
+    suffix = normalized[len(prefix) :]
     if len(set(suffix)) == 1:
         return ""
     if suffix.isdigit() and _looks_sequential_numeric_identifier(suffix):
@@ -680,7 +681,9 @@ def _sendgrid_proof_is_stable(proof: str) -> bool:
 def _stripe_balance_proof_is_stable(proof: str) -> bool:
     mode_match = re.search(r"\bmode=(live|test|unknown)\b", proof, re.IGNORECASE)
     currency_match = re.search(r"\bcurrencies=([a-z0-9_,.-]+)", proof, re.IGNORECASE)
-    balances_match = re.search(r"\bbalances=available:([0-9]+),pending:([0-9]+)\b", proof, re.IGNORECASE)
+    balances_match = re.search(
+        r"\bbalances=available:([0-9]+),pending:([0-9]+)\b", proof, re.IGNORECASE
+    )
     if not mode_match or mode_match.group(1).lower() != "live" or not balances_match:
         return False
     return bool(_stable_currency_summary(currency_match.group(1) if currency_match else ""))
@@ -708,9 +711,7 @@ def _slack_auth_proof_is_stable(proof: str) -> bool:
     actor_match = re.search(r"\b(?:actor_id|user_id|bot_id)=([a-z0-9]+)\b", proof, re.IGNORECASE)
     team_match = re.search(r"\bteam_id=([a-z0-9]+)\b", proof, re.IGNORECASE)
     actor_id = (
-        _stable_slack_identifier(actor_match.group(1), ("U", "W", "B"))
-        if actor_match
-        else ""
+        _stable_slack_identifier(actor_match.group(1), ("U", "W", "B")) if actor_match else ""
     )
     team_id = _stable_slack_identifier(team_match.group(1), ("T", "E")) if team_match else ""
     return bool(actor_id and team_id)
@@ -900,7 +901,9 @@ def _identifier_from_reportable_provider_proof(service: str, method: str, proof:
         user_id = _stable_provider_identifier(match.group(2))
         return f"{host}/{user_id}" if host in _POSTHOG_VALIDATION_HOSTS and user_id else ""
     if normalized_service == "sentry" or normalized_method == "sentry_list_organizations":
-        match = re.search(r"sentry organizations ok:\s*org_id=([0-9]{3,32})\b", proof, re.IGNORECASE)
+        match = re.search(
+            r"sentry organizations ok:\s*org_id=([0-9]{3,32})\b", proof, re.IGNORECASE
+        )
         return _stable_numeric_identifier(match.group(1)) if match else ""
     if normalized_service == "sendgrid" or normalized_method == "sendgrid_profile_api":
         if re.search(r"sendgrid profile ok:", proof, re.IGNORECASE):
@@ -919,12 +922,19 @@ def _identifier_from_reportable_provider_proof(service: str, method: str, proof:
         match = re.search(r"\bsid=(AC[a-z0-9]{32})\b", proof, re.IGNORECASE)
         return _stable_twilio_account_sid(match.group(1)) if match else ""
     if normalized_service == "slack" or normalized_method == "slack_auth_test":
-        actor_match = re.search(r"\b(?:actor_id|user_id|bot_id)=([a-z0-9]+)\b", proof, re.IGNORECASE)
+        actor_match = re.search(
+            r"\b(?:actor_id|user_id|bot_id)=([a-z0-9]+)\b", proof, re.IGNORECASE
+        )
         team_match = re.search(r"\bteam_id=([a-z0-9]+)\b", proof, re.IGNORECASE)
-        actor_id = _stable_slack_identifier(actor_match.group(1), ("U", "W", "B")) if actor_match else ""
+        actor_id = (
+            _stable_slack_identifier(actor_match.group(1), ("U", "W", "B")) if actor_match else ""
+        )
         team_id = _stable_slack_identifier(team_match.group(1), ("T", "E")) if team_match else ""
         return f"{team_id.lower()}/{actor_id.lower()}" if team_id and actor_id else ""
-    if normalized_service == "azure" or normalized_method == "azure_blob_list_containers_shared_key":
+    if (
+        normalized_service == "azure"
+        or normalized_method == "azure_blob_list_containers_shared_key"
+    ):
         match = re.search(r"\baccount=([a-z0-9]{3,24})\b", proof, re.IGNORECASE)
         return _stable_provider_identifier(match.group(1)) if match else ""
     return ""

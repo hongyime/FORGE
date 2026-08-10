@@ -7,6 +7,7 @@ All plaintext passwords age-encrypted before DB storage.
 Authorization: Operator solely responsible for lawful possession of datasets.
 FORGE does not distribute or facilitate acquisition of breach data.
 """
+
 from __future__ import annotations
 
 import csv
@@ -218,18 +219,22 @@ def query_breach(
         if pw_type == "bcrypt":
             continue  # skip — uncrackable at engagement speed
 
-        pw_hash = hashlib.sha256(password.encode()).hexdigest() if pw_type == "plaintext" else password
+        pw_hash = (
+            hashlib.sha256(password.encode()).hexdigest() if pw_type == "plaintext" else password
+        )
         pw_enc = encrypt_string(password) if pw_type == "plaintext" else None
 
-        chunk.append({
-            "engagement_id": engagement_id,
-            "email": email,
-            "password_hash": pw_hash if pw_type != "plaintext" else None,
-            "password_plaintext_enc": pw_enc,
-            "hash_type": pw_type if pw_type != "plaintext" else None,
-            "breach_name": str(source_path.stem),
-            "source": "local_breach",
-        })
+        chunk.append(
+            {
+                "engagement_id": engagement_id,
+                "email": email,
+                "password_hash": pw_hash if pw_type != "plaintext" else None,
+                "password_plaintext_enc": pw_enc,
+                "hash_type": pw_type if pw_type != "plaintext" else None,
+                "breach_name": str(source_path.stem),
+                "source": "local_breach",
+            }
+        )
 
         if len(chunk) >= CHUNK_SIZE:
             if not dry_run:

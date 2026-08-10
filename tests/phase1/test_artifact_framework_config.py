@@ -17,9 +17,18 @@ def test_framework_config_labels_are_source_aware() -> None:
     assert framework_config_artifact_label("config/database.yml") == "rails-database-config"
     assert framework_config_artifact_label("config/database.yaml") == "rails-database-config"
     assert framework_config_artifact_label("database.yml") == ""
-    assert framework_config_artifact_label("src/main/resources/application.properties") == "spring-config"
-    assert framework_config_artifact_label("src/main/resources/application-prod.yml") == "spring-config"
-    assert framework_config_artifact_label("src/main/resources/bootstrap-prod.properties") == "spring-config"
+    assert (
+        framework_config_artifact_label("src/main/resources/application.properties")
+        == "spring-config"
+    )
+    assert (
+        framework_config_artifact_label("src/main/resources/application-prod.yml")
+        == "spring-config"
+    )
+    assert (
+        framework_config_artifact_label("src/main/resources/bootstrap-prod.properties")
+        == "spring-config"
+    )
     assert framework_config_artifact_label("spring/application-local.yaml") == "spring-config"
     assert framework_config_artifact_label("offspring/application.properties") == ""
     assert framework_config_artifact_label("offspring/application-prod.yml") == ""
@@ -28,11 +37,16 @@ def test_framework_config_labels_are_source_aware() -> None:
     assert framework_config_artifact_label("appsettings.Production.json") == "dotnet-appsettings"
     assert framework_config_artifact_label("web.config") == "dotnet-web-config"
     assert framework_config_artifact_label("alembic.ini") == "alembic-config"
-    assert framework_config_artifact_label("laravel/config/database.php") == "laravel-database-config"
+    assert (
+        framework_config_artifact_label("laravel/config/database.php") == "laravel-database-config"
+    )
     assert framework_config_artifact_label("django/acme/settings.py") == "django-settings"
     assert framework_config_artifact_label("djangonaut/settings.py") == ""
     assert framework_config_artifact_label("settings.py") == ""
-    assert framework_config_artifact_label("database.yml.rails-database-config") == "rails-database-config"
+    assert (
+        framework_config_artifact_label("database.yml.rails-database-config")
+        == "rails-database-config"
+    )
 
 
 def test_framework_config_host_candidates_strip_credentials_and_templates() -> None:
@@ -163,10 +177,14 @@ def test_spring_profile_configs_feed_framework_hosts_into_recursive_seeds(
                 """
             )
         }
-        assert "spring-config" in artifact_meta[(artifact_root / "application-prod.yml").resolve().as_posix()]
-        assert "spring-config" in artifact_meta[
-            (artifact_root / "bootstrap-prod.properties").resolve().as_posix()
-        ]
+        assert (
+            "spring-config"
+            in artifact_meta[(artifact_root / "application-prod.yml").resolve().as_posix()]
+        )
+        assert (
+            "spring-config"
+            in artifact_meta[(artifact_root / "bootstrap-prod.properties").resolve().as_posix()]
+        )
 
         db_dump = "\n".join(con.iterdump())
         assert "prod-password-do-not-store" not in db_dump

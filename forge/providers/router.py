@@ -165,9 +165,7 @@ class TieredRouter:
     # Internals
     # ------------------------------------------------------------------
 
-    async def _dispatch(
-        self, tier: Tier, request: CompletionRequest
-    ) -> RouterCallResult:
+    async def _dispatch(self, tier: Tier, request: CompletionRequest) -> RouterCallResult:
         chain = self._planner if tier is Tier.PLANNER else self._executor
         names = self._planner_names if tier is Tier.PLANNER else self._executor_names
 
@@ -304,9 +302,7 @@ def build_router_from_discovery(
             "Ensure llama_cpp or another planner-eligible backend is detected."
         )
     if not executor_chain:
-        raise ValueError(
-            "build_router_from_discovery: executor chain is empty."
-        )
+        raise ValueError("build_router_from_discovery: executor chain is empty.")
 
     summary = _format_chain_summary(result, planner_chain, executor_chain, metadata)
     return TieredRouter(
@@ -330,15 +326,19 @@ def _construct_provider(b: DiscoveredBackend) -> LLMProvider | None:
     try:
         if name == "claude_code":
             from forge.providers.claude_code import ClaudeCodeProvider  # noqa: PLC0415
+
             return ClaudeCodeProvider(model_id=b.model_id)
         if name == "codex_cli":
             from forge.providers.codex_cli import CodexCliProvider  # noqa: PLC0415
+
             return CodexCliProvider(model_id=b.model_id)
         if name == "gemini_cli":
             from forge.providers.gemini_cli import GeminiCliProvider  # noqa: PLC0415
+
             return GeminiCliProvider(model_id=b.model_id)
         if name == "bedrock_anthropic":
             from forge.providers.bedrock_anthropic import BedrockAnthropicProvider  # noqa: PLC0415
+
             region = b.extra.get("region") if isinstance(b.extra, dict) else None
             return BedrockAnthropicProvider(
                 model_id=b.model_id,
@@ -346,6 +346,7 @@ def _construct_provider(b: DiscoveredBackend) -> LLMProvider | None:
             )
         if name == "llama_cpp":
             from forge.providers.llama_cpp import LlamaCppProvider  # noqa: PLC0415
+
             if b.endpoint:
                 return LlamaCppProvider(model_path=b.endpoint)
             return None
@@ -353,6 +354,7 @@ def _construct_provider(b: DiscoveredBackend) -> LLMProvider | None:
             from forge.providers.openai_compatible import (  # noqa: PLC0415
                 OpenAICompatibleProvider,
             )
+
             api_key = _resolve_api_key_for_backend(name)
             if not b.endpoint:
                 return None
@@ -364,7 +366,9 @@ def _construct_provider(b: DiscoveredBackend) -> LLMProvider | None:
             )
     except Exception as exc:  # noqa: BLE001 - any construction error skips backend
         _LOG.warning(
-            "router: failed to construct provider for %s: %s", name, exc,
+            "router: failed to construct provider for %s: %s",
+            name,
+            exc,
         )
     return None
 
@@ -406,9 +410,7 @@ def _format_chain_summary(
         f"in {result.duration_s:.2f}s",
     ]
     if not result.paid_allowed:
-        lines.append(
-            "Paid backends DISABLED (set FORGE_ALLOW_PAID_BACKENDS=1 to enable)"
-        )
+        lines.append("Paid backends DISABLED (set FORGE_ALLOW_PAID_BACKENDS=1 to enable)")
 
     lines.append("")
     lines.append(f"PLANNER chain ({len(planner_chain)} backends):")
@@ -486,19 +488,11 @@ class RouterAsProvider:
     ) -> dict[str, Any]:
         # FallbackChainProvider exposes structured_output too; route through
         # the same chain.
-        chain = (
-            self._router._planner
-            if self._tier is Tier.PLANNER
-            else self._router._executor
-        )
+        chain = self._router._planner if self._tier is Tier.PLANNER else self._router._executor
         return cast(dict[str, Any], await chain.structured_output(request, schema))
 
     async def embed(self, text: str) -> list[float]:
-        chain = (
-            self._router._planner
-            if self._tier is Tier.PLANNER
-            else self._router._executor
-        )
+        chain = self._router._planner if self._tier is Tier.PLANNER else self._router._executor
         return await chain.embed(text)
 
     async def health_check(self) -> bool:

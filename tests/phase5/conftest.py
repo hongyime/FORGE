@@ -14,6 +14,7 @@ Fixtures:
   patch_confirm      — auto-approve questionary.confirm()
   patch_confirm_deny — auto-deny questionary.confirm()
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -22,10 +23,10 @@ from unittest import mock
 
 import pytest
 
-ENGAGEMENT_ID  = 1
-IN_SCOPE_HOST  = "10.0.0.50"
+ENGAGEMENT_ID = 1
+IN_SCOPE_HOST = "10.0.0.50"
 OUT_SCOPE_HOST = "192.168.99.99"
-AES_KEY_HEX    = "aa" * 32      # 32 bytes test key
+AES_KEY_HEX = "aa" * 32  # 32 bytes test key
 
 
 @pytest.fixture()
@@ -149,20 +150,28 @@ def tmp_eng_db(tmp_path: Path) -> Path:
 @pytest.fixture()
 def mock_cred_password():
     from forge.contracts.models import LateralMovementCredential
+
     return LateralMovementCredential(
-        credential_id=1, username="testuser", domain="CORP",
-        password="P@ssw0rd!", auth_type="password",
+        credential_id=1,
+        username="testuser",
+        domain="CORP",
+        password="P@ssw0rd!",
+        auth_type="password",
     )
 
 
 @pytest.fixture()
 def mock_cred_kerberos(tmp_path: Path):
     from forge.contracts.models import LateralMovementCredential
+
     ccache = tmp_path / "test.ccache"
     ccache.write_bytes(b"\x05\x04" + b"\x00" * 32)
     return LateralMovementCredential(
-        credential_id=2, username="svc_account", domain="CORP",
-        ccache_path=ccache, auth_type="kerberos",
+        credential_id=2,
+        username="svc_account",
+        domain="CORP",
+        ccache_path=ccache,
+        auth_type="kerberos",
     )
 
 

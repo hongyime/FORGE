@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -12,9 +11,18 @@ _LOG = logging.getLogger(__name__)
 
 # Environment variable name patterns suggesting secret content
 _SECRET_VAR_PATTERNS = (
-    "KEY", "SECRET", "TOKEN", "PASSWORD", "PASSWD",
-    "CREDENTIAL", "AUTH", "API", "ACCESS", "PRIVATE",
+    "KEY",
+    "SECRET",
+    "TOKEN",
+    "PASSWORD",
+    "PASSWD",
+    "CREDENTIAL",
+    "AUTH",
+    "API",
+    "ACCESS",
+    "PRIVATE",
 )
+
 
 class EnvVarCollector(BaseCollector):
     """
@@ -51,8 +59,8 @@ class EnvVarCollector(BaseCollector):
         if not sensitive:
             return None
 
-        bundle  = json.dumps({"source": "ENV_VARS", "vars": sensitive}, indent=2).encode()
-        sha256  = self._sha256(bundle)
+        bundle = json.dumps({"source": "ENV_VARS", "vars": sensitive}, indent=2).encode()
+        sha256 = self._sha256(bundle)
         payload = self._compress_and_encrypt(bundle)
         del bundle
         del sensitive
@@ -62,10 +70,10 @@ class EnvVarCollector(BaseCollector):
         self._register_cleanup(stage_path)
 
         record = CollectedFile(
-            path       = "ENV_VARS",
-            sha256     = sha256,
-            size_bytes = len(payload),
-            metadata   = artifact,
+            path="ENV_VARS",
+            sha256=sha256,
+            size_bytes=len(payload),
+            metadata=artifact,
         )
         self.persist_metadata(record)
         return record

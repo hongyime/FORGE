@@ -10,6 +10,7 @@ Coverage targets:
   - fetch_nvd(): raises RuntimeError when offline_strict=True.
   - FTS5 trigger fires on CVE INSERT.
 """
+
 from __future__ import annotations
 
 import gzip
@@ -35,6 +36,7 @@ from forge.phase0.nvd_fetcher import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def nvd_db(tmp_path: Path) -> sqlite3.Connection:
     db_path = tmp_path / "nvd_cache.db"
@@ -51,7 +53,9 @@ def _make_nvd_item(
     cpe_count: int = 2,
 ) -> dict:
     """Build a minimal NVD CVE 1.1 item."""
-    cpe_matches = [{"cpe23Uri": f"cpe:2.3:a:apache:log4j:{i}:*:*:*:*:*:*:*"} for i in range(cpe_count)]
+    cpe_matches = [
+        {"cpe23Uri": f"cpe:2.3:a:apache:log4j:{i}:*:*:*:*:*:*:*"} for i in range(cpe_count)
+    ]
     item: dict = {
         "cve": {
             "CVE_data_meta": {"ID": cve_id},
@@ -62,9 +66,7 @@ def _make_nvd_item(
                 ]
             },
         },
-        "configurations": {
-            "nodes": [{"cpe_match": cpe_matches}]
-        },
+        "configurations": {"nodes": [{"cpe_match": cpe_matches}]},
         "publishedDate": "2021-12-10T10:15Z",
         "lastModifiedDate": "2021-12-20T14:00Z",
         "impact": {},
@@ -77,13 +79,16 @@ def _make_nvd_item(
 
 
 def _gzip_feed(items: list[dict]) -> bytes:
-    payload = json.dumps({"vulnerabilities": [{"cve": item} for item in items], "totalResults": len(items)}).encode("utf-8")
+    payload = json.dumps(
+        {"vulnerabilities": [{"cve": item} for item in items], "totalResults": len(items)}
+    ).encode("utf-8")
     return payload
 
 
 # ---------------------------------------------------------------------------
 # _score_to_severity()
 # ---------------------------------------------------------------------------
+
 
 class TestScoreToSeverity:
     def test_critical_at_nine(self) -> None:
@@ -114,6 +119,7 @@ class TestScoreToSeverity:
 # ---------------------------------------------------------------------------
 # _normalise()
 # ---------------------------------------------------------------------------
+
 
 class TestNormalise:
     def test_valid_item_full_fields(self) -> None:
@@ -166,6 +172,7 @@ class TestNormalise:
 # _bulk_upsert()
 # ---------------------------------------------------------------------------
 
+
 class TestBulkUpsert:
     def test_inserts_new_row(self, nvd_db: sqlite3.Connection) -> None:
         cve_row, cvss_row = _normalise(_make_nvd_item())
@@ -199,6 +206,7 @@ class TestBulkUpsert:
 # fetch_nvd()
 # ---------------------------------------------------------------------------
 
+
 class TestFetchNvd:
     def _make_cfg(self) -> MagicMock:
         cfg = MagicMock()
@@ -229,7 +237,9 @@ class TestFetchNvd:
         with patch("forge.phase0.nvd_fetcher._http_get", side_effect=fake_get):
             fetch_nvd(nvd_db, cfg)
 
-        assert len(fetched_urls) == 1, "Populated DB must only do one window fetch for modified CVEs."
+        assert len(fetched_urls) == 1, (
+            "Populated DB must only do one window fetch for modified CVEs."
+        )
         assert "lastModStartDate=" in fetched_urls[0]
 
     def test_uses_yearly_feeds_when_empty(self, nvd_db: sqlite3.Connection) -> None:
@@ -248,7 +258,9 @@ class TestFetchNvd:
         assert len(fetched_urls) > 1
         assert any("pubStartDate=" in url for url in fetched_urls)
 
-    def test_force_flag_fetches_yearly_even_when_populated(self, nvd_db: sqlite3.Connection) -> None:
+    def test_force_flag_fetches_yearly_even_when_populated(
+        self, nvd_db: sqlite3.Connection
+    ) -> None:
         """force=True must bypass incremental logic."""
         cve_row, cvss_row = _normalise(_make_nvd_item())
         _bulk_upsert(nvd_db, [cve_row], [cvss_row])

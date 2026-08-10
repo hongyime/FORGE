@@ -81,7 +81,9 @@ def test_cloudflare_pages_routes_use_bounded_workers_and_preserve_order(
             ],
         }
     )
-    original_route = ArtifactQueueProcessor._static_hosting_control_cloudflare_route_candidate_values
+    original_route = (
+        ArtifactQueueProcessor._static_hosting_control_cloudflare_route_candidate_values
+    )
     active = 0
     peak = 0
     lock = threading.Lock()

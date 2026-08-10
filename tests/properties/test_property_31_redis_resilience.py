@@ -120,8 +120,9 @@ def test_no_message_loss_across_arbitrary_event_sequences(
         expected_indices: list[int] = []
         next_index = 0
 
-        with patch("redis.asyncio.from_url", return_value=mock_redis), patch(
-            "asyncio.sleep", new_callable=AsyncMock
+        with (
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+            patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             for (kind,) in events:
                 if kind == "publish":
@@ -190,8 +191,9 @@ def test_backoff_bounded_starts_doubles_caps_and_resets(num_failures: int) -> No
         mock_redis.ping = fake_ping
         mock_redis.publish = AsyncMock()
 
-        with patch("redis.asyncio.from_url", return_value=mock_redis), patch(
-            "asyncio.sleep", side_effect=fake_sleep
+        with (
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+            patch("asyncio.sleep", side_effect=fake_sleep),
         ):
             await bus._reconnect_with_backoff()
 
@@ -203,16 +205,14 @@ def test_backoff_bounded_starts_doubles_caps_and_resets(num_failures: int) -> No
         # Every sleep stays inside the [initial, max] envelope.
         for s in captured_sleeps:
             assert _INITIAL_BACKOFF_S <= s <= _MAX_BACKOFF_S, (
-                f"sleep duration {s} outside "
-                f"[{_INITIAL_BACKOFF_S}, {_MAX_BACKOFF_S}]"
+                f"sleep duration {s} outside [{_INITIAL_BACKOFF_S}, {_MAX_BACKOFF_S}]"
             )
 
         # Each subsequent sleep doubles the previous, capped at the max.
         for prev, nxt in zip(captured_sleeps, captured_sleeps[1:]):
             expected = min(prev * _BACKOFF_MULTIPLIER, _MAX_BACKOFF_S)
             assert nxt == expected, (
-                f"backoff progression violated: {prev} -> {nxt}, "
-                f"expected {expected}"
+                f"backoff progression violated: {prev} -> {nxt}, expected {expected}"
             )
 
         # Eventual reconnection resets the backoff to the initial value.
@@ -252,8 +252,9 @@ def test_fifo_preserved_across_disconnect_reconnect_boundary(
         expected_order: list[int] = []
         next_index = 0
 
-        with patch("redis.asyncio.from_url", return_value=mock_redis), patch(
-            "asyncio.sleep", new_callable=AsyncMock
+        with (
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+            patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             for (kind,) in events:
                 if kind == "publish":

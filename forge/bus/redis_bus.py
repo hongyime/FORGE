@@ -93,9 +93,7 @@ class RedisMessageBus:
         # Operators can override the cap via FORGE_BUS_BUFFER_MAX env var
         # (default 10000). When the buffer is full, NEW publishes are
         # dropped with a WARNING audit/log entry.
-        self._buffer_max: int = max(
-            1, int(os.environ.get("FORGE_BUS_BUFFER_MAX", "10000"))
-        )
+        self._buffer_max: int = max(1, int(os.environ.get("FORGE_BUS_BUFFER_MAX", "10000")))
         self._buffer: deque[tuple[str, str]] = deque(maxlen=self._buffer_max)
         # Counter exposed via :attr:`dropped_count` for metrics scraping.
         self._dropped_count: int = 0
@@ -155,18 +153,12 @@ class RedisMessageBus:
         # constructor (tests that simulate a disconnected outage). The
         # first attempt's failure flips the attempted flag so subsequent
         # publishes go straight to the buffer path.
-        if (
-            self._auto_connect_enabled
-            and self._redis is None
-            and not self._auto_connect_attempted
-        ):
+        if self._auto_connect_enabled and self._redis is None and not self._auto_connect_attempted:
             self._auto_connect_attempted = True
             try:
                 await self.connect()
             except Exception as exc:
-                _LOG.debug(
-                    "RedisMessageBus: lazy connect on publish failed: %s", exc
-                )
+                _LOG.debug("RedisMessageBus: lazy connect on publish failed: %s", exc)
 
         if self._connected and self._redis is not None:
             try:
@@ -178,9 +170,7 @@ class RedisMessageBus:
                 )
                 return
             except Exception as exc:
-                _LOG.warning(
-                    "RedisMessageBus: publish failed, buffering message: %s", exc
-                )
+                _LOG.warning("RedisMessageBus: publish failed, buffering message: %s", exc)
                 self._connected = False
                 # Trigger reconnection in background
                 asyncio.create_task(self._reconnect_with_backoff())
@@ -225,18 +215,12 @@ class RedisMessageBus:
         # only. Same fail-open behaviour as publish: if the URL is
         # unreachable or auto_connect was disabled, fall through to the
         # wait-for-connect loop below rather than blocking on DNS/socket.
-        if (
-            self._auto_connect_enabled
-            and self._redis is None
-            and not self._auto_connect_attempted
-        ):
+        if self._auto_connect_enabled and self._redis is None and not self._auto_connect_attempted:
             self._auto_connect_attempted = True
             try:
                 await self.connect()
             except Exception as exc:
-                _LOG.warning(
-                    "RedisMessageBus: lazy connect on subscribe failed: %s", exc
-                )
+                _LOG.warning("RedisMessageBus: lazy connect on subscribe failed: %s", exc)
 
         while self._running:
             # Ensure we have a connection
@@ -262,15 +246,11 @@ class RedisMessageBus:
                         msg = AgentMessage.model_validate(data["payload"])
                         yield msg
                     except (json.JSONDecodeError, KeyError, Exception) as exc:
-                        _LOG.warning(
-                            "RedisMessageBus: failed to deserialize message: %s", exc
-                        )
+                        _LOG.warning("RedisMessageBus: failed to deserialize message: %s", exc)
                         continue
 
             except Exception as exc:
-                _LOG.warning(
-                    "RedisMessageBus: subscription error, reconnecting: %s", exc
-                )
+                _LOG.warning("RedisMessageBus: subscription error, reconnecting: %s", exc)
                 self._connected = False
                 self._pubsub = None
                 asyncio.create_task(self._reconnect_with_backoff())
@@ -353,9 +333,7 @@ class RedisMessageBus:
                         )
 
                 except Exception as exc:
-                    _LOG.warning(
-                        "RedisMessageBus: reconnection attempt failed: %s", exc
-                    )
+                    _LOG.warning("RedisMessageBus: reconnection attempt failed: %s", exc)
                     # Exponential backoff with cap
                     self._current_backoff = min(
                         self._current_backoff * _BACKOFF_MULTIPLIER, _MAX_BACKOFF_S
@@ -387,6 +365,7 @@ class RedisMessageBus:
     def buffer_size(self) -> int:
         """Return the number of messages currently buffered."""
         return len(self._buffer)
+
     @property
     def dropped_count(self) -> int:
         """Total messages dropped due to buffer overflow this process (P0-4)."""
@@ -396,7 +375,6 @@ class RedisMessageBus:
     def buffer_max(self) -> int:
         """Configured maximum buffer length (FORGE_BUS_BUFFER_MAX, default 10000)."""
         return self._buffer_max
-
 
     @property
     def connected(self) -> bool:

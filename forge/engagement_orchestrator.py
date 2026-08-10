@@ -167,7 +167,10 @@ from forge.utils.artifact_orm_config import (
     orm_config_artifact_label,
     orm_config_host_candidates,
 )
-from forge.utils.artifact_package_url import package_url_package_path, package_url_registry_candidate
+from forge.utils.artifact_package_url import (
+    package_url_package_path,
+    package_url_registry_candidate,
+)
 from forge.utils.artifact_package_manager_config import (
     package_manager_config_artifact_label,
     package_manager_config_remote_filename,
@@ -287,7 +290,11 @@ def _safe_social_profile_json_loads(value: str) -> Any:
 
 def _normalize_root_domain(host: str) -> str:
     labels = [part for part in host.lower().strip(".").split(".") if part]
-    if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _COMMON_SECOND_LEVEL_PUBLIC_SUFFIXES:
+    if (
+        len(labels) >= 3
+        and len(labels[-1]) == 2
+        and labels[-2] in _COMMON_SECOND_LEVEL_PUBLIC_SUFFIXES
+    ):
         return ".".join(labels[-3:])
     if len(labels) >= 2:
         return ".".join(labels[-2:])
@@ -477,7 +484,13 @@ def _is_stack_exchange_network_host(hostname: str) -> bool:
     host = hostname.strip().lower().lstrip(".")
     if host.startswith("www."):
         host = host[4:]
-    return host in {"askubuntu.com", "mathoverflow.net", "serverfault.com", "stackapps.com", "superuser.com"}
+    return host in {
+        "askubuntu.com",
+        "mathoverflow.net",
+        "serverfault.com",
+        "stackapps.com",
+        "superuser.com",
+    }
 
 
 def _is_mastodon_instance_host(hostname: str) -> bool:
@@ -493,7 +506,9 @@ def _is_managed_cloud_provider_host(hostname: str) -> bool:
     host = hostname.strip().lower().lstrip(".")
     if host.startswith("www."):
         host = host[4:]
-    return any(host == domain or host.endswith(f".{domain}") for domain in _MANAGED_CLOUD_PROVIDER_DOMAINS)
+    return any(
+        host == domain or host.endswith(f".{domain}") for domain in _MANAGED_CLOUD_PROVIDER_DOMAINS
+    )
 
 
 def _redact_secret(value: str) -> str:
@@ -536,11 +551,7 @@ def _redact_azure_storage_connection_string(value: str) -> str:
     account_name = str(parts.get("accountname") or "").strip()
     if not account_name:
         return _redact_secret(value)
-    return (
-        f"DefaultEndpointsProtocol={protocol};"
-        f"AccountName={account_name};"
-        "AccountKey=<redacted>"
-    )
+    return f"DefaultEndpointsProtocol={protocol};AccountName={account_name};AccountKey=<redacted>"
 
 
 def _normalize_phone_seed_value(value: Any) -> str:
@@ -662,9 +673,7 @@ def _artifact_network_host_seed_entries_for_host(hostname: str) -> list[tuple[st
 def _artifact_network_host_seed_entries(value: str) -> list[tuple[str, str]]:
     oracle_jdbc_match = _ARTIFACT_ORACLE_JDBC_DSN_RE.search(str(value or ""))
     if oracle_jdbc_match:
-        return _artifact_network_host_seed_entries_for_host(
-            oracle_jdbc_match.group("host")
-        )
+        return _artifact_network_host_seed_entries_for_host(oracle_jdbc_match.group("host"))
     candidate = _normalize_artifact_network_dsn_token(value)
     parsed = urlparse(candidate)
     if parsed.scheme.lower() not in _ARTIFACT_NETWORK_DSN_SCHEMES or not parsed.hostname:
@@ -834,9 +843,7 @@ def _dns_zone_line_host_tokens(raw_line: str, *, origin: str) -> list[str]:
     if not line or line.startswith("$"):
         return []
     tokens = [
-        token.strip().strip("\"'()")
-        for token in line.split()
-        if token.strip().strip("\"'()")
+        token.strip().strip("\"'()") for token in line.split() if token.strip().strip("\"'()")
     ]
     if len(tokens) < 2:
         return []
@@ -983,7 +990,9 @@ def _extract_artifact_hosts_file_host_seeds(text: str) -> list[tuple[str, str]]:
 
 
 def _looks_like_lease_mac_token(value: str) -> bool:
-    return re.fullmatch(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", str(value or "").strip()) is not None
+    return (
+        re.fullmatch(r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", str(value or "").strip()) is not None
+    )
 
 
 def _normalize_dhcp_lease_host_token(value: str) -> str:
@@ -1103,9 +1112,23 @@ def _looks_like_ansible_text_config_artifact_name(value: str) -> bool:
         return True
     if name == "inventory" and parent_segments & {"ansible", "inventories", "inventory"}:
         return True
-    if name.startswith("inventory.") and suffix in {".ini", ".cfg", ".conf", ".json", ".yml", ".yaml"}:
+    if name.startswith("inventory.") and suffix in {
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".json",
+        ".yml",
+        ".yaml",
+    }:
         return True
-    if parent_segments & {"group_vars", "host_vars"} and suffix in {"", ".json", ".yml", ".yaml", ".ini", ".cfg"}:
+    if parent_segments & {"group_vars", "host_vars"} and suffix in {
+        "",
+        ".json",
+        ".yml",
+        ".yaml",
+        ".ini",
+        ".cfg",
+    }:
         return True
     return False
 
@@ -1199,8 +1222,7 @@ def _looks_like_os_package_repo_text_config_artifact_name(value: str) -> bool:
     if suffix == ".list" and parent_segments & {"sources.list.d", "apt", "apt.conf.d"}:
         return True
     if suffix == ".repo" and (
-        parent_segments & {"yum.repos.d", "repos.d", "dnf", "yum", "zypp"}
-        or name.endswith(".repo")
+        parent_segments & {"yum.repos.d", "repos.d", "dnf", "yum", "zypp"} or name.endswith(".repo")
     ):
         return True
     if name == "repositories" and parent_segments & {"apk", "apk-tools", "alpine"}:
@@ -1351,8 +1373,10 @@ def _borg_text_config_artifact_kind(value: str) -> str:
         return "key_type"
     if name == "borg.repository.config" or re.fullmatch(r"\d+-borg\.repository\.config", name):
         return "repository_config"
-    if name in {"location", "key-type"} and "security" in parent_segments and (
-        {"borg", ".borg"} & parent_segments
+    if (
+        name in {"location", "key-type"}
+        and "security" in parent_segments
+        and ({"borg", ".borg"} & parent_segments)
     ):
         return "location" if name == "location" else "key_type"
     if name == "config" and ({"borg", ".borg"} & parent_segments):
@@ -1375,7 +1399,9 @@ def _looks_like_duplicacy_preferences_text_config_artifact_name(value: str) -> b
     parent_segments = set(segments[:-1])
     if name == "duplicacy.preferences":
         return True
-    if name in {"preferences", "preferences.json"} and ({".duplicacy", "duplicacy"} & parent_segments):
+    if name in {"preferences", "preferences.json"} and (
+        {".duplicacy", "duplicacy"} & parent_segments
+    ):
         return True
     return False
 
@@ -1529,7 +1555,9 @@ def _extract_artifact_database_client_host_seeds(text: str) -> list[tuple[str, s
 
 def _looks_like_gitreview_text_config_name(value: str) -> bool:
     lowered = Path(str(value or "").strip().replace("\\", "/")).name.lower()
-    return lowered == ".gitreview" or _cache_prefixed_special_text_config_name(lowered) == ".gitreview"
+    return (
+        lowered == ".gitreview" or _cache_prefixed_special_text_config_name(lowered) == ".gitreview"
+    )
 
 
 def _extract_artifact_gitreview_host_seeds(text: str) -> list[tuple[str, str]]:
@@ -1721,11 +1749,7 @@ def _normalize_artifact_route_token(value: str) -> str:
     candidate = str(value or "").strip()
     if not candidate:
         return ""
-    candidate = (
-        candidate.replace("\\/", "/")
-        .replace("\\u002f", "/")
-        .replace("\\u002F", "/")
-    )
+    candidate = candidate.replace("\\/", "/").replace("\\u002f", "/").replace("\\u002F", "/")
     candidate = unquote(candidate.strip().strip("[](){}<>,;\"'`"))
     while candidate:
         previous = candidate
@@ -2524,10 +2548,7 @@ def _helm_index_chart_url_metadata(
     source_file: str,
 ) -> dict[str, Any]:
     metadata = {"rule": "artifact_text_extract", "source_file": source_file}
-    if (
-        source_looks_like_helm_index(source_file)
-        and url_looks_like_helm_chart_archive(url)
-    ):
+    if source_looks_like_helm_index(source_file) and url_looks_like_helm_chart_archive(url):
         metadata["rule"] = "helm_index_chart_url"
         metadata["helm_index_url"] = source_file
     return metadata
@@ -3160,7 +3181,9 @@ def _aws_generic_arn_asset_type(service: str, resource: str) -> str:
     if normalized_service == "ecr":
         return "aws_ecr_repository" if normalized_resource.startswith("repository/") else ""
     if normalized_service == "cloudfront":
-        return "aws_cloudfront_distribution" if normalized_resource.startswith("distribution/") else ""
+        return (
+            "aws_cloudfront_distribution" if normalized_resource.startswith("distribution/") else ""
+        )
     if normalized_service == "execute-api":
         return "aws_apigateway"
     return ""
@@ -3188,6 +3211,8 @@ def _aws_generic_arn_cloud_asset_candidates(text: str) -> list[tuple[str, str, s
         seen.add(candidate)
         candidates.append(candidate)
     return candidates
+
+
 _CLOUDFLARE_STRUCTURED_ASSET_URI_RE = re.compile(
     r"cloudflare-(r2|d1|kv|worker|pages)://([a-z0-9][a-z0-9._\-]{1,127})(?:/|(?=\s|$))",
     re.IGNORECASE,
@@ -4729,7 +4754,11 @@ _OCR_TEXT_LIMIT = 16_384
 _PDF_RENDER_TIMEOUT_SECONDS = 30
 _PDF_OCR_MAX_PAGES = 3
 _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES = {".apkm", ".apks", ".xapk"}
-_NESTED_MOBILE_ARTIFACT_SUFFIXES = {".apk", ".ipa", ".aab"} | _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES
+_NESTED_MOBILE_ARTIFACT_SUFFIXES = {
+    ".apk",
+    ".ipa",
+    ".aab",
+} | _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES
 _DEFAULT_LOCAL_ARTIFACT_ROOT_SEGMENTS: tuple[tuple[str, ...], ...] = (
     ("data", "mobile"),
     ("data", "artifacts"),
@@ -4872,7 +4901,9 @@ def _looks_like_browser_sqlite_artifact_name(value: str) -> bool:
 
 def _looks_like_browser_text_config_artifact_name(value: str) -> bool:
     lowered = Path(str(value or "").strip().replace("\\", "/")).name.lower()
-    return lowered in _BROWSER_TEXT_CONFIG_ARTIFACT_NAMES or bool(_browser_state_artifact_label(value))
+    return lowered in _BROWSER_TEXT_CONFIG_ARTIFACT_NAMES or bool(
+        _browser_state_artifact_label(value)
+    )
 
 
 def _browser_state_artifact_label(value: str) -> str:
@@ -4904,7 +4935,12 @@ def _browser_state_artifact_label(value: str) -> str:
         return "playwright-storage-state"
     if name in {"cypress.env.json", "cypress.env", "cypress-env.json"}:
         return "cypress-env"
-    if name in {"localstorage.json", "sessionstorage.json", "local-storage.json", "session-storage.json"} and (
+    if name in {
+        "localstorage.json",
+        "sessionstorage.json",
+        "local-storage.json",
+        "session-storage.json",
+    } and (
         "playwright" in normalized
         or "cypress" in normalized
         or ".auth" in parent_segments
@@ -5078,7 +5114,9 @@ def _edge_proxy_config_artifact_label(value: str) -> str:
         name.endswith(".conf") or name in {"proxy_params"}
     ):
         return "apache-config"
-    if name in {"haproxy.cfg", "haproxy.conf"} or ("haproxy" in segments and name.endswith((".cfg", ".conf"))):
+    if name in {"haproxy.cfg", "haproxy.conf"} or (
+        "haproxy" in segments and name.endswith((".cfg", ".conf"))
+    ):
         return "haproxy-config"
     if name in {"traefik.yml", "traefik.yaml", "traefik.toml", "traefik.json"} or (
         "traefik" in segments and name.endswith((".yml", ".yaml", ".toml", ".json"))
@@ -5238,7 +5276,9 @@ _EDGE_PROXY_STRUCTURED_LABELS = {
     "nginx-config",
     "traefik-config",
 }
-_EDGE_PROXY_HOST_RULE_RE = re.compile(r"\bHost(?:SNI)?\s*\((?P<values>[^)]{1,2048})\)", re.IGNORECASE)
+_EDGE_PROXY_HOST_RULE_RE = re.compile(
+    r"\bHost(?:SNI)?\s*\((?P<values>[^)]{1,2048})\)", re.IGNORECASE
+)
 _EDGE_PROXY_HOST_RULE_VALUE_RE = re.compile(
     r"""[`'"](?P<quoted>[^`'"]{1,512})[`'"]|(?P<bare>[A-Za-z0-9*_.-]+(?::\d{1,5})?)""",
     re.IGNORECASE,
@@ -5344,7 +5384,10 @@ def _workflow_manifest_artifact_label(value: str) -> str:
     if not normalized:
         return ""
     name = Path(normalized).name
-    if normalized.endswith(f".github/workflows/{name}") and Path(name).suffix.lower() in {".yml", ".yaml"}:
+    if normalized.endswith(f".github/workflows/{name}") and Path(name).suffix.lower() in {
+        ".yml",
+        ".yaml",
+    }:
         return "github-actions-workflow"
     return {
         "bitbucket-pipelines.yml": "bitbucket-pipelines",
@@ -5427,9 +5470,19 @@ def _drone_ci_config_artifact_label(value: str) -> str:
 def _woodpecker_ci_config_artifact_label(value: str) -> str:
     parts = _ci_artifact_hint_parts(value)
     name = parts[-1] if parts else ""
-    if name in {"woodpecker", ".woodpecker.yml", ".woodpecker.yaml", "woodpecker.yml", "woodpecker.yaml"}:
+    if name in {
+        "woodpecker",
+        ".woodpecker.yml",
+        ".woodpecker.yaml",
+        "woodpecker.yml",
+        "woodpecker.yaml",
+    }:
         return "woodpecker"
-    if len(parts) >= 2 and parts[-2] in {".woodpecker", "woodpecker"} and name.endswith((".yml", ".yaml")):
+    if (
+        len(parts) >= 2
+        and parts[-2] in {".woodpecker", "woodpecker"}
+        and name.endswith((".yml", ".yaml"))
+    ):
         return "woodpecker"
     return ""
 
@@ -5437,7 +5490,13 @@ def _woodpecker_ci_config_artifact_label(value: str) -> str:
 def _buildkite_ci_config_artifact_label(value: str) -> str:
     parts = _ci_artifact_hint_parts(value)
     name = parts[-1] if parts else ""
-    if name in {"buildkite", "buildkite.yml", "buildkite.yaml", ".buildkite.yml", ".buildkite.yaml"}:
+    if name in {
+        "buildkite",
+        "buildkite.yml",
+        "buildkite.yaml",
+        ".buildkite.yml",
+        ".buildkite.yaml",
+    }:
         return "buildkite"
     if len(parts) >= 2 and parts[-2:] in {
         (".buildkite", "pipeline.yml"),
@@ -5485,7 +5544,12 @@ def _gitlab_ci_artifact_label(value: str) -> str:
     if not normalized:
         return ""
     name = Path(normalized).name
-    if name == "gitlab-ci" or name in {"gitlab-ci.yml", "gitlab-ci.yaml", ".gitlab-ci.yml", ".gitlab-ci.yaml"}:
+    if name == "gitlab-ci" or name in {
+        "gitlab-ci.yml",
+        "gitlab-ci.yaml",
+        ".gitlab-ci.yml",
+        ".gitlab-ci.yaml",
+    }:
         return "gitlab-ci"
     return ""
 
@@ -5547,24 +5611,56 @@ def _security_scanner_config_artifact_label(value: str) -> str:
 
     if name in {"codeql.yml", "codeql.yaml", "codeql-config.yml", "codeql-config.yaml"}:
         return "codeql-config"
-    if parent == "codeql" and name in {"config.yml", "config.yaml", "codeql-config.yml", "codeql-config.yaml"}:
+    if parent == "codeql" and name in {
+        "config.yml",
+        "config.yaml",
+        "codeql-config.yml",
+        "codeql-config.yaml",
+    }:
         return "codeql-config"
     if grandparent == ".github" and parent == "codeql" and name.endswith((".yml", ".yaml")):
         return "codeql-config"
 
-    if name == "sonar-project.properties" or re.fullmatch(r"sonar-project\.(?:ya?ml|json|toml)", name):
+    if name == "sonar-project.properties" or re.fullmatch(
+        r"sonar-project\.(?:ya?ml|json|toml)", name
+    ):
         return "sonar-project"
     if name in {"sonar.properties", ".sonarcloud.properties"}:
         return "sonar-project"
 
-    if name in {".pre-commit-config.yaml", ".pre-commit-config.yml", "pre-commit-config.yaml", "pre-commit-config.yml"}:
+    if name in {
+        ".pre-commit-config.yaml",
+        ".pre-commit-config.yml",
+        "pre-commit-config.yaml",
+        "pre-commit-config.yml",
+    }:
         return "pre-commit-config"
-    if name in {".pre-commit-hooks.yaml", ".pre-commit-hooks.yml", "pre-commit-hooks.yaml", "pre-commit-hooks.yml"}:
+    if name in {
+        ".pre-commit-hooks.yaml",
+        ".pre-commit-hooks.yml",
+        "pre-commit-hooks.yaml",
+        "pre-commit-hooks.yml",
+    }:
         return "pre-commit-hooks"
 
-    if name in {"trivy.yaml", "trivy.yml", "trivy.toml", "trivy.json", ".trivy.yaml", ".trivy.yml", ".trivy.toml"}:
+    if name in {
+        "trivy.yaml",
+        "trivy.yml",
+        "trivy.toml",
+        "trivy.json",
+        ".trivy.yaml",
+        ".trivy.yml",
+        ".trivy.toml",
+    }:
         return "trivy-config"
-    if name in {"gitleaks.toml", ".gitleaks.toml", "gitleaks.yaml", "gitleaks.yml", ".gitleaks.yaml", ".gitleaks.yml"}:
+    if name in {
+        "gitleaks.toml",
+        ".gitleaks.toml",
+        "gitleaks.yaml",
+        "gitleaks.yml",
+        ".gitleaks.yaml",
+        ".gitleaks.yml",
+    }:
         return "gitleaks-config"
     if name in {"semgrep.yaml", "semgrep.yml", ".semgrep.yaml", ".semgrep.yml"}:
         return "semgrep-config"
@@ -5615,9 +5711,23 @@ def _security_scanner_config_artifact_label(value: str) -> str:
     }:
         return "osv-scanner-config"
 
-    if name in {"checkov.yaml", "checkov.yml", "checkov.json", ".checkov.yaml", ".checkov.yml", ".checkov.json"}:
+    if name in {
+        "checkov.yaml",
+        "checkov.yml",
+        "checkov.json",
+        ".checkov.yaml",
+        ".checkov.yml",
+        ".checkov.json",
+    }:
         return "checkov-config"
-    if name in {"tfsec.yaml", "tfsec.yml", "tfsec.json", ".tfsec.yaml", ".tfsec.yml", ".tfsec.json"}:
+    if name in {
+        "tfsec.yaml",
+        "tfsec.yml",
+        "tfsec.json",
+        ".tfsec.yaml",
+        ".tfsec.yml",
+        ".tfsec.json",
+    }:
         return "tfsec-config"
     if name in {
         "terrascan.toml",
@@ -5631,9 +5741,23 @@ def _security_scanner_config_artifact_label(value: str) -> str:
         ".terrascanrc.yml",
     }:
         return "terrascan-config"
-    if name in {"kics.config", "kics.config.json", "kics.yaml", "kics.yml", ".kics.yaml", ".kics.yml"}:
+    if name in {
+        "kics.config",
+        "kics.config.json",
+        "kics.yaml",
+        "kics.yml",
+        ".kics.yaml",
+        ".kics.yml",
+    }:
         return "kics-config"
-    if name in {"nuclei.yaml", "nuclei.yml", "nuclei-config.yaml", "nuclei-config.yml", ".nuclei.yaml", ".nuclei.yml"}:
+    if name in {
+        "nuclei.yaml",
+        "nuclei.yml",
+        "nuclei-config.yaml",
+        "nuclei-config.yml",
+        ".nuclei.yaml",
+        ".nuclei.yml",
+    }:
         return "nuclei-config"
 
     return ""
@@ -5731,7 +5855,12 @@ def _developer_env_secret_config_artifact_label(value: str) -> str:
         return name_labels[name]
     if name == "config.toml" and {"mise", ".mise"} & set(parts[:-1]):
         return "mise-config"
-    if parent in {"doppler", ".doppler"} and name in {"config.json", "config.toml", "config.yaml", "config.yml"}:
+    if parent in {"doppler", ".doppler"} and name in {
+        "config.json",
+        "config.toml",
+        "config.yaml",
+        "config.yml",
+    }:
         return "doppler-config"
     if parent in {"infisical", ".infisical"} and name in {
         "config.json",
@@ -5810,7 +5939,9 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         return "expo-eas-config"
     if name in {"app.config.json", "app.config.jsonc", "app.config.yaml", "app.config.yml"}:
         return "expo-app-config"
-    if name == "app.json" and any(part in {"expo", "mobile", "react-native"} for part in parts[:-1]):
+    if name == "app.json" and any(
+        part in {"expo", "mobile", "react-native"} for part in parts[:-1]
+    ):
         return "expo-app-config"
     if name in {"capacitor.config.json", "capacitor.config.yaml", "capacitor.config.yml"}:
         return "capacitor-config"
@@ -5828,7 +5959,9 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         "testcafe.config.yml",
     }:
         return "testcafe-config"
-    if name == "config.xml" and any(part in {"cordova", "phonegap", "ionic"} for part in parts[:-1]):
+    if name == "config.xml" and any(
+        part in {"cordova", "phonegap", "ionic"} for part in parts[:-1]
+    ):
         return "cordova-config"
     if name == "firebase.json":
         return "firebase-hosting-config"
@@ -5855,7 +5988,9 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         return "heroku-config"
     if name == "static.json":
         return "static-json-config"
-    if name == "heroku-app.json" or (name == "app.json" and any(part in {"heroku", ".heroku"} for part in parts[:-1])):
+    if name == "heroku-app.json" or (
+        name == "app.json" and any(part in {"heroku", ".heroku"} for part in parts[:-1])
+    ):
         return "heroku-app-json"
     return ""
 
@@ -5895,7 +6030,12 @@ def _api_spec_config_artifact_label(value: str) -> str:
         return "api-blueprint"
     if stem in {"arazzo", "arazzo-spec", "arazzo_spec"}:
         return "arazzo"
-    if stem in {"openapi-overlay", "openapi_overlay", "openapi-overlay-spec", "openapi_overlay_spec"}:
+    if stem in {
+        "openapi-overlay",
+        "openapi_overlay",
+        "openapi-overlay-spec",
+        "openapi_overlay_spec",
+    }:
         return "openapi-overlay"
     if stem == "overlay" and any(part in normalized for part in ("openapi", "oas")):
         return "openapi-overlay"
@@ -5963,9 +6103,12 @@ def _api_client_collection_artifact_label(value: str) -> str:
         "pactum.config.yml",
     }:
         return "pactum-config"
-    if name in {"pyresttest.yaml", "pyresttest.yml", "resttest.yaml", "resttest.yml"} or name.endswith(
-        (".pyresttest.yaml", ".pyresttest.yml", ".resttest.yaml", ".resttest.yml")
-    ):
+    if name in {
+        "pyresttest.yaml",
+        "pyresttest.yml",
+        "resttest.yaml",
+        "resttest.yml",
+    } or name.endswith((".pyresttest.yaml", ".pyresttest.yml", ".resttest.yaml", ".resttest.yml")):
         return "pyresttest"
     if name in {"postman_collection", "postman-collection"} or name.endswith(
         (".postman_collection", ".postman-collection")
@@ -6017,7 +6160,8 @@ def _api_client_collection_artifact_label(value: str) -> str:
     if "pactum" in stem and any(marker in stem for marker in ("config", "api", "test", "suite")):
         return "pactum-config"
     if "pyresttest" in stem or (
-        "resttest" in stem and any(marker in stem for marker in ("api", "test", "suite", "requests"))
+        "resttest" in stem
+        and any(marker in stem for marker in ("api", "test", "suite", "requests"))
     ):
         return "pyresttest"
     if ("soapui" in stem or "readyapi" in stem) and any(
@@ -6218,7 +6362,9 @@ def _iac_manifest_artifact_label(value: str) -> str:
         return "terragrunt"
     if _looks_like_terraform_backend_config_name(normalized):
         return "terraform-backend"
-    if name.endswith((".tfvars", ".tfvars.json", ".tfvars.jsonc", ".auto.tfvars", ".auto.tfvars.json")):
+    if name.endswith(
+        (".tfvars", ".tfvars.json", ".tfvars.jsonc", ".auto.tfvars", ".auto.tfvars.json")
+    ):
         return "terraform-variables"
     if name.endswith((".tf", ".tf.json")):
         return "terraform"
@@ -6423,9 +6569,9 @@ def _looks_text_config_name(value: str) -> bool:
         return True
     if _ai_agent_config_artifact_label(raw_lowered):
         return True
-    if _looks_like_container_image_json_path(raw_lowered) and not _looks_like_container_image_blob_path(
+    if _looks_like_container_image_json_path(
         raw_lowered
-    ):
+    ) and not _looks_like_container_image_blob_path(raw_lowered):
         return True
     if _looks_like_ansible_text_config_artifact_name(raw_lowered):
         return True
@@ -7527,7 +7673,9 @@ def _classify_remote_artifact_url(raw_url: str, seed_type: str | None = None) ->
         return "config"
     if _looks_like_borg_text_config_artifact_name(unquote(parsed_remote.path or "")):
         return "config"
-    if _looks_like_duplicacy_preferences_text_config_artifact_name(unquote(parsed_remote.path or "")):
+    if _looks_like_duplicacy_preferences_text_config_artifact_name(
+        unquote(parsed_remote.path or "")
+    ):
         return "config"
     if normalized_seed_type == "apk_url":
         for candidate in _remote_artifact_name_candidates(raw_url):
@@ -7580,7 +7728,11 @@ def default_local_artifact_roots(base_dir: Path | None = None) -> list[Path]:
     seen: set[str] = set()
     for segments in _DEFAULT_LOCAL_ARTIFACT_ROOT_SEGMENTS:
         candidate = root.joinpath(*segments)
-        key = candidate.resolve().as_posix().lower() if candidate.exists() else candidate.as_posix().lower()
+        key = (
+            candidate.resolve().as_posix().lower()
+            if candidate.exists()
+            else candidate.as_posix().lower()
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -7615,7 +7767,11 @@ def _select_remote_artifact_filename(
     opensearch_label = opensearch_description_artifact_label(unquote(parsed_source.path or ""))
     if opensearch_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
-        if candidate and opensearch_description_artifact_label(candidate) and Path(candidate).suffix:
+        if (
+            candidate
+            and opensearch_description_artifact_label(candidate)
+            and Path(candidate).suffix
+        ):
             return candidate
         return "opensearch.xml"
     saml_label = saml_metadata_artifact_label(unquote(parsed_source.path or ""))
@@ -7647,7 +7803,10 @@ def _select_remote_artifact_filename(
     if _scheduler_config_artifact_label(unquote(parsed_source.path or "")):
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate:
-            if Path(candidate).suffix.lower() == ".cron" or candidate.lower() in _SCHEDULER_CONFIG_NAMES:
+            if (
+                Path(candidate).suffix.lower() == ".cron"
+                or candidate.lower() in _SCHEDULER_CONFIG_NAMES
+            ):
                 return candidate
             return f"{candidate}.cron"
         return "crontab"
@@ -7663,7 +7822,9 @@ def _select_remote_artifact_filename(
             unquote(parsed_source.path or ""),
             _suffix_from_content_type(content_type),
         )
-    connection_client_label = connection_client_config_artifact_label(unquote(parsed_source.path or ""))
+    connection_client_label = connection_client_config_artifact_label(
+        unquote(parsed_source.path or "")
+    )
     if connection_client_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate and connection_client_config_artifact_label(candidate):
@@ -7745,7 +7906,9 @@ def _select_remote_artifact_filename(
         return f"tunnel-client.{tunnel_config_label}"
     if _looks_like_kubeconfig_text_config_artifact_name(unquote(parsed_source.path or "")):
         return "kubeconfig"
-    kubernetes_secret_label = _kubernetes_secret_manifest_artifact_label(unquote(parsed_source.path or ""))
+    kubernetes_secret_label = _kubernetes_secret_manifest_artifact_label(
+        unquote(parsed_source.path or "")
+    )
     if kubernetes_secret_label:
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate and _kubernetes_secret_manifest_artifact_label(candidate):
@@ -7784,7 +7947,9 @@ def _select_remote_artifact_filename(
         if borg_kind == "key_type":
             return "borg.key-type"
         return "borg.location"
-    if _looks_like_duplicacy_preferences_text_config_artifact_name(unquote(parsed_source.path or "")):
+    if _looks_like_duplicacy_preferences_text_config_artifact_name(
+        unquote(parsed_source.path or "")
+    ):
         candidate = Path(unquote(parsed_source.path or "")).name.strip()
         if candidate.lower() == "preferences":
             return "duplicacy.preferences"
@@ -7796,7 +7961,9 @@ def _select_remote_artifact_filename(
     ):
         if _classify_artifact_name(candidate) is not None:
             return candidate
-    suffix = _suffix_from_content_type(content_type) or _default_remote_artifact_suffix(artifact_type)
+    suffix = _suffix_from_content_type(content_type) or _default_remote_artifact_suffix(
+        artifact_type
+    )
     return f"artifact-{artifact_id}{suffix}"
 
 
@@ -9509,7 +9676,9 @@ _HEXPM_RESERVED_PROFILE_HANDLES = {
 }
 _ORCID_PROFILE_ID_RE = re.compile(r"\d{4}-\d{4}-\d{4}-\d{3}[\dXx]")
 _GOOGLE_SCHOLAR_USER_ID_RE = re.compile(r"[A-Za-z0-9_-]{6,32}")
-_NOSTR_BECH32_ID_RE = re.compile(r"(?:npub|nprofile)1[023456789acdefghjklmnpqrstuvwxyz]{20,120}", re.IGNORECASE)
+_NOSTR_BECH32_ID_RE = re.compile(
+    r"(?:npub|nprofile)1[023456789acdefghjklmnpqrstuvwxyz]{20,120}", re.IGNORECASE
+)
 _GOOGLE_SCHOLAR_RESERVED_PROFILE_HANDLES = {
     "about",
     "authors",
@@ -12335,10 +12504,7 @@ class EngagementSynthesisEngine:
         bounded_workers = min(cls._MAX_LOCAL_BATCH_WORKERS, len(items))
         ordered_results: list[Any | None] = [None] * len(items)
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-            future_map = {
-                executor.submit(worker, item): index
-                for index, item in enumerate(items)
-            }
+            future_map = {executor.submit(worker, item): index for index, item in enumerate(items)}
             for future in as_completed(future_map):
                 index = future_map[future]
                 try:
@@ -12492,7 +12658,9 @@ class EngagementSynthesisEngine:
                 default_factory=list,
             )
 
-        social_profile_anchor_candidates = self._derive_social_profile_anchor_candidates(con, seed_depths)
+        social_profile_anchor_candidates = self._derive_social_profile_anchor_candidates(
+            con, seed_depths
+        )
         social_profile_candidates = self._derive_social_profile_candidates(con, seed_depths)
         username_profile_candidates = self._derive_username_profile_candidates(con, seed_depths)
         candidate_families = [
@@ -12762,7 +12930,9 @@ class EngagementSynthesisEngine:
         if host_ip and not _is_placeholder_host_ip(host_ip):
             ip_seed_type = _classify_seed_value(host_ip)
             if ip_seed_type in {"ipv4", "ipv6"}:
-                host_parent_type = _classify_seed_value(hostname) if hostname and hostname != host_ip else ""
+                host_parent_type = (
+                    _classify_seed_value(hostname) if hostname and hostname != host_ip else ""
+                )
                 ip_depth = seed_depths.get(
                     (ip_seed_type, host_ip),
                     seed_depths.get((host_parent_type, hostname), 0) if host_parent_type else 0,
@@ -12785,7 +12955,9 @@ class EngagementSynthesisEngine:
         if "." not in hostname:
             return candidates
         root_domain = _normalize_root_domain(hostname)
-        host_depth = seed_depths.get(("subdomain", hostname), seed_depths.get(("domain", root_domain), 0))
+        host_depth = seed_depths.get(
+            ("subdomain", hostname), seed_depths.get(("domain", root_domain), 0)
+        )
         candidates.append(
             SeedCandidate(
                 seed_value=hostname,
@@ -12842,7 +13014,11 @@ class EngagementSynthesisEngine:
             )
             if parsed.hostname:
                 hostname = str(parsed.hostname or "").strip().lower().strip(".")
-                if hostname and not _is_social_platform_host(hostname) and not _is_managed_cloud_provider_host(hostname):
+                if (
+                    hostname
+                    and not _is_social_platform_host(hostname)
+                    and not _is_managed_cloud_provider_host(hostname)
+                ):
                     root_domain = _normalize_root_domain(hostname)
                     host_depth = min(self._depth_limit, max(1, artifact_depth) + 1)
                     if hostname != root_domain:
@@ -13100,7 +13276,11 @@ class EngagementSynthesisEngine:
                 raw_profile_url,
                 platform=platform,
             )
-        if profile_url and self._profile_url_has_known_social_host(profile_url) and not profile_handle:
+        if (
+            profile_url
+            and self._profile_url_has_known_social_host(profile_url)
+            and not profile_handle
+        ):
             return []
         if (
             raw_profile_url
@@ -13160,7 +13340,16 @@ class EngagementSynthesisEngine:
     def _profile_uri_has_known_social_app_scheme(profile_url: str) -> bool:
         parsed = urlparse(str(profile_url or "").strip())
         scheme = str(parsed.scheme or "").strip().lower()
-        return scheme in {"instagram", "linkedin", "matrix", "nostr", "telegram", "tg", "twitter", "x"}
+        return scheme in {
+            "instagram",
+            "linkedin",
+            "matrix",
+            "nostr",
+            "telegram",
+            "tg",
+            "twitter",
+            "x",
+        }
 
     @staticmethod
     def _legacy_social_profile_candidate_row(row: Any) -> dict[str, str] | None:
@@ -13298,14 +13487,22 @@ class EngagementSynthesisEngine:
         anchor_type: str,
         base_depth: int,
     ) -> list[SeedCandidate]:
-        source_label = str(
-            profile.get("source") or row["source"] or "social_profile"
-        ).strip().lower()
-        platform = str(
-            profile.get("platform") or self._social_profile_platform_hint(profile)
-        ).strip().lower()
+        source_label = (
+            str(profile.get("source") or row["source"] or "social_profile").strip().lower()
+        )
+        platform = (
+            str(profile.get("platform") or self._social_profile_platform_hint(profile))
+            .strip()
+            .lower()
+        )
         candidates: list[SeedCandidate] = []
-        for seed_value, seed_type, relation_type, confidence, metadata in self._extract_social_profile_pivots(
+        for (
+            seed_value,
+            seed_type,
+            relation_type,
+            confidence,
+            metadata,
+        ) in self._extract_social_profile_pivots(
             profile,
             source_label=source_label,
             platform=platform,
@@ -13411,9 +13608,7 @@ class EngagementSynthesisEngine:
             candidates.append(profile_item)
         else:
             container_keys = {
-                key
-                for key in cls._SOCIAL_PROFILE_PAYLOAD_CONTAINER_KEYS
-                if key in profile_item
+                key for key in cls._SOCIAL_PROFILE_PAYLOAD_CONTAINER_KEYS if key in profile_item
             }
             if not container_keys:
                 candidates.append(profile_item)
@@ -13454,10 +13649,15 @@ class EngagementSynthesisEngine:
         inherited_context: dict[str, Any],
     ) -> dict[str, Any]:
         profile_item = dict(item)
-        if profile_item.get("source") in (None, "") and inherited_context.get("source") not in (None, ""):
+        if profile_item.get("source") in (None, "") and inherited_context.get("source") not in (
+            None,
+            "",
+        ):
             profile_item["source"] = inherited_context["source"]
         if profile_item.get("platform") in (None, ""):
-            platform = inherited_context.get("platform") or cls._social_profile_direct_platform(profile_item)
+            platform = inherited_context.get("platform") or cls._social_profile_direct_platform(
+                profile_item
+            )
             if platform not in (None, ""):
                 profile_item["platform"] = platform
         return profile_item
@@ -13753,7 +13953,11 @@ class EngagementSynthesisEngine:
                         "company",
                         "same_entity",
                         base_confidence,
-                        {"rule": "social_profile_company", "platform": platform, "source": source_label},
+                        {
+                            "rule": "social_profile_company",
+                            "platform": platform,
+                            "source": source_label,
+                        },
                     )
                 ]
             return []
@@ -13766,7 +13970,11 @@ class EngagementSynthesisEngine:
                         "name",
                         "same_entity",
                         base_confidence,
-                        {"rule": "social_profile_name", "platform": platform, "source": source_label},
+                        {
+                            "rule": "social_profile_name",
+                            "platform": platform,
+                            "source": source_label,
+                        },
                     )
                 ]
             return []
@@ -13815,13 +14023,11 @@ class EngagementSynthesisEngine:
                 self._social_profile_url_pivot_entry,
                 default_factory=lambda: None,
             )
-            return [
-                pivot
-                for pivot in pivot_entries
-                if isinstance(pivot, tuple)
-            ]
+            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
         if family == "hosts":
-            platform_profile_hosts = self._social_profile_platform_profile_hosts(profile, platform=platform)
+            platform_profile_hosts = self._social_profile_platform_profile_hosts(
+                profile, platform=platform
+            )
             host_entries = [
                 (host_value, host_type, platform, base_confidence, source_label)
                 for host_value, host_type in self._social_profile_related_hosts(profile)
@@ -13832,11 +14038,7 @@ class EngagementSynthesisEngine:
                 self._social_profile_host_pivot_entry,
                 default_factory=lambda: None,
             )
-            return [
-                pivot
-                for pivot in pivot_entries
-                if isinstance(pivot, tuple)
-            ]
+            return [pivot for pivot in pivot_entries if isinstance(pivot, tuple)]
         if family == "matrix_hosts":
             if str(platform or "").strip().lower() != "matrix":
                 return []
@@ -13851,7 +14053,9 @@ class EngagementSynthesisEngine:
                         platform,
                         source_label,
                     )
-                    for host_value, host_type in self._social_profile_matrix_homeserver_hosts(profile)
+                    for host_value, host_type in self._social_profile_matrix_homeserver_hosts(
+                        profile
+                    )
                 ],
                 self._social_profile_seed_pivot_entry,
                 default_factory=lambda: None,
@@ -13997,8 +14201,7 @@ class EngagementSynthesisEngine:
         if platform_text in {"google_scholar", "googlescholar", "scholar"}:
             return bool(
                 handle_text not in _GOOGLE_SCHOLAR_RESERVED_PROFILE_HANDLES
-                and
-                EngagementSynthesisEngine._normalize_google_scholar_user_id_candidate(handle)
+                and EngagementSynthesisEngine._normalize_google_scholar_user_id_candidate(handle)
             )
         if platform_text in {"nostr", "nostr_protocol"}:
             return bool(
@@ -14049,7 +14252,9 @@ class EngagementSynthesisEngine:
             return handle_text not in _KEYBASE_RESERVED_PROFILE_PATHS
         if platform_text == "orcid":
             return bool(_ORCID_PROFILE_ID_RE.fullmatch(handle_text))
-        reserved_direct_handles = _DIRECT_HANDLE_RESERVED_PROFILE_PATHS_BY_PLATFORM.get(platform_text)
+        reserved_direct_handles = _DIRECT_HANDLE_RESERVED_PROFILE_PATHS_BY_PLATFORM.get(
+            platform_text
+        )
         if reserved_direct_handles:
             return handle_text not in reserved_direct_handles
         return True
@@ -14202,7 +14407,9 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _social_profile_platform_hint_candidate(candidate: Any) -> str:
-        candidate_text = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(candidate)
+        candidate_text = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(
+            candidate
+        )
         parsed = urlparse(candidate_text)
         linkedin_app_parts = EngagementSynthesisEngine._linkedin_app_profile_path_parts(parsed)
         if linkedin_app_parts:
@@ -14472,7 +14679,9 @@ class EngagementSynthesisEngine:
         candidate = str(value or "").strip().strip("/")
         if not candidate:
             return ""
-        nostr_candidate = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(candidate)
+        nostr_candidate = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(
+            candidate
+        )
         if nostr_candidate:
             return nostr_candidate
         candidate = candidate.lstrip("@")
@@ -14493,7 +14702,9 @@ class EngagementSynthesisEngine:
             candidate = str(parsed.path or parsed.netloc or "").strip("/")
         elif candidate.lower().startswith("nostr:"):
             candidate = candidate.split(":", 1)[1].strip("/")
-        candidate = unquote(candidate).strip().strip("@").split("?", 1)[0].split("#", 1)[0].strip("/")
+        candidate = (
+            unquote(candidate).strip().strip("@").split("?", 1)[0].split("#", 1)[0].strip("/")
+        )
         if not candidate:
             return ""
         lowered = candidate.lower()
@@ -14504,7 +14715,9 @@ class EngagementSynthesisEngine:
     @staticmethod
     def _nostr_identity_handle_candidate(value: Any) -> str:
         candidate = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(value)
-        direct_identity = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(candidate)
+        direct_identity = EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(
+            candidate
+        )
         if direct_identity:
             return direct_identity
         parsed = urlparse(candidate)
@@ -14528,7 +14741,9 @@ class EngagementSynthesisEngine:
             return ""
         candidate_parts: list[str] = []
         candidate_parts.extend(part for part in parsed.path.strip("/").split("/") if part)
-        candidate_parts.extend(part for part in unquote(str(parsed.fragment or "")).strip("/").split("/") if part)
+        candidate_parts.extend(
+            part for part in unquote(str(parsed.fragment or "")).strip("/").split("/") if part
+        )
         query_map = {
             str(key).strip().lower(): str(item_value).strip()
             for key, item_value in parse_qsl(parsed.query, keep_blank_values=False)
@@ -14578,7 +14793,9 @@ class EngagementSynthesisEngine:
         )
         if not match:
             return "", ""
-        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(match.group("local"))
+        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+            match.group("local")
+        )
         server = match.group("server").lower().strip(".")
         if not handle or _classify_seed_value(server) != "domain":
             return "", ""
@@ -14639,7 +14856,9 @@ class EngagementSynthesisEngine:
         )
         if not match:
             return "", ""
-        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(match.group("local"))
+        handle = EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+            match.group("local")
+        )
         server = match.group("server").lower().strip(".")
         if not handle or _classify_seed_value(server) != "domain":
             return "", ""
@@ -14662,7 +14881,9 @@ class EngagementSynthesisEngine:
         return host in _MASTODON_INSTANCE_DOMAINS
 
     @classmethod
-    def _federated_account_host_entries(cls, value: Any, *, platform: str = "") -> list[tuple[str, str]]:
+    def _federated_account_host_entries(
+        cls, value: Any, *, platform: str = ""
+    ) -> list[tuple[str, str]]:
         handle, server = cls._federated_account_parts(value)
         if not handle or not server:
             return []
@@ -14757,7 +14978,9 @@ class EngagementSynthesisEngine:
 
     @staticmethod
     def _extract_social_profile_handle_from_url(candidate: str) -> str:
-        candidate_text = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(candidate)
+        candidate_text = EngagementSynthesisEngine._coerce_social_profile_urlish_candidate(
+            candidate
+        )
         nostr_handle = EngagementSynthesisEngine._nostr_identity_handle_candidate(candidate_text)
         if nostr_handle:
             return nostr_handle
@@ -14796,7 +15019,9 @@ class EngagementSynthesisEngine:
             }
             if bandcamp_slug.lower() in reserved_bandcamp_subdomains:
                 return ""
-            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(bandcamp_slug)
+            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(
+                bandcamp_slug
+            )
         if normalized_hostname == "bandcamp.com":
             if not path_parts:
                 return ""
@@ -14822,7 +15047,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_bandcamp_paths:
                 return ""
-            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_bandcamp_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname.endswith(".carrd.co"):
             carrd_slug = normalized_hostname[: -len(".carrd.co")].strip(".")
             reserved_carrd_subdomains = {
@@ -14838,23 +15065,33 @@ class EngagementSynthesisEngine:
                 "www",
             }
             if carrd_slug and carrd_slug.lower() not in reserved_carrd_subdomains:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(carrd_slug)
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    carrd_slug
+                )
         if normalized_hostname.endswith(".artstation.com"):
             artstation_slug = normalized_hostname[: -len(".artstation.com")].strip(".")
             if artstation_slug and artstation_slug.lower() not in _ARTSTATION_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(artstation_slug)
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    artstation_slug
+                )
         if normalized_hostname.endswith(".deviantart.com"):
             deviantart_slug = normalized_hostname[: -len(".deviantart.com")].strip(".")
             if deviantart_slug and deviantart_slug.lower() not in _DEVIANTART_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(deviantart_slug)
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    deviantart_slug
+                )
         if normalized_hostname.endswith(".medium.com"):
             medium_slug = normalized_hostname[: -len(".medium.com")].strip(".")
             if medium_slug and medium_slug.lower() not in _MEDIUM_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(medium_slug)
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    medium_slug
+                )
         if normalized_hostname.endswith(".substack.com"):
             substack_slug = normalized_hostname[: -len(".substack.com")].strip(".")
             if substack_slug and substack_slug.lower() not in _SUBSTACK_RESERVED_SUBDOMAINS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(substack_slug)
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    substack_slug
+                )
         if (
             normalized_hostname.endswith("gitbook.com")
             or normalized_hostname.endswith("gitbook.io")
@@ -14864,7 +15101,9 @@ class EngagementSynthesisEngine:
         if normalized_hostname.endswith(".taplink.ws"):
             taplink_slug = normalized_hostname[: -len(".taplink.ws")].strip(".")
             if taplink_slug and taplink_slug.lower() not in _TAPLINK_RESERVED_PROFILE_PATHS:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(taplink_slug)
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    taplink_slug
+                )
         if not path_parts:
             return ""
         if normalized_hostname == "scholar.google.com":
@@ -14880,24 +15119,32 @@ class EngagementSynthesisEngine:
         if normalized_hostname.endswith("academia.edu"):
             if path_parts[0].lower() in _ACADEMIA_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "semanticscholar.org":
             if len(path_parts) >= 2 and path_parts[0].lower() == "author":
                 if path_parts[1].lower() in _SEMANTIC_SCHOLAR_RESERVED_PROFILE_HANDLES:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname == "zenodo.org":
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
                 if path_parts[1].lower() in _ZENODO_RESERVED_PROFILE_HANDLES:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname.endswith("figshare.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "authors":
                 if path_parts[1].lower() in _FIGSHARE_RESERVED_PROFILE_HANDLES:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname.endswith("figma.com"):
             first_path = path_parts[0].strip() if path_parts else ""
@@ -14909,12 +15156,16 @@ class EngagementSynthesisEngine:
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(handle)
         if hostname.endswith("linkedin.com"):
             if len(path_parts) >= 2 and path_parts[0] in {"in", "pub"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("facebook.com"):
             first_path = path_parts[0].lower()
             if first_path == "people" and len(path_parts) >= 2:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             reserved_facebook = {
                 "business",
                 "events",
@@ -14939,7 +15190,9 @@ class EngagementSynthesisEngine:
             }
             if first_path in reserved_facebook:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("flickr.com"):
             if len(path_parts) < 2 or path_parts[0].lower() != "photos":
                 return ""
@@ -14958,7 +15211,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[1].lower() in reserved_flickr_photos:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[1]
+            )
         if normalized_hostname == "vimeo.com":
             reserved_vimeo = {
                 "about",
@@ -14985,7 +15240,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_vimeo:
                 return ""
-            return EngagementSynthesisEngine._normalize_vimeo_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_vimeo_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname.endswith(".vimeo.com"):
             return ""
         if hostname.endswith("kaggle.com"):
@@ -15006,11 +15263,15 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_kaggle:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("bitbucket.org"):
             if path_parts[0].lower() in _BITBUCKET_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("bugcrowd.com"):
             reserved_bugcrowd = {
                 "about",
@@ -15028,15 +15289,21 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_bugcrowd:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("codeberg.org"):
             if path_parts[0].lower() in _CODEBERG_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("codepen.io"):
             if path_parts[0].lower() in _CODEPEN_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname == "hub.docker.com":
             reserved_dockerhub = {
                 "_",
@@ -15057,9 +15324,13 @@ class EngagementSynthesisEngine:
             if first_path in reserved_dockerhub:
                 return ""
             if len(path_parts) >= 2 and first_path == "u":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             if len(path_parts) >= 2 and first_path == "r" and path_parts[1].lower() != "library":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname == "gist.github.com":
             first_path = path_parts[0].lower()
@@ -15067,7 +15338,9 @@ class EngagementSynthesisEngine:
                 return ""
             if len(path_parts) == 1 and re.fullmatch(r"[a-f0-9]{10,64}", first_path):
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("github.com"):
             if path_parts[0].lower() == "sponsors" and len(path_parts) >= 2:
                 reserved_sponsor_targets = {
@@ -15080,10 +15353,14 @@ class EngagementSynthesisEngine:
                 }
                 if path_parts[1].lower() in reserved_sponsor_targets:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             if path_parts[0].lower() in _GITHUB_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("gravatar.com"):
             reserved_gravatar = {
                 "avatar",
@@ -15099,7 +15376,9 @@ class EngagementSynthesisEngine:
             if slug_lower.endswith(".json"):
                 slug_lower = slug_lower[:-5]
                 slug = slug[:-5]
-            if re.fullmatch(r"[a-f0-9]{32}", slug_lower) or re.fullmatch(r"[a-f0-9]{64}", slug_lower):
+            if re.fullmatch(r"[a-f0-9]{32}", slug_lower) or re.fullmatch(
+                r"[a-f0-9]{64}", slug_lower
+            ):
                 return ""
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(slug)
         if hostname.endswith("hackerone.com"):
@@ -15119,33 +15398,53 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_hackerone:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("hashnode.com"):
             first_path = path_parts[0].lower()
             if first_path in _HASHNODE_RESERVED_PROFILE_PATHS:
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0].lstrip("@"))
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0].lstrip("@")
+                )
             if len(path_parts) >= 2 and first_path in {"@", "users", "user"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("instagram.com"):
             first_path = path_parts[0].lower()
             if first_path == "stories" and len(path_parts) >= 2:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             if first_path in _INSTAGRAM_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("intigriti.com"):
             first_path = path_parts[0].lower()
-            if len(path_parts) >= 3 and first_path == "researcher" and path_parts[1].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[2])
+            if (
+                len(path_parts) >= 3
+                and first_path == "researcher"
+                and path_parts[1].lower() == "profile"
+            ):
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[2]
+                )
             if len(path_parts) >= 2 and first_path == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("500px.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "p":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("x.com") or hostname.endswith("twitter.com"):
             first_path = path_parts[0].lower()
@@ -15163,52 +15462,78 @@ class EngagementSynthesisEngine:
                 return ""
             if first_path in _TWITTER_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("bsky.app"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("bsky.social"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             if path_parts and path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             return ""
         if hostname.endswith("dev.to"):
             if path_parts[0].lower() in _DEVTO_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("npmjs.com"):
             if path_parts[0].startswith("~"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0][1:])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0][1:]
+                )
             return ""
         if hostname.endswith("pypi.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "user":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("rubygems.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"profiles", "profile"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("crates.io"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("packagist.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("nuget.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"profiles", "profile"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("openbugbounty.org"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "researchers":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("hex.pm"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("huggingface.co"):
             reserved_huggingface = {
@@ -15231,17 +15556,25 @@ class EngagementSynthesisEngine:
                 "tasks",
             }
             if len(path_parts) == 1 and path_parts[0].lower() not in reserved_huggingface:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             return ""
         if hostname.endswith("threads.net") or hostname.endswith("threads.com"):
             if path_parts and path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             return ""
         if hostname.endswith("youtube.com"):
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             if len(path_parts) >= 2 and path_parts[0] in {"channel", "c", "user"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("youtu.be"):
             return ""
@@ -15262,18 +15595,24 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_linktree:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "orcid.org":
             if re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dXx]", path_parts[0]):
                 return path_parts[0].upper()
             return ""
         if normalized_hostname == "researchgate.net":
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname == "credly.com":
             if len(path_parts) >= 2 and path_parts[0].lower() in {"users", "u"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname == "behance.net":
             reserved_behance = {
@@ -15297,7 +15636,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_behance:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "dribbble.com":
             reserved_dribbble = {
                 "about",
@@ -15317,13 +15658,17 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_dribbble:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "muckrack.com":
             if len(path_parts) != 1:
                 return ""
             if path_parts[0].lower() in _MUCKRACK_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "calendly.com":
             reserved_calendly = {
                 "about",
@@ -15341,7 +15686,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_calendly:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "cal.com":
             reserved_cal = {
                 "about",
@@ -15361,7 +15708,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_cal:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "adplist.org":
             if len(path_parts) < 2 or path_parts[0].lower() not in {"mentor", "mentors"}:
                 return ""
@@ -15386,17 +15735,25 @@ class EngagementSynthesisEngine:
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(handle)
         if normalized_hostname == "producthunt.com":
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "user", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname == "wellfound.com":
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if normalized_hostname in {"angel.co", "angellist.com"}:
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         exact_profile_hosts = {
             "adplist.org",
@@ -15436,62 +15793,100 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_beacons:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("bento.me"):
             if path_parts[0].lower() in _BENTO_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("hoo.be"):
             if path_parts[0].lower() in _HOO_BE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("bio.link"):
             if path_parts[0].lower() in {"about", "blog", "discover", "login", "pricing", "signup"}:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("bio.site"):
             if path_parts[0].lower() in _BIO_SITE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("allmylinks.com"):
             if path_parts[0].lower() in _ALLMYLINKS_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("lnk.bio"):
             if path_parts[0].lower() in {"about", "login", "pricing", "signup"}:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("solo.to"):
             if path_parts[0].lower() in {"about", "discover", "login", "pricing", "signup"}:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("campsite.bio"):
             if path_parts[0].lower() in _CAMPSITE_BIO_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("taplink.cc"):
             if path_parts[0].lower() in _TAPLINK_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("taplink.ws"):
             if normalized_hostname == "taplink.ws":
                 return ""
             taplink_slug = normalized_hostname[: -len(".taplink.ws")].strip(".")
             if taplink_slug.lower() in _TAPLINK_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(taplink_slug)
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                taplink_slug
+            )
         if hostname.endswith("msha.ke"):
             if path_parts[0].lower() in _MILKSHAKE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname == "carrd.co":
-            if path_parts[0].lower() in {"about", "build", "dashboard", "docs", "login", "pricing", "signup", "sites", "templates"}:
+            if path_parts[0].lower() in {
+                "about",
+                "build",
+                "dashboard",
+                "docs",
+                "login",
+                "pricing",
+                "signup",
+                "sites",
+                "templates",
+            }:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname == "sr.ht" or hostname.endswith(".sr.ht"):
             first_path = path_parts[0]
             if first_path.startswith("~"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(first_path[1:])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    first_path[1:]
+                )
             reserved_sourcehut = {
                 "about",
                 "account",
@@ -15512,12 +15907,18 @@ class EngagementSynthesisEngine:
         if hostname.endswith("sourceforge.net"):
             if len(path_parts) < 2 or path_parts[0].lower() != "u":
                 return ""
-            if len(path_parts) >= 3 and path_parts[2].lower() not in {"profile", "activity", "wiki"}:
+            if len(path_parts) >= 3 and path_parts[2].lower() not in {
+                "profile",
+                "activity",
+                "wiki",
+            }:
                 return ""
             sourceforge_handle = path_parts[1].lstrip("@")
             if sourceforge_handle.lower() in _SOURCEFORGE_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(sourceforge_handle)
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                sourceforge_handle
+            )
         if normalized_hostname == "news.ycombinator.com":
             if path_parts != ["user"]:
                 return ""
@@ -15540,10 +15941,14 @@ class EngagementSynthesisEngine:
                 }
                 if path_parts[1].lower() in reserved_gitlab_user_slugs:
                     return ""
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             if path_parts[0].lower() in _GITLAB_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("snapchat.com"):
             if not path_parts:
                 return ""
@@ -15559,21 +15964,29 @@ class EngagementSynthesisEngine:
         if hostname == "t.me" or hostname.endswith(".t.me") or hostname.endswith("telegram.me"):
             if path_parts[0].lower() in _TELEGRAM_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("keybase.io"):
             if path_parts[0].lower() in _KEYBASE_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("launchpad.net"):
             if not path_parts[0].startswith("~"):
                 return ""
             launchpad_handle = path_parts[0].lstrip("~@")
             if launchpad_handle.lower() in _LAUNCHPAD_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(launchpad_handle)
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                launchpad_handle
+            )
         if hostname.endswith("last.fm"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "user":
-                return EngagementSynthesisEngine._normalize_lastfm_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_lastfm_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("opencollective.com"):
             reserved_opencollective = {
@@ -15593,7 +16006,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_opencollective:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("liberapay.com"):
             reserved_liberapay = {
                 "about",
@@ -15609,10 +16024,14 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_liberapay:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("patreon.com"):
             if path_parts[0].lower() == "c" and len(path_parts) >= 2:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             reserved_patreon = {
                 "about",
                 "api",
@@ -15633,7 +16052,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_patreon:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("ko-fi.com"):
             reserved_kofi = {
                 "about",
@@ -15651,7 +16072,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_kofi:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("buymeacoffee.com"):
             reserved_buymeacoffee = {
                 "about",
@@ -15667,10 +16090,14 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_buymeacoffee:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("reddit.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"u", "user"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("replit.com"):
             reserved_replit = {
@@ -15698,7 +16125,9 @@ class EngagementSynthesisEngine:
             if first_path in reserved_replit:
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             return ""
         if hostname.endswith("codesandbox.io"):
             reserved_codesandbox = {
@@ -15719,7 +16148,9 @@ class EngagementSynthesisEngine:
             }
             first_path = path_parts[0].lower()
             if len(path_parts) >= 2 and first_path in {"u", "users"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             if first_path in reserved_codesandbox:
                 return ""
             return ""
@@ -15740,7 +16171,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_devpost:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if normalized_hostname in {"discord.com", "discord.gg", "discordapp.com"}:
             return ""
         if hostname.endswith("read.cv"):
@@ -15760,7 +16193,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_readcv:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("speakerdeck.com"):
             reserved_speakerdeck = {
                 "about",
@@ -15781,7 +16216,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_speakerdeck:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("slideshare.net"):
             reserved_slideshare = {
                 "about",
@@ -15799,7 +16236,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_slideshare:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("soundcloud.com"):
             reserved_soundcloud = {
                 "about",
@@ -15827,18 +16266,26 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_soundcloud:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname in {"open.spotify.com", "spotify.com"}:
             if len(path_parts) >= 2 and path_parts[0].lower() == "user":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("strava.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() in {"athletes", "pros"}:
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("unsplash.com"):
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             return ""
         if hostname.endswith("mixcloud.com"):
             if not path_parts:
@@ -15870,7 +16317,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_mixcloud:
                 return ""
-            return EngagementSynthesisEngine._normalize_mixcloud_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_mixcloud_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("letterboxd.com"):
             if not path_parts:
                 return ""
@@ -15916,7 +16365,9 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_letterboxd:
                 return ""
-            return EngagementSynthesisEngine._normalize_letterboxd_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_letterboxd_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("pinterest.com"):
             reserved_pinterest = {
                 "about",
@@ -15939,14 +16390,20 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_pinterest:
                 return ""
-            return EngagementSynthesisEngine._normalize_pinterest_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_pinterest_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("quora.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "profile":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("steamcommunity.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "id":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if (
             hostname.endswith("stackoverflow.com")
@@ -15967,7 +16424,9 @@ class EngagementSynthesisEngine:
             }
             first_path = path_parts[0].lower()
             if len(path_parts) >= 3 and first_path == "users":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[2])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[2]
+                )
             if first_path in reserved_stack_paths:
                 return ""
             return ""
@@ -15986,34 +16445,48 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_aboutme:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("500px.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "p":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("artstation.com"):
             if not path_parts:
                 return ""
             if path_parts[0].lower() in _ARTSTATION_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("deviantart.com"):
             if not path_parts:
                 return ""
             if path_parts[0].lower() in _DEVIANTART_RESERVED_PROFILE_HANDLES:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("tiktok.com"):
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             return ""
         if hostname.endswith("tryhackme.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "p":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("yeswehack.com"):
             if len(path_parts) >= 2 and path_parts[0].lower() == "hunters":
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[1]
+                )
             return ""
         if hostname.endswith("twitch.tv"):
             reserved_twitch = {
@@ -16041,16 +16514,22 @@ class EngagementSynthesisEngine:
             }
             if path_parts[0].lower() in reserved_twitch:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         if hostname.endswith("substack.com"):
             normalized_host = hostname[4:] if hostname.startswith("www.") else hostname
             if normalized_host != "substack.com":
                 sub_host = normalized_host[: -len(".substack.com")].strip(".")
                 if sub_host and sub_host.lower() not in _SUBSTACK_RESERVED_SUBDOMAINS:
-                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(sub_host)
+                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                        sub_host
+                    )
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             if path_parts[0].lower() in _SUBSTACK_RESERVED_PROFILE_PATHS:
                 return ""
             return ""
@@ -16059,13 +16538,19 @@ class EngagementSynthesisEngine:
             if normalized_host != "medium.com":
                 sub_host = normalized_host[: -len(".medium.com")].strip(".")
                 if sub_host and sub_host.lower() not in _MEDIUM_RESERVED_SUBDOMAINS:
-                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(sub_host)
+                    return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                        sub_host
+                    )
                 return ""
             if path_parts[0].startswith("@"):
-                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+                return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                    path_parts[0]
+                )
             if path_parts[0].lower() in _MEDIUM_RESERVED_PROFILE_PATHS:
                 return ""
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[0])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[0]
+            )
         reserved = {
             "accounts",
             "company",
@@ -16092,7 +16577,9 @@ class EngagementSynthesisEngine:
         if first_path.startswith("@"):
             return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(first_path)
         if len(path_parts) >= 2 and first_path.lower() in {"users", "web"}:
-            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(path_parts[1])
+            return EngagementSynthesisEngine._normalize_social_profile_handle_candidate(
+                path_parts[1]
+            )
         return ""
 
     @staticmethod
@@ -16182,21 +16669,22 @@ class EngagementSynthesisEngine:
             "googlescholar",
             "scholar",
         }
-        direct_source_values = [
-            profile.get(key)
-            for key in (
-                "scholar_id",
-                "scholarId",
-                "google_scholar_id",
-                "googleScholarId",
-                "user_id",
-                "userId",
-                "id",
-            )
-        ] if query_id_platform else [
-            profile.get(key)
-            for key in cls._SOCIAL_PROFILE_HANDLE_FIELD_KEYS
-        ]
+        direct_source_values = (
+            [
+                profile.get(key)
+                for key in (
+                    "scholar_id",
+                    "scholarId",
+                    "google_scholar_id",
+                    "googleScholarId",
+                    "user_id",
+                    "userId",
+                    "id",
+                )
+            ]
+            if query_id_platform
+            else [profile.get(key) for key in cls._SOCIAL_PROFILE_HANDLE_FIELD_KEYS]
+        )
         direct_handle_candidates = cls._run_ordered_local_batch(
             direct_source_values,
             (
@@ -16390,7 +16878,9 @@ class EngagementSynthesisEngine:
         return values
 
     @classmethod
-    def _social_profile_matrix_homeserver_hosts(cls, profile: dict[str, Any]) -> list[tuple[str, str]]:
+    def _social_profile_matrix_homeserver_hosts(
+        cls, profile: dict[str, Any]
+    ) -> list[tuple[str, str]]:
         host_batches = cls._run_ordered_local_batch(
             cls._social_profile_matrix_identity_values(profile),
             cls._matrix_homeserver_host_entries,
@@ -16665,7 +17155,11 @@ class EngagementSynthesisEngine:
             if "." not in slug:
                 return _clean_slug(slug, _GITBOOK_RESERVED_SUBDOMAINS)
             return ""
-        if hostname == "app.gitbook.com" and len(path_parts) >= 2 and path_parts[0].lower() in {"o", "org", "orgs"}:
+        if (
+            hostname == "app.gitbook.com"
+            and len(path_parts) >= 2
+            and path_parts[0].lower() in {"o", "org", "orgs"}
+        ):
             return _clean_slug(path_parts[1], _GITBOOK_RESERVED_SUBDOMAINS)
         if hostname == "gitbook.com" and path_parts:
             first_path = path_parts[0].lower()
@@ -16772,9 +17266,7 @@ class EngagementSynthesisEngine:
         if not slug:
             return ""
         tokens = [
-            token
-            for token in re.split(r"[-_]+", slug)
-            if token and re.search(r"[A-Za-z]", token)
+            token for token in re.split(r"[-_]+", slug) if token and re.search(r"[A-Za-z]", token)
         ]
         if not tokens:
             return ""
@@ -16823,10 +17315,7 @@ class EngagementSynthesisEngine:
             if company_name:
                 return company_name
         work_history_company_candidates = cls._run_ordered_local_batch(
-            [
-                (profile, key)
-                for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS
-            ],
+            [(profile, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS],
             cls._social_profile_work_history_company_name_key_value,
             default_factory=str,
         )
@@ -16900,10 +17389,7 @@ class EngagementSynthesisEngine:
         if not isinstance(entry, dict):
             return ""
         candidate_batches = cls._run_ordered_local_batch(
-            [
-                (entry, key)
-                for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS
-            ],
+            [(entry, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS],
             cls._social_profile_named_entity_dict_key_value,
             default_factory=str,
         )
@@ -16929,10 +17415,7 @@ class EngagementSynthesisEngine:
         if isinstance(value, dict):
             entries: list[Any] = [value]
             nested_batches = cls._run_ordered_local_batch(
-                [
-                    (value, key)
-                    for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS
-                ],
+                [(value, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_ORGANIZATION_FIELD_KEYS],
                 cls._social_profile_work_history_nested_entry_items,
                 default_factory=list,
             )
@@ -16966,10 +17449,7 @@ class EngagementSynthesisEngine:
     ) -> list[Any]:
         entries: list[Any] = []
         entry_batches = cls._run_ordered_local_batch(
-            [
-                (profile, key)
-                for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS
-            ],
+            [(profile, key) for key in cls._SOCIAL_PROFILE_WORK_HISTORY_CONTAINER_KEYS],
             cls._social_profile_work_history_profile_key_entries,
             default_factory=list,
         )
@@ -17034,8 +17514,15 @@ class EngagementSynthesisEngine:
         if not candidate:
             return ""
         if _classify_seed_value(candidate) in {
-            "email", "phone", "url", "apk_url", "domain", "subdomain",
-            "ipv4", "ipv6", "cloud_ref",
+            "email",
+            "phone",
+            "url",
+            "apk_url",
+            "domain",
+            "subdomain",
+            "ipv4",
+            "ipv6",
+            "cloud_ref",
         }:
             return ""
         return candidate
@@ -17058,7 +17545,11 @@ class EngagementSynthesisEngine:
     def _social_profile_company_url_slug_candidate(cls, candidate: Any) -> str:
         parsed = urlparse(cls._coerce_social_profile_urlish_candidate(candidate))
         linkedin_app_parts = cls._linkedin_app_profile_path_parts(parsed)
-        if linkedin_app_parts and linkedin_app_parts[0].lower() in {"company", "school", "showcase"}:
+        if linkedin_app_parts and linkedin_app_parts[0].lower() in {
+            "company",
+            "school",
+            "showcase",
+        }:
             return cls._humanize_social_profile_slug(linkedin_app_parts[1])
         docs_workspace_slug = cls._docs_workspace_company_slug_candidate(candidate)
         if docs_workspace_slug:
@@ -17206,11 +17697,19 @@ class EngagementSynthesisEngine:
         if hostname.startswith("www."):
             hostname = hostname[4:]
         path_parts = [part for part in parsed.path.strip("/").split("/") if part]
-        if hostname.endswith("linkedin.com") and len(path_parts) >= 2 and path_parts[0].lower() in {"in", "pub"}:
+        if (
+            hostname.endswith("linkedin.com")
+            and len(path_parts) >= 2
+            and path_parts[0].lower() in {"in", "pub"}
+        ):
             humanized_slug = cls._humanize_social_profile_slug(path_parts[1])
             if humanized_slug and _classify_seed_value(humanized_slug) == "name":
                 return humanized_slug
-        if hostname.endswith("facebook.com") and len(path_parts) >= 2 and path_parts[0].lower() == "people":
+        if (
+            hostname.endswith("facebook.com")
+            and len(path_parts) >= 2
+            and path_parts[0].lower() == "people"
+        ):
             humanized_slug = cls._humanize_social_profile_slug(path_parts[1])
             if humanized_slug and _classify_seed_value(humanized_slug) == "name":
                 return humanized_slug
@@ -17816,9 +18315,7 @@ class EngagementSynthesisEngine:
             contact_target = parsed.path or parsed.netloc or ""
             if parsed.params:
                 contact_target = f"{contact_target};{parsed.params}"
-            values = EngagementSynthesisEngine._normalize_contact_phone_candidates(
-                contact_target
-            )
+            values = EngagementSynthesisEngine._normalize_contact_phone_candidates(contact_target)
             query_map = {
                 str(key).strip().lower(): str(value).strip()
                 for key, value in parse_qsl(parsed.query, keep_blank_values=False)
@@ -18298,7 +18795,12 @@ class EngagementSynthesisEngine:
         if not text:
             return ""
         prefix, separator, suffix = text.partition(":")
-        if separator and prefix.lower() in {"applinks", "webcredentials", "activitycontinuation", "appclips"}:
+        if separator and prefix.lower() in {
+            "applinks",
+            "webcredentials",
+            "activitycontinuation",
+            "appclips",
+        }:
             return suffix.strip()
         return text
 
@@ -18312,12 +18814,20 @@ class EngagementSynthesisEngine:
         hostname = str(parsed.hostname or "").strip().lower().strip(".")
         if hostname.startswith("*."):
             hostname = hostname[2:]
-        if not hostname or _is_social_platform_host(hostname) or _is_managed_cloud_provider_host(hostname):
+        if (
+            not hostname
+            or _is_social_platform_host(hostname)
+            or _is_managed_cloud_provider_host(hostname)
+        ):
             return []
         if _classify_seed_value(hostname) != "domain":
             return []
         root_domain = _normalize_root_domain(hostname)
-        if not root_domain or _is_social_platform_host(root_domain) or _is_managed_cloud_provider_host(root_domain):
+        if (
+            not root_domain
+            or _is_social_platform_host(root_domain)
+            or _is_managed_cloud_provider_host(root_domain)
+        ):
             return []
         values: list[tuple[str, str]] = []
         if hostname != root_domain:
@@ -18330,32 +18840,52 @@ class EngagementSynthesisEngine:
         batch_entry: tuple[int, Sequence[tuple[str, str]]],
     ) -> list[tuple[str, str]]:
         _batch_index, batch = batch_entry
-        return [host_entry for host_entry in batch if isinstance(host_entry, tuple) and len(host_entry) == 2]
+        return [
+            host_entry
+            for host_entry in batch
+            if isinstance(host_entry, tuple) and len(host_entry) == 2
+        ]
 
     @staticmethod
     def _social_profile_related_host_family_entries(
         family_entry: tuple[int, Sequence[tuple[str, str]]],
     ) -> list[tuple[str, str]]:
         _family_index, family = family_entry
-        return [host_entry for host_entry in family if isinstance(host_entry, tuple) and len(host_entry) == 2]
+        return [
+            host_entry
+            for host_entry in family
+            if isinstance(host_entry, tuple) and len(host_entry) == 2
+        ]
 
     @staticmethod
     def _social_profile_related_host_group_entries(
         group_entry: tuple[int, Sequence[tuple[str, str]]],
     ) -> list[tuple[str, str]]:
         _group_index, group = group_entry
-        return [host_entry for host_entry in group if isinstance(host_entry, tuple) and len(host_entry) == 2]
+        return [
+            host_entry
+            for host_entry in group
+            if isinstance(host_entry, tuple) and len(host_entry) == 2
+        ]
 
     @staticmethod
     def _social_profile_related_host_candidates(candidate: str) -> list[tuple[str, str]]:
         parsed = urlparse(candidate)
         hostname = str(parsed.hostname or "").strip().lower().strip(".")
-        if not hostname or _is_social_platform_host(hostname) or _is_managed_cloud_provider_host(hostname):
+        if (
+            not hostname
+            or _is_social_platform_host(hostname)
+            or _is_managed_cloud_provider_host(hostname)
+        ):
             return []
         if _classify_seed_value(hostname) != "domain":
             return []
         root_domain = _normalize_root_domain(hostname)
-        if not root_domain or _is_social_platform_host(root_domain) or _is_managed_cloud_provider_host(root_domain):
+        if (
+            not root_domain
+            or _is_social_platform_host(root_domain)
+            or _is_managed_cloud_provider_host(root_domain)
+        ):
             return []
         values: list[tuple[str, str]] = []
         if hostname != root_domain:
@@ -18499,8 +19029,12 @@ class EngagementSynthesisEngine:
                         "target_seed_type": str(target_type),
                         "left_value": str(left["target_value"]),
                         "right_value": str(right["target_value"]),
-                        "left_evidence": left["evidence"] if isinstance(left["evidence"], dict) else {},
-                        "right_evidence": right["evidence"] if isinstance(right["evidence"], dict) else {},
+                        "left_evidence": left["evidence"]
+                        if isinstance(left["evidence"], dict)
+                        else {},
+                        "right_evidence": right["evidence"]
+                        if isinstance(right["evidence"], dict)
+                        else {},
                     }
                     if self._insert_relation(
                         con,
@@ -18595,7 +19129,12 @@ class EngagementSynthesisEngine:
         conflict_penalty = min(0.18, conflict_count * 0.08)
         computed = max(
             stored_confidence,
-            base_confidence + support_bonus + type_bonus + evidence_bonus - depth_penalty - conflict_penalty,
+            base_confidence
+            + support_bonus
+            + type_bonus
+            + evidence_bonus
+            - depth_penalty
+            - conflict_penalty,
         )
         return round(max(0.35, min(1.0, computed)), 2)
 
@@ -18639,7 +19178,9 @@ class EngagementSynthesisEngine:
         for entry in relation_entry_batches:
             if not isinstance(entry, tuple):
                 continue
-            source_seed_id, target_seed_id, relation_type, relation_confidence, source_seed_type = entry
+            source_seed_id, target_seed_id, relation_type, relation_confidence, source_seed_type = (
+                entry
+            )
             source_metric = metrics.get(source_seed_id)
             target_metric = metrics.get(target_seed_id)
             if source_metric is not None:
@@ -18671,7 +19212,9 @@ class EngagementSynthesisEngine:
         for update_entry in seed_update_batches:
             if not isinstance(update_entry, tuple):
                 continue
-            seed_id, effective_source, computed_confidence, merged_metadata_json, corroborated = update_entry
+            seed_id, effective_source, computed_confidence, merged_metadata_json, corroborated = (
+                update_entry
+            )
             if corroborated:
                 corroborated_count += 1
             con.execute(
@@ -18762,7 +19305,9 @@ class EngagementSynthesisEngine:
             int(metric["supporting_relations"]),
             len(metric["corroborator_types"]),
         )
-        corroborated = int(metric["supporting_relations"]) > 1 or len(metric["corroborator_types"]) > 1
+        corroborated = (
+            int(metric["supporting_relations"]) > 1 or len(metric["corroborator_types"]) > 1
+        )
         merged_metadata = {
             **metadata_dict,
             "synthesis": {
@@ -18869,7 +19414,9 @@ class EngagementSynthesisEngine:
             """,
             (
                 self._preferred_seed_source(existing_source, candidate.source),
-                "pending" if min(existing_depth, candidate.depth) <= self._depth_limit else existing_status,
+                "pending"
+                if min(existing_depth, candidate.depth) <= self._depth_limit
+                else existing_status,
                 min(existing_depth, candidate.depth),
                 max(existing_confidence, candidate.confidence),
                 existing_parent if existing_parent is not None else parent_id,
@@ -19173,9 +19720,7 @@ class ArtifactQueueProcessor:
                     continue
 
                 merged_metadata = (
-                    dict(existing_metadata)
-                    if isinstance(existing_metadata, dict)
-                    else {}
+                    dict(existing_metadata) if isinstance(existing_metadata, dict) else {}
                 )
                 merged_metadata.update(current_metadata)
                 con.execute(
@@ -19217,7 +19762,9 @@ class ArtifactQueueProcessor:
         stat = path.stat()
         return {
             "local_file_size": int(stat.st_size),
-            "local_file_mtime_ns": int(getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))),
+            "local_file_mtime_ns": int(
+                getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))
+            ),
         }
 
     @staticmethod
@@ -19227,11 +19774,10 @@ class ArtifactQueueProcessor:
     ) -> bool:
         if not isinstance(existing_metadata, dict):
             return False
-        return (
-            int(existing_metadata.get("local_file_size") or -1)
-            == int(current_metadata.get("local_file_size") or -2)
-            and int(existing_metadata.get("local_file_mtime_ns") or -1)
-            == int(current_metadata.get("local_file_mtime_ns") or -2)
+        return int(existing_metadata.get("local_file_size") or -1) == int(
+            current_metadata.get("local_file_size") or -2
+        ) and int(existing_metadata.get("local_file_mtime_ns") or -1) == int(
+            current_metadata.get("local_file_mtime_ns") or -2
         )
 
     def process(
@@ -19359,9 +19905,11 @@ class ArtifactQueueProcessor:
                     )
                     summary.failed += 1
                     continue
-                firebase_count, supabase_count, seed_count, parse_metadata = self._persist_parsed_artifact(
-                    con,
-                    parsed,
+                firebase_count, supabase_count, seed_count, parse_metadata = (
+                    self._persist_parsed_artifact(
+                        con,
+                        parsed,
+                    )
                 )
                 self._update_artifact_status(
                     con,
@@ -19399,7 +19947,10 @@ class ArtifactQueueProcessor:
     def _artifact_queue_dispatch_entry(
         self,
         item: tuple[int, Any],
-    ) -> tuple[int, ArtifactWorkItem | None, ArtifactDownloadRequest | None, tuple[int, str] | None] | None:
+    ) -> (
+        tuple[int, ArtifactWorkItem | None, ArtifactDownloadRequest | None, tuple[int, str] | None]
+        | None
+    ):
         index, row = item
         artifact_id = int(row["id"])
         artifact_type = str(row["artifact_type"] or "")
@@ -19441,20 +19992,26 @@ class ArtifactQueueProcessor:
     def _remote_download_reconciliation_entry(
         self,
         item: tuple[int, ArtifactDownloadRequest, ArtifactDownloadResult],
-    ) -> tuple[
-        int,
-        tuple[int, str] | None,
-        tuple[int, str] | None,
-        tuple[int, Path, str, dict[str, Any]] | None,
-        ArtifactWorkItem | None,
-    ] | None:
+    ) -> (
+        tuple[
+            int,
+            tuple[int, str] | None,
+            tuple[int, str] | None,
+            tuple[int, Path, str, dict[str, Any]] | None,
+            ArtifactWorkItem | None,
+        ]
+        | None
+    ):
         index, request, result = item
         if result.error:
             if str(result.metadata_extra.get("skip_status") or "") == "skipped":
                 return (
                     index,
                     None,
-                    (request.artifact_id, str(result.metadata_extra.get("skip_reason") or result.error)),
+                    (
+                        request.artifact_id,
+                        str(result.metadata_extra.get("skip_reason") or result.error),
+                    ),
                     None,
                     None,
                 )
@@ -19680,7 +20237,10 @@ class ArtifactQueueProcessor:
         completed = 0
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
             future_map = {
-                executor.submit(self._download_remote_artifact_request, request): (result_index, request)
+                executor.submit(self._download_remote_artifact_request, request): (
+                    result_index,
+                    request,
+                )
                 for result_index, request in allowed_requests
             }
             for future in as_completed(future_map):
@@ -19717,9 +20277,11 @@ class ArtifactQueueProcessor:
         supabase_configs: list[SupabaseConfig] = []
         payloads: list[tuple[str, str, str]] = []
         if artifact_type == "apk":
-            payloads, firebase_projects, supabase_configs, parse_metadata = self._scan_mobile_bundle_artifact(
-                path,
-                artifact_type,
+            payloads, firebase_projects, supabase_configs, parse_metadata = (
+                self._scan_mobile_bundle_artifact(
+                    path,
+                    artifact_type,
+                )
             )
             return ParsedArtifact(
                 artifact_id=work_item.artifact_id,
@@ -19732,9 +20294,11 @@ class ArtifactQueueProcessor:
                 parse_metadata=parse_metadata,
             )
         elif artifact_type == "ipa":
-            payloads, firebase_projects, supabase_configs, parse_metadata = self._scan_mobile_bundle_artifact(
-                path,
-                artifact_type,
+            payloads, firebase_projects, supabase_configs, parse_metadata = (
+                self._scan_mobile_bundle_artifact(
+                    path,
+                    artifact_type,
+                )
             )
             return ParsedArtifact(
                 artifact_id=work_item.artifact_id,
@@ -19747,9 +20311,11 @@ class ArtifactQueueProcessor:
                 parse_metadata=parse_metadata,
             )
         elif artifact_type in {"config", "document", "archive"}:
-            payloads, firebase_projects, supabase_configs, parse_metadata = self._scan_text_artifact(
-                path,
-                artifact_type,
+            payloads, firebase_projects, supabase_configs, parse_metadata = (
+                self._scan_text_artifact(
+                    path,
+                    artifact_type,
+                )
             )
             return ParsedArtifact(
                 artifact_id=work_item.artifact_id,
@@ -19769,11 +20335,11 @@ class ArtifactQueueProcessor:
             firebase_projects=firebase_projects,
             supabase_configs=supabase_configs,
             parse_metadata={
-            "format": _artifact_format_label(path),
-            "parser": artifact_type,
-            "payload_count": 0,
-            "metadata_payload_count": 0,
-            "relationship_payload_count": 0,
+                "format": _artifact_format_label(path),
+                "parser": artifact_type,
+                "payload_count": 0,
+                "metadata_payload_count": 0,
+                "relationship_payload_count": 0,
             },
         )
 
@@ -19799,7 +20365,9 @@ class ArtifactQueueProcessor:
         payloads = family_results[0] if family_results else []
         firebase_projects = family_results[1] if len(family_results) > 1 else []
         supabase_configs = family_results[2] if len(family_results) > 2 else []
-        payload_firebase_projects, payload_supabase_configs = self._extract_cloud_configs_from_payloads(payloads)
+        payload_firebase_projects, payload_supabase_configs = (
+            self._extract_cloud_configs_from_payloads(payloads)
+        )
         firebase_projects.extend(payload_firebase_projects)
         supabase_configs.extend(payload_supabase_configs)
         summary = self._artifact_payload_summary(path, artifact_type, payloads)
@@ -19930,8 +20498,7 @@ class ArtifactQueueProcessor:
         ordered_results: list[_ArtifactBatchResult | None] = [None] * len(batch_items)
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
             future_map = {
-                executor.submit(worker, item): index
-                for index, item in enumerate(batch_items)
+                executor.submit(worker, item): index for index, item in enumerate(batch_items)
             }
             for future in as_completed(future_map):
                 index = future_map[future]
@@ -19939,10 +20506,7 @@ class ArtifactQueueProcessor:
                     ordered_results[index] = future.result()
                 except Exception:  # noqa: BLE001
                     ordered_results[index] = default_factory()
-        return [
-            result if result is not None else default_factory()
-            for result in ordered_results
-        ]
+        return [result if result is not None else default_factory() for result in ordered_results]
 
     def _extract_cloud_configs_from_payloads(
         self,
@@ -19954,9 +20518,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         payload_jobs = [
-            payload_job
-            for payload_job in payload_job_batches
-            if isinstance(payload_job, tuple)
+            payload_job for payload_job in payload_job_batches if isinstance(payload_job, tuple)
         ]
         if not payload_jobs:
             return [], []
@@ -20075,7 +20637,10 @@ class ArtifactQueueProcessor:
             return None
         member_name = str(member.filename or "")
         suffix = Path(member_name.lower()).suffix
-        if suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES or member.file_size > _REMOTE_ARTIFACT_MAX_BYTES:
+        if (
+            suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES
+            or member.file_size > _REMOTE_ARTIFACT_MAX_BYTES
+        ):
             return None
         return {"name": member_name}
 
@@ -20085,7 +20650,10 @@ class ArtifactQueueProcessor:
             return None
         member_name = str(member.name or "")
         suffix = Path(member_name.lower()).suffix
-        if suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES or member.size > _REMOTE_ARTIFACT_MAX_BYTES:
+        if (
+            suffix not in _NESTED_MOBILE_ARTIFACT_SUFFIXES
+            or member.size > _REMOTE_ARTIFACT_MAX_BYTES
+        ):
             return None
         return {"name": member_name}
 
@@ -20095,7 +20663,9 @@ class ArtifactQueueProcessor:
         member_name = ArtifactQueueProcessor._safe_archive_member_name(raw_member_name)
         if not member_name:
             return None
-        if bool(getattr(member, "is_directory", False)) or bool(getattr(member, "is_symlink", False)):
+        if bool(getattr(member, "is_directory", False)) or bool(
+            getattr(member, "is_symlink", False)
+        ):
             return None
         if not bool(getattr(member, "is_file", True)):
             return None
@@ -20131,11 +20701,7 @@ class ArtifactQueueProcessor:
             self._nested_mobile_member_job,
             default_factory=lambda: None,
         )
-        member_jobs = [
-            member_job
-            for member_job in member_jobs
-            if isinstance(member_job, tuple)
-        ]
+        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
         return self._extract_nested_mobile_configs_from_member_jobs(member_jobs, source_path)
 
     def _extract_nested_mobile_configs_from_tar(
@@ -20162,11 +20728,7 @@ class ArtifactQueueProcessor:
             self._nested_mobile_member_job,
             default_factory=lambda: None,
         )
-        member_jobs = [
-            member_job
-            for member_job in member_jobs
-            if isinstance(member_job, tuple)
-        ]
+        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
         return self._extract_nested_mobile_configs_from_member_jobs(member_jobs, source_path)
 
     def _extract_nested_mobile_configs_from_7z(
@@ -20186,11 +20748,7 @@ class ArtifactQueueProcessor:
                     self._nested_mobile_7z_member_entry,
                     default_factory=lambda: None,
                 )
-                selected_entries = [
-                    entry
-                    for entry in member_entries
-                    if isinstance(entry, dict)
-                ]
+                selected_entries = [entry for entry in member_entries if isinstance(entry, dict)]
                 if not selected_entries:
                     return [], [], [], 0
                 raw_member_jobs: list[tuple[str, bytes]] = []
@@ -20225,11 +20783,7 @@ class ArtifactQueueProcessor:
             self._nested_mobile_member_job,
             default_factory=lambda: None,
         )
-        member_jobs = [
-            member_job
-            for member_job in member_jobs
-            if isinstance(member_job, tuple)
-        ]
+        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
         return self._extract_nested_mobile_configs_from_member_jobs(member_jobs, source_path)
 
     @staticmethod
@@ -20302,9 +20856,11 @@ class ArtifactQueueProcessor:
                 temp_path = Path(temp_dir) / Path(member_name).name
                 temp_path.write_bytes(data[:_REMOTE_ARTIFACT_MAX_BYTES])
                 if suffix in _ARCHIVE_STYLE_MOBILE_ARTIFACT_SUFFIXES:
-                    payloads, firebase_projects, supabase_configs, _parse_metadata = self._scan_text_artifact(
-                        temp_path,
-                        "archive",
+                    payloads, firebase_projects, supabase_configs, _parse_metadata = (
+                        self._scan_text_artifact(
+                            temp_path,
+                            "archive",
+                        )
                     )
                 else:
                     member_artifact_type = "apk" if suffix in {".apk", ".aab"} else "ipa"
@@ -20333,9 +20889,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         rebased_payloads = [
-            payload
-            for payload in rebased_payload_batches
-            if isinstance(payload, tuple)
+            payload for payload in rebased_payload_batches if isinstance(payload, tuple)
         ]
         rebased_project_batches = self._run_ordered_local_batch(
             firebase_projects,
@@ -20347,9 +20901,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         rebased_projects = [
-            project
-            for project in rebased_project_batches
-            if isinstance(project, FirebaseProject)
+            project for project in rebased_project_batches if isinstance(project, FirebaseProject)
         ]
         rebased_config_batches = self._run_ordered_local_batch(
             supabase_configs,
@@ -20361,9 +20913,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         rebased_configs = [
-            config
-            for config in rebased_config_batches
-            if isinstance(config, SupabaseConfig)
+            config for config in rebased_config_batches if isinstance(config, SupabaseConfig)
         ]
         return rebased_payloads, rebased_projects, rebased_configs
 
@@ -20531,9 +21081,7 @@ class ArtifactQueueProcessor:
             if normalized_key in {"archive_sources", "provider_sources"}:
                 if isinstance(value, list):
                     metadata[normalized_key] = [
-                        str(item).strip()
-                        for item in value
-                        if str(item).strip()
+                        str(item).strip() for item in value if str(item).strip()
                     ][:8]
                 continue
             if isinstance(value, (str, int, float, bool)):
@@ -20621,9 +21169,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         payload_jobs = [
-            payload_job
-            for payload_job in payload_job_batches
-            if isinstance(payload_job, tuple)
+            payload_job for payload_job in payload_job_batches if isinstance(payload_job, tuple)
         ]
         if not payload_jobs:
             return []
@@ -20986,12 +21532,7 @@ class ArtifactQueueProcessor:
         decoded = decoded.strip()
         if not decoded:
             return ""
-        if not (
-            "://" in decoded
-            or "@" in decoded
-            or "=" in decoded
-            or ":" in decoded
-        ):
+        if not ("://" in decoded or "@" in decoded or "=" in decoded or ":" in decoded):
             return ""
         return decoded
 
@@ -21527,7 +22068,10 @@ class ArtifactQueueProcessor:
         if family == "emails":
             email_scan_text = _strip_artifact_url_userinfo_in_text(text)
             email_entries = self._run_ordered_local_batch(
-                [email_match.group(0) for email_match in _ARTIFACT_EMAIL_RE.finditer(email_scan_text)],
+                [
+                    email_match.group(0)
+                    for email_match in _ARTIFACT_EMAIL_RE.finditer(email_scan_text)
+                ],
                 _artifact_email_seed_entry,
                 default_factory=str,
             )
@@ -21567,7 +22111,9 @@ class ArtifactQueueProcessor:
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(mx_host))
             if _artifact_format_label(source_label) == "matrix-server":
                 for matrix_host in matrix_server_delegated_hosts(text):
-                    host_candidates.extend(_artifact_network_host_seed_entries_for_host(matrix_host))
+                    host_candidates.extend(
+                        _artifact_network_host_seed_entries_for_host(matrix_host)
+                    )
             if _artifact_format_label(source_label) in {"did.json", "did-configuration.json"}:
                 for did_host in did_web_hosts(text):
                     host_candidates.extend(_artifact_network_host_seed_entries_for_host(did_host))
@@ -21647,11 +22193,11 @@ class ArtifactQueueProcessor:
             pattern_finding_batches = self._run_ordered_local_batch(
                 eligible_patterns,
                 lambda pattern: self._artifact_text_key_pattern_findings(
-                        pattern,
-                        self._artifact_key_patterns,
-                        text,
-                        source_file=source_file,
-                    ),
+                    pattern,
+                    self._artifact_key_patterns,
+                    text,
+                    source_file=source_file,
+                ),
                 default_factory=list,
             )
             for pattern_findings in pattern_finding_batches:
@@ -21667,16 +22213,24 @@ class ArtifactQueueProcessor:
                     redacted = _redact_secret(artifact_key_value)
                     if pat.name == "azure_storage_key":
                         account_name = str(
-                            _parse_azure_storage_connection_string(artifact_key_value).get("accountname") or ""
+                            _parse_azure_storage_connection_string(artifact_key_value).get(
+                                "accountname"
+                            )
+                            or ""
                         ).strip()
                         if account_name:
                             domain = account_name.lower()
                         redacted = _redact_azure_storage_connection_string(artifact_key_value)
-                    source_path = str(finding.get("source_url") or source_file).strip() or source_file
-                    repo_name = str(finding.get("repo_name") or Path(source_path).name).strip() or Path(
-                        source_file
-                    ).name
-                    key_enc, validation_detail = _encrypt_secret_material_for_finding(artifact_key_value)
+                    source_path = (
+                        str(finding.get("source_url") or source_file).strip() or source_file
+                    )
+                    repo_name = (
+                        str(finding.get("repo_name") or Path(source_path).name).strip()
+                        or Path(source_file).name
+                    )
+                    key_enc, validation_detail = _encrypt_secret_material_for_finding(
+                        artifact_key_value
+                    )
                     batch.key_findings.append(
                         {
                             "service": pat.service,
@@ -21685,7 +22239,9 @@ class ArtifactQueueProcessor:
                             "pattern_name": pat.name,
                             "key_redacted": redacted,
                             "key_enc": key_enc,
-                            "source_backend": str(finding.get("backend") or "artifact_text_extract"),
+                            "source_backend": str(
+                                finding.get("backend") or "artifact_text_extract"
+                            ),
                             "repo_name": repo_name,
                             "validation_detail": validation_detail,
                         }
@@ -21818,7 +22374,11 @@ class ArtifactQueueProcessor:
                 return []
             return host_meta_href_urls(text, base_url=source_file)
         if family == "well_known_link_metadata":
-            if _artifact_format_label(source_file) not in {"host-meta.json", "nodeinfo", "webfinger"}:
+            if _artifact_format_label(source_file) not in {
+                "host-meta.json",
+                "nodeinfo",
+                "webfinger",
+            }:
                 return []
             return well_known_link_urls(text, base_url=source_file)
         if family == "api_catalog_metadata":
@@ -22264,7 +22824,9 @@ class ArtifactQueueProcessor:
             for match in _GITOPS_MANIFEST_ASSET_URI_RE.finditer(text):
                 family_name = str(match.group("family") or "").lower()
                 asset_type = asset_type_map.get(family_name)
-                identifier = unquote(str(match.group("identifier") or "")).strip().lower().strip("/")
+                identifier = (
+                    unquote(str(match.group("identifier") or "")).strip().lower().strip("/")
+                )
                 if not asset_type or not identifier:
                     continue
                 candidate = (asset_type, identifier, "artifact_gitops_manifest")
@@ -22299,7 +22861,9 @@ class ArtifactQueueProcessor:
             for match in _WORKFLOW_MANIFEST_ASSET_URI_RE.finditer(text):
                 family_name = str(match.group("family") or "").lower()
                 asset_type = asset_type_map.get(family_name)
-                identifier = unquote(str(match.group("identifier") or "")).strip().lower().strip("/")
+                identifier = (
+                    unquote(str(match.group("identifier") or "")).strip().lower().strip("/")
+                )
                 if not asset_type or not identifier:
                     continue
                 candidate = (asset_type, identifier, "artifact_workflow_manifest")
@@ -22424,9 +22988,15 @@ class ArtifactQueueProcessor:
         source: ArtifactTextDiscoveryBatch,
     ) -> dict[str, Any]:
         if family == "emails":
-            return {"family": family, "values": [str(email).strip() for email in source.emails if str(email).strip()]}
+            return {
+                "family": family,
+                "values": [str(email).strip() for email in source.emails if str(email).strip()],
+            }
         if family == "phones":
-            return {"family": family, "values": [str(phone).strip() for phone in source.phones if str(phone).strip()]}
+            return {
+                "family": family,
+                "values": [str(phone).strip() for phone in source.phones if str(phone).strip()],
+            }
         if family == "ip_seeds":
             values: list[tuple[str, str]] = []
             for ip_seed in source.ip_seeds:
@@ -22456,7 +23026,10 @@ class ArtifactQueueProcessor:
                 "values": values,
             }
         if family == "urls":
-            return {"family": family, "values": [str(url).strip() for url in source.urls if str(url).strip()]}
+            return {
+                "family": family,
+                "values": [str(url).strip() for url in source.urls if str(url).strip()],
+            }
         if family == "identity_seeds":
             values: list[tuple[str, str, str, str]] = []
             for identity_seed in source.identity_seeds:
@@ -22843,7 +23416,9 @@ class ArtifactQueueProcessor:
                 key_enc=(None if key_entry.get("key_enc") is None else str(key_entry["key_enc"])),
                 source_backend=str(key_entry["source_backend"]),
                 repo_name=str(key_entry["repo_name"]),
-                validation_detail=str(key_entry.get("validation_detail") or "artifact_queue_ingest"),
+                validation_detail=str(
+                    key_entry.get("validation_detail") or "artifact_queue_ingest"
+                ),
             )
 
         cloud_asset_entries = self._run_ordered_local_batch(
@@ -22930,8 +23505,12 @@ class ArtifactQueueProcessor:
         for family_entry in prepared_family_entries:
             if not isinstance(family_entry, dict):
                 continue
-            entry["social_pivot_entries"].extend(list(family_entry.get("social_pivot_entries") or []))
-            entry["related_seed_entries"].extend(list(family_entry.get("related_seed_entries") or []))
+            entry["social_pivot_entries"].extend(
+                list(family_entry.get("social_pivot_entries") or [])
+            )
+            entry["related_seed_entries"].extend(
+                list(family_entry.get("related_seed_entries") or [])
+            )
             entry["cloud_asset_entries"].extend(list(family_entry.get("cloud_asset_entries") or []))
         return entry
 
@@ -22953,7 +23532,11 @@ class ArtifactQueueProcessor:
         if family == "related_seeds":
             return {"related_seed_entries": self._artifact_url_related_seed_entries(hostname)}
         if family == "cloud_assets":
-            return {"cloud_asset_entries": self._artifact_url_cloud_asset_entries(url, source="artifact_url_extract")}
+            return {
+                "cloud_asset_entries": self._artifact_url_cloud_asset_entries(
+                    url, source="artifact_url_extract"
+                )
+            }
         return {}
 
     @staticmethod
@@ -23001,11 +23584,7 @@ class ArtifactQueueProcessor:
         social_relation_metadata = {"rule": "artifact_social_url_extract", "platform": platform}
         if relation_metadata:
             social_relation_metadata.update(
-                {
-                    key: value
-                    for key, value in relation_metadata.items()
-                    if key != "rule"
-                }
+                {key: value for key, value in relation_metadata.items() if key != "rule"}
             )
         entries: list[dict[str, Any]] = []
 
@@ -23119,7 +23698,9 @@ class ArtifactQueueProcessor:
                 if hostname.endswith(firebase_suffix):
                     project_ref = hostname.split(firebase_suffix, 1)[0].strip(".")
                     if project_ref:
-                        return [{"asset_type": "firebase", "identifier": project_ref, "source": source}]
+                        return [
+                            {"asset_type": "firebase", "identifier": project_ref, "source": source}
+                        ]
                     return []
             return []
         if family == "managed_hosting":
@@ -23131,25 +23712,41 @@ class ArtifactQueueProcessor:
                         re.IGNORECASE,
                     ),
                 ),
-                ("gcp_appspot", re.compile(r"^([a-z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com$", re.IGNORECASE)),
+                (
+                    "gcp_appspot",
+                    re.compile(r"^([a-z0-9\-]+)(?:\.[a-z0-9\-]+)?\.appspot\.com$", re.IGNORECASE),
+                ),
                 (
                     "gcp_cloudfunctions",
                     re.compile(r"^[a-z0-9\-]+-([a-z0-9\-]+)\.cloudfunctions\.net$", re.IGNORECASE),
                 ),
                 (
                     "gcp_cloud_run",
-                    re.compile(r"^([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9\-]+)*\.run\.app)$", re.IGNORECASE),
+                    re.compile(
+                        r"^([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9\-]+)*\.run\.app)$", re.IGNORECASE
+                    ),
                 ),
                 ("netlify", re.compile(r"^([a-z0-9\-]+)\.netlify\.(?:app|com)$", re.IGNORECASE)),
                 ("github_pages", re.compile(r"^[a-z0-9][a-z0-9\-]*\.github\.io$", re.IGNORECASE)),
-                ("gitlab_pages", re.compile(r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.gitlab\.io$", re.IGNORECASE)),
+                (
+                    "gitlab_pages",
+                    re.compile(
+                        r"^[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.gitlab\.io$",
+                        re.IGNORECASE,
+                    ),
+                ),
                 ("vercel", re.compile(r"^([a-z0-9\-]+)\.vercel\.app$", re.IGNORECASE)),
                 ("render", re.compile(r"^([a-z0-9][a-z0-9\-]*)\.onrender\.com$", re.IGNORECASE)),
                 ("fly", re.compile(r"^([a-z0-9][a-z0-9\-]*)\.fly\.dev$", re.IGNORECASE)),
-                ("railway", re.compile(r"^([a-z0-9][a-z0-9\-]*)\.up\.railway\.app$", re.IGNORECASE)),
+                (
+                    "railway",
+                    re.compile(r"^([a-z0-9][a-z0-9\-]*)\.up\.railway\.app$", re.IGNORECASE),
+                ),
                 (
                     "azure_static_web_app",
-                    re.compile(r"^([a-z0-9][a-z0-9\-]*)(?:\.[0-9]+)?\.azurestaticapps\.net$", re.IGNORECASE),
+                    re.compile(
+                        r"^([a-z0-9][a-z0-9\-]*)(?:\.[0-9]+)?\.azurestaticapps\.net$", re.IGNORECASE
+                    ),
                 ),
                 ("heroku", re.compile(r"^([a-z0-9][a-z0-9\-]*)\.herokuapp\.com$", re.IGNORECASE)),
             ):
@@ -23166,11 +23763,17 @@ class ArtifactQueueProcessor:
                         parsed_url = urlparse(url)
                         path = str(parsed_url.path or "").rstrip("/")
                         endpoint = f"{parsed_url.scheme or 'https'}://{hostname}{path}".strip()
-                        return [{"asset_type": asset_type, "identifier": endpoint, "source": source}]
+                        return [
+                            {"asset_type": asset_type, "identifier": endpoint, "source": source}
+                        ]
                     if asset_type in {"azure_static_web_app", "gcp_cloud_run"}:
-                        return [{"asset_type": asset_type, "identifier": hostname, "source": source}]
+                        return [
+                            {"asset_type": asset_type, "identifier": hostname, "source": source}
+                        ]
                     if asset_type == "amplify" and "." in project_ref:
-                        return [{"asset_type": asset_type, "identifier": hostname, "source": source}]
+                        return [
+                            {"asset_type": asset_type, "identifier": hostname, "source": source}
+                        ]
                     return [{"asset_type": asset_type, "identifier": project_ref, "source": source}]
                 return []
             return []
@@ -23179,7 +23782,9 @@ class ArtifactQueueProcessor:
                 match = pattern.search(url)
                 if not match:
                     continue
-                return [{"asset_type": "aws_s3", "identifier": match.group(1).lower(), "source": source}]
+                return [
+                    {"asset_type": "aws_s3", "identifier": match.group(1).lower(), "source": source}
+                ]
             return []
         if family == "do_spaces":
             for pattern in _DO_SPACES_URL_PATTERNS:
@@ -23190,14 +23795,22 @@ class ArtifactQueueProcessor:
                     bucket, region = match.group(1).lower(), match.group(2).lower()
                 else:
                     region, bucket = match.group(1).lower(), match.group(2).lower()
-                return [{"asset_type": "do_spaces", "identifier": f"{region}/{bucket}", "source": source}]
+                return [
+                    {
+                        "asset_type": "do_spaces",
+                        "identifier": f"{region}/{bucket}",
+                        "source": source,
+                    }
+                ]
             return []
         if family == "gcs":
             for pattern in _GCS_URL_PATTERNS:
                 match = pattern.search(url)
                 if not match:
                     continue
-                return [{"asset_type": "gcs", "identifier": match.group(1).lower(), "source": source}]
+                return [
+                    {"asset_type": "gcs", "identifier": match.group(1).lower(), "source": source}
+                ]
             return []
         if family == "azure_blob":
             static_site_match = _AZURE_STATIC_WEBSITE_HOST_RE.fullmatch(hostname)
@@ -23233,7 +23846,9 @@ class ArtifactQueueProcessor:
             return [{"asset_type": "azure_key_vault", "identifier": identifier, "source": source}]
         if family == "cloudflare":
             if _CLOUDFLARE_WORKERS_HOST_RE.fullmatch(hostname):
-                return [{"asset_type": "cloudflare_worker", "identifier": hostname, "source": source}]
+                return [
+                    {"asset_type": "cloudflare_worker", "identifier": hostname, "source": source}
+                ]
             pages_match = _CLOUDFLARE_PAGES_HOST_RE.fullmatch(hostname)
             if pages_match:
                 return [
@@ -23528,7 +24143,9 @@ class ArtifactQueueProcessor:
             "seed_confidence": float(entry.get("seed_confidence") or 0.0),
             "relation_type": str(entry.get("relation_type") or "").strip(),
             "relation_confidence": float(entry.get("relation_confidence") or 0.0),
-            "relation_metadata": dict(relation_metadata) if isinstance(relation_metadata, dict) else {},
+            "relation_metadata": dict(relation_metadata)
+            if isinstance(relation_metadata, dict)
+            else {},
         }
 
     @staticmethod
@@ -23571,7 +24188,9 @@ class ArtifactQueueProcessor:
             """,
             (self._engagement_id, normalized_type, normalized_identifier),
         ).fetchone()
-        existing_metadata = _safe_json_loads(str(existing[0] or "{}")) if existing is not None else {}
+        existing_metadata = (
+            _safe_json_loads(str(existing[0] or "{}")) if existing is not None else {}
+        )
         merged_metadata = self._merge_artifact_seed_metadata(existing_metadata, metadata or {})
         metadata_json = json.dumps(merged_metadata, sort_keys=True)
         con.execute(
@@ -23800,13 +24419,16 @@ class ArtifactQueueProcessor:
             if re.fullmatch(r"[a-z0-9._\-]{3,222}", bucket):
                 return f"gs://{bucket}"
             return ""
-        if resource in {"google_firebase_project", "google_firebase_web_app", "google_firebase_database_instance"}:
-            project_ref = str(
-                values.get("project")
-                or values.get("project_id")
-                or values.get("name")
-                or ""
-            ).strip().lower()
+        if resource in {
+            "google_firebase_project",
+            "google_firebase_web_app",
+            "google_firebase_database_instance",
+        }:
+            project_ref = (
+                str(values.get("project") or values.get("project_id") or values.get("name") or "")
+                .strip()
+                .lower()
+            )
             if re.fullmatch(r"[a-z0-9\-]{4,64}", project_ref):
                 return f"https://{project_ref}.firebaseio.com"
             return ""
@@ -23815,9 +24437,8 @@ class ArtifactQueueProcessor:
             account_name = str(values.get("storage_account_name") or "").strip().lower()
             if not account_name:
                 account_name = self._azure_storage_account_name_from_resource_values(values)
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 return f"https://{account_name}.blob.core.windows.net/{container_name}"
         return ""
@@ -23899,9 +24520,9 @@ class ArtifactQueueProcessor:
             self._terraform_text_block_candidate,
             default_factory=str,
         )
-        if _looks_like_terraform_backend_config_name(source_hint) or _looks_like_terragrunt_config_name(
+        if _looks_like_terraform_backend_config_name(
             source_hint
-        ):
+        ) or _looks_like_terragrunt_config_name(source_hint):
             candidate_lines.extend(self._terraform_backend_config_candidates(text))
         if _looks_like_terragrunt_config_name(source_hint):
             candidate_lines.extend(self._terragrunt_remote_state_backend_candidates(text))
@@ -23938,9 +24559,8 @@ class ArtifactQueueProcessor:
         if resource_type == "digitalocean_spaces_bucket":
             bucket = str(assignments.get("name") or assignments.get("bucket") or "").strip().lower()
             region = str(assignments.get("region") or "").strip().lower()
-            if (
-                re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket)
-                and re.fullmatch(r"[a-z0-9\-]{2,32}", region)
+            if re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket) and re.fullmatch(
+                r"[a-z0-9\-]{2,32}", region
             ):
                 return f"https://{bucket}.{region}.digitaloceanspaces.com"
             return ""
@@ -23949,22 +24569,29 @@ class ArtifactQueueProcessor:
             if re.fullmatch(r"[a-z0-9._\-]{3,222}", bucket):
                 return f"gs://{bucket}"
             return ""
-        if resource_type in {"google_firebase_project", "google_firebase_web_app", "google_firebase_database_instance"}:
-            project_ref = str(
-                assignments.get("project")
-                or assignments.get("project_id")
-                or assignments.get("name")
-                or ""
-            ).strip().lower()
+        if resource_type in {
+            "google_firebase_project",
+            "google_firebase_web_app",
+            "google_firebase_database_instance",
+        }:
+            project_ref = (
+                str(
+                    assignments.get("project")
+                    or assignments.get("project_id")
+                    or assignments.get("name")
+                    or ""
+                )
+                .strip()
+                .lower()
+            )
             if re.fullmatch(r"[a-z0-9\-]{4,64}", project_ref):
                 return f"https://{project_ref}.firebaseio.com"
             return ""
         if resource_type == "azurerm_storage_container":
             container_name = str(assignments.get("name") or "").strip().lower()
             account_name = str(assignments.get("storage_account_name") or "").strip().lower()
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 return f"https://{account_name}.blob.core.windows.net/{container_name}"
         return ""
@@ -24007,19 +24634,23 @@ class ArtifactQueueProcessor:
             )
             if do_spaces_url:
                 candidates.append(do_spaces_url)
-            if assignment_keys & {
-                "dynamodb_table",
-                "encrypt",
-                "endpoint",
-                "endpoint_url",
-                "key",
-                "profile",
-                "region",
-                "role_arn",
-                "s3_endpoint",
-                "skip_credentials_validation",
-                "workspace_key_prefix",
-            } and not do_spaces_url:
+            if (
+                assignment_keys
+                & {
+                    "dynamodb_table",
+                    "encrypt",
+                    "endpoint",
+                    "endpoint_url",
+                    "key",
+                    "profile",
+                    "region",
+                    "role_arn",
+                    "s3_endpoint",
+                    "skip_credentials_validation",
+                    "workspace_key_prefix",
+                }
+                and not do_spaces_url
+            ):
                 candidates.append(f"s3://{bucket}")
             elif assignment_keys & {
                 "access_token",
@@ -24029,16 +24660,16 @@ class ArtifactQueueProcessor:
             }:
                 candidates.append(f"gs://{bucket}")
 
-        container_name = str(
-            assignments.get("container_name")
-            or assignments.get("container")
-            or ""
-        ).strip().lower()
-        account_name = str(
-            assignments.get("storage_account_name")
-            or assignments.get("account_name")
-            or ""
-        ).strip().lower()
+        container_name = (
+            str(assignments.get("container_name") or assignments.get("container") or "")
+            .strip()
+            .lower()
+        )
+        account_name = (
+            str(assignments.get("storage_account_name") or assignments.get("account_name") or "")
+            .strip()
+            .lower()
+        )
         azure_blob_url = self._azure_blob_url_from_parts(account_name, container_name)
         if azure_blob_url:
             candidates.append(azure_blob_url)
@@ -24188,10 +24819,7 @@ class ArtifactQueueProcessor:
     def _azure_blob_url_from_parts(account_name: str, container_name: str) -> str:
         account = str(account_name or "").strip().lower()
         container = str(container_name or "").strip().lower()
-        if (
-            re.fullmatch(r"[a-z0-9\-]{3,24}", account)
-            and re.fullmatch(r"[^/?#]+", container)
-        ):
+        if re.fullmatch(r"[a-z0-9\-]{3,24}", account) and re.fullmatch(r"[^/?#]+", container):
             return f"https://{account}.blob.core.windows.net/{container}"
         return ""
 
@@ -24207,16 +24835,20 @@ class ArtifactQueueProcessor:
         mapping: dict[str, Any],
         normalized: dict[str, Any],
     ) -> list[str]:
-        type_hint = str(
-            self._yaml_ref_value(
-                normalized,
-                "type",
-                "resource_type",
-                "resourceType",
-                "kind",
+        type_hint = (
+            str(
+                self._yaml_ref_value(
+                    normalized,
+                    "type",
+                    "resource_type",
+                    "resourceType",
+                    "kind",
+                )
+                or ""
             )
-            or ""
-        ).strip().lower()
+            .strip()
+            .lower()
+        )
         if not type_hint:
             return []
         properties = self._yaml_child_mapping(mapping, "properties", "config", "inputs")
@@ -24227,7 +24859,9 @@ class ArtifactQueueProcessor:
 
         if "aws::s3::bucket" in type_hint or "aws:s3" in type_hint or "aws.s3" in type_hint:
             bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name")
+                self._yaml_ref_value(
+                    lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name"
+                )
             )
             if bucket and re.fullmatch(r"[a-z0-9.\-]{3,63}", bucket):
                 candidates.append(f"s3://{bucket}")
@@ -24239,18 +24873,28 @@ class ArtifactQueueProcessor:
             or "google_storage_bucket" in type_hint
         ):
             bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name")
+                self._yaml_ref_value(
+                    lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name"
+                )
             )
             if bucket:
                 candidates.append(f"gs://{bucket}")
 
         if "digitalocean" in type_hint and "space" in type_hint:
             bucket = self._yaml_valid_bucket_name(
-                self._yaml_ref_value(lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name")
+                self._yaml_ref_value(
+                    lookup, "bucketName", "bucket-name", "bucket_name", "bucket", "name"
+                )
             )
-            region = str(
-                self._yaml_ref_value(lookup, "region", "spaceRegion", "space-region", "space_region")
-            ).strip().lower()
+            region = (
+                str(
+                    self._yaml_ref_value(
+                        lookup, "region", "spaceRegion", "space-region", "space_region"
+                    )
+                )
+                .strip()
+                .lower()
+            )
             if bucket and re.fullmatch(r"[a-z0-9\-]{2,32}", region):
                 candidates.append(f"https://{bucket}.{region}.digitaloceanspaces.com")
 
@@ -24288,28 +24932,36 @@ class ArtifactQueueProcessor:
             or "azure:storage" in type_hint
             or "azurerm_storage_container" in type_hint
         ):
-            account_name = str(
-                self._yaml_ref_value(
-                    lookup,
-                    "storageAccountName",
-                    "storage-account-name",
-                    "storage_account_name",
-                    "accountName",
-                    "account-name",
-                    "account_name",
-                    "account",
+            account_name = (
+                str(
+                    self._yaml_ref_value(
+                        lookup,
+                        "storageAccountName",
+                        "storage-account-name",
+                        "storage_account_name",
+                        "accountName",
+                        "account-name",
+                        "account_name",
+                        "account",
+                    )
                 )
-            ).strip().lower()
-            container_name = str(
-                self._yaml_ref_value(
-                    lookup,
-                    "containerName",
-                    "container-name",
-                    "container_name",
-                    "container",
-                    "name",
+                .strip()
+                .lower()
+            )
+            container_name = (
+                str(
+                    self._yaml_ref_value(
+                        lookup,
+                        "containerName",
+                        "container-name",
+                        "container_name",
+                        "container",
+                        "name",
+                    )
                 )
-            ).strip().lower()
+                .strip()
+                .lower()
+            )
             candidate = self._azure_blob_url_from_parts(account_name, container_name)
             if not candidate:
                 composite_account, composite_container = self._azure_blob_parts_from_composite_name(
@@ -24328,11 +24980,7 @@ class ArtifactQueueProcessor:
             return ""
         if value.startswith(('"""', "'''")) and value.endswith(('"""', "'''")) and len(value) >= 6:
             value = value[3:-3].strip()
-        elif (
-            len(value) >= 2
-            and value[0] == value[-1]
-            and value[0] in {"'", '"'}
-        ):
+        elif len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
             value = value[1:-1].strip()
         else:
             value = re.split(r"\s(?:#|;|//).*$", value, maxsplit=1)[0].strip()
@@ -24362,7 +25010,11 @@ class ArtifactQueueProcessor:
             if not isinstance(line_entry, tuple) or not line_entry:
                 continue
             entry_type = str(line_entry[0] or "")
-            if entry_type == "section" and len(line_entry) == 2 and isinstance(line_entry[1], tuple):
+            if (
+                entry_type == "section"
+                and len(line_entry) == 2
+                and isinstance(line_entry[1], tuple)
+            ):
                 section_path = line_entry[1]
                 continue
             if entry_type != "assignment" or len(line_entry) != 3:
@@ -24457,11 +25109,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         candidate_batches = self._run_ordered_local_batch(
-            [
-                job
-                for job in structured_candidate_jobs
-                if isinstance(job, tuple)
-            ],
+            [job for job in structured_candidate_jobs if isinstance(job, tuple)],
             self._key_value_structured_candidate_batch,
             default_factory=list,
         )
@@ -24622,9 +25270,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         return [
-            parsed_line
-            for parsed_line in parsed_lines
-            if isinstance(parsed_line, (dict, list))
+            parsed_line for parsed_line in parsed_lines if isinstance(parsed_line, (dict, list))
         ]
 
     @staticmethod
@@ -24804,9 +25450,10 @@ class ArtifactQueueProcessor:
         candidates: list[str] = []
         if isinstance(value, dict):
             normalized = self._yaml_normalized_mapping(value)
-            scheme = self._observability_scheme_candidate(
-                self._yaml_ref_value(normalized, "scheme")
-            ) or inherited_scheme
+            scheme = (
+                self._observability_scheme_candidate(self._yaml_ref_value(normalized, "scheme"))
+                or inherited_scheme
+            )
             endpoint_jobs: list[tuple[Any, str]] = []
             for raw_key, raw_endpoint_values in value.items():
                 if (
@@ -24814,9 +25461,7 @@ class ArtifactQueueProcessor:
                     not in _OBSERVABILITY_ENDPOINT_FIELD_FINGERPRINTS
                 ):
                     continue
-                endpoint_jobs.extend(
-                    self._observability_endpoint_jobs(raw_endpoint_values, scheme)
-                )
+                endpoint_jobs.extend(self._observability_endpoint_jobs(raw_endpoint_values, scheme))
             if endpoint_jobs:
                 target_candidates = self._run_ordered_local_batch(
                     endpoint_jobs,
@@ -24825,8 +25470,7 @@ class ArtifactQueueProcessor:
                 )
                 candidates.extend(target_candidates)
             child_jobs = [
-                (child_index, child, scheme)
-                for child_index, child in enumerate(value.values())
+                (child_index, child, scheme) for child_index, child in enumerate(value.values())
             ]
             child_batches = (
                 self._run_ordered_local_batch(
@@ -24849,8 +25493,7 @@ class ArtifactQueueProcessor:
             return candidates
         if isinstance(value, list):
             item_jobs = [
-                (item_index, item, inherited_scheme)
-                for item_index, item in enumerate(value[:4096])
+                (item_index, item, inherited_scheme) for item_index, item in enumerate(value[:4096])
             ]
             item_batches = (
                 self._run_ordered_local_batch(
@@ -24991,16 +25634,13 @@ class ArtifactQueueProcessor:
             )
             if yaml_value_match:
                 scan_line = str(yaml_value_match.group("value") or "").strip()
-            if (
-                not host_rule_found
-                and (
-                    "://" in scan_line
-                    or scan_line.endswith("{")
-                    or re.search(
-                        r"\b(?:hdr\(host\)|host\(|hostsni\(|acl|backend|route|upstream|virtualhost)\b",
-                        scan_line,
-                        re.IGNORECASE,
-                    )
+            if not host_rule_found and (
+                "://" in scan_line
+                or scan_line.endswith("{")
+                or re.search(
+                    r"\b(?:hdr\(host\)|host\(|hostsni\(|acl|backend|route|upstream|virtualhost)\b",
+                    scan_line,
+                    re.IGNORECASE,
                 )
             ):
                 raw_candidates.extend(
@@ -25157,11 +25797,7 @@ class ArtifactQueueProcessor:
                     ) in child_jobs
                 ]
             )
-            return [
-                candidate
-                for child_values in child_batches
-                for candidate in child_values
-            ]
+            return [candidate for child_values in child_batches for candidate in child_values]
         if isinstance(value, list):
             item_jobs = [
                 (item_index, None, item, parent_key_fingerprint, source_label)
@@ -25184,11 +25820,7 @@ class ArtifactQueueProcessor:
                     for _item_index, _raw_key, item, parent_key_fingerprint, source_label in item_jobs
                 ]
             )
-            return [
-                candidate
-                for item_values in item_batches
-                for candidate in item_values
-            ]
+            return [candidate for item_values in item_batches for candidate in item_values]
         if isinstance(value, str) and ("Host(" in value or "HostSNI(" in value):
             return self._orchestration_routing_rule_candidates(value, use_workers=False)
         return []
@@ -25221,15 +25853,28 @@ class ArtifactQueueProcessor:
     ) -> list[str]:
         key_fingerprint = self._yaml_key_fingerprint(str(raw_key or ""))
         candidates: list[str] = []
-        if key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS or (
-            parent_key_fingerprint in {"annotation", "annotations"}
-            and self._orchestration_annotation_endpointish_key(key_fingerprint)
-        ) or (
-            source_label in {"helm-chart", "helm-lock"}
-            and key_fingerprint in {"repository", "repositories"}
+        if (
+            key_fingerprint in _ORCHESTRATION_ENDPOINT_FIELD_FINGERPRINTS
+            or (
+                parent_key_fingerprint in {"annotation", "annotations"}
+                and self._orchestration_annotation_endpointish_key(key_fingerprint)
+            )
+            or (
+                source_label in {"helm-chart", "helm-lock"}
+                and key_fingerprint in {"repository", "repositories"}
+            )
         ):
             candidates.extend(self._orchestration_endpoint_url_candidates(child, use_workers=False))
-        if key_fingerprint in {"annotation", "annotations", "label", "labels", "match", "matches", "rule", "rules"}:
+        if key_fingerprint in {
+            "annotation",
+            "annotations",
+            "label",
+            "labels",
+            "match",
+            "matches",
+            "rule",
+            "rules",
+        }:
             candidates.extend(self._orchestration_routing_rule_candidates(child, use_workers=False))
         candidates.extend(
             self._orchestration_node_url_candidates(
@@ -25264,10 +25909,7 @@ class ArtifactQueueProcessor:
                 default_factory=str,
             )
             if use_workers
-            else [
-                self._edge_proxy_endpoint_url_candidate(raw_value)
-                for raw_value in raw_values
-            ]
+            else [self._edge_proxy_endpoint_url_candidate(raw_value) for raw_value in raw_values]
         )
         return [candidate for candidate in normalized_values if candidate]
 
@@ -25280,16 +25922,9 @@ class ArtifactQueueProcessor:
                 default_factory=list,
             )
             if use_workers
-            else [
-                self._edge_proxy_line_url_candidates(text_value)
-                for text_value in text_values
-            ]
+            else [self._edge_proxy_line_url_candidates(text_value) for text_value in text_values]
         )
-        return [
-            candidate
-            for candidate_batch in candidate_batches
-            for candidate in candidate_batch
-        ]
+        return [candidate for candidate_batch in candidate_batches for candidate in candidate_batch]
 
     def _orchestration_endpoint_values(self, value: Any) -> list[str]:
         values: list[str] = []
@@ -25372,29 +26007,36 @@ class ArtifactQueueProcessor:
             if bucket:
                 _append(f"gs://{bucket}")
         if "azure" in storage_type or "blob" in storage_type:
-            account_name = str(
-                self._yaml_ref_value(
-                    normalized,
-                    "storage_account_name",
-                    "storageAccountName",
-                    "account_name",
-                    "accountName",
-                    "account",
+            account_name = (
+                str(
+                    self._yaml_ref_value(
+                        normalized,
+                        "storage_account_name",
+                        "storageAccountName",
+                        "account_name",
+                        "accountName",
+                        "account",
+                    )
                 )
-            ).strip().lower()
-            container_name = str(
-                self._yaml_ref_value(
-                    normalized,
-                    "container",
-                    "container_name",
-                    "containerName",
-                    "bucket",
-                    "bucketName",
+                .strip()
+                .lower()
+            )
+            container_name = (
+                str(
+                    self._yaml_ref_value(
+                        normalized,
+                        "container",
+                        "container_name",
+                        "containerName",
+                        "bucket",
+                        "bucketName",
+                    )
                 )
-            ).strip().lower()
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+                .strip()
+                .lower()
+            )
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 _append(f"https://{account_name}.blob.core.windows.net/{container_name}")
 
@@ -25519,22 +26161,25 @@ class ArtifactQueueProcessor:
             bucket = self._duplicacy_bucket_from_storage_url(value)
             return [f"gs://{bucket}"] if bucket else []
         if scheme in {"azure", "az", "azureblob"}:
-            account_name = str(
-                self._yaml_ref_value(
-                    context,
-                    "storage_account_name",
-                    "storageAccountName",
-                    "account_name",
-                    "accountName",
-                    "account",
-                    "azure_storage_account",
-                    "azureStorageAccount",
+            account_name = (
+                str(
+                    self._yaml_ref_value(
+                        context,
+                        "storage_account_name",
+                        "storageAccountName",
+                        "account_name",
+                        "accountName",
+                        "account",
+                        "azure_storage_account",
+                        "azureStorageAccount",
+                    )
                 )
-            ).strip().lower()
+                .strip()
+                .lower()
+            )
             container_name = self._duplicacy_bucket_from_storage_url(value)
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 return [f"https://{account_name}.blob.core.windows.net/{container_name}"]
         return []
@@ -25616,7 +26261,10 @@ class ArtifactQueueProcessor:
                 "borgrepo",
                 "borgrepository",
                 "borgrepositorylocation",
-            } or ("borg" in normalized_key and ("repo" in normalized_key or "repository" in normalized_key)):
+            } or (
+                "borg" in normalized_key
+                and ("repo" in normalized_key or "repository" in normalized_key)
+            ):
                 _append_repository_value(value)
 
         candidate_batches = self._run_ordered_local_batch(
@@ -25696,7 +26344,11 @@ class ArtifactQueueProcessor:
         ):
             return False
         lowered = str(source_hint or "").replace("\\", "/").lower()
-        return "duplicati" in lowered or "#sqlite-row-backup-" in lowered or "#sqlite-row-backups-" in lowered
+        return (
+            "duplicati" in lowered
+            or "#sqlite-row-backup-" in lowered
+            or "#sqlite-row-backups-" in lowered
+        )
 
     def _duplicati_nested_option_entries(self, value: str) -> list[tuple[str, str]]:
         option_lines: list[str] = []
@@ -26015,9 +26667,7 @@ class ArtifactQueueProcessor:
             [
                 (entry_index, entry)
                 for entry_index, entry in enumerate(
-                    entry
-                    for family in prepared_entry_families
-                    for entry in family
+                    entry for family in prepared_entry_families for entry in family
                 )
             ],
             self._yaml_env_map_write_entry,
@@ -26053,9 +26703,7 @@ class ArtifactQueueProcessor:
             [
                 (entry_index, entry)
                 for entry_index, entry in enumerate(
-                    entry
-                    for family in prepared_entry_families
-                    for entry in family
+                    entry for family in prepared_entry_families for entry in family
                 )
             ],
             self._yaml_env_map_write_entry,
@@ -26178,7 +26826,9 @@ class ArtifactQueueProcessor:
             return False
         if re.fullmatch(r"[A-Z][A-Z0-9_\-]{2,}", candidate):
             return True
-        return candidate.startswith(("NEXT_PUBLIC_", "VITE_", "REACT_APP_", "NUXT_PUBLIC_", "PUBLIC_"))
+        return candidate.startswith(
+            ("NEXT_PUBLIC_", "VITE_", "REACT_APP_", "NUXT_PUBLIC_", "PUBLIC_")
+        )
 
     @classmethod
     def _yaml_mapping_looks_like_env_map(cls, mapping: dict[str, Any]) -> bool:
@@ -26352,22 +27002,32 @@ class ArtifactQueueProcessor:
                 return []
             candidates: list[str] = []
             firebase_env = self._yaml_valid_project_ref(env_value)
-            if firebase_env and "FIREBASE" in env_name and any(
-                marker in env_name for marker in ("PROJECT", "DATABASE", "RTDB")
+            if (
+                firebase_env
+                and "FIREBASE" in env_name
+                and any(marker in env_name for marker in ("PROJECT", "DATABASE", "RTDB"))
             ):
                 candidates.append(f"https://{firebase_env}.firebaseio.com")
             supabase_env = self._yaml_valid_project_ref(env_value)
-            if supabase_env and "SUPABASE" in env_name and any(
-                marker in env_name for marker in ("PROJECT", "REF")
+            if (
+                supabase_env
+                and "SUPABASE" in env_name
+                and any(marker in env_name for marker in ("PROJECT", "REF"))
             ):
                 candidates.append(f"https://{supabase_env}.supabase.co")
             s3_env = self._yaml_valid_bucket_name(env_value)
             if s3_env and ("S3" in env_name or "AWS" in env_name) and "BUCKET" in env_name:
                 candidates.append(f"s3://{s3_env}")
             gcs_env = self._yaml_valid_bucket_name(env_value)
-            if gcs_env and any(marker in env_name for marker in ("GCS", "GOOGLE_STORAGE", "GCLOUD")) and "BUCKET" in env_name:
+            if (
+                gcs_env
+                and any(marker in env_name for marker in ("GCS", "GOOGLE_STORAGE", "GCLOUD"))
+                and "BUCKET" in env_name
+            ):
                 candidates.append(f"gs://{gcs_env}")
-            if "BORG" in env_name and ("REPO" in env_name or "REPOSITORY" in env_name or "LOCATION" in env_name):
+            if "BORG" in env_name and (
+                "REPO" in env_name or "REPOSITORY" in env_name or "LOCATION" in env_name
+            ):
                 candidates.extend(self._borg_repository_candidates(env_value, normalized))
             return candidates
         if family == "firebase_path":
@@ -26388,10 +27048,19 @@ class ArtifactQueueProcessor:
             )
             if not project_ref and any(
                 key in normalized
-                for key in ("name", "database", "database_id", "databaseid", "database-name", "databaseName")
+                for key in (
+                    "name",
+                    "database",
+                    "database_id",
+                    "databaseid",
+                    "database-name",
+                    "databaseName",
+                )
             ):
                 project_ref = self._yaml_valid_project_ref(
-                    self._yaml_ref_value(normalized, "name", "database", "database_id", "databaseId")
+                    self._yaml_ref_value(
+                        normalized, "name", "database", "database_id", "databaseId"
+                    )
                 )
             if project_ref:
                 return [f"https://{project_ref}.firebaseio.com"]
@@ -26472,53 +27141,64 @@ class ArtifactQueueProcessor:
                     "spaceName",
                 )
             )
-            region = str(
-                self._yaml_ref_value(
-                    normalized,
-                    "region",
-                    "space_region",
-                    "spaceRegion",
-                    "bucket_region",
-                    "bucketRegion",
+            region = (
+                str(
+                    self._yaml_ref_value(
+                        normalized,
+                        "region",
+                        "space_region",
+                        "spaceRegion",
+                        "bucket_region",
+                        "bucketRegion",
+                    )
                 )
-            ).strip().lower()
+                .strip()
+                .lower()
+            )
             if bucket and re.fullmatch(r"[a-z0-9\-]{2,32}", region):
                 return [f"https://{bucket}.{region}.digitaloceanspaces.com"]
             return []
         if family == "azure_path":
             if not self._yaml_has_hint(path_hint, "azure", "blob"):
                 return []
-            account_name = str(
-                self._yaml_ref_value(
-                    normalized,
-                    "storage_account_name",
-                    "storageAccountName",
-                    "storage-account-name",
-                    "account_name",
-                    "accountName",
-                    "account-name",
-                    "storage_account",
-                    "storageAccount",
-                    "storage-account",
-                    "azure_storage_account",
-                    "azureStorageAccount",
+            account_name = (
+                str(
+                    self._yaml_ref_value(
+                        normalized,
+                        "storage_account_name",
+                        "storageAccountName",
+                        "storage-account-name",
+                        "account_name",
+                        "accountName",
+                        "account-name",
+                        "storage_account",
+                        "storageAccount",
+                        "storage-account",
+                        "azure_storage_account",
+                        "azureStorageAccount",
+                    )
                 )
-            ).strip().lower()
-            container_name = str(
-                self._yaml_ref_value(
-                    normalized,
-                    "name",
-                    "container",
-                    "container_name",
-                    "containerName",
-                    "container-name",
-                    "blob_container",
-                    "blobContainer",
+                .strip()
+                .lower()
+            )
+            container_name = (
+                str(
+                    self._yaml_ref_value(
+                        normalized,
+                        "name",
+                        "container",
+                        "container_name",
+                        "containerName",
+                        "container-name",
+                        "blob_container",
+                        "blobContainer",
+                    )
                 )
-            ).strip().lower()
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+                .strip()
+                .lower()
+            )
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 return [f"https://{account_name}.blob.core.windows.net/{container_name}"]
             return []
@@ -26602,11 +27282,15 @@ class ArtifactQueueProcessor:
         if family == "gitlab_ci":
             return self._yaml_gitlab_ci_structured_candidates(mapping, normalized, path)
         if family == "dependabot_config":
-            return self._yaml_dependabot_config_structured_candidates(mapping, normalized, path_hint)
+            return self._yaml_dependabot_config_structured_candidates(
+                mapping, normalized, path_hint
+            )
         if family == "renovate_config":
             return self._yaml_renovate_config_structured_candidates(mapping, normalized, path_hint)
         if family == "goreleaser_config":
-            return self._yaml_goreleaser_config_structured_candidates(mapping, normalized, path_hint)
+            return self._yaml_goreleaser_config_structured_candidates(
+                mapping, normalized, path_hint
+            )
         if family == "backstage_catalog":
             if not (
                 backstage_catalog_artifact_label(source_hint)
@@ -26690,7 +27374,9 @@ class ArtifactQueueProcessor:
             candidates.append(candidate)
 
         if self._yaml_mapping_looks_like_github_actions_workflow(mapping):
-            workflow_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
+            workflow_name = self._yaml_external_secret_ref_segment(
+                self._yaml_ref_value(normalized, "name")
+            )
             _append(f"github-workflow://{workflow_name or 'workflow'}")
             for action_candidate in self._yaml_github_actions_uses_candidates(mapping):
                 _append(action_candidate)
@@ -26736,7 +27422,10 @@ class ArtifactQueueProcessor:
         jobs = normalized.get("jobs")
         if not isinstance(jobs, dict):
             return False
-        return bool(self._yaml_github_actions_uses_candidates(mapping) or self._yaml_github_actions_has_runs_on(jobs))
+        return bool(
+            self._yaml_github_actions_uses_candidates(mapping)
+            or self._yaml_github_actions_has_runs_on(jobs)
+        )
 
     def _yaml_github_actions_has_runs_on(self, value: Any) -> bool:
         if isinstance(value, dict):
@@ -26774,11 +27463,7 @@ class ArtifactQueueProcessor:
             if use_workers
             else [worker(child_job) for child_job in child_jobs]
         )
-        return [
-            candidate
-            for child_values in child_batches
-            for candidate in child_values
-        ]
+        return [candidate for child_values in child_batches for candidate in child_values]
 
     def _yaml_github_actions_uses_candidates(
         self,
@@ -26852,8 +27537,7 @@ class ArtifactQueueProcessor:
             return []
         owner, repository = parts[0], parts[1]
         if not (
-            re.fullmatch(r"[A-Za-z0-9_.-]+", owner)
-            and re.fullmatch(r"[A-Za-z0-9_.-]+", repository)
+            re.fullmatch(r"[A-Za-z0-9_.-]+", owner) and re.fullmatch(r"[A-Za-z0-9_.-]+", repository)
         ):
             return []
         encoded_ref = quote(ref_value, safe="/._:@+=-")
@@ -26876,11 +27560,15 @@ class ArtifactQueueProcessor:
             return []
 
         secret_jobs: list[tuple[str, Any]] = []
-        parameter_store = self._yaml_child_mapping(env_mapping, "parameter-store", "parameter_store", "parameterstore")
+        parameter_store = self._yaml_child_mapping(
+            env_mapping, "parameter-store", "parameter_store", "parameterstore"
+        )
         for parameter_ref in parameter_store.values() if parameter_store else ():
             secret_jobs.append(("parameter_store", parameter_ref))
 
-        secrets_manager = self._yaml_child_mapping(env_mapping, "secrets-manager", "secrets_manager", "secretsmanager")
+        secrets_manager = self._yaml_child_mapping(
+            env_mapping, "secrets-manager", "secrets_manager", "secretsmanager"
+        )
         for secret_ref in secrets_manager.values() if secrets_manager else ():
             secret_jobs.append(("secrets_manager", secret_ref))
 
@@ -26923,15 +27611,21 @@ class ArtifactQueueProcessor:
     ) -> bool:
         if "version" not in normalized:
             return False
-        has_buildspec_shape = any(isinstance(normalized.get(key), dict) for key in ("phases", "env", "artifacts", "cache"))
+        has_buildspec_shape = any(
+            isinstance(normalized.get(key), dict) for key in ("phases", "env", "artifacts", "cache")
+        )
         if not has_buildspec_shape:
             return False
         env_mapping = self._yaml_child_mapping(mapping, "env")
         if not env_mapping:
             return bool(isinstance(normalized.get("phases"), dict))
         return bool(
-            self._yaml_child_mapping(env_mapping, "parameter-store", "parameter_store", "parameterstore")
-            or self._yaml_child_mapping(env_mapping, "secrets-manager", "secrets_manager", "secretsmanager")
+            self._yaml_child_mapping(
+                env_mapping, "parameter-store", "parameter_store", "parameterstore"
+            )
+            or self._yaml_child_mapping(
+                env_mapping, "secrets-manager", "secrets_manager", "secretsmanager"
+            )
             or isinstance(normalized.get("phases"), dict)
         )
 
@@ -26945,7 +27639,9 @@ class ArtifactQueueProcessor:
                 raw_value,
                 re.IGNORECASE,
             )
-            return self._yaml_external_secret_ref_segment(arn_match.group(1) if arn_match else raw_value)
+            return self._yaml_external_secret_ref_segment(
+                arn_match.group(1) if arn_match else raw_value
+            )
         return self._yaml_external_secret_ref_segment(raw_value.split(":", 1)[0])
 
     def _yaml_cloudbuild_config_structured_candidates(
@@ -27156,9 +27852,7 @@ class ArtifactQueueProcessor:
         child_path = (*path_parts, key_name)
         values: list[str] = []
         if key_name == "image" and (
-            "docker" in path_parts
-            or "executors" in path_parts
-            or "jobs" in path_parts
+            "docker" in path_parts or "executors" in path_parts or "jobs" in path_parts
         ):
             candidate = _artifact_container_image_url_candidate(
                 str(child or "").strip().strip("\"'"),
@@ -27197,7 +27891,9 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
+        pipeline_name = self._yaml_external_secret_ref_segment(
+            self._yaml_ref_value(normalized, "name")
+        )
         _append(f"buildkite-pipeline://{pipeline_name or 'pipeline'}")
         for image_candidate in self._yaml_buildkite_plugin_image_candidates(mapping):
             _append(image_candidate)
@@ -27215,7 +27911,10 @@ class ArtifactQueueProcessor:
             if not isinstance(step_entry, dict):
                 continue
             step_normalized = self._yaml_normalized_mapping(step_entry)
-            if any(key in step_normalized for key in ("label", "command", "commands", "plugins", "block", "wait")):
+            if any(
+                key in step_normalized
+                for key in ("label", "command", "commands", "plugins", "block", "wait")
+            ):
                 return True
         return False
 
@@ -27266,7 +27965,11 @@ class ArtifactQueueProcessor:
         def _walk_plugins(value: Any) -> None:
             if isinstance(value, dict):
                 normalized = self._yaml_normalized_mapping(value)
-                _append(self._yaml_ref_value(normalized, "image", "container", "docker_image", "dockerImage"))
+                _append(
+                    self._yaml_ref_value(
+                        normalized, "image", "container", "docker_image", "dockerImage"
+                    )
+                )
                 for child in value.values():
                     if isinstance(child, (dict, list)):
                         _walk_plugins(child)
@@ -27299,7 +28002,9 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
+        pipeline_name = self._yaml_external_secret_ref_segment(
+            self._yaml_ref_value(normalized, "name")
+        )
         _append(f"drone-pipeline://{pipeline_name or 'pipeline'}")
         for image_candidate in self._yaml_drone_step_image_candidates(mapping):
             _append(image_candidate)
@@ -27314,7 +28019,9 @@ class ArtifactQueueProcessor:
         if kind != "pipeline":
             return False
         pipeline_type = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "type"))
-        return pipeline_type in {"docker", "exec", "kubernetes", "ssh"} or isinstance(normalized.get("steps"), list)
+        return pipeline_type in {"docker", "exec", "kubernetes", "ssh"} or isinstance(
+            normalized.get("steps"), list
+        )
 
     def _yaml_drone_step_image_candidates(self, mapping: dict[str, Any]) -> list[str]:
         image_jobs: list[tuple[Any, str]] = []
@@ -27346,7 +28053,9 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
+        pipeline_name = self._yaml_external_secret_ref_segment(
+            self._yaml_ref_value(normalized, "name")
+        )
         _append(f"woodpecker-pipeline://{pipeline_name or 'pipeline'}")
         for image_candidate in self._yaml_woodpecker_step_image_candidates(mapping):
             _append(image_candidate)
@@ -27394,7 +28103,9 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
+        pipeline_name = self._yaml_external_secret_ref_segment(
+            self._yaml_ref_value(normalized, "name")
+        )
         if pipeline_name:
             _append(f"azure-pipeline://{pipeline_name}")
 
@@ -27446,13 +28157,19 @@ class ArtifactQueueProcessor:
         mapping: dict[str, Any],
         normalized: dict[str, Any],
     ) -> bool:
-        if any(key in normalized for key in ("trigger", "pr", "schedules", "stages", "jobs", "steps", "pool")):
+        if any(
+            key in normalized
+            for key in ("trigger", "pr", "schedules", "stages", "jobs", "steps", "pool")
+        ):
             return True
         resources = self._yaml_child_mapping(mapping, "resources")
         if not resources:
             return False
         resource_normalized = self._yaml_normalized_mapping(resources)
-        return any(key in resource_normalized for key in ("repositories", "containers", "pipelines", "builds"))
+        return any(
+            key in resource_normalized
+            for key in ("repositories", "containers", "pipelines", "builds")
+        )
 
     def _yaml_azure_pipelines_repository_candidates(self, mapping: dict[str, Any]) -> list[str]:
         resources = self._yaml_child_mapping(mapping, "resources")
@@ -27485,13 +28202,19 @@ class ArtifactQueueProcessor:
         if not isinstance(value, dict):
             return []
         normalized = self._yaml_normalized_mapping(value)
-        explicit_url = self._yaml_ref_value(normalized, "url", "endpointUrl", "endpoint_url", "repositoryUrl")
+        explicit_url = self._yaml_ref_value(
+            normalized, "url", "endpointUrl", "endpoint_url", "repositoryUrl"
+        )
         if explicit_url:
             return self._yaml_gitops_repository_candidates(explicit_url)
 
         repo_type = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "type"))
         repo_name = str(self._yaml_ref_value(normalized, "name")).strip().strip("\"'")
-        if not repo_name or repo_name.lower() == "self" or any(marker in repo_name for marker in ("${", "$(", "{{", "}}")):
+        if (
+            not repo_name
+            or repo_name.lower() == "self"
+            or any(marker in repo_name for marker in ("${", "$(", "{{", "}}"))
+        ):
             return []
 
         repo_path = repo_name.strip("/")
@@ -27529,7 +28252,9 @@ class ArtifactQueueProcessor:
         seen: set[str] = set()
 
         def _append(value: str) -> None:
-            candidate = _artifact_container_image_url_candidate(value, require_explicit_registry=True)
+            candidate = _artifact_container_image_url_candidate(
+                value, require_explicit_registry=True
+            )
             if not candidate or candidate.lower() in seen:
                 return
             seen.add(candidate.lower())
@@ -27618,7 +28343,9 @@ class ArtifactQueueProcessor:
             seen.add(lowered)
             candidates.append(candidate)
 
-        pipeline_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
+        pipeline_name = self._yaml_external_secret_ref_segment(
+            self._yaml_ref_value(normalized, "name")
+        )
         _append(f"bitbucket-pipeline://{pipeline_name or 'pipeline'}")
 
         resource_batches = self._run_ordered_local_batch(
@@ -27645,7 +28372,8 @@ class ArtifactQueueProcessor:
         if any(key in normalized for key in ("definitions", "image", "clone", "options")):
             return True
         return any(
-            self._yaml_key_fingerprint(str(key or "")) in {"default", "branches", "tags", "pullrequests", "custom"}
+            self._yaml_key_fingerprint(str(key or ""))
+            in {"default", "branches", "tags", "pullrequests", "custom"}
             for key in pipelines
         )
 
@@ -27732,8 +28460,7 @@ class ArtifactQueueProcessor:
         key_name = self._yaml_key_fingerprint(str(raw_key or ""))
         child_path = (*path_parts, key_name)
         in_repository_context = any(
-            part in {"repository", "repositories", "repo"}
-            for part in path_parts
+            part in {"repository", "repositories", "repo"} for part in path_parts
         )
         values: list[str] = []
         if isinstance(child, str) and (key_name in repo_key_names or in_repository_context):
@@ -27868,16 +28595,26 @@ class ArtifactQueueProcessor:
         mapping: dict[str, Any],
         normalized: dict[str, Any],
     ) -> bool:
-        if any(key in normalized for key in ("include", "stages", "workflow", "before_script", "after_script")):
+        if any(
+            key in normalized
+            for key in ("include", "stages", "workflow", "before_script", "after_script")
+        ):
             return True
         for key, value in mapping.items():
             key_name = str(key or "").strip()
-            if not key_name or key_name.startswith(".") or key_name in {"default", "variables", "cache"}:
+            if (
+                not key_name
+                or key_name.startswith(".")
+                or key_name in {"default", "variables", "cache"}
+            ):
                 continue
             if not isinstance(value, dict):
                 continue
             job_normalized = self._yaml_normalized_mapping(value)
-            if any(job_key in job_normalized for job_key in ("script", "stage", "extends", "rules", "needs")):
+            if any(
+                job_key in job_normalized
+                for job_key in ("script", "stage", "extends", "rules", "needs")
+            ):
                 return True
         return False
 
@@ -27929,11 +28666,7 @@ class ArtifactQueueProcessor:
                     self._yaml_ref_value(normalized, "component")
                 )
             )
-            child_jobs = [
-                child
-                for child in value.values()
-                if isinstance(child, (dict, list))
-            ]
+            child_jobs = [child for child in value.values() if isinstance(child, (dict, list))]
             child_batches = (
                 self._run_ordered_local_batch(
                     child_jobs,
@@ -27951,11 +28684,7 @@ class ArtifactQueueProcessor:
             )
             return [
                 *direct_values,
-                *[
-                    candidate
-                    for child_values in child_batches
-                    for candidate in child_values
-                ],
+                *[candidate for child_values in child_batches for candidate in child_values],
             ]
         if isinstance(value, list):
             item_jobs = list(value)
@@ -27974,11 +28703,7 @@ class ArtifactQueueProcessor:
                     for item in item_jobs
                 ]
             )
-            return [
-                candidate
-                for item_values in item_batches
-                for candidate in item_values
-            ]
+            return [candidate for item_values in item_batches for candidate in item_values]
         return []
 
     def _yaml_gitlab_ci_include_child_candidate_values(
@@ -28030,7 +28755,9 @@ class ArtifactQueueProcessor:
             raw_value = str(value or "").strip().strip("\"'")
             if not raw_value:
                 return
-            candidate = _artifact_container_image_url_candidate(raw_value, require_explicit_registry=True)
+            candidate = _artifact_container_image_url_candidate(
+                raw_value, require_explicit_registry=True
+            )
             if not candidate or candidate.lower() in seen:
                 return
             seen.add(candidate.lower())
@@ -28482,11 +29209,9 @@ class ArtifactQueueProcessor:
                     for _child_index, raw_key, child, allowed_keys in child_jobs
                 ]
             )
-            return [
-                candidate
-                for child_values in child_batches
-                for candidate in child_values
-            ][:4096]
+            return [candidate for child_values in child_batches for candidate in child_values][
+                :4096
+            ]
         if isinstance(value, list):
             item_jobs = [
                 (item_index, None, item, allowed_keys)
@@ -28508,11 +29233,7 @@ class ArtifactQueueProcessor:
                     for _item_index, _raw_key, item, allowed_keys in item_jobs
                 ]
             )
-            return [
-                candidate
-                for item_values in item_batches
-                for candidate in item_values
-            ][:4096]
+            return [candidate for item_values in item_batches for candidate in item_values][:4096]
         return []
 
     def _security_scanner_structured_document_child_values(
@@ -28739,8 +29460,7 @@ class ArtifactQueueProcessor:
     ) -> list[str]:
         if isinstance(value, dict):
             child_jobs = [
-                (raw_key, child, allowed_keys)
-                for raw_key, child in list(value.items())[:4096]
+                (raw_key, child, allowed_keys) for raw_key, child in list(value.items())[:4096]
             ]
             child_batches = (
                 self._run_ordered_local_batch(
@@ -28750,22 +29470,15 @@ class ArtifactQueueProcessor:
                 )
                 if use_workers
                 else [
-                    self._recon_tool_output_structured_document_child_values(
-                        child_job
-                    )
+                    self._recon_tool_output_structured_document_child_values(child_job)
                     for child_job in child_jobs
                 ]
             )
-            return [
-                candidate
-                for child_values in child_batches
-                for candidate in child_values
-            ][:4096]
-        if isinstance(value, list):
-            item_jobs = [
-                (None, item, allowed_keys)
-                for item in value[:4096]
+            return [candidate for child_values in child_batches for candidate in child_values][
+                :4096
             ]
+        if isinstance(value, list):
+            item_jobs = [(None, item, allowed_keys) for item in value[:4096]]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -28774,17 +29487,11 @@ class ArtifactQueueProcessor:
                 )
                 if use_workers
                 else [
-                    self._recon_tool_output_structured_document_child_values(
-                        item_job
-                    )
+                    self._recon_tool_output_structured_document_child_values(item_job)
                     for item_job in item_jobs
                 ]
             )
-            return [
-                candidate
-                for item_values in item_batches
-                for candidate in item_values
-            ][:4096]
+            return [candidate for item_values in item_batches for candidate in item_values][:4096]
         return []
 
     def _recon_tool_output_structured_document_child_values(
@@ -28849,7 +29556,9 @@ class ArtifactQueueProcessor:
         if not raw_text or "<" not in raw_text or ">" not in raw_text:
             return ""
         source_label = _maven_xml_config_artifact_label(source_hint)
-        if not source_label and not re.search(r"<\s*(?:project|settings)\b", raw_text, re.IGNORECASE):
+        if not source_label and not re.search(
+            r"<\s*(?:project|settings)\b", raw_text, re.IGNORECASE
+        ):
             return ""
 
         try:
@@ -28905,7 +29614,9 @@ class ArtifactQueueProcessor:
                 }
             )
         if root_tag == "settings":
-            return bool(tags & {"localrepository", "mirrors", "pluginGroups", "profiles", "servers"})
+            return bool(
+                tags & {"localrepository", "mirrors", "pluginGroups", "profiles", "servers"}
+            )
         return False
 
     @classmethod
@@ -29058,11 +29769,7 @@ class ArtifactQueueProcessor:
             self._js_runtime_text_candidate_family_entries,
             default_factory=list,
         )
-        entries.extend(
-            entry
-            for family_entries in family_batches
-            for entry in family_entries
-        )
+        entries.extend(entry for family_entries in family_batches for entry in family_entries)
 
         in_bun_scope_block = False
         offset = 0
@@ -29115,17 +29822,13 @@ class ArtifactQueueProcessor:
             browser_batches = self._run_ordered_local_batch(
                 [
                     (index, pattern, raw_text)
-                    for index, pattern in enumerate(
-                        self._js_runtime_browser_endpoint_patterns()
-                    )
+                    for index, pattern in enumerate(self._js_runtime_browser_endpoint_patterns())
                 ],
                 self._js_runtime_browser_endpoint_pattern_entries,
                 default_factory=list,
             )
             entries.extend(
-                entry
-                for pattern_entries in browser_batches
-                for entry in pattern_entries
+                entry for pattern_entries in browser_batches for entry in pattern_entries
             )
 
         entries.sort(key=lambda item: item[0])
@@ -29362,19 +30065,26 @@ class ArtifactQueueProcessor:
         if not candidate:
             return ""
         lowered = candidate.lower()
-        if lowered in {"-", "/", "/*", "/:splat", "/:path*", "200", "301", "302", "303", "307", "308"}:
+        if lowered in {
+            "-",
+            "/",
+            "/*",
+            "/:splat",
+            "/:path*",
+            "200",
+            "301",
+            "302",
+            "303",
+            "307",
+            "308",
+        }:
             return ""
         return candidate
 
     @staticmethod
     def _static_hosting_control_cloudflare_route_candidate_values(value: object) -> list[str]:
         if isinstance(value, dict):
-            candidate = (
-                value.get("pattern")
-                or value.get("path")
-                or value.get("route")
-                or ""
-            )
+            candidate = value.get("pattern") or value.get("path") or value.get("route") or ""
         else:
             candidate = value
         normalized = ArtifactQueueProcessor._static_hosting_control_candidate_entry(candidate)
@@ -29570,10 +30280,7 @@ class ArtifactQueueProcessor:
                 candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            item_jobs = [
-                (item_index, item, path)
-                for item_index, item in enumerate(value[:256])
-            ]
+            item_jobs = [(item_index, item, path) for item_index, item in enumerate(value[:256])]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -29683,9 +30390,7 @@ class ArtifactQueueProcessor:
         if not isinstance(value, dict):
             return []
         return [
-            str(key or "").strip()
-            for key in value
-            if isinstance(key, str) and "://" in str(key)
+            str(key or "").strip() for key in value if isinstance(key, str) and "://" in str(key)
         ][:64]
 
     @classmethod
@@ -29693,8 +30398,7 @@ class ArtifactQueueProcessor:
         if "url" in normalized:
             return True
         return bool(
-            ({"host", "hostname"} & set(normalized))
-            and ({"protocol", "scheme"} & set(normalized))
+            ({"host", "hostname"} & set(normalized)) and ({"protocol", "scheme"} & set(normalized))
         )
 
     def _api_spec_server_mapping_candidates(self, mapping: dict[str, Any]) -> list[str]:
@@ -29730,7 +30434,9 @@ class ArtifactQueueProcessor:
             schemes = ["https"]
         candidates: list[str] = []
         for scheme in schemes:
-            candidate = self._api_spec_host_protocol_candidate(host, protocol=scheme, path=base_path)
+            candidate = self._api_spec_host_protocol_candidate(
+                host, protocol=scheme, path=base_path
+            )
             if candidate:
                 candidates.append(candidate)
         return candidates
@@ -29894,7 +30600,9 @@ class ArtifactQueueProcessor:
         for values in self._api_client_text_candidate_family_batches(text_families, parse_text):
             raw_values.extend(values)
         if not raw_values:
-            fallback_batches = self._api_client_text_candidate_family_batches(("fallback",), parse_text)
+            fallback_batches = self._api_client_text_candidate_family_batches(
+                ("fallback",), parse_text
+            )
             raw_values = list(fallback_batches[0]) if fallback_batches else []
 
         candidate_entries = self._run_ordered_local_batch(
@@ -29938,7 +30646,13 @@ class ArtifactQueueProcessor:
             if variable_candidate:
                 candidates.append(variable_candidate)
             child_jobs = [
-                (child_index, key, child, path, self._api_client_url_object_looks_supported(normalized))
+                (
+                    child_index,
+                    key,
+                    child,
+                    path,
+                    self._api_client_url_object_looks_supported(normalized),
+                )
                 for child_index, (key, child) in enumerate(value.items())
             ]
             child_batches = (
@@ -29968,10 +30682,7 @@ class ArtifactQueueProcessor:
                 candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            item_jobs = [
-                (item_index, item, path)
-                for item_index, item in enumerate(value[:512])
-            ]
+            item_jobs = [(item_index, item, path) for item_index, item in enumerate(value[:512])]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -30102,8 +30813,7 @@ class ArtifactQueueProcessor:
         normalized_bases = [
             normalized
             for normalized in (
-                self._api_client_url_candidate_entry(base_value)
-                for base_value in base_values
+                self._api_client_url_candidate_entry(base_value) for base_value in base_values
             )
             if normalized
         ]
@@ -30148,7 +30858,13 @@ class ArtifactQueueProcessor:
         values: list[str] = []
         if isinstance(value, dict):
             normalized = self._yaml_normalized_mapping(value)
-            command = str(normalized.get("command") or "").strip().lower().replace("_", "").replace("-", "")
+            command = (
+                str(normalized.get("command") or "")
+                .strip()
+                .lower()
+                .replace("_", "")
+                .replace("-", "")
+            )
             if command in {"open", "openwindow"}:
                 for key in ("target", "url"):
                     candidate = self._api_client_selenium_side_navigation_target(
@@ -30158,8 +30874,7 @@ class ArtifactQueueProcessor:
                     if candidate:
                         values.append(candidate)
             child_jobs = [
-                (child_index, child, base_url)
-                for child_index, child in enumerate(value.values())
+                (child_index, child, base_url) for child_index, child in enumerate(value.values())
             ]
             child_batches = (
                 self._run_ordered_local_batch(
@@ -30182,8 +30897,7 @@ class ArtifactQueueProcessor:
             return values
         if isinstance(value, list):
             item_jobs = [
-                (item_index, item, base_url)
-                for item_index, item in enumerate(value[:512])
+                (item_index, item, base_url) for item_index, item in enumerate(value[:512])
             ]
             item_batches = (
                 self._run_ordered_local_batch(
@@ -30292,7 +31006,10 @@ class ArtifactQueueProcessor:
         pattern: re.Pattern[str],
     ) -> list[str]:
         line_entries = self._run_ordered_local_batch(
-            [(line_index, line, pattern) for line_index, line in enumerate(parse_text.splitlines()[:4096])],
+            [
+                (line_index, line, pattern)
+                for line_index, line in enumerate(parse_text.splitlines()[:4096])
+            ],
             self._api_client_api_config_line_candidate_value,
             default_factory=str,
         )
@@ -30332,7 +31049,10 @@ class ArtifactQueueProcessor:
             ),
         )
         pattern_batches = self._run_ordered_local_batch(
-            [(pattern_index, pattern, parse_text) for pattern_index, pattern in enumerate(patterns)],
+            [
+                (pattern_index, pattern, parse_text)
+                for pattern_index, pattern in enumerate(patterns)
+            ],
             self._api_client_pactum_pattern_candidate_entries,
             default_factory=list,
         )
@@ -30399,11 +31119,7 @@ class ArtifactQueueProcessor:
             self._api_client_bruno_resolved_candidate_entry,
             default_factory=lambda: (-1, ""),
         )
-        return [
-            value
-            for _position, value in resolved_entries
-            if value
-        ][:512]
+        return [value for _position, value in resolved_entries if value][:512]
 
     @staticmethod
     def _api_client_bruno_clean_value(value: Any) -> str:
@@ -30497,7 +31213,9 @@ class ArtifactQueueProcessor:
         if not host:
             return ""
         protocol = self._yaml_ref_value(normalized, "protocol", "scheme")
-        path_value = self._api_client_url_path_value(normalized.get("path") or normalized.get("pathname"))
+        path_value = self._api_client_url_path_value(
+            normalized.get("path") or normalized.get("pathname")
+        )
         return self._api_spec_host_protocol_candidate(host, protocol=protocol, path=path_value)
 
     @staticmethod
@@ -30576,14 +31294,14 @@ class ArtifactQueueProcessor:
             default_factory=lambda: (-1, ""),
         )
         candidates.extend(
-            (position, value)
-            for position, value in line_entries
-            if position >= 0 and value
+            (position, value) for position, value in line_entries if position >= 0 and value
         )
         pattern_batches = self._run_ordered_local_batch(
             [
                 (pattern_index, pattern, parse_text)
-                for pattern_index, pattern in enumerate((xml_attr_pattern, xml_endpoint_text_pattern))
+                for pattern_index, pattern in enumerate(
+                    (xml_attr_pattern, xml_endpoint_text_pattern)
+                )
             ],
             self._api_client_text_fallback_pattern_candidate_entries,
             default_factory=list,
@@ -30672,7 +31390,10 @@ class ArtifactQueueProcessor:
 
     def _api_client_k6_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
-        if not any(marker in parse_text for marker in ("http.", "ws.connect", "WebSocket", "baseURL", "baseUrl")):
+        if not any(
+            marker in parse_text
+            for marker in ("http.", "ws.connect", "WebSocket", "baseURL", "baseUrl")
+        ):
             return []
         patterns = (
             re.compile(
@@ -30699,7 +31420,10 @@ class ArtifactQueueProcessor:
             ),
         )
         pattern_batches = self._run_ordered_local_batch(
-            [(pattern_index, pattern, parse_text) for pattern_index, pattern in enumerate(patterns)],
+            [
+                (pattern_index, pattern, parse_text)
+                for pattern_index, pattern in enumerate(patterns)
+            ],
             self._api_client_k6_pattern_candidate_entries,
             default_factory=list,
         )
@@ -30723,7 +31447,9 @@ class ArtifactQueueProcessor:
 
     def _api_client_locust_text_candidate_values(self, text: str) -> list[str]:
         parse_text = str(text or "")[:_MAX_ARTIFACT_MEMBER_BYTES]
-        if not any(marker in parse_text for marker in ("HttpUser", "self.client", "host", "FastHttpUser")):
+        if not any(
+            marker in parse_text for marker in ("HttpUser", "self.client", "host", "FastHttpUser")
+        ):
             return []
         patterns = (
             re.compile(
@@ -30750,7 +31476,10 @@ class ArtifactQueueProcessor:
             ),
         )
         pattern_batches = self._run_ordered_local_batch(
-            [(pattern_index, pattern, parse_text) for pattern_index, pattern in enumerate(patterns)],
+            [
+                (pattern_index, pattern, parse_text)
+                for pattern_index, pattern in enumerate(patterns)
+            ],
             self._api_client_locust_pattern_candidate_entries,
             default_factory=list,
         )
@@ -31200,7 +31929,9 @@ class ArtifactQueueProcessor:
             return ""
         normalized = self._run_ordered_local_batch(
             tunnel_config_endpoint_candidates(text),
-            lambda endpoint: self._edge_proxy_endpoint_url_candidate(endpoint, default_scheme="https"),
+            lambda endpoint: self._edge_proxy_endpoint_url_candidate(
+                endpoint, default_scheme="https"
+            ),
             default_factory=str,
         )
         lines: list[str] = []
@@ -31301,7 +32032,9 @@ class ArtifactQueueProcessor:
         child, parent_path, child_path, normalized = child_job
         key = child_path[-1] if child_path else ""
         candidates: list[str] = []
-        if key == "value" and self._browser_state_path_allows_storage_value(parent_path, normalized):
+        if key == "value" and self._browser_state_path_allows_storage_value(
+            parent_path, normalized
+        ):
             storage_name = self._yaml_ref_value(normalized, "name", "key")
             candidates.extend(
                 self._browser_state_storage_value_candidates(
@@ -31320,11 +32053,15 @@ class ArtifactQueueProcessor:
                 or _classify_seed_value(child_text) == "email"
             ):
                 candidates.append(child_text)
-        candidates.extend(self._browser_state_document_candidate_values_for_path((child, child_path)))
+        candidates.extend(
+            self._browser_state_document_candidate_values_for_path((child, child_path))
+        )
         return self._browser_state_candidate_batch_values((candidates,))
 
     @staticmethod
-    def _browser_state_candidate_batch_values(candidate_batches: Sequence[Sequence[str]]) -> list[str]:
+    def _browser_state_candidate_batch_values(
+        candidate_batches: Sequence[Sequence[str]],
+    ) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
         for batch in candidate_batches:
@@ -31351,7 +32088,9 @@ class ArtifactQueueProcessor:
         )
 
     @staticmethod
-    def _browser_state_path_allows_storage_value(path: tuple[str, ...], normalized: dict[str, Any]) -> bool:
+    def _browser_state_path_allows_storage_value(
+        path: tuple[str, ...], normalized: dict[str, Any]
+    ) -> bool:
         if any(part in _BROWSER_STATE_STORAGE_PATH_KEYS for part in path):
             return True
         return bool("name" in normalized and "value" in normalized and "domain" not in normalized)
@@ -31510,7 +32249,11 @@ class ArtifactQueueProcessor:
                 candidate = self._charles_session_json_url_candidate_entry(direct)
                 parsed = urlparse(candidate)
                 if parsed.scheme in {"http", "https"} and parsed.netloc:
-                    return parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                    return (
+                        parsed._replace(path="", params="", query="", fragment="")
+                        .geturl()
+                        .rstrip("/")
+                    )
             nested_origin = self._charles_session_request_origin_url(request_normalized)
             if nested_origin:
                 return nested_origin
@@ -31520,12 +32263,16 @@ class ArtifactQueueProcessor:
             candidate = self._charles_session_json_url_candidate_entry(direct)
             parsed = urlparse(candidate)
             if parsed.scheme in {"http", "https"} and parsed.netloc:
-                return parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                return (
+                    parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                )
 
         host = self._yaml_ref_value(normalized, "host", "hostname", "domain")
         if not host:
             return ""
-        path = self._yaml_ref_value(normalized, "path", "uri", "urlPath", "url_path", "requestPath", "request_path")
+        path = self._yaml_ref_value(
+            normalized, "path", "uri", "urlPath", "url_path", "requestPath", "request_path"
+        )
         scheme = self._yaml_ref_value(normalized, "scheme", "protocol")
         port = self._yaml_ref_value(normalized, "port")
         secure = self._yaml_ref_value(normalized, "ssl", "secure", "tls")
@@ -31553,8 +32300,14 @@ class ArtifactQueueProcessor:
                 direct = self._yaml_ref_value(response_normalized, key)
                 if direct:
                     values.append(direct)
-            values.extend(self._charles_session_header_values(response_normalized, {"location", "content-location"}))
-        values.extend(self._charles_session_header_values(normalized, {"location", "content-location"}))
+            values.extend(
+                self._charles_session_header_values(
+                    response_normalized, {"location", "content-location"}
+                )
+            )
+        values.extend(
+            self._charles_session_header_values(normalized, {"location", "content-location"})
+        )
         return values[:64]
 
     def _charles_session_header_values(
@@ -31563,7 +32316,11 @@ class ArtifactQueueProcessor:
         names: set[str],
     ) -> list[str]:
         values: list[str] = []
-        header_value = normalized.get("headers") or normalized.get("responseheaders") or normalized.get("response_headers")
+        header_value = (
+            normalized.get("headers")
+            or normalized.get("responseheaders")
+            or normalized.get("response_headers")
+        )
         header_items: list[Any] = []
         if isinstance(header_value, list):
             header_items = header_value[:256]
@@ -31572,7 +32329,9 @@ class ArtifactQueueProcessor:
         for item in header_items:
             if isinstance(item, dict):
                 item_normalized = self._yaml_normalized_mapping(item)
-                name = str(self._yaml_ref_value(item_normalized, "name", "key") or "").strip().lower()
+                name = (
+                    str(self._yaml_ref_value(item_normalized, "name", "key") or "").strip().lower()
+                )
                 value = self._yaml_ref_value(item_normalized, "value")
                 if name in names and value:
                     values.append(value)
@@ -31644,7 +32403,9 @@ class ArtifactQueueProcessor:
         direct_url = self._burp_xml_child_text(item, "url")
         host = self._burp_xml_child_text(item, "host")
         path = self._burp_xml_child_text(item, "path")
-        protocol = self._burp_xml_child_text(item, "protocol") or self._burp_xml_child_text(item, "scheme")
+        protocol = self._burp_xml_child_text(item, "protocol") or self._burp_xml_child_text(
+            item, "scheme"
+        )
 
         lines: list[str] = []
         origin_url = ""
@@ -31654,7 +32415,11 @@ class ArtifactQueueProcessor:
                 lines.append(candidate)
                 parsed = urlparse(candidate)
                 if parsed.scheme in {"http", "https"} and parsed.netloc:
-                    origin_url = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                    origin_url = (
+                        parsed._replace(path="", params="", query="", fragment="")
+                        .geturl()
+                        .rstrip("/")
+                    )
         if host and path:
             candidate = self._http_transcript_absolute_url(path, host=host, scheme=protocol)
             normalized = self._burp_site_map_url_candidate_entry(candidate)
@@ -31662,7 +32427,11 @@ class ArtifactQueueProcessor:
                 lines.append(normalized)
                 if not origin_url:
                     parsed = urlparse(normalized)
-                    origin_url = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                    origin_url = (
+                        parsed._replace(path="", params="", query="", fragment="")
+                        .geturl()
+                        .rstrip("/")
+                    )
 
         request_text = self._burp_xml_named_payload_text(item, "request")
         response_text = self._burp_xml_named_payload_text(item, "response")
@@ -31676,10 +32445,16 @@ class ArtifactQueueProcessor:
                 if not origin_url:
                     parsed = urlparse(candidate)
                     if parsed.scheme in {"http", "https"} and parsed.netloc:
-                        origin_url = parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                        origin_url = (
+                            parsed._replace(path="", params="", query="", fragment="")
+                            .geturl()
+                            .rstrip("/")
+                        )
         if origin_url:
             for location in self._saz_response_relative_locations(response_text):
-                candidate = self._burp_site_map_url_candidate_entry(urljoin(f"{origin_url}/", location))
+                candidate = self._burp_site_map_url_candidate_entry(
+                    urljoin(f"{origin_url}/", location)
+                )
                 if candidate:
                     lines.append(candidate)
         return lines
@@ -31688,7 +32463,10 @@ class ArtifactQueueProcessor:
     def _burp_xml_child_text(cls, item: Any, child_name: str) -> str:
         child_name_normalized = str(child_name or "").strip().lower()
         for child in list(item)[:256]:
-            if cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower() != child_name_normalized:
+            if (
+                cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower()
+                != child_name_normalized
+            ):
                 continue
             return cls._xml_element_text(child)
         return ""
@@ -31697,12 +32475,17 @@ class ArtifactQueueProcessor:
     def _burp_xml_named_payload_text(cls, item: Any, child_name: str) -> str:
         child_name_normalized = str(child_name or "").strip().lower()
         for child in list(item)[:256]:
-            if cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower() != child_name_normalized:
+            if (
+                cls._xml_local_name(str(getattr(child, "tag", "") or "")).lower()
+                != child_name_normalized
+            ):
                 continue
             text_value = cls._xml_element_text(child)
             if str(child.attrib.get("base64") or "").strip().lower() == "true":
                 try:
-                    decoded = base64.b64decode(text_value.encode("ascii", errors="ignore"), validate=False)
+                    decoded = base64.b64decode(
+                        text_value.encode("ascii", errors="ignore"), validate=False
+                    )
                 except Exception:  # noqa: BLE001
                     return ""
                 return cls._decode_text_artifact_bytes(decoded[:_MAX_ARTIFACT_MEMBER_BYTES])
@@ -31790,7 +32573,9 @@ class ArtifactQueueProcessor:
             payloads.append((source_file, f"{member_name}#burp-request-{index}.txt", request_text))
         response_text = self._burp_xml_named_payload_text(item, "response")
         if response_text.strip():
-            payloads.append((source_file, f"{member_name}#burp-response-{index}.txt", response_text))
+            payloads.append(
+                (source_file, f"{member_name}#burp-response-{index}.txt", response_text)
+            )
         return payloads
 
     def _graphql_config_text_structured_payload_text(
@@ -31872,10 +32657,7 @@ class ArtifactQueueProcessor:
                 candidates.extend(child_values)
             return candidates
         if isinstance(value, list):
-            item_jobs = [
-                (item_index, item, path)
-                for item_index, item in enumerate(value[:512])
-            ]
+            item_jobs = [(item_index, item, path) for item_index, item in enumerate(value[:512])]
             item_batches = (
                 self._run_ordered_local_batch(
                     item_jobs,
@@ -32073,7 +32855,9 @@ class ArtifactQueueProcessor:
             ("proto_option", proto_option_pattern, parse_text),
         ]
         if is_buf_config:
-            pattern_jobs.append(("buf_registry", self._buf_config_registry_ref_pattern(), parse_text))
+            pattern_jobs.append(
+                ("buf_registry", self._buf_config_registry_ref_pattern(), parse_text)
+            )
 
         candidates: list[tuple[int, str]] = []
         pattern_batches = self._run_ordered_local_batch(
@@ -32347,7 +33131,9 @@ class ArtifactQueueProcessor:
         }
         if (keys & {"dockers", "dockermanifests", "blobs"}) and (keys & root_markers):
             return True
-        return "goreleaser" in path_hint and bool(keys & (root_markers | {"dockers", "dockermanifests", "blobs"}))
+        return "goreleaser" in path_hint and bool(
+            keys & (root_markers | {"dockers", "dockermanifests", "blobs"})
+        )
 
     def _yaml_gitops_manifest_structured_candidates(
         self,
@@ -32466,7 +33252,9 @@ class ArtifactQueueProcessor:
                     values.append(ref_value)
             name_hint = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "name"))
             value_ref = self._yaml_ref_value(normalized, "value")
-            if value_ref and any(marker in name_hint for marker in ("repo", "repository", "sourceurl")):
+            if value_ref and any(
+                marker in name_hint for marker in ("repo", "repository", "sourceurl")
+            ):
                 values.append(value_ref)
             child_jobs = list(enumerate(value.values()))
             child_batches = (
@@ -32597,7 +33385,9 @@ class ArtifactQueueProcessor:
         if "gcp" in provider or "google" in provider:
             return [f"gs://{bucket}"]
         if "azure" in provider:
-            account_name = self._yaml_ref_value(normalized, "accountName", "account_name", "account")
+            account_name = self._yaml_ref_value(
+                normalized, "accountName", "account_name", "account"
+            )
             if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name):
                 return [f"https://{account_name.lower()}.blob.core.windows.net/{bucket}"]
         do_match = _DO_SPACES_ENDPOINT_HOST_RE.fullmatch(endpoint)
@@ -32720,7 +33510,9 @@ class ArtifactQueueProcessor:
                 "container_name",
             )
             if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and container_name:
-                candidates.append(f"https://{account_name.lower()}.blob.core.windows.net/{container_name.lower()}")
+                candidates.append(
+                    f"https://{account_name.lower()}.blob.core.windows.net/{container_name.lower()}"
+                )
         return candidates
 
     def _yaml_kubernetes_secret_manifest_structured_candidates(
@@ -32777,7 +33569,9 @@ class ArtifactQueueProcessor:
 
         spec = self._yaml_child_mapping(mapping, "spec")
         spec_mappings = [spec] if spec else []
-        external_secret_spec = self._yaml_child_mapping(spec, "externalSecretSpec", "external_secret_spec")
+        external_secret_spec = self._yaml_child_mapping(
+            spec, "externalSecretSpec", "external_secret_spec"
+        )
         if external_secret_spec:
             spec_mappings.append(external_secret_spec)
 
@@ -32787,7 +33581,9 @@ class ArtifactQueueProcessor:
             for store_ref in self._yaml_external_secret_store_refs(spec_mapping, object_identifier):
                 _append(store_ref)
             provider = self._yaml_child_mapping(spec_mapping, "provider")
-            for provider_candidate in self._yaml_external_secret_provider_candidates(provider, remote_keys):
+            for provider_candidate in self._yaml_external_secret_provider_candidates(
+                provider, remote_keys
+            ):
                 _append(provider_candidate)
 
         for remote_key in remote_keys:
@@ -32820,7 +33616,9 @@ class ArtifactQueueProcessor:
         if not store_ref:
             return []
         normalized = self._yaml_normalized_mapping(store_ref)
-        store_name = self._yaml_external_secret_ref_segment(self._yaml_ref_value(normalized, "name"))
+        store_name = self._yaml_external_secret_ref_segment(
+            self._yaml_ref_value(normalized, "name")
+        )
         if not store_name:
             return []
         store_kind = self._yaml_key_fingerprint(self._yaml_ref_value(normalized, "kind"))
@@ -32833,16 +33631,12 @@ class ArtifactQueueProcessor:
         data_entries = spec.get("data")
         if isinstance(data_entries, list):
             remote_ref_jobs.extend(
-                ("data", entry)
-                for entry in data_entries
-                if isinstance(entry, dict)
+                ("data", entry) for entry in data_entries if isinstance(entry, dict)
             )
         data_from_entries = spec.get("dataFrom") or spec.get("datafrom")
         if isinstance(data_from_entries, list):
             remote_ref_jobs.extend(
-                ("data_from", entry)
-                for entry in data_from_entries
-                if isinstance(entry, dict)
+                ("data_from", entry) for entry in data_from_entries if isinstance(entry, dict)
             )
 
         remote_ref_batches = self._run_ordered_local_batch(
@@ -33031,9 +33825,13 @@ class ArtifactQueueProcessor:
             sops_jobs.append(("aws_kms", entry))
         for entry in self._yaml_sops_section_entries(sops_mapping, "gcp_kms", "gcpKms", "gcp-kms"):
             sops_jobs.append(("gcp_kms", entry))
-        for entry in self._yaml_sops_section_entries(sops_mapping, "azure_kv", "azureKv", "azure-kv"):
+        for entry in self._yaml_sops_section_entries(
+            sops_mapping, "azure_kv", "azureKv", "azure-kv"
+        ):
             sops_jobs.append(("azure_kv", entry))
-        for entry in self._yaml_sops_section_entries(sops_mapping, "hc_vault", "hcVault", "hc-vault"):
+        for entry in self._yaml_sops_section_entries(
+            sops_mapping, "hc_vault", "hcVault", "hc-vault"
+        ):
             sops_jobs.append(("hc_vault", entry))
 
         candidate_entries = self._run_ordered_local_batch(
@@ -33064,10 +33862,14 @@ class ArtifactQueueProcessor:
             arn = self._yaml_ref_value(entry, "arn")
             return str(arn).strip() if _AWS_KMS_ARN_RE.fullmatch(str(arn or "").strip()) else ""
         if family == "gcp_kms":
-            resource_id = str(self._yaml_ref_value(entry, "resource_id", "resourceId", "resource-id") or "").strip()
+            resource_id = str(
+                self._yaml_ref_value(entry, "resource_id", "resourceId", "resource-id") or ""
+            ).strip()
             return resource_id if _GCP_KMS_RESOURCE_RE.fullmatch(resource_id) else ""
         if family == "azure_kv":
-            vault_url = str(self._yaml_ref_value(entry, "vault_url", "vaultUrl", "vault-url") or "").strip()
+            vault_url = str(
+                self._yaml_ref_value(entry, "vault_url", "vaultUrl", "vault-url") or ""
+            ).strip()
             return _normalize_artifact_text_url(vault_url) if vault_url else ""
         if family == "hc_vault":
             vault_address = str(
@@ -33086,7 +33888,9 @@ class ArtifactQueueProcessor:
             return self._yaml_vault_address_candidate(vault_address)
         return ""
 
-    def _yaml_sops_section_entries(self, mapping: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
+    def _yaml_sops_section_entries(
+        self, mapping: dict[str, Any], *keys: str
+    ) -> list[dict[str, Any]]:
         normalized_keys = {self._yaml_key_fingerprint(key) for key in keys}
         for key, value in mapping.items():
             if self._yaml_key_fingerprint(str(key or "")) not in normalized_keys:
@@ -33454,7 +34258,9 @@ class ArtifactQueueProcessor:
             "BORG_REMOTE_URL",
             "BORG_LOCATION",
         ):
-            value = str(env_map.get(key) or normalized.get(self._yaml_key_fingerprint(key)) or "").strip()
+            value = str(
+                env_map.get(key) or normalized.get(self._yaml_key_fingerprint(key)) or ""
+            ).strip()
             lowered = value.lower()
             if not value or lowered in seen_values:
                 continue
@@ -33505,24 +34311,27 @@ class ArtifactQueueProcessor:
             if bucket:
                 _append(f"gs://{bucket}")
         elif scheme in {"azure", "az", "azureblob"}:
-            account_name = str(
-                self._yaml_ref_value(
-                    context,
-                    "storage_account_name",
-                    "storageAccountName",
-                    "account_name",
-                    "accountName",
-                    "account",
-                    "azure_storage_account",
-                    "azureStorageAccount",
-                    "AZURE_STORAGE_ACCOUNT",
-                    "AZURE_BLOB_ACCOUNT",
+            account_name = (
+                str(
+                    self._yaml_ref_value(
+                        context,
+                        "storage_account_name",
+                        "storageAccountName",
+                        "account_name",
+                        "accountName",
+                        "account",
+                        "azure_storage_account",
+                        "azureStorageAccount",
+                        "AZURE_STORAGE_ACCOUNT",
+                        "AZURE_BLOB_ACCOUNT",
+                    )
                 )
-            ).strip().lower()
+                .strip()
+                .lower()
+            )
             container_name = self._borg_bucket_from_repository_url(value)
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 _append(f"https://{account_name}.blob.core.windows.net/{container_name}")
         elif scheme in {"ssh", "sftp"}:
@@ -33634,16 +34443,19 @@ class ArtifactQueueProcessor:
             if bucket:
                 _append(f"gs://{bucket}")
         elif value.startswith("azure:"):
-            account_name = str(
-                env_map.get("AZURE_STORAGE_ACCOUNT")
-                or env_map.get("AZURE_ACCOUNT_NAME")
-                or env_map.get("AZURE_ACCOUNT")
-                or ""
-            ).strip().lower()
+            account_name = (
+                str(
+                    env_map.get("AZURE_STORAGE_ACCOUNT")
+                    or env_map.get("AZURE_ACCOUNT_NAME")
+                    or env_map.get("AZURE_ACCOUNT")
+                    or ""
+                )
+                .strip()
+                .lower()
+            )
             container_name = self._restic_bucket_from_pathish(value[6:])
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 _append(f"https://{account_name}.blob.core.windows.net/{container_name}")
 
@@ -33728,25 +34540,28 @@ class ArtifactQueueProcessor:
             bucket = self._duplicati_bucket_from_target_url(value)
             return [f"gs://{bucket}"] if bucket else []
         if scheme in {"azure", "az", "azureblob"}:
-            account_name = str(
-                self._yaml_ref_value(
-                    context,
-                    "storage_account_name",
-                    "storageAccountName",
-                    "account_name",
-                    "accountName",
-                    "account",
-                    "azure_storage_account",
-                    "azureStorageAccount",
-                    "auth_username",
-                    "authUsername",
-                    "username",
+            account_name = (
+                str(
+                    self._yaml_ref_value(
+                        context,
+                        "storage_account_name",
+                        "storageAccountName",
+                        "account_name",
+                        "accountName",
+                        "account",
+                        "azure_storage_account",
+                        "azureStorageAccount",
+                        "auth_username",
+                        "authUsername",
+                        "username",
+                    )
                 )
-            ).strip().lower()
+                .strip()
+                .lower()
+            )
             container_name = self._duplicati_bucket_from_target_url(value)
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", account_name)
-                and re.fullmatch(r"[^/?#]+", container_name)
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", account_name) and re.fullmatch(
+                r"[^/?#]+", container_name
             ):
                 return [f"https://{account_name}.blob.core.windows.net/{container_name}"]
         return []
@@ -33837,32 +34652,37 @@ class ArtifactQueueProcessor:
             return []
         if family == "do_spaces":
             do_bucket = self._yaml_valid_bucket_name(
-                env_map.get("DO_SPACES_BUCKET")
-                or env_map.get("DIGITALOCEAN_SPACES_BUCKET")
-                or ""
+                env_map.get("DO_SPACES_BUCKET") or env_map.get("DIGITALOCEAN_SPACES_BUCKET") or ""
             )
-            do_region = str(
-                env_map.get("DO_SPACES_REGION")
-                or env_map.get("DIGITALOCEAN_SPACES_REGION")
-                or ""
-            ).strip().lower()
+            do_region = (
+                str(
+                    env_map.get("DO_SPACES_REGION")
+                    or env_map.get("DIGITALOCEAN_SPACES_REGION")
+                    or ""
+                )
+                .strip()
+                .lower()
+            )
             if do_bucket and re.fullmatch(r"[a-z0-9\-]{2,32}", do_region):
                 return [f"https://{do_bucket}.{do_region}.digitaloceanspaces.com"]
             return []
         if family == "azure":
-            azure_account = str(
-                env_map.get("AZURE_STORAGE_ACCOUNT")
-                or env_map.get("AZURE_BLOB_ACCOUNT")
-                or ""
-            ).strip().lower()
-            azure_container = str(
-                env_map.get("AZURE_STORAGE_CONTAINER")
-                or env_map.get("AZURE_BLOB_CONTAINER")
-                or ""
-            ).strip().lower()
-            if (
-                re.fullmatch(r"[a-z0-9\-]{3,24}", azure_account)
-                and re.fullmatch(r"[^/?#]+", azure_container)
+            azure_account = (
+                str(env_map.get("AZURE_STORAGE_ACCOUNT") or env_map.get("AZURE_BLOB_ACCOUNT") or "")
+                .strip()
+                .lower()
+            )
+            azure_container = (
+                str(
+                    env_map.get("AZURE_STORAGE_CONTAINER")
+                    or env_map.get("AZURE_BLOB_CONTAINER")
+                    or ""
+                )
+                .strip()
+                .lower()
+            )
+            if re.fullmatch(r"[a-z0-9\-]{3,24}", azure_account) and re.fullmatch(
+                r"[^/?#]+", azure_container
             ):
                 return [f"https://{azure_account}.blob.core.windows.net/{azure_container}"]
             return []
@@ -34050,7 +34870,12 @@ class ArtifactQueueProcessor:
     @classmethod
     def _docker_auth_config_legacy_entry_candidates(cls, item: tuple[Any, Any]) -> list[str]:
         raw_registry, raw_entry = item
-        if str(raw_registry or "").strip() in {"credsStore", "credStore", "credHelpers", "credhelpers"}:
+        if str(raw_registry or "").strip() in {
+            "credsStore",
+            "credStore",
+            "credHelpers",
+            "credhelpers",
+        }:
             return []
         if not isinstance(raw_entry, dict):
             return []
@@ -34113,7 +34938,9 @@ class ArtifactQueueProcessor:
             return ""
         return cls._docker_auth_principal_candidate(principal)
 
-    def _yaml_env_list_structured_candidates(self, entries: list[Any], *, source_hint: str = "") -> list[str]:
+    def _yaml_env_list_structured_candidates(
+        self, entries: list[Any], *, source_hint: str = ""
+    ) -> list[str]:
         return self._yaml_structured_candidates_from_env_map(
             self._yaml_env_map(entries),
             source_hint=source_hint,
@@ -34128,7 +34955,9 @@ class ArtifactQueueProcessor:
         source_hint: str = "",
     ) -> None:
         if isinstance(value, dict):
-            for candidate in self._yaml_map_structured_candidates(value, path, source_hint=source_hint):
+            for candidate in self._yaml_map_structured_candidates(
+                value, path, source_hint=source_hint
+            ):
                 append(candidate)
             child_jobs = [
                 ((*path, str(key or "").strip().lower()), item, source_hint)
@@ -34144,7 +34973,9 @@ class ArtifactQueueProcessor:
                     append(candidate)
             return
         if isinstance(value, list):
-            for candidate in self._yaml_env_list_structured_candidates(value, source_hint=source_hint):
+            for candidate in self._yaml_env_list_structured_candidates(
+                value, source_hint=source_hint
+            ):
                 append(candidate)
             child_batches = self._run_ordered_local_batch(
                 [(path, item, source_hint) for item in value],
@@ -34170,7 +35001,9 @@ class ArtifactQueueProcessor:
         return lines
 
     @staticmethod
-    def _iter_terraform_state_resource_values(payload: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    def _iter_terraform_state_resource_values(
+        payload: dict[str, Any],
+    ) -> list[tuple[str, dict[str, Any]]]:
         values: list[tuple[str, dict[str, Any]]] = []
 
         def _append(resource_type: str, item: Any) -> None:
@@ -34255,13 +35088,17 @@ class ArtifactQueueProcessor:
                 return self._extract_embedded_plist_payloads(path)
             if _burp_site_map_artifact_label(path.name):
                 return self._extract_burp_site_map_payloads(path)
-            if path.suffix.lower() in _PLIST_SUFFIXES or path.read_bytes()[:8].startswith(_PLIST_MAGIC):
+            if path.suffix.lower() in _PLIST_SUFFIXES or path.read_bytes()[:8].startswith(
+                _PLIST_MAGIC
+            ):
                 return self._extract_plist_payloads(path)
             if _looks_like_terraform_state_name(path.name):
                 return self._extract_terraform_state_payloads(path)
             return [(str(path), path.name, self._read_text(path))]
         if artifact_type == "document":
-            if path.suffix.lower() in _PCAP_SUFFIXES or self._looks_like_pcap_bytes(path.read_bytes()[:4], path.name):
+            if path.suffix.lower() in _PCAP_SUFFIXES or self._looks_like_pcap_bytes(
+                path.read_bytes()[:4], path.name
+            ):
                 return self._extract_pcap_payloads(path)
             if _looks_like_browser_binary_string_artifact_name(path.name):
                 return self._extract_legacy_binary_payloads(
@@ -34288,7 +35125,9 @@ class ArtifactQueueProcessor:
                     path.name,
                     depth=depth,
                 )
-            if path.suffix.lower() in _SQLITE_DATABASE_SUFFIXES or path.read_bytes()[:16].startswith(_SQLITE_MAGIC):
+            if path.suffix.lower() in _SQLITE_DATABASE_SUFFIXES or path.read_bytes()[
+                :16
+            ].startswith(_SQLITE_MAGIC):
                 return self._extract_sqlite_payloads(path)
             if path.suffix.lower() == ".msg":
                 return self._extract_msg_payloads(path, depth=depth)
@@ -34375,7 +35214,9 @@ class ArtifactQueueProcessor:
         member_name = ArtifactQueueProcessor._safe_archive_member_name(raw_member_name)
         if not member_name:
             return None
-        if bool(getattr(member, "is_directory", False)) or bool(getattr(member, "is_symlink", False)):
+        if bool(getattr(member, "is_directory", False)) or bool(
+            getattr(member, "is_symlink", False)
+        ):
             return None
         if not bool(getattr(member, "is_file", True)):
             return None
@@ -34421,11 +35262,7 @@ class ArtifactQueueProcessor:
             self._text_member_job,
             default_factory=lambda: None,
         )
-        member_jobs = [
-            member_job
-            for member_job in member_jobs
-            if isinstance(member_job, tuple)
-        ]
+        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
         if not member_jobs:
             return []
         ordered_payloads = self._run_ordered_local_batch(
@@ -34470,11 +35307,7 @@ class ArtifactQueueProcessor:
                     self._text_7z_member_entry,
                     default_factory=lambda: None,
                 )
-                selected_entries = [
-                    entry
-                    for entry in member_entries
-                    if isinstance(entry, dict)
-                ]
+                selected_entries = [entry for entry in member_entries if isinstance(entry, dict)]
                 if not selected_entries:
                     return []
                 raw_member_jobs: list[tuple[str, bytes]] = []
@@ -34510,11 +35343,7 @@ class ArtifactQueueProcessor:
             self._text_member_job,
             default_factory=lambda: None,
         )
-        member_jobs = [
-            member_job
-            for member_job in member_jobs
-            if isinstance(member_job, tuple)
-        ]
+        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
         if not member_jobs:
             return []
         ordered_payloads = self._run_ordered_local_batch(
@@ -34566,11 +35395,7 @@ class ArtifactQueueProcessor:
             self._text_member_job,
             default_factory=lambda: None,
         )
-        member_jobs = [
-            member_job
-            for member_job in member_jobs
-            if isinstance(member_job, tuple)
-        ]
+        member_jobs = [member_job for member_job in member_jobs if isinstance(member_job, tuple)]
         if not member_jobs:
             return []
         ordered_payloads = self._run_ordered_local_batch(
@@ -34664,12 +35489,8 @@ class ArtifactQueueProcessor:
         for manifest_digest in manifest_digests:
             manifest_member = oci_blob_member_name(manifest_digest)
             manifest_bytes = _append_member_payloads(manifest_member)
-            manifest_payload = _safe_json_loads(
-                self._decode_text_artifact_bytes(manifest_bytes)
-            )
-            config_member = oci_blob_member_name(
-                oci_manifest_config_digest(manifest_payload)
-            )
+            manifest_payload = _safe_json_loads(self._decode_text_artifact_bytes(manifest_bytes))
+            config_member = oci_blob_member_name(oci_manifest_config_digest(manifest_payload))
             if config_member:
                 _append_member_payloads(config_member)
             for layer_digest in oci_manifest_layer_digests(manifest_payload):
@@ -34953,9 +35774,9 @@ class ArtifactQueueProcessor:
                 source_file,
                 member_name,
             )
-        if _looks_like_container_image_blob_path(member_name) and _looks_like_container_image_json_payload(
-            data
-        ):
+        if _looks_like_container_image_blob_path(
+            member_name
+        ) and _looks_like_container_image_json_payload(data):
             return self._member_payloads(source_file, member_name, data)
         if _looks_text_config_name(member_name) or lowered.endswith(".rels"):
             return self._member_payloads(source_file, member_name, data)
@@ -35168,11 +35989,7 @@ class ArtifactQueueProcessor:
             lambda job: self._saz_session_pairing_payload(job, source_file=source_file),
             default_factory=lambda: None,
         )
-        return [
-            payload
-            for payload in payload_batches
-            if isinstance(payload, tuple)
-        ]
+        return [payload for payload in payload_batches if isinstance(payload, tuple)]
 
     @staticmethod
     def _saz_raw_session_member_entry(
@@ -35202,13 +36019,17 @@ class ArtifactQueueProcessor:
         request_member_name, request_bytes = request_member
         response_member_name, response_bytes = response_member
         request_text = self._decode_text_artifact_bytes(request_bytes[:_MAX_ARTIFACT_MEMBER_BYTES])
-        response_text = self._decode_text_artifact_bytes(response_bytes[:_MAX_ARTIFACT_MEMBER_BYTES])
+        response_text = self._decode_text_artifact_bytes(
+            response_bytes[:_MAX_ARTIFACT_MEMBER_BYTES]
+        )
         origin_url = self._saz_request_origin_url(request_text)
         if not origin_url:
             return None
         lines: list[str] = []
         for location in self._saz_response_relative_locations(response_text):
-            candidate = self._http_transcript_url_candidate_entry(urljoin(f"{origin_url}/", location))
+            candidate = self._http_transcript_url_candidate_entry(
+                urljoin(f"{origin_url}/", location)
+            )
             if candidate and candidate not in lines:
                 lines.append(candidate)
         if not lines:
@@ -35231,7 +36052,9 @@ class ArtifactQueueProcessor:
             candidate = self._http_transcript_url_candidate_entry(value)
             parsed = urlparse(candidate)
             if parsed.scheme in {"http", "https"} and parsed.netloc:
-                return parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                return (
+                    parsed._replace(path="", params="", query="", fragment="").geturl().rstrip("/")
+                )
         return ""
 
     @staticmethod
@@ -35540,7 +36363,11 @@ class ArtifactQueueProcessor:
                 if not safe_name:
                     continue
                 suffix = Path(safe_name.lower()).suffix
-                size_limit = _MAX_OCR_IMAGE_BYTES if suffix in _OCR_IMAGE_SUFFIXES else _MAX_ARTIFACT_MEMBER_BYTES
+                size_limit = (
+                    _MAX_OCR_IMAGE_BYTES
+                    if suffix in _OCR_IMAGE_SUFFIXES
+                    else _MAX_ARTIFACT_MEMBER_BYTES
+                )
                 if member_size > size_limit:
                     continue
                 member_start = content_base + relative_offset
@@ -35716,7 +36543,9 @@ class ArtifactQueueProcessor:
         if max_workers is None:
             bounded_workers = cls._static_batch_worker_count(len(batch_items))
         else:
-            bounded_workers = max(1, min(cls._MAX_STATIC_BATCH_WORKERS, len(batch_items), int(max_workers)))
+            bounded_workers = max(
+                1, min(cls._MAX_STATIC_BATCH_WORKERS, len(batch_items), int(max_workers))
+            )
         if bounded_workers <= 1:
             results: list[Any] = []
             for item in batch_items:
@@ -35728,8 +36557,7 @@ class ArtifactQueueProcessor:
         ordered_results: list[Any | None] = [None] * len(batch_items)
         with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
             future_map = {
-                executor.submit(worker, item): index
-                for index, item in enumerate(batch_items)
+                executor.submit(worker, item): index for index, item in enumerate(batch_items)
             }
             for future in as_completed(future_map):
                 index = future_map[future]
@@ -35751,7 +36579,15 @@ class ArtifactQueueProcessor:
         decoded_candidates = cls._run_ordered_static_batch(
             [
                 (encoding, bounded)
-                for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "utf-8", "cp1252", "latin-1")
+                for encoding in (
+                    "utf-8-sig",
+                    "utf-16",
+                    "utf-16-le",
+                    "utf-16-be",
+                    "utf-8",
+                    "cp1252",
+                    "latin-1",
+                )
             ],
             cls._decode_text_artifact_entry,
             default_factory=str,
@@ -36194,11 +37030,7 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        property_jobs = [
-            job
-            for job in job_batches
-            if isinstance(job, MsgOLEPropertyJob)
-        ]
+        property_jobs = [job for job in job_batches if isinstance(job, MsgOLEPropertyJob)]
 
         ordered_property_results = self._run_ordered_local_batch(
             property_jobs,
@@ -36247,7 +37079,9 @@ class ArtifactQueueProcessor:
             default_factory=list,
         )
         family_head_payloads = prepared_payload_families[0] if prepared_payload_families else []
-        family_tail_payloads = prepared_payload_families[1] if len(prepared_payload_families) > 1 else []
+        family_tail_payloads = (
+            prepared_payload_families[1] if len(prepared_payload_families) > 1 else []
+        )
         return [*family_head_payloads, *payloads, *family_tail_payloads]
 
     @staticmethod
@@ -36396,7 +37230,9 @@ class ArtifactQueueProcessor:
         if not property_text:
             return MsgOLEPropertyResult()
         if job.prop_id in {"1000", "1013"}:
-            suffix = ".html" if job.prop_id == "1013" or "<html" in property_text.lower() else ".txt"
+            suffix = (
+                ".html" if job.prop_id == "1013" or "<html" in property_text.lower() else ".txt"
+            )
             return MsgOLEPropertyResult(
                 payloads=[
                     (
@@ -36481,7 +37317,9 @@ class ArtifactQueueProcessor:
     @staticmethod
     def _looks_like_pcap_bytes(data: bytes, member_name: str = "") -> bool:
         lowered = str(member_name or "").strip().lower()
-        if lowered.endswith(tuple(_PCAP_SUFFIXES)) or any(f"{suffix}#" in lowered for suffix in _PCAP_SUFFIXES):
+        if lowered.endswith(tuple(_PCAP_SUFFIXES)) or any(
+            f"{suffix}#" in lowered for suffix in _PCAP_SUFFIXES
+        ):
             return True
         return data[:4] in _PCAP_CLASSIC_MAGICS or data[:4] == _PCAPNG_MAGIC
 
@@ -36615,7 +37453,9 @@ class ArtifactQueueProcessor:
                 interface_count += 1
             elif block_type == 0x00000006 and block_length >= 32:
                 try:
-                    captured_length = struct.unpack(f"{endian}I", data[offset + 20 : offset + 24])[0]
+                    captured_length = struct.unpack(f"{endian}I", data[offset + 20 : offset + 24])[
+                        0
+                    ]
                 except struct.error:
                     captured_length = 0
                 packet_count += 1
@@ -36685,11 +37525,7 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        record_jobs = [
-            job
-            for job in job_batches
-            if isinstance(job, WARCRecordExtractionJob)
-        ]
+        record_jobs = [job for job in job_batches if isinstance(job, WARCRecordExtractionJob)]
         ordered_payloads = self._run_ordered_local_batch(
             record_jobs,
             self._extract_warc_record_payloads,
@@ -36841,8 +37677,8 @@ class ArtifactQueueProcessor:
         http_header_bytes = b""
         body_bytes = content_bytes
         if self._looks_like_http_message_bytes(content_bytes):
-            http_header_bytes, http_body_bytes, _http_separator_length = self._split_bytes_header_block(
-                content_bytes
+            http_header_bytes, http_body_bytes, _http_separator_length = (
+                self._split_bytes_header_block(content_bytes)
             )
             body_bytes = http_body_bytes
         family_results = self._run_ordered_local_batch(
@@ -36914,7 +37750,9 @@ class ArtifactQueueProcessor:
     def _looks_like_http_message_bytes(data: bytes) -> bool:
         if not data:
             return False
-        header_bytes, _remainder, _separator_length = ArtifactQueueProcessor._split_bytes_header_block(data)
+        header_bytes, _remainder, _separator_length = (
+            ArtifactQueueProcessor._split_bytes_header_block(data)
+        )
         first_line = header_bytes.splitlines()[0].strip() if header_bytes.splitlines() else b""
         if not first_line:
             return False
@@ -37393,7 +38231,9 @@ class ArtifactQueueProcessor:
         mime_type = self._har_scalar_text(response_content.get("mimeType"))
         if mime_type:
             lines.append(f"response.content.mimeType={mime_type}")
-        image_payload_lines = self._har_content_image_payload_lines(response_content, mime_type=mime_type)
+        image_payload_lines = self._har_content_image_payload_lines(
+            response_content, mime_type=mime_type
+        )
         if image_payload_lines:
             lines.extend(image_payload_lines)
             return lines
@@ -37557,7 +38397,9 @@ class ArtifactQueueProcessor:
         if family == "values":
             flattened_lines = self._plist_text_lines(payload)
             if flattened_lines:
-                return [(source_file, f"{member_name}#plist-values", "\n".join(flattened_lines[:256]))]
+                return [
+                    (source_file, f"{member_name}#plist-values", "\n".join(flattened_lines[:256]))
+                ]
             return []
         return []
 
@@ -37581,7 +38423,11 @@ class ArtifactQueueProcessor:
         if not data:
             return None
         stripped = data.lstrip()
-        if stripped.startswith(_PLIST_MAGIC) or stripped.startswith(b"<?xml") or stripped.startswith(b"<plist"):
+        if (
+            stripped.startswith(_PLIST_MAGIC)
+            or stripped.startswith(b"<?xml")
+            or stripped.startswith(b"<plist")
+        ):
             return stripped
 
         xml_start = data.find(b"<?xml")
@@ -37617,11 +38463,7 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        entry_jobs = [
-            entry_job
-            for entry_job in entry_jobs
-            if isinstance(entry_job, tuple)
-        ]
+        entry_jobs = [entry_job for entry_job in entry_jobs if isinstance(entry_job, tuple)]
         entry_batches = self._run_ordered_local_batch(
             entry_jobs,
             self._plist_entry_lines,
@@ -37743,11 +38585,7 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        jobs = [
-            job
-            for job in job_batches
-            if isinstance(job, SQLiteObjectExtractionJob)
-        ]
+        jobs = [job for job in job_batches if isinstance(job, SQLiteObjectExtractionJob)]
         if not jobs:
             return payloads
 
@@ -37931,7 +38769,9 @@ class ArtifactQueueProcessor:
             ).fetchall()
         except sqlite3.Error:
             column_rows = []
-        column_names = [str(row[1] or "").strip() for row in column_rows if str(row[1] or "").strip()]
+        column_names = [
+            str(row[1] or "").strip() for row in column_rows if str(row[1] or "").strip()
+        ]
         try:
             sample_rows = con.execute(
                 f"SELECT * FROM {self._sqlite_identifier(name)} LIMIT ?",
@@ -38034,7 +38874,11 @@ class ArtifactQueueProcessor:
         object_name: str,
         column_names: Sequence[str],
     ) -> list[tuple[str, str, str]]:
-        names = [str(column_name or "").strip() for column_name in column_names if str(column_name or "").strip()]
+        names = [
+            str(column_name or "").strip()
+            for column_name in column_names
+            if str(column_name or "").strip()
+        ]
         if not names:
             return []
         return [
@@ -38230,7 +39074,10 @@ class ArtifactQueueProcessor:
                 default_factory=lambda: None,
             )
             for extracted_part_payload in extracted_part_payloads:
-                if not isinstance(extracted_part_payload, tuple) or len(extracted_part_payload) != 2:
+                if (
+                    not isinstance(extracted_part_payload, tuple)
+                    or len(extracted_part_payload) != 2
+                ):
                     continue
                 result_index, part_payloads = extracted_part_payload
                 if not isinstance(result_index, int) or result_index < 0:
@@ -38280,9 +39127,7 @@ class ArtifactQueueProcessor:
                 default_factory=lambda: None,
             )
             nested_jobs = [
-                nested_job
-                for nested_job in nested_jobs
-                if isinstance(nested_job, tuple)
+                nested_job for nested_job in nested_jobs if isinstance(nested_job, tuple)
             ]
             if not nested_jobs:
                 return None
@@ -38317,7 +39162,9 @@ class ArtifactQueueProcessor:
 
         attachment_name = filename or f"{member_name}.attachment-{part_index}"
         suffix = Path(attachment_name.lower()).suffix
-        size_limit = _MAX_OCR_IMAGE_BYTES if suffix in _OCR_IMAGE_SUFFIXES else _MAX_ARTIFACT_MEMBER_BYTES
+        size_limit = (
+            _MAX_OCR_IMAGE_BYTES if suffix in _OCR_IMAGE_SUFFIXES else _MAX_ARTIFACT_MEMBER_BYTES
+        )
         if len(payload_bytes) > size_limit:
             return None
         return EmailPartPlanningEntry(
@@ -38432,11 +39279,7 @@ class ArtifactQueueProcessor:
             self._mbox_message_job,
             default_factory=lambda: None,
         )
-        message_jobs = [
-            job
-            for job in job_batches
-            if isinstance(job, tuple)
-        ]
+        message_jobs = [job for job in job_batches if isinstance(job, tuple)]
         if message_jobs:
             payload_families = self._run_ordered_local_batch(
                 ("summary", "messages"),
@@ -38554,7 +39397,9 @@ class ArtifactQueueProcessor:
     def _decode_email_part_text(cls, part: Any, data: bytes) -> str:
         charset = str(part.get_content_charset() or "").strip().lower()
         bounded = data[:_MAX_ARTIFACT_MEMBER_BYTES]
-        decode_entries = [(encoding, bounded) for encoding in (charset, "utf-8", "latin-1") if encoding]
+        decode_entries = [
+            (encoding, bounded) for encoding in (charset, "utf-8", "latin-1") if encoding
+        ]
         decoded_candidates = cls._run_ordered_static_batch(
             decode_entries,
             cls._decode_email_part_entry,
@@ -38890,9 +39735,7 @@ class ArtifactQueueProcessor:
             member_name,
             depth=depth,
         )
-        payloads.extend(
-            self._extract_embedded_image_payloads(data, source_file, member_name)
-        )
+        payloads.extend(self._extract_embedded_image_payloads(data, source_file, member_name))
         return payloads
 
     def _extract_legacy_binary_ole_payloads(
@@ -38950,9 +39793,7 @@ class ArtifactQueueProcessor:
                     default_factory=lambda: None,
                 )
                 stream_jobs = [
-                    job
-                    for job in job_batches
-                    if isinstance(job, OLEStreamExtractionJob)
+                    job for job in job_batches if isinstance(job, OLEStreamExtractionJob)
                 ]
         except Exception:  # noqa: BLE001
             return []
@@ -39171,7 +40012,9 @@ class ArtifactQueueProcessor:
                         hex_value = raw[index + 1 : index + 3]
                         if re.fullmatch(r"[0-9a-fA-F]{2}", hex_value):
                             try:
-                                out.append(bytes.fromhex(hex_value).decode("cp1252", errors="ignore"))
+                                out.append(
+                                    bytes.fromhex(hex_value).decode("cp1252", errors="ignore")
+                                )
                             except Exception:  # noqa: BLE001
                                 pass
                             index += 3
@@ -39261,11 +40104,7 @@ class ArtifactQueueProcessor:
             ),
             default_factory=lambda: None,
         )
-        jobs = [
-            job
-            for job in job_batches
-            if isinstance(job, EmbeddedArchiveExtractionJob)
-        ]
+        jobs = [job for job in job_batches if isinstance(job, EmbeddedArchiveExtractionJob)]
         if not jobs:
             return []
         ordered_payloads = self._run_ordered_local_batch(
@@ -39366,7 +40205,9 @@ class ArtifactQueueProcessor:
                     payloads.append((source_file, f"{member_name}#ocr-page-{index}", ocr_text))
                 barcode_payload = self._barcode_image_path_payload(image_path)
                 if barcode_payload.strip():
-                    payloads.append((source_file, f"{member_name}#barcode-page-{index}", barcode_payload))
+                    payloads.append(
+                        (source_file, f"{member_name}#barcode-page-{index}", barcode_payload)
+                    )
                 return payloads
             finally:
                 image_path.unlink(missing_ok=True)
@@ -39376,11 +40217,7 @@ class ArtifactQueueProcessor:
             self._pdf_ocr_page_job,
             default_factory=lambda: None,
         )
-        page_images = [
-            page_job
-            for page_job in page_job_batches
-            if isinstance(page_job, tuple)
-        ]
+        page_images = [page_job for page_job in page_job_batches if isinstance(page_job, tuple)]
         if not page_images:
             return []
         ordered_payloads = self._run_ordered_local_batch(
@@ -39417,7 +40254,9 @@ class ArtifactQueueProcessor:
             return None
         retained_path: Path | None = None
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=source_path.suffix or ".png") as handle:
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=source_path.suffix or ".png"
+            ) as handle:
                 handle.write(source_path.read_bytes())
                 retained_path = Path(handle.name)
             return retained_path
@@ -39465,9 +40304,7 @@ class ArtifactQueueProcessor:
             default_factory=lambda: None,
         )
         results = [
-            retained_path
-            for retained_path in retained_paths
-            if isinstance(retained_path, Path)
+            retained_path for retained_path in retained_paths if isinstance(retained_path, Path)
         ]
         temp_dir.cleanup()
         return results
@@ -39686,11 +40523,7 @@ class ArtifactQueueProcessor:
             ),
             default_factory=list,
         )
-        raw_matches = [
-            match
-            for match_batch in match_batches
-            for match in match_batch
-        ]
+        raw_matches = [match for match_batch in match_batches for match in match_batch]
         matches: list[tuple[str, str, int]] = []
         seen_offsets: set[int] = set()
         for kind, suffix, offset in sorted(raw_matches, key=lambda item: item[2]):
@@ -39805,9 +40638,7 @@ class ArtifactQueueProcessor:
             [
                 (match_index, match_entry)
                 for match_index, match_entry in enumerate(
-                    match_entry
-                    for match_batch in match_batches
-                    for match_entry in match_batch
+                    match_entry for match_batch in match_batches for match_entry in match_batch
                 )
             ],
             self._embedded_archive_match_entry,
@@ -39886,9 +40717,7 @@ class ArtifactQueueProcessor:
             [
                 (candidate_index, candidate)
                 for candidate_index, candidate in enumerate(
-                    candidate
-                    for candidates in family_entry_batches
-                    for candidate in candidates
+                    candidate for candidates in family_entry_batches for candidate in candidates
                 )
             ],
             self._binary_string_value_entry,
@@ -39979,14 +40808,14 @@ class ArtifactQueueProcessor:
             return []
         line_candidates = self._run_ordered_local_batch(
             (
-            "title",
-            "subject",
-            "author",
-            "last_saved_by",
-            "comments",
-            "keywords",
-            "company",
-            "manager",
+                "title",
+                "subject",
+                "author",
+                "last_saved_by",
+                "comments",
+                "keywords",
+                "company",
+                "manager",
             ),
             lambda key: self._ole_metadata_line(metadata, key),
             default_factory=str,
@@ -40250,15 +41079,15 @@ class ArtifactQueueProcessor:
     def _email_message_metadata_lines(self, message: Any) -> list[str]:
         line_candidates = self._run_ordered_local_batch(
             (
-            "subject",
-            "from",
-            "to",
-            "cc",
-            "bcc",
-            "reply-to",
-            "date",
-            "message-id",
-            "x-mailer",
+                "subject",
+                "from",
+                "to",
+                "cc",
+                "bcc",
+                "reply-to",
+                "date",
+                "message-id",
+                "x-mailer",
             ),
             lambda header_name: self._email_message_metadata_line(message, header_name),
             default_factory=str,
@@ -40288,7 +41117,9 @@ class ArtifactQueueProcessor:
         payloads: list[tuple[str, str, str]],
     ) -> dict[str, Any]:
         metadata_payloads = [extract_path for _, extract_path, _ in payloads if "#" in extract_path]
-        relationship_payloads = [value for value in metadata_payloads if value.endswith("#relationships")]
+        relationship_payloads = [
+            value for value in metadata_payloads if value.endswith("#relationships")
+        ]
         ocr_payloads = [value for value in metadata_payloads if "#ocr" in value]
         barcode_payloads = [value for value in metadata_payloads if "#barcode" in value]
         return {
@@ -40921,8 +41752,12 @@ class ArtifactQueueProcessor:
                 try:
                     total_bytes = 0
                     with urlopen(request, timeout=20.0) as response:
-                        content_type = str(response.headers.get("Content-Type") or "").strip().lower()
-                        content_disposition = str(response.headers.get("Content-Disposition") or "").strip()
+                        content_type = (
+                            str(response.headers.get("Content-Type") or "").strip().lower()
+                        )
+                        content_disposition = str(
+                            response.headers.get("Content-Disposition") or ""
+                        ).strip()
                         filename = _select_remote_artifact_filename(
                             artifact_id,
                             source_url,

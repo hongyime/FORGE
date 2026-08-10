@@ -33,7 +33,10 @@ class TestPlatformSettingsDefaults:
 
     def test_state_db_url_default(self) -> None:
         settings = PlatformSettings()
-        assert settings.state_db_url == "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
+        assert (
+            settings.state_db_url
+            == "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
+        )
 
     def test_plugin_dir_default(self) -> None:
         settings = PlatformSettings()
@@ -74,7 +77,10 @@ class TestPlatformSettingsDefaults:
 
     def test_audit_db_url_default(self) -> None:
         settings = PlatformSettings()
-        assert settings.audit_db_url == "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
+        assert (
+            settings.audit_db_url
+            == "postgresql+asyncpg://forge:forge_dev_only@localhost:5433/forge"
+        )
 
     def test_telemetry_threshold_ms_default(self) -> None:
         settings = PlatformSettings()

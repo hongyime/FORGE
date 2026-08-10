@@ -4,6 +4,7 @@ Unit tests for api_policy_check.py (Module 4-G).
 
 All HTTP calls are mocked. No live Supabase connections.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,12 +26,14 @@ from forge.phase4.api_policy_check import (
 # Fixtures
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def tmp_db(tmp_path: Path) -> Path:
     db = tmp_path / "eng.db"
     con = sqlite3.connect(db)
     SupabaseScanner._ensure_schema(con)
-    con.commit(); con.close()
+    con.commit()
+    con.close()
     return db
 
 
@@ -49,15 +52,19 @@ def _mock_resp(status: int, body: str | dict) -> MagicMock:
 
 def _jwt_for_project(project_ref: str, role: str = "anon") -> str:
     header = urlsafe_b64encode(b'{"alg":"HS256","typ":"JWT"}').decode().rstrip("=")
-    payload = urlsafe_b64encode(
-        json.dumps(
-            {
-                "role": role,
-                "iss": f"https://{project_ref}.supabase.co/auth/v1",
-                "ref": project_ref,
-            }
-        ).encode()
-    ).decode().rstrip("=")
+    payload = (
+        urlsafe_b64encode(
+            json.dumps(
+                {
+                    "role": role,
+                    "iss": f"https://{project_ref}.supabase.co/auth/v1",
+                    "ref": project_ref,
+                }
+            ).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
     return f"{header}.{payload}.sig"
 
 
@@ -65,8 +72,8 @@ def _jwt_for_project(project_ref: str, role: str = "anon") -> str:
 # Static helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestSensitiveColumnDetection:
 
+class TestSensitiveColumnDetection:
     def test_email_key_detected(self):
         assert SupabaseScanner._has_sensitive([{"email": "u@c.com", "id": 1}])
 
@@ -97,7 +104,6 @@ class TestSensitiveColumnDetection:
 
 
 class TestAssessSeverity:
-
     def test_critical_when_data_and_sensitive(self):
         assert SupabaseScanner._assess_severity(has_data=True, has_sensitive=True) == "CRITICAL"
 
@@ -116,10 +122,11 @@ class TestAssessSeverity:
 # Severity matrix (PRD §9.17.3)
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestSeverityMatrix:
 
-    def _make_finding(self, scanner, base, table, anon_key, session, dry_run, con,
-                      data_body, status=200):
+class TestSeverityMatrix:
+    def _make_finding(
+        self, scanner, base, table, anon_key, session, dry_run, con, data_body, status=200
+    ):
         mock_resp = _mock_resp(status, data_body)
         session.get = MagicMock(return_value=mock_resp)
         return scanner._anon_read_probe(base, table, anon_key, session, dry_run, con)
@@ -128,7 +135,13 @@ class TestSeverityMatrix:
         session = MagicMock()
         con = sqlite3.connect(tmp_db)
         finding = self._make_finding(
-            scanner, "https://xyz.supabase.co", "users", "key", session, False, con,
+            scanner,
+            "https://xyz.supabase.co",
+            "users",
+            "key",
+            session,
+            False,
+            con,
             data_body=[{"id": 1, "email": "alice@corp.com"}],
         )
         con.close()
@@ -139,7 +152,13 @@ class TestSeverityMatrix:
         session = MagicMock()
         con = sqlite3.connect(tmp_db)
         finding = self._make_finding(
-            scanner, "https://xyz.supabase.co", "products", "key", session, False, con,
+            scanner,
+            "https://xyz.supabase.co",
+            "products",
+            "key",
+            session,
+            False,
+            con,
             data_body=[{"id": 1, "name": "Widget", "price": 9.99}],
         )
         con.close()
@@ -196,22 +215,22 @@ class TestSeverityMatrix:
 # Table enumeration
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestTableEnumeration:
 
+class TestTableEnumeration:
     def test_extracts_table_names_from_openapi(self, scanner: SupabaseScanner):
         schema = {
             "paths": {
-                "/users":    {"get": {}},
+                "/users": {"get": {}},
                 "/products": {"get": {}},
-                "/":         {"get": {}},  # root — must be excluded
+                "/": {"get": {}},  # root — must be excluded
             }
         }
         session = MagicMock()
         session.get = MagicMock(return_value=_mock_resp(200, schema))
         tables = scanner._enumerate_tables("https://xyz.supabase.co", session, dry_run=False)
-        assert "users"    in tables
+        assert "users" in tables
         assert "products" in tables
-        assert ""         not in tables  # root stripped
+        assert "" not in tables  # root stripped
 
     def test_404_returns_empty(self, scanner: SupabaseScanner):
         session = MagicMock()
@@ -230,12 +249,14 @@ class TestTableEnumeration:
 # Dry-run
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestDryRun:
 
+class TestDryRun:
     def test_dry_run_zero_requests(self, scanner: SupabaseScanner):
-        with patch.object(scanner, "_make_session") as mock_sess_fn, \
-             patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q, \
-             patch.object(scanner, "_scope_gate"):
+        with (
+            patch.object(scanner, "_make_session") as mock_sess_fn,
+            patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q,
+            patch.object(scanner, "_scope_gate"),
+        ):
             mock_q.confirm.return_value.ask.return_value = True
             session = MagicMock()
             session.get = MagicMock()
@@ -246,31 +267,41 @@ class TestDryRun:
         assert session.get.call_count == 0
 
     def test_dry_run_no_write_probes(self, scanner: SupabaseScanner, tmp_db: Path):
-        with patch.object(scanner, "_make_session", return_value=MagicMock()), \
-             patch.object(scanner, "_enumerate_tables", return_value=["users"]), \
-             patch.object(scanner, "_anon_read_probe", return_value=None) as mock_read, \
-             patch.object(scanner, "_anon_write_probe", return_value=None) as mock_write, \
-             patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q, \
-             patch.object(scanner, "_scope_gate"):
+        with (
+            patch.object(scanner, "_make_session", return_value=MagicMock()),
+            patch.object(scanner, "_enumerate_tables", return_value=["users"]),
+            patch.object(scanner, "_anon_read_probe", return_value=None) as mock_read,
+            patch.object(scanner, "_anon_write_probe", return_value=None) as mock_write,
+            patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q,
+            patch.object(scanner, "_scope_gate"),
+        ):
             mock_q.confirm.return_value.ask.return_value = True
             scanner.scan("xyzxyzxyz", dry_run=True)
         mock_read.assert_called_once()
         mock_write.assert_not_called()
 
     def test_scope_violation_raised_before_requests(self, scanner: SupabaseScanner):
-        with patch("forge.opsec.scope_gate.assert_in_scope", side_effect=RuntimeError("out of scope")), \
-             patch.object(scanner, "_make_session") as mock_make_session:
+        with (
+            patch(
+                "forge.opsec.scope_gate.assert_in_scope", side_effect=RuntimeError("out of scope")
+            ),
+            patch.object(scanner, "_make_session") as mock_make_session,
+        ):
             with pytest.raises(RuntimeError, match="out of scope"):
                 scanner.scan("blockedproj", dry_run=True)
         mock_make_session.assert_not_called()
 
     def test_scan_accepts_base_url_without_project_ref(self, scanner: SupabaseScanner):
-        with patch.object(scanner, "_make_session", return_value=MagicMock()), \
-             patch.object(scanner, "_enumerate_tables", return_value=[]), \
-             patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q, \
-             patch.object(scanner, "_scope_gate") as mock_scope:
+        with (
+            patch.object(scanner, "_make_session", return_value=MagicMock()),
+            patch.object(scanner, "_enumerate_tables", return_value=[]),
+            patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q,
+            patch.object(scanner, "_scope_gate") as mock_scope,
+        ):
             mock_q.confirm.return_value.ask.return_value = True
-            findings = scanner.scan(project_ref="", base_url="https://xyzxyzxyz.supabase.co", dry_run=True)
+            findings = scanner.scan(
+                project_ref="", base_url="https://xyzxyzxyz.supabase.co", dry_run=True
+            )
         assert findings == []
         mock_scope.assert_called_once()
 
@@ -281,10 +312,12 @@ class TestDryRun:
         # source. A populated developer .env (with placeholder ANON_A/ANON_B)
         # would otherwise satisfy resolve_secret_pool and skip the branch.
         monkeypatch.delenv("FORGE_SUPABASE_ANON_KEY", raising=False)
-        with patch.object(scanner, "_make_session", return_value=MagicMock()), \
-             patch.object(scanner, "_enumerate_tables", return_value=[]), \
-             patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q, \
-             patch.object(scanner, "_scope_gate"):
+        with (
+            patch.object(scanner, "_make_session", return_value=MagicMock()),
+            patch.object(scanner, "_enumerate_tables", return_value=[]),
+            patch("forge.phase4.api_policy_check.questionary", create=True) as mock_q,
+            patch.object(scanner, "_scope_gate"),
+        ):
             mock_q.confirm.return_value.ask.return_value = True
             scanner.scan(project_ref="xyzxyzxyz", dry_run=True)
 
@@ -306,15 +339,17 @@ class TestDryRun:
 # Storage
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestStorage:
 
+class TestStorage:
     def test_finding_written_to_db(self, scanner: SupabaseScanner, tmp_db: Path):
         con = sqlite3.connect(tmp_db)
         SupabaseScanner._ensure_schema(con)
         finding = SupabaseFinding(
-            table="users", severity="CRITICAL",
+            table="users",
+            severity="CRITICAL",
             title="IDOR: anon read on users",
-            description="PII exposed", evidence='{"email":"x"}',
+            description="PII exposed",
+            evidence='{"email":"x"}',
         )
         scanner._store_finding(con, "xyzxyzxyz", finding)
         con.commit()
@@ -330,9 +365,7 @@ class TestStorage:
         f = SupabaseFinding("users", "HIGH", "t", "d", "e")
         scanner._store_finding(con, "xyzxyzxyz", f)
         scanner._store_finding(con, "xyzxyzxyz", f)  # duplicate
-        count = con.execute(
-            "SELECT COUNT(*) FROM vulnerability_findings"
-        ).fetchone()[0]
+        count = con.execute("SELECT COUNT(*) FROM vulnerability_findings").fetchone()[0]
         con.close()
         assert count == 1
 
@@ -358,7 +391,7 @@ class TestStorage:
         con.close()
         assert row is not None
         assert "users" in row[0]
-        assert "200"   in row[0]
+        assert "200" in row[0]
         # Verify body is NOT logged
         assert "email" not in row[0]
 
@@ -367,8 +400,8 @@ class TestStorage:
 # Authenticated differential
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestAuthDifferential:
 
+class TestAuthDifferential:
     def test_medium_finding_when_anon_equals_auth(self, scanner: SupabaseScanner, tmp_db: Path):
         session = MagicMock()
         anon_body = [{"id": 1, "role": "admin"}]
@@ -393,7 +426,6 @@ class TestAuthDifferential:
 
 
 class TestCredentialResolution:
-
     def test_validate_anon_key_accepts_matching_project(self, scanner: SupabaseScanner):
         token = _jwt_for_project("xyzxyzxyz")
         assert scanner._validate_anon_key(token, "xyzxyzxyz")

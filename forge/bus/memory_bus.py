@@ -41,7 +41,9 @@ class InMemoryMessageBus:
         """
         serialized = json.dumps({"topic": topic, "payload": message.model_dump()})
         await self._topics[topic].put(serialized)
-        _LOG.debug("InMemoryBus: published to topic=%s correlation_id=%s", topic, message.correlation_id)
+        _LOG.debug(
+            "InMemoryBus: published to topic=%s correlation_id=%s", topic, message.correlation_id
+        )
 
     async def subscribe(self, topics: list[str]) -> AsyncIterator[AgentMessage]:
         """Yield messages for subscribed topics in FIFO order.

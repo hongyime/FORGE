@@ -58,7 +58,9 @@ def _write_visio_package(path: Path) -> None:
 
 def test_visio_artifacts_are_zip_backed_documents() -> None:
     assert _classify_artifact_name("architecture.vsdx") == "document"
-    assert _classify_remote_artifact_url("https://files.acme.example/architecture.vsdx") == "document"
+    assert (
+        _classify_remote_artifact_url("https://files.acme.example/architecture.vsdx") == "document"
+    )
     assert _artifact_format_label("architecture.vsdx") == "vsdx"
     assert _suffix_from_content_type("application/vnd.ms-visio.drawing.main+xml") == ".vsdx"
 

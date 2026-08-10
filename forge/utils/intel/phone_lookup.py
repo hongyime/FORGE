@@ -11,6 +11,7 @@ Two-tier lookup:
 Persists findings to the engagement DB as audit_log rows (no dedicated
 phone table exists yet). Returns a dict summary for the CLI/caller.
 """
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -183,8 +184,7 @@ def _extract_social_handle_from_public_profile_url(url: str) -> str:
         return ""
     try:
         return str(
-            EngagementSynthesisEngine._extract_social_profile_handle_from_url(url)
-            or ""
+            EngagementSynthesisEngine._extract_social_profile_handle_from_url(url) or ""
         ).strip()
     except Exception:
         return ""
@@ -197,10 +197,7 @@ def _platform_from_public_profile_url(url: str, fallback_host: str = "") -> str:
         return fallback_host.strip().lower()
     try:
         platform = str(
-            EngagementSynthesisEngine._social_profile_platform_hint(
-                {"profile_url": url}
-            )
-            or ""
+            EngagementSynthesisEngine._social_profile_platform_hint({"profile_url": url}) or ""
         ).strip()
     except Exception:
         platform = ""
@@ -242,10 +239,10 @@ def _parse_phone(number: str) -> dict[str, Any]:
     }
 
     return {
-        "e164": phonenumbers.format_number(parsed,
-            phonenumbers.PhoneNumberFormat.E164),
-        "international": phonenumbers.format_number(parsed,
-            phonenumbers.PhoneNumberFormat.INTERNATIONAL),
+        "e164": phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164),
+        "international": phonenumbers.format_number(
+            parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL
+        ),
         "country_code": parsed.country_code,
         "region": ph_geo.description_for_number(parsed, "en") or "",
         "carrier": ph_carrier.name_for_number(parsed, "en") or "",
@@ -269,18 +266,21 @@ def _run_phoneinfoga(number: str, timeout: float = 30.0) -> dict[str, Any]:
     """
     exe = _find_phoneinfoga()
     if not exe:
-        return {"available": False,
-                "reason": "phoneinfoga binary not found in PATH or .venv/Scripts"}
+        return {
+            "available": False,
+            "reason": "phoneinfoga binary not found in PATH or .venv/Scripts",
+        }
     try:
         proc = subprocess.run(
             [exe, "scan", "-n", number],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         return {"available": True, "error": str(exc)}
     if proc.returncode != 0:
-        return {"available": True,
-                "error": proc.stderr[-300:] or "nonzero exit"}
+        return {"available": True, "error": proc.stderr[-300:] or "nonzero exit"}
     stdout = proc.stdout or ""
     # Parse per-scanner sections
     scanners: dict[str, dict[str, Any]] = {}
@@ -288,10 +288,10 @@ def _run_phoneinfoga(number: str, timeout: float = 30.0) -> dict[str, Any]:
     for line in stdout.splitlines():
         stripped = line.strip()
         if stripped.startswith("Results for "):
-            current = stripped[len("Results for "):].strip()
+            current = stripped[len("Results for ") :].strip()
             scanners[current] = {"raw_lines": [], "dork_urls": []}
         elif current and stripped.startswith("URL:"):
-            scanners[current]["dork_urls"].append(stripped[len("URL:"):].strip())
+            scanners[current]["dork_urls"].append(stripped[len("URL:") :].strip())
         elif current and stripped:
             scanners[current]["raw_lines"].append(stripped)
     return {
@@ -300,9 +300,7 @@ def _run_phoneinfoga(number: str, timeout: float = 30.0) -> dict[str, Any]:
         "dork_count": {s: len(d["dork_urls"]) for s, d in scanners.items()},
         "total_dorks": sum(len(d["dork_urls"]) for d in scanners.values()),
         # Keep first 10 dork URLs per scanner for the report
-        "sample_dorks": {
-            s: d["dork_urls"][:10] for s, d in scanners.items()
-        },
+        "sample_dorks": {s: d["dork_urls"][:10] for s, d in scanners.items()},
     }
 
 
@@ -337,16 +335,19 @@ def _check_account_existence(number: str, timeout: float = 8.0) -> dict[str, str
         return {"error": "httpx not installed"}
 
     HEADERS = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/120.0.0.0 Safari/537.36"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
     }
 
     # Telegram - always returns fallback page for phone URLs (privacy),
     # so we can only distinguish format-valid from format-invalid.
     try:
-        with httpx.Client(headers=HEADERS, timeout=timeout,
-                          follow_redirects=True, verify=False) as c:  # noqa: S501
+        with httpx.Client(
+            headers=HEADERS, timeout=timeout, follow_redirects=True, verify=False
+        ) as c:  # noqa: S501
             r = identity_get(c, f"https://t.me/+{e164}")
             body = r.text or ""
             if 'og:title" content="Join group chat on Telegram"' in body:
@@ -354,7 +355,7 @@ def _check_account_existence(number: str, timeout: float = 8.0) -> dict[str, str
                 # phone->account correlation. Registration status is
                 # UNVERIFIABLE via public HTTP.
                 results["telegram"] = "UNVERIFIABLE"
-            elif 'tgme_page_photo_image' in body:
+            elif "tgme_page_photo_image" in body:
                 results["telegram"] = "REGISTERED"  # Very rare - only if
                 # the phone happens to match a public username / channel
             else:
@@ -364,8 +365,9 @@ def _check_account_existence(number: str, timeout: float = 8.0) -> dict[str, str
 
     # WhatsApp - similar privacy stance. Fallback page unless format is bad.
     try:
-        with httpx.Client(headers=HEADERS, timeout=timeout,
-                          follow_redirects=True, verify=False) as c:  # noqa: S501
+        with httpx.Client(
+            headers=HEADERS, timeout=timeout, follow_redirects=True, verify=False
+        ) as c:  # noqa: S501
             r = identity_get(c, f"https://wa.me/{e164}")
             body = (r.text or "")[:5000].lower()
             if "phone number shared via url is invalid" in body:
@@ -380,11 +382,14 @@ def _check_account_existence(number: str, timeout: float = 8.0) -> dict[str, str
     return results
 
 
-def _mine_dork_urls(number: str, dork_urls: list[str],
-                    proxy: Optional[str] = None,
-                    max_dorks: int = 8,
-                    timeout: float = 12.0,
-                    max_workers: int | None = None) -> dict[str, Any]:
+def _mine_dork_urls(
+    number: str,
+    dork_urls: list[str],
+    proxy: Optional[str] = None,
+    max_dorks: int = 8,
+    timeout: float = 12.0,
+    max_workers: int | None = None,
+) -> dict[str, Any]:
     """PhoneInfoga produces Google-search dork URLs targeting
     site:facebook.com, site:twitter.com, receive-sms-now.com etc.
 
@@ -406,13 +411,14 @@ def _mine_dork_urls(number: str, dork_urls: list[str],
     try:
         import httpx
     except ImportError:
-        return {"emails_found": [], "usernames_found": [],
-                "urls_found": [], "sites_searched": []}
+        return {"emails_found": [], "usernames_found": [], "urls_found": [], "sites_searched": []}
 
     HEADERS = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/120.0.0.0 Safari/537.36"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
     }
     # Parse each Google dork URL to extract the target site. PhoneInfoga and
     # search frontends vary between encoded and decoded query strings, so
@@ -462,7 +468,7 @@ def _mine_dork_urls(number: str, dork_urls: list[str],
 
     sites_seen: set[str] = set()
     sites_ordered: list[str] = []
-    for url in dork_urls[:max_dorks * 4]:  # oversample - dedupe by site
+    for url in dork_urls[: max_dorks * 4]:  # oversample - dedupe by site
         for site in _site_filters_from_dork_url(url):
             if site not in sites_seen:
                 sites_seen.add(site)
@@ -476,20 +482,22 @@ def _mine_dork_urls(number: str, dork_urls: list[str],
 
     selected_sites = sites_ordered[:max_dorks]
     e164 = number.lstrip("+")
-    email_pattern = _re.compile(
-        r"[a-zA-Z0-9._+\-]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+"
-    )
+    email_pattern = _re.compile(r"[a-zA-Z0-9._+\-]+@[a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+")
+
     def _query_site(site: str) -> dict[str, Any]:
         query = f'"{e164}" site:{site}'
         try:
             request_delay = _search_dork_request_delay_seconds()
             if request_delay > 0:
                 time.sleep(request_delay)
-            with httpx.Client(proxy=proxy, timeout=timeout,
-                              follow_redirects=True, verify=False,  # noqa: S501
-                              headers=HEADERS) as c:
-                r = c.get("https://duckduckgo.com/html/",
-                          params={"q": query})
+            with httpx.Client(
+                proxy=proxy,
+                timeout=timeout,
+                follow_redirects=True,
+                verify=False,  # noqa: S501
+                headers=HEADERS,
+            ) as c:
+                r = c.get("https://duckduckgo.com/html/", params={"q": query})
                 if r.status_code not in (200, 202):
                     return {
                         "emails_found": [],
@@ -518,9 +526,10 @@ def _mine_dork_urls(number: str, dork_urls: list[str],
         for em in email_pattern.findall(blob):
             e = em.lower()
             # Filter obvious garbage
-            if not any(bad in e for bad in ("example.com", "sentry.io",
-                                             "@2x.png", "wixpress.com",
-                                             "@sha256")):
+            if not any(
+                bad in e
+                for bad in ("example.com", "sentry.io", "@2x.png", "wixpress.com", "@sha256")
+            ):
                 emails_found.add(e)
         # Public-profile URLs can carry deterministic username pivots for the
         # recursive identity graph far beyond the original Twitter/Instagram
@@ -554,7 +563,9 @@ def _mine_dork_urls(number: str, dork_urls: list[str],
             for future in as_completed(future_map):
                 site_results[future_map[future]] = future.result()
         site_results = [
-            result if result is not None else {
+            result
+            if result is not None
+            else {
                 "emails_found": [],
                 "usernames_found": [],
                 "urls_found": [],
@@ -571,10 +582,10 @@ def _mine_dork_urls(number: str, dork_urls: list[str],
         urls_all.update(result.get("urls_found", []) or [])
 
     return {
-        "sites_searched":  selected_sites,
-        "emails_found":    sorted(emails_all),
+        "sites_searched": selected_sites,
+        "emails_found": sorted(emails_all),
         "usernames_found": sorted(usernames_all),
-        "urls_found":      sorted(urls_all)[:30],  # cap
+        "urls_found": sorted(urls_all)[:30],  # cap
     }
 
 
@@ -660,10 +671,12 @@ def _persist_phone_findings(
         if emails:
             try:
                 existing = {
-                    r[0].lower() for r in con.execute(
+                    r[0].lower()
+                    for r in con.execute(
                         "SELECT email FROM emails WHERE engagement_id=?",
                         (engagement_id,),
-                    ).fetchall() if r[0]
+                    ).fetchall()
+                    if r[0]
                 }
             except sqlite3.OperationalError:
                 existing = set()
@@ -686,11 +699,13 @@ def _persist_phone_findings(
         phone_key = f"phone:{number}"
         for service, status in account_probes.items():
             if status in ("REGISTERED",):
-                profile_data = json.dumps({
-                    "source": "phone_probe",
-                    "phone": number,
-                    "status": status,
-                })
+                profile_data = json.dumps(
+                    {
+                        "source": "phone_probe",
+                        "phone": number,
+                        "status": status,
+                    }
+                )
                 try:
                     con.execute(
                         "INSERT INTO social_profiles "
@@ -703,19 +718,19 @@ def _persist_phone_findings(
                     pass
 
         for username in mined.get("usernames_found", []) or []:
-            profile_data = json.dumps({
-                "source": "phone_dork_mining",
-                "phone": number,
-                "handle": username,
-            })
+            profile_data = json.dumps(
+                {
+                    "source": "phone_dork_mining",
+                    "phone": number,
+                    "handle": username,
+                }
+            )
             try:
                 con.execute(
                     "INSERT INTO social_profiles "
                     "(engagement_id, email, source, profile_data) "
                     "VALUES (?, ?, ?, ?)",
-                    (engagement_id, phone_key,
-                     f"phone_dork:{username[:32]}",
-                     profile_data),
+                    (engagement_id, phone_key, f"phone_dork:{username[:32]}", profile_data),
                 )
                 counts["social_profiles"] += 1
             except (sqlite3.OperationalError, sqlite3.IntegrityError):
@@ -729,15 +744,19 @@ def _persist_phone_findings(
             if not normalized_url:
                 continue
             raw_hostname = str(parsed.hostname or "").strip().lower()
-            source_suffix = hashlib.sha1(normalized_url.encode("utf-8", errors="ignore")).hexdigest()[:16]
-            profile_data = json.dumps({
-                "source": "phone_dork_mining",
-                "phone": number,
-                "url": normalized_url,
-                "profile_url": normalized_url,
-                "platform": _platform_from_public_profile_url(normalized_url, raw_hostname),
-                "host": raw_hostname,
-            })
+            source_suffix = hashlib.sha1(
+                normalized_url.encode("utf-8", errors="ignore")
+            ).hexdigest()[:16]
+            profile_data = json.dumps(
+                {
+                    "source": "phone_dork_mining",
+                    "phone": number,
+                    "url": normalized_url,
+                    "profile_url": normalized_url,
+                    "platform": _platform_from_public_profile_url(normalized_url, raw_hostname),
+                    "host": raw_hostname,
+                }
+            )
             try:
                 con.execute(
                     "INSERT INTO social_profiles "
@@ -797,8 +816,12 @@ def lookup_phone(
                 ),
             )
         else:
-            result["dork_mining"] = {"sites_searched": [], "emails_found": [],
-                                     "usernames_found": [], "urls_found": []}
+            result["dork_mining"] = {
+                "sites_searched": [],
+                "emails_found": [],
+                "usernames_found": [],
+                "urls_found": [],
+            }
         # Persist discoveries into engagement DB so kill-chain fan-out E
         # picks them up on the next iteration.
         result["persisted"] = _persist_phone_findings(
@@ -817,12 +840,14 @@ def lookup_phone(
     try:
         con = direct_connect(str(db_path))
         try:
-            payload = json.dumps({
-                "region": result["parse"].get("region"),
-                "carrier": result["parse"].get("carrier"),
-                "line_type": result["parse"].get("line_type"),
-                "phoneinfoga_available": result.get("phoneinfoga", {}).get("available", False),
-            })
+            payload = json.dumps(
+                {
+                    "region": result["parse"].get("region"),
+                    "carrier": result["parse"].get("carrier"),
+                    "line_type": result["parse"].get("line_type"),
+                    "phoneinfoga_available": result.get("phoneinfoga", {}).get("available", False),
+                }
+            )
             con.execute(
                 "INSERT INTO audit_log (engagement_id, phase, module, action, target, result, operator) "
                 "VALUES (?, 'phase2', 'phone_lookup', 'lookup', ?, ?, ?)",

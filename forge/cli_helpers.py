@@ -477,10 +477,7 @@ def _load_scope_manifest(value: str) -> dict[str, Any]:
             raise ValueError(f"cannot resolve scope manifest path: {exc}") from exc
         cwd = Path.cwd().resolve()
         home = Path.home().resolve()
-        if not (
-            _path_under(resolved, cwd)
-            or _path_under(resolved, home)
-        ):
+        if not (_path_under(resolved, cwd) or _path_under(resolved, home)):
             raise ValueError(
                 f"scope manifest path {resolved.as_posix()!r} is outside "
                 f"the current working directory and the operator home; "
@@ -760,7 +757,9 @@ def _direct_cli_load_scope_lists(
                     ip_ranges.append(item)
                 else:
                     domains.append(item)
-            if not ScopeGate(EngagementScope(domains=domains, ip_ranges=ip_ranges, urls=url_prefixes)).is_in_scope(target):
+            if not ScopeGate(
+                EngagementScope(domains=domains, ip_ranges=ip_ranges, urls=url_prefixes)
+            ).is_in_scope(target):
                 raise typer.BadParameter(f"target is outside scope: target={target!r}")
         else:
             from forge.opsec.scope_gate import ScopeViolationError, assert_in_scope  # noqa: PLC0415
@@ -773,7 +772,9 @@ def _direct_cli_load_scope_lists(
 
 
 def _direct_cli_require_roe(roe_id: str | None, *, command_name: str) -> str:
-    normalized = " ".join(str(roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split())[:160]
+    normalized = " ".join(str(roe_id or os.environ.get("FORGE_ROE_ID", "") or "").strip().split())[
+        :160
+    ]
     if not normalized:
         raise typer.BadParameter(
             f"{command_name} requires --roe-id or FORGE_ROE_ID before live execution."
@@ -1039,10 +1040,7 @@ def _run_inprocess_batch(
     completed = 0
     failed = 0
     with ThreadPoolExecutor(max_workers=bounded_workers) as executor:
-        future_map = {
-            executor.submit(worker, item): index
-            for index, item in enumerate(items)
-        }
+        future_map = {executor.submit(worker, item): index for index, item in enumerate(items)}
         for future in as_completed(future_map):
             try:
                 result = future.result()
@@ -1266,11 +1264,7 @@ def _extract_html_surface_urls(
                 srcset_value = html_lib.unescape(str(match.group(1) or ""))
                 skip_data_payload = False
                 for candidate in srcset_value.split(","):
-                    raw_value = (
-                        candidate.strip().split(maxsplit=1)[0]
-                        if candidate.strip()
-                        else ""
-                    )
+                    raw_value = candidate.strip().split(maxsplit=1)[0] if candidate.strip() else ""
                     if skip_data_payload:
                         skip_data_payload = False
                         continue
@@ -1421,6 +1415,4 @@ def _cli_audit(
             )
             con.commit()
     except (sqlite3.OperationalError, sqlite3.DatabaseError) as exc:
-        logging.getLogger(__name__).debug(
-            "audit_log write failed (non-fatal): %s", exc
-        )
+        logging.getLogger(__name__).debug("audit_log write failed (non-fatal): %s", exc)

@@ -57,19 +57,16 @@ def test_runtime_js_config_extracts_env_hosts_and_cloud_refs(tmp_path: Path) -> 
     assert _artifact_format_label("public/runtime-env.js") == "runtime-js-config"
     assert _artifact_format_label("public/config.js") == "runtime-js-config"
     assert _artifact_format_label("config.js") == "js"
-    assert (
-        processor._js_runtime_text_structured_payload_text(
-            _RUNTIME_ENV_PAYLOAD,
-            source_hint="public/runtime-env.js",
-        ).splitlines()
-        == [
-            "https://api.runtime.acme.example",
-            "https://runtime-api.acme.example/v1",
-            "https://runtime-firebase.firebaseio.com",
-            "https://runtimevault.supabase.co",
-            "https://runtimecms123.api.sanity.io",
-        ]
-    )
+    assert processor._js_runtime_text_structured_payload_text(
+        _RUNTIME_ENV_PAYLOAD,
+        source_hint="public/runtime-env.js",
+    ).splitlines() == [
+        "https://api.runtime.acme.example",
+        "https://runtime-api.acme.example/v1",
+        "https://runtime-firebase.firebaseio.com",
+        "https://runtimevault.supabase.co",
+        "https://runtimecms123.api.sanity.io",
+    ]
     assert (
         processor._js_runtime_text_structured_payload_text(
             _RUNTIME_ENV_PAYLOAD,
@@ -94,18 +91,15 @@ def test_service_worker_js_extracts_public_imports_and_cloud_refs(tmp_path: Path
     assert _artifact_format_label("public/precache-manifest.abc123.js") == "service-worker-js"
     assert _artifact_format_label("public/firebase-messaging-sw.js") == "service-worker-js"
     assert _artifact_format_label("public/app.js") == "js"
-    assert (
-        processor._js_runtime_text_structured_payload_text(
-            _SERVICE_WORKER_PAYLOAD,
-            source_hint="public/service-worker.js",
-        ).splitlines()
-        == [
-            "https://cdn.acme.example/sw-lib.js",
-            "https://static.acme.example/workbox-helper.js",
-            "https://acme-prod.firebaseio.com",
-            "https://api.acme.example/v1",
-        ]
-    )
+    assert processor._js_runtime_text_structured_payload_text(
+        _SERVICE_WORKER_PAYLOAD,
+        source_hint="public/service-worker.js",
+    ).splitlines() == [
+        "https://cdn.acme.example/sw-lib.js",
+        "https://static.acme.example/workbox-helper.js",
+        "https://acme-prod.firebaseio.com",
+        "https://api.acme.example/v1",
+    ]
     assert (
         processor._js_runtime_text_structured_payload_text(
             _SERVICE_WORKER_PAYLOAD,
@@ -123,17 +117,14 @@ def test_service_worker_js_resolves_relative_imports_from_remote_source(
     importScripts("/precache-manifest.abc123.js", "./workbox-helper.js", "data:text/plain,nope");
     """.strip()
 
-    assert (
-        processor._js_runtime_text_structured_payload_text(
-            payload,
-            source_hint="https://app.acme.example/service-worker.js",
-            base_url="https://app.acme.example/service-worker.js",
-        ).splitlines()
-        == [
-            "https://app.acme.example/precache-manifest.abc123.js",
-            "https://app.acme.example/workbox-helper.js",
-        ]
-    )
+    assert processor._js_runtime_text_structured_payload_text(
+        payload,
+        source_hint="https://app.acme.example/service-worker.js",
+        base_url="https://app.acme.example/service-worker.js",
+    ).splitlines() == [
+        "https://app.acme.example/precache-manifest.abc123.js",
+        "https://app.acme.example/workbox-helper.js",
+    ]
     assert (
         processor._js_runtime_text_structured_payload_text(
             payload,

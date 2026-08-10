@@ -83,9 +83,7 @@ async def test_engine_advance_with_hostile_condition_raises(
                     name="alpha",
                     agent_role="a",
                     topic="topic.alpha",
-                    transition_condition=(
-                        "().__class__.__base__.__subclasses__()"
-                    ),
+                    transition_condition=("().__class__.__base__.__subclasses__()"),
                 ),
                 WorkflowStage(
                     name="beta",

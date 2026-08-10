@@ -18,7 +18,6 @@ from forge.cli_helpers import _direct_cli_load_scope_lists, _direct_cli_require_
 from forge.db.direct_connect import direct_connect
 
 
-
 def _assert_offensive_cli(phase_label: str) -> None:
     from forge.config import is_offensive_enabled, prompt_offensive_upgrade  # noqa: PLC0415
 
@@ -88,8 +87,10 @@ def post_beacon(
 
     cfg = ForgeConfig.load()
     selected_channel = (channel or cfg.c2_default_channel).strip().lower()
-    selected_interval = interval if interval is not None else (
-        cfg.c2_icmp_packet_interval if selected_channel == "icmp" else 300
+    selected_interval = (
+        interval
+        if interval is not None
+        else (cfg.c2_icmp_packet_interval if selected_channel == "icmp" else 300)
     )
     urls = [item.strip() for item in c2_urls.split(",") if item.strip()]
     config_payload = {
@@ -129,7 +130,9 @@ def post_beacon(
         agent_type=agent_type,
         channel=beacon_cfg.channel.value,
         c2_urls=beacon_cfg.c2_urls,
-        interval=beacon_cfg.icmp_packet_interval if beacon_cfg.channel == C2Channel.ICMP else beacon_cfg.beacon_interval,
+        interval=beacon_cfg.icmp_packet_interval
+        if beacon_cfg.channel == C2Channel.ICMP
+        else beacon_cfg.beacon_interval,
         jitter_pct=beacon_cfg.jitter_pct,
         smb_config=channel_cfg or None,
         icmp_config=icmp_cfg or None,
@@ -190,4 +193,3 @@ def post_lateral(
         technique=technique,
         cleanup_on_exit=cleanup_on_exit,
     )
-

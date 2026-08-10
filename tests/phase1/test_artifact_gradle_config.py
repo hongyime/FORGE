@@ -27,7 +27,10 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
         ("settings.gradle.kts", "gradle-settings"),
         ("gradle.properties", "gradle-properties"),
         ("gradle/wrapper/gradle-wrapper.properties", "gradle-wrapper-properties"),
-        ("download.gradle-wrapper.properties.gradle-wrapper-properties", "gradle-wrapper-properties"),
+        (
+            "download.gradle-wrapper.properties.gradle-wrapper-properties",
+            "gradle-wrapper-properties",
+        ),
     ],
 )
 def test_gradle_config_artifact_label_recognizes_source_paths(
@@ -67,12 +70,11 @@ def test_gradle_wrapper_properties_routes_remote_and_preserves_label() -> None:
     source = "https://downloads.acme.example/gradle/wrapper/gradle-wrapper.properties"
 
     assert _classify_remote_artifact_url(source) == "config"
+    assert _select_remote_artifact_filename(91, source, "config") == "gradle-wrapper.properties"
     assert (
-        _select_remote_artifact_filename(91, source, "config")
-        == "gradle-wrapper.properties"
-    )
-    assert (
-        gradle_text_config_remote_filename("download.gradle-wrapper.properties.gradle-wrapper-properties")
+        gradle_text_config_remote_filename(
+            "download.gradle-wrapper.properties.gradle-wrapper-properties"
+        )
         == "download.gradle-wrapper.properties.gradle-wrapper-properties"
     )
     assert _artifact_format_label("gradle/wrapper/gradle-wrapper.properties") == (

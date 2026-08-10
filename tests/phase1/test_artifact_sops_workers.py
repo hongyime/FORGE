@@ -15,8 +15,12 @@ def test_sops_metadata_entries_use_bounded_workers_and_preserve_order(
     document = {
         "sops": {
             "kms": [
-                {"arn": "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"},
-                {"arn": "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"},
+                {
+                    "arn": "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
+                },
+                {
+                    "arn": "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111"
+                },
             ],
             "gcp_kms": [
                 {"resource_id": "projects/acme-prod/locations/global/keyRings/main/cryptoKeys/app"}

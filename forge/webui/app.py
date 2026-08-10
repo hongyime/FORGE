@@ -20,7 +20,11 @@ from forge.config import ForgeConfig
 from forge.db.session import get_engagement_db
 from forge.distributed.coordinator import QueueCoordinator
 from forge.distributed.scheduler import ScheduledTask, TaskScheduler
-from forge.engagement_ids import allocate_engagement_id, engagement_db_root, numeric_engagement_db_files
+from forge.engagement_ids import (
+    allocate_engagement_id,
+    engagement_db_root,
+    numeric_engagement_db_files,
+)
 from forge.models.pydantic_models import CommandEvent
 from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.reporting.dashboard import (
@@ -176,9 +180,11 @@ def create_app() -> Any:
 
     # --- Production 500 handler (no traceback leakage) ---
     if not _is_dev:
+
         @app.exception_handler(Exception)
         async def _internal_error(request: Request, exc: Exception) -> JSONResponse:
             return JSONResponse(status_code=500, content={"error": "internal error"})
+
     def _auth_subject(
         creds: HTTPAuthorizationCredentials | None = Depends(auth_scheme),
     ) -> str:
@@ -296,7 +302,9 @@ def create_app() -> Any:
                     "current_iteration": int(row["current_iteration"] or 0),
                     "max_iterations": int(row["max_iterations"] or 0),
                     "run_kind": "kill_chain",
-                    "counts": metadata.get("counts") if isinstance(metadata.get("counts"), dict) else {},
+                    "counts": metadata.get("counts")
+                    if isinstance(metadata.get("counts"), dict)
+                    else {},
                     "queue_metrics": (
                         metadata.get("queue_metrics")
                         if isinstance(metadata.get("queue_metrics"), dict)
@@ -367,8 +375,12 @@ def create_app() -> Any:
                         "active_artifact_eta_seconds": payload["active_artifact_eta_seconds"],
                         "active_validation_stage_label": payload["active_validation_stage_label"],
                         "active_validation_eta_seconds": payload["active_validation_eta_seconds"],
-                        "active_finalization_stage_label": payload["active_finalization_stage_label"],
-                        "active_finalization_eta_seconds": payload["active_finalization_eta_seconds"],
+                        "active_finalization_stage_label": payload[
+                            "active_finalization_stage_label"
+                        ],
+                        "active_finalization_eta_seconds": payload[
+                            "active_finalization_eta_seconds"
+                        ],
                     },
                     sort_keys=True,
                 )
@@ -442,6 +454,7 @@ def create_app() -> Any:
         # module at request time. Mirrors slice 2 of the cloud_ref rollout;
         # keeps this classifier and the orchestrator classifier in lockstep.
         from forge.engagement_orchestrator import _hostname_is_cloud_ref  # noqa: PLC0415
+
         parsed = urlparse(text)
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             if parsed.path.lower().endswith(_MOBILE_BUNDLE_SEED_SUFFIXES):
@@ -566,7 +579,9 @@ def create_app() -> Any:
                     "status": str(row["status"] or ""),
                     "depth": int(row["depth"] or 0),
                     "confidence": float(row["confidence"] or 0.0),
-                    "parent_seed_id": int(row["parent_seed_id"]) if row["parent_seed_id"] is not None else None,
+                    "parent_seed_id": int(row["parent_seed_id"])
+                    if row["parent_seed_id"] is not None
+                    else None,
                     "metadata": metadata if isinstance(metadata, dict) else {},
                     "discovered_at": _format_dt(str(row["discovered_at"] or "")),
                     "updated_at": _format_dt(str(row["updated_at"] or "")),
@@ -659,7 +674,9 @@ def create_app() -> Any:
         _stop_marker_path(engagement_id).unlink(missing_ok=True)
         _pause_marker_path(engagement_id).unlink(missing_ok=True)
 
-    def _latest_running_engagement_run(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row | None:
+    def _latest_running_engagement_run(
+        con: sqlite3.Connection, engagement_id: int
+    ) -> sqlite3.Row | None:
         return con.execute(
             """
             SELECT id, metadata_json
@@ -692,7 +709,9 @@ def create_app() -> Any:
             "tail_api": f"/api/engagements/{quote(engagement_ref, safe='')}/logs/{quote(log_path.name, safe='')}/tail",
             "size_bytes": int(stat.st_size),
             "size_label": _format_size(int(stat.st_size)),
-            "modified_at": _format_dt(time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime))),
+            "modified_at": _format_dt(
+                time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime))
+            ),
         }
 
     def _resolve_log_file(engagement_id: int, log_name: str) -> Path | None:
@@ -803,7 +822,9 @@ def create_app() -> Any:
             filtered = scope_entries_from_payload(payload)
             seen = set(filtered)
             authorized = payload.get("authorized_seeds")
-            authorized_items = authorized if isinstance(authorized, list) else [authorized] if authorized else []
+            authorized_items = (
+                authorized if isinstance(authorized, list) else [authorized] if authorized else []
+            )
             authorized_list = [str(item).strip() for item in authorized_items if str(item).strip()]
             for entry in add_entries or []:
                 value = str(entry).strip()
@@ -819,11 +840,7 @@ def create_app() -> Any:
             return filtered
 
         scope_list = scope_entries_from_payload(scope)
-        filtered = [
-            item
-            for item in scope_list
-            if item and item not in remove_set
-        ]
+        filtered = [item for item in scope_list if item and item not in remove_set]
         seen = set(filtered)
         for entry in add_entries or []:
             value = str(entry).strip()
@@ -949,7 +966,9 @@ def create_app() -> Any:
             "path": artifact.as_posix(),
             "size_bytes": int(stat.st_size),
             "size_label": _format_size(int(stat.st_size)),
-            "modified_at": _format_dt(time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime))),
+            "modified_at": _format_dt(
+                time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime))
+            ),
         }
 
     def _report_preview_payload(artifact: Path) -> dict[str, str]:
@@ -1065,14 +1084,16 @@ def create_app() -> Any:
             verify=True,
         )
         graph_files = _graph_files(str(engagement_id), _reports_dir())
-        artifacts = [_artifact_payload(summary["slug"], path, "report") for path in report_files] + [
-            _artifact_payload(summary["slug"], path, "graph") for path in graph_files
-        ] + [
-            _artifact_payload(summary["slug"], path, "audit") for path in audit_files
-        ]
+        artifacts = (
+            [_artifact_payload(summary["slug"], path, "report") for path in report_files]
+            + [_artifact_payload(summary["slug"], path, "graph") for path in graph_files]
+            + [_artifact_payload(summary["slug"], path, "audit") for path in audit_files]
+        )
         report_history = _report_history_payload(report_files)
         preview_files = [
-            path for path in _latest_report_family_files(report_files) if path.suffix.lower() == ".md"
+            path
+            for path in _latest_report_family_files(report_files)
+            if path.suffix.lower() == ".md"
         ]
         scope = _safe_json_loads(str(row["scope_json"] or "[]"))
         scope_list = scope_entries_from_payload(scope)
@@ -1182,9 +1203,13 @@ def create_app() -> Any:
                         engagement_id=engagement_id,
                         verify=True,
                     )
-                    files = _report_files(engagement_id) + audit_files + _graph_files(
-                        str(summary["id"]),
-                        _reports_dir(),
+                    files = (
+                        _report_files(engagement_id)
+                        + audit_files
+                        + _graph_files(
+                            str(summary["id"]),
+                            _reports_dir(),
+                        )
                     )
                     for path in files:
                         if path.is_file() and path.name == requested_name:
@@ -1355,11 +1380,19 @@ def create_app() -> Any:
     _htmx_templates_dir = Path(__file__).parent / "templates" / "htmx"
     _htmx_templates = Jinja2Templates(directory=_htmx_templates_dir)
     _HTMX_VALID_TABS: tuple[str, ...] = (
-        "overview", "seeds", "findings", "graph", "report", "audit",
+        "overview",
+        "seeds",
+        "findings",
+        "graph",
+        "report",
+        "audit",
     )
 
     def _render_htmx(
-        template_name: str, detail: dict, active_tab: str, is_htmx: bool = False,
+        template_name: str,
+        detail: dict,
+        active_tab: str,
+        is_htmx: bool = False,
     ) -> HTMLResponse:
         """Render a Jinja2 template without needing a Request object.
 
@@ -1369,7 +1402,9 @@ def create_app() -> Any:
         env = _htmx_templates.env
         template = env.get_template(template_name)
         html = template.render(
-            detail=detail, active_tab=active_tab, tabs=_HTMX_VALID_TABS,
+            detail=detail,
+            active_tab=active_tab,
+            tabs=_HTMX_VALID_TABS,
         )
         headers = {"Cache-Control": "no-store"}
         return HTMLResponse(content=html, headers=headers)
@@ -1387,7 +1422,9 @@ def create_app() -> Any:
         response_class=HTMLResponse,
     )
     def engagement_htmx_tab(
-        engagement_ref: str, tab_name: str, hx_request: str = Header(default=""),
+        engagement_ref: str,
+        tab_name: str,
+        hx_request: str = Header(default=""),
     ) -> Any:
         if tab_name not in _HTMX_VALID_TABS:
             raise HTTPException(status_code=404, detail=f"Unknown tab: {tab_name}")
@@ -1472,7 +1509,9 @@ def create_app() -> Any:
                 source = "operator"
             elif isinstance(item, dict):
                 seed_value = str(item.get("seed_value") or item.get("value") or "").strip()
-                seed_type = str(item.get("seed_type") or _classify_seed_value(seed_value)).strip().lower()
+                seed_type = (
+                    str(item.get("seed_type") or _classify_seed_value(seed_value)).strip().lower()
+                )
                 source = _normalize_seed_source(str(item.get("source") or "operator"))
             else:
                 raise HTTPException(status_code=400, detail="Each seed must be a string or object.")
@@ -1718,16 +1757,28 @@ def create_app() -> Any:
             old_value = str(row["seed_value"] or "")
             old_type = str(row["seed_type"] or "")
             updated_value = str(body.get("seed_value") or body.get("value") or old_value).strip()
-            updated_type = str(body.get("seed_type") or old_type).strip().lower() or _classify_seed_value(updated_value)
+            updated_type = str(
+                body.get("seed_type") or old_type
+            ).strip().lower() or _classify_seed_value(updated_value)
             updated_value = _canonical_seed_value(updated_value, updated_type)
-            updated_source = _normalize_seed_source(str(body.get("source") or row["source"] or "operator"))
+            updated_source = _normalize_seed_source(
+                str(body.get("source") or row["source"] or "operator")
+            )
             updated_status = str(body.get("status") or row["status"] or "").strip().lower()
             updated_depth = int(body.get("depth") if "depth" in body else row["depth"] or 0)
-            updated_confidence = float(body.get("confidence") if "confidence" in body else row["confidence"] or 0.0)
+            updated_confidence = float(
+                body.get("confidence") if "confidence" in body else row["confidence"] or 0.0
+            )
             existing_metadata = _safe_json_loads(str(row["metadata_json"] or "{}"))
-            metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else existing_metadata
+            metadata = (
+                body.get("metadata")
+                if isinstance(body.get("metadata"), dict)
+                else existing_metadata
+            )
             if updated_status not in _VALID_SEED_STATUSES:
-                raise HTTPException(status_code=400, detail=f"Invalid seed status: {updated_status}")
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid seed status: {updated_status}"
+                )
             if not updated_value:
                 raise HTTPException(status_code=400, detail="seed_value must not be empty.")
             try:
@@ -1796,7 +1847,10 @@ def create_app() -> Any:
                 raise HTTPException(status_code=404, detail="Seed not found.")
             seed_value = str(row["seed_value"] or "")
             seed_type = str(row["seed_type"] or "")
-            con.execute("DELETE FROM seed_runs WHERE engagement_id=? AND seed_id=?", (engagement_id, seed_id))
+            con.execute(
+                "DELETE FROM seed_runs WHERE engagement_id=? AND seed_id=?",
+                (engagement_id, seed_id),
+            )
             con.execute(
                 "DELETE FROM seed_relations WHERE engagement_id=? AND (source_seed_id=? OR target_seed_id=?)",
                 (engagement_id, seed_id, seed_id),
@@ -1811,7 +1865,11 @@ def create_app() -> Any:
                 remove_entries=_scope_entries_for_seed(seed_value, seed_type),
             )
             con.commit()
-            return {"status": "deleted", "seed_id": seed_id, "items": _engagement_seed_rows(con, engagement_id)}
+            return {
+                "status": "deleted",
+                "seed_id": seed_id,
+                "items": _engagement_seed_rows(con, engagement_id),
+            }
         finally:
             con.close()
 
@@ -1900,8 +1958,12 @@ def create_app() -> Any:
         dry_run = bool(options.get("dry_run", False))
         attack_mode = bool(options.get("attack_mode", False))
         auto_run_detected = bool(options.get("auto_run_detected", False))
-        roe_id = " ".join(str(options.get("roe_id") or os.environ.get("FORGE_ROE_ID", "")).strip().split())[:160]
-        scope_manifest = str(options.get("scope_manifest") or os.environ.get("FORGE_SCOPE_MANIFEST", "")).strip()
+        roe_id = " ".join(
+            str(options.get("roe_id") or os.environ.get("FORGE_ROE_ID", "")).strip().split()
+        )[:160]
+        scope_manifest = str(
+            options.get("scope_manifest") or os.environ.get("FORGE_SCOPE_MANIFEST", "")
+        ).strip()
         live_launch = not dry_run
         require_scope_manifest = live_launch
         skip_cloud = bool(options.get("skip_cloud", False))
@@ -1918,11 +1980,17 @@ def create_app() -> Any:
             try:
                 report_max_loops = int(report_max_loops_raw)
             except (TypeError, ValueError) as exc:
-                raise HTTPException(status_code=400, detail="report_max_loops must be an integer.") from exc
+                raise HTTPException(
+                    status_code=400, detail="report_max_loops must be an integer."
+                ) from exc
         if report_provider is not None and report_provider not in _VALID_REPORT_PROVIDERS:
-            raise HTTPException(status_code=400, detail=f"Invalid report provider: {report_provider}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid report provider: {report_provider}"
+            )
         if report_max_loops is not None and (report_max_loops < 0 or report_max_loops > 10):
-            raise HTTPException(status_code=400, detail="report_max_loops must be between 0 and 10.")
+            raise HTTPException(
+                status_code=400, detail="report_max_loops must be between 0 and 10."
+            )
         if live_launch and not roe_id:
             raise HTTPException(
                 status_code=400,
@@ -2107,8 +2175,14 @@ def create_app() -> Any:
         db_path, engagement_id = resolved
         if control_kind not in {"stop", "pause"}:
             raise HTTPException(status_code=500, detail="Unsupported control action.")
-        default_reason = "operator requested pause" if control_kind == "pause" else "operator requested stop"
-        marker_path = _pause_marker_path(engagement_id) if control_kind == "pause" else _stop_marker_path(engagement_id)
+        default_reason = (
+            "operator requested pause" if control_kind == "pause" else "operator requested stop"
+        )
+        marker_path = (
+            _pause_marker_path(engagement_id)
+            if control_kind == "pause"
+            else _stop_marker_path(engagement_id)
+        )
         reason = str((body or {}).get("reason") or default_reason).strip()
         marker_payload = {
             "requested_at": _format_dt(time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())),

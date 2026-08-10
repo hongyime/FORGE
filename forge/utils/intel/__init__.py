@@ -29,6 +29,7 @@ OPSEC invariants (PRD §12.3):
   - audit_log appended for every API call and spray attempt.
   - dry_run=True is the DEFAULT for all destructive operations.
 """
+
 from __future__ import annotations
 
 __all__ = [
@@ -67,28 +68,29 @@ __all__ = [
 
 def __getattr__(name: str):  # lazy imports
     _MAP = {
-        "BaseBreachAdapter":   ("forge.utils.intel.data_connector", "BaseBreachAdapter"),
+        "BaseBreachAdapter": ("forge.utils.intel.data_connector", "BaseBreachAdapter"),
         "SQLiteBreachAdapter": ("forge.utils.intel.data_connector", "SQLiteBreachAdapter"),
-        "BaseQueryAdapter":    ("forge.utils.intel.data_connector", "BaseQueryAdapter"),
-        "TextBreachAdapter":   ("forge.utils.intel.data_connector", "TextBreachAdapter"),
-        "BreachRecord":        ("forge.utils.intel.data_connector", "BreachRecord"),
-        "run_breach_query":    ("forge.utils.intel.data_connector", "run_breach_query"),
-        "CredentialValidator": ("forge.utils.intel.auth_check",     "CredentialValidator"),
-        "DeHashedClient":      ("forge.utils.intel.index_query",    "DeHashedClient"),
-        "run_dehashed":        ("forge.utils.intel.index_query",    "run_dehashed"),
-        "XposedOrNotClient":   ("forge.utils.intel.exposure_check", "XposedOrNotClient"),
-        "run_xposed":          ("forge.utils.intel.exposure_check", "run_xposed"),
-        "run_contact_enum":    ("forge.utils.intel.contact_enum",   "run_contact_enum"),
+        "BaseQueryAdapter": ("forge.utils.intel.data_connector", "BaseQueryAdapter"),
+        "TextBreachAdapter": ("forge.utils.intel.data_connector", "TextBreachAdapter"),
+        "BreachRecord": ("forge.utils.intel.data_connector", "BreachRecord"),
+        "run_breach_query": ("forge.utils.intel.data_connector", "run_breach_query"),
+        "CredentialValidator": ("forge.utils.intel.auth_check", "CredentialValidator"),
+        "DeHashedClient": ("forge.utils.intel.index_query", "DeHashedClient"),
+        "run_dehashed": ("forge.utils.intel.index_query", "run_dehashed"),
+        "XposedOrNotClient": ("forge.utils.intel.exposure_check", "XposedOrNotClient"),
+        "run_xposed": ("forge.utils.intel.exposure_check", "run_xposed"),
+        "run_contact_enum": ("forge.utils.intel.contact_enum", "run_contact_enum"),
         "run_reputation_lookup": ("forge.utils.intel.reputation_lookup", "run_reputation_lookup"),
-        "run_social_scraper":  ("forge.utils.intel.social_scraper", "run_social_scraper"),
-        "run_handle_finder":   ("forge.utils.intel.handle_finder",  "run_handle_finder"),
-        "run_scavenger":       ("forge.utils.intel.scavenger",      "run_scavenger"),
-        "load_patterns":       ("forge.utils.intel.scavenger",      "load_patterns"),
-        "run_key_scanner":     ("forge.utils.intel.secret_finder",  "run_key_scanner"),
-        "PasteMonitor":        ("forge.utils.intel.paste_monitor",  "PasteMonitor"),
+        "run_social_scraper": ("forge.utils.intel.social_scraper", "run_social_scraper"),
+        "run_handle_finder": ("forge.utils.intel.handle_finder", "run_handle_finder"),
+        "run_scavenger": ("forge.utils.intel.scavenger", "run_scavenger"),
+        "load_patterns": ("forge.utils.intel.scavenger", "load_patterns"),
+        "run_key_scanner": ("forge.utils.intel.secret_finder", "run_key_scanner"),
+        "PasteMonitor": ("forge.utils.intel.paste_monitor", "PasteMonitor"),
     }
     if name in _MAP:
         import importlib
+
         mod_name, attr = _MAP[name]
         mod = importlib.import_module(mod_name)
         return getattr(mod, attr)

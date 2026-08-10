@@ -13,6 +13,7 @@ try the next. If every instance fails we fall back to DuckDuckGo HTML
 
 Zero API keys. Zero signup.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,33 +37,38 @@ _SEARXNG_INSTANCES = (
     "https://priv.au",
 )
 
-_PUBLIC_URL_PATTERN = re.compile(r"https?://[^\s\"'<>)]+" , re.IGNORECASE)
+_PUBLIC_URL_PATTERN = re.compile(r"https?://[^\s\"'<>)]+", re.IGNORECASE)
 
 _HEADERS_ROTATION = [
     {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/120.0.0.0 Safari/537.36"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
         "Accept": "application/json,text/html;q=0.9",
         "Accept-Language": "en-US,en;q=0.9",
     },
     {
-        "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                       "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                       "Version/17.0 Safari/605.1.15"),
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "Version/17.0 Safari/605.1.15"
+        ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
         "Accept-Language": "en-US,en;q=0.9",
     },
     {
-        "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64; rv:121.0) "
-                       "Gecko/20100101 Firefox/121.0"),
+        "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0"),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
         "Accept-Language": "en-US,en;q=0.5",
     },
     {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+        ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
         "Accept-Language": "en-GB,en;q=0.9",
     },
@@ -74,6 +80,7 @@ def _pick_headers() -> dict[str, str]:
     signals. Non-random-secure - just enough entropy to hit different UA
     fingerprints across sequential requests."""
     import random as _rand
+
     return dict(_HEADERS_ROTATION[_rand.randrange(len(_HEADERS_ROTATION))])
 
 
@@ -121,8 +128,7 @@ def _search_dork_request_delay_seconds() -> float:
     )
 
 
-def _startpage_search(query: str, proxy: Optional[str] = None,
-                      timeout: float = 12.0) -> str:
+def _startpage_search(query: str, proxy: Optional[str] = None, timeout: float = 12.0) -> str:
     """Startpage HTML search - Google-backed but scraper-friendlier.
     Third-tier fallback for when both DDG and Bing rate-limit us."""
     try:
@@ -137,8 +143,7 @@ def _startpage_search(query: str, proxy: Optional[str] = None,
             headers=_pick_headers(),
             verify=False,  # noqa: S501
         ) as c:
-            r = c.get("https://www.startpage.com/do/search",
-                      params={"query": query, "cat": "web"})
+            r = c.get("https://www.startpage.com/do/search", params={"query": query, "cat": "web"})
             if r.status_code in (200, 202):
                 return r.text or ""
     except Exception:  # noqa: BLE001
@@ -146,8 +151,7 @@ def _startpage_search(query: str, proxy: Optional[str] = None,
     return ""
 
 
-def _bing_html_search(query: str, proxy: Optional[str] = None,
-                      timeout: float = 12.0) -> str:
+def _bing_html_search(query: str, proxy: Optional[str] = None, timeout: float = 12.0) -> str:
     """Bing HTML search - second-tier fallback."""
     try:
         import httpx
@@ -161,8 +165,7 @@ def _bing_html_search(query: str, proxy: Optional[str] = None,
             headers=_pick_headers(),
             verify=False,  # noqa: S501
         ) as c:
-            r = c.get("https://www.bing.com/search",
-                      params={"q": query, "count": "50"})
+            r = c.get("https://www.bing.com/search", params={"q": query, "count": "50"})
             if r.status_code in (200, 202):
                 return r.text or ""
     except Exception:  # noqa: BLE001
@@ -170,8 +173,7 @@ def _bing_html_search(query: str, proxy: Optional[str] = None,
     return ""
 
 
-def _ddg_html_search(query: str, proxy: Optional[str] = None,
-                     timeout: float = 12.0) -> str:
+def _ddg_html_search(query: str, proxy: Optional[str] = None, timeout: float = 12.0) -> str:
     """DuckDuckGo HTML search - primary backend with uddg-param decoding."""
     try:
         import httpx
@@ -201,8 +203,7 @@ def _ddg_html_search(query: str, proxy: Optional[str] = None,
     return "\n".join(decoded_parts) + "\n" + html
 
 
-def _searxng_query(query: str, proxy: Optional[str] = None,
-                   timeout: float = 10.0) -> str:
+def _searxng_query(query: str, proxy: Optional[str] = None, timeout: float = 10.0) -> str:
     """Public-instance SearXNG fallback. Iterates through the rotation list,
     tries JSON first then HTML. Returns concatenated blob of URLs/snippets.
     Frequently rate-limits or blocks - non-fatal, DDG covers the gap.
@@ -221,9 +222,15 @@ def _searxng_query(query: str, proxy: Optional[str] = None,
                 headers=_HEADERS,
                 verify=False,  # noqa: S501
             ) as c:
-                r = c.get(base.rstrip("/") + "/search",
-                          params={"q": query, "format": "json",
-                                  "categories": "general", "language": "en"})
+                r = c.get(
+                    base.rstrip("/") + "/search",
+                    params={
+                        "q": query,
+                        "format": "json",
+                        "categories": "general",
+                        "language": "en",
+                    },
+                )
                 if r.status_code == 200 and len(r.text) > 200:
                     try:
                         data = r.json()
@@ -237,8 +244,7 @@ def _searxng_query(query: str, proxy: Optional[str] = None,
                     except Exception:  # noqa: BLE001
                         pass
                 # Fall back to HTML endpoint on this instance
-                r = c.get(base.rstrip("/") + "/search",
-                          params={"q": query, "language": "en"})
+                r = c.get(base.rstrip("/") + "/search", params={"q": query, "language": "en"})
                 if r.status_code == 200 and len(r.text) > 500:
                     return r.text
         except Exception:  # noqa: BLE001
@@ -260,15 +266,18 @@ def _extract_profiles(blob: str) -> dict[str, list[str]]:
         if not candidate:
             continue
         try:
-            platform = str(
-                EngagementSynthesisEngine._social_profile_platform_hint(
-                    {"profile_url": candidate}
+            platform = (
+                str(
+                    EngagementSynthesisEngine._social_profile_platform_hint(
+                        {"profile_url": candidate}
+                    )
+                    or ""
                 )
-                or ""
-            ).strip().lower()
+                .strip()
+                .lower()
+            )
             handle = str(
-                EngagementSynthesisEngine._extract_social_profile_handle_from_url(candidate)
-                or ""
+                EngagementSynthesisEngine._extract_social_profile_handle_from_url(candidate) or ""
             ).strip()
         except Exception:
             continue
@@ -301,9 +310,11 @@ def _extract_company_profiles(blob: str) -> list[dict[str, str]]:
             continue
         try:
             profile = {"profile_url": candidate}
-            platform = str(
-                EngagementSynthesisEngine._social_profile_platform_hint(profile) or ""
-            ).strip().lower()
+            platform = (
+                str(EngagementSynthesisEngine._social_profile_platform_hint(profile) or "")
+                .strip()
+                .lower()
+            )
             if not platform:
                 continue
             if not EngagementSynthesisEngine._social_profile_is_company_profile(
@@ -550,11 +561,13 @@ def search_name(
                 """)
             except sqlite3.OperationalError:
                 pass
-            payload = json.dumps({
-                "profile_hits": {p: v[:5] for p, v in profiles.items() if v},
-                "company_profile_hits": company_profiles[:10],
-                "used_ddg_fallback": used_fallback,
-            })
+            payload = json.dumps(
+                {
+                    "profile_hits": {p: v[:5] for p, v in profiles.items() if v},
+                    "company_profile_hits": company_profiles[:10],
+                    "used_ddg_fallback": used_fallback,
+                }
+            )
             con.execute(
                 "INSERT INTO audit_log (engagement_id, phase, module, action, target, result, operator) "
                 "VALUES (?, 'phase2', 'name_search', 'lookup', ?, ?, ?)",
@@ -564,20 +577,25 @@ def search_name(
             name_key = f"name:{name}"
             for platform, handles in profiles.items():
                 for handle in handles[:5]:
-                    handle_data = json.dumps({
-                        "source": "name_search",
-                        "name": name,
-                        "handle": handle,
-                        "platform": platform,
-                    })
+                    handle_data = json.dumps(
+                        {
+                            "source": "name_search",
+                            "name": name,
+                            "handle": handle,
+                            "platform": platform,
+                        }
+                    )
                     try:
                         con.execute(
                             "INSERT INTO social_profiles "
                             "(engagement_id, email, source, profile_data) "
                             "VALUES (?, ?, ?, ?)",
-                            (engagement_id, name_key,
-                             f"name_search:{platform}:{handle[:32]}",
-                             handle_data),
+                            (
+                                engagement_id,
+                                name_key,
+                                f"name_search:{platform}:{handle[:32]}",
+                                handle_data,
+                            ),
                         )
                     except (sqlite3.OperationalError, sqlite3.IntegrityError):
                         pass
@@ -587,14 +605,16 @@ def search_name(
                 profile_url = str(profile.get("profile_url") or "").strip()
                 if not platform or not company_name or not profile_url:
                     continue
-                company_data = json.dumps({
-                    "source": "name_search",
-                    "name": name,
-                    "platform": platform,
-                    "company": company_name,
-                    "company_name": company_name,
-                    "profile_url": profile_url,
-                })
+                company_data = json.dumps(
+                    {
+                        "source": "name_search",
+                        "name": name,
+                        "platform": platform,
+                        "company": company_name,
+                        "company_name": company_name,
+                        "profile_url": profile_url,
+                    }
+                )
                 company_source_slug = re.sub(r"[^A-Za-z0-9._-]+", "-", company_name).strip("-")
                 if not company_source_slug:
                     company_source_slug = "company"
@@ -603,9 +623,12 @@ def search_name(
                         "INSERT INTO social_profiles "
                         "(engagement_id, email, source, profile_data) "
                         "VALUES (?, ?, ?, ?)",
-                        (engagement_id, f"company:{company_name}",
-                         f"name_search:{platform}:{company_source_slug[:32]}",
-                         company_data),
+                        (
+                            engagement_id,
+                            f"company:{company_name}",
+                            f"name_search:{platform}:{company_source_slug[:32]}",
+                            company_data,
+                        ),
                     )
                 except (sqlite3.OperationalError, sqlite3.IntegrityError):
                     pass

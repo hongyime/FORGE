@@ -21,10 +21,13 @@ from forge.providers.router import build_router_from_discovery
 async def _async_main(args: argparse.Namespace) -> int:
     result = await discover_backends(probe_timeout_s=args.probe_timeout)
 
-    print(f"Discovery: ran {len(result.backends) + len(result.skipped)} probes "
-          f"in {result.duration_s:.2f}s")
-    print(f"Paid backends allowed: {result.paid_allowed}  "
-          f"(set FORGE_ALLOW_PAID_BACKENDS=1 to opt in)")
+    print(
+        f"Discovery: ran {len(result.backends) + len(result.skipped)} probes "
+        f"in {result.duration_s:.2f}s"
+    )
+    print(
+        f"Paid backends allowed: {result.paid_allowed}  (set FORGE_ALLOW_PAID_BACKENDS=1 to opt in)"
+    )
     print()
 
     if not result.backends:
@@ -35,11 +38,12 @@ async def _async_main(args: argparse.Namespace) -> int:
     print(f"Detected {len(result.backends)} backends (in default order):")
     for b in result.backends:
         backstop = " (BACKSTOP)" if b.backend_name == "llama_cpp" else ""
-        print(f"  - {b.backend_name:22s} family={b.family:18s} "
-              f"model={b.model_id[:60]}{backstop}")
-        print(f"    {' ':22s}tier={[t.value for t in b.tier_assignment.tiers]} "
-              f"primary={b.tier_assignment.primary_tier.value} "
-              f"endpoint={b.endpoint or '(in-process)'}")
+        print(f"  - {b.backend_name:22s} family={b.family:18s} model={b.model_id[:60]}{backstop}")
+        print(
+            f"    {' ':22s}tier={[t.value for t in b.tier_assignment.tiers]} "
+            f"primary={b.tier_assignment.primary_tier.value} "
+            f"endpoint={b.endpoint or '(in-process)'}"
+        )
 
     if args.build_chains:
         print()

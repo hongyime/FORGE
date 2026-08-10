@@ -22,11 +22,7 @@ def test_observability_children_use_bounded_workers_and_preserve_order(
                 "{{ template_target }}:9100",
             ],
         },
-        "jobTwo": {
-            "static_configs": [
-                {"targets": ["worker.acme.example:9100/custom"]}
-            ]
-        },
+        "jobTwo": {"static_configs": [{"targets": ["worker.acme.example:9100/custom"]}]},
         "jobThree": {
             "scheme": "https",
             "nested": {"endpoint": "traces.acme.example:4317"},

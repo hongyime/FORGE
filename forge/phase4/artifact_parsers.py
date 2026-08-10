@@ -116,7 +116,8 @@ class MSIParser:
             n_fat_sectors = struct.unpack_from("<L", data, 44)[0]
         except struct.error:
             return ArtifactMetadata(
-                format=self.format, confidence="low",
+                format=self.format,
+                confidence="low",
                 warnings=["CFBF header too short"],
             )
         return ArtifactMetadata(
@@ -217,7 +218,8 @@ class RPMParser:
             sig_type = struct.unpack_from(">H", data, 78)[0]
         except (struct.error, IndexError):
             return ArtifactMetadata(
-                format=self.format, confidence="low",
+                format=self.format,
+                confidence="low",
                 warnings=["RPM lead too short"],
             )
         return ArtifactMetadata(
@@ -261,9 +263,7 @@ class WARParser:
             web_xml = next((n for n in names if n.endswith("WEB-INF/web.xml")), None)
             app_xml = next((n for n in names if n.endswith("META-INF/application.xml")), None)
             manifest = next((n for n in names if n == "META-INF/MANIFEST.MF"), None)
-            servlet_classes = [
-                n for n in names if n.endswith(".class") and "WEB-INF/classes/" in n
-            ]
+            servlet_classes = [n for n in names if n.endswith(".class") and "WEB-INF/classes/" in n]
             libs = [n for n in names if n.startswith("WEB-INF/lib/") and n.endswith(".jar")]
             return ArtifactMetadata(
                 format=self.format,
@@ -324,8 +324,7 @@ class PDFAttachmentParser:
                 "is_encrypted": encrypted,
                 "file_size_bytes": path.stat().st_size,
             },
-            warnings=["encrypted PDF — attachment enum may be incomplete"]
-            if encrypted else [],
+            warnings=["encrypted PDF — attachment enum may be incomplete"] if encrypted else [],
         )
 
 
@@ -393,7 +392,8 @@ class PSTParser:
             wVerClient = struct.unpack_from("<H", data, 12)[0]
         except struct.error:
             return ArtifactMetadata(
-                format=self.format, confidence="low",
+                format=self.format,
+                confidence="low",
                 warnings=["PST header too short"],
             )
         return ArtifactMetadata(
@@ -468,8 +468,9 @@ class PFXParser:
     magic = (b"\x30\x82", b"\x30\x81", b"\x30\x83")  # DER SEQUENCE
 
     def matches(self, path: Path, head: bytes) -> bool:
-        return any(head.startswith(m) for m in self.magic) and \
-               path.suffix.lower() in self.extensions
+        return (
+            any(head.startswith(m) for m in self.magic) and path.suffix.lower() in self.extensions
+        )
 
     def parse(self, path: Path) -> ArtifactMetadata | None:
         data = _bounded_read(path)
@@ -488,8 +489,7 @@ class PFXParser:
                 if cert is not None:
                     cert_chain_length = 1 + len(chain or [])
                     friendly_name = (
-                        cert.subject.rfc4514_string()
-                        if hasattr(cert, "subject") else None
+                        cert.subject.rfc4514_string() if hasattr(cert, "subject") else None
                     )
             except (ValueError, Exception):  # noqa: BLE001 — encrypted, no password
                 pass
@@ -507,7 +507,9 @@ class PFXParser:
             warnings=[
                 "encrypted PFX — no password crack attempted. Subject DN "
                 "not extractable without decryption."
-            ] if cert_chain_length is None else [],
+            ]
+            if cert_chain_length is None
+            else [],
         )
 
 

@@ -35,6 +35,7 @@ Normalisation rules (PRD §5.3):
   - Stealth rank defaulted to 5; operator can adjust post-ingest.
   - commands stored as JSON array of command strings.
 """
+
 from __future__ import annotations
 
 import json
@@ -101,15 +102,15 @@ def _normalise(entry: dict[str, Any]) -> dict[str, Any] | None:
     os_family = "windows"
 
     return {
-        "name":            name,
-        "os_family":       os_family,
-        "category":        category,
-        "description":     description,
-        "use_case":        "; ".join(use_cases),
+        "name": name,
+        "os_family": os_family,
+        "category": category,
+        "description": description,
+        "use_case": "; ".join(use_cases),
         "mitre_technique": ", ".join(mitre_ids),
-        "commands":        json.dumps(commands),
-        "stealth_rank":    5,
-        "source":          "lolbas",
+        "commands": json.dumps(commands),
+        "stealth_rank": 5,
+        "source": "lolbas",
     }
 
 
@@ -145,6 +146,7 @@ def _http_get(url: str, cfg: ForgeConfig) -> bytes:
         )
     try:
         from curl_cffi import requests as cffi_requests  # noqa: PLC0415
+
         proxies = {"https": cfg.proxy} if cfg.proxy else None
         resp = cffi_requests.get(
             url,
@@ -157,5 +159,6 @@ def _http_get(url: str, cfg: ForgeConfig) -> bytes:
     except ImportError:
         _LOG.warning("curl_cffi not installed; falling back to urllib.")
         import urllib.request  # noqa: PLC0415
+
         with urllib.request.urlopen(url, timeout=30) as r:  # noqa: S310
             return r.read()

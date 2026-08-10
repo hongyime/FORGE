@@ -63,8 +63,7 @@ def test_kill_process_is_a_coroutine_function() -> None:
     messages. Regression guard: static check on the callable.
     """
     assert asyncio.iscoroutinefunction(_kill_process), (
-        "_kill_process must be async so scenarios can await it "
-        "without blocking the event loop"
+        "_kill_process must be async so scenarios can await it without blocking the event loop"
     )
 
 
@@ -183,8 +182,7 @@ def test_hold_sqlite_write_lock_forces_wal_mode(tmp_path: Path) -> None:
         row = conn.execute("PRAGMA journal_mode").fetchone()
     assert row is not None
     assert row[0].lower() == "wal", (
-        f"expected WAL journal mode after _hold_sqlite_write_lock, "
-        f"got {row[0]!r}"
+        f"expected WAL journal mode after _hold_sqlite_write_lock, got {row[0]!r}"
     )
 
 

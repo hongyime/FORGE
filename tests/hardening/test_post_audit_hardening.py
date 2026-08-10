@@ -66,7 +66,7 @@ class TestAttackPathHostByNameIndexesCloudRef:
 
         source = inspect.getsource(ap_mod)
         # find the specific _host_by_name populate line
-        marker = "self._host_by_name[str(seed_value or \"\").lower()] = node_id"
+        marker = 'self._host_by_name[str(seed_value or "").lower()] = node_id'
         idx = source.find(marker)
         assert idx >= 0, "populate line not found — signature may have changed"
         # walk backwards to the surrounding `if seed_type_text in {...}:` line
@@ -101,9 +101,7 @@ class TestPackageInitInstallsRedactionFilter:
 
         target = logging.getLogger("httpx")
         matched = [f for f in target.filters if isinstance(f, SecretQueryRedactionFilter)]
-        assert matched, (
-            "httpx logger must carry SecretQueryRedactionFilter after `import forge`."
-        )
+        assert matched, "httpx logger must carry SecretQueryRedactionFilter after `import forge`."
 
     def test_forge_import_attaches_filter_to_urllib_request_logger(self) -> None:
         import forge  # noqa: F401
@@ -198,8 +196,8 @@ class TestRebuildTableIsIdempotentUnderInterruptedRuns:
                 ).fetchall()
             }
             assert {"a", "b"} <= tables
-            assert not any(t.startswith("a__rebuild_") or t.startswith("b__rebuild_") for t in tables), (
-                "temp tables must be dropped after rebuild"
-            )
+            assert not any(
+                t.startswith("a__rebuild_") or t.startswith("b__rebuild_") for t in tables
+            ), "temp tables must be dropped after rebuild"
         finally:
             conn.close()

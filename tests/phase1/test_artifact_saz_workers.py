@@ -44,7 +44,9 @@ def test_saz_raw_session_member_classification_uses_bounded_workers_and_preserve
         )
         zf.writestr(
             "raw/0001_s.txt",
-            "\r\n".join(["HTTP/1.1 302 Found", "Location: /home?api_key=hidden&view=public", "", ""]),
+            "\r\n".join(
+                ["HTTP/1.1 302 Found", "Location: /home?api_key=hidden&view=public", "", ""]
+            ),
         )
 
     original_entry = ArtifactQueueProcessor._saz_raw_session_member_entry

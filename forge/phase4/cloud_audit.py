@@ -373,9 +373,12 @@ class FirebaseAuditor:
         if dry_run:
             # Dry-run bypasses tool-version check so operators can preview
             # without needing agneyastra installed.
-            _LOG.info("[DRY-RUN] Firebase project=%s tests=%s api_key=%s",
-                       project_id, ",".join(tests),
-                       "ACTIVE" if resolved_api_key else "none")
+            _LOG.info(
+                "[DRY-RUN] Firebase project=%s tests=%s api_key=%s",
+                project_id,
+                ",".join(tests),
+                "ACTIVE" if resolved_api_key else "none",
+            )
             con.close()
             return []
 

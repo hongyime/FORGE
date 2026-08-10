@@ -47,7 +47,9 @@ def test_run_email_harvest_writes_emails_and_audit(tmp_path: Path) -> None:
     assert "admin@example.com" in discovered
     conn = sqlite3.connect(db_path)
     try:
-        email_count = conn.execute("SELECT COUNT(*) FROM emails WHERE engagement_id=1").fetchone()[0]
+        email_count = conn.execute("SELECT COUNT(*) FROM emails WHERE engagement_id=1").fetchone()[
+            0
+        ]
         audit_count = conn.execute(
             "SELECT COUNT(*) FROM audit_log WHERE engagement_id=1 AND module='email_harvester'"
         ).fetchone()[0]

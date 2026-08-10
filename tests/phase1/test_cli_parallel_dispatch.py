@@ -69,7 +69,9 @@ def test_run_module_batch_honors_parallel_worker_cap() -> None:
             with lock:
                 active -= 1
 
-    specs = [ModuleDispatchSpec(cmd_argv=["mod", str(idx)], label=f"task-{idx}") for idx in range(5)]
+    specs = [
+        ModuleDispatchSpec(cmd_argv=["mod", str(idx)], label=f"task-{idx}") for idx in range(5)
+    ]
 
     results = _run_module_batch(specs, fake_run_module, max_workers=2)
 
@@ -99,7 +101,9 @@ def test_run_module_batch_serializes_external_osint_providers_by_default(
                 active -= 1
 
     specs = [
-        ModuleDispatchSpec(cmd_argv=["osint", "shodan", "--target", f"203.0.113.{idx}"], label=f"shodan-{idx}")
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "shodan", "--target", f"203.0.113.{idx}"], label=f"shodan-{idx}"
+        )
         for idx in range(4)
     ]
 
@@ -133,7 +137,9 @@ def test_run_module_batch_allows_explicit_bounded_provider_worker_raise(
                 active -= 1
 
     specs = [
-        ModuleDispatchSpec(cmd_argv=["osint", "shodan", "--target", f"203.0.113.{idx}"], label=f"shodan-{idx}")
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "shodan", "--target", f"203.0.113.{idx}"], label=f"shodan-{idx}"
+        )
         for idx in range(4)
     ]
 
@@ -157,7 +163,9 @@ def test_run_module_batch_staggers_same_provider_launches_when_configured(
         return 0
 
     specs = [
-        ModuleDispatchSpec(cmd_argv=["osint", "shodan", "--target", f"203.0.113.{idx}"], label=f"shodan-{idx}")
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "shodan", "--target", f"203.0.113.{idx}"], label=f"shodan-{idx}"
+        )
         for idx in range(3)
     ]
 
@@ -182,10 +190,18 @@ def test_run_module_batch_staggers_mixed_providers_independently(
         return 0
 
     specs = [
-        ModuleDispatchSpec(cmd_argv=["osint", "shodan", "--target", "alpha.example"], label="shodan-1"),
-        ModuleDispatchSpec(cmd_argv=["osint", "urlscan", "--hostname", "alpha.example"], label="urlscan-1"),
-        ModuleDispatchSpec(cmd_argv=["osint", "shodan", "--target", "beta.example"], label="shodan-2"),
-        ModuleDispatchSpec(cmd_argv=["osint", "urlscan", "--hostname", "beta.example"], label="urlscan-2"),
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "shodan", "--target", "alpha.example"], label="shodan-1"
+        ),
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "urlscan", "--hostname", "alpha.example"], label="urlscan-1"
+        ),
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "shodan", "--target", "beta.example"], label="shodan-2"
+        ),
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "urlscan", "--hostname", "beta.example"], label="urlscan-2"
+        ),
     ]
 
     results = _run_module_batch(specs, fake_run_module, max_workers=4)
@@ -206,7 +222,9 @@ def test_run_module_batch_does_not_stagger_local_non_provider_modules(
         return 0
 
     specs = [
-        ModuleDispatchSpec(cmd_argv=["report", "generate", "--engagement", str(idx)], label=f"report-{idx}")
+        ModuleDispatchSpec(
+            cmd_argv=["report", "generate", "--engagement", str(idx)], label=f"report-{idx}"
+        )
         for idx in range(3)
     ]
 
@@ -220,8 +238,12 @@ def test_mixed_shodan_urlscan_batch_uses_strictest_provider_cap(monkeypatch) -> 
     monkeypatch.setenv("FORGE_SHODAN_MAX_WORKERS", "2")
     monkeypatch.delenv("FORGE_URLSCAN_MAX_WORKERS", raising=False)
     specs = [
-        ModuleDispatchSpec(cmd_argv=["osint", "shodan", "--target", "acme.example"], label="shodan"),
-        ModuleDispatchSpec(cmd_argv=["osint", "urlscan", "--hostname", "acme.example"], label="urlscan"),
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "shodan", "--target", "acme.example"], label="shodan"
+        ),
+        ModuleDispatchSpec(
+            cmd_argv=["osint", "urlscan", "--hostname", "acme.example"], label="urlscan"
+        ),
     ]
 
     assert _provider_limited_worker_count(specs, requested_workers=4) == 1
@@ -574,7 +596,9 @@ def test_kill_chain_rejects_max_iter_out_of_range() -> None:
     runner = CliRunner()
 
     low_result = runner.invoke(app, ["kill-chain", "acme.example", "--max-iter", "0", "--dry-run"])
-    high_result = runner.invoke(app, ["kill-chain", "acme.example", "--max-iter", "11", "--dry-run"])
+    high_result = runner.invoke(
+        app, ["kill-chain", "acme.example", "--max-iter", "11", "--dry-run"]
+    )
 
     assert low_result.exit_code != 0
     assert high_result.exit_code != 0

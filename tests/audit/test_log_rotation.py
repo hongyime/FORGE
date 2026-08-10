@@ -80,8 +80,7 @@ async def test_rotated_files_each_have_valid_hash_chain(tmp_path: Path) -> None:
     await logger.close()
     # Each existing log file must independently verify.
     files = [p] + [
-        tmp_path / f"audit.jsonl.{i}" for i in (1, 2, 3)
-        if (tmp_path / f"audit.jsonl.{i}").exists()
+        tmp_path / f"audit.jsonl.{i}" for i in (1, 2, 3) if (tmp_path / f"audit.jsonl.{i}").exists()
     ]
     assert len(files) >= 2  # at least one rotation happened
     for f in files:

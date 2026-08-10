@@ -22,10 +22,12 @@ _install_query_redaction_filter()
 
 # Extend the filter to cover urllib.request / aiohttp / curl_cffi loggers too —
 # these emit URLs from Phase 0 KB fetchers and subdomain enumeration paths.
-_install_query_redaction_filter((
-    "urllib.request",
-    "urllib3.connectionpool",
-    "aiohttp.client",
-    "curl_cffi",
-    "curl_cffi.requests",
-))
+_install_query_redaction_filter(
+    (
+        "urllib.request",
+        "urllib3.connectionpool",
+        "aiohttp.client",
+        "curl_cffi",
+        "curl_cffi.requests",
+    )
+)

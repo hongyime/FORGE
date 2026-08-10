@@ -55,9 +55,7 @@ def redis_bus() -> RedisMessageBus:
     auto-connect, otherwise ``publish()`` would connect and send instead
     of buffering, and buffer-size assertions silently pass vacuously.
     """
-    return RedisMessageBus(
-        redis_url="redis://localhost:6379/0", auto_connect=False
-    )
+    return RedisMessageBus(redis_url="redis://localhost:6379/0", auto_connect=False)
 
 
 # ---------------------------------------------------------------------------
@@ -142,9 +140,7 @@ class TestRedisMessageBusBuffering:
         assert redis_bus.buffer_size == 1
 
     @pytest.mark.asyncio
-    async def test_buffers_multiple_messages(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_buffers_multiple_messages(self, redis_bus: RedisMessageBus) -> None:
         """Multiple messages should accumulate in the buffer."""
         for i in range(5):
             msg = AgentMessage(
@@ -157,9 +153,7 @@ class TestRedisMessageBusBuffering:
         assert redis_bus.buffer_size == 5
 
     @pytest.mark.asyncio
-    async def test_buffer_preserves_fifo_order(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_buffer_preserves_fifo_order(self, redis_bus: RedisMessageBus) -> None:
         """Buffered messages should maintain FIFO order."""
         messages = []
         for i in range(3):
@@ -203,9 +197,7 @@ class TestRedisMessageBusReconnection:
     """Test exponential backoff reconnection logic."""
 
     @pytest.mark.asyncio
-    async def test_reconnect_resets_backoff_on_success(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_reconnect_resets_backoff_on_success(self, redis_bus: RedisMessageBus) -> None:
         """Successful reconnection should reset backoff to initial value."""
         redis_bus._current_backoff = 16.0  # Simulate several failed attempts
 
@@ -221,9 +213,7 @@ class TestRedisMessageBusReconnection:
         assert redis_bus._current_backoff == _INITIAL_BACKOFF_S
 
     @pytest.mark.asyncio
-    async def test_backoff_doubles_on_failure(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_backoff_doubles_on_failure(self, redis_bus: RedisMessageBus) -> None:
         """Each failed reconnection attempt should double the backoff."""
         redis_bus._current_backoff = _INITIAL_BACKOFF_S
         call_count = 0
@@ -236,20 +226,20 @@ class TestRedisMessageBusReconnection:
                 redis_bus._connected = True
 
         mock_redis = AsyncMock()
-        mock_redis.ping = AsyncMock(side_effect=[
-            ConnectionError("fail"),
-            ConnectionError("fail"),
-            True,
-        ])
+        mock_redis.ping = AsyncMock(
+            side_effect=[
+                ConnectionError("fail"),
+                ConnectionError("fail"),
+                True,
+            ]
+        )
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
             with patch("asyncio.sleep", side_effect=mock_sleep):
                 await redis_bus._reconnect_with_backoff()
 
     @pytest.mark.asyncio
-    async def test_backoff_caps_at_max(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_backoff_caps_at_max(self, redis_bus: RedisMessageBus) -> None:
         """Backoff should never exceed _MAX_BACKOFF_S (30s)."""
         redis_bus._current_backoff = 16.0  # Next would be 32, but should cap at 30
 
@@ -262,10 +252,12 @@ class TestRedisMessageBusReconnection:
                 redis_bus._connected = True
 
         mock_redis = AsyncMock()
-        mock_redis.ping = AsyncMock(side_effect=[
-            ConnectionError("fail"),
-            True,
-        ])
+        mock_redis.ping = AsyncMock(
+            side_effect=[
+                ConnectionError("fail"),
+                True,
+            ]
+        )
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
             with patch("asyncio.sleep", side_effect=mock_sleep):
@@ -297,9 +289,7 @@ class TestRedisMessageBusReconnection:
         assert redis_bus._current_backoff == _MAX_BACKOFF_S
 
     @pytest.mark.asyncio
-    async def test_flush_buffer_on_reconnect(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_flush_buffer_on_reconnect(self, redis_bus: RedisMessageBus) -> None:
         """Buffered messages should be flushed after successful reconnection."""
         # Buffer some messages
         for i in range(3):
@@ -371,16 +361,12 @@ class TestRedisMessageBusClose:
     """Test graceful shutdown."""
 
     @pytest.mark.asyncio
-    async def test_close_sets_running_false(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_close_sets_running_false(self, redis_bus: RedisMessageBus) -> None:
         await redis_bus.close()
         assert redis_bus._running is False
 
     @pytest.mark.asyncio
-    async def test_close_cleans_up_redis(
-        self, redis_bus: RedisMessageBus
-    ) -> None:
+    async def test_close_cleans_up_redis(self, redis_bus: RedisMessageBus) -> None:
         mock_redis = AsyncMock()
         mock_pubsub = AsyncMock()
         redis_bus._redis = mock_redis

@@ -5,7 +5,9 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_phase1_orchestrator_partitions.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parents[2] / "scripts" / "run_phase1_orchestrator_partitions.py"
+)
 SPEC = spec_from_file_location("run_phase1_orchestrator_partitions", MODULE_PATH)
 assert SPEC is not None
 assert SPEC.loader is not None

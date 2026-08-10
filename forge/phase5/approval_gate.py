@@ -8,6 +8,7 @@ Automation bypass:
   when kill-chain sets it from ``--attack-mode`` + valid ROE/scope-manifest.
   Scope gates in each caller (``_assert_targets_in_scope`` etc.) still run.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,8 +21,8 @@ _LOG = logging.getLogger(__name__)
 
 
 class ActionClassification(str, Enum):
-    PASSIVE = "passive"          # auto-execute, no approval needed
-    ACTIVE = "active"            # auto-execute with audit log
+    PASSIVE = "passive"  # auto-execute, no approval needed
+    ACTIVE = "active"  # auto-execute with audit log
     DESTRUCTIVE = "destructive"  # requires operator approval or SAFE_MODE blocks
 
 
@@ -108,9 +109,7 @@ def request_approval(
 
 def check_approval(action_id: int, db: sqlite3.Connection) -> bool:
     """Check if a queued action has been approved by the operator."""
-    row = db.execute(
-        "SELECT status FROM approval_queue WHERE id=?", (action_id,)
-    ).fetchone()
+    row = db.execute("SELECT status FROM approval_queue WHERE id=?", (action_id,)).fetchone()
     return row is not None and row[0] == "approved"
 
 

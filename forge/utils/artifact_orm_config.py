@@ -93,7 +93,11 @@ def orm_config_artifact_label(value: str) -> str:
         return "liquibase-config"
     if "liquibase" in segments and name in {"changelog.xml", "db.changelog-master.xml"}:
         return "liquibase-config"
-    if name in {"flyway.conf", "flyway.toml"} or name.startswith("flyway.") and suffix in _SCRIPT_EXTENSIONS:
+    if (
+        name in {"flyway.conf", "flyway.toml"}
+        or name.startswith("flyway.")
+        and suffix in _SCRIPT_EXTENSIONS
+    ):
         return "flyway-config"
     return ""
 
@@ -101,7 +105,9 @@ def orm_config_artifact_label(value: str) -> str:
 def orm_config_host_candidates(text: str) -> list[str]:
     matches: list[tuple[int, str]] = []
     for pattern in (_JSON_FIELD_RE, _FIELD_RE, _PRISMA_FIELD_RE, _PLIST_RE):
-        matches.extend((match.start(), match.group("value")) for match in pattern.finditer(str(text or "")))
+        matches.extend(
+            (match.start(), match.group("value")) for match in pattern.finditer(str(text or ""))
+        )
     values: list[str] = []
     seen: set[str] = set()
     for _, value in sorted(matches, key=lambda item: item[0]):
@@ -119,7 +125,11 @@ def _artifact_parts(value: str) -> list[str]:
 def _append(values: list[str], seen: set[str], value: str) -> None:
     raw = str(value or "").strip().strip("\"'`[]{}(),;").strip(".")
     lowered = raw.lower()
-    if not raw or lowered in _template_tokens() or any(marker in lowered for marker in _template_markers()):
+    if (
+        not raw
+        or lowered in _template_tokens()
+        or any(marker in lowered for marker in _template_markers())
+    ):
         return
     host = _candidate_host(raw)
     if not host:

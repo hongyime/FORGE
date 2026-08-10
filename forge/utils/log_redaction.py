@@ -97,8 +97,7 @@ def install_query_redaction_filter(
         # Only attach once per logger; check by class rather than identity
         # since callers may re-import the module.
         already_installed = any(
-            isinstance(existing, SecretQueryRedactionFilter)
-            for existing in target.filters
+            isinstance(existing, SecretQueryRedactionFilter) for existing in target.filters
         )
         if not already_installed:
             target.addFilter(redactor)

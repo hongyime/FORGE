@@ -3,7 +3,9 @@ from __future__ import annotations
 from forge.engagement_orchestrator import EngagementSynthesisEngine
 
 
-def test_social_profile_url_parser_supports_gravatar_vanity_profiles_but_skips_hash_endpoints() -> None:
+def test_social_profile_url_parser_supports_gravatar_vanity_profiles_but_skips_hash_endpoints() -> (
+    None
+):
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
             {"profile_url": "https://gravatar.com/acmeavatar"}
@@ -28,6 +30,7 @@ def test_social_profile_url_parser_supports_gravatar_vanity_profiles_but_skips_h
         )
         == ""
     )
+
 
 def test_social_profile_url_parser_supports_spotify_user_profiles_only() -> None:
     assert (
@@ -61,6 +64,7 @@ def test_social_profile_url_parser_supports_spotify_user_profiles_only() -> None
         == ""
     )
 
+
 def test_social_profile_url_parser_supports_strava_athlete_and_pro_profiles_only() -> None:
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
@@ -93,6 +97,7 @@ def test_social_profile_url_parser_supports_strava_athlete_and_pro_profiles_only
         == ""
     )
 
+
 def test_social_profile_url_parser_supports_quora_profile_routes_only() -> None:
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
@@ -118,6 +123,7 @@ def test_social_profile_url_parser_supports_quora_profile_routes_only() -> None:
         )
         == ""
     )
+
 
 def test_social_profile_url_parser_supports_creator_photo_profiles_only() -> None:
     assert (
@@ -157,6 +163,7 @@ def test_social_profile_url_parser_supports_creator_photo_profiles_only() -> Non
         == ""
     )
 
+
 def test_social_profile_url_parser_supports_artstation_profiles_only() -> None:
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
@@ -194,6 +201,7 @@ def test_social_profile_url_parser_supports_artstation_profiles_only() -> None:
         )
         == ""
     )
+
 
 def test_social_profile_url_parser_supports_deviantart_profiles_only() -> None:
     assert (
@@ -233,6 +241,7 @@ def test_social_profile_url_parser_supports_deviantart_profiles_only() -> None:
         == ""
     )
 
+
 def test_social_profile_url_parser_supports_matrix_user_ids_only() -> None:
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
@@ -241,8 +250,7 @@ def test_social_profile_url_parser_supports_matrix_user_ids_only() -> None:
         == "matrix"
     )
     assert (
-        EngagementSynthesisEngine._social_profile_platform_label_candidate("Matrix.org")
-        == "matrix"
+        EngagementSynthesisEngine._social_profile_platform_label_candidate("Matrix.org") == "matrix"
     )
     assert (
         EngagementSynthesisEngine._extract_social_profile_handle_from_url(
@@ -263,6 +271,7 @@ def test_social_profile_url_parser_supports_matrix_user_ids_only() -> None:
         == ""
     )
 
+
 def test_social_profile_parser_supports_federated_acct_identifiers() -> None:
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
@@ -270,27 +279,44 @@ def test_social_profile_parser_supports_federated_acct_identifiers() -> None:
         )
         == "activitypub"
     )
-    assert EngagementSynthesisEngine._social_profile_platform_label_candidate("Fediverse") == "activitypub"
-    assert EngagementSynthesisEngine._federated_account_handle_candidate(
-        "acct:fedblue@social.acme.example"
-    ) == "fedblue"
-    assert EngagementSynthesisEngine._federated_account_handle_candidate(
-        "@nestedfed@mastodon.acme.example"
-    ) == "nestedfed"
-    assert EngagementSynthesisEngine._federated_account_handle_candidate(
-        "https://social.acme.example/.well-known/webfinger?resource=acct%3Awebfingerfed%40social.acme.example"
-    ) == "webfingerfed"
-    assert EngagementSynthesisEngine._federated_account_handle_candidate(
-        "acct:ab@social.acme.example"
-    ) == ""
+    assert (
+        EngagementSynthesisEngine._social_profile_platform_label_candidate("Fediverse")
+        == "activitypub"
+    )
+    assert (
+        EngagementSynthesisEngine._federated_account_handle_candidate(
+            "acct:fedblue@social.acme.example"
+        )
+        == "fedblue"
+    )
+    assert (
+        EngagementSynthesisEngine._federated_account_handle_candidate(
+            "@nestedfed@mastodon.acme.example"
+        )
+        == "nestedfed"
+    )
+    assert (
+        EngagementSynthesisEngine._federated_account_handle_candidate(
+            "https://social.acme.example/.well-known/webfinger?resource=acct%3Awebfingerfed%40social.acme.example"
+        )
+        == "webfingerfed"
+    )
+    assert (
+        EngagementSynthesisEngine._federated_account_handle_candidate("acct:ab@social.acme.example")
+        == ""
+    )
     assert EngagementSynthesisEngine._federated_account_host_entries(
         "acct:fedblue@social.acme.example",
         platform="mastodon",
     ) == [("social.acme.example", "subdomain"), ("acme.example", "domain")]
-    assert EngagementSynthesisEngine._federated_account_host_entries(
-        "acct:publicuser@mastodon.social",
-        platform="mastodon",
-    ) == []
+    assert (
+        EngagementSynthesisEngine._federated_account_host_entries(
+            "acct:publicuser@mastodon.social",
+            platform="mastodon",
+        )
+        == []
+    )
+
 
 def test_social_profile_platform_profile_hosts_expand_mastodon_identity_url_aliases() -> None:
     hosts = EngagementSynthesisEngine._social_profile_platform_profile_hosts(
@@ -300,9 +326,7 @@ def test_social_profile_platform_profile_hosts_expand_mastodon_identity_url_alia
                 "https://mstdn.acme.example/@mirror",
                 "https://github.com/notmastodon",
             ],
-            "identifier": {
-                "url": "https://community.example.org/users/schemaactor"
-            },
+            "identifier": {"url": "https://community.example.org/users/schemaactor"},
             "identifiers": [
                 "https://mstdn.second.example.net/web/secondactor",
                 "not-a-url",
@@ -322,6 +346,7 @@ def test_social_profile_platform_profile_hosts_expand_mastodon_identity_url_alia
     }
     assert "github.com" not in hosts
 
+
 def test_social_profile_parser_supports_nostr_public_identity_links() -> None:
     npub_direct = "npub1" + "q" * 58
     npub_url = "npub1" + "p" * 58
@@ -333,19 +358,32 @@ def test_social_profile_parser_supports_nostr_public_identity_links() -> None:
         )
         == "nostr"
     )
-    assert EngagementSynthesisEngine._social_profile_platform_label_candidate("Nostr Protocol") == "nostr"
-    assert EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(
-        f"nostr:{npub_direct}"
-    ) == npub_direct
-    assert EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-        f"https://njump.me/{npub_direct}"
-    ) == npub_direct
-    assert EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-        f"https://primal.net/p/{npub_url}"
-    ) == npub_url
-    assert EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-        f"https://nostrudel.ninja/#/u/{nprofile_url}"
-    ) == nprofile_url
+    assert (
+        EngagementSynthesisEngine._social_profile_platform_label_candidate("Nostr Protocol")
+        == "nostr"
+    )
+    assert (
+        EngagementSynthesisEngine._normalize_nostr_public_identity_candidate(f"nostr:{npub_direct}")
+        == npub_direct
+    )
+    assert (
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
+            f"https://njump.me/{npub_direct}"
+        )
+        == npub_direct
+    )
+    assert (
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
+            f"https://primal.net/p/{npub_url}"
+        )
+        == npub_url
+    )
+    assert (
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
+            f"https://nostrudel.ninja/#/u/{nprofile_url}"
+        )
+        == nprofile_url
+    )
     assert (
         EngagementSynthesisEngine._extract_social_profile_handle_from_url(
             "https://primal.net/settings"
@@ -356,6 +394,7 @@ def test_social_profile_parser_supports_nostr_public_identity_links() -> None:
         EngagementSynthesisEngine._social_profile_handle_allowed_for_platform("nostr", "settings")
         is False
     )
+
 
 def test_social_profile_url_parser_treats_youtube_short_links_as_evidence_only() -> None:
     assert (
@@ -383,6 +422,7 @@ def test_social_profile_url_parser_treats_youtube_short_links_as_evidence_only()
         == ""
     )
 
+
 def test_social_profile_url_parser_supports_launchpad_profile_routes_only() -> None:
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
@@ -408,6 +448,7 @@ def test_social_profile_url_parser_supports_launchpad_profile_routes_only() -> N
         )
         == ""
     )
+
 
 def test_social_profile_url_parser_supports_sourceforge_user_profiles_only() -> None:
     assert (
@@ -440,6 +481,7 @@ def test_social_profile_url_parser_supports_sourceforge_user_profiles_only() -> 
         )
         == ""
     )
+
 
 def test_social_profile_url_parser_supports_snapchat_add_routes_only() -> None:
     assert (
@@ -479,7 +521,10 @@ def test_social_profile_url_parser_supports_snapchat_add_routes_only() -> None:
         == ""
     )
 
-def test_social_profile_url_parser_supports_twitter_intent_links_and_skips_github_reserved_paths() -> None:
+
+def test_social_profile_url_parser_supports_twitter_intent_links_and_skips_github_reserved_paths() -> (
+    None
+):
     assert (
         EngagementSynthesisEngine._social_profile_platform_hint(
             {"profile_url": "https://x.com/intent/user?screen_name=acmeops"}
@@ -737,9 +782,7 @@ def test_social_profile_url_parser_supports_twitter_intent_links_and_skips_githu
         == ""
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://t.me/rootrelay"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://t.me/rootrelay")
         == "rootrelay"
     )
     assert (
@@ -815,9 +858,7 @@ def test_social_profile_url_parser_supports_twitter_intent_links_and_skips_githu
         == ""
     )
     assert (
-        EngagementSynthesisEngine._extract_social_profile_handle_from_url(
-            "https://keybase.io/docs"
-        )
+        EngagementSynthesisEngine._extract_social_profile_handle_from_url("https://keybase.io/docs")
         == ""
     )
     assert (

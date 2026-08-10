@@ -487,7 +487,10 @@ def test_selenium_side_navigation_children_use_bounded_workers_and_preserve_orde
             "command": "openWindow",
             "target": "https://two.acme.example/path?signature=hidden&view=public",
         },
-        "test3": {"command": "open", "target": "//three.acme.example/path?token=hidden&view=public"},
+        "test3": {
+            "command": "open",
+            "target": "//three.acme.example/path?token=hidden&view=public",
+        },
         "test4": {"command": "open", "target": "https://${tenant}.acme.example/template"},
     }
     original_child = ArtifactQueueProcessor._api_client_selenium_side_navigation_child_values
