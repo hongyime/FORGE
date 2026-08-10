@@ -64,22 +64,22 @@ dependencies = [
 
 [project.optional-dependencies]
 artifacts = [
-    "py7zr>=0.21,<1.0",
+    "py7zr>=0.21,<2.0",
     "zstandard>=0.23,<1.0",
     "brotli>=1.1,<2.0",
     "lz4>=4.3,<5.0",
-    "Pillow>=10.0,<12.0",
+    "Pillow>=10.0,<13.0",
     "numpy>=1.26,<3.0",
-    "opencv-python-headless>=4.10,<5.0",
+    "opencv-python-headless>=4.10,<6.0",
     "pyzbar>=0.1.9,<0.2",
 ]
 offensive = [
-    "impacket==0.12.0",
-    "asyncssh==2.18.0",
-    "pywinrm==0.4.3",
-    "smbprotocol==1.14.0",
-    "pyperclip==1.9.0",
-    "psutil==6.1.1",
+    "impacket==0.13.1",
+    "asyncssh==2.24.0",
+    "pywinrm==0.5.0",
+    "smbprotocol==1.17.0",
+    "pyperclip==1.11.0",
+    "psutil==7.2.2",
 ]
 graph = [
     "networkx>=3.0,<4.0",
@@ -92,22 +92,22 @@ dev = [
     # pytest-asyncio >=1.0 required for pytest 9 compat (upstream matrix
     # is pytest<10,>=8.4).
     "pytest-asyncio>=1.0,<2.0",
-    "pytest-recording==0.13.2",
+    "pytest-recording==0.13.4",
     # vcrpy >=8.2.1 patches GHSA-rpj2-4hq8-938g (HIGH: arbitrary code
     # execution via unsafe YAML deserialization of cassette files).
     # Dev-only dep. FORGE has no direct `import vcr`; cassettes are
     # consumed via pytest-recording. vcrpy 8.x drops Py 3.9 and
     # urllib3<2 — both fine for FORGE (Py 3.11+ / urllib3 2.x).
     "vcrpy>=8.2.1,<9.0",
-    "pytest-cov==6.0.0",
-    "pytest-mock==3.14.0",
-    "responses==0.25.3",
-    "pytest-httpserver==1.1.0",
-    "hypothesis==6.119.3",
-    "ruff==0.9.4",
-    "mypy==1.14.1",
-    "bandit==1.8.3",
-    "pyinstaller==6.11.1",
+    "pytest-cov==7.1.0",
+    "pytest-mock==3.15.1",
+    "responses==0.26.2",
+    "pytest-httpserver==1.1.5",
+    "hypothesis==6.165.2",
+    "ruff==0.16.1",
+    "mypy==2.3.0",
+    "bandit==1.9.4",
+    "pyinstaller==6.21.0",
 ]
 
 [project.scripts]
