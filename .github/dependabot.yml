@@ -1,106 +1,18 @@
 version: 2
-
-# FORGE Dependabot configuration.
-#
-# History: prior version only declared `github-actions` and relied on
-# Dependabot's manifest auto-detection to pick up `pyproject.toml` and
-# `forge/reporting/webui/package.json`. Auto-detection kept spawning
-# 24-hour-timeout runs on `npm_and_yarn` (postcss, react-router) and on
-# `pip` (azure-core), consuming ~30 hours of Actions minutes per day.
-#
-# Fix:
-# - Declare every ecosystem explicitly with tight `groups` so updates
-#   batch into a single PR instead of one per package.
-# - Cap `open-pull-requests-limit` at 3 so Dependabot cannot fan out.
-# - Ignore the known-stuck npm packages (postcss, react-router major
-#   bumps) until they can be handled manually.
-# - Weekly schedule anchored to Asia/Singapore business hours.
-
 updates:
-  # ────────────────────────────────────────────────────────────────────
-  # GitHub Actions
-  # ────────────────────────────────────────────────────────────────────
+  # Conservative shared default.
+  #
+  # Language package ecosystems are intentionally not synced from sourcerepo:
+  # Dependabot has no manifest-aware conditionals in this file, so a global
+  # all-ecosystems template creates duplicate PRs and false CI failures in
+  # repos that do not use those ecosystems. Add npm, bun, pip, etc. directly
+  # in a target repo only when that repo actually owns the matching manifest.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "09:00"
-      timezone: "Asia/Singapore"
-    open-pull-requests-limit: 3
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+      time: "15:00"
     labels:
       - "dependencies"
       - "github-actions"
-
-  # ────────────────────────────────────────────────────────────────────
-  # Python (pyproject.toml + requirements.lock)
-  #
-  # The pip ecosystem includes both pyproject deps and any generated
-  # lock files. Grouped so all pip PRs land as one bundle. azure-core
-  # was singled out as a chronic offender in past stuck runs; if it
-  # continues to stall, add it to `ignore` below.
-  # ────────────────────────────────────────────────────────────────────
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "10:00"
-      timezone: "Asia/Singapore"
-    open-pull-requests-limit: 3
-    groups:
-      python-runtime:
-        applies-to: "version-updates"
-        dependency-type: "production"
-        patterns:
-          - "*"
-      python-dev:
-        applies-to: "version-updates"
-        dependency-type: "development"
-        patterns:
-          - "*"
-    labels:
-      - "dependencies"
-      - "python"
-    ignore:
-      # python-jose replaced by PyJWT in b347cd8 for CVE mitigation;
-      # ignore any Dependabot re-suggestion of the abandoned package.
-      - dependency-name: "python-jose"
-
-  # ────────────────────────────────────────────────────────────────────
-  # npm — WebUI (forge/reporting/webui)
-  #
-  # postcss and react-router have caused every recent stuck run.
-  # Grouping all npm updates and ignoring known-offenders keeps
-  # Dependabot from spinning on them.
-  # ────────────────────────────────────────────────────────────────────
-  - package-ecosystem: "npm"
-    directory: "/forge/reporting/webui"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "11:00"
-      timezone: "Asia/Singapore"
-    open-pull-requests-limit: 3
-    groups:
-      webui-dependencies:
-        patterns:
-          - "*"
-    labels:
-      - "dependencies"
-      - "javascript"
-      - "webui"
-    ignore:
-      # Chronic 24-hour timeouts on these; handle manually.
-      - dependency-name: "postcss"
-      - dependency-name: "react-router"
-      # major version bumps for React ecosystem tend to require code
-      # changes; keep on patch/minor only until we can plan an upgrade.
-      - dependency-name: "react"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "react-dom"
-        update-types: ["version-update:semver-major"]

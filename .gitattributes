@@ -28,20 +28,3 @@ templates/** linguist-generated=true
 *.pdf    -filter -diff -merge
 *.psd    -filter -diff -merge
 *.txt    -filter -diff -merge
-
-
-# ONEDRIVE SYNC PROTECTION (2026-08-06):
-# OneDrive's server-side virus scanner (separate from Windows Defender)
-# inspects uploaded Python files for exploit patterns and blocks sync.
-# Marking these paths as binary prevents the text-content scanner from
-# pattern-matching against known exploit signatures. The files still
-# sync as opaque blobs. This does NOT affect git diff/merge behavior
-# for these files (git still treats .py as text locally).
-#
-# Alternative approach if this doesn't work: add these folders to
-# OneDrive selective sync exclusion (Settings → Account → Choose folders)
-# and rely on git push/pull alone for cross-machine sync.
-forge/phase3/**    -diff -merge binary
-forge/phase5/**    -diff -merge binary
-forge/phase3/*.py  -diff linguist-language=Python
-forge/phase5/*.py  -diff linguist-language=Python
