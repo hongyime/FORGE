@@ -20,7 +20,7 @@
 #   - All external API calls replaced by VCR cassette replay (--record-mode=none).
 #   - No live network access permitted in any test job except test-phase2-extended
 #     which uses Docker-internal services only.
-#   - requirements.lock is hash-pinned; CI installs from lock file only.
+#   - CI installs from pyproject.toml optional dependency groups.
 #   - build job runs only on refs/heads/main after all test jobs pass.
 #   - FORGE_OFFLINE_STRICT=1 is set for all test jobs to enforce offline mode.
 
@@ -88,7 +88,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run evasion assertion tests
         run: |
           pytest tests/opsec/test_evasion_assertions.py \
@@ -110,7 +110,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run core tests
         run: |
           pytest tests/phase0/ tests/phase1/ \
@@ -133,7 +133,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run Phase 2 core tests
         run: |
           pytest tests/phase2/test_breach_db.py \
@@ -169,7 +169,7 @@ jobs:
           USER_NAME: testuser
           USER_PASSWORD: testpass
       mock-smb:
-        image: dperson/samba:2022-11-21
+        image: dperson/samba:latest
         ports:
           - "4445:445"
         options: >-
@@ -182,7 +182,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run credential validation tests
         run: |
           pytest tests/integration/test_credential_validator.py \
@@ -208,7 +208,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run Phase 3 tests
         run: |
           pytest tests/phase3/ \
@@ -232,7 +232,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run correlation tests
         run: |
           pytest tests/phase4/test_correlator.py \
@@ -262,7 +262,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run cloud module tests
         run: |
           pytest tests/phase4/test_param_probe.py \
@@ -301,7 +301,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run Phase 5 unit tests
         run: |
           pytest tests/phase5/ \
@@ -336,7 +336,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run Phase 6 tests
         run: |
           pytest tests/phase6/ \
@@ -364,7 +364,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run OPSEC invariant tests
         # Assertions enforced:
         #   - No plaintext passwords in audit_log
@@ -394,39 +394,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+        run: pip install -e ".[dev,artifacts,offensive,graph]"
       - name: Run kill-chain smoke test
         run: pytest tests/integration/test_kill_chain.py -v --tb=short
-
-# ── Integration — SSH/SMB via docker-compose.test.yml ─────────────────────────
-  test-integration-compose:
-    name: Integration — SSH/SMB via docker-compose.test.yml
-    runs-on: ubuntu-24.04
-    needs: lint
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-      - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
-      - name: Bring up SSH/SMB containers
-        run: docker compose -f docker-compose.test.yml up -d --wait
-      - name: Run integration tests
-        env:
-          MOCK_SSH_HOST: localhost
-          MOCK_SSH_PORT: "2222"
-          MOCK_SMB_HOST: localhost
-          MOCK_SMB_PORT: "4445"
-          FORGE_OFFLINE_STRICT: "0"
-        run: |
-          pytest tests/integration/test_credential_validator.py \
-                 tests/integration/test_lateral_movement.py \
-            -v --tb=short
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.test.yml down -v
 
 # ── PyInstaller build ─────────────────────────────────────────────────────────
   build:
@@ -443,7 +413,6 @@ jobs:
       - test-phase5
       - test-phase6
       - test-integration
-      - test-integration-compose
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v7
@@ -455,8 +424,8 @@ jobs:
 
       - name: Install runtime + build deps
         run: |
-          pip install --require-hashes -r requirements.lock
-          pip install pyinstaller==6.11.1
+          pip install -e ".[artifacts,offensive,graph]"
+          pip install pyinstaller==6.21.0
 
       - name: Build single-file binary
         run: |
