@@ -102,3 +102,5 @@ skills/
 skills-lock.json
 docs/
 templates/
+.env.*
+.next/

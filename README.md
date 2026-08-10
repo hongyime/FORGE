@@ -428,3 +428,6 @@ SAST posture: Bandit (`9bf521d`) and Semgrep (`90199d8`) workflows run in CI.
 `python-jose` swapped for PyJWT (`b347cd8`) to mitigate CVE-2024-33663 and
 CVE-2024-33664. Dependabot ecosystems + grouping stabilised in `a1cd662`.
 
+## License
+
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
