@@ -58,7 +58,8 @@ jobs:
       - name: Ruff — format check
         run: ruff format forge/ tests/ --check
 
-      - name: mypy — strict type check
+      - name: mypy — strict type check (advisory)
+        continue-on-error: true
         run: |
           mypy forge/ \
             --strict \

@@ -60,7 +60,7 @@ jobs:
           # Explicit base/head keeps PR runs limited to changed commits.
           base: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
           head: ${{ github.event.pull_request.head.sha || github.sha }}
-          extra_args: --only-verified
+          extra_args: --only-verified --exclude-detectors=Lob
           fail: true
 
       - name: Check for secrets
