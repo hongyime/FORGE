@@ -73,9 +73,19 @@ vendor/tor/
 .DS_Store
 Thumbs.db
 
+templates/
+.env.*
+.next/
+
 # AI / editor dot directories (managed via sourcerepo)
 .*
 !.github/
+!.agents/
+.agents/*
+!.agents/STATE.md
+!.agents/JOURNAL.md
+!.agents/handoffs/
+!.agents/handoffs/**
 !.gitignore
 !.gitattributes
 !.gitmodules
@@ -101,6 +111,4 @@ Thumbs.db
 skills/
 skills-lock.json
 docs/
-templates/
-.env.*
-.next/
+# End AI / editor dot directories (managed via sourcerepo)
