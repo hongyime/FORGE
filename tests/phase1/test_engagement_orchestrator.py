@@ -221,6 +221,9 @@ from tests.phase1.remote_artifact_download_cases import (
     run_rate_limited_remote_artifact_retry,
     run_remote_mobile_bundle_url_seed,
 )
+from tests.phase1.recon_tool_artifact_cases import (
+    run_recon_tool_output_structured_payload_uses_bounded_workers_and_preserves_order,
+)
 from tests.phase1.security_scanner_artifact_cases import (
     run_detect_secrets_baseline_without_secret_material,
     run_security_scanner_control_files,
@@ -26896,46 +26899,10 @@ def test_artifact_recon_tool_output_structured_payload_uses_bounded_workers_and_
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = "\n".join(
-        [
-            json.dumps({"host": "one.acme.example"}),
-            json.dumps({"url": "two.acme.example/status?token=drop-me&view=public"}),
-            json.dumps({"name": "three.acme.example"}),
-            json.dumps({"matched-url": "https://four.acme.example/path"}),
-        ]
+    run_recon_tool_output_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_recon_tool_output_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._recon_tool_output_structured_payload_text(
-        payload,
-        source_hint="subfinder.jsonl",
-    )
-
-    assert observed_candidate_batches == [
-        [
-            "one.acme.example",
-            "two.acme.example/status?token=drop-me&view=public",
-            "three.acme.example",
-            "https://four.acme.example/path",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://one.acme.example",
-        "https://two.acme.example/status?view=public",
-        "https://three.acme.example",
-        "https://four.acme.example/path",
-    ]
 
 
 def test_artifact_gradle_text_structured_payload_uses_bounded_workers_and_preserves_order(
