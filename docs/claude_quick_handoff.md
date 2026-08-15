@@ -32,6 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Vitest, Jest, and Karma test-runner configs now
+join passive JS-runtime recursion. Scoped `vitest.config.*`, `jest.config.*`,
+and `karma.conf.*` artifacts map to source-gated config labels, so test server,
+coverage/report, proxy, and dashboard URLs become recursive URL seeds through
+the existing endpoint extractor. URL userinfo is stripped before persistence,
+and the regression proves `vitest-token-do-not-store` and
+`karma-token-do-not-store` are not stored. No test-runner execution, package
+install, HTTP probing, authentication, provider calls, or scope relaxation was
+added. Verification passed for JS-runtime config plus API format label tests
+(`16 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B387.
 Latest checkpoint (2026-08-16): Webpack, Rollup, Rspack, and Rsbuild bundler
 configs now join passive JS-runtime recursion. Scoped `webpack.config.*`,
 `rollup.config.*`, `rspack.config.*`, and `rsbuild.config.*` artifacts map to

@@ -145,6 +145,46 @@ export default {
 """.strip(),
 }
 
+_TEST_RUNNER_CONFIG_PAYLOADS = {
+    "vitest.config.ts": """
+export default {
+  owner: "vitest-owner@acme.example",
+  test: {
+    apiUrl: "https://vitest-user:vitest-token-do-not-store@vitest-api.acme.example/v1",
+    coverage: {
+      reporterUrl: "https://vitest-coverage.acme.example/report"
+    }
+  }
+};
+""".strip(),
+    "jest.config.cjs": """
+module.exports = {
+  owner: "jest-owner@acme.example",
+  testEnvironmentOptions: {
+    url: "https://jest-app.acme.example"
+  },
+  reporters: [
+    ["jest-junit", { outputUrl: "https://jest-report.acme.example/junit" }]
+  ]
+};
+""".strip(),
+    "karma.conf.js": """
+module.exports = function(config) {
+  config.set({
+    owner: "karma-owner@acme.example",
+    proxies: {
+      "/api": {
+        target: "https://karma-user:karma-token-do-not-store@karma-api.acme.example/v1"
+      }
+    },
+    client: {
+      serverUrl: "karma-dashboard.acme.example/run"
+    }
+  });
+};
+""".strip(),
+}
+
 
 def test_bun_scope_candidate_values_do_not_reuse_stale_registry_value(tmp_path) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
@@ -534,6 +574,103 @@ def test_bundler_config_artifacts_recurse_without_persisting_userinfo(
         assert artifact_meta[(artifact_root / filename).resolve().as_posix()]
     assert "webpack-token-do-not-store" not in persisted_text
     assert "rollup-token-do-not-store" not in persisted_text
+
+
+def test_test_runner_configs_extract_static_public_endpoints(tmp_path: Path) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+
+    assert _artifact_format_label("vitest.config.ts") == "vitest-config"
+    assert _artifact_format_label("jest.config.cjs") == "jest-config"
+    assert _artifact_format_label("karma.conf.js") == "karma-config"
+    assert processor._js_runtime_text_structured_payload_text(
+        _TEST_RUNNER_CONFIG_PAYLOADS["vitest.config.ts"],
+        source_hint="vitest.config.ts",
+    ).splitlines() == [
+        "https://vitest-api.acme.example/v1",
+        "https://vitest-coverage.acme.example/report",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _TEST_RUNNER_CONFIG_PAYLOADS["jest.config.cjs"],
+        source_hint="jest.config.cjs",
+    ).splitlines() == [
+        "https://jest-app.acme.example",
+        "https://jest-report.acme.example/junit",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _TEST_RUNNER_CONFIG_PAYLOADS["karma.conf.js"],
+        source_hint="karma.conf.js",
+    ).splitlines() == [
+        "https://karma-api.acme.example/v1",
+        "https://karma-dashboard.acme.example/run",
+    ]
+    assert (
+        processor._js_runtime_text_structured_payload_text(
+            _TEST_RUNNER_CONFIG_PAYLOADS["vitest.config.ts"],
+            source_hint="vitest.notes.ts",
+        )
+        == ""
+    )
+
+
+def test_test_runner_config_artifacts_recurse_without_persisting_userinfo(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "test-runners"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path, name="Test Runner Config Recursion Test")
+    for filename, payload in _TEST_RUNNER_CONFIG_PAYLOADS.items():
+        (artifact_root / filename).write_text(payload, encoding="utf-8")
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 3
+    assert summary.processed == 3
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        artifact_meta = {
+            row[0]: row[1]
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        persisted_text = "\n".join(con.iterdump())
+    finally:
+        con.close()
+
+    for expected_seed in {
+        ("https://vitest-api.acme.example/v1", "url"),
+        ("https://vitest-coverage.acme.example/report", "url"),
+        ("https://jest-app.acme.example", "url"),
+        ("https://jest-report.acme.example/junit", "url"),
+        ("https://karma-api.acme.example/v1", "url"),
+        ("https://karma-dashboard.acme.example/run", "url"),
+        ("vitest-owner@acme.example", "email"),
+        ("jest-owner@acme.example", "email"),
+        ("karma-owner@acme.example", "email"),
+    }:
+        assert expected_seed in seeds
+    for filename in _TEST_RUNNER_CONFIG_PAYLOADS:
+        assert artifact_meta[(artifact_root / filename).resolve().as_posix()]
+    assert "vitest-token-do-not-store" not in persisted_text
+    assert "karma-token-do-not-store" not in persisted_text
 
 
 def test_deno_config_extracts_static_imports_and_endpoints(tmp_path: Path) -> None:

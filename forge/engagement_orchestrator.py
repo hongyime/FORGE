@@ -6358,6 +6358,12 @@ def _js_runtime_config_artifact_label(value: str) -> str:
             return "rspack-config"
         if stem == "rsbuild.config":
             return "rsbuild-config"
+        if stem == "vitest.config":
+            return "vitest-config"
+        if stem == "jest.config":
+            return "jest-config"
+        if stem == "karma.conf":
+            return "karma-config"
         if stem == "next.config":
             return "next-config"
         if stem == "nuxt.config":
@@ -23529,6 +23535,9 @@ class ArtifactQueueProcessor:
             "rollup-config",
             "rspack-config",
             "rsbuild-config",
+            "vitest-config",
+            "jest-config",
+            "karma-config",
             "next-config",
             "nuxt-config",
             "playwright-config",
@@ -23572,7 +23581,8 @@ class ArtifactQueueProcessor:
             cdnURL|cdnUrl|contentURL|contentUrl|destination|domain|endpoint|
             endpointURL|endpointUrl|host|hostname|href|launchURL|launchUrl|
             loginURL|loginUrl|
-            launch_url|origin|publicPath|redirectURL|redirectUrl|serverURL|
+            launch_url|origin|outputURL|outputUrl|publicPath|redirectURL|
+            redirectUrl|reportURL|reportUrl|reporterURL|reporterUrl|serverURL|
             serverUrl|site|siteURL|siteUrl|sourceMapBaseURL|sourceMapBaseUrl|
             sourcemapBaseURL|sourcemapBaseUrl|src|staticURL|staticUrl|target|to|
             updatesURL|updatesUrl|url|webServerURL|webServerUrl|webURL|webUrl|

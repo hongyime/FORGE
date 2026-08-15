@@ -512,6 +512,18 @@ sentences as historical notes only, not as current instructions.
   was added. Verification: JS-runtime config plus API format label tests (`14
   passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B386.
 
+- [x] Test-runner config passive-recursion checkpoint (2026-08-16):
+  Scoped Vitest, Jest, and Karma config artifacts now receive `vitest-config`,
+  `jest-config`, and `karma-config` labels and route through the existing
+  JS-runtime endpoint extractor. Test server, coverage/report, proxy, and
+  dashboard URLs become recursive URL seeds, URL userinfo is stripped before
+  persistence, and the regression proves `vitest-token-do-not-store` and
+  `karma-token-do-not-store` are not persisted. No test-runner execution,
+  package install, HTTP probing, authentication, provider calls, or scope
+  relaxation was added. Verification: JS-runtime config plus API format label
+  tests (`16 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md`
+  B387.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
