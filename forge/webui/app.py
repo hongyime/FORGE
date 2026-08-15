@@ -5,7 +5,6 @@ import os
 import sqlite3
 import subprocess
 import time
-from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -93,6 +92,10 @@ from forge.webui.monitoring_routes import (
     update_monitoring_alert_route_payload,
     upsert_monitoring_alert_route_dispatch_payload,
     upsert_monitoring_policy_route_payload,
+)
+from forge.webui.middleware import (
+    install_webui_internal_error_handler,
+    install_webui_rate_limit_middleware,
 )
 from forge.webui.remediation_routes import (
     RemediationRouteError,
@@ -302,27 +305,17 @@ def create_app() -> Any:
     if cfg.web_auth.lower() == "jwt":
         validate_jwt_secret()
 
-    # --- Rate limiting (60 req/min per IP, in-process) ---
-    _rate_window: dict[str, list[float]] = defaultdict(list)
-
-    @app.middleware("http")
-    async def _rate_limit(request: Request, call_next):
-        if request.url.path == "/health":
-            return await call_next(request)
-        client_ip = request.client.host if request.client else "unknown"
-        now = time.monotonic()
-        window = _rate_window[client_ip]
-        window[:] = [t for t in window if now - t < 60.0]
-        if len(window) >= 60:
-            return JSONResponse(status_code=429, content={"error": "rate limit exceeded"})
-        window.append(now)
-        return await call_next(request)
-
-    # --- Production 500 handler (no traceback leakage) ---
-    if not _is_dev:
-        @app.exception_handler(Exception)
-        async def _internal_error(request: Request, exc: Exception) -> JSONResponse:
-            return JSONResponse(status_code=500, content={"error": "internal error"})
+    install_webui_rate_limit_middleware(
+        app,
+        request_type=Request,
+        json_response=JSONResponse,
+    )
+    install_webui_internal_error_handler(
+        app,
+        request_type=Request,
+        json_response=JSONResponse,
+        enabled=not _is_dev,
+    )
     def _auth_principal(
         creds: HTTPAuthorizationCredentials | None = Depends(auth_scheme),
     ) -> Principal:

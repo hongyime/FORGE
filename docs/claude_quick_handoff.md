@@ -32,6 +32,14 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-15): Web UI middleware setup was split out of
+`forge.webui.app.create_app()`. `forge.webui.middleware` now owns the pure
+`InMemoryRateLimiter` plus installers for the rate-limit middleware and
+production internal-error handler; `create_app()` delegates those concerns while
+preserving `/health` bypass, per-client request windows, 60 request/minute
+limits, and production traceback suppression. Verification passed for Web UI
+middleware plus HTMX app wiring tests (`21 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B345.
 Latest checkpoint (2026-08-15): attack-graph exports now apply an export-layer
 metadata guard before any artifact writer consumes the graph. `forge.graph.export`
 sanitizes node and edge metadata once after build/filtering, stripping

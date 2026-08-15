@@ -124,6 +124,15 @@ sentences as historical notes only, not as current instructions.
   focused attack-graph export tests (`4 passed`), graph artifact parser tests
   (`3 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B344.
 
+- [x] Web UI middleware extraction checkpoint (2026-08-15):
+  `forge.webui.app.create_app()` now delegates in-process rate limiting and
+  production internal-error handler registration to `forge.webui.middleware`.
+  The pure `InMemoryRateLimiter` keeps the existing `/health` bypass,
+  per-client windowing, and 60 request/minute behavior testable outside a full
+  FastAPI app, while `create_app()` preserves the same middleware/error-handler
+  wiring. Verification: Web UI middleware plus HTMX app wiring tests (`21
+  passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B345.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
