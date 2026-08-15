@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Interface schema artifact-ingestion regression
+modularization is complete. A new `tests/phase1/interface_schema_artifact_cases.py`
+module now owns the Proto, AsyncAPI, Avro, Thrift, and GraphQL schema local
+artifact fixture, while the original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for
+interface-schema artifact labels, nested ZIP payload extraction, email/URL seed
+promotion, and S3/GCS/Firebase/Supabase asset detection without changing
+production parser behavior, live probing, provider calls, credential use,
+scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved wrapper (`1 passed`),
+Ruff, and `py_compile`. Backprop: `SPEC.md` B433.
 Latest checkpoint (2026-08-16): Pact contract artifact-ingestion regression
 modularization is complete. A new `tests/phase1/pact_artifact_cases.py` module
 now owns the Pact contract local artifact fixture, while the original pytest
