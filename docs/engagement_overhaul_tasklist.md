@@ -456,6 +456,17 @@ sentences as historical notes only, not as current instructions.
   added. Verification: package-manager artifact tests (`60 passed`), Ruff, and
   `py_compile` passed. Backprop: `SPEC.md` B381.
 
+- [x] Deno/JSR config passive-recursion checkpoint (2026-08-16):
+  Source-gated `deno.json`, `deno.jsonc`, import-map, and `jsr.json` artifacts
+  now passively extract static Deno URL imports, `npm:`/`jsr:` package
+  specifiers, and endpoint URLs into recursive seeds. HTTP(S) URLs with
+  Deno-style `@version` path segments are preserved, while URL userinfo is
+  stripped before persistence; the regression proves `deno-token-do-not-store`
+  is not stored. No Deno execution, package install, import resolution, HTTP
+  probing, authentication, provider calls, or scope relaxation was added.
+  Verification: JS-runtime config tests (`8 passed`), API format label tests
+  (`1 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B382.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

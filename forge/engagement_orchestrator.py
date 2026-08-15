@@ -610,6 +610,7 @@ from forge.utils.artifact_helm_index import (
 from forge.utils.artifact_host_meta_metadata import host_meta_href_urls
 from forge.utils.artifact_firebase_hosting_config import firebase_hosting_site_urls
 from forge.utils.artifact_js_runtime_config import (
+    deno_config_candidate_entries,
     runtime_js_config_artifact_label,
     runtime_js_env_assignment_entries,
     service_worker_js_candidate_entries,
@@ -23445,6 +23446,8 @@ class ArtifactQueueProcessor:
                     ),
                 )
             )
+        if source_label in {"deno-config", "deno-import-map", "jsr-config"}:
+            entries.extend(deno_config_candidate_entries(raw_text))
 
         if self._js_runtime_source_uses_browser_endpoint_patterns(source_label):
             browser_batches = self._run_ordered_local_batch(
@@ -23589,7 +23592,15 @@ class ArtifactQueueProcessor:
         lowered = value.lower()
         if lowered.startswith(("npm:", "jsr:")):
             return ArtifactQueueProcessor._js_runtime_package_specifier_url_candidate(value)
-        if "@" in value:
+        parsed_value = urlparse(value)
+        if parsed_value.scheme in {"http", "https"} and parsed_value.netloc:
+            if parsed_value.username or parsed_value.password:
+                host = str(parsed_value.hostname or "").strip()
+                if not host:
+                    return ""
+                netloc = f"{host}:{parsed_value.port}" if parsed_value.port else host
+                value = parsed_value._replace(netloc=netloc).geturl()
+        elif "@" in value:
             return ""
         return _artifact_package_registry_host_or_url_candidate(value)
 

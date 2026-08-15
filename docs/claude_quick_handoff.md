@@ -32,6 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Deno/JSR config artifacts now join passive
+JS-runtime recursion. Source-gated `deno.json`, `deno.jsonc`, import-map, and
+`jsr.json` artifacts extract static Deno URL imports, `npm:`/`jsr:` package
+specifiers, and endpoint URLs into recursive seeds. HTTP(S) `@version` path
+segments are preserved, URL userinfo is stripped before persistence, and the
+regression proves `deno-token-do-not-store` is not stored. No Deno execution,
+package install, import resolution, HTTP probing, provider calls, or scope
+relaxation was added. Verification passed for JS-runtime config tests (`8
+passed`), API format label tests (`1 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B382.
 Latest checkpoint (2026-08-16): Bun package-manager config artifacts now join
 passive package-manager recursion. `bunfig.toml` and downloaded Bun config
 cache names receive the `bun-config` label, so the existing artifact queue

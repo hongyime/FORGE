@@ -66,6 +66,10 @@ _QUOTED_IMPORT_SCRIPT_VALUE_PATTERN = re.compile(
     r"""(?P<quote>["'])(?P<value>[^"'\s,)]+)(?P=quote)""",
     re.IGNORECASE,
 )
+_DENO_IMPORT_VALUE_PATTERN = re.compile(
+    r"""(?P<quote>["'])(?P<value>(?:https?://|npm:|jsr:)[^"'\s,}\]]+)(?P=quote)""",
+    re.IGNORECASE,
+)
 _FIREBASE_PROJECT_ASSIGNMENT_PATTERN = re.compile(
     r"""
     ["']?
@@ -160,6 +164,16 @@ def service_worker_js_candidate_entries(
         )
 
     return entries
+
+
+def deno_config_candidate_entries(text: str) -> list[tuple[int, str]]:
+    raw_text = str(text or "")
+    return [
+        (match.start("value"), value)
+        for match in _DENO_IMPORT_VALUE_PATTERN.finditer(raw_text)
+        if (value := str(match.group("value") or "").strip())
+        and not any(marker in value for marker in ("${", "$(", "{{", "}}", "<", ">"))
+    ]
 
 
 def _resolve_import_script_url(value: str, *, base_url: str = "") -> str:
