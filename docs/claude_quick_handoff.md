@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI engagement artifact route-file provider
+binding moved out of `forge.webui.app.create_app()`.
+`forge.webui.artifacts.build_engagement_artifact_files_provider` now owns the
+reports-root binding for report/audit/graph route-file discovery while
+preserving audit-manifest materialization and discovery-context behavior.
+Verification passed for Web UI artifact plus HTMX wiring tests (`27 passed`),
+Ruff, and `py_compile`. Backprop: `SPEC.md` B371.
 Latest checkpoint (2026-08-16): Scheduled target-import monitoring snapshots no
 longer warn on existing ISO `T` timestamps in engagement DBs opened with sqlite
 declared-type parsing. `forge.monitoring.continuous._select_existing` casts

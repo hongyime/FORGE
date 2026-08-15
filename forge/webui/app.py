@@ -48,9 +48,9 @@ from forge.webui.artifacts import (
     artifact_payloads as build_artifact_payloads,
     audit_artifact_payloads as build_audit_artifact_payloads,
     build_audit_files_provider,
+    build_engagement_artifact_files_provider,
     build_report_files_provider,
     build_reports_dir_provider,
-    engagement_artifact_files as webui_engagement_artifact_files,
     engagement_artifact_route_file,
     report_preview_payload as build_report_preview_payload,
 )
@@ -421,18 +421,7 @@ def create_app() -> Any:
 
     _open_workflow_db = build_workflow_db_opener()
 
-    def _engagement_artifact_files(
-        con: sqlite3.Connection,
-        db_file: Path,
-        engagement_id: int,
-        _summary: dict[str, Any],
-    ) -> list[Path]:
-        return webui_engagement_artifact_files(
-            con,
-            db_path=db_file,
-            reports_root=_reports_dir(),
-            engagement_id=engagement_id,
-        )
+    _engagement_artifact_files = build_engagement_artifact_files_provider(_reports_dir)
 
     _discovery_context = build_engagement_discovery_context_provider(
         data_dir=cfg.data_dir,

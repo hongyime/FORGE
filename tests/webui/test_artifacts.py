@@ -9,6 +9,7 @@ from forge.webui.artifacts import (
     audit_files,
     audit_artifact_payloads,
     build_audit_files_provider,
+    build_engagement_artifact_files_provider,
     build_report_files_provider,
     build_reports_dir_provider,
     engagement_artifact_files,
@@ -142,6 +143,36 @@ def test_engagement_artifact_files_materializes_audits_and_keeps_route_order(
         graph_files=graph_files,
     ) == [report, audit, graph]
     assert calls == [(con, db_path, 1001, True)]
+
+
+def test_engagement_artifact_files_provider_binds_reports_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = reports_dir(cwd=tmp_path)
+    db_path = tmp_path / "1001.db"
+    con = object()
+    calls: list[tuple[object, Path, Path, int | str]] = []
+
+    def fake_engagement_artifact_files(
+        *,
+        con: object,
+        db_path: Path,
+        reports_root: Path,
+        engagement_id: int | str,
+    ) -> list[Path]:
+        calls.append((con, db_path, reports_root, engagement_id))
+        return [reports_root / "engagement_1001.md"]
+
+    monkeypatch.setattr(
+        "forge.webui.artifacts.engagement_artifact_files",
+        fake_engagement_artifact_files,
+    )
+
+    provider = build_engagement_artifact_files_provider(lambda: root)
+
+    assert provider(con, db_path, 1001, {"id": 1001}) == [root / "engagement_1001.md"]
+    assert calls == [(con, db_path, root, 1001)]
 
 
 def test_report_preview_payload_uses_artifact_path_href(tmp_path: Path) -> None:

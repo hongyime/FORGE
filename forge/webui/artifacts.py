@@ -87,6 +87,25 @@ def engagement_artifact_files(
     )
 
 
+def build_engagement_artifact_files_provider(
+    reports_root: Callable[[], Path],
+) -> Callable[[Any, Path, int, dict[str, Any]], list[Path]]:
+    def _engagement_artifact_files(
+        con: Any,
+        db_path: Path,
+        engagement_id: int,
+        _summary: dict[str, Any],
+    ) -> list[Path]:
+        return engagement_artifact_files(
+            con=con,
+            db_path=db_path,
+            reports_root=reports_root(),
+            engagement_id=engagement_id,
+        )
+
+    return _engagement_artifact_files
+
+
 def artifact_payload(
     engagement_ref: str,
     artifact: Path,
@@ -194,6 +213,7 @@ __all__ = [
     "audit_files",
     "audit_artifact_payloads",
     "build_audit_files_provider",
+    "build_engagement_artifact_files_provider",
     "build_report_files_provider",
     "build_reports_dir_provider",
     "engagement_artifact_files",

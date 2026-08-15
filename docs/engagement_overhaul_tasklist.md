@@ -352,6 +352,14 @@ sentences as historical notes only, not as current instructions.
   focused monitoring/import regressions (`2 passed`), Ruff, `py_compile`, and a
   local no-start target-import smoke test passed. Backprop: `SPEC.md` B370.
 
+- [x] Web UI engagement artifact provider extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds engagement artifact route-file
+  discovery through `forge.webui.artifacts.build_engagement_artifact_files_provider`
+  instead of binding reports root in an inline wrapper. The provider preserves
+  report/audit/graph route ordering, audit-manifest materialization, and
+  discovery-context integration. Verification: Web UI artifact plus HTMX wiring
+  tests (`27 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B371.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
