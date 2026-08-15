@@ -32,6 +32,18 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Network endpoint extractor regression
+modularization started. Remote-access host fields, Ansible inventory host
+extraction, Vagrantfile hostnames, Ansible inventory bounded line
+tokenization, and network-endpoint family bounded dispatch moved from
+`tests/phase1/test_engagement_orchestrator.py` into
+`tests/phase1/network_endpoint_artifact_cases.py`, while the original pytest
+nodes remain as thin wrappers. This removes passive network endpoint parser
+fixture weight from the Phase 1 mega test without changing production parser
+behavior, live probing, provider calls, credential use, scope,
+validation/report gates, scheduler behavior, or persistent non-test engagement
+data. Verification passed for the preserved network-endpoint wrapper tests (`5
+passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B403.
 Latest checkpoint (2026-08-16): Framework database config regression
 modularization is complete. The Rails, Spring, .NET appsettings, Alembic,
 Laravel, and Django fixture moved from
