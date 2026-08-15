@@ -114,6 +114,16 @@ sentences as historical notes only, not as current instructions.
   and a scheduled live run that generated
   `reports/engagement_10696_kill_chain_20260815T150918.md`.
 
+- [x] Attack-graph export metadata guard checkpoint (2026-08-15):
+  The reusable graph export service now sanitizes node and edge metadata once
+  after build/filtering and before JSON, Mermaid/DOT, GraphML, MTGX, manifest,
+  node CSV, or edge CSV writers consume the graph. The guard strips
+  secret-bearing keys and nested values, removes sensitive HTTP(S) query
+  parameters, drops URL userinfo, and preserves non-sensitive proof/source
+  metadata consistently across exported review artifacts. Verification:
+  focused attack-graph export tests (`4 passed`), graph artifact parser tests
+  (`3 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B344.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
@@ -4327,11 +4337,16 @@ sentences as historical notes only, not as current instructions.
   prefix-collision, report-history, and vuln-summary tests passed (`5 passed`);
   pytest engagement cleanup reported `removed=3 remaining=0`. Handoff:
   `.claude/handoffs/2026-07-24-report-artifact-api-isolation.md`.
-- [ ] Next target: audit another concrete passive-to-live validation/report/API
-  parity gap, preferably provider-specific proof/detail reviewability for
-  long-tail validators or imported graph/raw-export shape mismatches. Keep live
-  provider calls mocked unless an explicit ROE/scope manifest and target are
-  supplied.
+- [x] Attack-graph export metadata guard checkpoint:
+  Shareable attack-graph exports now apply an export-layer metadata sanitizer
+  before every artifact writer consumes the graph, so JSON, GraphML, MTGX
+  manifest/workspace, node CSV, edge CSV, and renderer inputs all share the same
+  scrubbed metadata shape. Regression coverage mutates an in-memory graph after
+  model validation and proves secret keys, nested secret values, sensitive query
+  parameters, and URL userinfo are absent while non-sensitive proof/source
+  metadata remains reviewable. Verification: compile passed; Ruff passed;
+  focused graph export tests passed (`4 passed`); graph artifact parser tests
+  passed (`3 passed`). Backprop: `SPEC.md` B344.
 - [x] Workflow report API lineage checkpoint:
   Legacy `GET /reports/{workflow_id}` now preserves backward-compatible
   markdown response fields while exposing allowlisted deterministic lineage from

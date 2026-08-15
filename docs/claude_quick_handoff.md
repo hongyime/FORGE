@@ -32,6 +32,15 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-15): attack-graph exports now apply an export-layer
+metadata guard before any artifact writer consumes the graph. `forge.graph.export`
+sanitizes node and edge metadata once after build/filtering, stripping
+secret-bearing keys and nested values, removing sensitive HTTP(S) query
+parameters, and dropping URL userinfo while preserving reviewable non-sensitive
+proof/source metadata. The guard covers JSON, Mermaid/DOT renderer inputs,
+GraphML, MTGX workspace/manifest, node CSV, and edge CSV exports. Verification
+passed for focused graph export tests (`4 passed`), graph artifact parser tests
+(`3 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B344.
 Latest checkpoint (2026-08-15): scheduled theprawnhunter target import was
 hardened after live logs showed runs could exceed the intended wall-clock cap
 and live fan-out could crash on `engagement_seeds.source` CHECK constraints.

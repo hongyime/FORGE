@@ -15,11 +15,40 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 from xml.etree import ElementTree as _ElementTree
 import xml.sax.saxutils as _xs
 
 from forge.models.attack_graph_models import AttackGraph, OutputFormat, Severity
 from forge.phase4.attack_path import AttackGraphBuilder, DotRenderer, MermaidRenderer
+from forge.utils.artifact_url_sanitizer import strip_sensitive_url_query
+
+
+_FORBIDDEN_METADATA_KEYS = {
+    "api_key",
+    "apikey",
+    "access_token",
+    "authorization",
+    "client_secret",
+    "credential",
+    "credentials",
+    "hash_plaintext",
+    "key_enc",
+    "key_raw",
+    "password",
+    "password_enc",
+    "password_hash",
+    "password_plaintext_enc",
+    "private_key",
+    "raw_secret",
+    "raw_token",
+    "refresh_token",
+    "secret",
+    "secret_enc",
+    "token",
+    "token_enc",
+}
+_FORBIDDEN_METADATA_KEY_FRAGMENTS = ("authorization", "password", "secret", "token")
 
 
 @dataclass(frozen=True)
@@ -57,6 +86,59 @@ def _coerce_severity(value: str | Severity) -> Severity:
     return Severity(str(value).strip().upper())
 
 
+def _is_sensitive_metadata_key(key: object) -> bool:
+    normalized = str(key or "").strip().lower()
+    return (
+        not normalized
+        or normalized in _FORBIDDEN_METADATA_KEYS
+        or normalized.endswith("_enc")
+        or any(fragment in normalized for fragment in _FORBIDDEN_METADATA_KEY_FRAGMENTS)
+    )
+
+
+def _safe_export_metadata_value(value: object) -> object:
+    if value is None or isinstance(value, (int, float, bool)):
+        return value
+    if isinstance(value, str):
+        return _safe_export_text_value(value)
+    if isinstance(value, list):
+        return [_safe_export_metadata_value(item) for item in value[:50]]
+    if isinstance(value, tuple):
+        return [_safe_export_metadata_value(item) for item in value[:50]]
+    if isinstance(value, dict):
+        return _safe_export_metadata(value)
+    return str(value)
+
+
+def _safe_export_text_value(value: str) -> str:
+    stripped = strip_sensitive_url_query(value)
+    parsed = urlsplit(stripped)
+    if parsed.scheme not in {"http", "https"} or "@" not in parsed.netloc:
+        return stripped
+    host = parsed.hostname or ""
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment))
+
+
+def _safe_export_metadata(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    clean: dict[str, object] = {}
+    for raw_key, raw_value in value.items():
+        if _is_sensitive_metadata_key(raw_key):
+            continue
+        clean[str(raw_key).strip()] = _safe_export_metadata_value(raw_value)
+    return clean
+
+
+def _sanitize_graph_metadata(graph: AttackGraph) -> None:
+    for node in graph.nodes:
+        node.metadata = _safe_export_metadata(getattr(node, "metadata", {}) or {})
+    for edge in graph.edges:
+        edge.metadata = _safe_export_metadata(getattr(edge, "metadata", {}) or {})
+
+
 def export_attack_graph(
     *,
     engagement_id: int,
@@ -88,6 +170,7 @@ def export_attack_graph(
         graph.edges[:] = [
             e for e in graph.edges if e.source_node_id in cp_ids and e.target_node_id in cp_ids
         ]
+    _sanitize_graph_metadata(graph)
 
     requested = _coerce_output_format(fmt)
     stem = f"{int(engagement_id)}_attack_graph"
@@ -117,14 +200,15 @@ def export_attack_graph(
         if not isinstance(raw_metadata, dict):
             return {}
         try:
-            return _json.loads(
+            normalized = _json.loads(
                 _json.dumps(raw_metadata, sort_keys=True, default=str)
             )
+            return _safe_export_metadata(normalized)
         except Exception:
-            return {
+            return _safe_export_metadata({
                 str(key): str(value)
                 for key, value in sorted(raw_metadata.items(), key=lambda item: str(item[0]))
-            }
+            })
 
     def _node_metadata_text(node) -> str:
         return _json.dumps(
@@ -196,14 +280,15 @@ def export_attack_graph(
         if not isinstance(raw_metadata, dict):
             return {}
         try:
-            return _json.loads(
+            normalized = _json.loads(
                 _json.dumps(raw_metadata, sort_keys=True, default=str)
             )
+            return _safe_export_metadata(normalized)
         except Exception:
-            return {
+            return _safe_export_metadata({
                 str(key): str(value)
                 for key, value in sorted(raw_metadata.items(), key=lambda item: str(item[0]))
-            }
+            })
 
     def _edge_metadata_text(edge) -> str:
         return _json.dumps(
@@ -709,4 +794,3 @@ def export_attack_graph(
         artifacts=dict(artifacts),
         snapshot_written=snapshot_written,
     )
-

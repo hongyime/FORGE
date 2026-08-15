@@ -160,6 +160,84 @@ def test_export_attack_graph_writes_artifacts_and_snapshot(
     assert any(message.startswith("[bold]Graph:") for message in emitted)
 
 
+def test_export_attack_graph_sanitizes_metadata_in_all_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from forge.graph import export as export_module  # noqa: PLC0415
+    from forge.graph.export import export_attack_graph  # noqa: PLC0415
+
+    graph = _sample_graph()
+    graph.nodes[1].metadata.update(
+        {
+            "source_url": (
+                "https://user:pass@app.example.com/download?"
+                "token=node-secret&ok=1"
+            ),
+            "key_enc": "node-encrypted-secret",
+            "nested": {
+                "client_secret": "nested-client-secret",
+                "source_url": "https://app.example.com/config?sig=nested-secret&ok=1",
+            },
+            "provider_sources": ["urlscan"],
+        }
+    )
+    graph.edges[0].metadata.update(
+        {
+            "proof": "observed relation",
+            "token": "edge-token-secret",
+            "evidence": {
+                "authorization": "Bearer edge-secret",
+                "source_url": "https://edge.example.com/path?api_key=edge-secret&view=1",
+            },
+        }
+    )
+
+    class FakeBuilder:
+        def __init__(self, **_kwargs: Any) -> None:
+            pass
+
+        def build(self) -> AttackGraph:
+            return graph
+
+    monkeypatch.setattr(export_module, "AttackGraphBuilder", FakeBuilder)
+
+    result = export_attack_graph(
+        engagement_id=42,
+        db_path=tmp_path / "engagement.db",
+        output_dir=tmp_path / "reports",
+        fmt="all",
+    )
+
+    artifact_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for name, path in result.artifacts.items()
+        if name != "mtgx"
+    )
+    with zipfile.ZipFile(result.artifacts["mtgx"]) as archive:
+        artifact_text += archive.read("manifest.json").decode("utf-8")
+        artifact_text += archive.read("Graphs/Graph1.graphml").decode("utf-8")
+
+    assert "node-encrypted-secret" not in artifact_text
+    assert "node-secret" not in artifact_text
+    assert "user:pass" not in artifact_text
+    assert "nested-client-secret" not in artifact_text
+    assert "nested-secret" not in artifact_text
+    assert "edge-token-secret" not in artifact_text
+    assert "edge-secret" not in artifact_text
+
+    graph_json = json.loads(result.artifacts["json"].read_text(encoding="utf-8"))
+    host_node = next(node for node in graph_json["nodes"] if node["source_table"] == "hosts")
+    assert host_node["metadata"]["source_url"] == "https://app.example.com/download?ok=1"
+    assert host_node["metadata"]["nested"]["source_url"] == "https://app.example.com/config?ok=1"
+    assert "key_enc" not in host_node["metadata"]
+    assert graph_json["edges"][0]["metadata"] == {
+        "evidence": {"source_url": "https://edge.example.com/path?view=1"},
+        "proof": "observed relation",
+        "rule": "fixture",
+    }
+
+
 def test_export_attack_graph_can_emit_critical_path_only_json(
     tmp_path: Path,
     monkeypatch,
