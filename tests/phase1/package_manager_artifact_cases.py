@@ -4,6 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 from textwrap import dedent
+from typing import Any
 import zipfile
 
 from forge.engagement_orchestrator import (
@@ -1025,3 +1026,61 @@ def run_jvm_build_metadata_text_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 4
     finally:
         con.close()
+
+
+def run_maven_xml_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = dedent(
+        """
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.acme</groupId>
+          <artifactId>portal</artifactId>
+          <repositories>
+            <repository>
+              <url>repo.maven.apache.org/maven2</url>
+            </repository>
+          </repositories>
+          <distributionManagement>
+            <repository>
+              <url>maven.pkg.github.com/acme/portal</url>
+            </repository>
+          </distributionManagement>
+          <ciManagement>
+            <url>pom-ci.acme.example/build</url>
+          </ciManagement>
+        </project>
+        """
+    ).strip()
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_maven_xml_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._maven_xml_structured_payload_text(
+        payload,
+        source_hint="pom.xml",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "repo.maven.apache.org/maven2",
+            "maven.pkg.github.com/acme/portal",
+            "pom-ci.acme.example/build",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://repo.maven.apache.org/maven2",
+        "https://maven.pkg.github.com/acme/portal",
+        "https://pom-ci.acme.example/build",
+    ]

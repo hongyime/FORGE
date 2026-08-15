@@ -151,6 +151,7 @@ from forge.utils.intel.social_scraper import _parse_epieos_response
 from tests.phase1.package_manager_artifact_cases import (
     run_cargo_credentials_without_suffix,
     run_jvm_build_metadata_text_artifacts,
+    run_maven_xml_structured_payload_uses_bounded_workers_and_preserves_order,
     run_os_package_repository_artifacts,
     run_package_manager_credential_configs,
     run_package_index_url_credentials,
@@ -26885,58 +26886,10 @@ def test_artifact_maven_xml_structured_payload_uses_bounded_workers_and_preserve
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        <project xmlns="http://maven.apache.org/POM/4.0.0">
-          <modelVersion>4.0.0</modelVersion>
-          <groupId>com.acme</groupId>
-          <artifactId>portal</artifactId>
-          <repositories>
-            <repository>
-              <url>repo.maven.apache.org/maven2</url>
-            </repository>
-          </repositories>
-          <distributionManagement>
-            <repository>
-              <url>maven.pkg.github.com/acme/portal</url>
-            </repository>
-          </distributionManagement>
-          <ciManagement>
-            <url>pom-ci.acme.example/build</url>
-          </ciManagement>
-        </project>
-        """
-    ).strip()
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_maven_xml_url_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._maven_xml_structured_payload_text(
-        payload,
-        source_hint="pom.xml",
+    run_maven_xml_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    assert observed_candidate_batches == [
-        [
-            "repo.maven.apache.org/maven2",
-            "maven.pkg.github.com/acme/portal",
-            "pom-ci.acme.example/build",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://repo.maven.apache.org/maven2",
-        "https://maven.pkg.github.com/acme/portal",
-        "https://pom-ci.acme.example/build",
-    ]
 
 
 def test_artifact_recon_tool_output_structured_payload_uses_bounded_workers_and_preserves_order(
