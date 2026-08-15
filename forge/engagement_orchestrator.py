@@ -6364,6 +6364,14 @@ def _js_runtime_config_artifact_label(value: str) -> str:
             return "jest-config"
         if stem == "karma.conf":
             return "karma-config"
+        if stem == "docusaurus.config":
+            return "docusaurus-config"
+        if stem == "rspress.config":
+            return "rspress-config"
+        if stem == "config" and ".vitepress" in parts:
+            return "vitepress-config"
+        if stem == "config" and ".vuepress" in parts:
+            return "vuepress-config"
         if stem == "next.config":
             return "next-config"
         if stem == "nuxt.config":
@@ -23538,6 +23546,10 @@ class ArtifactQueueProcessor:
             "vitest-config",
             "jest-config",
             "karma-config",
+            "docusaurus-config",
+            "rspress-config",
+            "vitepress-config",
+            "vuepress-config",
             "next-config",
             "nuxt-config",
             "playwright-config",
@@ -23579,7 +23591,7 @@ class ArtifactQueueProcessor:
             apiURL|apiUrl|api_url|appURL|appUrl|assetPrefix|assets|base|baseURL|
             baseUrl|base_url|buildHookURL|buildHookUrl|callbackURL|callbackUrl|
             cdnURL|cdnUrl|contentURL|contentUrl|destination|domain|endpoint|
-            endpointURL|endpointUrl|host|hostname|href|launchURL|launchUrl|
+            endpointURL|endpointUrl|editURL|editUrl|host|hostname|href|launchURL|launchUrl|
             loginURL|loginUrl|
             launch_url|origin|outputURL|outputUrl|publicPath|redirectURL|
             redirectUrl|reportURL|reportUrl|reporterURL|reporterUrl|serverURL|

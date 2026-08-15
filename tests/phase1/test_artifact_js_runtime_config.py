@@ -185,6 +185,55 @@ module.exports = function(config) {
 """.strip(),
 }
 
+_DOCS_SITE_CONFIG_PAYLOADS = {
+    "docusaurus.config.ts": """
+export default {
+  owner: "docusaurus-owner@acme.example",
+  url: "https://docusaurus-user:docusaurus-token-do-not-store@docs.acme.example",
+  baseUrl: "/",
+  customFields: {
+    apiUrl: "https://docs-api.acme.example/v1"
+  }
+};
+""".strip(),
+    "rspress.config.mjs": """
+export default {
+  owner: "rspress-owner@acme.example",
+  base: "/docs",
+  route: {
+    cleanUrls: true
+  },
+  builderConfig: {
+    html: {
+      tags: [{ attrs: { href: "https://rspress-cdn.acme.example/assets/" } }]
+    }
+  },
+  siteUrl: "rspress-docs.acme.example"
+};
+""".strip(),
+    ".vitepress/config.ts": """
+export default {
+  owner: "vitepress-owner@acme.example",
+  themeConfig: {
+    search: {
+      provider: "local"
+    },
+    editLink: {
+      editUrl: "https://github.com/acme/vitepress-docs/edit/main/:path"
+    }
+  },
+  apiUrl: "https://vitepress-api.acme.example/v1"
+};
+""".strip(),
+    ".vuepress/config.js": """
+module.exports = {
+  owner: "vuepress-owner@acme.example",
+  head: [["link", { href: "https://vuepress-cdn.acme.example/app.css" }]],
+  apiUrl: "https://vuepress-user:vuepress-token-do-not-store@vuepress-api.acme.example/v1"
+};
+""".strip(),
+}
+
 
 def test_bun_scope_candidate_values_do_not_reuse_stale_registry_value(tmp_path) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
@@ -671,6 +720,118 @@ def test_test_runner_config_artifacts_recurse_without_persisting_userinfo(
         assert artifact_meta[(artifact_root / filename).resolve().as_posix()]
     assert "vitest-token-do-not-store" not in persisted_text
     assert "karma-token-do-not-store" not in persisted_text
+
+
+def test_docs_site_configs_extract_static_public_endpoints(tmp_path: Path) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+
+    assert _artifact_format_label("docusaurus.config.ts") == "docusaurus-config"
+    assert _artifact_format_label("rspress.config.mjs") == "rspress-config"
+    assert _artifact_format_label(".vitepress/config.ts") == "vitepress-config"
+    assert _artifact_format_label(".vuepress/config.js") == "vuepress-config"
+    assert processor._js_runtime_text_structured_payload_text(
+        _DOCS_SITE_CONFIG_PAYLOADS["docusaurus.config.ts"],
+        source_hint="docusaurus.config.ts",
+    ).splitlines() == [
+        "https://docs.acme.example",
+        "https://docs-api.acme.example/v1",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _DOCS_SITE_CONFIG_PAYLOADS["rspress.config.mjs"],
+        source_hint="rspress.config.mjs",
+    ).splitlines() == [
+        "https://rspress-cdn.acme.example/assets/",
+        "https://rspress-docs.acme.example",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _DOCS_SITE_CONFIG_PAYLOADS[".vitepress/config.ts"],
+        source_hint=".vitepress/config.ts",
+    ).splitlines() == [
+        "https://github.com/acme/vitepress-docs/edit/main/:path",
+        "https://vitepress-api.acme.example/v1",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _DOCS_SITE_CONFIG_PAYLOADS[".vuepress/config.js"],
+        source_hint=".vuepress/config.js",
+    ).splitlines() == [
+        "https://vuepress-cdn.acme.example/app.css",
+        "https://vuepress-api.acme.example/v1",
+    ]
+    assert (
+        processor._js_runtime_text_structured_payload_text(
+            _DOCS_SITE_CONFIG_PAYLOADS["docusaurus.config.ts"],
+            source_hint="docs.notes.ts",
+        )
+        == ""
+    )
+
+
+def test_docs_site_config_artifacts_recurse_without_persisting_userinfo(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "docs-sites"
+    artifact_root.mkdir()
+    vitepress_dir = artifact_root / ".vitepress"
+    vuepress_dir = artifact_root / ".vuepress"
+    vitepress_dir.mkdir()
+    vuepress_dir.mkdir()
+    bootstrap_engagement(db_path, name="Docs Site Config Recursion Test")
+    for filename, payload in _DOCS_SITE_CONFIG_PAYLOADS.items():
+        (artifact_root / filename).write_text(payload, encoding="utf-8")
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 4
+    assert summary.processed == 4
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        artifact_meta = {
+            row[0]: row[1]
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        persisted_text = "\n".join(con.iterdump())
+    finally:
+        con.close()
+
+    for expected_seed in {
+        ("https://docs.acme.example", "url"),
+        ("https://docs-api.acme.example/v1", "url"),
+        ("https://rspress-cdn.acme.example/assets/", "url"),
+        ("https://rspress-docs.acme.example", "url"),
+        ("https://github.com/acme/vitepress-docs/edit/main/:path", "url"),
+        ("https://vitepress-api.acme.example/v1", "url"),
+        ("https://vuepress-cdn.acme.example/app.css", "url"),
+        ("https://vuepress-api.acme.example/v1", "url"),
+        ("docusaurus-owner@acme.example", "email"),
+        ("rspress-owner@acme.example", "email"),
+        ("vitepress-owner@acme.example", "email"),
+        ("vuepress-owner@acme.example", "email"),
+    }:
+        assert expected_seed in seeds
+    for filename in _DOCS_SITE_CONFIG_PAYLOADS:
+        assert artifact_meta[(artifact_root / filename).resolve().as_posix()]
+    assert "docusaurus-token-do-not-store" not in persisted_text
+    assert "vuepress-token-do-not-store" not in persisted_text
 
 
 def test_deno_config_extracts_static_imports_and_endpoints(tmp_path: Path) -> None:

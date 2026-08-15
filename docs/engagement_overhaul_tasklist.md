@@ -524,6 +524,18 @@ sentences as historical notes only, not as current instructions.
   tests (`16 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md`
   B387.
 
+- [x] Docs-site config passive-recursion checkpoint (2026-08-16):
+  Scoped Docusaurus, VitePress, VuePress, and Rspress config artifacts now
+  receive `docusaurus-config`, `vitepress-config`, `vuepress-config`, and
+  `rspress-config` labels and route through the existing JS-runtime endpoint
+  extractor. Docs, API, CDN, and explicit source-edit URLs become recursive URL
+  seeds, URL userinfo is stripped before persistence, and the regression proves
+  `docusaurus-token-do-not-store` and `vuepress-token-do-not-store` are not
+  persisted. No docs-site build execution, package install, HTTP probing,
+  authentication, provider calls, or scope relaxation was added. Verification:
+  JS-runtime config plus API format label tests (`18 passed`), Ruff, and
+  `py_compile` passed. Backprop: `SPEC.md` B388.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

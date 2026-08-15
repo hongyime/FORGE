@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Docusaurus, VitePress, VuePress, and Rspress
+docs-site configs now join passive JS-runtime recursion. Scoped
+`docusaurus.config.*`, `.vitepress/config.*`, `.vuepress/config.*`, and
+`rspress.config.*` artifacts map to source-gated config labels, so docs, API,
+CDN, and explicit source-edit URLs become recursive URL seeds through the
+existing endpoint extractor. URL userinfo is stripped before persistence, and
+the regression proves `docusaurus-token-do-not-store` and
+`vuepress-token-do-not-store` are not stored. No docs-site build execution,
+package install, HTTP probing, authentication, provider calls, or scope
+relaxation was added. Verification passed for JS-runtime config plus API format
+label tests (`18 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B388.
 Latest checkpoint (2026-08-16): Vitest, Jest, and Karma test-runner configs now
 join passive JS-runtime recursion. Scoped `vitest.config.*`, `jest.config.*`,
 and `karma.conf.*` artifacts map to source-gated config labels, so test server,
