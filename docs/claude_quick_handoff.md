@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): JS runtime host-only promotion regression
+modularization is complete. `tests/phase1/js_runtime_artifact_cases.py` now
+owns the Playwright, TestCafe, and frontend framework config batching fixtures,
+while the original pytest nodes remain thin wrappers in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for
+host-only URL promotion, relative/template suppression, candidate ordering, and
+bounded local batch dispatch without changing production parser behavior, live
+probing, provider calls, credential use, scope, validation/report gates,
+scheduler behavior, or persistent non-test engagement data. Verification
+passed for the preserved wrappers plus adjacent JS runtime worker/config suites
+(`21 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B419.
 Latest checkpoint (2026-08-16): JS runtime structured payload worker-order
 modularization and raw candidate dedupe are complete. A new
 `tests/phase1/js_runtime_artifact_cases.py` module now owns the Deno/JSR/npm
