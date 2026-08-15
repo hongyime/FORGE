@@ -28,4 +28,21 @@ def open_workflow_db(
     return con
 
 
-__all__ = ["open_workflow_db"]
+def build_workflow_db_opener(
+    *,
+    connect: ConnectDb = direct_connect,
+    migrate: ConnectionHook = run_migrations,
+    validate: ConnectionHook = validate_canonical_schema,
+) -> ConnectDb:
+    def _open_workflow_db(db_path: Path) -> sqlite3.Connection:
+        return open_workflow_db(
+            db_path,
+            connect=connect,
+            migrate=migrate,
+            validate=validate,
+        )
+
+    return _open_workflow_db
+
+
+__all__ = ["build_workflow_db_opener", "open_workflow_db"]

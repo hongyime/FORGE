@@ -42,7 +42,7 @@ from forge.webui.auth_dependencies import (
     build_principal_permission_guard,
     websocket_principal,
 )
-from forge.webui.db import open_workflow_db
+from forge.webui.db import build_workflow_db_opener
 from forge.webui.artifacts import (
     ArtifactRouteNotFound,
     artifact_payloads as build_artifact_payloads,
@@ -456,8 +456,7 @@ def create_app() -> Any:
             format_size=_format_size,
         )
 
-    def _open_workflow_db(db_path: Path) -> sqlite3.Connection:
-        return open_workflow_db(db_path)
+    _open_workflow_db = build_workflow_db_opener()
 
     def _engagement_artifact_files(
         con: sqlite3.Connection,

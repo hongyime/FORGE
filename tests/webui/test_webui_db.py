@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from forge.webui.db import open_workflow_db
+from forge.webui.db import build_workflow_db_opener, open_workflow_db
 
 
 def test_open_workflow_db_sets_row_factory_and_runs_hooks_in_order(tmp_path: Path) -> None:
@@ -16,7 +16,7 @@ def test_open_workflow_db_sets_row_factory_and_runs_hooks_in_order(tmp_path: Pat
         assert path == db_path
         calls.append("connect")
         con = sqlite3.connect(path)
-        con.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, value TEXT)")
+        con.execute("CREATE TABLE IF NOT EXISTS sample (id INTEGER PRIMARY KEY, value TEXT)")
         con.execute("INSERT INTO sample (value) VALUES ('ok')")
         con.commit()
         return con
@@ -34,6 +34,17 @@ def test_open_workflow_db_sets_row_factory_and_runs_hooks_in_order(tmp_path: Pat
         row = con.execute("SELECT value FROM sample").fetchone()
 
         assert calls == ["connect", "migrate", "validate"]
+        assert row["value"] == "ok"
+    finally:
+        con.close()
+
+    con = build_workflow_db_opener(
+        connect=connect,
+        migrate=migrate,
+        validate=validate,
+    )(db_path)
+    try:
+        row = con.execute("SELECT value FROM sample").fetchone()
         assert row["value"] == "ok"
     finally:
         con.close()

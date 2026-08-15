@@ -319,6 +319,15 @@ sentences as historical notes only, not as current instructions.
   Verification: Web UI engagement-discovery tests (`7 passed`), HTMX app wiring
   tests (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B366.
 
+- [x] Web UI workflow-DB opener provider extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds its workflow DB opener through
+  `forge.webui.db.build_workflow_db_opener` instead of defining the direct
+  `open_workflow_db` wrapper inline. The helper preserves row-factory,
+  migration-before-validation, and route-level open/close behavior while keeping
+  DB binding in the Web UI DB module. Verification: Web UI DB tests (`2
+  passed`), HTMX app wiring tests (`19 passed`), Ruff, and `py_compile` passed.
+  Backprop: `SPEC.md` B367.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
