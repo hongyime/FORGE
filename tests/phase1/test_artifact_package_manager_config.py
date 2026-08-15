@@ -23,6 +23,8 @@ from tests.phase1.artifact_test_support import bootstrap_engagement
 @pytest.mark.parametrize(
     ("value", "label"),
     [
+        ("bunfig.toml", "bun-config"),
+        ("download.bunfig.toml.bun-config", "bun-config"),
         (".npmrc", "npmrc"),
         (".condarc", "conda-config"),
         ("condarc", "conda-config"),
@@ -89,6 +91,8 @@ def test_package_manager_config_artifact_label_recognizes_source_paths(
         "yarnrc.yml",
         "app/yarnrc.yml",
         "pixi-notes.toml",
+        "bunfig-notes.toml",
+        "app/bunfig.toml.bak",
     ],
 )
 def test_package_manager_config_artifact_label_avoids_generic_configs(value: str) -> None:
@@ -97,6 +101,7 @@ def test_package_manager_config_artifact_label_avoids_generic_configs(value: str
 
 def test_package_manager_config_routes_remote_sources_without_generic_names() -> None:
     assert _classify_remote_artifact_url("https://downloads.acme.example/.npmrc") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/bunfig.toml") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.condarc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/mambarc") == "config"
     assert _classify_remote_artifact_url("https://downloads.acme.example/.yarnrc.yml") == "config"
@@ -154,10 +159,12 @@ def test_package_manager_config_routes_remote_sources_without_generic_names() ->
         package_manager_config_remote_filename(".cargo/credentials")
         == "credentials.cargo-credentials"
     )
+    assert package_manager_config_remote_filename("bunfig.toml") == "bunfig.toml"
     assert package_manager_config_remote_filename(".yarnrc.yml") == ".yarnrc.yml"
     assert package_manager_config_remote_filename("poetry.toml") == "poetry.toml"
     assert package_manager_config_remote_filename("pypoetry/auth.toml") == "auth.toml.poetry-auth"
     assert _artifact_format_label(".condarc") == "conda-config"
+    assert _artifact_format_label("bunfig.toml") == "bun-config"
     assert _artifact_format_label("mambarc") == "mamba-config"
     assert _artifact_format_label(".yarnrc.yml") == "yarnrc-yml"
     assert _artifact_format_label("poetry.toml") == "poetry-config"
@@ -248,6 +255,25 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         ).strip(),
         encoding="utf-8",
     )
+    bun_config_path = artifact_root / "bunfig.toml"
+    bun_config_path.write_text(
+        dedent(
+            """
+            telemetry = false
+
+            [install]
+            registry = "https://bun-user:bun-token-do-not-store@bun-registry.acme.example/npm"
+            cafile = "./certs/ca.pem"
+
+            [install.scopes]
+            acme = "https://bun-scope.acme.example/npm"
+
+            owner = "bun-owner@acme.example"
+            firebase = "https://bun-firebase.firebaseio.com"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
     yarnrc_yml_path = artifact_root / ".yarnrc.yml"
     yarnrc_yml_path.write_text(
         dedent(
@@ -334,8 +360,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 13
-    assert summary.processed >= 13
+    assert queued >= 14
+    assert summary.processed >= 14
 
     con = sqlite3.connect(db_path)
     try:
@@ -361,6 +387,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert artifact_meta[poetry_config_path.resolve().as_posix()]["format"] == "poetry-config"
         assert artifact_meta[poetry_auth_path.resolve().as_posix()]["format"] == "poetry-auth"
         assert artifact_meta[pixi_manifest_path.resolve().as_posix()]["format"] == "pixi-manifest"
+        assert artifact_meta[bun_config_path.resolve().as_posix()]["format"] == "bun-config"
         assert (
             artifact_meta[conda_environment_path.resolve().as_posix()]["format"]
             == "conda-environment"
@@ -389,6 +416,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert ("https://poetry-auth.acme.example/simple", "url") in seeds
         assert ("https://poetry-labels.acme.example/simple", "url") in seeds
         assert ("https://pixi.acme.example/conda", "url") in seeds
+        assert ("https://bun-registry.acme.example/npm", "url") in seeds
+        assert ("https://bun-scope.acme.example/npm", "url") in seeds
         assert ("conda-label-owner@acme.example", "email") in seeds
         assert ("conda-env-owner@acme.example", "email") in seeds
         assert ("mamba-label-owner@acme.example", "email") in seeds
@@ -396,6 +425,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert ("poetry-auth-owner@acme.example", "email") in seeds
         assert ("poetry-owner@acme.example", "email") in seeds
         assert ("pixi-owner@acme.example", "email") in seeds
+        assert ("bun-owner@acme.example", "email") in seeds
         assert ("https://nuget-labels.acme.example/v3/index.json", "url") in seeds
         assert ("nuget-label-owner@acme.example", "email") in seeds
 
@@ -412,6 +442,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert ("firebase", "yarn-firebase") in cloud_assets
         assert ("firebase", "poetry-firebase") in cloud_assets
         assert ("supabase", "poetryauthvault") in cloud_assets
+        assert ("firebase", "bun-firebase") in cloud_assets
 
         persisted_text = "\n".join(con.iterdump())
         for raw_secret in {
@@ -427,6 +458,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
             "poetry-auth-token-do-not-store",
             "poetry-token-do-not-store",
             "pixi-token-do-not-store",
+            "bun-token-do-not-store",
         }:
             assert raw_secret not in persisted_text
     finally:

@@ -5,6 +5,7 @@ from urllib.parse import unquote, urlparse
 
 
 _DIRECT_LABELS = {
+    "bunfig.toml": "bun-config",
     ".condarc": "conda-config",
     ".gemrc": "gemrc",
     ".mambarc": "mamba-config",
@@ -30,6 +31,7 @@ _DIRECT_LABELS = {
     "uv.toml": "uv-config",
 }
 _CACHE_LABEL_SUFFIXES = {
+    ".bun-config": "bun-config",
     ".cargo-config": "cargo-config",
     ".conda-config": "conda-config",
     ".conda-environment": "conda-environment",

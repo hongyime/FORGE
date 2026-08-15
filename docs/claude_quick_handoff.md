@@ -32,6 +32,14 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Bun package-manager config artifacts now join
+passive package-manager recursion. `bunfig.toml` and downloaded Bun config
+cache names receive the `bun-config` label, so the existing artifact queue
+extracts scoped registry URLs, owner emails, and cloud metadata without running
+Bun or installing packages. The regression proves Bun registry URL seeds, owner
+email seeds, Firebase metadata, and no persisted `bun-token-do-not-store`
+material. Verification passed for package-manager artifact tests (`60 passed`),
+Ruff, and `py_compile`. Backprop: `SPEC.md` B381.
 Latest checkpoint (2026-08-16): Web UI command-center body parsing moved from
 a local `forge.webui.app.create_app()` wrapper to
 `forge.webui.command_center_routes.build_command_body_engagement_id_parser`.

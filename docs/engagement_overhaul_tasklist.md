@@ -445,6 +445,17 @@ sentences as historical notes only, not as current instructions.
   Verification: Web UI command-center plus HTMX wiring tests (`27 passed`),
   Ruff, and `py_compile` passed. Backprop: `SPEC.md` B380.
 
+- [x] Bun package-manager passive-recursion checkpoint (2026-08-16):
+  Scoped `bunfig.toml` package-manager config artifacts now receive the
+  `bun-config` label for local and downloaded artifact paths, so the existing
+  artifact queue can passively extract Bun registry URLs, owner contacts, and
+  cloud metadata into recursive URL/email/cloud pivots. The regression proves
+  Bun registry URLs and owner email become seeds, Firebase metadata is captured,
+  and `bun-token-do-not-store` is not persisted. No Bun execution, package
+  install, HTTP probing, authentication, provider calls, or scope relaxation was
+  added. Verification: package-manager artifact tests (`60 passed`), Ruff, and
+  `py_compile` passed. Backprop: `SPEC.md` B381.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
