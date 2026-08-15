@@ -100,6 +100,7 @@ def test_security_scanner_config_artifact_format_labels_are_source_aware() -> No
     assert _artifact_format_label("dependency-check.properties") == "dependency-check-config"
     assert _artifact_format_label(".anchorectl/config.yaml") == "anchorectl-config"
     assert _artifact_format_label("clair/config.yaml") == "clair-config"
+    assert _artifact_format_label("cve-bin-tool/config.toml") == "cve-bin-tool-config"
     assert _artifact_format_label(".gitleaks.toml") == "gitleaks-config"
     assert _artifact_format_label(".semgrep/config.yml") == "semgrep-config"
     assert _artifact_format_label(".trufflehog.yml") == "trufflehog-config"

@@ -353,6 +353,22 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    cve_bin_tool_path = artifact_root / "cve-bin-tool" / "config.toml"
+    cve_bin_tool_path.parent.mkdir(parents=True, exist_ok=True)
+    cve_bin_tool_path.write_text(
+        dedent(
+            """
+            [nvd]
+            api_key = "cve-bin-tool-api-key-do-not-store"
+            url = "https://cve-feed.acme.example/nvd"
+            [osv]
+            url = "https://cve-osv.acme.example/v1/query"
+            owner = "cve-bin-tool-owner@acme.example"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
     semgrep_path = artifact_root / ".semgrep" / "config.yml"
     semgrep_path.parent.mkdir(parents=True, exist_ok=True)
     semgrep_path.write_text(
@@ -439,7 +455,7 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
 
     assert queued >= 14
     assert summary.processed >= 14
-    assert summary.discovered_seeds >= 41
+    assert summary.discovered_seeds >= 44
 
     seeds = _seed_pairs(db_path)
     for expected_seed in {
@@ -461,6 +477,8 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         ("https://clair-api.acme.example", "url"),
         ("https://clair-metrics.acme.example:8089", "url"),
         ("https://clair-indexer.acme.example", "url"),
+        ("https://cve-feed.acme.example/nvd", "url"),
+        ("https://cve-osv.acme.example/v1/query", "url"),
         ("https://semgrep-registry.acme.example/rules", "url"),
         ("https://gitleaks-control.acme.example/api", "url"),
         ("https://kics-control.acme.example", "url"),
@@ -479,6 +497,7 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         ("dependency-check-owner@acme.example", "email"),
         ("anchore-owner@acme.example", "email"),
         ("clair-owner@acme.example", "email"),
+        ("cve-bin-tool-owner@acme.example", "email"),
         ("semgrep-config-owner@acme.example", "email"),
         ("gitleaks-config-owner@acme.example", "email"),
         ("kics-owner@acme.example", "email"),
@@ -510,6 +529,10 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     )
     assert artifact_meta[anchorectl_path.resolve().as_posix()]["format"] == "anchorectl-config"
     assert artifact_meta[clair_path.resolve().as_posix()]["format"] == "clair-config"
+    assert (
+        artifact_meta[cve_bin_tool_path.resolve().as_posix()]["format"]
+        == "cve-bin-tool-config"
+    )
     assert artifact_meta[semgrep_path.resolve().as_posix()]["format"] == "semgrep-config"
     assert artifact_meta[gitleaks_path.resolve().as_posix()]["format"] == "gitleaks-config"
     assert artifact_meta[kics_path.resolve().as_posix()]["format"] == "kics-config"
@@ -534,4 +557,5 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     assert "anchore-token-do-not-store" not in db_dump
     assert "anchore-password-do-not-store" not in db_dump
     assert "clair-db-password-do-not-store" not in db_dump
+    assert "cve-bin-tool-api-key-do-not-store" not in db_dump
     assert "detect-token-do-not-store" not in db_dump
