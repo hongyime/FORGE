@@ -201,6 +201,7 @@ def import_targets(
                 roe_id=str(roe_id or "").strip(),
                 scope_manifest=manifest_path,
                 max_iter=max_iter,
+                engagement_db_path=cfg.engagement_db_path(str(engagement_id)),
             )
             started = True
             if starts_remaining is not None:
@@ -773,6 +774,7 @@ def _start_passive_kill_chain(
     roe_id: str,
     scope_manifest: Path,
     max_iter: int,
+    engagement_db_path: Path,
 ) -> None:
     command = [
         sys.executable,
@@ -803,9 +805,44 @@ def _start_passive_kill_chain(
     combined_output = f"{proc.stdout or ''}\n{proc.stderr or ''}"
     if proc.returncode == 2 and "Kill-chain complete" in combined_output and "Report:" in combined_output:
         return
+    if proc.returncode == 2 and _completed_passive_kill_chain_run(
+        engagement_db_path,
+        engagement_id=engagement_id,
+        seed=seed,
+    ):
+        return
     raise subprocess.CalledProcessError(
         proc.returncode,
         command,
         output=proc.stdout,
         stderr=proc.stderr,
     )
+
+
+def _completed_passive_kill_chain_run(
+    db_path: Path,
+    *,
+    engagement_id: int,
+    seed: str,
+) -> bool:
+    if not db_path.exists():
+        return False
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM engagement_runs
+            WHERE engagement_id=?
+              AND run_kind='kill_chain'
+              AND seed_value=?
+              AND status='completed'
+            LIMIT 1
+            """,
+            (engagement_id, seed),
+        ).fetchone()
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+    return row is not None

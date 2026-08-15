@@ -207,6 +207,17 @@ sentences as historical notes only, not as current instructions.
   app wiring tests (`19 passed`), Ruff, and `py_compile` passed. Backprop:
   `SPEC.md` B353.
 
+- [x] Scheduled target-import exit-2 DB-completion checkpoint (2026-08-16):
+  A scheduled target import generated
+  `reports/engagement_10078_kill_chain_20260815T161113.md` but still ended with
+  Task Scheduler result `2` and stderr `Invalid value: not enough values to
+  unpack`. Target import now accepts child exit code `2` when durable engagement
+  DB state proves a completed `kill_chain` run exists for the same engagement
+  and seed, in addition to the previous captured-output `Kill-chain complete` +
+  `Report:` success gate. Real exit-2 CLI/parser failures without DB completion
+  still raise. Verification: target-import regression suite (`15 passed`),
+  Ruff, and `py_compile` passed. Backprop: `SPEC.md` B354.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

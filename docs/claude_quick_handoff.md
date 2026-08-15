@@ -32,6 +32,15 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Scheduled target import generated
+`reports/engagement_10078_kill_chain_20260815T161113.md` but still ended with
+Task Scheduler result `2` and stderr `Invalid value: not enough values to
+unpack`. Target import now accepts child exit code `2` when the engagement DB
+contains a completed `kill_chain` run for the same engagement and seed, in
+addition to the previous captured-output `Kill-chain complete` plus `Report:`
+success gate. Real exit-2 CLI/parser failures without DB completion still fail.
+Verification passed for target-import regression tests (`15 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B354.
 Latest checkpoint (2026-08-16): Web UI workflow engagement DB opening was split
 out of `forge.webui.app.create_app()`. `forge.webui.db.open_workflow_db` now
 owns direct-connect use, `sqlite3.Row` row factory setup before migrations,
