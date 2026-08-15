@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI workflow engagement DB opening was split
+out of `forge.webui.app.create_app()`. `forge.webui.db.open_workflow_db` now
+owns direct-connect use, `sqlite3.Row` row factory setup before migrations,
+migration-before-validation ordering, canonical-schema validation, and returned
+open connection semantics for route handlers. Verification passed for Web UI
+DB-helper tests (`2 passed`), HTMX app wiring tests (`19 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B353.
 Latest checkpoint (2026-08-16): Web UI route permission guarding was split out
 of `forge.webui.app.create_app()`. `forge.webui.auth_dependencies` now exposes
 `build_principal_permission_guard`, and `create_app()` uses it for the local
