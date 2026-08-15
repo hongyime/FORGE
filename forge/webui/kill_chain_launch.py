@@ -433,6 +433,44 @@ def launch_kill_chain_run_payload(
     return payload
 
 
+def build_kill_chain_run_launcher(
+    *,
+    logs_root: Callable[[], Path],
+    clear_control_markers: Callable[[int], None],
+    open_launch_log: Callable[[Path, int], tuple[Path, TextIO]],
+    publish_sync: Callable[[int, str, dict[str, Any]], None],
+    env: Mapping[str, str],
+    cwd: Path,
+    popen_factory: Callable[..., Any] = subprocess.Popen,
+) -> Callable[..., dict[str, Any]]:
+    def launch_run(
+        *,
+        con: sqlite3.Connection,
+        engagement_id: int,
+        operator: str,
+        body: dict[str, Any] | None,
+        force_resume: bool | None,
+        launch_status: str,
+    ) -> dict[str, Any]:
+        return launch_kill_chain_run_payload(
+            con=con,
+            engagement_id=engagement_id,
+            operator=operator,
+            body=body,
+            force_resume=force_resume,
+            launch_status=launch_status,
+            logs_root=logs_root(),
+            clear_control_markers=clear_control_markers,
+            open_launch_log=open_launch_log,
+            publish_sync=publish_sync,
+            env=env,
+            cwd=cwd,
+            popen_factory=popen_factory,
+        )
+
+    return launch_run
+
+
 __all__ = [
     "KillChainLaunchConflict",
     "KillChainLaunchNoSeeds",
@@ -443,6 +481,7 @@ __all__ = [
     "VALID_REPORT_PROVIDERS",
     "build_kill_chain_command",
     "build_kill_chain_launch_spec",
+    "build_kill_chain_run_launcher",
     "launch_seed_values",
     "launch_progress_message",
     "launch_progress_payload",

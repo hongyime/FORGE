@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +12,7 @@ from forge.webui.kill_chain_launch import (
     KillChainLaunchOptionError,
     build_kill_chain_command,
     build_kill_chain_launch_spec,
+    build_kill_chain_run_launcher,
     launch_seed_values,
     launch_response_payload,
     parse_kill_chain_launch_options,
@@ -292,3 +295,92 @@ def test_launch_response_and_progress_payloads_share_contract(tmp_path: Path) ->
             },
         )
     ]
+
+
+def test_kill_chain_run_launcher_binds_app_dependencies(tmp_path: Path) -> None:
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.executescript(
+        """
+        CREATE TABLE engagement_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            started_at TEXT,
+            metadata_json TEXT
+        );
+        CREATE TABLE engagement_seeds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            engagement_id INTEGER NOT NULL,
+            seed_value TEXT NOT NULL,
+            seed_type TEXT NOT NULL,
+            source TEXT NOT NULL,
+            depth INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO engagement_seeds (
+            engagement_id, seed_value, seed_type, source, depth
+        ) VALUES (
+            1001, 'acme.example', 'domain', 'operator', 0
+        );
+        """
+    )
+    logs_root_calls: list[None] = []
+    cleared: list[int] = []
+    published: list[tuple[int, str, dict[str, object]]] = []
+    seen: dict[str, object] = {}
+
+    def logs_root() -> Path:
+        logs_root_calls.append(None)
+        return tmp_path
+
+    def open_log(root: Path, engagement_id: int) -> tuple[Path, object]:
+        log_path = root / f"engagement_{engagement_id}_kill_chain_test.log"
+        return log_path, log_path.open("w", encoding="utf-8")
+
+    def fake_popen(command: list[str], **kwargs: object) -> SimpleNamespace:
+        seen["command"] = command
+        seen["kwargs"] = kwargs
+        return SimpleNamespace(pid=4242)
+
+    launcher = build_kill_chain_run_launcher(
+        logs_root=logs_root,
+        clear_control_markers=cleared.append,
+        open_launch_log=open_log,  # type: ignore[arg-type]
+        publish_sync=lambda engagement_id, message, payload: published.append(
+            (engagement_id, message, payload)
+        ),
+        env={"FORGE_ENV": "test"},
+        cwd=tmp_path,
+        popen_factory=fake_popen,
+    )
+
+    payload = launcher(
+        con=con,
+        engagement_id=1001,
+        operator="operator-web",
+        body={"dry_run": True, "max_iter": 1},
+        force_resume=None,
+        launch_status="started",
+    )
+
+    assert logs_root_calls == [None]
+    assert cleared == [1001]
+    assert payload["status"] == "started"
+    assert payload["engagement_id"] == 1001
+    assert payload["pid"] == 4242
+    assert payload["primary_seed"] == "acme.example"
+    assert payload["dry_run"] is True
+    assert payload["max_iter"] == 1
+    command = seen["command"]
+    assert isinstance(command, list)
+    assert command[0] == sys.executable
+    assert command[1:6] == ["-m", "forge.cli", "--no-tor", "kill-chain", "acme.example"]
+    assert "--dry-run" in command
+    kwargs = seen["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["cwd"] == str(tmp_path)
+    assert kwargs["stderr"] == subprocess.STDOUT
+    assert kwargs["env"] == {"FORGE_ENV": "test"}
+    assert published[0][0] == 1001
+    assert published[0][1] == "engagement_run_started"
+    assert published[0][2]["primary_seed"] == "acme.example"

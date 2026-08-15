@@ -77,7 +77,7 @@ from forge.webui.kill_chain_launch import (
     KillChainLaunchConflict,
     KillChainLaunchNoSeeds,
     KillChainLaunchOptionError,
-    launch_kill_chain_run_payload,
+    build_kill_chain_run_launcher,
 )
 from forge.webui.monitoring_routes import (
     MonitoringRouteError,
@@ -379,6 +379,15 @@ def create_app() -> Any:
     _clear_run_control_markers = build_run_control_marker_clearer(cfg.data_dir)
 
     _logs_dir = build_logs_dir_provider(cfg.data_dir)
+    _launch_kill_chain_run = build_kill_chain_run_launcher(
+        logs_root=_logs_dir,
+        clear_control_markers=_clear_run_control_markers,
+        open_launch_log=open_launch_log_file,
+        publish_sync=_publish_progress_sync,
+        env=os.environ,
+        cwd=Path.cwd(),
+        popen_factory=subprocess.Popen,
+    )
 
     _report_files = build_report_files_provider(_reports_dir)
     _audit_files = build_audit_files_provider(_reports_dir)
@@ -1977,20 +1986,13 @@ def create_app() -> Any:
         con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
-            return launch_kill_chain_run_payload(
+            return _launch_kill_chain_run(
                 con=con,
                 engagement_id=engagement_id,
                 operator=subject,
                 body=body,
                 force_resume=force_resume,
                 launch_status=launch_status,
-                logs_root=_logs_dir(),
-                clear_control_markers=_clear_run_control_markers,
-                open_launch_log=open_launch_log_file,
-                publish_sync=_publish_progress_sync,
-                env=os.environ,
-                cwd=Path.cwd(),
-                popen_factory=subprocess.Popen,
             )
         except KillChainLaunchConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc

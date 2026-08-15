@@ -417,6 +417,16 @@ sentences as historical notes only, not as current instructions.
   command-center plus HTMX wiring tests (`26 passed`), Ruff, and `py_compile`
   passed. Backprop: `SPEC.md` B377.
 
+- [x] Web UI kill-chain launcher binding checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now binds kill-chain launch execution through
+  `forge.webui.kill_chain_launch.build_kill_chain_run_launcher` instead of
+  passing logs-root, control-marker cleanup, launch-log opening, progress
+  publishing, environment, cwd, and `Popen` dependencies from the route wrapper.
+  The route wrapper still owns auth, engagement DB resolution, connection
+  lifecycle, and HTTP error mapping. Verification: Web UI kill-chain launch plus
+  HTMX wiring tests (`29 passed`), Ruff, and `py_compile` passed. Backprop:
+  `SPEC.md` B378.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
