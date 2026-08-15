@@ -98,6 +98,7 @@ def test_security_scanner_config_artifact_format_labels_are_source_aware() -> No
     assert _artifact_format_label("syft.toml") == "syft-config"
     assert _artifact_format_label(".hadolint.yaml") == "hadolint-config"
     assert _artifact_format_label("dependency-check.properties") == "dependency-check-config"
+    assert _artifact_format_label(".anchorectl/config.yaml") == "anchorectl-config"
     assert _artifact_format_label(".gitleaks.toml") == "gitleaks-config"
     assert _artifact_format_label(".semgrep/config.yml") == "semgrep-config"
     assert _artifact_format_label(".trufflehog.yml") == "trufflehog-config"

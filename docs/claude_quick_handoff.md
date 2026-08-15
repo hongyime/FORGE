@@ -32,17 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
-Latest checkpoint (2026-08-16): OWASP Dependency-Check config files now join
-passive security-scanner config recursion. Scoped `dependency-check.*` and
-`.dependency-check.*` artifacts map to `dependency-check-config`, and the
-security-scanner structured extractor accepts NVD, legacy CVE feed, and
-hosted-suppression endpoint fields. Dependency-Check configs now recurse
-sanitized NVD API URLs, hosted-suppression URLs, and owner contacts while
-proving URL userinfo token material is not persisted. No scanner execution,
-feed downloads, registry calls, HTTP probing, authentication, provider calls,
-scheduler changes, or scope relaxation was added. Verification passed for
-focused security-scanner tests (`2 passed`), Ruff, and `py_compile`. Backprop:
-`SPEC.md` B391.
+Latest checkpoint (2026-08-16): AnchoreCTL config files now join passive
+security-scanner config recursion. Scoped `.anchorectl.yaml`,
+`anchorectl.yaml`, and `.anchorectl/config.yaml` artifacts map to
+`anchorectl-config` and route through the existing source-gated
+security-scanner structured extractor. AnchoreCTL configs now recurse sanitized
+Anchore Enterprise API URLs and owner contacts while proving URL userinfo token
+and password material are not persisted. No scanner execution, Enterprise API
+calls, feed downloads, registry calls, HTTP probing, authentication, provider
+calls, scheduler changes, or scope relaxation was added. Verification passed
+for focused security-scanner tests (`2 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B392.
 Latest checkpoint (2026-08-16): Docusaurus, VitePress, VuePress, and Rspress
 docs-site configs now join passive JS-runtime recursion. Scoped
 `docusaurus.config.*`, `.vitepress/config.*`, `.vuepress/config.*`, and

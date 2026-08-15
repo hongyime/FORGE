@@ -6161,6 +6161,10 @@ def _security_scanner_config_artifact_label(value: str) -> str:
         ".dependency-check.xml",
     }:
         return "dependency-check-config"
+    if name in {"anchorectl.yaml", "anchorectl.yml", ".anchorectl.yaml", ".anchorectl.yml"}:
+        return "anchorectl-config"
+    if parent == ".anchorectl" and name in {"config.yaml", "config.yml"}:
+        return "anchorectl-config"
     if name in {"gitleaks.toml", ".gitleaks.toml", "gitleaks.yaml", "gitleaks.yml", ".gitleaks.yaml", ".gitleaks.yml"}:
         return "gitleaks-config"
     if name in {"semgrep.yaml", "semgrep.yml", ".semgrep.yaml", ".semgrep.yml"}:
