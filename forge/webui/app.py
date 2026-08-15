@@ -246,6 +246,11 @@ from forge.webui.workspace_routes import (
     upsert_workspace_member_route_payload,
     upsert_workspace_route_payload,
 )
+from forge.webui.workspace_access import (
+    ensure_workspace_rbac_foundation,
+    principal_can_access_engagement_row,
+    principal_can_access_workspace,
+)
 from forge.webui.state import (
     engagement_run_progress_event,
     broker,
@@ -384,98 +389,6 @@ def create_app() -> Any:
             file_response=FileResponse,
         )
 
-    def _safe_alter_engagements(con: sqlite3.Connection, sql: str) -> None:
-        try:
-            con.execute(sql)
-        except sqlite3.OperationalError as exc:
-            if "duplicate column" not in str(exc).lower():
-                raise
-
-    def _ensure_workspace_rbac_foundation(con: sqlite3.Connection) -> None:
-        if not _table_exists(con, "engagements"):
-            return
-        con.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS workspaces (
-                workspace_id  TEXT PRIMARY KEY,
-                name          TEXT      NOT NULL,
-                metadata_json TEXT      NOT NULL DEFAULT '{}',
-                created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS workspace_memberships (
-                workspace_id     TEXT      NOT NULL,
-                subject          TEXT      NOT NULL,
-                role             TEXT      NOT NULL DEFAULT 'operator',
-                permissions_json TEXT      NOT NULL DEFAULT '[]',
-                created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (workspace_id, subject)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_workspace_memberships_subject
-                ON workspace_memberships (subject, workspace_id);
-            """
-        )
-        if "workspace_id" not in _table_columns(con, "engagements"):
-            _safe_alter_engagements(
-                con,
-                "ALTER TABLE engagements ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default'",
-            )
-        con.execute(
-            """
-            UPDATE engagements
-            SET workspace_id='default'
-            WHERE workspace_id IS NULL OR TRIM(workspace_id) = ''
-            """
-        )
-        con.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_engagements_workspace
-                ON engagements (workspace_id, id)
-            """
-        )
-        con.execute(
-            """
-            INSERT OR IGNORE INTO workspaces (workspace_id, name, metadata_json)
-            VALUES ('default', 'Default Workspace', '{}')
-            """
-        )
-        con.commit()
-
-    def _principal_has_workspace_membership(
-        con: sqlite3.Connection,
-        principal: Principal,
-        workspace_id: str,
-    ) -> bool:
-        if not _table_exists(con, "workspace_memberships"):
-            return False
-        row = con.execute(
-            """
-            SELECT 1
-            FROM workspace_memberships
-            WHERE workspace_id=? AND subject=?
-            LIMIT 1
-            """,
-            (workspace_id, principal.subject),
-        ).fetchone()
-        return row is not None
-
-    def _workspace_has_memberships(con: sqlite3.Connection, workspace_id: str) -> bool:
-        if not _table_exists(con, "workspace_memberships"):
-            return False
-        row = con.execute(
-            """
-            SELECT 1
-            FROM workspace_memberships
-            WHERE workspace_id=?
-            LIMIT 1
-            """,
-            (workspace_id,),
-        ).fetchone()
-        return row is not None
-
     def _principal_can_access_workspace(
         principal: Principal | None,
         workspace_id: str,
@@ -483,35 +396,19 @@ def create_app() -> Any:
         con: sqlite3.Connection | None = None,
         allow_bootstrap: bool = False,
     ) -> bool:
-        if principal is None:
-            return True
-        normalized = str(workspace_id or "default").strip() or "default"
-        if "workspaces:any" in principal.permissions:
-            return True
-        if principal.workspace_id != normalized:
-            return False
-        if allow_bootstrap:
-            return True
-        if con is not None and _principal_has_workspace_membership(con, principal, normalized):
-            return True
-        return "workspaces:legacy" in principal.permissions
+        return principal_can_access_workspace(
+            principal,
+            workspace_id,
+            con=con,
+            allow_bootstrap=allow_bootstrap,
+        )
 
     def _principal_can_access_engagement_row(
         con: sqlite3.Connection,
         principal: Principal | None,
         row: sqlite3.Row,
     ) -> bool:
-        workspace_id = str(row["workspace_id"] or "default").strip() or "default"
-        if _principal_can_access_workspace(principal, workspace_id, con=con):
-            return True
-        if principal is None or principal.workspace_id != workspace_id:
-            return False
-        if _workspace_has_memberships(con, workspace_id):
-            return False
-        # Legacy engagement DBs may predate workspace membership rows. Keep the
-        # original operator able to read their own engagement only when the
-        # workspace has no membership records to consult.
-        return str(row["operator"] or "").strip() == principal.subject
+        return principal_can_access_engagement_row(con, principal, row)
 
     def _workspace_access_checker(
         principal: Principal,
@@ -781,7 +678,7 @@ def create_app() -> Any:
     def _discovery_context() -> EngagementDiscoveryContext:
         return EngagementDiscoveryContext(
             data_dir=cfg.data_dir,
-            ensure_workspace_rbac_foundation=_ensure_workspace_rbac_foundation,
+            ensure_workspace_rbac_foundation=ensure_workspace_rbac_foundation,
             engagement_rows=_engagement_rows,
             engagement_row=_engagement_row,
             summary_payload=_engagement_summary_payload,

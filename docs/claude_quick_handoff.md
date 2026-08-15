@@ -32,6 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI workspace RBAC/access setup was split
+out of `forge.webui.app.create_app()`. `forge.webui.workspace_access` now owns
+workspace foundation bootstrapping, membership checks, workspace access, and
+engagement-row access decisions. `create_app()` delegates those helpers while
+preserving default workspace creation, legacy `workspace_id` migration,
+membership-based access, bootstrap allowance, `workspaces:any`,
+`workspaces:legacy`, and denial of legacy owner fallback after explicit
+memberships exist. Verification passed for Web UI workspace access/routes,
+engagement discovery, and HTMX app wiring tests (`31 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B348.
 Latest checkpoint (2026-08-16): Web UI live run-progress snapshot scanning was
 split out of `forge.webui.app.create_app()`. `forge.webui.run_status` now owns
 `iter_live_run_progress_snapshots` with injectable numeric-DB discovery,

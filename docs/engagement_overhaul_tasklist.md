@@ -152,6 +152,17 @@ sentences as historical notes only, not as current instructions.
   shaping. Verification: Web UI run-status plus HTMX app wiring tests (`25
   passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B347.
 
+- [x] Web UI workspace-access extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now delegates workspace RBAC table bootstrap,
+  membership checks, workspace access, and engagement-row access decisions to
+  `forge.webui.workspace_access`. The extracted helpers preserve default
+  workspace creation, legacy engagement `workspace_id` migration,
+  membership-based access, bootstrap allowance, `workspaces:any`,
+  `workspaces:legacy`, and the legacy owner fallback denial once a workspace
+  has explicit memberships. Verification: Web UI workspace access/routes,
+  engagement discovery, and HTMX app wiring tests (`31 passed`), Ruff, and
+  `py_compile` passed. Backprop: `SPEC.md` B348.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
