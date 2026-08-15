@@ -408,6 +408,15 @@ sentences as historical notes only, not as current instructions.
   wiring tests (`30 passed`), Ruff, and `py_compile` passed. Backprop:
   `SPEC.md` B376.
 
+- [x] Web UI command-center event publisher checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now binds command-center event publishing
+  through `forge.webui.command_center_routes.build_command_event_publisher`
+  instead of defining a local command-event bridge. The helper preserves
+  command-event-to-progress-event shaping while keeping command-center route
+  event policy beside the command-center route helpers. Verification: Web UI
+  command-center plus HTMX wiring tests (`26 passed`), Ruff, and `py_compile`
+  passed. Backprop: `SPEC.md` B377.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

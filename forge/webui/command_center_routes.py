@@ -50,6 +50,15 @@ def publish_command_progress_event(
     publish_sync(progress_event_for_command_event(event))
 
 
+def build_command_event_publisher(
+    publish_sync: PublishCommandProgress,
+) -> PublishCommandEvent:
+    def publish_event(event: CommandEvent) -> None:
+        publish_command_progress_event(publish_sync, event)
+
+    return publish_event
+
+
 def command_body_engagement_id(body: dict[str, Any]) -> Any:
     engagement_id = body.get("engagement_id")
     if not engagement_id:
@@ -153,6 +162,7 @@ __all__ = [
     "CommandCenterRouteError",
     "approve_action_payload",
     "approve_action_route_payload",
+    "build_command_event_publisher",
     "command_body_engagement_id",
     "command_center_service",
     "command_context_from_body",

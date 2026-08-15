@@ -150,13 +150,13 @@ from forge.webui.active_validation_routes import (
 from forge.webui.command_center_routes import (
     CommandCenterRouteError,
     approve_action_route_payload,
+    build_command_event_publisher,
     command_body_engagement_id,
     command_center_service as build_command_center_service,
     emergency_stop_route_payload,
     execute_action_route_payload,
     host_actions_route_payload,
     host_context_route_payload,
-    publish_command_progress_event,
     timeline_route_payload,
     toggle_sentry_route_payload,
 )
@@ -2293,15 +2293,14 @@ def create_app() -> Any:
         finally:
             con.close()
 
-    def _publish_command_event(event: Any) -> None:
-        publish_command_progress_event(broker.publish_sync, event)
+    publish_command_event = build_command_event_publisher(broker.publish_sync)
 
     def get_command_center(engagement_id: Any) -> Any:
         return build_command_center_service(
             engagement_id=engagement_id,
             config=cfg,
             coordinator=coordinator,
-            publish_event=_publish_command_event,
+            publish_event=publish_command_event,
         )
 
     def _command_body_engagement_id(body: dict[str, Any]) -> Any:

@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI command-center event publishing moved
+from a local `forge.webui.app.create_app()` bridge to
+`forge.webui.command_center_routes.build_command_event_publisher`. App setup now
+binds the command event publisher from the command-center route helper module,
+preserving command-event-to-progress-event shaping while shrinking app-factory
+command-center surface. Verification passed for Web UI command-center plus HTMX
+wiring tests (`26 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B377.
 Latest checkpoint (2026-08-16): Web UI live run-progress snapshot binding moved
 from `forge.webui.app.create_app()` to
 `forge.webui.run_status.build_live_run_progress_snapshot_provider`. The bridge

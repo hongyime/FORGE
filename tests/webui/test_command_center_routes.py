@@ -8,6 +8,7 @@ from forge.webui.command_center_routes import (
     CommandCenterRouteError,
     approve_action_payload,
     approve_action_route_payload,
+    build_command_event_publisher,
     command_body_engagement_id,
     command_context_from_body,
     emergency_stop_payload,
@@ -207,3 +208,23 @@ def test_command_event_helpers_preserve_progress_event_contract() -> None:
     assert progress.message == "action_queued"
     assert progress.payload == {"action_id": "action-1"}
     assert published == [progress]
+
+
+def test_command_event_publisher_binds_progress_publisher() -> None:
+    event = CommandEvent(
+        event_id="evt-2",
+        event_type="action_started",
+        engagement_id=1002,
+        timestamp=datetime(2026, 8, 13, tzinfo=timezone.utc),
+        payload={"action_id": "action-2"},
+        severity="info",
+    )
+    published: list[Any] = []
+
+    publish_event = build_command_event_publisher(published.append)
+    publish_event(event)
+
+    assert len(published) == 1
+    assert published[0].engagement_id == 1002
+    assert published[0].message == "action_started"
+    assert published[0].payload == {"action_id": "action-2"}
