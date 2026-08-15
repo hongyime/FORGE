@@ -193,6 +193,10 @@ from tests.phase1.api_client_artifact_cases import (
     run_soapui_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_tavern_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
 )
+from tests.phase1.http_request_artifact_cases import (
+    run_http_request_text_structured_payload_uses_bounded_workers_and_preserves_order,
+    run_hurl_request_text_structured_payload_uses_bounded_workers_and_preserves_order,
+)
 from tests.phase1.ci_workflow_artifact_cases import (
     run_azure_pipelines_resource_refs,
     run_bitbucket_pipelines_resource_refs,
@@ -27230,95 +27234,20 @@ def test_artifact_http_request_text_structured_payload_uses_bounded_workers_and_
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        @baseUrl = http-env.acme.example/api
-        GET http-one.acme.example/v1/users HTTP/1.1
-        POST https://http-two.acme.example/v2/session
-        GET {{baseUrl}}/users
-        Host: http-host.acme.example
-        Content-Type: application/json
-        """
-    ).strip()
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_http_request_url_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._http_request_text_structured_payload_text(
-        payload,
-        source_hint="requests/session.http",
+    run_http_request_text_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    assert observed_candidate_batches == [
-        [
-            "http-env.acme.example/api",
-            "http-one.acme.example/v1/users",
-            "https://http-two.acme.example/v2/session",
-            "{{baseUrl}}/users",
-            "http-host.acme.example",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://http-env.acme.example/api",
-        "https://http-one.acme.example/v1/users",
-        "https://http-two.acme.example/v2/session",
-        "https://http-host.acme.example",
-    ]
 
 
 def test_artifact_hurl_request_text_structured_payload_uses_bounded_workers_and_preserves_order(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        apiHost: hurl-env.acme.example/api
-        GET hurl-one.acme.example/v1/users
-        HTTP 200
-        POST https://hurl-two.acme.example/v2/session
-        GET {{apiHost}}/users
-        """
-    ).strip()
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_http_request_url_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._http_request_text_structured_payload_text(
-        payload,
-        source_hint="requests/session.hurl",
+    run_hurl_request_text_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    assert observed_candidate_batches == [
-        [
-            "hurl-env.acme.example/api",
-            "hurl-one.acme.example/v1/users",
-            "https://hurl-two.acme.example/v2/session",
-            "{{apiHost}}/users",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://hurl-env.acme.example/api",
-        "https://hurl-one.acme.example/v1/users",
-        "https://hurl-two.acme.example/v2/session",
-    ]
 
 
 def test_artifact_graphql_config_text_structured_payload_uses_bounded_workers_and_preserves_order(
