@@ -181,6 +181,14 @@ sentences as historical notes only, not as current instructions.
   passed`), HTMX app wiring tests (`19 passed`) after the combined command
   exceeded 120s, Ruff, and `py_compile` passed. Backprop: `SPEC.md` B350.
 
+- [x] Web UI latest-audit timestamp extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now delegates latest audit-log timestamp lookup
+  to `forge.webui.run_status.latest_audit_timestamp`. The helper preserves
+  newest-audit-row selection by descending id, missing-table tolerance, empty
+  fallback, and injected date formatting for dashboard summary payloads.
+  Verification: Web UI run-status tests (`10 passed`), HTMX app wiring tests
+  (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B351.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

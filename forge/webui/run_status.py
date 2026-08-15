@@ -200,6 +200,30 @@ def annotate_run_audit_review(
     return annotated
 
 
+def latest_audit_timestamp(
+    con: sqlite3.Connection,
+    engagement_id: int,
+    *,
+    format_dt: FormatDate,
+) -> str:
+    try:
+        row = con.execute(
+            """
+            SELECT logged_at
+            FROM audit_log
+            WHERE engagement_id=?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (engagement_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+    if row is None:
+        return ""
+    return format_dt(str(row[0] or ""))
+
+
 def latest_running_engagement_run(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row | None:
     return con.execute(
         """
@@ -318,6 +342,7 @@ __all__ = [
     "engagement_run_row_payload",
     "engagement_run_rows",
     "iter_live_run_progress_snapshots",
+    "latest_audit_timestamp",
     "latest_running_engagement_run",
     "live_run_progress_fingerprint",
     "live_run_progress_payload",

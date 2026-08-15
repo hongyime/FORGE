@@ -215,6 +215,7 @@ from forge.webui.run_log_routes import (
 from forge.webui.run_status import (
     annotate_run_audit_review as annotate_run_audit_review_payload,
     iter_live_run_progress_snapshots,
+    latest_audit_timestamp,
     latest_running_engagement_run as find_latest_running_engagement_run,
 )
 from forge.webui.shell_routes import (
@@ -454,22 +455,7 @@ def create_app() -> Any:
         return list_audit_artifact_files(str(engagement_id), _reports_dir())
 
     def _latest_audit(con: sqlite3.Connection, engagement_id: int) -> str:
-        try:
-            row = con.execute(
-                """
-                SELECT logged_at
-                FROM audit_log
-                WHERE engagement_id=?
-                ORDER BY id DESC
-                LIMIT 1
-                """,
-                (engagement_id,),
-            ).fetchone()
-        except sqlite3.OperationalError:
-            row = None
-        if row is None:
-            return ""
-        return _format_dt(str(row[0] or ""))
+        return latest_audit_timestamp(con, engagement_id, format_dt=_format_dt)
 
     def _engagement_summary_payload(
         db_file: Path,

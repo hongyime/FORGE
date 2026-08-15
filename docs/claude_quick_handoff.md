@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI latest audit-log timestamp lookup was
+split out of `forge.webui.app.create_app()`. `forge.webui.run_status` now owns
+`latest_audit_timestamp`, preserving newest-audit-row selection by descending id,
+missing-table tolerance, empty fallback, and injected date formatting for
+dashboard summary payloads. Verification passed for Web UI run-status tests (`10
+passed`), HTMX app wiring tests (`19 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B351.
 Latest checkpoint (2026-08-16): Web UI engagement row listing was moved out of
 `forge.webui.app.create_app()`. `forge.webui.engagement_lifecycle` now exposes
 `engagement_rows` beside the existing `engagement_row`, and `create_app()` wires

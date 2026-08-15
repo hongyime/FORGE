@@ -9,6 +9,7 @@ from forge.webui.run_status import (
     annotate_run_audit_review,
     engagement_run_rows,
     iter_live_run_progress_snapshots,
+    latest_audit_timestamp,
     latest_running_engagement_run,
     live_run_progress_fingerprint,
     live_run_progress_payload,
@@ -248,6 +249,40 @@ def test_annotate_run_audit_review_ignores_non_dict_summary() -> None:
     con = _connect()
 
     assert annotate_run_audit_review(con, None, engagement_id=1001) is None
+
+
+def test_latest_audit_timestamp_formats_newest_audit_row() -> None:
+    con = _connect()
+    con.executescript(
+        """
+        CREATE TABLE audit_log (
+            id INTEGER PRIMARY KEY,
+            engagement_id INTEGER,
+            logged_at TEXT
+        );
+        """
+    )
+    con.execute(
+        "INSERT INTO audit_log (id, engagement_id, logged_at) VALUES (1, 1001, '2026-07-10T10:00:00')"
+    )
+    con.execute(
+        "INSERT INTO audit_log (id, engagement_id, logged_at) VALUES (2, 1001, '2026-07-10T10:02:00')"
+    )
+    con.execute(
+        "INSERT INTO audit_log (id, engagement_id, logged_at) VALUES (3, 1002, '2026-07-10T10:03:00')"
+    )
+
+    assert latest_audit_timestamp(
+        con,
+        1001,
+        format_dt=lambda value: f"fmt:{value}",
+    ) == "fmt:2026-07-10T10:02:00"
+
+
+def test_latest_audit_timestamp_ignores_missing_audit_table() -> None:
+    con = _connect()
+
+    assert latest_audit_timestamp(con, 1001, format_dt=lambda value: value) == ""
 
 
 def test_live_run_progress_payload_and_fingerprint_preserve_bridge_contract() -> None:
