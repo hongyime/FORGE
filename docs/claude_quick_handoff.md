@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Ansible inventory and cloud-init regression
+modularization is complete. The Ansible inventory artifact fixture plus
+cloud-init host extraction and cloud-init artifact fixture moved from
+`tests/phase1/test_engagement_orchestrator.py` into
+`tests/phase1/network_endpoint_artifact_cases.py`, while the original pytest
+nodes remain as thin wrappers. This removes adjacent infrastructure endpoint
+fixture weight from the Phase 1 mega test without changing production parser
+behavior, live probing, provider calls, credential use, scope,
+validation/report gates, scheduler behavior, or persistent non-test engagement
+data. Verification passed for the preserved Ansible/cloud-init wrapper tests
+(`3 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B407.
 Latest checkpoint (2026-08-16): Tunnel config regression modularization is
 complete. The Cloudflared/ngrok/Tailscale/localtunnel structured payload and
 artifact-queue fixtures moved from `tests/phase1/test_engagement_orchestrator.py`

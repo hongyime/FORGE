@@ -180,8 +180,11 @@ from tests.phase1.database_config_artifact_cases import (
     run_orm_config_artifacts,
 )
 from tests.phase1.network_endpoint_artifact_cases import (
+    run_ansible_inventory_artifacts,
     run_ansible_inventory_hosts,
     run_ansible_inventory_line_tokenization_uses_bounded_workers_and_preserves_order,
+    run_cloud_init_artifacts,
+    run_cloud_init_hosts,
     run_dhcp_lease_hostnames,
     run_dhcp_lease_line_tokenization_uses_bounded_workers_and_preserves_order,
     run_dns_zone_line_parsing_uses_bounded_workers_and_preserves_origin_order,
@@ -26798,245 +26801,15 @@ def test_artifact_queue_processor_extracts_tunnel_config_artifacts(tmp_path: Pat
 
 
 def test_artifact_queue_processor_extracts_ansible_inventory_artifacts(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_ansible_inventory"
-    ansible_dir = artifact_root / "ansible"
-    group_vars_dir = artifact_root / "group_vars"
-    ansible_dir.mkdir(parents=True)
-    group_vars_dir.mkdir(parents=True)
-    _bootstrap_engagement(db_path)
-
-    inventory_path = ansible_dir / "inventory"
-    inventory_path.write_text(
-        dedent(
-            """
-            [web]
-            web1.acme.example ansible_user=ansible-owner@acme.example
-            api01 ansible_host=api.ansible.acme.example
-            db01 ansible_ssh_host=10.24.60.20
-            github ansible_host=github.com
-            status_url=https://ansible.acme.example/status
-            supabase=https://ansiblevault.supabase.co/rest/v1/inventory
-            backups=s3://acme-ansible-bucket/inventory/latest.ini
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    group_vars_path = group_vars_dir / "all.yml"
-    group_vars_path.write_text(
-        dedent(
-            """
-            ansible_host: groupvars.acme.example
-            owner: groupvars-owner@acme.example
-            firebase: https://ansible-firebase.firebaseio.com
-            mirror: gs://acme-ansible-gcs/group_vars/all.yml
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 2
-    assert summary.processed >= 2
-    assert summary.discovered_seeds >= 8
-    assert summary.firebase_projects >= 1
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("web1.acme.example", "subdomain") in seeds
-        assert ("api.ansible.acme.example", "subdomain") in seeds
-        assert ("groupvars.acme.example", "subdomain") in seeds
-        assert ("10.24.60.20", "ipv4") in seeds
-        assert ("acme.example", "domain") in seeds
-        assert ("ansible-owner@acme.example", "email") in seeds
-        assert ("groupvars-owner@acme.example", "email") in seeds
-        assert ("https://ansible.acme.example/status", "url") in seeds
-        assert ("github.com", "domain") not in seeds
-        assert ("ansiblevault.supabase.co", "subdomain") not in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-ansible-bucket") in cloud_assets
-        assert ("firebase", "ansible-firebase") in cloud_assets
-        assert ("gcs", "acme-ansible-gcs") in cloud_assets
-        assert ("supabase", "ansiblevault") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[inventory_path.resolve().as_posix()]["format"] == "ansible-inventory"
-        assert artifact_meta[group_vars_path.resolve().as_posix()]["format"] == "ansible-inventory"
-    finally:
-        con.close()
+    run_ansible_inventory_artifacts(tmp_path)
 
 
 def test_artifact_network_endpoint_extraction_includes_cloud_init_hosts() -> None:
-    text = dedent(
-        """
-        #cloud-config
-        fqdn: web.cloudinit.acme.example
-        hostname: api.cloudinit.acme.example
-        local-hostname: 10.30.40.50
-        public_hostname: https://cloudinitvault.supabase.co/rest/v1/hosts
-        """
-    )
-
-    seeds = _extract_artifact_network_endpoint_seeds(
-        text,
-        source_file="cloud-init/user-data",
-    )
-
-    assert ("web.cloudinit.acme.example", "subdomain") in seeds
-    assert ("api.cloudinit.acme.example", "subdomain") in seeds
-    assert ("10.30.40.50", "ipv4") in seeds
-    assert ("acme.example", "domain") in seeds
-    assert ("cloudinitvault.supabase.co", "subdomain") not in seeds
-
-    generic_seeds = _extract_artifact_network_endpoint_seeds(
-        text,
-        source_file="notes/user-data",
-    )
-    assert ("web.cloudinit.acme.example", "subdomain") not in generic_seeds
-    assert ("api.cloudinit.acme.example", "subdomain") not in generic_seeds
+    run_cloud_init_hosts()
 
 
 def test_artifact_queue_processor_extracts_cloud_init_artifacts(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_cloud_init"
-    cloud_init_dir = artifact_root / "cloud-init"
-    cloud_init_dir.mkdir(parents=True)
-    _bootstrap_engagement(db_path)
-
-    user_data_path = cloud_init_dir / "user-data"
-    user_data_path.write_text(
-        dedent(
-            """
-            #cloud-config
-            fqdn: web.cloudinit.acme.example
-            hostname: api.cloudinit.acme.example
-            owner: cloudinit-owner@acme.example
-            status_url: https://cloudinit.acme.example/status
-            firebase: https://cloudinit-firebase.firebaseio.com
-            backup_bucket: s3://acme-cloudinit-bucket/bootstrap/latest.yml
-            supabase: https://cloudinitvault.supabase.co/rest/v1/bootstrap
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    meta_data_path = cloud_init_dir / "meta-data"
-    meta_data_path.write_text(
-        dedent(
-            """
-            instance-id: acme-cloudinit-01
-            local-hostname: meta.cloudinit.acme.example
-            support: meta-cloudinit-owner@acme.example
-            mirror: gs://acme-cloudinit-gcs/meta-data
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    assert _classify_artifact_name(Path("cloud-init/user-data")) == "config"
-    assert _classify_artifact_name(Path("notes/user-data")) is None
-    assert (
-        _classify_remote_artifact_url("https://downloads.acme.example/cloud-init/user-data")
-        == "config"
-    )
-    assert _classify_remote_artifact_url("https://downloads.acme.example/user-data") is None
-    assert (
-        _select_remote_artifact_filename(
-            42,
-            "https://downloads.acme.example/cloud-init/user-data",
-            "config",
-        )
-        == "user-data"
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 2
-    assert summary.processed >= 2
-    assert summary.discovered_seeds >= 8
-    assert summary.firebase_projects >= 1
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("web.cloudinit.acme.example", "subdomain") in seeds
-        assert ("api.cloudinit.acme.example", "subdomain") in seeds
-        assert ("meta.cloudinit.acme.example", "subdomain") in seeds
-        assert ("acme.example", "domain") in seeds
-        assert ("cloudinit-owner@acme.example", "email") in seeds
-        assert ("meta-cloudinit-owner@acme.example", "email") in seeds
-        assert ("https://cloudinit.acme.example/status", "url") in seeds
-        assert ("cloudinitvault.supabase.co", "subdomain") not in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-cloudinit-bucket") in cloud_assets
-        assert ("firebase", "cloudinit-firebase") in cloud_assets
-        assert ("gcs", "acme-cloudinit-gcs") in cloud_assets
-        assert ("supabase", "cloudinitvault") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[user_data_path.resolve().as_posix()]["format"] == "cloud-init"
-        assert artifact_meta[meta_data_path.resolve().as_posix()]["format"] == "cloud-init"
-    finally:
-        con.close()
+    run_cloud_init_artifacts(tmp_path)
 
 
 def test_artifact_network_endpoint_extraction_includes_os_installer_hosts() -> None:
