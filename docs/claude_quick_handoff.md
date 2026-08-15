@@ -33,6 +33,19 @@ CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
 Latest checkpoint (2026-08-16): API client parser regression modularization is
+further advanced. `tests/phase1/api_client_artifact_cases.py` now also owns the
+Selenium SIDE, Tavern, Dredd, Schemathesis, Pactum, and Pact contract structured
+payload fixtures, while the original pytest nodes remain thin wrappers in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for
+navigation target resolution, API client candidate ordering, template/relative
+suppression, host-to-URL normalization, Pact provider-base resolution, and
+bounded local batch dispatch without changing production parser behavior, live
+probing, provider calls, credential use, scope, validation/report gates,
+scheduler behavior, or persistent non-test engagement data. Verification passed
+for the preserved wrappers plus the adjacent Pact depth guard and API client
+worker/document tests (`25 passed`), Ruff, and `py_compile`. Backprop:
+`SPEC.md` B424.
+Latest checkpoint (2026-08-16): API client parser regression modularization is
 partially advanced. A new `tests/phase1/api_client_artifact_cases.py` module
 now owns the Postman-style collection, SoapUI, JMeter, Artillery, and
 Gherkin/Karate structured payload fixtures, while the original pytest nodes

@@ -278,3 +278,342 @@ def run_gherkin_api_client_text_structured_payload_uses_bounded_workers_and_pres
         "https://karate-hostonly.acme.example/api",
         "https://karate-live.acme.example/events",
     ]
+
+
+def run_selenium_side_structured_payload_resolves_navigation_targets(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = json.dumps(
+        {
+            "id": "acme-side",
+            "version": "2.0",
+            "name": "Acme Selenium",
+            "url": "selenium-base.acme.example/app",
+            "tests": [
+                {
+                    "name": "login",
+                    "commands": [
+                        {"command": "open", "target": "/login"},
+                        {"command": "click", "target": "css=.submit"},
+                        {"command": "openWindow", "target": "reports.acme.example/dashboard"},
+                        {"command": "open", "target": "https://${tenant}.acme.example/template"},
+                        {"command": "open", "target": "//cdn.acme.example/assets"},
+                    ],
+                }
+            ],
+        }
+    )
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="login.side",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "selenium-base.acme.example/app",
+            "https://selenium-base.acme.example/login",
+            "reports.acme.example/dashboard",
+            "https://${tenant}.acme.example/template",
+            "https://cdn.acme.example/assets",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://selenium-base.acme.example/app",
+        "https://selenium-base.acme.example/login",
+        "https://reports.acme.example/dashboard",
+        "https://cdn.acme.example/assets",
+    ]
+
+
+def run_tavern_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = dedent(
+        """
+        test_name: Acme Tavern
+        variables:
+          base_url: tavern-env.acme.example/api
+        stages:
+          - name: host-only
+            request:
+              url: tavern-one.acme.example/v1/users
+          - name: live
+            request:
+              url: https://tavern-two.acme.example/v2/session
+          - name: templated
+            request:
+              url: https://${tenant}.acme.example/template
+          - name: host-key
+            request:
+              host: tavern-host.acme.example
+        """
+    ).strip()
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="login.tavern.yaml",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "tavern-env.acme.example/api",
+            "tavern-one.acme.example/v1/users",
+            "https://tavern-two.acme.example/v2/session",
+            "https://${tenant}.acme.example/template",
+            "tavern-host.acme.example",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://tavern-env.acme.example/api",
+        "https://tavern-one.acme.example/v1/users",
+        "https://tavern-two.acme.example/v2/session",
+        "https://tavern-host.acme.example",
+    ]
+
+
+def run_dredd_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = dedent(
+        """
+        endpoint: dredd-hostonly.acme.example/api
+        blueprint: https://dredd-docs.acme.example/openapi.yaml
+        server: "python manage.py runserver"
+        hookfiles:
+          - hooks/*.js
+        x_tenant_url: https://${tenant}.acme.example/template
+        """
+    ).strip()
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint=".dredd.yml",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "dredd-hostonly.acme.example/api",
+            "https://dredd-docs.acme.example/openapi.yaml",
+            "https://${tenant}.acme.example/template",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://dredd-hostonly.acme.example/api",
+        "https://dredd-docs.acme.example/openapi.yaml",
+    ]
+
+
+def run_schemathesis_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = dedent(
+        """
+        schema = "https://schemathesis-schema.acme.example/openapi.json"
+        base-url = "schemathesis-hostonly.acme.example/api"
+        endpoint = "https://${tenant}.acme.example/template"
+        headers = { Authorization = "Bearer ${TOKEN}" }
+        """
+    ).strip()
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint=".schemathesis.toml",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "https://schemathesis-schema.acme.example/openapi.json",
+            "schemathesis-hostonly.acme.example/api",
+            "https://${tenant}.acme.example/template",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://schemathesis-schema.acme.example/openapi.json",
+        "https://schemathesis-hostonly.acme.example/api",
+    ]
+
+
+def run_pactum_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = dedent(
+        """
+        const pactum = require('pactum');
+
+        pactum.request.setBaseUrl('pactum-base.acme.example/api');
+
+        module.exports = {
+          baseUrl: 'https://pactum-config.acme.example/v1',
+          endpoint: 'https://${tenant}.acme.example/template',
+          testGlob: './specs/**/*.spec.js',
+        };
+        """
+    ).strip()
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="pactum.config.js",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "pactum-base.acme.example/api",
+            "https://pactum-config.acme.example/v1",
+            "https://${tenant}.acme.example/template",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://pactum-base.acme.example/api",
+        "https://pactum-config.acme.example/v1",
+    ]
+
+
+def run_pact_contract_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = json.dumps(
+        {
+            "consumer": {"name": "acme-web"},
+            "provider": {
+                "name": "acme-api",
+                "baseUrl": "pact-provider.acme.example/api",
+            },
+            "metadata": {
+                "pactBrokerUrl": "https://pact-broker.acme.example/pacts",
+            },
+            "interactions": [
+                {
+                    "description": "relative request resolves through provider base",
+                    "request": {"method": "GET", "path": "/v1/status"},
+                    "providerStates": [
+                        {
+                            "name": "tenant callback",
+                            "params": {
+                                "callbackUrl": "pact-state.acme.example/callback",
+                            },
+                        }
+                    ],
+                },
+                {
+                    "description": "full URL request is preserved",
+                    "request": {"method": "POST", "url": "https://pact-live.acme.example/events"},
+                },
+                {
+                    "description": "templated request is filtered later",
+                    "request": {"method": "GET", "url": "https://${tenant}.acme.example/template"},
+                },
+            ],
+            "messages": [
+                {
+                    "description": "async callback",
+                    "contents": {
+                        "messageCallbackUrl": "pact-message.acme.example/callback",
+                    },
+                }
+            ],
+        }
+    )
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._api_client_text_structured_payload_text(
+        payload,
+        source_hint="pacts/acme-web-acme-api.json",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "pact-provider.acme.example/api",
+            "https://pact-broker.acme.example/pacts",
+            "https://pact-provider.acme.example/v1/status",
+            "pact-state.acme.example/callback",
+            "https://pact-live.acme.example/events",
+            "https://${tenant}.acme.example/template",
+            "pact-message.acme.example/callback",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://pact-provider.acme.example/api",
+        "https://pact-broker.acme.example/pacts",
+        "https://pact-provider.acme.example/v1/status",
+        "https://pact-state.acme.example/callback",
+        "https://pact-live.acme.example/events",
+        "https://pact-message.acme.example/callback",
+    ]
