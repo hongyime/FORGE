@@ -14,6 +14,13 @@ def logs_dir(data_dir: Path) -> Path:
     return path
 
 
+def build_logs_dir_provider(data_dir: Path) -> Callable[[], Path]:
+    def _logs_dir() -> Path:
+        return logs_dir(data_dir)
+
+    return _logs_dir
+
+
 def engagement_log_files(logs_root: Path, engagement_id: int) -> list[Path]:
     return sorted(
         logs_root.glob(f"engagement_{engagement_id}_kill_chain_*.log"),
@@ -84,6 +91,7 @@ def log_tail_payload(path: Path, requested_lines: int) -> dict[str, Any]:
 
 
 __all__ = [
+    "build_logs_dir_provider",
     "engagement_log_files",
     "log_api_href",
     "log_payload",

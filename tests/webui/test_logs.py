@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from forge.webui.logs import (
+    build_logs_dir_provider,
     engagement_log_files,
     log_api_href,
     log_payload,
@@ -25,6 +26,7 @@ def test_logs_dir_creates_data_log_directory(tmp_path: Path) -> None:
 
     assert logs_dir(data_dir) == data_dir / "logs"
     assert (data_dir / "logs").is_dir()
+    assert build_logs_dir_provider(data_dir)() == data_dir / "logs"
 
 
 def test_engagement_log_files_filters_and_orders_newest_first(tmp_path: Path) -> None:

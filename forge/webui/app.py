@@ -73,7 +73,7 @@ from forge.webui.asset_graph_routes import (
     resolve_ownership_conflict_payload,
     upsert_ownership_claim_payload,
 )
-from forge.webui.logs import logs_dir as ensure_logs_dir
+from forge.webui.logs import build_logs_dir_provider
 from forge.webui.kill_chain_launch import (
     KillChainLaunchConflict,
     KillChainLaunchNoSeeds,
@@ -429,8 +429,7 @@ def create_app() -> Any:
     def _latest_running_engagement_run(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row | None:
         return find_latest_running_engagement_run(con, engagement_id)
 
-    def _logs_dir() -> Path:
-        return ensure_logs_dir(cfg.data_dir)
+    _logs_dir = build_logs_dir_provider(cfg.data_dir)
 
     def _report_files(engagement_id: int) -> list[Path]:
         return webui_report_files(engagement_id, _reports_dir())

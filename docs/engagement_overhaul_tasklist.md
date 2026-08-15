@@ -265,6 +265,14 @@ sentences as historical notes only, not as current instructions.
   run-control tests (`9 passed`), HTMX app wiring tests (`19 passed`), Ruff,
   and `py_compile` passed. Backprop: `SPEC.md` B360.
 
+- [x] Web UI logs-dir provider extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds its logs-root provider through
+  `forge.webui.logs.build_logs_dir_provider` instead of defining the
+  data-dir-bound closure inline. The helper preserves `FORGE_DATA_DIR/logs`
+  creation behavior while keeping logs path policy in the logs module.
+  Verification: Web UI logs tests (`5 passed`), HTMX app wiring tests
+  (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B361.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
