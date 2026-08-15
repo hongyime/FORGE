@@ -90,6 +90,23 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] API client parser final-batch modularization checkpoint (2026-08-16):
+  the PyRestTest, k6, and Locust structured payload fixtures now live in
+  `tests/phase1/api_client_artifact_cases.py`, with the original pytest nodes
+  retained as thin wrappers in the Phase 1 mega test. This keeps coverage for
+  API client candidate ordering, WebSocket URL preservation,
+  template/relative suppression, host-to-URL normalization, and bounded local
+  batch dispatch while reducing inline fixture weight in
+  `tests/phase1/test_engagement_orchestrator.py`. Files:
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/api_client_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  wrappers plus adjacent API client worker/document tests -> `21 passed`; Ruff
+  and `py_compile` passed for touched Python files. Safety note: test
+  modularization only; no production parser behavior, live probing, provider
+  calls, credential use, scope changes, validation/report gates, scheduler
+  behavior, or persistent non-test engagement data changed.
+
 - [x] API client parser second-batch modularization checkpoint (2026-08-16):
   the Selenium SIDE, Tavern, Dredd, Schemathesis, Pactum, and Pact contract
   structured payload fixtures now live in

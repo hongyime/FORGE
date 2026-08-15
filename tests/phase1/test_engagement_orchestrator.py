@@ -183,8 +183,11 @@ from tests.phase1.api_client_artifact_cases import (
     run_dredd_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_gherkin_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_jmeter_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
+    run_k6_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
+    run_locust_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_pact_contract_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_pactum_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
+    run_pyresttest_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_schemathesis_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_selenium_side_structured_payload_resolves_navigation_targets,
     run_soapui_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order,
@@ -27197,166 +27200,30 @@ def test_artifact_pyresttest_api_client_text_structured_payload_uses_bounded_wor
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        config:
-          variable_binds:
-            base_url: pyresttest-env.acme.example/api
-        tests:
-          - name: host-only
-            url: pyresttest-one.acme.example/v1/users
-          - name: live
-            url: https://pyresttest-two.acme.example/v2/session
-          - name: templated
-            url: https://${tenant}.acme.example/template
-        """
-    ).strip()
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._api_client_text_structured_payload_text(
-        payload,
-        source_hint="login.pyresttest.yaml",
+    run_pyresttest_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    assert observed_candidate_batches == [
-        [
-            "pyresttest-env.acme.example/api",
-            "pyresttest-one.acme.example/v1/users",
-            "https://pyresttest-two.acme.example/v2/session",
-            "https://${tenant}.acme.example/template",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://pyresttest-env.acme.example/api",
-        "https://pyresttest-one.acme.example/v1/users",
-        "https://pyresttest-two.acme.example/v2/session",
-    ]
 
 
 def test_artifact_k6_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        import http from 'k6/http';
-        import ws from 'k6/ws';
-
-        export const options = {
-          ext: { loadimpact: { projectID: 123 } },
-          target: 'k6-target.acme.example/api'
-        };
-
-        export default function () {
-          http.get('k6-hostonly.acme.example/api');
-          http.post("https://k6-live.acme.example/events", "{}");
-          http.request("GET", "k6-request.acme.example/v1");
-          http.get("https://${tenant}.acme.example/template");
-          http.get("/relative");
-          ws.connect("wss://k6-ws.acme.example/socket", {}, function () {});
-        }
-        """
-    ).strip()
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._api_client_text_structured_payload_text(
-        payload,
-        source_hint="k6-test.js",
+    run_k6_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    assert observed_candidate_batches == [
-        [
-            "k6-target.acme.example/api",
-            "k6-hostonly.acme.example/api",
-            "https://k6-live.acme.example/events",
-            "k6-request.acme.example/v1",
-            "https://${tenant}.acme.example/template",
-            "/relative",
-            "wss://k6-ws.acme.example/socket",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://k6-target.acme.example/api",
-        "https://k6-hostonly.acme.example/api",
-        "https://k6-live.acme.example/events",
-        "https://k6-request.acme.example/v1",
-        "https://k6-ws.acme.example/socket",
-    ]
 
 
 def test_artifact_locust_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        from locust import HttpUser, task
-
-        class WebsiteUser(HttpUser):
-            host = "locust-hostonly.acme.example/api"
-
-            @task
-            def index(self):
-                self.client.get("/relative")
-                self.client.post("https://locust-live.acme.example/events")
-                self.client.request("GET", "locust-request.acme.example/v1")
-                self.client.get("https://${tenant}.acme.example/template")
-        """
-    ).strip()
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_api_client_url_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._api_client_text_structured_payload_text(
-        payload,
-        source_hint="locustfile.py",
+    run_locust_api_client_text_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    assert observed_candidate_batches == [
-        [
-            "locust-hostonly.acme.example/api",
-            "/relative",
-            "https://locust-live.acme.example/events",
-            "locust-request.acme.example/v1",
-            "https://${tenant}.acme.example/template",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://locust-hostonly.acme.example/api",
-        "https://locust-live.acme.example/events",
-        "https://locust-request.acme.example/v1",
-    ]
 
 
 def test_artifact_http_request_text_structured_payload_uses_bounded_workers_and_preserves_order(
