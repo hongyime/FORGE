@@ -149,6 +149,7 @@ from forge.utils.intel.linkedin_scraper import persist_linkedin_findings
 from forge.utils.intel.phone_lookup import _persist_phone_findings
 from forge.utils.intel.social_scraper import _parse_epieos_response
 from tests.phase1.package_manager_artifact_cases import (
+    run_cargo_credentials_without_suffix,
     run_os_package_repository_artifacts,
     run_package_manager_credential_configs,
     run_package_index_url_credentials,
@@ -26870,91 +26871,7 @@ def test_artifact_queue_processor_extracts_game_engine_metadata_artifacts(
 def test_artifact_queue_processor_extracts_cargo_credentials_without_suffix(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_cargo_credentials"
-    cargo_dir = artifact_root / ".cargo"
-    cargo_dir.mkdir(parents=True)
-    _bootstrap_engagement(db_path)
-
-    credentials_path = cargo_dir / "credentials"
-    credentials_path.write_text(
-        dedent(
-            """
-            [registries.acme]
-            index = "https://cargo-credentials.acme.example/index"
-            username = "cargo-creds-owner@acme.example"
-            token = "do-not-persist-cargo-token"
-            firebase = "https://cargo-creds-firebase.firebaseio.com"
-            archive = "s3://acme-cargo-creds-bucket/releases/latest.crate"
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 1
-    assert summary.processed >= 1
-    assert summary.discovered_seeds >= 3
-
-    con = sqlite3.connect(db_path)
-    try:
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "cargo-creds-owner@acme.example" in emails
-
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("https://cargo-credentials.acme.example/index", "url") in seeds
-        assert ("cargo-creds-owner@acme.example", "email") in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-cargo-creds-bucket") in cloud_assets
-        assert ("firebase", "cargo-creds-firebase") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[credentials_path.resolve().as_posix()]["format"] == "cargo-credentials"
-
-        persisted_text = json.dumps(
-            {
-                "emails": sorted(emails),
-                "seeds": sorted(seeds),
-                "cloud_assets": sorted(cloud_assets),
-                "artifact_meta": artifact_meta,
-            },
-            sort_keys=True,
-        )
-        assert "do-not-persist-cargo-token" not in persisted_text
-    finally:
-        con.close()
+    run_cargo_credentials_without_suffix(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_jvm_build_metadata_text_artifacts(
