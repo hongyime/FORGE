@@ -337,6 +337,14 @@ sentences as historical notes only, not as current instructions.
   Verification: Web UI engagement-payload tests (`3 passed`), HTMX app wiring
   tests (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B368.
 
+- [x] Web UI stale audit-review wrapper cleanup checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` no longer imports and defines an unused
+  `_annotate_run_audit_review` wrapper after run audit-review annotation moved
+  to the payload/run-status modules. This removes dead app-factory surface while
+  keeping annotation behavior covered where it is now used. Verification: Web UI
+  run-status plus engagement-payload tests (`13 passed`), HTMX app wiring tests
+  (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B369.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

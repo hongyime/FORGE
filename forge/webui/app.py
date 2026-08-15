@@ -204,10 +204,7 @@ from forge.webui.run_log_routes import (
     engagement_runs_route_payload,
     run_control_route_payload,
 )
-from forge.webui.run_status import (
-    annotate_run_audit_review as annotate_run_audit_review_payload,
-    iter_live_run_progress_snapshots,
-)
+from forge.webui.run_status import iter_live_run_progress_snapshots
 from forge.webui.shell_routes import (
     ShellRouteNotFound,
     build_frontend_entry_response_provider,
@@ -408,17 +405,6 @@ def create_app() -> Any:
         con: sqlite3.Connection,
     ) -> bool:
         return _principal_can_access_workspace(principal, workspace_id, con=con)
-
-    def _annotate_run_audit_review(
-        con: sqlite3.Connection,
-        run_summary: dict[str, Any] | None,
-        engagement_id: int,
-    ) -> dict[str, Any] | None:
-        return annotate_run_audit_review_payload(
-            con,
-            run_summary,
-            engagement_id=engagement_id,
-        )
 
     _clear_run_control_markers = build_run_control_marker_clearer(cfg.data_dir)
 
