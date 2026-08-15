@@ -32,6 +32,18 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Native build config artifact-ingestion
+regression modularization is complete. A new
+`tests/phase1/native_build_artifact_cases.py` module now owns the CMake, Meson,
+SCons, Autoconf, Automake, m4, and SConscript local artifact fixture, while the
+original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for local
+native-build artifact labels, nested ZIP payload extraction, email/URL seed
+promotion, and S3/GCS/Firebase/Supabase asset detection without changing
+production parser behavior, live probing, provider calls, credential use,
+scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved wrapper (`1 passed`),
+Ruff, and `py_compile`. Backprop: `SPEC.md` B428.
 Latest checkpoint (2026-08-16): GraphQL config parser regression
 modularization is complete for the structured payload worker-order fixture. A
 new `tests/phase1/graphql_config_artifact_cases.py` module now owns the
