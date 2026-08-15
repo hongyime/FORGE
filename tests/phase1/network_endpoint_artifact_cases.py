@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import sqlite3
 import threading
 import time
@@ -1134,5 +1135,352 @@ def run_cloud_init_artifacts(tmp_path: Path) -> None:
         }
         assert artifact_meta[user_data_path.resolve().as_posix()]["format"] == "cloud-init"
         assert artifact_meta[meta_data_path.resolve().as_posix()]["format"] == "cloud-init"
+    finally:
+        con.close()
+
+
+def run_os_installer_hosts() -> None:
+    text = dedent(
+        """
+        network --bootproto=dhcp --hostname=web.kickstart.acme.example --nameserver=10.41.0.53
+        nfs --server=nfs.kickstart.acme.example --dir=/exports/os
+        d-i netcfg/get_hostname string preseed-web.acme.example
+        d-i netcfg/get_domain string preseed.acme.example
+        d-i mirror/http/hostname string mirror.preseed.acme.example
+        """
+    )
+
+    seeds = _extract_artifact_network_endpoint_seeds(
+        text,
+        source_file="kickstart/ks.cfg",
+    )
+
+    assert ("web.kickstart.acme.example", "subdomain") in seeds
+    assert ("nfs.kickstart.acme.example", "subdomain") in seeds
+    assert ("10.41.0.53", "ipv4") in seeds
+    assert ("preseed-web.acme.example", "subdomain") in seeds
+    assert ("preseed.acme.example", "subdomain") in seeds
+    assert ("mirror.preseed.acme.example", "subdomain") in seeds
+    assert ("acme.example", "domain") in seeds
+
+    generic_seeds = _extract_artifact_network_endpoint_seeds(
+        text,
+        source_file="notes/ks",
+    )
+    assert ("web.kickstart.acme.example", "subdomain") not in generic_seeds
+    assert ("preseed-web.acme.example", "subdomain") not in generic_seeds
+
+
+def run_os_installer_host_extraction_uses_bounded_workers_and_preserves_order(
+    monkeypatch: Any,
+) -> None:
+    import forge.engagement_orchestrator as orchestrator
+
+    monkeypatch.setenv("FORGE_STATIC_ARTIFACT_MAX_WORKERS", "4")
+    original_entry = orchestrator._remote_access_host_field_seed_entries
+    expected_values = [
+        "web.kickstart.acme.example",
+        "10.41.0.53",
+        "nfs.kickstart.acme.example",
+        "preseed-web.acme.example",
+    ]
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def _fake_remote_access_host_field_seed_entries(raw_value: str) -> list[tuple[str, str]]:
+        nonlocal active, peak
+        assert raw_value in expected_values
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(0.05)
+            return original_entry(raw_value)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_remote_access_host_field_seed_entries",
+        _fake_remote_access_host_field_seed_entries,
+    )
+
+    seeds = orchestrator._extract_artifact_network_endpoint_seeds(
+        dedent(
+            """
+            network --bootproto=dhcp --hostname=web.kickstart.acme.example --nameserver=10.41.0.53
+            nfs --server=nfs.kickstart.acme.example --dir=/exports/os
+            d-i netcfg/get_hostname string preseed-web.acme.example
+            """
+        ),
+        source_file="kickstart/ks.cfg",
+    )
+
+    assert peak == 4
+    assert seeds == [
+        ("web.kickstart.acme.example", "subdomain"),
+        ("acme.example", "domain"),
+        ("10.41.0.53", "ipv4"),
+        ("nfs.kickstart.acme.example", "subdomain"),
+        ("preseed-web.acme.example", "subdomain"),
+    ]
+
+
+def run_os_installer_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_os_installer"
+    kickstart_dir = artifact_root / "kickstart"
+    preseed_dir = artifact_root / "preseed"
+    kickstart_dir.mkdir(parents=True)
+    preseed_dir.mkdir(parents=True)
+    bootstrap_engagement(db_path)
+
+    kickstart_path = kickstart_dir / "ks.cfg"
+    kickstart_path.write_text(
+        dedent(
+            """
+            network --bootproto=dhcp --hostname=web.kickstart.acme.example --nameserver=10.41.0.53
+            nfs --server=nfs.kickstart.acme.example --dir=/exports/os
+            url --url=https://kickstart.acme.example/os
+            repo --name=app --baseurl=https://repos.kickstart.acme.example/base
+            %post
+            echo "owner=kickstart-owner@acme.example" > /etc/acme-owner
+            echo "firebase=https://kickstart-firebase.firebaseio.com" >> /etc/acme-cloud
+            echo "bucket=s3://acme-kickstart-bucket/bootstrap/ks.cfg" >> /etc/acme-cloud
+            %end
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    preseed_path = preseed_dir / "preseed"
+    preseed_path.write_text(
+        dedent(
+            """
+            d-i netcfg/get_hostname string preseed-web.acme.example
+            d-i netcfg/get_domain string preseed.acme.example
+            d-i mirror/http/hostname string mirror.preseed.acme.example
+            d-i preseed/late_command string in-target curl https://preseed.acme.example/late
+            d-i preseed/include string https://preseed.acme.example/include.cfg
+            d-i debian-installer/comment string preseed-owner@acme.example
+            d-i debian-installer/cloud string https://preseedvault.supabase.co/rest/v1/install
+            d-i debian-installer/mirror string gs://acme-preseed-gcs/bootstrap
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    assert _classify_artifact_name(Path("kickstart/ks.cfg")) == "config"
+    assert _classify_artifact_name(Path("preseed/preseed")) == "config"
+    assert _classify_artifact_name(Path("notes/preseed")) is None
+    assert _classify_remote_artifact_url("https://downloads.acme.example/kickstart/ks") == "config"
+    assert (
+        _classify_remote_artifact_url("https://downloads.acme.example/preseed/preseed")
+        == "config"
+    )
+    assert _classify_remote_artifact_url("https://downloads.acme.example/preseed") is None
+    assert (
+        _select_remote_artifact_filename(
+            42,
+            "https://downloads.acme.example/kickstart/ks",
+            "config",
+        )
+        == "ks"
+    )
+    assert _suffix_from_content_type("text/x-kickstart") == ".ks"
+    assert _suffix_from_content_type("text/x-preseed") == ".preseed"
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 2
+    assert summary.processed >= 2
+    assert summary.discovered_seeds >= 11
+    assert summary.firebase_projects >= 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("web.kickstart.acme.example", "subdomain") in seeds
+        assert ("nfs.kickstart.acme.example", "subdomain") in seeds
+        assert ("10.41.0.53", "ipv4") in seeds
+        assert ("preseed-web.acme.example", "subdomain") in seeds
+        assert ("mirror.preseed.acme.example", "subdomain") in seeds
+        assert ("acme.example", "domain") in seeds
+        assert ("kickstart-owner@acme.example", "email") in seeds
+        assert ("preseed-owner@acme.example", "email") in seeds
+        assert ("https://kickstart.acme.example/os", "url") in seeds
+        assert ("https://preseed.acme.example/include.cfg", "url") in seeds
+        assert ("preseedvault.supabase.co", "subdomain") not in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-kickstart-bucket") in cloud_assets
+        assert ("firebase", "kickstart-firebase") in cloud_assets
+        assert ("gcs", "acme-preseed-gcs") in cloud_assets
+        assert ("supabase", "preseedvault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[kickstart_path.resolve().as_posix()]["format"] == "kickstart"
+        assert artifact_meta[preseed_path.resolve().as_posix()]["format"] == "preseed"
+    finally:
+        con.close()
+
+
+def run_ignition_and_butane_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_ignition_butane"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    ignition_path = artifact_root / "bootstrap.ign"
+    ignition_path.write_text(
+        json.dumps(
+            {
+                "ignition": {"version": "3.4.0"},
+                "storage": {
+                    "files": [
+                        {
+                            "path": "/etc/acme.conf",
+                            "contents": {
+                                "source": (
+                                    "data:,owner=ignition-owner@acme.example%0A"
+                                    "url=https://ignition.acme.example/bootstrap%0A"
+                                    "firebase=https://ignition-firebase.firebaseio.com%0A"
+                                    "bucket=s3://acme-ignition-bucket/bootstrap/config"
+                                )
+                            },
+                        },
+                        {
+                            "path": "/etc/acme-b64.conf",
+                            "contents": {
+                                "source": (
+                                    "data:text/plain;base64,"
+                                    + base64.b64encode(
+                                        b"owner=ignition-b64-owner@acme.example\n"
+                                        b"url=https://ignition-b64.acme.example/config\n"
+                                        b"mirror=gs://acme-ignition-gcs/b64"
+                                    ).decode("ascii")
+                                )
+                            },
+                        },
+                    ]
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    butane_path = artifact_root / "worker.bu"
+    butane_path.write_text(
+        dedent(
+            """
+            variant: fcos
+            version: 1.5.0
+            passwd:
+              users:
+                - name: core
+            systemd:
+              units:
+                - name: acme.service
+                  contents: |
+                    [Service]
+                    Environment=OWNER=butane-owner@acme.example
+                    Environment=SUPABASE=https://butanevault.supabase.co/rest/v1/bootstrap
+                    Environment=GCS=gs://acme-butane-gcs/bootstrap/worker
+                    ExecStart=/usr/bin/curl https://butane.acme.example/health
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    assert _classify_artifact_name("bootstrap.ign") == "config"
+    assert _classify_artifact_name("worker.bu") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/bootstrap.ign") == "config"
+    assert _classify_remote_artifact_url("https://downloads.acme.example/worker.bu") == "config"
+    assert _suffix_from_content_type("application/vnd.coreos.ignition+json") == ".ign"
+    assert _suffix_from_content_type("application/vnd.coreos.butane+yaml") == ".bu"
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 2
+    assert summary.processed >= 2
+    assert summary.discovered_seeds >= 7
+    assert summary.firebase_projects >= 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("ignition-owner@acme.example", "email") in seeds
+        assert ("ignition-b64-owner@acme.example", "email") in seeds
+        assert ("butane-owner@acme.example", "email") in seeds
+        assert ("https://ignition.acme.example/bootstrap", "url") in seeds
+        assert ("https://ignition-b64.acme.example/config", "url") in seeds
+        assert ("https://butane.acme.example/health", "url") in seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-ignition-bucket") in cloud_assets
+        assert ("firebase", "ignition-firebase") in cloud_assets
+        assert ("gcs", "acme-ignition-gcs") in cloud_assets
+        assert ("gcs", "acme-butane-gcs") in cloud_assets
+        assert ("supabase", "butanevault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[ignition_path.resolve().as_posix()]["format"] == "ign"
+        assert artifact_meta[butane_path.resolve().as_posix()]["format"] == "bu"
     finally:
         con.close()

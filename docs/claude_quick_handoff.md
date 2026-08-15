@@ -32,6 +32,18 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): OS installer and Ignition/Butane bootstrap
+regression modularization is complete. Kickstart/preseed host extraction, the
+bounded OS-installer worker check, OS installer artifact queue fixture, and
+Ignition/Butane inline-data/base64 artifact fixture moved from
+`tests/phase1/test_engagement_orchestrator.py` into
+`tests/phase1/network_endpoint_artifact_cases.py`, while the original pytest
+nodes remain as thin wrappers. This removes more bootstrap endpoint fixture
+weight from the Phase 1 mega test without changing production parser behavior,
+live probing, provider calls, credential use, scope, validation/report gates,
+scheduler behavior, or persistent non-test engagement data. Verification
+passed for the preserved OS-installer/Ignition/Butane wrapper tests (`4
+passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B408.
 Latest checkpoint (2026-08-16): Ansible inventory and cloud-init regression
 modularization is complete. The Ansible inventory artifact fixture plus
 cloud-init host extraction and cloud-init artifact fixture moved from

@@ -90,6 +90,25 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] OS installer and Ignition/Butane bootstrap regression modularization
+  checkpoint (2026-08-16): the kickstart/preseed OS installer host extraction,
+  bounded worker order check, OS installer artifact classification fixture, and
+  Ignition/Butane inline-data/base64 parsing fixture now live in
+  `tests/phase1/network_endpoint_artifact_cases.py`, with the original pytest
+  nodes retained as thin wrappers in the Phase 1 mega test. This keeps coverage
+  for URL/IP/domain/subdomain seeds, S3/GCS/Firebase/Supabase assets,
+  artifact metadata labels, source-aware host suppression, and secret-safe
+  passive parsing while reducing inline fixture weight in
+  `tests/phase1/test_engagement_orchestrator.py`. Files:
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/network_endpoint_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  OS-installer/Ignition/Butane wrapper tests -> `4 passed`; Ruff and
+  `py_compile` passed for touched Python files. Safety note: test
+  modularization only; no production parser behavior, live probing, provider
+  calls, credential use, scope changes, validation/report gates, scheduler
+  behavior, or persistent non-test engagement data changed.
+
 - [x] Ansible inventory and cloud-init regression modularization checkpoint
   (2026-08-16): the Ansible inventory artifact fixture plus cloud-init host
   extraction and cloud-init artifact fixtures now live in
