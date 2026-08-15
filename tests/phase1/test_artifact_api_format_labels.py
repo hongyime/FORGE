@@ -198,6 +198,7 @@ def test_api_spec_and_client_collection_content_types_map_to_config_artifact_suf
     assert _artifact_format_label("npm-shrinkwrap.json") == "npm-shrinkwrap"
     assert _artifact_format_label("yarn.lock") == "yarn-lock"
     assert _artifact_format_label("pnpm-lock.yaml") == "pnpm-lock"
+    assert _artifact_format_label("pnpm-workspace.yaml") == "pnpm-workspace"
     assert _artifact_format_label("bun.lockb") == "bun-lockb"
     assert _artifact_format_label("Pipfile.lock") == "pipfile-lock"
     assert _artifact_format_label("poetry.lock") == "poetry-lock"

@@ -32,6 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): PNPM workspace manifests now receive a
+first-class passive dependency label. Scoped `pnpm-workspace.yaml` and
+`pnpm-workspace.yml` artifacts map to `pnpm-workspace`, so the existing
+YAML/package-manager artifact queue extracts registry and endpoint URL seeds
+plus owner email seeds without executing PNPM, installing packages, probing
+HTTP, authenticating, calling providers, or relaxing scope. URL userinfo is
+stripped before persistence, and the regression proves
+`pnpm-workspace-token-do-not-store` is not stored. Verification passed for
+package-manager artifact plus API format label tests (`61 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B384.
 Latest checkpoint (2026-08-16): Deno lockfiles now join passive JS-runtime
 recursion. Scoped `deno.lock` artifacts receive the `deno-lock` label and feed
 the Deno/JSR extractor, so static Deno remote module URLs, `npm:`/`jsr:`

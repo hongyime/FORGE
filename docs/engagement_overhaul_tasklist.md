@@ -478,6 +478,17 @@ sentences as historical notes only, not as current instructions.
   API format label tests (`10 passed`), Ruff, and `py_compile` passed.
   Backprop: `SPEC.md` B383.
 
+- [x] PNPM workspace passive-recursion checkpoint (2026-08-16):
+  Scoped `pnpm-workspace.yaml` and `pnpm-workspace.yml` artifacts now receive
+  the `pnpm-workspace` dependency label. The existing YAML/package-manager
+  artifact queue can passively extract registry URLs, endpoint URLs, and owner
+  contacts into recursive URL/email pivots while stripping URL userinfo and
+  proving `pnpm-workspace-token-do-not-store` is not persisted. No PNPM
+  execution, package install, HTTP probing, authentication, provider calls, or
+  scope relaxation was added. Verification: package-manager artifact plus API
+  format label tests (`61 passed`), Ruff, and `py_compile` passed. Backprop:
+  `SPEC.md` B384.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

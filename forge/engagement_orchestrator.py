@@ -6857,6 +6857,8 @@ def _dependency_manifest_artifact_label(value: str) -> str:
         "yarn.lock": "yarn-lock",
         "pnpm-lock.yaml": "pnpm-lock",
         "pnpm-lock.yml": "pnpm-lock",
+        "pnpm-workspace.yaml": "pnpm-workspace",
+        "pnpm-workspace.yml": "pnpm-workspace",
         "bun.lock": "bun-lock",
         "bun.lockb": "bun-lockb",
         "deno.lock": "deno-lock",

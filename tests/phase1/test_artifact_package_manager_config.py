@@ -328,6 +328,24 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         ).strip(),
         encoding="utf-8",
     )
+    pnpm_workspace_path = artifact_root / "pnpm-workspace.yaml"
+    pnpm_workspace_path.write_text(
+        dedent(
+            """
+            packages:
+              - apps/*
+
+            catalog:
+              "@acme/api-client": 1.2.3
+
+            owner: pnpm-workspace-owner@acme.example
+            registry: https://pnpm-workspace-user:pnpm-workspace-token-do-not-store@pnpm-workspace.acme.example/npm
+            endpoints:
+              metadata: https://pnpm-workspace-api.acme.example/v1
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
     generic_credentials_path = artifact_root / "credentials"
     generic_credentials_path.write_text(
         "owner = generic-creds-owner@acme.example", encoding="utf-8"
@@ -360,8 +378,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 14
-    assert summary.processed >= 14
+    assert queued >= 15
+    assert summary.processed >= 15
 
     con = sqlite3.connect(db_path)
     try:
@@ -392,6 +410,10 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
             artifact_meta[conda_environment_path.resolve().as_posix()]["format"]
             == "conda-environment"
         )
+        assert (
+            artifact_meta[pnpm_workspace_path.resolve().as_posix()]["format"]
+            == "pnpm-workspace"
+        )
         assert artifact_meta[nuget_config_path.resolve().as_posix()]["format"] == "nuget-config"
         assert (
             artifact_meta[generic_credentials_path.resolve().as_posix()]["format"] == "credentials"
@@ -418,6 +440,8 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert ("https://pixi.acme.example/conda", "url") in seeds
         assert ("https://bun-registry.acme.example/npm", "url") in seeds
         assert ("https://bun-scope.acme.example/npm", "url") in seeds
+        assert ("https://pnpm-workspace.acme.example/npm", "url") in seeds
+        assert ("https://pnpm-workspace-api.acme.example/v1", "url") in seeds
         assert ("conda-label-owner@acme.example", "email") in seeds
         assert ("conda-env-owner@acme.example", "email") in seeds
         assert ("mamba-label-owner@acme.example", "email") in seeds
@@ -426,6 +450,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
         assert ("poetry-owner@acme.example", "email") in seeds
         assert ("pixi-owner@acme.example", "email") in seeds
         assert ("bun-owner@acme.example", "email") in seeds
+        assert ("pnpm-workspace-owner@acme.example", "email") in seeds
         assert ("https://nuget-labels.acme.example/v3/index.json", "url") in seeds
         assert ("nuget-label-owner@acme.example", "email") in seeds
 
@@ -459,6 +484,7 @@ def test_artifact_queue_processor_labels_package_manager_configs_without_secrets
             "poetry-token-do-not-store",
             "pixi-token-do-not-store",
             "bun-token-do-not-store",
+            "pnpm-workspace-token-do-not-store",
         }:
             assert raw_secret not in persisted_text
     finally:
