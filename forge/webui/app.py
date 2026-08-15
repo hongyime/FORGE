@@ -55,8 +55,7 @@ from forge.webui.artifacts import (
     report_preview_payload as build_report_preview_payload,
 )
 from forge.webui.engagement_payloads import (
-    engagement_detail_payload as build_engagement_detail_payload,
-    engagement_summary_payload as build_engagement_summary_payload,
+    build_engagement_payload_providers,
 )
 from forge.webui.audit_review_routes import (
     AuditReviewRouteError,
@@ -428,33 +427,11 @@ def create_app() -> Any:
     _report_files = build_report_files_provider(_reports_dir)
     _audit_files = build_audit_files_provider(_reports_dir)
 
-    def _engagement_summary_payload(
-        db_file: Path,
-        con: sqlite3.Connection,
-        row: sqlite3.Row,
-    ) -> dict[str, Any]:
-        return build_engagement_summary_payload(
-            db_file,
-            con,
-            row,
-            reports_root=_reports_dir(),
-            format_dt=_format_dt,
-            format_size=_format_size,
-        )
-
-    def _engagement_detail_payload(
-        db_file: Path,
-        con: sqlite3.Connection,
-        row: sqlite3.Row,
-    ) -> dict[str, Any]:
-        return build_engagement_detail_payload(
-            db_file,
-            con,
-            row,
-            reports_root=_reports_dir(),
-            format_dt=_format_dt,
-            format_size=_format_size,
-        )
+    _engagement_summary_payload, _engagement_detail_payload = build_engagement_payload_providers(
+        reports_root=_reports_dir,
+        format_dt=_format_dt,
+        format_size=_format_size,
+    )
 
     _open_workflow_db = build_workflow_db_opener()
 

@@ -328,6 +328,15 @@ sentences as historical notes only, not as current instructions.
   passed`), HTMX app wiring tests (`19 passed`), Ruff, and `py_compile` passed.
   Backprop: `SPEC.md` B367.
 
+- [x] Web UI engagement payload provider extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds summary/detail payload builders
+  through `forge.webui.engagement_payloads.build_engagement_payload_providers`
+  instead of binding reports root and dashboard formatters in inline closures.
+  The helper preserves the existing dashboard/detail payload contracts while
+  keeping report-root and formatter binding with payload construction policy.
+  Verification: Web UI engagement-payload tests (`3 passed`), HTMX app wiring
+  tests (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B368.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

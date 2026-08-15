@@ -32,6 +32,12 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI engagement summary/detail payload
+binding was split out of `forge.webui.app.create_app()`.
+`forge.webui.engagement_payloads.build_engagement_payload_providers` now binds
+reports root and dashboard formatters for the discovery summary/detail builders.
+Verification passed for Web UI engagement-payload tests (`3 passed`), HTMX app
+wiring tests (`19 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B368.
 Latest checkpoint (2026-08-16): Web UI workflow DB opener binding was split out
 of `forge.webui.app.create_app()`.
 `forge.webui.db.build_workflow_db_opener` now binds the route-level DB opener

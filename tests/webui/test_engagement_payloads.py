@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from forge.webui.engagement_payloads import (
+    build_engagement_payload_providers,
     engagement_detail_payload,
     engagement_summary_payload,
 )
@@ -203,3 +204,48 @@ def test_engagement_detail_payload_extends_summary_with_artifacts_and_graph(
     assert payload["graph_payload"] == {"source": "graph"}
     assert payload["graph_snapshot_at"] == "graph-time"
     assert payload["report_history"][0]["artifact_name"] == "report.md"
+
+
+def test_build_engagement_payload_providers_bind_reports_and_formatters(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    con = _connect()
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir()
+    report = reports_root / "report.md"
+    report.write_text("# report", encoding="utf-8")
+    audit = reports_root / "audit.json"
+    graph = reports_root / "graph.json"
+    _patch_summary_dependencies(monkeypatch, reports=[report], audits=[audit], graphs=[graph])
+    monkeypatch.setattr(
+        "forge.webui.engagement_payloads.artifact_payloads",
+        lambda _slug, **_kwargs: [],
+    )
+    monkeypatch.setattr(
+        "forge.webui.engagement_payloads.latest_report_family_files",
+        lambda _reports: [],
+    )
+    monkeypatch.setattr(
+        "forge.webui.engagement_payloads._detail_sections",
+        lambda _con, _engagement_id, *, db_path: {"findings": []},
+    )
+    monkeypatch.setattr(
+        "forge.webui.engagement_payloads.audit_review_section_rows",
+        lambda _con, *, engagement_id: [],
+    )
+    db_file = tmp_path / "1001.db"
+    db_file.write_text("db", encoding="utf-8")
+    summary_payload, detail_payload = build_engagement_payload_providers(
+        reports_root=lambda: reports_root,
+        format_dt=lambda value: f"dt:{value}",
+        format_size=lambda size: f"{size} bytes",
+    )
+
+    summary = summary_payload(db_file, con, _row(con))
+    detail = detail_payload(db_file, con, _row(con))
+
+    assert summary["created_at"] == "dt:2026-08-16T00:00:00"
+    assert summary["report_count"] == 1
+    assert detail["size_label"] == "2 bytes"
+    assert detail["report_count"] == 1

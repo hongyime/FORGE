@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,8 @@ from forge.webui.run_status import (
     annotate_run_audit_review,
     latest_audit_timestamp,
 )
+
+PayloadBuilder = Callable[[Path, sqlite3.Connection, sqlite3.Row], dict[str, Any]]
 
 
 def engagement_summary_payload(
@@ -209,7 +212,45 @@ def engagement_detail_payload(
     return payload
 
 
+def build_engagement_payload_providers(
+    *,
+    reports_root: Callable[[], Path],
+    format_dt: Callable[[str], str],
+    format_size: Callable[[int], str],
+) -> tuple[PayloadBuilder, PayloadBuilder]:
+    def _engagement_summary_payload(
+        db_file: Path,
+        con: sqlite3.Connection,
+        row: sqlite3.Row,
+    ) -> dict[str, Any]:
+        return engagement_summary_payload(
+            db_file,
+            con,
+            row,
+            reports_root=reports_root(),
+            format_dt=format_dt,
+            format_size=format_size,
+        )
+
+    def _engagement_detail_payload(
+        db_file: Path,
+        con: sqlite3.Connection,
+        row: sqlite3.Row,
+    ) -> dict[str, Any]:
+        return engagement_detail_payload(
+            db_file,
+            con,
+            row,
+            reports_root=reports_root(),
+            format_dt=format_dt,
+            format_size=format_size,
+        )
+
+    return _engagement_summary_payload, _engagement_detail_payload
+
+
 __all__ = [
+    "build_engagement_payload_providers",
     "engagement_detail_payload",
     "engagement_summary_payload",
 ]
