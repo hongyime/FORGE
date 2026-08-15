@@ -378,6 +378,18 @@ sentences as historical notes only, not as current instructions.
   Verification: Web UI engagement-discovery plus HTMX wiring tests (`27
   passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B373.
 
+- [x] Scheduled target-import orphan prevention checkpoint (2026-08-16): A real
+  02:05 scheduled import hit the 45-minute Task Scheduler cap after logging
+  `timeout exceeded; requesting graceful stop`, leaving child import/kill-chain
+  processes alive. The orphaned process tree was stopped, engagement `10702`
+  had no remaining `running` run rows, and the scheduled watchdog now reserves
+  explicit timeout-recovery, graceful-stop, and kill-job cleanup time before the
+  hard cap. Timeout recovery uses a short helper budget, closes the watchdog
+  job while the parent is still alive, and then force-stops remaining child IDs.
+  The installer now passes the timeout-recovery helper budget. Verification:
+  Windows launcher tests (`15 passed`), watchdog self-test, Ruff, and
+  `py_compile` passed. Backprop: `SPEC.md` B374.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

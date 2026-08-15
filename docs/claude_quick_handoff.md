@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): The real 02:05 scheduled target import proved
+the remaining orphan edge case: after Task Scheduler hit the 45-minute cap, the
+parent task ended but child import/kill-chain PowerShell/Python processes stayed
+alive. The orphaned tree was stopped, engagement `10702` had no remaining
+`running` run rows, and `scripts/run_tph_target_import_task.ps1` now reserves
+timeout-recovery, graceful-stop, and kill-job cleanup time before the hard cap.
+Timeout recovery uses a short helper budget, closes the watchdog job while the
+parent is still alive, then force-stops remaining child IDs. The installer passes
+the new timeout-recovery helper budget. Verification passed for Windows launcher
+tests (`15 passed`), watchdog self-test, Ruff, and `py_compile`. Backprop:
+`SPEC.md` B374.
 Latest checkpoint (2026-08-16): Web UI engagement discovery route callables
 now bind through `forge.webui.engagement_discovery.build_engagement_discovery_providers`
 instead of five inline wrappers in `forge.webui.app.create_app()`. The provider

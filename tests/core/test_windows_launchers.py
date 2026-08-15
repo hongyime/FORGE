@@ -146,10 +146,18 @@ def test_tph_import_task_uses_one_wall_clock_budget_for_startup_import_and_clean
         "$stalerecoverytimeoutseconds = get-remainingtaskbudgetseconds "
         "-reserveseconds ([math]::max(30, $stopgraceseconds + 30))"
     ) in text
-    assert "$timeout = get-remainingtaskbudgetmilliseconds -reserveseconds $stopgraceseconds" in text
+    assert "[int]$timeoutrecoveryhelperseconds = 10" in text
+    assert "$timeoutcleanupreserveseconds = [math]::max(" in text
+    assert (
+        "[math]::max(1, $stopgraceseconds) + "
+        "[math]::max(1, $timeoutrecoveryhelperseconds) + 30"
+    ) in text
+    assert "$timeout = get-remainingtaskbudgetmilliseconds -reserveseconds $timeoutcleanupreserveseconds" in text
     assert "import skipped: no remaining task budget after startup and cleanup reserve" in text
     assert "task_timeout_minutes=$timeoutminutes import_timeout_seconds=" in text
     assert "$gracemilliseconds = [math]::min" in text
+    assert "[math]::max(0, (get-remainingtaskbudgetmilliseconds -reserveseconds 20))" in text
+    assert "[math]::max(1, $timeoutrecoveryhelperseconds)" in text
     assert "timed-out run marking skipped: no remaining task budget" in text
 
 
@@ -244,14 +252,17 @@ def test_tph_task_installer_uses_timeout_as_whole_task_budget() -> None:
     ).read_text(encoding="utf-8").lower()
     assert "[int]$everyminutes = 60" in text
     assert "[int]$watchdoghelpertimeoutseconds = 120" in text
+    assert "[int]$timeoutrecoveryhelperseconds = 10" in text
     assert "[int]$stalehelperfileminutes = 360" in text
     assert "-watchdoghelpertimeoutseconds $watchdoghelpertimeoutseconds" in text
+    assert "-timeoutrecoveryhelperseconds $timeoutrecoveryhelperseconds" in text
     assert "-stalehelperfileminutes $stalehelperfileminutes" in text
     assert "$cleanupminutes" not in text
     assert "$executionlimitminutes = [math]::max($timeoutminutes, 10)" in text
     assert "$interval = [math]::max([math]::max(5, $everyminutes), $executionlimitminutes)" in text
     assert "requested interval $everyminutes minute(s) was raised to $interval minute(s)" in text
     assert "-executiontimelimit (new-timespan -minutes $executionlimitminutes)" in text
+    assert "timeout recovery helper: $timeoutrecoveryhelperseconds second(s)" in text
 
 
 def test_remediation_ticket_status_import_task_defaults_to_dry_run() -> None:

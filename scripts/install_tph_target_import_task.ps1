@@ -11,6 +11,7 @@ param(
     [int]$TimeoutMinutes = 45,
     [int]$StopGraceSeconds = 90,
     [int]$WatchdogHelperTimeoutSeconds = 120,
+    [int]$TimeoutRecoveryHelperSeconds = 10,
     [int]$StaleHelperFileMinutes = 360,
     [int]$ModuleTimeoutSeconds = 900,
     [int]$StaleRunMinutes = 120,
@@ -43,7 +44,7 @@ $startArg = if ($Start) { " -Start" } else { "" }
 $launcherBody = @"
 @echo off
 setlocal
-call powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$taskRunner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg
+call powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$taskRunner" -ApiUrl "$ApiUrl" -TphEnvPath "$TphEnvPath" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -TimeoutRecoveryHelperSeconds $TimeoutRecoveryHelperSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg
 set "RESULT=%ERRORLEVEL%"
 exit /b %RESULT%
 "@
@@ -58,7 +59,7 @@ $trigger = New-ScheduledTaskTrigger `
     -RepetitionDuration (New-TimeSpan -Days 3650)
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$taskRunner`" -ApiUrl `"$ApiUrl`" -TphEnvPath `"$TphEnvPath`" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg" `
+    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$taskRunner`" -ApiUrl `"$ApiUrl`" -TphEnvPath `"$TphEnvPath`" -Limit $Limit -MaxIter $MaxIter -StartLimit $StartLimit -WaitSeconds $WaitSeconds -TimeoutMinutes $TimeoutMinutes -StopGraceSeconds $StopGraceSeconds -WatchdogHelperTimeoutSeconds $WatchdogHelperTimeoutSeconds -TimeoutRecoveryHelperSeconds $TimeoutRecoveryHelperSeconds -StaleHelperFileMinutes $StaleHelperFileMinutes -ModuleTimeoutSeconds $ModuleTimeoutSeconds -StaleRunMinutes $StaleRunMinutes$startArg$dryRunArg" `
     -WorkingDirectory $launcherDir
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
@@ -80,5 +81,5 @@ if ($interval -ne $EveryMinutes) {
 Write-Host "Runs every $interval minute(s) while Windows is running."
 Write-Host "Start enabled: $Start; max new passive runs per import: $StartLimit; max iterations per run: $MaxIter"
 Write-Host "Watchdog timeout: $TimeoutMinutes minute(s)"
-Write-Host "Graceful stop window: $StopGraceSeconds second(s); watchdog helper timeout: $WatchdogHelperTimeoutSeconds second(s); stale helper cleanup: $StaleHelperFileMinutes minute(s); module timeout: $ModuleTimeoutSeconds second(s)"
+Write-Host "Graceful stop window: $StopGraceSeconds second(s); watchdog helper timeout: $WatchdogHelperTimeoutSeconds second(s); timeout recovery helper: $TimeoutRecoveryHelperSeconds second(s); stale helper cleanup: $StaleHelperFileMinutes minute(s); module timeout: $ModuleTimeoutSeconds second(s)"
 Write-Host "Launcher: $launcher"

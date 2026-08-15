@@ -9,6 +9,7 @@ param(
     [int]$TimeoutMinutes = 45,
     [int]$StopGraceSeconds = 90,
     [int]$WatchdogHelperTimeoutSeconds = 120,
+    [int]$TimeoutRecoveryHelperSeconds = 10,
     [int]$StaleHelperFileMinutes = 360,
     [int]$ModuleTimeoutSeconds = 900,
     [int]$StaleRunMinutes = 120,
@@ -749,7 +750,11 @@ if ($DryRun) {
     $args += "-DryRun"
 }
 
-$timeout = Get-RemainingTaskBudgetMilliseconds -ReserveSeconds $StopGraceSeconds
+$timeoutCleanupReserveSeconds = [Math]::Max(
+    45,
+    [Math]::Max(1, $StopGraceSeconds) + [Math]::Max(1, $TimeoutRecoveryHelperSeconds) + 30
+)
+$timeout = Get-RemainingTaskBudgetMilliseconds -ReserveSeconds $timeoutCleanupReserveSeconds
 if ($timeout -lt 1000) {
     Write-TaskLog "import skipped: no remaining task budget after startup and cleanup reserve"
     exit 124
@@ -778,12 +783,22 @@ try {
 
     if (-not $process.WaitForExit($timeout)) {
         Write-TaskLog "timeout exceeded; requesting graceful stop root=$($process.Id)"
-        $recoveryTimeoutSeconds = Get-RemainingTaskBudgetSeconds -ReserveSeconds 5
+        $recoveryTimeoutSeconds = Get-RemainingTaskBudgetSeconds -ReserveSeconds (
+            [Math]::Max(20, [Math]::Max(1, $StopGraceSeconds) + 20)
+        )
         Invoke-OptionalRecoveryStep -Name "graceful-stop request" -Action {
-            Request-GracefulStopForTimedOutRuns -StartedAfterIso $startedAfter -TimeoutSeconds ([Math]::Min($WatchdogHelperTimeoutSeconds, [Math]::Max(1, $recoveryTimeoutSeconds)))
+            Request-GracefulStopForTimedOutRuns -StartedAfterIso $startedAfter -TimeoutSeconds (
+                [Math]::Min(
+                    [Math]::Max(1, $TimeoutRecoveryHelperSeconds),
+                    [Math]::Max(1, $recoveryTimeoutSeconds)
+                )
+            )
         }
-        $graceMilliseconds = [Math]::Min([Math]::Max(1, $StopGraceSeconds) * 1000, [Math]::Max(1000, (Get-RemainingTaskBudgetMilliseconds -ReserveSeconds 5)))
-        if ($process.WaitForExit($graceMilliseconds)) {
+        $graceMilliseconds = [Math]::Min(
+            [Math]::Max(1, $StopGraceSeconds) * 1000,
+            [Math]::Max(0, (Get-RemainingTaskBudgetMilliseconds -ReserveSeconds 20))
+        )
+        if ($graceMilliseconds -gt 0 -and $process.WaitForExit($graceMilliseconds)) {
             $process.WaitForExit()
             Add-Content -LiteralPath $stdoutPath -Value $stdoutTask.Result -Encoding UTF8
             Add-Content -LiteralPath $stderrPath -Value $stderrTask.Result -Encoding UTF8
@@ -805,11 +820,11 @@ try {
             Write-TaskLog "stopping remaining import process ids after watchdog close root=$($process.Id) candidates=$($remainingProcessIds -join ',')"
             Stop-ProcessIds -ProcessIds $remainingProcessIds
         }
-        if (-not $process.WaitForExit(5000)) {
+        if (-not $process.WaitForExit(3000)) {
             try {
                 Stop-Process -Id $process.Id -Force -ErrorAction Stop
                 Write-TaskLog "stopped import root process id=$($process.Id)"
-                $process.WaitForExit(5000) | Out-Null
+                $process.WaitForExit(3000) | Out-Null
             } catch {
                 Write-TaskLog "import root process id=$($process.Id) already exited or could not be stopped"
             }
