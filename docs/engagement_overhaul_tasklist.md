@@ -436,6 +436,15 @@ sentences as historical notes only, not as current instructions.
   run-log plus HTMX wiring tests (`23 passed`), Ruff, and `py_compile` passed.
   Backprop: `SPEC.md` B379.
 
+- [x] Web UI command-center body parser checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` no longer defines a local command-center
+  engagement-id body parser wrapper. App setup now binds
+  `forge.webui.command_center_routes.build_command_body_engagement_id_parser`
+  with FastAPI's `HTTPException`, preserving missing-body 400 mapping while
+  keeping parser route-error policy beside the command-center route helpers.
+  Verification: Web UI command-center plus HTMX wiring tests (`27 passed`),
+  Ruff, and `py_compile` passed. Backprop: `SPEC.md` B380.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

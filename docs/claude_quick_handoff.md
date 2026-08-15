@@ -32,6 +32,14 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI command-center body parsing moved from
+a local `forge.webui.app.create_app()` wrapper to
+`forge.webui.command_center_routes.build_command_body_engagement_id_parser`.
+App setup now binds the parser with FastAPI's `HTTPException`, preserving
+missing `engagement_id` 400 responses while keeping command-center parser
+route-error policy beside the command-center route helpers. Verification passed
+for Web UI command-center plus HTMX wiring tests (`27 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B380.
 Latest checkpoint (2026-08-16): Web UI run-control dependency binding moved
 from the stop/pause route wrapper in `forge.webui.app.create_app()` to
 `forge.webui.run_log_routes.build_run_control_requester`. App setup now binds

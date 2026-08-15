@@ -150,8 +150,8 @@ from forge.webui.active_validation_routes import (
 from forge.webui.command_center_routes import (
     CommandCenterRouteError,
     approve_action_route_payload,
+    build_command_body_engagement_id_parser,
     build_command_event_publisher,
-    command_body_engagement_id,
     command_center_service as build_command_center_service,
     emergency_stop_route_payload,
     execute_action_route_payload,
@@ -2298,6 +2298,9 @@ def create_app() -> Any:
             con.close()
 
     publish_command_event = build_command_event_publisher(broker.publish_sync)
+    command_body_engagement_id = build_command_body_engagement_id_parser(
+        http_exception=HTTPException
+    )
 
     def get_command_center(engagement_id: Any) -> Any:
         return build_command_center_service(
@@ -2306,12 +2309,6 @@ def create_app() -> Any:
             coordinator=coordinator,
             publish_event=publish_command_event,
         )
-
-    def _command_body_engagement_id(body: dict[str, Any]) -> Any:
-        try:
-            return command_body_engagement_id(body)
-        except CommandCenterRouteError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/assets/{host}/context")
     def get_host_context_api(
@@ -2339,7 +2336,7 @@ def create_app() -> Any:
         body: dict[str, Any],
         principal: Principal = Depends(_auth_principal),
     ) -> dict[str, Any]:
-        engagement_id = _command_body_engagement_id(body)
+        engagement_id = command_body_engagement_id(body)
         authorized_engagements.db_path(int(engagement_id), principal)
         _require_principal_permission(principal, "actions:execute")
         try:
@@ -2353,7 +2350,7 @@ def create_app() -> Any:
         body: dict[str, Any],
         principal: Principal = Depends(_auth_principal),
     ) -> dict[str, Any]:
-        engagement_id = _command_body_engagement_id(body)
+        engagement_id = command_body_engagement_id(body)
         authorized_engagements.db_path(int(engagement_id), principal)
         _require_principal_permission(principal, "actions:approve")
         try:
@@ -2366,7 +2363,7 @@ def create_app() -> Any:
         body: dict[str, Any],
         principal: Principal = Depends(_auth_principal),
     ) -> dict[str, Any]:
-        engagement_id = _command_body_engagement_id(body)
+        engagement_id = command_body_engagement_id(body)
         authorized_engagements.db_path(int(engagement_id), principal)
         _require_principal_permission(principal, "sentry:write")
         return toggle_sentry_route_payload(get_command_center(engagement_id), body)
@@ -2376,7 +2373,7 @@ def create_app() -> Any:
         body: dict[str, Any],
         principal: Principal = Depends(_auth_principal),
     ) -> dict[str, Any]:
-        engagement_id = _command_body_engagement_id(body)
+        engagement_id = command_body_engagement_id(body)
         authorized_engagements.db_path(int(engagement_id), principal)
         _require_principal_permission(principal, "sentry:emergency_stop")
         return emergency_stop_route_payload(get_command_center(engagement_id))

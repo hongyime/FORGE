@@ -66,6 +66,19 @@ def command_body_engagement_id(body: dict[str, Any]) -> Any:
     return engagement_id
 
 
+def build_command_body_engagement_id_parser(
+    *,
+    http_exception: type[Exception],
+) -> Callable[[dict[str, Any]], Any]:
+    def parse_engagement_id(body: dict[str, Any]) -> Any:
+        try:
+            return command_body_engagement_id(body)
+        except CommandCenterRouteError as exc:
+            raise http_exception(status_code=400, detail=str(exc)) from exc
+
+    return parse_engagement_id
+
+
 def command_context_from_body(body: dict[str, Any]) -> dict[str, Any]:
     context = body.get("context") if isinstance(body.get("context"), dict) else {}
     return inherit_roe_scope_context(
@@ -162,6 +175,7 @@ __all__ = [
     "CommandCenterRouteError",
     "approve_action_payload",
     "approve_action_route_payload",
+    "build_command_body_engagement_id_parser",
     "build_command_event_publisher",
     "command_body_engagement_id",
     "command_center_service",

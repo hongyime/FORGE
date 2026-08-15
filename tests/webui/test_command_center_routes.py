@@ -8,6 +8,7 @@ from forge.webui.command_center_routes import (
     CommandCenterRouteError,
     approve_action_payload,
     approve_action_route_payload,
+    build_command_body_engagement_id_parser,
     build_command_event_publisher,
     command_body_engagement_id,
     command_context_from_body,
@@ -69,6 +70,13 @@ class _FailingCommandCenter(_FakeCommandCenter):
         raise ValueError(f"cannot approve {action_id}")
 
 
+class _RouteException(Exception):
+    def __init__(self, *, status_code: int, detail: str) -> None:
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(detail)
+
+
 def test_command_body_engagement_id_preserves_missing_body_contract() -> None:
     assert command_body_engagement_id({"engagement_id": 1001}) == 1001
     assert command_body_engagement_id({"engagement_id": "1001"}) == "1001"
@@ -76,6 +84,19 @@ def test_command_body_engagement_id_preserves_missing_body_contract() -> None:
         command_body_engagement_id({})
     with pytest.raises(CommandCenterRouteError, match="engagement_id required"):
         command_body_engagement_id({"engagement_id": 0})
+
+
+def test_command_body_engagement_id_parser_maps_route_errors() -> None:
+    parse_engagement_id = build_command_body_engagement_id_parser(
+        http_exception=_RouteException
+    )
+
+    assert parse_engagement_id({"engagement_id": "1001"}) == "1001"
+    with pytest.raises(_RouteException) as exc_info:
+        parse_engagement_id({})
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "engagement_id required in body"
 
 
 def test_command_context_from_body_inherits_only_roe_scope_fields() -> None:
