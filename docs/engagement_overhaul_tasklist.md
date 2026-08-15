@@ -292,6 +292,14 @@ sentences as historical notes only, not as current instructions.
   wiring tests (`19 passed`), Ruff, and `py_compile` passed. Backprop:
   `SPEC.md` B363.
 
+- [x] Web UI stale run-status wrapper cleanup checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` no longer imports and defines an unused
+  `_latest_running_engagement_run` wrapper after run-status ownership moved to
+  `forge.webui.run_status`. This removes dead app-factory surface while keeping
+  the actual latest-running query covered in the run-status module. Verification:
+  Web UI run-status tests (`10 passed`), HTMX app wiring tests (`19 passed`),
+  Ruff, and `py_compile` passed. Backprop: `SPEC.md` B364.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

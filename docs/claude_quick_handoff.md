@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): A stale Web UI latest-running run wrapper was
+removed from `forge.webui.app.create_app()`.
+`forge.webui.run_status.latest_running_engagement_run` remains the owned query
+used by run-control and kill-chain launch helpers; app setup no longer imports
+or defines an unused local wrapper. Verification passed for Web UI run-status
+tests (`10 passed`), HTMX app wiring tests (`19 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B364.
 Latest checkpoint (2026-08-16): Web UI report/audit file-provider binding was
 split out of `forge.webui.app.create_app()`.
 `forge.webui.artifacts.build_report_files_provider` and

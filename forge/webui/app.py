@@ -208,7 +208,6 @@ from forge.webui.run_log_routes import (
 from forge.webui.run_status import (
     annotate_run_audit_review as annotate_run_audit_review_payload,
     iter_live_run_progress_snapshots,
-    latest_running_engagement_run as find_latest_running_engagement_run,
 )
 from forge.webui.shell_routes import (
     ShellRouteNotFound,
@@ -424,9 +423,6 @@ def create_app() -> Any:
         )
 
     _clear_run_control_markers = build_run_control_marker_clearer(cfg.data_dir)
-
-    def _latest_running_engagement_run(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row | None:
-        return find_latest_running_engagement_run(con, engagement_id)
 
     _logs_dir = build_logs_dir_provider(cfg.data_dir)
 
