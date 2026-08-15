@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -61,6 +62,15 @@ def publish_progress_sync(
     payload: dict[str, Any],
 ) -> None:
     publish_sync(progress_event(engagement_id, message, payload))
+
+
+def build_progress_publisher(
+    publish_sync: Any,
+) -> Callable[[int, str, dict[str, Any]], None]:
+    def _publish(engagement_id: int, message: str, payload: dict[str, Any]) -> None:
+        publish_progress_sync(publish_sync, engagement_id, message, payload)
+
+    return _publish
 
 
 def queued_progress_event(message_payload: dict[str, Any]) -> ProgressEvent | None:

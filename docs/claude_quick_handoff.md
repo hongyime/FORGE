@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI synchronous progress publishing was
+split out of `forge.webui.app.create_app()`.
+`forge.webui.state.build_progress_publisher` now binds a broker publish method
+to the shared `ProgressEvent` constructor, preserving the event shape used by
+task, lifecycle, seed, run-control, and command-center route payloads.
+Verification passed for Web UI state tests (`5 passed`), HTMX app wiring tests
+(`19 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B359.
 Latest checkpoint (2026-08-16): Web UI engagement summary/detail payload
 construction was split out of `forge.webui.app.create_app()`.
 `forge.webui.engagement_payloads` now owns dashboard/detail payload shaping,

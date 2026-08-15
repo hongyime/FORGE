@@ -248,11 +248,11 @@ from forge.webui.workspace_access import (
     principal_can_access_workspace,
 )
 from forge.webui.state import (
+    build_progress_publisher,
     engagement_run_progress_event,
     broker,
     progress_event_websocket_text,
     progress_websocket_subprotocol,
-    publish_progress_sync,
     queued_progress_event,
 )
 from forge.db.direct_connect import direct_connect  # noqa: E402  # PRAGMA-configured wrapper for bare sqlite3.connect
@@ -330,8 +330,7 @@ def create_app() -> Any:
     _bootstrap_secret = build_bootstrap_secret_provider(http_exception=HTTPException)
     _require_principal_permission = build_principal_permission_guard(http_exception=HTTPException)
 
-    def _publish_progress_sync(engagement_id: int, message: str, payload: dict[str, Any]) -> None:
-        publish_progress_sync(broker.publish_sync, engagement_id, message, payload)
+    _publish_progress_sync = build_progress_publisher(broker.publish_sync)
 
     async def _queue_event_bridge() -> None:
         while not event_bridge_stop.is_set():

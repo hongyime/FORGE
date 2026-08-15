@@ -247,6 +247,15 @@ sentences as historical notes only, not as current instructions.
   UI engagement-payload tests (`2 passed`), HTMX app wiring tests (`19 passed`),
   Ruff, and `py_compile` passed. Backprop: `SPEC.md` B358.
 
+- [x] Web UI progress publisher extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds its synchronous progress publisher
+  through `forge.webui.state.build_progress_publisher` instead of defining the
+  closure inline. The helper preserves the `ProgressEvent` shape used by task,
+  lifecycle, seed, run-control, and command-center route payloads while keeping
+  app-local wiring limited to the broker dependency. Verification: Web UI state
+  tests (`5 passed`), HTMX app wiring tests (`19 passed`), Ruff, and
+  `py_compile` passed. Backprop: `SPEC.md` B359.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

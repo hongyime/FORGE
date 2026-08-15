@@ -6,6 +6,7 @@ import json
 from forge.webui.state import (
     ProgressEvent,
     ProgressBroker,
+    build_progress_publisher,
     engagement_run_progress_event,
     progress_event_websocket_text,
     progress_websocket_subprotocol,
@@ -39,13 +40,23 @@ def test_publish_progress_sync_and_run_progress_event_preserve_contract() -> Non
     published: list[ProgressEvent] = []
 
     publish_progress_sync(published.append, 1001, "scan_started", {"task_key": "crawl:app"})
+    build_progress_publisher(published.append)(
+        1002,
+        "scan_finished",
+        {"task_key": "crawl:app"},
+    )
 
     assert published == [
         ProgressEvent(
             engagement_id=1001,
             message="scan_started",
             payload={"task_key": "crawl:app"},
-        )
+        ),
+        ProgressEvent(
+            engagement_id=1002,
+            message="scan_finished",
+            payload={"task_key": "crawl:app"},
+        ),
     ]
     assert engagement_run_progress_event(1001, {"phase": "iteration_1"}) == ProgressEvent(
         engagement_id=1001,
