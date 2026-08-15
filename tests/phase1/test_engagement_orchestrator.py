@@ -185,6 +185,7 @@ from tests.phase1.network_endpoint_artifact_cases import (
     run_dhcp_lease_hostnames,
     run_dhcp_lease_line_tokenization_uses_bounded_workers_and_preserves_order,
     run_dns_zone_line_parsing_uses_bounded_workers_and_preserves_origin_order,
+    run_dns_zone_artifacts,
     run_dns_zone_records,
     run_hosts_file_aliases,
     run_hosts_file_line_tokenization_uses_bounded_workers_and_preserves_order,
@@ -192,6 +193,7 @@ from tests.phase1.network_endpoint_artifact_cases import (
     run_remote_access_host_fields,
     run_vagrantfile_hostnames,
     run_vpn_endpoint_hosts,
+    run_vpn_endpoint_artifacts,
 )
 from tests.phase1.remote_artifact_download_cases import (
     run_extensionless_remote_avif_content_type,
@@ -26772,239 +26774,11 @@ def test_artifact_network_endpoint_extraction_includes_vpn_endpoint_hosts() -> N
 
 
 def test_artifact_queue_processor_extracts_dns_zone_artifacts(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_dns_zones"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    zone_path = artifact_root / "acme.zone"
-    zone_path.write_text(
-        dedent(
-            """
-            $ORIGIN acme.example.
-            @ 3600 IN SOA ns1.acme.example. hostmaster.acme.example. 2026071701 7200 3600 1209600 3600
-            @ IN NS ns1.acme.example.
-            @ IN MX 10 mail.acme.example.
-            www 300 IN A 203.0.113.24
-            api 300 IN CNAME api-edge.acme.example.
-            firebase IN TXT "https://dnszone-firebase.firebaseio.com"
-            supabase IN TXT "https://dnszonevault.supabase.co/rest/v1/zones"
-            backups IN TXT "s3://acme-zone-bucket/dns/acme.zone"
-            """
-        ),
-        encoding="utf-8",
-    )
-
-    named_conf_path = artifact_root / "named.conf.local"
-    named_conf_path.write_text(
-        'zone "internal.acme.example" { type master; file "/etc/bind/db.internal.acme.example"; };',
-        encoding="utf-8",
-    )
-
-    archive_path = artifact_root / "dns-bundle.zip"
-    with zipfile.ZipFile(archive_path, "w") as zf:
-        zf.writestr(
-            "zones/db.internal.acme.example",
-            dedent(
-                """
-                $ORIGIN internal.acme.example.
-                @ IN NS ns1.internal.acme.example.
-                portal IN CNAME portal-edge.internal.acme.example.
-                storage IN TXT "gs://acme-zone-gcs/dns/internal.zone"
-                """
-            ),
-        )
-
-    assert (
-        _classify_remote_artifact_url("https://downloads.acme.example/zones/acme.zone") == "config"
-    )
-    assert (
-        _classify_remote_artifact_url("https://downloads.acme.example/bind/db.acme.example")
-        == "config"
-    )
-    assert (
-        _classify_remote_artifact_url("https://downloads.acme.example/named.conf.local") == "config"
-    )
-    assert _suffix_from_content_type("text/dns") == ".zone"
-    assert _suffix_from_content_type("application/x-zone-file") == ".zone"
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 3
-    assert summary.processed >= 3
-    assert summary.discovered_seeds >= 12
-    assert summary.firebase_projects >= 1
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("acme.example", "domain") in seeds
-        assert ("internal.acme.example", "subdomain") in seeds
-        assert ("ns1.acme.example", "subdomain") in seeds
-        assert ("mail.acme.example", "subdomain") in seeds
-        assert ("www.acme.example", "subdomain") in seeds
-        assert ("api.acme.example", "subdomain") in seeds
-        assert ("api-edge.acme.example", "subdomain") in seeds
-        assert ("ns1.internal.acme.example", "subdomain") in seeds
-        assert ("portal.internal.acme.example", "subdomain") in seeds
-        assert ("portal-edge.internal.acme.example", "subdomain") in seeds
-        assert ("203.0.113.24", "ipv4") in seeds
-        assert ("https://dnszonevault.supabase.co/rest/v1/zones", "url") in seeds
-        assert ("dnszonevault.supabase.co", "subdomain") not in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-zone-bucket") in cloud_assets
-        assert ("firebase", "dnszone-firebase") in cloud_assets
-        assert ("gcs", "acme-zone-gcs") in cloud_assets
-        assert ("supabase", "dnszonevault") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[zone_path.resolve().as_posix()]["format"] == "zone"
-        assert artifact_meta[zone_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[named_conf_path.resolve().as_posix()]["format"] == "zone"
-        assert artifact_meta[named_conf_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[archive_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[archive_path.resolve().as_posix()]["payload_count"] >= 1
-    finally:
-        con.close()
+    run_dns_zone_artifacts(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_vpn_endpoint_artifacts(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_vpn_endpoints"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    wireguard_path = artifact_root / "wg0.conf"
-    wireguard_path.write_text(
-        dedent(
-            """
-            [Interface]
-            Address = 10.80.0.2/32
-            [Peer]
-            Endpoint = wg.acme.example:51820
-            # passive cloud refs discovered in the profile
-            https://vpnprofile-firebase.firebaseio.com
-            https://vpnprofilevault.supabase.co/rest/v1/profiles
-            s3://acme-vpn-profile-bucket/wireguard/wg0.conf
-            """
-        ),
-        encoding="utf-8",
-    )
-
-    ovpn_path = artifact_root / "client.ovpn"
-    ovpn_path.write_text(
-        dedent(
-            """
-            client
-            remote ovpn.acme.example 1194 udp
-            remote backup-vpn.acme.example 443 tcp
-            """
-        ),
-        encoding="utf-8",
-    )
-
-    archive_path = artifact_root / "vpn-bundle.zip"
-    with zipfile.ZipFile(archive_path, "w") as zf:
-        zf.writestr(
-            "profiles/backup.conf",
-            dedent(
-                """
-                [Peer]
-                Endpoint = nested-wg.acme.example:51820
-                gs://acme-vpn-profile-gcs/wireguard/backup.conf
-                """
-            ),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 3
-    assert summary.processed >= 3
-    assert summary.discovered_seeds >= 10
-    assert summary.firebase_projects >= 1
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("wg.acme.example", "subdomain") in seeds
-        assert ("ovpn.acme.example", "subdomain") in seeds
-        assert ("backup-vpn.acme.example", "subdomain") in seeds
-        assert ("nested-wg.acme.example", "subdomain") in seeds
-        assert ("acme.example", "domain") in seeds
-        assert ("10.80.0.2", "ipv4") in seeds
-        assert ("https://vpnprofilevault.supabase.co/rest/v1/profiles", "url") in seeds
-        assert ("vpnprofilevault.supabase.co", "subdomain") not in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-vpn-profile-bucket") in cloud_assets
-        assert ("firebase", "vpnprofile-firebase") in cloud_assets
-        assert ("gcs", "acme-vpn-profile-gcs") in cloud_assets
-        assert ("supabase", "vpnprofilevault") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[wireguard_path.resolve().as_posix()]["format"] == "conf"
-        assert artifact_meta[wireguard_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[ovpn_path.resolve().as_posix()]["format"] == "ovpn"
-        assert artifact_meta[ovpn_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[archive_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[archive_path.resolve().as_posix()]["payload_count"] >= 1
-    finally:
-        con.close()
+    run_vpn_endpoint_artifacts(tmp_path)
 
 
 def test_artifact_tunnel_config_structured_payload_uses_bounded_workers_and_preserves_order(
