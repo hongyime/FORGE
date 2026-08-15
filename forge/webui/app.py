@@ -10,10 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from forge.audit.manifest import summarize_run_audit_manifest
-from forge.audit.review import (
-    audit_review_section_rows,
-    audit_review_summary,
-)
+from forge.audit.review import audit_review_summary
 from forge.config import ForgeConfig
 from forge.db.control import (
     connect_control_db,
@@ -23,27 +20,17 @@ from forge.distributed.coordinator import QueueCoordinator
 from forge.engagement_ids import allocate_engagement_id, numeric_engagement_db_files
 from forge.opsec.scope_gate import scope_entries_from_payload
 from forge.reporting.dashboard import (
-    _annotate_audit_manifest_bundle,
     _engagement_tags,
-    _detail_sections,
     _format_dt,
     _format_size,
     _graph_files,
-    _graph_state_for_engagement,
-    _highest_severity,
-    _latest_engagement_run,
     _safe_json_loads,
-    _seed_list,
-    _seed_graph_summary,
     _slugify,
-    _severity_summary,
-    _summary_counts,
     _table_columns,
     _table_exists,
 )
 from forge.reporting.audit_manifest_artifacts import materialize_audit_manifest_artifacts
 from forge.reporting.report_history import (
-    latest_report_family_files,
     report_history_payload,
     report_review_counts,
 )
@@ -66,6 +53,10 @@ from forge.webui.artifacts import (
     report_files as webui_report_files,
     report_preview_payload as build_report_preview_payload,
     reports_dir as webui_reports_dir,
+)
+from forge.webui.engagement_payloads import (
+    engagement_detail_payload as build_engagement_detail_payload,
+    engagement_summary_payload as build_engagement_summary_payload,
 )
 from forge.webui.audit_review_routes import (
     AuditReviewRouteError,
@@ -217,7 +208,6 @@ from forge.webui.run_log_routes import (
 from forge.webui.run_status import (
     annotate_run_audit_review as annotate_run_audit_review_payload,
     iter_live_run_progress_snapshots,
-    latest_audit_timestamp,
     latest_running_engagement_run as find_latest_running_engagement_run,
 )
 from forge.webui.shell_routes import (
@@ -450,153 +440,33 @@ def create_app() -> Any:
     def _audit_files(engagement_id: int) -> list[Path]:
         return webui_audit_files(engagement_id, _reports_dir())
 
-    def _latest_audit(con: sqlite3.Connection, engagement_id: int) -> str:
-        return latest_audit_timestamp(con, engagement_id, format_dt=_format_dt)
-
     def _engagement_summary_payload(
         db_file: Path,
         con: sqlite3.Connection,
         row: sqlite3.Row,
     ) -> dict[str, Any]:
-        engagement_id = int(row["id"])
-        scope = _safe_json_loads(str(row["scope_json"] or "[]"))
-        scope_list = scope_entries_from_payload(scope)
-        seeds = _seed_list(con, engagement_id, scope_list)
-        primary_seed = seeds[0] if seeds else ""
-        slug_source = str(row["name"] or primary_seed or f"engagement-{engagement_id}")
-        slug = f"engagement-{engagement_id}-{_slugify(slug_source)}"
-        report_files = _report_files(engagement_id)
-        audit_files = materialize_audit_manifest_artifacts(
+        return build_engagement_summary_payload(
+            db_file,
             con,
-            db_path=db_file,
-            reports_dir=_reports_dir(),
-            engagement_id=engagement_id,
-            verify=False,
+            row,
+            reports_root=_reports_dir(),
+            format_dt=_format_dt,
+            format_size=_format_size,
         )
-        graph_files = _graph_files(str(engagement_id), _reports_dir())
-        severity_summary = _severity_summary(con, engagement_id)
-        graph_summary, _graph_payload, _graph_snapshot_at = _graph_state_for_engagement(
-            con,
-            engagement_id,
-            graph_files,
-        )
-        tags = _engagement_tags(con, engagement_id)
-        run_summary = _annotate_audit_manifest_bundle(
-            _latest_engagement_run(
-                con,
-                engagement_id,
-                db_path=db_file,
-            ),
-            build_audit_artifact_payloads(
-                slug,
-                audit_files,
-                format_size=_format_size,
-                format_dt=_format_dt,
-            ),
-        )
-        run_summary = _annotate_run_audit_review(con, run_summary, engagement_id)
-        report_history = report_history_payload(report_files)
-        payload = {
-            "db": db_file.name,
-            "id": engagement_id,
-            "slug": slug,
-            "name": str(row["name"] or f"Engagement {engagement_id}"),
-            "workspace_id": str(row["workspace_id"] or "default"),
-            "status": str(row["status"] or ""),
-            "operator": str(row["operator"] or ""),
-            "tags": tags,
-            "created_at": _format_dt(str(row["created_at"] or "")),
-            "updated_at": _format_dt(str(row["updated_at"] or "")),
-            "latest_audit": _latest_audit(con, engagement_id),
-            "primary_seed": primary_seed,
-            "seeds": seeds,
-            "counts": _summary_counts(con, engagement_id),
-            "severity_summary": severity_summary,
-            "highest_severity": _highest_severity(severity_summary),
-            "graph_summary": graph_summary,
-            "run_summary": run_summary,
-            "audit_review": audit_review_summary(con, engagement_id=engagement_id),
-            "seed_graph_summary": _seed_graph_summary(con, engagement_id),
-            "report_count": len(report_files),
-            "audit_count": len(audit_files),
-            "graph_count": len(graph_files),
-            "detail_route": f"/engagements/{slug}",
-            "detail_api": f"/api/engagements/{slug}",
-            **report_review_counts(report_history),
-        }
-        report_summary = report_history[0] if report_history else None
-        if report_summary is not None:
-            payload["report_summary"] = report_summary
-        return payload
 
     def _engagement_detail_payload(
         db_file: Path,
         con: sqlite3.Connection,
         row: sqlite3.Row,
     ) -> dict[str, Any]:
-        summary = _engagement_summary_payload(db_file, con, row)
-        engagement_id = int(row["id"])
-        report_files = _report_files(engagement_id)
-        audit_files = materialize_audit_manifest_artifacts(
+        return build_engagement_detail_payload(
+            db_file,
             con,
-            db_path=db_file,
-            reports_dir=_reports_dir(),
-            engagement_id=engagement_id,
-            verify=True,
-        )
-        graph_files = _graph_files(str(engagement_id), _reports_dir())
-        artifacts = build_artifact_payloads(
-            summary["slug"],
-            report_files=report_files,
-            graph_files=graph_files,
-            audit_files=audit_files,
-            format_size=_format_size,
+            row,
+            reports_root=_reports_dir(),
             format_dt=_format_dt,
+            format_size=_format_size,
         )
-        report_history = report_history_payload(report_files)
-        preview_files = [
-            path for path in latest_report_family_files(report_files) if path.suffix.lower() == ".md"
-        ]
-        scope = _safe_json_loads(str(row["scope_json"] or "[]"))
-        scope_list = scope_entries_from_payload(scope)
-        payload = {
-            **summary,
-            "path": db_file.as_posix(),
-            "size_bytes": int(db_file.stat().st_size),
-            "size_label": _format_size(int(db_file.stat().st_size)),
-            "scope": scope_list,
-            "run_summary": _annotate_audit_manifest_bundle(
-                _latest_engagement_run(con, engagement_id, db_path=db_file),
-                [artifact for artifact in artifacts if artifact["kind"] == "audit"],
-            ),
-            "sections": _detail_sections(con, engagement_id, db_path=db_file),
-            "artifacts": artifacts,
-            "report_previews": [build_report_preview_payload(path) for path in preview_files],
-            "report_count": len(report_files),
-            "audit_count": len(audit_files),
-            "graph_count": len(graph_files),
-        }
-        payload["run_summary"] = _annotate_run_audit_review(con, payload["run_summary"], engagement_id)
-        payload["audit_review"] = audit_review_summary(con, engagement_id=engagement_id)
-        payload["sections"]["audit_reviews"] = audit_review_section_rows(
-            con,
-            engagement_id=engagement_id,
-        )
-        report_summary = report_history[0] if report_history else None
-        if report_summary is not None:
-            payload["report_summary"] = report_summary
-        if report_history:
-            payload["report_history"] = report_history
-        _graph_summary, graph_payload, graph_snapshot_at = _graph_state_for_engagement(
-            con,
-            engagement_id,
-            graph_files,
-        )
-        if graph_payload is not None:
-            payload["graph_payload"] = graph_payload
-        if graph_snapshot_at:
-            payload["graph_snapshot_at"] = graph_snapshot_at
-        return payload
 
     def _open_workflow_db(db_path: Path) -> sqlite3.Connection:
         return open_workflow_db(db_path)
