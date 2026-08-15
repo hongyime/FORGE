@@ -32,6 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Backup/sync repository artifact regression
+modularization is complete. The rclone, Kopia, Restic, Borg, Duplicacy, and
+Duplicati fixtures moved from `tests/phase1/test_engagement_orchestrator.py`
+into `tests/phase1/backup_config_artifact_cases.py`, while the original pytest
+nodes remain as thin wrappers. This removes passive repository/cloud recursion
+fixture weight from the Phase 1 mega test without changing production parser
+behavior, live probing, provider calls, credential use, scope,
+validation/report gates, scheduler behavior, or persistent non-test engagement
+data. Verification passed for the preserved backup/sync wrapper tests (`6
+passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B399.
 Latest checkpoint (2026-08-16): Azure and OCI CLI config artifact regression
 modularization is complete. The Azure CLI and OCI CLI config fixtures moved
 from `tests/phase1/test_engagement_orchestrator.py` into
