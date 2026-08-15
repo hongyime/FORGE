@@ -16,6 +16,7 @@ from forge.db.validation import validate_canonical_schema
 from forge.graph.assets import upsert_asset_entity, upsert_ownership_claim
 from forge.monitoring.cli import register_monitoring_commands
 from forge.monitoring.continuous import (
+    collect_exposure_state,
     create_monitoring_snapshot,
     monitoring_refresh_from_policy,
     monitoring_overview,
@@ -63,6 +64,45 @@ def _build_db(path: Path) -> sqlite3.Connection:
     )
     con.commit()
     return con
+
+
+def test_collect_exposure_state_keeps_iso_timestamps_as_text_with_decltypes(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    con = sqlite3.connect(
+        db_path,
+        detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+    )
+    con.row_factory = sqlite3.Row
+    try:
+        apply_schema(con)
+        con.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator)
+            VALUES (1001, 'Acme Example', '["acme.example"]', 'ACTIVE', 'delta-one')
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO engagement_seeds
+                (engagement_id, seed_value, seed_type, source, discovered_at, updated_at)
+            VALUES
+                (1001, 'acme.example', 'domain', 'scope',
+                 '2026-07-09T09:00:00Z', '2026-07-09T09:00:00Z')
+            """
+        )
+        con.commit()
+
+        state = collect_exposure_state(con, 1001)
+        snapshot = create_monitoring_snapshot(con, engagement_id=1001)
+    finally:
+        con.close()
+
+    seed = state["assets"]["seed:domain:acme.example"]
+    assert seed["first_seen_at"] == "2026-07-09T09:00:00Z"
+    assert seed["updated_at"] == "2026-07-09T09:00:00Z"
+    assert snapshot["snapshot"]["summary"]["asset_count"] == 1
 
 
 def test_run_due_monitoring_policies_advances_schedule_and_records_alerts(tmp_path: Path) -> None:

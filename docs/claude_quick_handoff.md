@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Scheduled target-import monitoring snapshots no
+longer warn on existing ISO `T` timestamps in engagement DBs opened with sqlite
+declared-type parsing. `forge.monitoring.continuous._select_existing` casts
+timestamp-like `*_at` fields to text before exposure-state JSON construction.
+Verification passed for focused monitoring/import regressions (`2 passed`),
+Ruff, `py_compile`, and a local no-start target-import smoke test. Backprop:
+`SPEC.md` B370.
 Latest checkpoint (2026-08-16): A stale Web UI audit-review annotation wrapper
 was removed from `forge.webui.app.create_app()`.
 `forge.webui.run_status.annotate_run_audit_review` remains the owned

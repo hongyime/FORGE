@@ -345,6 +345,13 @@ sentences as historical notes only, not as current instructions.
   run-status plus engagement-payload tests (`13 passed`), HTMX app wiring tests
   (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B369.
 
+- [x] Target-import monitoring timestamp checkpoint (2026-08-16): Monitoring
+  exposure-state collection now casts timestamp-like `*_at` fields to text when
+  selecting snapshot inputs, avoiding Python sqlite timestamp conversion errors
+  on existing ISO `T` timestamps during scheduled target imports. Verification:
+  focused monitoring/import regressions (`2 passed`), Ruff, `py_compile`, and a
+  local no-start target-import smoke test passed. Backprop: `SPEC.md` B370.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

@@ -1262,8 +1262,12 @@ def _select_existing(
     selected = [field for field in fields if field in columns]
     if not selected:
         return []
+    select_exprs = [
+        f"CAST({field} AS TEXT) AS {field}" if field.endswith("_at") else field
+        for field in selected
+    ]
     sql = (
-        f"SELECT {', '.join(selected)} FROM {table_name} "
+        f"SELECT {', '.join(select_exprs)} FROM {table_name} "
         "WHERE engagement_id=? ORDER BY id"
     )
     return [_row_dict(row, selected) for row in con.execute(sql, (engagement_id,)).fetchall()]
