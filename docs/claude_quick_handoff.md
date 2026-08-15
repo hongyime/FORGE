@@ -32,6 +32,18 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): DHCP lease and hosts-file artifact regression
+modularization is complete. The DHCP lease artifact fixture and hosts-file
+artifact fixture moved from `tests/phase1/test_engagement_orchestrator.py` into
+`tests/phase1/network_endpoint_artifact_cases.py`, while the original pytest
+nodes remain as thin wrappers. This keeps coverage for DHCP/hosts artifact
+classification, nested ZIP payload parsing, URL/IP/domain/subdomain seeds,
+S3/GCS/Firebase/Supabase assets, Supabase host suppression, and artifact
+metadata labels without changing production parser behavior, live probing,
+provider calls, credential use, scope, validation/report gates, scheduler
+behavior, or persistent non-test engagement data. Verification passed for the
+preserved DHCP/hosts wrapper tests (`2 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B409.
 Latest checkpoint (2026-08-16): OS installer and Ignition/Butane bootstrap
 regression modularization is complete. Kickstart/preseed host extraction, the
 bounded OS-installer worker check, OS installer artifact queue fixture, and

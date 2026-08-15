@@ -185,12 +185,14 @@ from tests.phase1.network_endpoint_artifact_cases import (
     run_ansible_inventory_line_tokenization_uses_bounded_workers_and_preserves_order,
     run_cloud_init_artifacts,
     run_cloud_init_hosts,
+    run_dhcp_lease_artifacts,
     run_dhcp_lease_hostnames,
     run_dhcp_lease_line_tokenization_uses_bounded_workers_and_preserves_order,
     run_dns_zone_line_parsing_uses_bounded_workers_and_preserves_origin_order,
     run_dns_zone_artifacts,
     run_dns_zone_records,
     run_hosts_file_aliases,
+    run_hosts_file_artifacts,
     run_hosts_file_line_tokenization_uses_bounded_workers_and_preserves_order,
     run_ignition_and_butane_artifacts,
     run_network_endpoint_family_dispatch_uses_bounded_workers_and_preserves_order,
@@ -26835,226 +26837,11 @@ def test_artifact_queue_processor_extracts_ignition_and_butane_artifacts(tmp_pat
 
 
 def test_artifact_queue_processor_extracts_dhcp_lease_artifacts(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_dhcp_leases"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    dhcpd_path = artifact_root / "dhcpd.leases"
-    dhcpd_path.write_text(
-        dedent(
-            """
-            lease 10.24.30.50 {
-              starts 5 2026/07/17 03:00:00;
-              ends 5 2026/07/17 09:00:00;
-              client-hostname "dhcp-client.acme.example";
-              set ddns-fwd-name = "dhcp-edge.acme.example.";
-            }
-            https://dhcplease-firebase.firebaseio.com
-            https://dhcpleasevault.supabase.co/rest/v1/leases
-            s3://acme-dhcp-lease-bucket/dhcp/dhcpd.leases
-            """
-        ),
-        encoding="utf-8",
-    )
-
-    kea_path = artifact_root / "kea-leases4.csv"
-    kea_path.write_text(
-        dedent(
-            """
-            address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context
-            10.24.30.52,aa:bb:cc:dd:ee:11,,3600,2026-07-17,1,1,1,kea-client.acme.example,0,{}
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    archive_path = artifact_root / "leases-bundle.zip"
-    with zipfile.ZipFile(archive_path, "w") as zf:
-        zf.writestr(
-            "dnsmasq/dnsmasq.leases",
-            dedent(
-                """
-                1700000000 aa:bb:cc:dd:ee:ff 10.24.30.51 dnsmasq-client.acme.example *
-                gs://acme-dhcp-lease-gcs/dnsmasq/leases
-                """
-            ),
-        )
-
-    assert _classify_remote_artifact_url("https://downloads.acme.example/dhcpd.leases") == "config"
-    assert (
-        _classify_remote_artifact_url("https://downloads.acme.example/dnsmasq.leases") == "config"
-    )
-    assert (
-        _classify_remote_artifact_url("https://downloads.acme.example/kea-leases4.csv") == "config"
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 3
-    assert summary.processed >= 3
-    assert summary.discovered_seeds >= 10
-    assert summary.firebase_projects >= 1
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("dhcp-client.acme.example", "subdomain") in seeds
-        assert ("dhcp-edge.acme.example", "subdomain") in seeds
-        assert ("dnsmasq-client.acme.example", "subdomain") in seeds
-        assert ("kea-client.acme.example", "subdomain") in seeds
-        assert ("acme.example", "domain") in seeds
-        assert ("10.24.30.50", "ipv4") in seeds
-        assert ("10.24.30.51", "ipv4") in seeds
-        assert ("10.24.30.52", "ipv4") in seeds
-        assert ("https://dhcpleasevault.supabase.co/rest/v1/leases", "url") in seeds
-        assert ("dhcpleasevault.supabase.co", "subdomain") not in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-dhcp-lease-bucket") in cloud_assets
-        assert ("firebase", "dhcplease-firebase") in cloud_assets
-        assert ("gcs", "acme-dhcp-lease-gcs") in cloud_assets
-        assert ("supabase", "dhcpleasevault") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[dhcpd_path.resolve().as_posix()]["format"] == "leases"
-        assert artifact_meta[dhcpd_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[kea_path.resolve().as_posix()]["format"] == "leases"
-        assert artifact_meta[kea_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[archive_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[archive_path.resolve().as_posix()]["payload_count"] >= 1
-    finally:
-        con.close()
+    run_dhcp_lease_artifacts(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_hosts_file_artifacts(tmp_path: Path) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_hosts_files"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    hosts_path = artifact_root / "hosts"
-    hosts_path.write_text(
-        dedent(
-            """
-            127.0.0.1 localhost
-            10.24.30.40 portal.acme.example portal
-            10.24.30.41 api.acme.example api-edge.acme.example
-            # cloud refs discovered beside host mappings
-            https://hostfile-firebase.firebaseio.com
-            https://hostfilevault.supabase.co/rest/v1/hosts
-            s3://acme-hostfile-bucket/etc/hosts
-            """
-        ),
-        encoding="utf-8",
-    )
-
-    archive_path = artifact_root / "hosts-bundle.zip"
-    with zipfile.ZipFile(archive_path, "w") as zf:
-        zf.writestr(
-            "windows/lmhosts",
-            dedent(
-                """
-                10.24.30.42 winhost.acme.example winhost
-                10.24.30.43 files.acme.example files
-                gs://acme-hostfile-gcs/windows/lmhosts
-                """
-            ),
-        )
-
-    assert _classify_remote_artifact_url("https://downloads.acme.example/etc/hosts") == "config"
-    assert (
-        _classify_remote_artifact_url("https://downloads.acme.example/windows/lmhosts") == "config"
-    )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 2
-    assert summary.processed >= 2
-    assert summary.discovered_seeds >= 10
-    assert summary.firebase_projects >= 1
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert ("portal.acme.example", "subdomain") in seeds
-        assert ("api.acme.example", "subdomain") in seeds
-        assert ("api-edge.acme.example", "subdomain") in seeds
-        assert ("winhost.acme.example", "subdomain") in seeds
-        assert ("files.acme.example", "subdomain") in seeds
-        assert ("acme.example", "domain") in seeds
-        assert ("10.24.30.40", "ipv4") in seeds
-        assert ("10.24.30.41", "ipv4") in seeds
-        assert ("https://hostfilevault.supabase.co/rest/v1/hosts", "url") in seeds
-        assert ("hostfilevault.supabase.co", "subdomain") not in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-hostfile-bucket") in cloud_assets
-        assert ("firebase", "hostfile-firebase") in cloud_assets
-        assert ("gcs", "acme-hostfile-gcs") in cloud_assets
-        assert ("supabase", "hostfilevault") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[hosts_path.resolve().as_posix()]["format"] == "hosts"
-        assert artifact_meta[hosts_path.resolve().as_posix()]["parser"] == "config"
-        assert artifact_meta[archive_path.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[archive_path.resolve().as_posix()]["payload_count"] >= 1
-    finally:
-        con.close()
+    run_hosts_file_artifacts(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_diagram_design_artifacts(
