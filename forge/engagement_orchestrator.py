@@ -6165,6 +6165,10 @@ def _security_scanner_config_artifact_label(value: str) -> str:
         return "anchorectl-config"
     if parent == ".anchorectl" and name in {"config.yaml", "config.yml"}:
         return "anchorectl-config"
+    if name in {"clair.yaml", "clair.yml", "clair.json", "clair-config.yaml", "clair-config.yml", "clair-config.json"}:
+        return "clair-config"
+    if parent == "clair" and name in {"config.yaml", "config.yml", "config.json"}:
+        return "clair-config"
     if name in {"gitleaks.toml", ".gitleaks.toml", "gitleaks.yaml", "gitleaks.yml", ".gitleaks.yaml", ".gitleaks.yml"}:
         return "gitleaks-config"
     if name in {"semgrep.yaml", "semgrep.yml", ".semgrep.yaml", ".semgrep.yml"}:
@@ -22741,6 +22745,9 @@ class ArtifactQueueProcessor:
             "host",
             "hostname",
             "hosturl",
+            "httplistenaddr",
+            "indexeraddr",
+            "introspectionaddr",
             "javadatabaserepository",
             "nvdapiendpoint",
             "pythondatabaserepository",
