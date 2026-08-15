@@ -501,8 +501,7 @@ def _create_or_reuse_engagement(
     if existing_id is not None:
         return existing_id, False
 
-    engagement_id = allocate_engagement_id(cfg.data_dir)
-    db_path = cfg.engagement_db_path(str(engagement_id))
+    engagement_id, db_path = _allocate_empty_target_import_engagement(cfg)
     conn = get_engagement_db(db_path)
     try:
         now = datetime.now(timezone.utc).isoformat()
@@ -556,6 +555,34 @@ def _create_or_reuse_engagement(
     index_engagement_db_file(cfg.data_dir, db_path, engagement_id=engagement_id)
     existing_targets[item.target_key] = engagement_id
     return engagement_id, True
+
+
+def _allocate_empty_target_import_engagement(cfg: ForgeConfig) -> tuple[int, Path]:
+    for _attempt in range(100):
+        engagement_id = allocate_engagement_id(cfg.data_dir)
+        db_path = cfg.engagement_db_path(str(engagement_id))
+        if not _engagement_db_has_existing_engagement(db_path):
+            return engagement_id, db_path
+    raise RuntimeError("could not allocate an empty engagement database for target import")
+
+
+def _engagement_db_has_existing_engagement(db_path: Path) -> bool:
+    if not db_path.exists():
+        return False
+    conn = sqlite3.connect(db_path)
+    try:
+        tables = {
+            str(row[0])
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "engagements" not in tables:
+            return False
+        row = conn.execute("SELECT 1 FROM engagements LIMIT 1").fetchone()
+        return row is not None
+    except sqlite3.Error:
+        return True
+    finally:
+        conn.close()
 
 
 def _ensure_target_import_monitoring(

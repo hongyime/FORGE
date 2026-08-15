@@ -9,6 +9,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+from forge.db.session import get_engagement_db
 from forge.targets_import_cli import register_target_import_commands
 from forge.targets_import import import_targets, load_target_feed
 
@@ -200,6 +201,51 @@ def test_import_feed_file_creates_deduped_engagements_and_manifests(tmp_path: Pa
     assert summary["workspace_id"] == "default"
     assert summary["seeds"] == ["example.com"]
     assert "must-not-persist" not in json.dumps(summary)
+
+
+def test_import_feed_skips_allocator_id_with_existing_engagement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+
+    existing_db = cfg.engagement_db_path("1")
+    existing_db.parent.mkdir(parents=True, exist_ok=True)
+    conn = get_engagement_db(existing_db)
+    try:
+        conn.execute(
+            """
+            INSERT INTO engagements (id, name, scope_json, status, operator, metadata_json)
+            VALUES (1, 'existing', '{}', 'ACTIVE', 'tester', '{}')
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    allocated = iter([1, 2, 3])
+    monkeypatch.setattr(
+        "forge.targets_import.allocate_engagement_id",
+        lambda _data_dir: next(allocated),
+    )
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=False,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert len(results) == 1
+    assert results[0].engagement_id == 2
+    assert cfg.engagement_db_path("2").exists()
 
 
 def test_import_feed_accepts_canonical_multi_seed_targets(tmp_path: Path) -> None:
