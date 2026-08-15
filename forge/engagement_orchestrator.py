@@ -6146,6 +6146,8 @@ def _security_scanner_config_artifact_label(value: str) -> str:
         return "grype-config"
     if name in {"syft.yaml", "syft.yml", "syft.toml", "syft.json", ".syft.yaml", ".syft.yml", ".syft.toml"}:
         return "syft-config"
+    if name in {"hadolint.yaml", "hadolint.yml", ".hadolint.yaml", ".hadolint.yml"}:
+        return "hadolint-config"
     if name in {"gitleaks.toml", ".gitleaks.toml", "gitleaks.yaml", "gitleaks.yml", ".gitleaks.yaml", ".gitleaks.yml"}:
         return "gitleaks-config"
     if name in {"semgrep.yaml", "semgrep.yml", ".semgrep.yaml", ".semgrep.yml"}:
@@ -22735,6 +22737,7 @@ class ArtifactQueueProcessor:
             "sonarlinks scm",
             "source",
             "tokenendpoint",
+            "trustedregistries",
             "updateurl",
             "url",
             "urls",
@@ -22747,6 +22750,7 @@ class ArtifactQueueProcessor:
             "repository",
             "repos",
             "repo",
+            "trustedregistries",
             "urls",
         }
 

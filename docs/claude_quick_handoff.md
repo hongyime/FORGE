@@ -32,16 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
-Latest checkpoint (2026-08-16): Grype and Syft free/local scanner configs now
-join passive security-scanner config recursion. Scoped `.grype.*`/`grype.*`
-and `.syft.*`/`syft.*` artifacts map to `grype-config` and `syft-config`, and
-the security-scanner structured extractor accepts `update-url`/`updateUrl`
-endpoint keys. Grype/Syft configs now recurse sanitized DB update URLs,
-registry URLs, source URLs, and owner contacts while proving
-`grype-token-do-not-store` is not persisted. No scanner execution, package
-install, HTTP probing, authentication, provider calls, or scope relaxation was
-added. Verification passed for focused security-scanner tests (`2 passed`),
-Ruff, and `py_compile`. Backprop: `SPEC.md` B389.
+Latest checkpoint (2026-08-16): Hadolint config files now join passive
+security-scanner config recursion. Scoped `.hadolint.yaml`/`.hadolint.yml` and
+`hadolint.yaml`/`hadolint.yml` artifacts map to `hadolint-config`, and the
+security-scanner structured extractor accepts `trustedRegistries` fields.
+Hadolint configs now recurse sanitized trusted-registry URLs and owner contacts
+while proving URL userinfo token material is not persisted. No scanner
+execution, registry calls, HTTP probing, authentication, provider calls,
+scheduler changes, or scope relaxation was added. Verification passed for
+focused security-scanner tests (`2 passed`), Ruff, and `py_compile`. Backprop:
+`SPEC.md` B390.
 Latest checkpoint (2026-08-16): Docusaurus, VitePress, VuePress, and Rspress
 docs-site configs now join passive JS-runtime recursion. Scoped
 `docusaurus.config.*`, `.vitepress/config.*`, `.vuepress/config.*`, and
