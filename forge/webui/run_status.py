@@ -171,6 +171,35 @@ def engagement_run_rows(
     return items
 
 
+def annotate_run_audit_review(
+    con: sqlite3.Connection,
+    run_summary: dict[str, Any] | None,
+    engagement_id: int,
+    *,
+    audit_review_summary: AuditReviewSummary = summarize_audit_review,
+) -> dict[str, Any] | None:
+    if not isinstance(run_summary, dict):
+        return run_summary
+    run_id = int(run_summary.get("id") or 0)
+    manifest = run_summary.get("audit_manifest")
+    manifest_hash = ""
+    if isinstance(manifest, dict):
+        manifest_hash = str(manifest.get("manifest_hash") or "")
+    review = audit_review_summary(
+        con,
+        engagement_id=engagement_id,
+        run_id=run_id,
+        manifest_hash=manifest_hash,
+    )
+    annotated = dict(run_summary)
+    annotated["audit_review"] = review
+    if isinstance(manifest, dict):
+        manifest_payload = dict(manifest)
+        manifest_payload["review"] = review
+        annotated["audit_manifest"] = manifest_payload
+    return annotated
+
+
 def latest_running_engagement_run(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row | None:
     return con.execute(
         """
@@ -285,6 +314,7 @@ def iter_live_run_progress_snapshots(
 __all__ = [
     "LIVE_PROGRESS_STATUSES",
     "PROGRESS_FINGERPRINT_KEYS",
+    "annotate_run_audit_review",
     "engagement_run_row_payload",
     "engagement_run_rows",
     "iter_live_run_progress_snapshots",

@@ -211,6 +211,7 @@ from forge.webui.run_log_routes import (
     run_control_route_payload,
 )
 from forge.webui.run_status import (
+    annotate_run_audit_review as annotate_run_audit_review_payload,
     iter_live_run_progress_snapshots,
     latest_running_engagement_run as find_latest_running_engagement_run,
 )
@@ -429,26 +430,11 @@ def create_app() -> Any:
         run_summary: dict[str, Any] | None,
         engagement_id: int,
     ) -> dict[str, Any] | None:
-        if not isinstance(run_summary, dict):
-            return run_summary
-        run_id = int(run_summary.get("id") or 0)
-        manifest = run_summary.get("audit_manifest")
-        manifest_hash = ""
-        if isinstance(manifest, dict):
-            manifest_hash = str(manifest.get("manifest_hash") or "")
-        review = audit_review_summary(
+        return annotate_run_audit_review_payload(
             con,
+            run_summary,
             engagement_id=engagement_id,
-            run_id=run_id,
-            manifest_hash=manifest_hash,
         )
-        annotated = dict(run_summary)
-        annotated["audit_review"] = review
-        if isinstance(manifest, dict):
-            manifest_payload = dict(manifest)
-            manifest_payload["review"] = review
-            annotated["audit_manifest"] = manifest_payload
-        return annotated
 
     def _clear_run_control_markers(engagement_id: int) -> None:
         clear_run_markers(cfg.data_dir, engagement_id)

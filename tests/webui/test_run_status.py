@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from forge.webui.run_status import (
+    annotate_run_audit_review,
     engagement_run_rows,
     iter_live_run_progress_snapshots,
     latest_running_engagement_run,
@@ -200,6 +201,53 @@ def test_latest_running_engagement_run_orders_newest_first() -> None:
     assert row is not None
     assert int(row["id"]) == 2
     assert json.loads(row["metadata_json"]) == {}
+
+
+def test_annotate_run_audit_review_preserves_manifest_payload() -> None:
+    con = _connect()
+    review_calls: list[dict[str, Any]] = []
+
+    def summarize_review(_con: sqlite3.Connection, **kwargs: Any) -> dict[str, Any]:
+        review_calls.append(kwargs)
+        return {"review_status": "approved"}
+
+    run_summary = {
+        "id": 17,
+        "status": "completed",
+        "audit_manifest": {"manifest_hash": "hash-17", "verified": True},
+    }
+
+    annotated = annotate_run_audit_review(
+        con,
+        run_summary,
+        engagement_id=1001,
+        audit_review_summary=summarize_review,
+    )
+
+    assert annotated == {
+        "id": 17,
+        "status": "completed",
+        "audit_manifest": {
+            "manifest_hash": "hash-17",
+            "verified": True,
+            "review": {"review_status": "approved"},
+        },
+        "audit_review": {"review_status": "approved"},
+    }
+    assert run_summary == {
+        "id": 17,
+        "status": "completed",
+        "audit_manifest": {"manifest_hash": "hash-17", "verified": True},
+    }
+    assert review_calls == [
+        {"engagement_id": 1001, "run_id": 17, "manifest_hash": "hash-17"}
+    ]
+
+
+def test_annotate_run_audit_review_ignores_non_dict_summary() -> None:
+    con = _connect()
+
+    assert annotate_run_audit_review(con, None, engagement_id=1001) is None
 
 
 def test_live_run_progress_payload_and_fingerprint_preserve_bridge_contract() -> None:

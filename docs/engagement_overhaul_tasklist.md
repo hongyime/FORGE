@@ -163,6 +163,14 @@ sentences as historical notes only, not as current instructions.
   engagement discovery, and HTMX app wiring tests (`31 passed`), Ruff, and
   `py_compile` passed. Backprop: `SPEC.md` B348.
 
+- [x] Web UI run audit-review annotation extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now delegates run audit-review annotation to
+  `forge.webui.run_status.annotate_run_audit_review`. The helper preserves
+  non-dict passthrough, run-id and manifest-hash extraction, top-level
+  `audit_review`, nested audit-manifest `review`, and non-mutating payload
+  copies. Verification: Web UI run-status plus HTMX app wiring tests (`27
+  passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B349.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
