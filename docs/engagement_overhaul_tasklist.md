@@ -218,6 +218,15 @@ sentences as historical notes only, not as current instructions.
   still raise. Verification: target-import regression suite (`15 passed`),
   Ruff, and `py_compile` passed. Backprop: `SPEC.md` B354.
 
+- [x] Web UI artifact file-helper extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now delegates reports-directory, report-file,
+  and audit-file helper policy to `forge.webui.artifacts`. The extracted helpers
+  preserve `Path.cwd()/reports`, existing report/audit filename discovery
+  patterns, and report/graph/audit payload ordering through the established
+  artifact payload path. Verification: Web UI artifact tests (`6 passed`), HTMX
+  app wiring tests (`19 passed`), Ruff, and `py_compile` passed. Backprop:
+  `SPEC.md` B355.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI artifact file helper policy was split
+out of `forge.webui.app.create_app()`. `forge.webui.artifacts` now owns
+`reports_dir`, `report_files`, and `audit_files`, preserving `Path.cwd()/reports`,
+existing report/audit filename discovery patterns, and report/graph/audit payload
+ordering through the established artifact payload path. Verification passed for
+Web UI artifact tests (`6 passed`), HTMX app wiring tests (`19 passed`), Ruff,
+and `py_compile`. Backprop: `SPEC.md` B355.
 Latest checkpoint (2026-08-16): Scheduled target import generated
 `reports/engagement_10078_kill_chain_20260815T161113.md` but still ended with
 Task Scheduler result `2` and stderr `Invalid value: not enough values to

@@ -41,11 +41,7 @@ from forge.reporting.dashboard import (
     _table_columns,
     _table_exists,
 )
-from forge.reporting.audit_manifest_artifacts import (
-    audit_files as list_audit_artifact_files,
-    materialize_audit_manifest_artifacts,
-    report_files as list_report_artifact_files,
-)
+from forge.reporting.audit_manifest_artifacts import materialize_audit_manifest_artifacts
 from forge.reporting.report_history import (
     latest_report_family_files,
     report_history_payload,
@@ -63,9 +59,12 @@ from forge.webui.db import open_workflow_db
 from forge.webui.artifacts import (
     ArtifactRouteNotFound,
     artifact_payloads as build_artifact_payloads,
+    audit_files as webui_audit_files,
     audit_artifact_payloads as build_audit_artifact_payloads,
     engagement_artifact_route_file,
+    report_files as webui_report_files,
     report_preview_payload as build_report_preview_payload,
+    reports_dir as webui_reports_dir,
 )
 from forge.webui.audit_review_routes import (
     AuditReviewRouteError,
@@ -387,7 +386,7 @@ def create_app() -> Any:
                 continue
 
     def _reports_dir() -> Path:
-        return Path.cwd() / "reports"
+        return webui_reports_dir()
 
     def _frontend_entry_response() -> Any:
         return frontend_entry_response(
@@ -445,10 +444,10 @@ def create_app() -> Any:
         return ensure_logs_dir(cfg.data_dir)
 
     def _report_files(engagement_id: int) -> list[Path]:
-        return list_report_artifact_files(str(engagement_id), _reports_dir())
+        return webui_report_files(engagement_id, _reports_dir())
 
     def _audit_files(engagement_id: int) -> list[Path]:
-        return list_audit_artifact_files(str(engagement_id), _reports_dir())
+        return webui_audit_files(engagement_id, _reports_dir())
 
     def _latest_audit(con: sqlite3.Connection, engagement_id: int) -> str:
         return latest_audit_timestamp(con, engagement_id, format_dt=_format_dt)

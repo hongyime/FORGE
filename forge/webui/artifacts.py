@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from forge.reporting.audit_manifest_artifacts import audit_files as list_audit_artifact_files
+from forge.reporting.audit_manifest_artifacts import report_files as list_report_artifact_files
 from forge.reporting.report_history import report_preview_payload as build_report_preview_payload
 
 
@@ -19,6 +21,18 @@ def artifact_api_href(engagement_ref: str, artifact_name: str) -> str:
         f"/api/engagements/{quote(str(engagement_ref), safe='')}"
         f"/artifacts/{quote(str(artifact_name), safe='')}"
     )
+
+
+def reports_dir(*, cwd: Path | None = None) -> Path:
+    return (cwd or Path.cwd()) / "reports"
+
+
+def report_files(engagement_id: int | str, reports_root: Path) -> list[Path]:
+    return list_report_artifact_files(str(engagement_id), reports_root)
+
+
+def audit_files(engagement_id: int | str, reports_root: Path) -> list[Path]:
+    return list_audit_artifact_files(str(engagement_id), reports_root)
 
 
 def artifact_payload(
@@ -125,7 +139,10 @@ __all__ = [
     "artifact_api_href",
     "artifact_payload",
     "artifact_payloads",
+    "audit_files",
     "audit_artifact_payloads",
     "engagement_artifact_route_file",
+    "report_files",
     "report_preview_payload",
+    "reports_dir",
 ]

@@ -6,9 +6,12 @@ from forge.webui.artifacts import (
     artifact_api_href,
     artifact_payload,
     artifact_payloads,
+    audit_files,
     audit_artifact_payloads,
     engagement_artifact_route_file,
+    report_files,
     report_preview_payload,
+    reports_dir,
 )
 import pytest
 
@@ -78,6 +81,20 @@ def test_artifact_payloads_keep_report_graph_audit_order(tmp_path: Path) -> None
         format_size=lambda size: f"{size} bytes",
         format_dt=lambda _value: "date",
     ) == [payloads[2]]
+
+
+def test_report_and_audit_file_helpers_delegate_to_report_artifact_patterns(
+    tmp_path: Path,
+) -> None:
+    root = reports_dir(cwd=tmp_path)
+    report = _write(root / "engagement_1001_kill_chain_20260816T000000.md", "# Report\n")
+    audit = _write(root / "audit_1001_run_7_abcdef.json", "{}\n")
+    _write(root / "engagement_1002_kill_chain_20260816T000000.md", "# Other\n")
+
+    assert reports_dir(cwd=tmp_path) == tmp_path / "reports"
+    assert report in report_files(1001, root)
+    assert audit in audit_files("1001", root)
+    assert all("1002" not in path.name for path in report_files(1001, root))
 
 
 def test_report_preview_payload_uses_artifact_path_href(tmp_path: Path) -> None:
