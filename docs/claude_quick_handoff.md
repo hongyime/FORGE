@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI engagement discovery route callables
+now bind through `forge.webui.engagement_discovery.build_engagement_discovery_providers`
+instead of five inline wrappers in `forge.webui.app.create_app()`. The provider
+preserves list, tombstone-list, detail, artifact, and DB resolution callable
+contracts while keeping context refresh inside the discovery module.
+Verification passed for Web UI engagement-discovery plus HTMX wiring tests (`27
+passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B373.
 Latest checkpoint (2026-08-16): Web UI route workspace-access checker binding
 moved out of `forge.webui.app.create_app()`.
 `forge.webui.workspace_access.build_workspace_access_checker` now owns the

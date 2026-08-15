@@ -369,6 +369,15 @@ sentences as historical notes only, not as current instructions.
   workspace-access plus HTMX wiring tests (`24 passed`), Ruff, and
   `py_compile` passed. Backprop: `SPEC.md` B372.
 
+- [x] Web UI engagement discovery provider checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now consumes
+  `forge.webui.engagement_discovery.build_engagement_discovery_providers`
+  instead of defining separate list, tombstone-list, detail, artifact, and DB
+  resolution wrappers inline. The provider keeps the same route callable
+  contracts while binding context refresh inside the discovery module.
+  Verification: Web UI engagement-discovery plus HTMX wiring tests (`27
+  passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B373.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

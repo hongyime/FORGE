@@ -45,6 +45,15 @@ class EngagementDiscoveryContext:
     tombstone_retention_days: str = "30"
 
 
+@dataclass(frozen=True)
+class EngagementDiscoveryProviders:
+    iter_engagement_payloads: Callable[[Any | None], list[dict[str, Any]]]
+    iter_missing_engagement_index_payloads: Callable[[Any | None], list[dict[str, Any]]]
+    find_engagement_detail: Callable[[str, Any | None], dict[str, Any] | None]
+    find_engagement_artifact: Callable[[str, str, Any | None], Path | None]
+    resolve_engagement_db: Callable[[str, Any | None], tuple[Path, int] | None]
+
+
 def build_engagement_discovery_context_provider(
     *,
     data_dir: Path,
@@ -73,6 +82,50 @@ def build_engagement_discovery_context_provider(
         )
 
     return _discovery_context
+
+
+def build_engagement_discovery_providers(
+    context_provider: Callable[[], EngagementDiscoveryContext],
+) -> EngagementDiscoveryProviders:
+    def _iter_engagement_payloads(principal: Any | None = None) -> list[dict[str, Any]]:
+        return iter_engagement_payloads(context_provider(), principal)
+
+    def _iter_missing_engagement_index_payloads(
+        principal: Any | None = None,
+    ) -> list[dict[str, Any]]:
+        return iter_missing_engagement_index_payloads(context_provider(), principal)
+
+    def _find_engagement_detail(
+        engagement_ref: str,
+        principal: Any | None = None,
+    ) -> dict[str, Any] | None:
+        return find_engagement_detail(context_provider(), engagement_ref, principal)
+
+    def _find_engagement_artifact(
+        engagement_ref: str,
+        artifact_name: str,
+        principal: Any | None = None,
+    ) -> Path | None:
+        return find_engagement_artifact(
+            context_provider(),
+            engagement_ref,
+            artifact_name,
+            principal,
+        )
+
+    def _resolve_engagement_db(
+        engagement_ref: str,
+        principal: Any | None = None,
+    ) -> tuple[Path, int] | None:
+        return resolve_engagement_db(context_provider(), engagement_ref, principal)
+
+    return EngagementDiscoveryProviders(
+        iter_engagement_payloads=_iter_engagement_payloads,
+        iter_missing_engagement_index_payloads=_iter_missing_engagement_index_payloads,
+        find_engagement_detail=_find_engagement_detail,
+        find_engagement_artifact=_find_engagement_artifact,
+        resolve_engagement_db=_resolve_engagement_db,
+    )
 
 
 def indexed_db_path(index_row: sqlite3.Row, data_dir: str | Path) -> Path | None:
@@ -367,8 +420,10 @@ def authorized_engagement_db_path(
 
 __all__ = [
     "EngagementDiscoveryContext",
+    "EngagementDiscoveryProviders",
     "authorized_engagement_db_path",
     "build_engagement_discovery_context_provider",
+    "build_engagement_discovery_providers",
     "control_tombstone_retention_seconds",
     "find_engagement_artifact",
     "find_engagement_detail",

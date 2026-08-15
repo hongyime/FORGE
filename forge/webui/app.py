@@ -127,11 +127,7 @@ from forge.webui.engagement_lifecycle import (
 )
 from forge.webui.engagement_discovery import (
     build_engagement_discovery_context_provider,
-    find_engagement_artifact as find_engagement_artifact_file,
-    find_engagement_detail as find_engagement_detail_payload,
-    iter_engagement_payloads as iter_discovered_engagement_payloads,
-    iter_missing_engagement_index_payloads as iter_missing_index_payloads,
-    resolve_engagement_db as resolve_engagement_db_path,
+    build_engagement_discovery_providers,
 )
 from forge.webui.automation_routes import (
     AutomationRouteError,
@@ -440,38 +436,14 @@ def create_app() -> Any:
             "30",
         ),
     )
-
-    def _iter_engagement_payloads(principal: Principal | None = None) -> list[dict[str, Any]]:
-        return iter_discovered_engagement_payloads(_discovery_context(), principal)
-
-    def _iter_missing_engagement_index_payloads(
-        principal: Principal | None = None,
-    ) -> list[dict[str, Any]]:
-        return iter_missing_index_payloads(_discovery_context(), principal)
-
-    def _find_engagement_detail(
-        engagement_ref: str,
-        principal: Principal | None = None,
-    ) -> dict[str, Any] | None:
-        return find_engagement_detail_payload(_discovery_context(), engagement_ref, principal)
-
-    def _find_engagement_artifact(
-        engagement_ref: str,
-        artifact_name: str,
-        principal: Principal | None = None,
-    ) -> Path | None:
-        return find_engagement_artifact_file(
-            _discovery_context(),
-            engagement_ref,
-            artifact_name,
-            principal,
-        )
-
-    def _resolve_engagement_db(
-        engagement_ref: str,
-        principal: Principal | None = None,
-    ) -> tuple[Path, int] | None:
-        return resolve_engagement_db_path(_discovery_context(), engagement_ref, principal)
+    _discovery_providers = build_engagement_discovery_providers(_discovery_context)
+    _iter_engagement_payloads = _discovery_providers.iter_engagement_payloads
+    _iter_missing_engagement_index_payloads = (
+        _discovery_providers.iter_missing_engagement_index_payloads
+    )
+    _find_engagement_detail = _discovery_providers.find_engagement_detail
+    _find_engagement_artifact = _discovery_providers.find_engagement_artifact
+    _resolve_engagement_db = _discovery_providers.resolve_engagement_db
 
     authorized_engagements = AuthorizedEngagementResolver(_discovery_context)
 

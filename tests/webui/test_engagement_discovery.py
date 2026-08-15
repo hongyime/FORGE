@@ -12,6 +12,7 @@ from forge.db.direct_connect import direct_connect
 from forge.webui.engagement_discovery import (
     EngagementDiscoveryContext,
     build_engagement_discovery_context_provider,
+    build_engagement_discovery_providers,
     control_tombstone_retention_seconds,
     find_engagement_artifact,
     find_engagement_detail,
@@ -200,6 +201,53 @@ def test_build_engagement_discovery_context_provider_binds_dependencies(
     assert ctx.can_access_engagement_row is _can_access_engagement_row
     assert ctx.artifact_files(None, artifact, 1001, {}) == [artifact]
     assert ctx.tombstone_retention_days == "7"
+
+
+def test_build_engagement_discovery_providers_bind_context_provider(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / ".forge_data"
+    db_path = data_dir / "engagements" / "1001.db"
+    _create_engagement_db(db_path)
+    control_con = connect_control_db(data_dir)
+    try:
+        upsert_membership(
+            control_con,
+            workspace_id="default",
+            subject="architect",
+            role="owner",
+            permissions_json='["*"]',
+        )
+        control_con.commit()
+    finally:
+        control_con.close()
+    report_path = tmp_path / "1001_report.json"
+    report_path.write_text("{}", encoding="utf-8")
+    provider_calls = 0
+
+    def context_provider() -> EngagementDiscoveryContext:
+        nonlocal provider_calls
+        provider_calls += 1
+        return _context(data_dir, artifact_files=[report_path])
+
+    providers = build_engagement_discovery_providers(context_provider)
+
+    assert [item["id"] for item in providers.iter_engagement_payloads(_principal())] == [1001]
+    assert providers.iter_missing_engagement_index_payloads(_principal()) == []
+    assert providers.find_engagement_detail("1001", _principal())["detail"] is True
+    assert (
+        providers.find_engagement_artifact(
+            "engagement-1001-acme-example",
+            "../1001_report.json",
+            _principal(),
+        )
+        == report_path
+    )
+    assert providers.resolve_engagement_db("engagement-1001-acme-example", _principal()) == (
+        db_path.resolve(),
+        1001,
+    )
+    assert provider_calls == 5
 
 
 def test_control_tombstone_retention_seconds_parses_operational_values() -> None:
