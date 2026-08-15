@@ -171,6 +171,16 @@ sentences as historical notes only, not as current instructions.
   copies. Verification: Web UI run-status plus HTMX app wiring tests (`27
   passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B349.
 
+- [x] Web UI engagement-row helper extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now delegates basic engagement row listing and
+  single-row lookup to lifecycle helpers instead of owning duplicate SQL snippets
+  in route assembly. `forge.webui.engagement_lifecycle.engagement_rows`
+  preserves the dashboard/discovery column shape and ID ordering, while
+  `engagement_row` remains the shared single-row helper. Verification:
+  engagement lifecycle tests (`11 passed`), engagement discovery tests (`6
+  passed`), HTMX app wiring tests (`19 passed`) after the combined command
+  exceeded 120s, Ruff, and `py_compile` passed. Backprop: `SPEC.md` B350.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

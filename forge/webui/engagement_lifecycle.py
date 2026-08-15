@@ -220,6 +220,16 @@ def engagement_row(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row |
     ).fetchone()
 
 
+def engagement_rows(con: sqlite3.Connection) -> list[sqlite3.Row]:
+    return con.execute(
+        """
+        SELECT id, name, workspace_id, scope_json, status, operator, created_at, updated_at
+        FROM engagements
+        ORDER BY id
+        """
+    ).fetchall()
+
+
 def create_engagement_record(
     con: sqlite3.Connection,
     *,
@@ -390,6 +400,7 @@ __all__ = [
     "create_engagement_route_payload",
     "engagement_metadata",
     "engagement_row",
+    "engagement_rows",
     "ensure_engagement_metadata_column",
     "ensure_engagement_workspace_owner",
     "index_webui_engagement_summary",

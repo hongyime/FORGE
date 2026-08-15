@@ -10,6 +10,7 @@ from forge.db.direct_connect import direct_connect
 from forge.webui.engagement_lifecycle import (
     create_engagement_record,
     create_engagement_route_payload,
+    engagement_rows,
     index_webui_engagement_summary,
     normalize_create_engagement_request,
     normalize_engagement_tags,
@@ -154,6 +155,44 @@ def test_create_engagement_record_bootstraps_workspace_and_seeds(tmp_path: Path)
         con.execute("SELECT metadata_json FROM engagements WHERE id=1001").fetchone()[0]
     )
     assert metadata == {"tags": ["external", "beta"]}
+
+
+def test_engagement_rows_returns_dashboard_columns_in_id_order(tmp_path: Path) -> None:
+    db_path = tmp_path / "1001.db"
+    con = direct_connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        for engagement_id, name in ((2, "Second"), (1, "First")):
+            request = normalize_create_engagement_request(
+                {"name": name, "seeds": [f"{name.lower()}.example"]},
+                principal_subject="architect",
+                principal_workspace_id="default",
+                default_operator="fallback",
+            )
+            create_engagement_record(
+                con,
+                db_path=db_path,
+                engagement_id=engagement_id,
+                request=request,
+                member_subject="architect",
+                detail_payload_builder=_detail_payload,
+            )
+
+        rows = engagement_rows(con)
+
+        assert [int(row["id"]) for row in rows] == [1, 2]
+        assert set(rows[0].keys()) == {
+            "id",
+            "name",
+            "workspace_id",
+            "scope_json",
+            "status",
+            "operator",
+            "created_at",
+            "updated_at",
+        }
+    finally:
+        con.close()
 
 
 def test_create_engagement_route_payload_indexes_control_summary(tmp_path: Path) -> None:

@@ -32,6 +32,14 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI engagement row listing was moved out of
+`forge.webui.app.create_app()`. `forge.webui.engagement_lifecycle` now exposes
+`engagement_rows` beside the existing `engagement_row`, and `create_app()` wires
+discovery context to those shared lifecycle helpers. The row-list helper
+preserves dashboard/discovery column shape and ID ordering. Verification passed
+for engagement lifecycle tests (`11 passed`), engagement discovery tests (`6
+passed`), and HTMX app wiring tests (`19 passed`) after the combined command
+exceeded 120s; Ruff and `py_compile` passed. Backprop: `SPEC.md` B350.
 Latest checkpoint (2026-08-16): Web UI run audit-review annotation was split
 out of `forge.webui.app.create_app()`. `forge.webui.run_status` now owns
 `annotate_run_audit_review`, preserving non-dict passthrough, run-id and

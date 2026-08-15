@@ -128,6 +128,8 @@ from forge.webui.retention_routes import (
 )
 from forge.webui.engagement_lifecycle import (
     create_engagement_route_payload,
+    engagement_row as webui_engagement_row,
+    engagement_rows as webui_engagement_rows,
     normalize_create_engagement_request,
     update_engagement_route_payload,
 )
@@ -614,25 +616,6 @@ def create_app() -> Any:
             payload["graph_snapshot_at"] = graph_snapshot_at
         return payload
 
-    def _engagement_rows(con: sqlite3.Connection) -> list[sqlite3.Row]:
-        return con.execute(
-            """
-            SELECT id, name, workspace_id, scope_json, status, operator, created_at, updated_at
-            FROM engagements
-            ORDER BY id
-            """
-        ).fetchall()
-
-    def _engagement_row(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row | None:
-        return con.execute(
-            """
-            SELECT id, name, workspace_id, scope_json, status, operator, created_at, updated_at
-            FROM engagements
-            WHERE id=?
-            """,
-            (engagement_id,),
-        ).fetchone()
-
     def _open_workflow_db(db_path: Path) -> sqlite3.Connection:
         from forge.db.migrations import run_migrations  # noqa: PLC0415
         from forge.db.validation import validate_canonical_schema  # noqa: PLC0415
@@ -665,8 +648,8 @@ def create_app() -> Any:
         return EngagementDiscoveryContext(
             data_dir=cfg.data_dir,
             ensure_workspace_rbac_foundation=ensure_workspace_rbac_foundation,
-            engagement_rows=_engagement_rows,
-            engagement_row=_engagement_row,
+            engagement_rows=webui_engagement_rows,
+            engagement_row=webui_engagement_row,
             summary_payload=_engagement_summary_payload,
             detail_payload=_engagement_detail_payload,
             can_access_workspace=(
