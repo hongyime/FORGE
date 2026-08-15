@@ -6148,6 +6148,19 @@ def _security_scanner_config_artifact_label(value: str) -> str:
         return "syft-config"
     if name in {"hadolint.yaml", "hadolint.yml", ".hadolint.yaml", ".hadolint.yml"}:
         return "hadolint-config"
+    if name in {
+        "dependency-check.properties",
+        "dependency-check.yaml",
+        "dependency-check.yml",
+        "dependency-check.json",
+        "dependency-check.xml",
+        ".dependency-check.properties",
+        ".dependency-check.yaml",
+        ".dependency-check.yml",
+        ".dependency-check.json",
+        ".dependency-check.xml",
+    }:
+        return "dependency-check-config"
     if name in {"gitleaks.toml", ".gitleaks.toml", "gitleaks.yaml", "gitleaks.yml", ".gitleaks.yaml", ".gitleaks.yml"}:
         return "gitleaks-config"
     if name in {"semgrep.yaml", "semgrep.yml", ".semgrep.yaml", ".semgrep.yml"}:
@@ -22712,14 +22725,20 @@ class ArtifactQueueProcessor:
             "apiurl",
             "baseurl",
             "bcapiurl",
+            "cveurl20base",
+            "cveurl20modified",
+            "cveurlbase",
+            "cveurlmodified",
             "dbrepository",
             "downloadurl",
             "endpoint",
             "godatabaserepository",
+            "hostedsuppressionsurl",
             "host",
             "hostname",
             "hosturl",
             "javadatabaserepository",
+            "nvdapiendpoint",
             "pythondatabaserepository",
             "registry",
             "registryurl",

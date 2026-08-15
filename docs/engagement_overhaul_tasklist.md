@@ -90,6 +90,20 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] OWASP Dependency-Check security-scanner config passive-recursion
+  checkpoint (2026-08-16): source-gated `dependency-check.properties`,
+  `dependency-check.yaml`/`.yml`/`.json`/`.xml`, and `.dependency-check.*`
+  artifacts now classify as `dependency-check-config`. NVD API, legacy CVE feed,
+  and hosted-suppression endpoint keys feed sanitized URL seeds through the
+  existing security-scanner config extractor, owner contacts still recurse
+  through static text scanning, and URL userinfo token material is not persisted.
+  Files: `forge/engagement_orchestrator.py`,
+  `tests/phase1/security_scanner_artifact_cases.py`,
+  `tests/phase1/test_artifact_helpers.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: focused
+  security-scanner tests -> `2 passed`; Ruff and `py_compile` passed for
+  touched Python files.
+
 - [x] Hadolint security-scanner config passive-recursion checkpoint (2026-08-16):
   source-gated `.hadolint.yaml`/`.hadolint.yml` and `hadolint.yaml`/`hadolint.yml`
   artifacts now classify as `hadolint-config`. `trustedRegistries` values feed

@@ -312,6 +312,18 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    dependency_check_path = artifact_root / "dependency-check.properties"
+    dependency_check_path.write_text(
+        dedent(
+            """
+            nvd.api.endpoint=https://dependency-check-user:dependency-check-token-do-not-store@nvd.acme.example/rest/json/cves/2.0
+            hosted.suppressions.url=dependency-check-suppressions.acme.example/suppressions.xml
+            owner=dependency-check-owner@acme.example
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
     semgrep_path = artifact_root / ".semgrep" / "config.yml"
     semgrep_path.parent.mkdir(parents=True, exist_ok=True)
     semgrep_path.write_text(
@@ -398,7 +410,7 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
 
     assert queued >= 14
     assert summary.processed >= 14
-    assert summary.discovered_seeds >= 32
+    assert summary.discovered_seeds >= 35
 
     seeds = _seed_pairs(db_path)
     for expected_seed in {
@@ -414,6 +426,8 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         ("https://syft-source.acme.example/images/latest", "url"),
         ("https://syft-registry.acme.example", "url"),
         ("https://hadolint-registry.acme.example/base", "url"),
+        ("https://nvd.acme.example/rest/json/cves/2.0", "url"),
+        ("https://dependency-check-suppressions.acme.example/suppressions.xml", "url"),
         ("https://semgrep-registry.acme.example/rules", "url"),
         ("https://gitleaks-control.acme.example/api", "url"),
         ("https://kics-control.acme.example", "url"),
@@ -429,6 +443,7 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         ("grype-owner@acme.example", "email"),
         ("syft-owner@acme.example", "email"),
         ("hadolint-config-owner@acme.example", "email"),
+        ("dependency-check-owner@acme.example", "email"),
         ("semgrep-config-owner@acme.example", "email"),
         ("gitleaks-config-owner@acme.example", "email"),
         ("kics-owner@acme.example", "email"),
@@ -454,6 +469,10 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     assert artifact_meta[grype_path.resolve().as_posix()]["format"] == "grype-config"
     assert artifact_meta[syft_path.resolve().as_posix()]["format"] == "syft-config"
     assert artifact_meta[hadolint_config_path.resolve().as_posix()]["format"] == "hadolint-config"
+    assert (
+        artifact_meta[dependency_check_path.resolve().as_posix()]["format"]
+        == "dependency-check-config"
+    )
     assert artifact_meta[semgrep_path.resolve().as_posix()]["format"] == "semgrep-config"
     assert artifact_meta[gitleaks_path.resolve().as_posix()]["format"] == "gitleaks-config"
     assert artifact_meta[kics_path.resolve().as_posix()]["format"] == "kics-config"
@@ -474,4 +493,5 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     assert "checkov-token-do-not-store" not in db_dump
     assert "grype-token-do-not-store" not in db_dump
     assert "hadolint-token-do-not-store" not in db_dump
+    assert "dependency-check-token-do-not-store" not in db_dump
     assert "detect-token-do-not-store" not in db_dump
