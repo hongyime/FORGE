@@ -90,6 +90,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Package-manager credential artifact regression modularization checkpoint
+  (2026-08-16): the heavy package-manager credential fixture now lives in
+  `tests/phase1/package_manager_artifact_cases.py`, with the original
+  `test_artifact_queue_processor_extracts_package_manager_credential_configs`
+  pytest node retained as a thin wrapper in the Phase 1 mega test. This reduces
+  `tests/phase1/test_engagement_orchestrator.py` by another large inline
+  fixture while preserving coverage for `.pypirc`, `.netrc`, Yarn, PNPM, Gem,
+  NuGet, uv, PDM, requirements/constraints, nested package config archives,
+  recursive URL/email/cloud seeds, and token non-persistence. Files:
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/package_manager_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  wrapper test -> `1 passed`; Ruff and `py_compile` passed for touched Python
+  files. Safety note: test modularization only; no production parser behavior,
+  live probing, provider calls, credential use, scope changes,
+  validation/report gates, scheduler behavior, or persistent non-test
+  engagement data changed.
+
 - [x] CVE Binary Tool security-scanner config passive-recursion checkpoint
   (2026-08-16): source-gated `cve-bin-tool.yaml`/`.toml`/`.json`,
   `.cve-bin-tool.*`, and `cve-bin-tool/config.*` artifacts now classify as

@@ -32,16 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
-Latest checkpoint (2026-08-16): CVE Binary Tool config files now join passive
-security-scanner config recursion. Scoped `cve-bin-tool.*`,
-`.cve-bin-tool.*`, and `cve-bin-tool/config.*` artifacts map to
-`cve-bin-tool-config` and route through the existing source-gated
-security-scanner structured extractor. CVE Binary Tool configs now recurse
-sanitized feed URLs plus owner contacts while proving API-key material is not
-persisted. No CVE scanner execution, database update, feed download, registry
-call, HTTP probing, authentication, provider call, scheduler change, or scope
-relaxation was added. Verification passed for focused security-scanner tests
-(`2 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B394.
+Latest checkpoint (2026-08-16): package-manager credential artifact regression
+modularization is complete. The heavy package-manager credential fixture moved
+from `tests/phase1/test_engagement_orchestrator.py` into
+`tests/phase1/package_manager_artifact_cases.py`, while the original pytest
+node remains as a thin wrapper. This removes another large inline fixture from
+the Phase 1 mega test without changing production parser behavior, live
+probing, provider calls, credential use, scope, validation/report gates,
+scheduler behavior, or persistent non-test engagement data. Verification passed
+for the preserved wrapper test (`1 passed`), Ruff, and `py_compile`. Backprop:
+`SPEC.md` B395.
 Latest checkpoint (2026-08-16): Docusaurus, VitePress, VuePress, and Rspress
 docs-site configs now join passive JS-runtime recursion. Scoped
 `docusaurus.config.*`, `.vitepress/config.*`, `.vuepress/config.*`, and
