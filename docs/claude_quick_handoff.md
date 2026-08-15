@@ -32,6 +32,18 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): API client parser regression modularization is
+partially advanced. A new `tests/phase1/api_client_artifact_cases.py` module
+now owns the Postman-style collection, SoapUI, JMeter, Artillery, and
+Gherkin/Karate structured payload fixtures, while the original pytest nodes
+remain thin wrappers in `tests/phase1/test_engagement_orchestrator.py`. This
+keeps coverage for API client candidate ordering, template/relative
+suppression, host-to-URL normalization, and bounded local batch dispatch without
+changing production parser behavior, live probing, provider calls, credential
+use, scope, validation/report gates, scheduler behavior, or persistent non-test
+engagement data. Verification passed for the preserved wrappers plus adjacent
+API client worker/document tests (`23 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B423.
 Latest checkpoint (2026-08-16): API spec parser regression modularization is
 complete. A new `tests/phase1/api_spec_artifact_cases.py` module now owns the
 OpenAPI, API Blueprint, Arazzo, and OpenAPI Overlay structured payload fixtures,
