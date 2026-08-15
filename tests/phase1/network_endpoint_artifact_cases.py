@@ -689,3 +689,206 @@ def run_vpn_endpoint_artifacts(tmp_path: Path) -> None:
         assert artifact_meta[archive_path.resolve().as_posix()]["payload_count"] >= 1
     finally:
         con.close()
+
+
+def run_tunnel_config_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+    payload = dedent(
+        """
+        hostname: cloudflared.acme.example
+        service: http://localhost:8080
+        service: https://origin-tunnel.acme.example
+        public_url=https://ngrok-public.acme.example/app
+        hostname: ${tenant}.acme.example
+        """
+    )
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self: Any, items: Any, worker: Any, *, default_factory: Any) -> Any:
+        materialized = list(items)
+        if materialized and "cloudflared.acme.example" in materialized:
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._tunnel_config_structured_payload_text(
+        payload,
+        source_hint="cloudflared/config.yml",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "cloudflared.acme.example",
+            "https://origin-tunnel.acme.example",
+            "https://ngrok-public.acme.example/app",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://cloudflared.acme.example",
+        "https://origin-tunnel.acme.example",
+        "https://ngrok-public.acme.example/app",
+    ]
+    assert (
+        processor._tunnel_config_structured_payload_text(
+            payload,
+            source_hint="config.yml",
+        )
+        == ""
+    )
+
+
+def run_tunnel_config_artifacts(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_tunnel_configs"
+    ngrok_dir = artifact_root / "ngrok"
+    cloudflared_dir = artifact_root / "cloudflared"
+    tailscale_dir = artifact_root / "tailscale"
+    localtunnel_dir = artifact_root / "localtunnel"
+    for directory in (ngrok_dir, cloudflared_dir, tailscale_dir, localtunnel_dir):
+        directory.mkdir(parents=True)
+    bootstrap_engagement(db_path)
+
+    ngrok_path = ngrok_dir / "ngrok.yml"
+    ngrok_path.write_text(
+        dedent(
+            """
+            tunnels:
+              web:
+                proto: http
+                hostname: ngrok.acme.example
+                public_url: https://ngrok-public.acme.example/app
+                owner: ngrok-owner@acme.example
+                firebase: https://tunnel-firebase.firebaseio.com
+                backup: s3://acme-tunnel-bucket/ngrok.yml
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    cloudflared_path = cloudflared_dir / "config.yml"
+    cloudflared_path.write_text(
+        dedent(
+            """
+            tunnel: acme
+            ingress:
+              - hostname: cloudflared.acme.example
+                service: http://localhost:8080
+              - hostname: ${tenant}.acme.example
+                service: https://origin-tunnel.acme.example
+            supabase: https://tunnelvault.supabase.co/rest/v1
+            mirror: gs://acme-tunnel-gcs/config.yml
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    tailscale_path = tailscale_dir / "serve.json"
+    tailscale_path.write_text(
+        json.dumps(
+            {
+                "HTTPS": {
+                    "tailnet.acme.ts.net": {
+                        "Handlers": {
+                            "/": {
+                                "Proxy": "https://tailscale.acme.example/app",
+                            }
+                        }
+                    }
+                },
+                "owner": "tailscale-owner@acme.example",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    localtunnel_path = localtunnel_dir / "lt.yml"
+    localtunnel_path.write_text(
+        dedent(
+            """
+            host: https://loca-tunnel.acme.example
+            endpoint: http://127.0.0.1:8080
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 4
+    assert summary.processed >= 4
+    assert summary.discovered_seeds >= 12
+    assert summary.firebase_projects >= 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert ("https://ngrok.acme.example", "url") in seeds
+        assert ("https://ngrok-public.acme.example/app", "url") in seeds
+        assert ("https://cloudflared.acme.example", "url") in seeds
+        assert ("https://origin-tunnel.acme.example", "url") in seeds
+        assert ("https://tailscale.acme.example/app", "url") in seeds
+        assert ("https://loca-tunnel.acme.example", "url") in seeds
+        assert ("ngrok-owner@acme.example", "email") in seeds
+        assert ("tailscale-owner@acme.example", "email") in seeds
+
+        serialized_seeds = "\n".join(f"{value} {seed_type}" for value, seed_type in seeds)
+        assert "localhost" not in serialized_seeds
+        assert "127.0.0.1" not in serialized_seeds
+        assert "${tenant}" not in serialized_seeds
+
+        cloud_assets = con.execute(
+            """
+            SELECT asset_type, identifier
+            FROM cloud_assets
+            WHERE engagement_id=1001
+            ORDER BY asset_type, identifier
+            """
+        ).fetchall()
+        assert ("aws_s3", "acme-tunnel-bucket") in cloud_assets
+        assert ("firebase", "tunnel-firebase") in cloud_assets
+        assert ("gcs", "acme-tunnel-gcs") in cloud_assets
+        assert ("supabase", "tunnelvault") in cloud_assets
+
+        artifact_meta = {
+            row[0]: json.loads(str(row[1] or "{}"))
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        assert artifact_meta[ngrok_path.resolve().as_posix()]["format"] == "ngrok-config"
+        assert artifact_meta[ngrok_path.resolve().as_posix()]["parser"] == "config"
+        assert (
+            artifact_meta[cloudflared_path.resolve().as_posix()]["format"]
+            == "cloudflared-config"
+        )
+        assert artifact_meta[cloudflared_path.resolve().as_posix()]["parser"] == "config"
+        assert (
+            artifact_meta[tailscale_path.resolve().as_posix()]["format"]
+            == "tailscale-serve-config"
+        )
+        assert (
+            artifact_meta[localtunnel_path.resolve().as_posix()]["format"]
+            == "localtunnel-config"
+        )
+    finally:
+        con.close()

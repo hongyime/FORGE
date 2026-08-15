@@ -90,6 +90,24 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Tunnel config regression modularization checkpoint (2026-08-16): the
+  Cloudflared/ngrok/Tailscale/localtunnel structured payload and artifact-queue
+  fixtures now live in `tests/phase1/network_endpoint_artifact_cases.py`, with
+  the original pytest nodes retained as thin wrappers in the Phase 1 mega test.
+  This keeps coverage for tunnel endpoint URL extraction, localhost/template
+  suppression, ordered payload batching, tunnel-specific artifact labels,
+  S3/GCS/Firebase/Supabase cloud assets, and metadata parser labels while
+  reducing inline fixture weight in
+  `tests/phase1/test_engagement_orchestrator.py`. Files:
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/network_endpoint_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  tunnel wrapper tests -> `2 passed`; Ruff and `py_compile` passed for touched
+  Python files. Safety note: test modularization only; no production parser
+  behavior, live probing, provider calls, credential use, scope changes,
+  validation/report gates, scheduler behavior, or persistent non-test
+  engagement data changed.
+
 - [x] DNS zone and VPN endpoint artifact regression modularization checkpoint
   (2026-08-16): the full DNS zone bundle and VPN endpoint config artifact
   fixtures now live in `tests/phase1/network_endpoint_artifact_cases.py`, with
