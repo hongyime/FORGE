@@ -222,6 +222,9 @@ from tests.phase1.network_endpoint_artifact_cases import (
     run_vpn_endpoint_hosts,
     run_vpn_endpoint_artifacts,
 )
+from tests.phase1.orchestration_artifact_cases import (
+    run_nomad_job_orchestration_payload_uses_bounded_workers_and_preserves_order,
+)
 from tests.phase1.remote_artifact_download_cases import (
     run_extensionless_remote_avif_content_type,
     run_extensionless_remote_dex_download,
@@ -26977,68 +26980,10 @@ def test_artifact_nomad_job_orchestration_payload_uses_bounded_workers_and_prese
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        job "api" {
-          group "web" {
-            service {
-              tags = ["traefik.http.routers.api.rule=Host(`nomad-edge.acme.example`)"]
-              check {
-                address = "nomad-check.acme.example:8080"
-              }
-            }
-            task "api" {
-              env {
-                endpoint = "nomad-api.acme.example/v1"
-                templated = "https://${tenant}.acme.example/api"
-              }
-            }
-          }
-        }
-        """
-    ).strip()
-    observed_line_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_edge_proxy_line_url_candidates":
-            observed_line_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    assert _artifact_format_label("jobs/api.hcl") != "nomad-job"
-    assert _artifact_format_label("nomad/api.hcl") == "nomad-job"
-    assert _artifact_format_label("nomad/jobs/api.nomad.hcl") == "nomad-job"
-    assert (
-        processor._orchestration_structured_payload_text(
-            payload,
-            source_hint="notes/app.hcl",
-        )
-        == ""
+    run_nomad_job_orchestration_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-    assert (
-        processor._orchestration_structured_payload_text(
-            payload,
-            source_hint="jobs/api.hcl",
-        )
-        == ""
-    )
-
-    result = processor._orchestration_structured_payload_text(
-        payload,
-        source_hint="nomad/jobs/api.nomad.hcl",
-    )
-
-    assert observed_line_batches[0] == payload.splitlines()
-    assert result.splitlines() == [
-        "http://nomad-edge.acme.example",
-        "http://nomad-check.acme.example:8080",
-        "http://nomad-api.acme.example/v1",
-    ]
 
 
 def test_artifact_api_spec_text_structured_payload_uses_bounded_workers_and_preserves_order(

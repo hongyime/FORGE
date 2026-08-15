@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Nomad orchestration worker-order regression
+modularization is complete. A new `tests/phase1/orchestration_artifact_cases.py`
+module now owns the Nomad structured payload fixture, while the original pytest
+node remains a thin wrapper in `tests/phase1/test_engagement_orchestrator.py`.
+This keeps coverage for Nomad artifact label gating, line-batch ordering,
+host-only URL promotion, template suppression, and orchestration payload output
+without changing production parser behavior, live probing, provider calls,
+credential use, scope, validation/report gates, scheduler behavior, or
+persistent non-test engagement data. Verification passed for the preserved
+wrapper plus adjacent orchestration worker tests (`4 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B421.
 Latest checkpoint (2026-08-16): JS runtime mobile/deploy host-only promotion
 regression modularization is complete. `tests/phase1/js_runtime_artifact_cases.py`
 now owns the Expo, Capacitor, Cordova, Vercel, and Netlify config batching
