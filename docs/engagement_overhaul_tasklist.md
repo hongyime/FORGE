@@ -273,6 +273,15 @@ sentences as historical notes only, not as current instructions.
   Verification: Web UI logs tests (`5 passed`), HTMX app wiring tests
   (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B361.
 
+- [x] Web UI reports-dir provider extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds its reports-root provider through
+  `forge.webui.artifacts.build_reports_dir_provider` instead of defining the
+  `Path.cwd()/reports` closure inline. The helper preserves existing reports
+  directory resolution while keeping report/artifact path policy in the artifact
+  module. Verification: Web UI artifact tests (`7 passed`), HTMX app wiring
+  tests (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md`
+  B362.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

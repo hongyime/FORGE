@@ -48,11 +48,11 @@ from forge.webui.artifacts import (
     artifact_payloads as build_artifact_payloads,
     audit_files as webui_audit_files,
     audit_artifact_payloads as build_audit_artifact_payloads,
+    build_reports_dir_provider,
     engagement_artifact_files as webui_engagement_artifact_files,
     engagement_artifact_route_file,
     report_files as webui_report_files,
     report_preview_payload as build_report_preview_payload,
-    reports_dir as webui_reports_dir,
 )
 from forge.webui.engagement_payloads import (
     engagement_detail_payload as build_engagement_detail_payload,
@@ -375,8 +375,7 @@ def create_app() -> Any:
             except asyncio.TimeoutError:
                 continue
 
-    def _reports_dir() -> Path:
-        return webui_reports_dir()
+    _reports_dir = build_reports_dir_provider()
 
     def _frontend_entry_response() -> Any:
         return frontend_entry_response(

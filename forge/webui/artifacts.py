@@ -29,6 +29,13 @@ def reports_dir(*, cwd: Path | None = None) -> Path:
     return (cwd or Path.cwd()) / "reports"
 
 
+def build_reports_dir_provider(*, cwd: Path | None = None) -> Callable[[], Path]:
+    def _reports_dir() -> Path:
+        return reports_dir(cwd=cwd)
+
+    return _reports_dir
+
+
 def report_files(engagement_id: int | str, reports_root: Path) -> list[Path]:
     return list_report_artifact_files(str(engagement_id), reports_root)
 
@@ -168,6 +175,7 @@ __all__ = [
     "artifact_payloads",
     "audit_files",
     "audit_artifact_payloads",
+    "build_reports_dir_provider",
     "engagement_artifact_files",
     "engagement_artifact_route_file",
     "report_files",

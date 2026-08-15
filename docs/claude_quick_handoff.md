@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI reports-directory provider binding was
+split out of `forge.webui.app.create_app()`.
+`forge.webui.artifacts.build_reports_dir_provider` now binds the `Path.cwd() /
+"reports"` root used by report, audit, and graph artifact routes, keeping
+report path policy in the artifact module. Verification passed for Web UI
+artifact tests (`7 passed`), HTMX app wiring tests (`19 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B362.
 Latest checkpoint (2026-08-16): Web UI logs-directory provider binding was
 split out of `forge.webui.app.create_app()`.
 `forge.webui.logs.build_logs_dir_provider` now binds `FORGE_DATA_DIR` to the
