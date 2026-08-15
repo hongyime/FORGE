@@ -32,6 +32,18 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): GraphQL config parser regression
+modularization is complete for the structured payload worker-order fixture. A
+new `tests/phase1/graphql_config_artifact_cases.py` module now owns the
+GraphQL YAML and Apollo JS config fixture, while the original pytest node
+remains a thin wrapper in `tests/phase1/test_engagement_orchestrator.py`. This
+keeps coverage for GraphQL endpoint candidate ordering, template suppression,
+host-to-URL normalization, JavaScript config extraction, and bounded local batch
+dispatch without changing production parser behavior, live probing, provider
+calls, credential use, scope, validation/report gates, scheduler behavior, or
+persistent non-test engagement data. Verification passed for the preserved
+wrapper plus adjacent GraphQL config worker tests (`3 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B427.
 Latest checkpoint (2026-08-16): HTTP request parser regression
 modularization is complete for the request/Hurl structured payload fixtures.
 A new `tests/phase1/http_request_artifact_cases.py` module now owns those
