@@ -90,6 +90,25 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Additional network endpoint extractor regression modularization
+  checkpoint (2026-08-16): the DNS zone record, DNS zone bounded line parsing,
+  hosts-file alias, hosts-file bounded line tokenization, DHCP lease hostname,
+  DHCP bounded line tokenization, and VPN endpoint host tests now live in
+  `tests/phase1/network_endpoint_artifact_cases.py`, with the original pytest
+  nodes retained as thin wrappers in the Phase 1 mega test. This keeps coverage
+  for DNS/hosts/DHCP/VPN passive endpoint extraction, ordered worker dispatch,
+  bounded worker counts, local host suppression, and Supabase host suppression
+  while reducing inline fixture weight in
+  `tests/phase1/test_engagement_orchestrator.py`. Files:
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/network_endpoint_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  network-endpoint wrapper tests -> `7 passed`; Ruff and `py_compile` passed
+  for touched Python files. Safety note: test modularization only; no
+  production parser behavior, live probing, provider calls, credential use,
+  scope changes, validation/report gates, scheduler behavior, or persistent
+  non-test engagement data changed.
+
 - [x] Network endpoint extractor regression modularization checkpoint
   (2026-08-16): the remote-access host field, Ansible inventory host,
   Vagrantfile hostname, Ansible inventory bounded tokenization, and network
