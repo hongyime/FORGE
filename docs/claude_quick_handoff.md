@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI launch-time run-control marker cleanup
+was split out of `forge.webui.app.create_app()`.
+`forge.webui.run_control.build_run_control_marker_clearer` now binds
+`FORGE_DATA_DIR` to stale stop/pause marker cleanup before launching a new
+kill-chain run, keeping marker path policy in the run-control module.
+Verification passed for Web UI run-control tests (`9 passed`), HTMX app wiring
+tests (`19 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B360.
 Latest checkpoint (2026-08-16): Web UI synchronous progress publishing was
 split out of `forge.webui.app.create_app()`.
 `forge.webui.state.build_progress_publisher` now binds a broker publish method

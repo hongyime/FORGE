@@ -40,6 +40,13 @@ def clear_run_control_markers(data_dir: Path, engagement_id: int) -> None:
     pause_marker_path(data_dir, engagement_id).unlink(missing_ok=True)
 
 
+def build_run_control_marker_clearer(data_dir: Path) -> Callable[[int], None]:
+    def _clear(engagement_id: int) -> None:
+        clear_run_control_markers(data_dir, engagement_id)
+
+    return _clear
+
+
 def default_run_control_reason(control_kind: str) -> str:
     if control_kind == "pause":
         return "operator requested pause"
@@ -290,6 +297,7 @@ def open_launch_log(
 
 __all__ = [
     "RUN_CONTROL_KINDS",
+    "build_run_control_marker_clearer",
     "clear_run_control_markers",
     "default_run_control_reason",
     "launch_log_path",

@@ -193,7 +193,7 @@ from forge.webui.htmx_routes import (
 from forge.webui.rbac import ROLE_PERMISSIONS
 from forge.webui.route_authorization import AuthorizedEngagementResolver
 from forge.webui.run_control import (
-    clear_run_control_markers as clear_run_markers,
+    build_run_control_marker_clearer,
     open_launch_log as open_launch_log_file,
 )
 from forge.webui.run_log_routes import (
@@ -424,8 +424,7 @@ def create_app() -> Any:
             engagement_id=engagement_id,
         )
 
-    def _clear_run_control_markers(engagement_id: int) -> None:
-        clear_run_markers(cfg.data_dir, engagement_id)
+    _clear_run_control_markers = build_run_control_marker_clearer(cfg.data_dir)
 
     def _latest_running_engagement_run(con: sqlite3.Connection, engagement_id: int) -> sqlite3.Row | None:
         return find_latest_running_engagement_run(con, engagement_id)

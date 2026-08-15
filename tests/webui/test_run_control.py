@@ -7,6 +7,7 @@ import pytest
 
 from forge.webui.run_control import (
     RUN_CONTROL_KINDS,
+    build_run_control_marker_clearer,
     clear_run_control_markers,
     default_run_control_reason,
     launch_log_path,
@@ -47,11 +48,17 @@ def test_clear_run_control_markers_removes_stale_stop_and_pause_files(tmp_path: 
     pause_path.write_text("stale", encoding="utf-8")
     unrelated_path.write_text("keep", encoding="utf-8")
 
-    clear_run_control_markers(data_dir, 1001)
+    build_run_control_marker_clearer(data_dir)(1001)
 
     assert not stop_path.exists()
     assert not pause_path.exists()
     assert unrelated_path.exists()
+
+    stop_path.write_text("stale", encoding="utf-8")
+    pause_path.write_text("stale", encoding="utf-8")
+    clear_run_control_markers(data_dir, 1001)
+    assert not stop_path.exists()
+    assert not pause_path.exists()
 
 
 def test_run_control_reason_preserves_request_body_and_defaults() -> None:

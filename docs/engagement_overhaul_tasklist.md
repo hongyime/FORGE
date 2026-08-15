@@ -256,6 +256,15 @@ sentences as historical notes only, not as current instructions.
   tests (`5 passed`), HTMX app wiring tests (`19 passed`), Ruff, and
   `py_compile` passed. Backprop: `SPEC.md` B359.
 
+- [x] Web UI run-control marker clearer extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds its launch-time run-control marker
+  clearer through `forge.webui.run_control.build_run_control_marker_clearer`
+  instead of defining the data-dir-bound closure inline. The helper preserves
+  stop/pause stale-marker cleanup before launching a new kill-chain run while
+  keeping marker path policy in the run-control module. Verification: Web UI
+  run-control tests (`9 passed`), HTMX app wiring tests (`19 passed`), Ruff,
+  and `py_compile` passed. Backprop: `SPEC.md` B360.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
