@@ -200,7 +200,7 @@ from forge.webui.run_log_routes import (
     engagement_runs_route_payload,
     run_control_route_payload,
 )
-from forge.webui.run_status import iter_live_run_progress_snapshots
+from forge.webui.run_status import build_live_run_progress_snapshot_provider
 from forge.webui.shell_routes import (
     ShellRouteNotFound,
     build_frontend_entry_response_provider,
@@ -338,13 +338,12 @@ def create_app() -> Any:
                 continue
             await broker.publish(event)
 
-    def _iter_live_run_progress_snapshots() -> list[tuple[int, str, dict[str, Any]]]:
-        return iter_live_run_progress_snapshots(
-            cfg.data_dir,
-            numeric_db_files=numeric_engagement_db_files,
-            table_exists=_table_exists,
-            connect=direct_connect,
-        )
+    _iter_live_run_progress_snapshots = build_live_run_progress_snapshot_provider(
+        cfg.data_dir,
+        numeric_db_files=numeric_engagement_db_files,
+        table_exists=_table_exists,
+        connect=direct_connect,
+    )
 
     async def _run_progress_bridge() -> None:
         last_seen: dict[int, str] = {}

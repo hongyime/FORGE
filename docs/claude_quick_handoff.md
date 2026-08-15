@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI live run-progress snapshot binding moved
+from `forge.webui.app.create_app()` to
+`forge.webui.run_status.build_live_run_progress_snapshot_provider`. The bridge
+loop remains app-owned, but data-dir, numeric DB discovery, table-exists, and
+DB-connect injection now live beside the run-status scan policy. Verification
+passed for Web UI run-status plus HTMX wiring tests (`30 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B376.
 Latest checkpoint (2026-08-16): Web UI principal workspace/engagement-row access
 pass-through wrappers were removed from `forge.webui.app.create_app()`. App
 setup now wires directly to `forge.webui.workspace_access.principal_can_access_workspace`,

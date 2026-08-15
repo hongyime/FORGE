@@ -399,6 +399,15 @@ sentences as historical notes only, not as current instructions.
   engagement-discovery, and HTMX wiring tests (`32 passed`), Ruff, and
   `py_compile` passed. Backprop: `SPEC.md` B375.
 
+- [x] Web UI live run-progress provider checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds the live run-progress snapshot scan
+  through `forge.webui.run_status.build_live_run_progress_snapshot_provider`
+  instead of binding data-dir, numeric DB discovery, table-exists, and DB-connect
+  dependencies inline. The bridge loop remains app-owned while snapshot policy
+  stays in `forge.webui.run_status`. Verification: Web UI run-status plus HTMX
+  wiring tests (`30 passed`), Ruff, and `py_compile` passed. Backprop:
+  `SPEC.md` B376.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

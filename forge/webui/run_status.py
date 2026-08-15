@@ -335,10 +335,29 @@ def iter_live_run_progress_snapshots(
     return snapshots
 
 
+def build_live_run_progress_snapshot_provider(
+    data_dir: Path,
+    *,
+    numeric_db_files: NumericDbFiles,
+    table_exists: TableExists,
+    connect: ConnectDb,
+) -> Callable[[], list[tuple[int, str, dict[str, Any]]]]:
+    def _iter_live_run_progress_snapshots() -> list[tuple[int, str, dict[str, Any]]]:
+        return iter_live_run_progress_snapshots(
+            data_dir,
+            numeric_db_files=numeric_db_files,
+            table_exists=table_exists,
+            connect=connect,
+        )
+
+    return _iter_live_run_progress_snapshots
+
+
 __all__ = [
     "LIVE_PROGRESS_STATUSES",
     "PROGRESS_FINGERPRINT_KEYS",
     "annotate_run_audit_review",
+    "build_live_run_progress_snapshot_provider",
     "engagement_run_row_payload",
     "engagement_run_rows",
     "iter_live_run_progress_snapshots",

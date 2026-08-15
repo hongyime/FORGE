@@ -7,6 +7,7 @@ from typing import Any
 
 from forge.webui.run_status import (
     annotate_run_audit_review,
+    build_live_run_progress_snapshot_provider,
     engagement_run_rows,
     iter_live_run_progress_snapshots,
     latest_audit_timestamp,
@@ -503,3 +504,23 @@ def test_iter_live_run_progress_snapshots_returns_empty_without_engagements_dir(
         )
         == []
     )
+
+
+def test_live_run_progress_snapshot_provider_binds_scan_dependencies(tmp_path: Path) -> None:
+    calls: list[Path] = []
+
+    def numeric_db_files(data_dir: Path) -> list[Path]:
+        calls.append(data_dir)
+        return []
+
+    provider = build_live_run_progress_snapshot_provider(
+        tmp_path,
+        numeric_db_files=numeric_db_files,
+        table_exists=lambda _con, _table: True,
+        connect=_connect_file,
+    )
+
+    (tmp_path / "engagements").mkdir()
+
+    assert provider() == []
+    assert calls == [tmp_path]
