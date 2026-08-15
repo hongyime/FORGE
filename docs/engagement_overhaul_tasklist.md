@@ -90,6 +90,26 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] JS runtime structured payload worker-order modularization and raw
+  candidate dedupe checkpoint (2026-08-16): the Deno/JSR/npm candidate
+  batching fixture now lives in `tests/phase1/js_runtime_artifact_cases.py`,
+  with the original pytest node retained as a thin wrapper in the Phase 1 mega
+  test. The parser now dedupes raw JS runtime candidates before worker dispatch,
+  preserving final normalized output while avoiding duplicate batch work. This
+  keeps coverage for JS runtime candidate ordering, bounded local batch
+  dispatch, package-specifier normalization, and registry host-to-URL
+  normalization while reducing inline fixture weight in
+  `tests/phase1/test_engagement_orchestrator.py`. Files:
+  `forge/engagement_orchestrator.py`,
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/js_runtime_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  wrapper plus adjacent JS runtime worker/config suites -> `19 passed`; Ruff
+  and `py_compile` passed for touched Python files. Safety note: parser
+  batching cleanup only; no provider calls, live probing, credential use, scope
+  changes, validation/report gates, scheduler behavior, or persistent non-test
+  engagement data changed.
+
 - [x] Gradle structured payload worker-order regression modularization
   checkpoint (2026-08-16): the Gradle repository URL candidate batching fixture
   now lives in `tests/phase1/package_manager_artifact_cases.py`, with the

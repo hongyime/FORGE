@@ -32,6 +32,15 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): JS runtime structured payload worker-order
+modularization and raw candidate dedupe are complete. A new
+`tests/phase1/js_runtime_artifact_cases.py` module now owns the Deno/JSR/npm
+candidate batching fixture, while the original pytest node remains a thin
+wrapper in `tests/phase1/test_engagement_orchestrator.py`. The parser now
+dedupes raw JS runtime candidates before worker dispatch, preserving final
+normalized output while avoiding duplicate batch work. Verification passed for
+the preserved wrapper plus adjacent JS runtime worker/config suites (`19
+passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B418.
 Latest checkpoint (2026-08-16): Gradle structured payload worker-order
 regression modularization is complete. `tests/phase1/package_manager_artifact_cases.py`
 now owns the Gradle repository URL candidate batching fixture, while the

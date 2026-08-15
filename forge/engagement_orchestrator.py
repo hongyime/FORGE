@@ -23443,8 +23443,16 @@ class ArtifactQueueProcessor:
             source_label=source_label,
             base_url=base_url,
         )
+        deduped_raw_values: list[str] = []
+        seen_raw_values: set[str] = set()
+        for raw_value in raw_values:
+            normalized_raw = str(raw_value or "").strip()
+            if not normalized_raw or normalized_raw.lower() in seen_raw_values:
+                continue
+            seen_raw_values.add(normalized_raw.lower())
+            deduped_raw_values.append(normalized_raw)
         candidate_entries = self._run_ordered_local_batch(
-            raw_values,
+            deduped_raw_values,
             self._js_runtime_url_candidate_entry,
             default_factory=str,
         )
