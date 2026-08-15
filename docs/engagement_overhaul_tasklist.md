@@ -90,6 +90,25 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Azure/OCI CLI config artifact regression modularization checkpoint
+  (2026-08-16): the Azure CLI config and OCI CLI config fixtures now live in
+  `tests/phase1/cloud_cli_artifact_cases.py`, with the original
+  `test_artifact_queue_processor_labels_azure_cli_config_artifacts` and
+  `test_artifact_queue_processor_labels_oci_cli_config_artifacts` pytest nodes
+  retained as thin wrappers in the Phase 1 mega test. This keeps coverage for
+  source-aware Azure/OCI config labels, remote filename recovery, URL/email
+  seeds, Azure Blob, Firebase/Supabase, S3/GCS, and token-cache suppression
+  while reducing inline fixture weight in
+  `tests/phase1/test_engagement_orchestrator.py`. Files:
+  `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/cloud_cli_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  Azure/OCI wrapper tests -> `2 passed`; Ruff and `py_compile` passed for
+  touched Python files. Safety note: test modularization only; no production
+  parser behavior, live probing, provider calls, credential use, scope changes,
+  validation/report gates, scheduler behavior, or persistent non-test
+  engagement data changed.
+
 - [x] Cloud CLI config artifact regression modularization checkpoint
   (2026-08-16): the gcloud CLI config and AWS CLI config fixtures now live in
   `tests/phase1/cloud_cli_artifact_cases.py`, with the original
