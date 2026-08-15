@@ -275,6 +275,32 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    grype_path = artifact_root / ".grype.yaml"
+    grype_path.write_text(
+        dedent(
+            """
+            db:
+              cache-dir: .grype/db
+              update-url: https://grype-user:grype-token-do-not-store@grype-db.acme.example/vulnerability-db/listing.json
+            registry: grype-registry.acme.example
+            owner: grype-owner@acme.example
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    syft_path = artifact_root / "syft.toml"
+    syft_path.write_text(
+        dedent(
+            """
+            source = "https://syft-source.acme.example/images/latest"
+            registry = "syft-registry.acme.example"
+            owner = "syft-owner@acme.example"
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
     semgrep_path = artifact_root / ".semgrep" / "config.yml"
     semgrep_path.parent.mkdir(parents=True, exist_ok=True)
     semgrep_path.write_text(
@@ -359,9 +385,9 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     queued = processor.ingest_local_artifacts([artifact_root])
     summary = processor.process()
 
-    assert queued >= 12
-    assert summary.processed >= 12
-    assert summary.discovered_seeds >= 26
+    assert queued >= 14
+    assert summary.processed >= 14
+    assert summary.discovered_seeds >= 30
 
     seeds = _seed_pairs(db_path)
     for expected_seed in {
@@ -372,6 +398,10 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         ("https://bridgecrew.acme.example/api", "url"),
         ("https://ghcr.io/acme/trivy-db", "url"),
         ("https://trivy-control.acme.example", "url"),
+        ("https://grype-db.acme.example/vulnerability-db/listing.json", "url"),
+        ("https://grype-registry.acme.example", "url"),
+        ("https://syft-source.acme.example/images/latest", "url"),
+        ("https://syft-registry.acme.example", "url"),
         ("https://semgrep-registry.acme.example/rules", "url"),
         ("https://gitleaks-control.acme.example/api", "url"),
         ("https://kics-control.acme.example", "url"),
@@ -384,6 +414,8 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
         ("precommit-owner@acme.example", "email"),
         ("checkov-owner@acme.example", "email"),
         ("trivy-config-owner@acme.example", "email"),
+        ("grype-owner@acme.example", "email"),
+        ("syft-owner@acme.example", "email"),
         ("semgrep-config-owner@acme.example", "email"),
         ("gitleaks-config-owner@acme.example", "email"),
         ("kics-owner@acme.example", "email"),
@@ -406,6 +438,8 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     assert artifact_meta[precommit_path.resolve().as_posix()]["format"] == "pre-commit-config"
     assert artifact_meta[checkov_path.resolve().as_posix()]["format"] == "checkov-config"
     assert artifact_meta[trivy_path.resolve().as_posix()]["format"] == "trivy-config"
+    assert artifact_meta[grype_path.resolve().as_posix()]["format"] == "grype-config"
+    assert artifact_meta[syft_path.resolve().as_posix()]["format"] == "syft-config"
     assert artifact_meta[semgrep_path.resolve().as_posix()]["format"] == "semgrep-config"
     assert artifact_meta[gitleaks_path.resolve().as_posix()]["format"] == "gitleaks-config"
     assert artifact_meta[kics_path.resolve().as_posix()]["format"] == "kics-config"
@@ -424,4 +458,5 @@ def run_security_scanner_policy_configs(tmp_path: Path) -> None:
     db_dump = _db_dump(db_path)
     assert "sonar-token-do-not-store" not in db_dump
     assert "checkov-token-do-not-store" not in db_dump
+    assert "grype-token-do-not-store" not in db_dump
     assert "detect-token-do-not-store" not in db_dump

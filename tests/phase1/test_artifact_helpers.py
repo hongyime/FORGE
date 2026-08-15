@@ -94,6 +94,8 @@ def test_security_scanner_config_artifact_format_labels_are_source_aware() -> No
     assert _artifact_format_label(".pre-commit-config.yaml") == "pre-commit-config"
     assert _artifact_format_label(".pre-commit-hooks.yaml") == "pre-commit-hooks"
     assert _artifact_format_label("trivy.yaml") == "trivy-config"
+    assert _artifact_format_label(".grype.yaml") == "grype-config"
+    assert _artifact_format_label("syft.toml") == "syft-config"
     assert _artifact_format_label(".gitleaks.toml") == "gitleaks-config"
     assert _artifact_format_label(".semgrep/config.yml") == "semgrep-config"
     assert _artifact_format_label(".trufflehog.yml") == "trufflehog-config"

@@ -6142,6 +6142,10 @@ def _security_scanner_config_artifact_label(value: str) -> str:
 
     if name in {"trivy.yaml", "trivy.yml", "trivy.toml", "trivy.json", ".trivy.yaml", ".trivy.yml", ".trivy.toml"}:
         return "trivy-config"
+    if name in {"grype.yaml", "grype.yml", "grype.toml", "grype.json", ".grype.yaml", ".grype.yml", ".grype.toml"}:
+        return "grype-config"
+    if name in {"syft.yaml", "syft.yml", "syft.toml", "syft.json", ".syft.yaml", ".syft.yml", ".syft.toml"}:
+        return "syft-config"
     if name in {"gitleaks.toml", ".gitleaks.toml", "gitleaks.yaml", "gitleaks.yml", ".gitleaks.yaml", ".gitleaks.yml"}:
         return "gitleaks-config"
     if name in {"semgrep.yaml", "semgrep.yml", ".semgrep.yaml", ".semgrep.yml"}:
@@ -22731,6 +22735,7 @@ class ArtifactQueueProcessor:
             "sonarlinks scm",
             "source",
             "tokenendpoint",
+            "updateurl",
             "url",
             "urls",
             "weburl",

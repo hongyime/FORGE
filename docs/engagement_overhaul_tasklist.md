@@ -536,6 +536,16 @@ sentences as historical notes only, not as current instructions.
   JS-runtime config plus API format label tests (`18 passed`), Ruff, and
   `py_compile` passed. Backprop: `SPEC.md` B388.
 
+- [x] Grype/Syft scanner config passive-recursion checkpoint (2026-08-16):
+  Scoped Grype and Syft scanner config artifacts now receive `grype-config` and
+  `syft-config` labels and route through the existing security-scanner config
+  extractor. DB update URLs, registry URLs, source URLs, and owner contacts
+  become recursive URL/email seeds, URL userinfo is stripped before persistence,
+  and the regression proves `grype-token-do-not-store` is not persisted. No
+  scanner execution, package install, HTTP probing, authentication, provider
+  calls, or scope relaxation was added. Verification: focused security-scanner
+  tests (`2 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B389.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
