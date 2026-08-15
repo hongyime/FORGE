@@ -32,6 +32,18 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Pact contract artifact-ingestion regression
+modularization is complete. A new `tests/phase1/pact_artifact_cases.py` module
+now owns the Pact contract local artifact fixture, while the original pytest
+node remains a thin wrapper in `tests/phase1/test_engagement_orchestrator.py`.
+This keeps coverage for Pact format classification, Pact content-type filename
+selection, nested ZIP payload extraction, provider-base URL resolution,
+email/URL seed promotion, template suppression, and S3/Firebase/Supabase asset
+detection without changing production parser behavior, live probing, provider
+calls, credential use, scope, validation/report gates, scheduler behavior, or
+persistent non-test engagement data. Verification passed for the preserved
+wrapper plus adjacent Pact unit tests (`2 passed`), Ruff, and `py_compile`.
+Backprop: `SPEC.md` B432.
 Latest checkpoint (2026-08-16): API spec and client collection
 artifact-ingestion regression modularization is complete. A new
 `tests/phase1/api_collection_artifact_cases.py` module now owns the OpenAPI,
