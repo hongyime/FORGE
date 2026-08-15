@@ -117,6 +117,34 @@ def run_control_route_payload(
     )
 
 
+def build_run_control_requester(
+    *,
+    data_dir: Path,
+    publish_sync: Callable[[int, str, dict[str, Any]], None],
+    format_dt: Callable[[str], str],
+) -> Callable[..., dict[str, Any]]:
+    def request_control(
+        con: sqlite3.Connection,
+        *,
+        engagement_id: int,
+        control_kind: str,
+        requested_by: str,
+        body: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        return run_control_route_payload(
+            con,
+            data_dir=data_dir,
+            engagement_id=engagement_id,
+            control_kind=control_kind,
+            requested_by=requested_by,
+            body=body,
+            publish_sync=publish_sync,
+            format_dt=format_dt,
+        )
+
+    return request_control
+
+
 def engagement_logs_payload(
     *,
     logs_root: Path,

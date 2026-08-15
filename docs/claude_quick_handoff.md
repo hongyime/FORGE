@@ -32,6 +32,14 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI run-control dependency binding moved
+from the stop/pause route wrapper in `forge.webui.app.create_app()` to
+`forge.webui.run_log_routes.build_run_control_requester`. App setup now binds
+data-dir, progress publisher, and timestamp formatter dependencies beside
+run/log route policy, while the route wrapper keeps auth, engagement DB
+resolution, connection lifecycle, and HTTP error mapping. Verification passed
+for Web UI run-log plus HTMX wiring tests (`23 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B379.
 Latest checkpoint (2026-08-16): Web UI kill-chain launch dependency binding
 moved from the route wrapper in `forge.webui.app.create_app()` to
 `forge.webui.kill_chain_launch.build_kill_chain_run_launcher`. App setup now

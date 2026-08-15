@@ -427,6 +427,15 @@ sentences as historical notes only, not as current instructions.
   HTMX wiring tests (`29 passed`), Ruff, and `py_compile` passed. Backprop:
   `SPEC.md` B378.
 
+- [x] Web UI run-control requester binding checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now binds stop/pause run-control execution
+  through `forge.webui.run_log_routes.build_run_control_requester` instead of
+  passing data-dir, progress publisher, and timestamp formatter dependencies
+  from the route wrapper. The route wrapper still owns auth, engagement DB
+  resolution, connection lifecycle, and HTTP error mapping. Verification: Web UI
+  run-log plus HTMX wiring tests (`23 passed`), Ruff, and `py_compile` passed.
+  Backprop: `SPEC.md` B379.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

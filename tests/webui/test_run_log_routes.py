@@ -10,6 +10,7 @@ import pytest
 from forge.webui.logs import logs_dir
 from forge.webui.run_log_routes import (
     RunLogRouteNotFound,
+    build_run_control_requester,
     engagement_log_route_file,
     engagement_log_tail_route_payload,
     engagement_logs_route_payload,
@@ -177,6 +178,68 @@ def test_run_control_route_payload_updates_run_and_publishes(tmp_path: Path) -> 
         "reason": "checkpoint",
     }
     assert published[0][0:2] == (1001, "engagement_run_pause_requested")
+
+
+def test_run_control_requester_binds_route_dependencies(tmp_path: Path) -> None:
+    con = _connect()
+    _create_runs_table(con)
+    con.execute(
+        """
+        INSERT INTO engagement_runs (
+            id, engagement_id, run_kind, status, seed_value, seed_type, seed_count,
+            max_iterations, current_iteration, resume_enabled, dry_run, attack_mode,
+            error, metadata_json, started_at, completed_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            10,
+            1001,
+            "kill_chain",
+            "running",
+            "acme.example",
+            "domain",
+            1,
+            3,
+            2,
+            1,
+            0,
+            1,
+            "",
+            "{}",
+            "2026-08-14T01:00:00",
+            "",
+            "2026-08-14T01:02:00",
+        ),
+    )
+    published: list[tuple[int, str, dict[str, Any]]] = []
+    data_dir = tmp_path / ".forge_data"
+
+    request_control = build_run_control_requester(
+        data_dir=data_dir,
+        publish_sync=lambda engagement_id, message, body: published.append(
+            (engagement_id, message, body)
+        ),
+        format_dt=lambda value: f"formatted:{bool(value)}",
+    )
+
+    payload = request_control(
+        con,
+        engagement_id=1001,
+        control_kind="stop",
+        requested_by="operator-web",
+        body=None,
+    )
+
+    marker_path = data_dir / "run_control" / "engagement_1001_stop.json"
+    assert payload["status"] == "stop_requested"
+    assert payload["active_run_id"] == 10
+    assert json.loads(marker_path.read_text(encoding="utf-8")) == {
+        "requested_at": "formatted:True",
+        "requested_by": "operator-web",
+        "reason": "operator requested stop",
+    }
+    assert published[0][0:2] == (1001, "engagement_run_stop_requested")
 
 
 def test_engagement_log_route_payloads_preserve_listing_download_and_tail(

@@ -194,11 +194,11 @@ from forge.webui.run_control import (
 from forge.webui.run_log_routes import (
     RunLogRouteError,
     RunLogRouteNotFound,
+    build_run_control_requester,
     engagement_log_route_file,
     engagement_log_tail_route_payload,
     engagement_logs_route_payload,
     engagement_runs_route_payload,
-    run_control_route_payload,
 )
 from forge.webui.run_status import build_live_run_progress_snapshot_provider
 from forge.webui.shell_routes import (
@@ -377,6 +377,11 @@ def create_app() -> Any:
     _workspace_access_checker = build_workspace_access_checker(principal_can_access_workspace)
 
     _clear_run_control_markers = build_run_control_marker_clearer(cfg.data_dir)
+    _request_run_control = build_run_control_requester(
+        data_dir=cfg.data_dir,
+        publish_sync=_publish_progress_sync,
+        format_dt=_format_dt,
+    )
 
     _logs_dir = build_logs_dir_provider(cfg.data_dir)
     _launch_kill_chain_run = build_kill_chain_run_launcher(
@@ -2069,15 +2074,12 @@ def create_app() -> Any:
         con = direct_connect(db_path)
         con.row_factory = sqlite3.Row
         try:
-            return run_control_route_payload(
+            return _request_run_control(
                 con,
-                data_dir=cfg.data_dir,
                 engagement_id=engagement_id,
                 control_kind=control_kind,
                 requested_by=subject,
                 body=body,
-                publish_sync=_publish_progress_sync,
-                format_dt=_format_dt,
             )
         except RunLogRouteError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
