@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI route workspace-access checker binding
+moved out of `forge.webui.app.create_app()`.
+`forge.webui.workspace_access.build_workspace_access_checker` now owns the
+connection-bound wrapper around the existing workspace access predicate,
+preserving membership, legacy, and `workspaces:any` decisions for route
+payloads. Verification passed for Web UI workspace-access plus HTMX wiring tests
+(`24 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B372.
 Latest checkpoint (2026-08-16): Web UI engagement artifact route-file provider
 binding moved out of `forge.webui.app.create_app()`.
 `forge.webui.artifacts.build_engagement_artifact_files_provider` now owns the

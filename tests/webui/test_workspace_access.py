@@ -4,6 +4,7 @@ import sqlite3
 
 from forge.webui.auth import Principal
 from forge.webui.workspace_access import (
+    build_workspace_access_checker,
     ensure_workspace_rbac_foundation,
     principal_can_access_engagement_row,
     principal_can_access_workspace,
@@ -132,6 +133,33 @@ def test_principal_can_access_workspace_uses_membership_legacy_and_any_permissio
             con=con,
             allow_bootstrap=True,
         )
+    finally:
+        con.close()
+
+
+def test_workspace_access_checker_binds_connection_to_access_predicate() -> None:
+    con = _connect()
+    principal = _principal("member")
+    calls: list[tuple[Principal, str, sqlite3.Connection]] = []
+
+    def can_access_workspace(
+        principal: Principal,
+        workspace_id: str,
+        *,
+        con: sqlite3.Connection,
+    ) -> bool:
+        calls.append((principal, workspace_id, con))
+        return workspace_id == "default"
+
+    try:
+        checker = build_workspace_access_checker(can_access_workspace)
+
+        assert checker(principal, "default", con)
+        assert not checker(principal, "other", con)
+        assert calls == [
+            (principal, "default", con),
+            (principal, "other", con),
+        ]
     finally:
         con.close()
 

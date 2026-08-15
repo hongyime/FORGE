@@ -360,6 +360,15 @@ sentences as historical notes only, not as current instructions.
   discovery-context integration. Verification: Web UI artifact plus HTMX wiring
   tests (`27 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B371.
 
+- [x] Web UI workspace access-checker provider checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds the route workspace-access checker
+  through `forge.webui.workspace_access.build_workspace_access_checker` instead
+  of defining the connection-bound wrapper inline. The helper preserves
+  membership/legacy/any-permission decisions through the existing predicate
+  while reducing app-factory route policy surface. Verification: Web UI
+  workspace-access plus HTMX wiring tests (`24 passed`), Ruff, and
+  `py_compile` passed. Backprop: `SPEC.md` B372.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

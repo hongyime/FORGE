@@ -238,6 +238,7 @@ from forge.webui.workspace_routes import (
     upsert_workspace_route_payload,
 )
 from forge.webui.workspace_access import (
+    build_workspace_access_checker,
     ensure_workspace_rbac_foundation,
     principal_can_access_engagement_row,
     principal_can_access_workspace,
@@ -399,12 +400,7 @@ def create_app() -> Any:
     ) -> bool:
         return principal_can_access_engagement_row(con, principal, row)
 
-    def _workspace_access_checker(
-        principal: Principal,
-        workspace_id: str,
-        con: sqlite3.Connection,
-    ) -> bool:
-        return _principal_can_access_workspace(principal, workspace_id, con=con)
+    _workspace_access_checker = build_workspace_access_checker(_principal_can_access_workspace)
 
     _clear_run_control_markers = build_run_control_marker_clearer(cfg.data_dir)
 

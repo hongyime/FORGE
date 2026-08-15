@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from typing import Any
 
 from forge.webui.auth import Principal
@@ -145,6 +146,19 @@ def principal_can_access_workspace(
     return "workspaces:legacy" in principal.permissions
 
 
+def build_workspace_access_checker(
+    can_access_workspace: Callable[..., bool] = principal_can_access_workspace,
+) -> Callable[[Principal, str, sqlite3.Connection], bool]:
+    def _workspace_access_checker(
+        principal: Principal,
+        workspace_id: str,
+        con: sqlite3.Connection,
+    ) -> bool:
+        return can_access_workspace(principal, workspace_id, con=con)
+
+    return _workspace_access_checker
+
+
 def principal_can_access_engagement_row(
     con: sqlite3.Connection,
     principal: Principal | None,
@@ -161,6 +175,7 @@ def principal_can_access_engagement_row(
 
 
 __all__ = [
+    "build_workspace_access_checker",
     "ensure_workspace_rbac_foundation",
     "principal_can_access_engagement_row",
     "principal_can_access_workspace",
