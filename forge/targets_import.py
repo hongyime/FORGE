@@ -791,4 +791,21 @@ def _start_passive_kill_chain(
         "--no-attack-mode",
         "--no-auto-run-detected",
     ]
-    subprocess.run(command, check=True)
+    proc = subprocess.run(command, check=False, capture_output=True, text=True)
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+        sys.stdout.flush()
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+        sys.stderr.flush()
+    if proc.returncode == 0:
+        return
+    combined_output = f"{proc.stdout or ''}\n{proc.stderr or ''}"
+    if proc.returncode == 2 and "Kill-chain complete" in combined_output and "Report:" in combined_output:
+        return
+    raise subprocess.CalledProcessError(
+        proc.returncode,
+        command,
+        output=proc.stdout,
+        stderr=proc.stderr,
+    )

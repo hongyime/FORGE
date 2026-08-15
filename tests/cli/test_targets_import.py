@@ -382,9 +382,17 @@ def test_start_launches_passive_kill_chain_with_scope_and_roe(
     cfg = _FakeConfig(tmp_path / "data")
     calls: list[list[str]] = []
 
-    def _fake_run(command: list[str], *, check: bool) -> object:
+    def _fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> object:
         calls.append(command)
-        assert check is True
+        assert check is False
+        assert capture_output is True
+        assert text is True
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
@@ -413,6 +421,71 @@ def test_start_launches_passive_kill_chain_with_scope_and_roe(
     assert "--auto-run-detected" not in command
 
 
+def test_start_treats_completed_kill_chain_exit_two_as_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        return subprocess.CompletedProcess(
+            command,
+            2,
+            stdout="Kill-chain complete in 10.0s\nReport: reports/demo.md\n",
+            stderr="Non-TTY invocation - not prompting.\n",
+        )
+
+    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    assert results[0].started is True
+
+
+def test_start_keeps_real_kill_chain_cli_exit_two_as_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        return subprocess.CompletedProcess(
+            command,
+            2,
+            stdout="",
+            stderr="Usage: python -m forge.cli kill-chain [OPTIONS]\nInvalid value\n",
+        )
+
+    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        import_targets(
+            feed_url=None,
+            feed_file=feed_path,
+            auth_header_env=None,
+            roe_id="ROE-ACME-2026-08",
+            start=True,
+            dry_run=False,
+            limit=1,
+            max_iter=3,
+            config=cfg,  # type: ignore[arg-type]
+        )
+
+
 def test_start_limit_caps_passive_kill_chain_launches(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -422,8 +495,17 @@ def test_start_limit_caps_passive_kill_chain_launches(
     cfg = _FakeConfig(tmp_path / "data")
     calls: list[list[str]] = []
 
-    def _fake_run(command: list[str], *, check: bool) -> object:
+    def _fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> object:
         calls.append(command)
+        assert check is False
+        assert capture_output is True
+        assert text is True
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
@@ -481,7 +563,7 @@ def test_start_skips_engagement_with_existing_kill_chain_run(
     calls: list[list[str]] = []
     monkeypatch.setattr(
         "forge.targets_import.subprocess.run",
-        lambda command, *, check: calls.append(command),
+        lambda command, **_kwargs: calls.append(command),
     )
 
     second = import_targets(
