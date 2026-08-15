@@ -309,6 +309,16 @@ sentences as historical notes only, not as current instructions.
   Verification: Web UI shell route tests (`7 passed`), HTMX app wiring tests
   (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B365.
 
+- [x] Web UI engagement-discovery context provider extraction checkpoint
+  (2026-08-16): `forge.webui.app.create_app()` now builds the
+  `EngagementDiscoveryContext` provider through
+  `forge.webui.engagement_discovery.build_engagement_discovery_context_provider`
+  instead of constructing the context dataclass inline. The helper preserves all
+  existing dependency injection for workspace checks, lifecycle row readers,
+  summary/detail payloads, artifact file discovery, and tombstone retention.
+  Verification: Web UI engagement-discovery tests (`7 passed`), HTMX app wiring
+  tests (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B366.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

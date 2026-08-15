@@ -127,7 +127,7 @@ from forge.webui.engagement_lifecycle import (
     update_engagement_route_payload,
 )
 from forge.webui.engagement_discovery import (
-    EngagementDiscoveryContext,
+    build_engagement_discovery_context_provider,
     find_engagement_artifact as find_engagement_artifact_file,
     find_engagement_detail as find_engagement_detail_payload,
     iter_engagement_payloads as iter_discovered_engagement_payloads,
@@ -472,28 +472,27 @@ def create_app() -> Any:
             engagement_id=engagement_id,
         )
 
-    def _discovery_context() -> EngagementDiscoveryContext:
-        return EngagementDiscoveryContext(
-            data_dir=cfg.data_dir,
-            ensure_workspace_rbac_foundation=ensure_workspace_rbac_foundation,
-            engagement_rows=webui_engagement_rows,
-            engagement_row=webui_engagement_row,
-            summary_payload=_engagement_summary_payload,
-            detail_payload=_engagement_detail_payload,
-            can_access_workspace=(
-                lambda principal, workspace_id, con: _principal_can_access_workspace(
-                    principal,
-                    workspace_id,
-                    con=con,
-                )
-            ),
-            can_access_engagement_row=_principal_can_access_engagement_row,
-            artifact_files=_engagement_artifact_files,
-            tombstone_retention_days=os.environ.get(
-                "FORGE_CONTROL_TOMBSTONE_RETENTION_DAYS",
-                "30",
-            ),
-        )
+    _discovery_context = build_engagement_discovery_context_provider(
+        data_dir=cfg.data_dir,
+        ensure_workspace_rbac_foundation=ensure_workspace_rbac_foundation,
+        engagement_rows=webui_engagement_rows,
+        engagement_row=webui_engagement_row,
+        summary_payload=_engagement_summary_payload,
+        detail_payload=_engagement_detail_payload,
+        can_access_workspace=(
+            lambda principal, workspace_id, con: _principal_can_access_workspace(
+                principal,
+                workspace_id,
+                con=con,
+            )
+        ),
+        can_access_engagement_row=_principal_can_access_engagement_row,
+        artifact_files=_engagement_artifact_files,
+        tombstone_retention_days=os.environ.get(
+            "FORGE_CONTROL_TOMBSTONE_RETENTION_DAYS",
+            "30",
+        ),
+    )
 
     def _iter_engagement_payloads(principal: Principal | None = None) -> list[dict[str, Any]]:
         return iter_discovered_engagement_payloads(_discovery_context(), principal)

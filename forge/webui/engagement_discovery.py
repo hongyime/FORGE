@@ -45,6 +45,36 @@ class EngagementDiscoveryContext:
     tombstone_retention_days: str = "30"
 
 
+def build_engagement_discovery_context_provider(
+    *,
+    data_dir: Path,
+    ensure_workspace_rbac_foundation: ConnectionSetup,
+    engagement_rows: EngagementRows,
+    engagement_row: EngagementRow,
+    summary_payload: PayloadBuilder,
+    detail_payload: PayloadBuilder,
+    can_access_workspace: CanAccessWorkspace,
+    can_access_engagement_row: CanAccessEngagementRow,
+    artifact_files: ArtifactFileProvider,
+    tombstone_retention_days: str = "30",
+) -> Callable[[], EngagementDiscoveryContext]:
+    def _discovery_context() -> EngagementDiscoveryContext:
+        return EngagementDiscoveryContext(
+            data_dir=data_dir,
+            ensure_workspace_rbac_foundation=ensure_workspace_rbac_foundation,
+            engagement_rows=engagement_rows,
+            engagement_row=engagement_row,
+            summary_payload=summary_payload,
+            detail_payload=detail_payload,
+            can_access_workspace=can_access_workspace,
+            can_access_engagement_row=can_access_engagement_row,
+            artifact_files=artifact_files,
+            tombstone_retention_days=tombstone_retention_days,
+        )
+
+    return _discovery_context
+
+
 def indexed_db_path(index_row: sqlite3.Row, data_dir: str | Path) -> Path | None:
     try:
         candidate = Path(str(index_row["db_path"] or "")).resolve()
@@ -338,6 +368,7 @@ def authorized_engagement_db_path(
 __all__ = [
     "EngagementDiscoveryContext",
     "authorized_engagement_db_path",
+    "build_engagement_discovery_context_provider",
     "control_tombstone_retention_seconds",
     "find_engagement_artifact",
     "find_engagement_detail",

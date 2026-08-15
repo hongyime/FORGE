@@ -11,6 +11,7 @@ from forge.db.control import (
 from forge.db.direct_connect import direct_connect
 from forge.webui.engagement_discovery import (
     EngagementDiscoveryContext,
+    build_engagement_discovery_context_provider,
     control_tombstone_retention_seconds,
     find_engagement_artifact,
     find_engagement_detail,
@@ -169,6 +170,36 @@ def _context(data_dir: Path, artifact_files: list[Path] | None = None) -> Engage
         artifact_files=lambda _con, _db, _engagement_id, _summary: list(artifact_files or []),
         tombstone_retention_days="30",
     )
+
+
+def test_build_engagement_discovery_context_provider_binds_dependencies(
+    tmp_path: Path,
+) -> None:
+    artifact = tmp_path / "report.md"
+    provider = build_engagement_discovery_context_provider(
+        data_dir=tmp_path / ".forge_data",
+        ensure_workspace_rbac_foundation=lambda _con: None,
+        engagement_rows=_engagement_rows,
+        engagement_row=_engagement_row,
+        summary_payload=_summary_payload,
+        detail_payload=_detail_payload,
+        can_access_workspace=_can_access_workspace,
+        can_access_engagement_row=_can_access_engagement_row,
+        artifact_files=lambda _con, _db, _engagement_id, _summary: [artifact],
+        tombstone_retention_days="7",
+    )
+
+    ctx = provider()
+
+    assert ctx.data_dir == tmp_path / ".forge_data"
+    assert ctx.engagement_rows is _engagement_rows
+    assert ctx.engagement_row is _engagement_row
+    assert ctx.summary_payload is _summary_payload
+    assert ctx.detail_payload is _detail_payload
+    assert ctx.can_access_workspace is _can_access_workspace
+    assert ctx.can_access_engagement_row is _can_access_engagement_row
+    assert ctx.artifact_files(None, artifact, 1001, {}) == [artifact]
+    assert ctx.tombstone_retention_days == "7"
 
 
 def test_control_tombstone_retention_seconds_parses_operational_values() -> None:
