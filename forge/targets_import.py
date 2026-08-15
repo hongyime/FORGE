@@ -187,7 +187,14 @@ def import_targets(
             continue
 
         engagement_id, created = _create_or_reuse_engagement(cfg, item, existing_targets)
-        _ensure_target_import_monitoring(cfg, engagement_id=engagement_id, item=item)
+        try:
+            _ensure_target_import_monitoring(cfg, engagement_id=engagement_id, item=item)
+        except Exception as exc:  # noqa: BLE001
+            print(
+                "warning: target import monitoring seed skipped "
+                f"engagement={engagement_id} error={_bounded_text(exc, 180)}",
+                file=sys.stderr,
+            )
         manifest_path = _write_scope_manifest(cfg, engagement_id, item, roe_id)
         started = False
         if (

@@ -576,6 +576,47 @@ def test_start_limit_caps_passive_kill_chain_launches(
     assert len(calls) == 1
 
 
+def test_monitoring_seed_failure_does_not_block_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    feed_path = tmp_path / "feed.json"
+    _write_feed(feed_path)
+    cfg = _FakeConfig(tmp_path / "data")
+    calls: list[list[str]] = []
+
+    def _fake_monitoring_seed(*_args: object, **_kwargs: object) -> None:
+        raise ValueError("not enough values to unpack (expected 2, got 1)")
+
+    def _fake_run(command: list[str], **_: object) -> object:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(
+        "forge.targets_import._ensure_target_import_monitoring",
+        _fake_monitoring_seed,
+    )
+    monkeypatch.setattr("forge.targets_import.subprocess.run", _fake_run)
+
+    results = import_targets(
+        feed_url=None,
+        feed_file=feed_path,
+        auth_header_env=None,
+        roe_id="ROE-ACME-2026-08",
+        start=True,
+        dry_run=False,
+        limit=1,
+        max_iter=3,
+        config=cfg,  # type: ignore[arg-type]
+    )
+
+    captured = capsys.readouterr()
+    assert results[0].started is True
+    assert len(calls) == 1
+    assert "target import monitoring seed skipped" in captured.err
+
+
 def test_start_skips_engagement_with_existing_kill_chain_run(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

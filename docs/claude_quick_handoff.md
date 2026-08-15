@@ -32,6 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): The 01:05 scheduled target-import run returned
+Task Scheduler result `2` without generating a new report. A traceback-friendly
+mocked reproduction showed the real failure was target-import monitoring seeding:
+`create_monitoring_snapshot()` read existing SQLite timestamp rows through
+Python's deprecated converter and raised `not enough values to unpack`. Target
+import now logs bounded warnings when monitoring seeding fails and continues to
+scope manifest generation plus passive start decisions. Verification passed for
+target-import tests (`16 passed`), Ruff, `py_compile`, and a mocked
+production-data reproduction that reached fake start with `OK 100 started 1`.
+Backprop: `SPEC.md` B356.
 Latest checkpoint (2026-08-16): Web UI artifact file helper policy was split
 out of `forge.webui.app.create_app()`. `forge.webui.artifacts` now owns
 `reports_dir`, `report_files`, and `audit_files`, preserving `Path.cwd()/reports`,
