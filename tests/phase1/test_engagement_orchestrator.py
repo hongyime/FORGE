@@ -151,6 +151,7 @@ from forge.utils.intel.social_scraper import _parse_epieos_response
 from tests.phase1.package_manager_artifact_cases import (
     run_os_package_repository_artifacts,
     run_package_manager_credential_configs,
+    run_package_index_url_credentials,
 )
 from tests.phase1.cloud_cli_artifact_cases import (
     run_aws_cli_config_artifacts,
@@ -181,6 +182,7 @@ from tests.phase1.remote_artifact_download_cases import (
     run_remote_mobile_bundle_url_seed,
 )
 from tests.phase1.security_scanner_artifact_cases import (
+    run_detect_secrets_baseline_without_secret_material,
     run_security_scanner_control_files,
     run_security_scanner_policy_configs,
 )
@@ -26603,272 +26605,13 @@ def test_artifact_queue_processor_derives_duplicati_sqlite_target_urls(
 def test_artifact_queue_processor_strips_package_index_url_credentials(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_python_conda_credentials"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    pip_conf_path = artifact_root / "pip.conf"
-    pip_conf_path.write_text(
-        dedent(
-            """
-            [global]
-            index-url = https://pip-user:pip-index-token-do-not-store@pip.acme.example/simple
-            extra-index-url = https://extra-user:extra-index-token-do-not-store@pip-extra.acme.example/simple
-            download-url = https://packages.acme.example/download?file=agent.whl&token=url-query-token-do-not-store&X-Amz-Signature=signed-query-do-not-store
-            owner = pip-owner@acme.example
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    condarc_path = artifact_root / ".condarc"
-    condarc_path.write_text(
-        dedent(
-            """
-            channels:
-              - https://conda-user:conda-channel-token-do-not-store@conda.acme.example/pkgs/main
-            custom_channels:
-              acme: https://conda-cloud.acme.example/acme
-            owner: conda-owner@acme.example
-            firebase: https://conda-firebase.firebaseio.com
-            archive: gs://acme-conda-gcs/releases/env.tar.bz2
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    nested_bundle = artifact_root / "python-package-configs.zip"
-    with zipfile.ZipFile(nested_bundle, "w") as zf:
-        zf.writestr(
-            "nested/condarc",
-            dedent(
-                """
-                channels:
-                  - https://nested-user:nested-conda-token-do-not-store@nested-conda.acme.example/pkgs/main
-                owner: nested-conda-owner@acme.example
-                supabase: https://nestedconda.supabase.co/rest/v1
-                """
-            ).strip(),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 3
-    assert summary.processed >= 3
-    assert summary.discovered_seeds >= 8
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        for expected_url in {
-            "https://pip.acme.example/simple",
-            "https://pip-extra.acme.example/simple",
-            "https://packages.acme.example/download?file=agent.whl",
-            "https://conda.acme.example/pkgs/main",
-            "https://conda-cloud.acme.example/acme",
-            "https://nested-conda.acme.example/pkgs/main",
-        }:
-            assert (expected_url, "url") in seeds
-        for expected_email in {
-            "pip-owner@acme.example",
-            "conda-owner@acme.example",
-            "nested-conda-owner@acme.example",
-        }:
-            assert (expected_email, "email") in seeds
-
-        emails = {
-            row[0]
-            for row in con.execute("SELECT email FROM emails WHERE engagement_id=1001").fetchall()
-        }
-        assert "pip-index-token-do-not-store@pip.acme.example" not in emails
-        assert "extra-index-token-do-not-store@pip-extra.acme.example" not in emails
-        assert "conda-channel-token-do-not-store@conda.acme.example" not in emails
-        assert "nested-conda-token-do-not-store@nested-conda.acme.example" not in emails
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("firebase", "conda-firebase") in cloud_assets
-        assert ("gcs", "acme-conda-gcs") in cloud_assets
-        assert ("supabase", "nestedconda") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[pip_conf_path.resolve().as_posix()]["format"] == "pip-config"
-        assert artifact_meta[condarc_path.resolve().as_posix()]["format"] == "conda-config"
-        assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
-
-        db_dump = "\n".join(con.iterdump())
-        for raw_secret in {
-            "pip-index-token-do-not-store",
-            "extra-index-token-do-not-store",
-            "conda-channel-token-do-not-store",
-            "nested-conda-token-do-not-store",
-            "url-query-token-do-not-store",
-            "signed-query-do-not-store",
-        }:
-            assert raw_secret not in db_dump
-    finally:
-        con.close()
+    run_package_index_url_credentials(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_detect_secrets_baseline_without_secret_material(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    artifact_root = tmp_path / "artifact_detect_secrets_baseline"
-    artifact_root.mkdir()
-    _bootstrap_engagement(db_path)
-
-    baseline_path = artifact_root / ".secrets.baseline"
-    baseline_path.write_text(
-        json.dumps(
-            {
-                "version": "1.5.0",
-                "plugins_used": [{"name": "KeywordDetector"}],
-                "filters_used": [],
-                "results": {
-                    "config/settings.py": [
-                        {
-                            "type": "Secret Keyword",
-                            "filename": "config/settings.py",
-                            "hashed_secret": "baseline-secret-do-not-store",
-                            "is_verified": False,
-                            "line_number": 12,
-                            "context": (
-                                "owner baseline-owner@acme.example "
-                                "https://baseline-api.acme.example/status"
-                                "?token=baseline-url-token-do-not-store "
-                                "https://baseline-firebase.firebaseio.com "
-                                "s3://acme-baseline-bucket/private/config.json"
-                            ),
-                        }
-                    ]
-                },
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-
-    nested_bundle = artifact_root / "scanner-outputs.zip"
-    with zipfile.ZipFile(nested_bundle, "w") as zf:
-        zf.writestr(
-            "nested/secrets.baseline",
-            json.dumps(
-                {
-                    "version": "1.5.0",
-                    "results": {
-                        "services/api.py": [
-                            {
-                                "type": "Secret Keyword",
-                                "filename": "services/api.py",
-                                "hashed_secret": "nested-baseline-secret-do-not-store",
-                                "is_verified": False,
-                                "line_number": 21,
-                                "context": (
-                                    "nested-baseline-owner@acme.example "
-                                    "https://nested-baseline-api.acme.example/health "
-                                    "https://baselinevault.supabase.co/rest/v1"
-                                ),
-                            }
-                        ]
-                    },
-                },
-                indent=2,
-            ),
-        )
-
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    queued = processor.ingest_local_artifacts([artifact_root])
-    summary = processor.process()
-
-    assert queued >= 2
-    assert summary.processed >= 2
-    assert summary.discovered_seeds >= 6
-
-    con = sqlite3.connect(db_path)
-    try:
-        seeds = {
-            (row[0], row[1])
-            for row in con.execute(
-                """
-                SELECT seed_value, seed_type
-                FROM engagement_seeds
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        for expected_seed in {
-            ("baseline-owner@acme.example", "email"),
-            ("nested-baseline-owner@acme.example", "email"),
-            ("https://baseline-api.acme.example/status", "url"),
-            ("https://nested-baseline-api.acme.example/health", "url"),
-            ("baseline-api.acme.example", "subdomain"),
-            ("nested-baseline-api.acme.example", "subdomain"),
-        }:
-            assert expected_seed in seeds
-
-        cloud_assets = con.execute(
-            """
-            SELECT asset_type, identifier
-            FROM cloud_assets
-            WHERE engagement_id=1001
-            ORDER BY asset_type, identifier
-            """
-        ).fetchall()
-        assert ("aws_s3", "acme-baseline-bucket") in cloud_assets
-        assert ("firebase", "baseline-firebase") in cloud_assets
-        assert ("supabase", "baselinevault") in cloud_assets
-
-        artifact_meta = {
-            row[0]: json.loads(str(row[1] or "{}"))
-            for row in con.execute(
-                """
-                SELECT source_url, metadata_json
-                FROM artifact_queue
-                WHERE engagement_id=1001
-                """
-            ).fetchall()
-        }
-        assert artifact_meta[baseline_path.resolve().as_posix()]["format"] == "baseline"
-        assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
-        assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 1
-
-        db_dump = "\n".join(con.iterdump())
-        for raw_secret in {
-            "baseline-secret-do-not-store",
-            "nested-baseline-secret-do-not-store",
-            "baseline-url-token-do-not-store",
-        }:
-            assert raw_secret not in db_dump
-    finally:
-        con.close()
+    run_detect_secrets_baseline_without_secret_material(tmp_path)
 
 
 def test_artifact_queue_processor_extracts_security_scanner_control_files(

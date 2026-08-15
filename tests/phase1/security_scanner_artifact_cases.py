@@ -4,6 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 from textwrap import dedent
+import zipfile
 
 from forge.engagement_orchestrator import ArtifactQueueProcessor
 from tests.phase1.artifact_test_support import bootstrap_engagement
@@ -64,6 +65,109 @@ def _db_dump(db_path: Path) -> str:
         return "\n".join(con.iterdump())
     finally:
         con.close()
+
+
+def run_detect_secrets_baseline_without_secret_material(tmp_path: Path) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "artifact_detect_secrets_baseline"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path)
+
+    baseline_path = artifact_root / ".secrets.baseline"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "version": "1.5.0",
+                "plugins_used": [{"name": "KeywordDetector"}],
+                "filters_used": [],
+                "results": {
+                    "config/settings.py": [
+                        {
+                            "type": "Secret Keyword",
+                            "filename": "config/settings.py",
+                            "hashed_secret": "baseline-secret-do-not-store",
+                            "is_verified": False,
+                            "line_number": 12,
+                            "context": (
+                                "owner baseline-owner@acme.example "
+                                "https://baseline-api.acme.example/status"
+                                "?token=baseline-url-token-do-not-store "
+                                "https://baseline-firebase.firebaseio.com "
+                                "s3://acme-baseline-bucket/private/config.json"
+                            ),
+                        }
+                    ]
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    nested_bundle = artifact_root / "scanner-outputs.zip"
+    with zipfile.ZipFile(nested_bundle, "w") as zf:
+        zf.writestr(
+            "nested/secrets.baseline",
+            json.dumps(
+                {
+                    "version": "1.5.0",
+                    "results": {
+                        "services/api.py": [
+                            {
+                                "type": "Secret Keyword",
+                                "filename": "services/api.py",
+                                "hashed_secret": "nested-baseline-secret-do-not-store",
+                                "is_verified": False,
+                                "line_number": 21,
+                                "context": (
+                                    "nested-baseline-owner@acme.example "
+                                    "https://nested-baseline-api.acme.example/health "
+                                    "https://baselinevault.supabase.co/rest/v1"
+                                ),
+                            }
+                        ]
+                    },
+                },
+                indent=2,
+            ),
+        )
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued >= 2
+    assert summary.processed >= 2
+    assert summary.discovered_seeds >= 6
+
+    seeds = _seed_pairs(db_path)
+    for expected_seed in {
+        ("baseline-owner@acme.example", "email"),
+        ("nested-baseline-owner@acme.example", "email"),
+        ("https://baseline-api.acme.example/status", "url"),
+        ("https://nested-baseline-api.acme.example/health", "url"),
+        ("baseline-api.acme.example", "subdomain"),
+        ("nested-baseline-api.acme.example", "subdomain"),
+    }:
+        assert expected_seed in seeds
+
+    cloud_assets = _cloud_assets(db_path)
+    assert ("aws_s3", "acme-baseline-bucket") in cloud_assets
+    assert ("firebase", "baseline-firebase") in cloud_assets
+    assert ("supabase", "baselinevault") in cloud_assets
+
+    artifact_meta = _artifact_meta(db_path)
+    assert artifact_meta[baseline_path.resolve().as_posix()]["format"] == "baseline"
+    assert artifact_meta[nested_bundle.resolve().as_posix()]["format"] == "zip"
+    assert artifact_meta[nested_bundle.resolve().as_posix()]["payload_count"] >= 1
+
+    db_dump = _db_dump(db_path)
+    for raw_secret in {
+        "baseline-secret-do-not-store",
+        "nested-baseline-secret-do-not-store",
+        "baseline-url-token-do-not-store",
+    }:
+        assert raw_secret not in db_dump
 
 
 def run_security_scanner_control_files(tmp_path: Path) -> None:

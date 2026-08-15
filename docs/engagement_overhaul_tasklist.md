@@ -90,6 +90,26 @@ checkpoint summaries in this backlog may still contain retained "not a git
 repo" or "no commit possible" sentences from pre-repo sessions. Treat those
 sentences as historical notes only, not as current instructions.
 
+- [x] Package-index credential and detect-secrets baseline regression
+  modularization checkpoint (2026-08-16): the package index URL credential
+  fixture now lives in `tests/phase1/package_manager_artifact_cases.py`, and
+  the detect-secrets baseline fixture now lives in
+  `tests/phase1/security_scanner_artifact_cases.py`, with the original pytest
+  nodes retained as thin wrappers in the Phase 1 mega test. This keeps coverage
+  for pip/Conda URL credential stripping, nested package config archives,
+  detect-secrets baseline context extraction, URL/email seeds, S3/GCS,
+  Firebase/Supabase cloud assets, and secret non-persistence while reducing
+  inline fixture weight in `tests/phase1/test_engagement_orchestrator.py`.
+  Files: `tests/phase1/test_engagement_orchestrator.py`,
+  `tests/phase1/package_manager_artifact_cases.py`,
+  `tests/phase1/security_scanner_artifact_cases.py`, `SPEC.md`,
+  `docs/claude_quick_handoff.md`, and this tasklist. Verification: preserved
+  wrapper tests -> `2 passed`; Ruff and `py_compile` passed for touched Python
+  files. Safety note: test modularization only; no production parser behavior,
+  live probing, provider calls, credential use, scope changes,
+  validation/report gates, scheduler behavior, or persistent non-test
+  engagement data changed.
+
 - [x] Backup/sync repository artifact regression modularization checkpoint
   (2026-08-16): the rclone, Kopia, Restic, Borg, Duplicacy, and Duplicati
   repository config fixtures now live in

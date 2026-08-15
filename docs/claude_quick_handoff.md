@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Package-index credential and detect-secrets
+baseline regression modularization is complete. The package index credential
+fixture moved into `tests/phase1/package_manager_artifact_cases.py`, and the
+detect-secrets baseline fixture moved into
+`tests/phase1/security_scanner_artifact_cases.py`, while the original pytest
+nodes remain as thin wrappers in `tests/phase1/test_engagement_orchestrator.py`.
+This removes more passive secret-redaction fixture weight from the Phase 1 mega
+test without changing production parser behavior, live probing, provider calls,
+credential use, scope, validation/report gates, scheduler behavior, or
+persistent non-test engagement data. Verification passed for the preserved
+wrapper tests (`2 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B400.
 Latest checkpoint (2026-08-16): Backup/sync repository artifact regression
 modularization is complete. The rclone, Kopia, Restic, Borg, Duplicacy, and
 Duplicati fixtures moved from `tests/phase1/test_engagement_orchestrator.py`
