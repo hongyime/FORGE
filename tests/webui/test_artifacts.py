@@ -8,6 +8,8 @@ from forge.webui.artifacts import (
     artifact_payloads,
     audit_files,
     audit_artifact_payloads,
+    build_audit_files_provider,
+    build_report_files_provider,
     build_reports_dir_provider,
     engagement_artifact_files,
     engagement_artifact_route_file,
@@ -97,6 +99,8 @@ def test_report_and_audit_file_helpers_delegate_to_report_artifact_patterns(
     assert build_reports_dir_provider(cwd=tmp_path)() == tmp_path / "reports"
     assert report in report_files(1001, root)
     assert audit in audit_files("1001", root)
+    assert report in build_report_files_provider(lambda: root)(1001)
+    assert audit in build_audit_files_provider(lambda: root)("1001")
     assert all("1002" not in path.name for path in report_files(1001, root))
 
 

@@ -40,8 +40,26 @@ def report_files(engagement_id: int | str, reports_root: Path) -> list[Path]:
     return list_report_artifact_files(str(engagement_id), reports_root)
 
 
+def build_report_files_provider(
+    reports_root: Callable[[], Path],
+) -> Callable[[int | str], list[Path]]:
+    def _report_files(engagement_id: int | str) -> list[Path]:
+        return report_files(engagement_id, reports_root())
+
+    return _report_files
+
+
 def audit_files(engagement_id: int | str, reports_root: Path) -> list[Path]:
     return list_audit_artifact_files(str(engagement_id), reports_root)
+
+
+def build_audit_files_provider(
+    reports_root: Callable[[], Path],
+) -> Callable[[int | str], list[Path]]:
+    def _audit_files(engagement_id: int | str) -> list[Path]:
+        return audit_files(engagement_id, reports_root())
+
+    return _audit_files
 
 
 def engagement_artifact_files(
@@ -175,6 +193,8 @@ __all__ = [
     "artifact_payloads",
     "audit_files",
     "audit_artifact_payloads",
+    "build_audit_files_provider",
+    "build_report_files_provider",
     "build_reports_dir_provider",
     "engagement_artifact_files",
     "engagement_artifact_route_file",

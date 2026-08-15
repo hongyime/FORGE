@@ -282,6 +282,16 @@ sentences as historical notes only, not as current instructions.
   tests (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md`
   B362.
 
+- [x] Web UI artifact file-provider extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds report-file and audit-file
+  providers through `forge.webui.artifacts.build_report_files_provider` and
+  `forge.webui.artifacts.build_audit_files_provider` instead of defining
+  reports-root-bound closures inline. The helpers preserve existing report and
+  audit filename discovery behavior while keeping artifact path binding in the
+  artifact module. Verification: Web UI artifact tests (`7 passed`), HTMX app
+  wiring tests (`19 passed`), Ruff, and `py_compile` passed. Backprop:
+  `SPEC.md` B363.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

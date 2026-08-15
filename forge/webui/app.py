@@ -46,12 +46,12 @@ from forge.webui.db import open_workflow_db
 from forge.webui.artifacts import (
     ArtifactRouteNotFound,
     artifact_payloads as build_artifact_payloads,
-    audit_files as webui_audit_files,
     audit_artifact_payloads as build_audit_artifact_payloads,
+    build_audit_files_provider,
+    build_report_files_provider,
     build_reports_dir_provider,
     engagement_artifact_files as webui_engagement_artifact_files,
     engagement_artifact_route_file,
-    report_files as webui_report_files,
     report_preview_payload as build_report_preview_payload,
 )
 from forge.webui.engagement_payloads import (
@@ -430,11 +430,8 @@ def create_app() -> Any:
 
     _logs_dir = build_logs_dir_provider(cfg.data_dir)
 
-    def _report_files(engagement_id: int) -> list[Path]:
-        return webui_report_files(engagement_id, _reports_dir())
-
-    def _audit_files(engagement_id: int) -> list[Path]:
-        return webui_audit_files(engagement_id, _reports_dir())
+    _report_files = build_report_files_provider(_reports_dir)
+    _audit_files = build_audit_files_provider(_reports_dir)
 
     def _engagement_summary_payload(
         db_file: Path,
