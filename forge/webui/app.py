@@ -375,28 +375,7 @@ def create_app() -> Any:
         file_response=FileResponse,
     )
 
-    def _principal_can_access_workspace(
-        principal: Principal | None,
-        workspace_id: str,
-        *,
-        con: sqlite3.Connection | None = None,
-        allow_bootstrap: bool = False,
-    ) -> bool:
-        return principal_can_access_workspace(
-            principal,
-            workspace_id,
-            con=con,
-            allow_bootstrap=allow_bootstrap,
-        )
-
-    def _principal_can_access_engagement_row(
-        con: sqlite3.Connection,
-        principal: Principal | None,
-        row: sqlite3.Row,
-    ) -> bool:
-        return principal_can_access_engagement_row(con, principal, row)
-
-    _workspace_access_checker = build_workspace_access_checker(_principal_can_access_workspace)
+    _workspace_access_checker = build_workspace_access_checker(principal_can_access_workspace)
 
     _clear_run_control_markers = build_run_control_marker_clearer(cfg.data_dir)
 
@@ -423,13 +402,13 @@ def create_app() -> Any:
         summary_payload=_engagement_summary_payload,
         detail_payload=_engagement_detail_payload,
         can_access_workspace=(
-            lambda principal, workspace_id, con: _principal_can_access_workspace(
+            lambda principal, workspace_id, con: principal_can_access_workspace(
                 principal,
                 workspace_id,
                 con=con,
             )
         ),
-        can_access_engagement_row=_principal_can_access_engagement_row,
+        can_access_engagement_row=principal_can_access_engagement_row,
         artifact_files=_engagement_artifact_files,
         tombstone_retention_days=os.environ.get(
             "FORGE_CONTROL_TOMBSTONE_RETENTION_DAYS",
@@ -795,7 +774,7 @@ def create_app() -> Any:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         _require_principal_permission(principal, "engagements:create")
-        if not _principal_can_access_workspace(principal, request.workspace_id, allow_bootstrap=True):
+        if not principal_can_access_workspace(principal, request.workspace_id, allow_bootstrap=True):
             raise HTTPException(status_code=403, detail="Workspace access denied.")
 
         engagement_id = allocate_engagement_id(cfg.data_dir)

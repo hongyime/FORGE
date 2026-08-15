@@ -32,6 +32,12 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI principal workspace/engagement-row access
+pass-through wrappers were removed from `forge.webui.app.create_app()`. App
+setup now wires directly to `forge.webui.workspace_access.principal_can_access_workspace`,
+`principal_can_access_engagement_row`, and `build_workspace_access_checker`.
+Verification passed for Web UI workspace-access, engagement-discovery, and HTMX
+wiring tests (`32 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B375.
 Latest checkpoint (2026-08-16): The real 02:05 scheduled target import proved
 the remaining orphan edge case: after Task Scheduler hit the 45-minute cap, the
 parent task ended but child import/kill-chain PowerShell/Python processes stayed

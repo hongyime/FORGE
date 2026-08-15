@@ -390,6 +390,15 @@ sentences as historical notes only, not as current instructions.
   Windows launcher tests (`15 passed`), watchdog self-test, Ruff, and
   `py_compile` passed. Backprop: `SPEC.md` B374.
 
+- [x] Web UI principal access wrapper cleanup checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` no longer defines principal workspace and
+  engagement-row access wrappers that only forwarded to
+  `forge.webui.workspace_access`. App setup now wires directly to
+  `principal_can_access_workspace`, `principal_can_access_engagement_row`, and
+  `build_workspace_access_checker`. Verification: Web UI workspace-access,
+  engagement-discovery, and HTMX wiring tests (`32 passed`), Ruff, and
+  `py_compile` passed. Backprop: `SPEC.md` B375.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
