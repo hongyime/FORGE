@@ -43,9 +43,18 @@ local task was reinstalled with `ExecutionTimeLimit=PT45M`,
 `MultipleInstances IgnoreNew`, `-Start`, limit 100, max-iter 1, and start-limit
 1. `SeedRunTracker` now normalizes runtime-only source labels such as
 `social_profile` to schema-safe neutral values while preserving the raw label in
-`metadata_json.raw_source`. Verification passed for scheduler/import/run
-tracking, Python Ruff/compileall, engagement API/history/MVP/API auth batches,
-and theprawnhunter target-feed/auth checks.
+`metadata_json.raw_source`. Follow-up scheduled testing found and fixed two
+remaining import-run failures: allocator drift could hand target import a DB
+that already contained an engagement row, and a passive kill-chain that
+completed and generated a report could still exit `2` after
+`--no-auto-run-detected` skipped optional follow-on modules. Target import now
+skips populated allocated DB IDs, and it accepts only the specific
+`Kill-chain complete` plus `Report:` exit-2 shape while preserving failure for
+real CLI/parser errors. Verification passed for scheduler/import/run tracking,
+Python Ruff/compileall, engagement API/history/MVP/API auth batches,
+theprawnhunter target-feed/auth checks, target-import regressions (`14
+passed`), real feed import of 100 targets, and a scheduled live run that
+generated `reports/engagement_10696_kill_chain_20260815T150918.md`.
 Latest checkpoint (2026-08-14): the canonical release E2E now proves the
 enterprise CTEM roadmap primitives inside the same representative engagement
 instead of relying only on isolated module tests. `tests/integration/test_canonical_release_e2e.py`

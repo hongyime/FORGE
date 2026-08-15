@@ -101,9 +101,18 @@ sentences as historical notes only, not as current instructions.
   fan-out source labels such as `social_profile` to schema-safe neutral sources
   while preserving the original label in `metadata_json.raw_source`, preventing
   scheduled live fan-out crashes against the `engagement_seeds.source` CHECK
-  constraint. Verification: targeted scheduler/import/run-tracking tests,
-  Python Ruff/compileall, engagement API/history/MVP/API auth batches, and
-  theprawnhunter target-feed/auth checks passed.
+  constraint. Follow-up live scheduled runs exposed two remaining operational
+  failures: target import could collide with a populated engagement DB ID after
+  allocator/state drift, and a completed passive kill-chain could return code
+  `2` after deliberately skipping optional detected follow-on tools under
+  `--no-auto-run-detected`. Target import now skips populated allocated DB IDs,
+  and completed passive runs with a generated report are accepted as successful
+  while real CLI/parser failures still fail. Verification: targeted
+  scheduler/import/run-tracking tests, Python Ruff/compileall, engagement
+  API/history/MVP/API auth batches, theprawnhunter target-feed/auth checks,
+  target-import regression suite (`14 passed`), real feed import of 100 targets,
+  and a scheduled live run that generated
+  `reports/engagement_10696_kill_chain_20260815T150918.md`.
 
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
