@@ -1,6 +1,6 @@
 # Claude Quick Handoff
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 End goal quick answer: FORGE must be one deterministic authorized engagement
 pipeline from scoped multi-seed intake through bounded recursive discovery,
@@ -32,6 +32,15 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI auth/bootstrap helper setup was split
+out of `forge.webui.app.create_app()`. `forge.webui.auth_dependencies` now owns
+injectable bearer-principal, bootstrap-secret, and progress-WebSocket token
+parsing helpers without importing FastAPI at module import time. `create_app()`
+delegates those helpers while preserving missing/invalid bearer 401s, disabled
+bootstrap-token 503s, bootstrap token trimming, and WebSocket token lookup from
+query params, Authorization header, and subprotocols. Verification passed for
+Web UI auth-dependency plus HTMX app wiring tests (`22 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B346.
 Latest checkpoint (2026-08-15): Web UI middleware setup was split out of
 `forge.webui.app.create_app()`. `forge.webui.middleware` now owns the pure
 `InMemoryRateLimiter` plus installers for the rate-limit middleware and

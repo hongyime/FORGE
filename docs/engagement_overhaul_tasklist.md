@@ -1,6 +1,6 @@
 # Engagement Overhaul Task List
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 ## End Goal Quick Answer
 
@@ -132,6 +132,16 @@ sentences as historical notes only, not as current instructions.
   FastAPI app, while `create_app()` preserves the same middleware/error-handler
   wiring. Verification: Web UI middleware plus HTMX app wiring tests (`21
   passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B345.
+
+- [x] Web UI auth-dependency extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now delegates bearer-principal, bootstrap-token,
+  and progress-WebSocket token parsing helpers to `forge.webui.auth_dependencies`
+  without importing FastAPI at module import time. The extracted helpers preserve
+  missing/invalid bearer 401s, disabled bootstrap-token 503s, bootstrap token
+  trimming, and WebSocket token lookup through query params, Authorization
+  headers, and subprotocols. Verification: Web UI auth-dependency plus HTMX app
+  wiring tests (`22 passed`), Ruff, and `py_compile` passed. Backprop:
+  `SPEC.md` B346.
 
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the

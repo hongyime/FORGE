@@ -52,7 +52,12 @@ from forge.reporting.report_history import (
     report_review_counts,
 )
 from forge.security_headers import install_security_headers
-from forge.webui.auth import Principal, mint_token, validate_jwt_secret, verify_principal
+from forge.webui.auth import Principal, mint_token, validate_jwt_secret
+from forge.webui.auth_dependencies import (
+    build_auth_principal_dependency,
+    build_bootstrap_secret_provider,
+    websocket_principal,
+)
 from forge.webui.artifacts import (
     ArtifactRouteNotFound,
     artifact_payloads as build_artifact_payloads,
@@ -256,7 +261,7 @@ def create_app() -> Any:
     try:
         from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket
         from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
-        from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+        from fastapi.security import HTTPBearer
         from fastapi.staticfiles import StaticFiles
         from fastapi.templating import Jinja2Templates
     except ImportError as exc:
@@ -316,44 +321,12 @@ def create_app() -> Any:
         json_response=JSONResponse,
         enabled=not _is_dev,
     )
-    def _auth_principal(
-        creds: HTTPAuthorizationCredentials | None = Depends(auth_scheme),
-    ) -> Principal:
-        if creds is None:
-            raise HTTPException(status_code=401, detail="Missing authorization token.")
-        principal = verify_principal(creds.credentials)
-        if principal is None:
-            raise HTTPException(status_code=401, detail="Invalid authorization token.")
-        return principal
-
-    def _auth_subject(
-        principal: Principal = Depends(_auth_principal),
-    ) -> str:
-        return principal.subject
-
-    def _websocket_principal(websocket: WebSocket) -> Principal | None:
-        token = str(websocket.query_params.get("token") or "").strip()
-        if not token:
-            auth_header = str(websocket.headers.get("authorization") or "").strip()
-            scheme, _, value = auth_header.partition(" ")
-            if scheme.lower() == "bearer":
-                token = value.strip()
-        if not token:
-            protocols = str(websocket.headers.get("sec-websocket-protocol") or "")
-            for candidate in (part.strip() for part in protocols.split(",")):
-                if candidate and verify_principal(candidate) is not None:
-                    token = candidate
-                    break
-        return verify_principal(token) if token else None
-
-    def _bootstrap_secret() -> str:
-        secret = os.environ.get("FORGE_WEB_BOOTSTRAP_TOKEN", "").strip()
-        if not secret:
-            raise HTTPException(
-                status_code=503,
-                detail="Token issuance is disabled until FORGE_WEB_BOOTSTRAP_TOKEN is configured.",
-            )
-        return secret
+    _auth_principal = build_auth_principal_dependency(
+        auth_scheme=auth_scheme,
+        depends=Depends,
+        http_exception=HTTPException,
+    )
+    _bootstrap_secret = build_bootstrap_secret_provider(http_exception=HTTPException)
 
     def _publish_progress_sync(engagement_id: int, message: str, payload: dict[str, Any]) -> None:
         publish_progress_sync(broker.publish_sync, engagement_id, message, payload)
@@ -2859,7 +2832,7 @@ def create_app() -> Any:
 
     @app.websocket("/ws/progress")
     async def progress_ws(websocket: WebSocket) -> None:
-        principal = _websocket_principal(websocket)
+        principal = websocket_principal(websocket)
         if principal is None:
             await websocket.close(code=1008)
             return
