@@ -211,8 +211,8 @@ from forge.webui.run_log_routes import (
     run_control_route_payload,
 )
 from forge.webui.run_status import (
+    iter_live_run_progress_snapshots,
     latest_running_engagement_run as find_latest_running_engagement_run,
-    live_run_progress_snapshot,
 )
 from forge.webui.shell_routes import (
     ShellRouteNotFound,
@@ -331,9 +331,6 @@ def create_app() -> Any:
     def _publish_progress_sync(engagement_id: int, message: str, payload: dict[str, Any]) -> None:
         publish_progress_sync(broker.publish_sync, engagement_id, message, payload)
 
-    def _numeric_engagement_db_files() -> list[Path]:
-        return numeric_engagement_db_files(cfg.data_dir)
-
     async def _queue_event_bridge() -> None:
         while not event_bridge_stop.is_set():
             msg = await asyncio.to_thread(
@@ -349,42 +346,12 @@ def create_app() -> Any:
             await broker.publish(event)
 
     def _iter_live_run_progress_snapshots() -> list[tuple[int, str, dict[str, Any]]]:
-        db_root = cfg.data_dir / "engagements"
-        if not db_root.exists():
-            return []
-        snapshots: list[tuple[int, str, dict[str, Any]]] = []
-        for db_file in _numeric_engagement_db_files():
-            con = direct_connect(db_file)
-            con.row_factory = sqlite3.Row
-            try:
-                if not _table_exists(con, "engagement_runs"):
-                    continue
-                rows = con.execute(
-                    """
-                    SELECT id,
-                           engagement_id,
-                           status,
-                           current_iteration,
-                           max_iterations,
-                           metadata_json
-                    FROM engagement_runs
-                    ORDER BY engagement_id ASC, updated_at DESC, id DESC
-                    """
-                ).fetchall()
-            except sqlite3.OperationalError:
-                continue
-            finally:
-                con.close()
-            seen_engagements: set[int] = set()
-            for row in rows:
-                engagement_id = int(row["engagement_id"] or 0)
-                if engagement_id <= 0 or engagement_id in seen_engagements:
-                    continue
-                seen_engagements.add(engagement_id)
-                snapshot = live_run_progress_snapshot(row)
-                if snapshot is not None:
-                    snapshots.append(snapshot)
-        return snapshots
+        return iter_live_run_progress_snapshots(
+            cfg.data_dir,
+            numeric_db_files=numeric_engagement_db_files,
+            table_exists=_table_exists,
+            connect=direct_connect,
+        )
 
     async def _run_progress_bridge() -> None:
         last_seen: dict[int, str] = {}

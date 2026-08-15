@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +14,9 @@ from forge.reporting.run_summaries import effective_run_status, run_policy_summa
 FormatDate = Callable[[str], str]
 AuditManifestSummary = Callable[..., dict[str, Any]]
 AuditReviewSummary = Callable[..., dict[str, Any]]
+NumericDbFiles = Callable[[Path], Iterable[Path]]
+ConnectDb = Callable[[Path], sqlite3.Connection]
+TableExists = Callable[[sqlite3.Connection, str], bool]
 
 LIVE_PROGRESS_STATUSES = frozenset({"running", "pausing", "stopping"})
 PROGRESS_FINGERPRINT_KEYS = (
@@ -234,11 +237,57 @@ def live_run_progress_snapshot(row: Any) -> tuple[int, str, dict[str, Any]] | No
     return engagement_id, live_run_progress_fingerprint(payload), payload
 
 
+def iter_live_run_progress_snapshots(
+    data_dir: Path,
+    *,
+    numeric_db_files: NumericDbFiles,
+    table_exists: TableExists,
+    connect: ConnectDb,
+) -> list[tuple[int, str, dict[str, Any]]]:
+    db_root = data_dir / "engagements"
+    if not db_root.exists():
+        return []
+    snapshots: list[tuple[int, str, dict[str, Any]]] = []
+    for db_file in numeric_db_files(data_dir):
+        con = connect(db_file)
+        con.row_factory = sqlite3.Row
+        try:
+            if not table_exists(con, "engagement_runs"):
+                continue
+            rows = con.execute(
+                """
+                SELECT id,
+                       engagement_id,
+                       status,
+                       current_iteration,
+                       max_iterations,
+                       metadata_json
+                FROM engagement_runs
+                ORDER BY engagement_id ASC, updated_at DESC, id DESC
+                """
+            ).fetchall()
+        except sqlite3.OperationalError:
+            continue
+        finally:
+            con.close()
+        seen_engagements: set[int] = set()
+        for row in rows:
+            engagement_id = int(row["engagement_id"] or 0)
+            if engagement_id <= 0 or engagement_id in seen_engagements:
+                continue
+            seen_engagements.add(engagement_id)
+            snapshot = live_run_progress_snapshot(row)
+            if snapshot is not None:
+                snapshots.append(snapshot)
+    return snapshots
+
+
 __all__ = [
     "LIVE_PROGRESS_STATUSES",
     "PROGRESS_FINGERPRINT_KEYS",
     "engagement_run_row_payload",
     "engagement_run_rows",
+    "iter_live_run_progress_snapshots",
     "latest_running_engagement_run",
     "live_run_progress_fingerprint",
     "live_run_progress_payload",

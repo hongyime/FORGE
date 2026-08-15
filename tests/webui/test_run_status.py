@@ -7,6 +7,7 @@ from typing import Any
 
 from forge.webui.run_status import (
     engagement_run_rows,
+    iter_live_run_progress_snapshots,
     latest_running_engagement_run,
     live_run_progress_fingerprint,
     live_run_progress_payload,
@@ -18,6 +19,10 @@ def _connect() -> sqlite3.Connection:
     con = sqlite3.connect(":memory:")
     con.row_factory = sqlite3.Row
     return con
+
+
+def _connect_file(path: Path) -> sqlite3.Connection:
+    return sqlite3.connect(path)
 
 
 def _create_runs_table(con: sqlite3.Connection, *, include_engagement_id: bool = True) -> None:
@@ -288,3 +293,130 @@ def test_live_run_progress_payload_ignores_terminal_or_step_less_rows() -> None:
 
     assert live_run_progress_payload(rows[0]) is None
     assert live_run_progress_payload(rows[1]) is None
+
+
+def test_iter_live_run_progress_snapshots_scans_numeric_engagement_dbs(tmp_path: Path) -> None:
+    engagements_dir = tmp_path / "engagements"
+    engagements_dir.mkdir()
+    first_db = engagements_dir / "1001.db"
+    second_db = engagements_dir / "1002.db"
+    missing_table_db = engagements_dir / "1003.db"
+    for db_path in (first_db, second_db):
+        con = sqlite3.connect(db_path)
+        _create_runs_table(con)
+        con.close()
+    sqlite3.connect(missing_table_db).close()
+
+    first_con = sqlite3.connect(first_db)
+    first_metadata = {
+        "last_step": "2.D html mining",
+        "last_step_at": "2026-07-10T10:00:02Z",
+    }
+    _insert_run(
+        first_con,
+        (
+            1,
+            1001,
+            "kill_chain",
+            "running",
+            "old.example",
+            "domain",
+            1,
+            3,
+            1,
+            1,
+            0,
+            0,
+            "",
+            json.dumps(first_metadata),
+            "2026-07-10T10:00:00",
+            "",
+            "2026-07-10T10:00:02",
+        ),
+    )
+    _insert_run(
+        first_con,
+        (
+            2,
+            1001,
+            "kill_chain",
+            "completed",
+            "new.example",
+            "domain",
+            1,
+            3,
+            2,
+            1,
+            0,
+            0,
+            "",
+            json.dumps(first_metadata),
+            "2026-07-10T10:01:00",
+            "",
+            "2026-07-10T10:01:02",
+        ),
+    )
+    first_con.commit()
+    first_con.close()
+
+    second_con = sqlite3.connect(second_db)
+    second_metadata = {
+        "last_step": "2.E email fan-out",
+        "last_step_at": "2026-07-10T10:02:02Z",
+    }
+    _insert_run(
+        second_con,
+        (
+            3,
+            1002,
+            "kill_chain",
+            "running",
+            "active.example",
+            "domain",
+            1,
+            3,
+            2,
+            1,
+            0,
+            0,
+            "",
+            json.dumps(second_metadata),
+            "2026-07-10T10:02:00",
+            "",
+            "2026-07-10T10:02:02",
+        ),
+    )
+    second_con.commit()
+    second_con.close()
+
+    def table_exists(con: sqlite3.Connection, table: str) -> bool:
+        row = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+        return row is not None
+
+    snapshots = iter_live_run_progress_snapshots(
+        tmp_path,
+        numeric_db_files=lambda _data_dir: [first_db, second_db, missing_table_db],
+        table_exists=table_exists,
+        connect=_connect_file,
+    )
+
+    assert len(snapshots) == 1
+    engagement_id, _fingerprint, payload = snapshots[0]
+    assert engagement_id == 1002
+    assert payload["run_id"] == 3
+    assert payload["last_step"] == "2.E email fan-out"
+
+
+def test_iter_live_run_progress_snapshots_returns_empty_without_engagements_dir(tmp_path: Path) -> None:
+    assert (
+        iter_live_run_progress_snapshots(
+            tmp_path,
+            numeric_db_files=lambda _data_dir: [tmp_path / "1.db"],
+            table_exists=lambda _con, _table: True,
+            connect=_connect_file,
+        )
+        == []
+    )

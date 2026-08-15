@@ -143,6 +143,15 @@ sentences as historical notes only, not as current instructions.
   wiring tests (`22 passed`), Ruff, and `py_compile` passed. Backprop:
   `SPEC.md` B346.
 
+- [x] Web UI run-progress snapshot extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now delegates the live run-progress SQLite DB
+  scan to `forge.webui.run_status.iter_live_run_progress_snapshots`. The helper
+  keeps numeric engagement DB discovery injectable and preserves missing-table
+  skips, SQLite operational-error skips, newest-row-per-engagement selection,
+  terminal/step-less row suppression, and existing progress payload/fingerprint
+  shaping. Verification: Web UI run-status plus HTMX app wiring tests (`25
+  passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B347.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

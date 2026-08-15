@@ -32,6 +32,15 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI live run-progress snapshot scanning was
+split out of `forge.webui.app.create_app()`. `forge.webui.run_status` now owns
+`iter_live_run_progress_snapshots` with injectable numeric-DB discovery,
+table-exists, and connection helpers. `create_app()` delegates the scan while
+preserving missing-table and SQLite operational-error skips, newest row per
+engagement selection, terminal/step-less row suppression, and existing progress
+payload/fingerprint shaping. Verification passed for Web UI run-status plus
+HTMX app wiring tests (`25 passed`), Ruff, and `py_compile`. Backprop:
+`SPEC.md` B347.
 Latest checkpoint (2026-08-16): Web UI auth/bootstrap helper setup was split
 out of `forge.webui.app.create_app()`. `forge.webui.auth_dependencies` now owns
 injectable bearer-principal, bootstrap-secret, and progress-WebSocket token
