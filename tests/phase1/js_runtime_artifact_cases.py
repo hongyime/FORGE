@@ -212,3 +212,95 @@ def run_frontend_framework_js_runtime_config_promotes_hostonly_urls_with_bounded
         "https://vite-hostonly.acme.example/api",
         "https://vite-preview.acme.example",
     ]
+
+
+def run_mobile_and_deploy_runtime_config_promotes_hostonly_urls_with_bounded_workers(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_js_runtime_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    expo_payload = dedent(
+        """
+        export default {
+          expo: {
+            updates: { url: 'expo-updates.acme.example/update' },
+            extra: {
+              apiBase: process.env.API_URL || 'expo-api.acme.example/v1',
+              relativeUrl: '/ignored',
+              tenantUrl: 'https://${tenant}.acme.example/app',
+            },
+          },
+        };
+        """
+    ).strip()
+    capacitor_payload = dedent(
+        """
+        export default {
+          server: { url: "capacitor-api.acme.example/mobile" },
+          appUrl: "/relative",
+        };
+        """
+    ).strip()
+    cordova_payload = dedent(
+        """
+        <widget id="com.acme.mobile">
+          <content src="cordova-api.acme.example/app" />
+          <access origin="https://${tenant}.acme.example/mobile" />
+          <allow-navigation href="/relative" />
+        </widget>
+        """
+    ).strip()
+    vercel_payload = (
+        '{"rewrites":[{"source":"/api/(.*)","destination":"vercel-api.acme.example/status"}]}'
+    )
+    netlify_payload = '[[redirects]]\nfrom = "/api/*"\nto = "netlify-edge.acme.example/status"\n'
+
+    assert processor._js_runtime_text_structured_payload_text(
+        expo_payload,
+        source_hint="app.config.ts",
+    ).splitlines() == [
+        "https://expo-updates.acme.example/update",
+        "https://expo-api.acme.example/v1",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        capacitor_payload,
+        source_hint="capacitor.config.ts",
+    ).splitlines() == ["https://capacitor-api.acme.example/mobile"]
+    assert processor._js_runtime_text_structured_payload_text(
+        cordova_payload,
+        source_hint="cordova/config.xml",
+    ).splitlines() == ["https://cordova-api.acme.example/app"]
+    assert processor._js_runtime_text_structured_payload_text(
+        vercel_payload,
+        source_hint="vercel.json",
+    ).splitlines() == ["https://vercel-api.acme.example/status"]
+    assert processor._js_runtime_text_structured_payload_text(
+        netlify_payload,
+        source_hint="netlify.toml",
+    ).splitlines() == ["https://netlify-edge.acme.example/status"]
+
+    assert observed_candidate_batches == [
+        [
+            "expo-updates.acme.example/update",
+            "expo-api.acme.example/v1",
+        ],
+        ["capacitor-api.acme.example/mobile", "/relative"],
+        [
+            "cordova-api.acme.example/app",
+            "/relative",
+        ],
+        ["vercel-api.acme.example/status"],
+        ["netlify-edge.acme.example/status"],
+    ]
