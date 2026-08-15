@@ -8,6 +8,7 @@ from forge.webui.auth import Principal
 from forge.webui.auth_dependencies import (
     build_auth_principal_dependency,
     build_bootstrap_secret_provider,
+    build_principal_permission_guard,
     websocket_principal,
 )
 
@@ -73,6 +74,22 @@ def test_bootstrap_secret_provider_requires_configured_token() -> None:
         disabled()
     assert exc.value.status_code == 503
     assert "FORGE_WEB_BOOTSTRAP_TOKEN" in exc.value.detail
+
+
+def test_principal_permission_guard_maps_denied_permission_to_403() -> None:
+    guard = build_principal_permission_guard(http_exception=_FakeHTTPException)
+    principal = Principal(
+        "operator",
+        permissions=("engagements:read", "assets:*"),
+    )
+
+    guard(principal, "engagements:read")
+    guard(principal, "assets:write")
+
+    with pytest.raises(_FakeHTTPException) as exc:
+        guard(principal, "runs:execute")
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Missing required permission: runs:execute"
 
 
 def test_websocket_principal_accepts_query_header_and_subprotocol_tokens() -> None:

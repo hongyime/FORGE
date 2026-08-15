@@ -56,6 +56,7 @@ from forge.webui.auth import Principal, mint_token, validate_jwt_secret
 from forge.webui.auth_dependencies import (
     build_auth_principal_dependency,
     build_bootstrap_secret_provider,
+    build_principal_permission_guard,
     websocket_principal,
 )
 from forge.webui.artifacts import (
@@ -336,6 +337,7 @@ def create_app() -> Any:
         http_exception=HTTPException,
     )
     _bootstrap_secret = build_bootstrap_secret_provider(http_exception=HTTPException)
+    _require_principal_permission = build_principal_permission_guard(http_exception=HTTPException)
 
     def _publish_progress_sync(engagement_id: int, message: str, payload: dict[str, Any]) -> None:
         publish_progress_sync(broker.publish_sync, engagement_id, message, payload)
@@ -420,13 +422,6 @@ def create_app() -> Any:
         con: sqlite3.Connection,
     ) -> bool:
         return _principal_can_access_workspace(principal, workspace_id, con=con)
-
-    def _require_principal_permission(principal: Principal, permission: str) -> None:
-        if not principal.has_permission(permission):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Missing required permission: {permission}",
-            )
 
     def _annotate_run_audit_review(
         con: sqlite3.Connection,

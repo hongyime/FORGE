@@ -189,6 +189,15 @@ sentences as historical notes only, not as current instructions.
   Verification: Web UI run-status tests (`10 passed`), HTMX app wiring tests
   (`19 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B351.
 
+- [x] Web UI permission-guard extraction checkpoint (2026-08-16):
+  `forge.webui.app.create_app()` now builds its route permission guard through
+  `forge.webui.auth_dependencies.build_principal_permission_guard` instead of
+  defining the 403 mapping inline. The guard preserves `Principal.has_permission`
+  wildcard and prefix matching, HTTP 403 status mapping, and exact
+  missing-permission detail text. Verification: Web UI auth-dependency tests (`4
+  passed`), HTMX app wiring tests (`19 passed`), Ruff, and `py_compile` passed.
+  Backprop: `SPEC.md` B352.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

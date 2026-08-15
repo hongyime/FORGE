@@ -73,9 +73,24 @@ def build_bootstrap_secret_provider(
     return _bootstrap_secret
 
 
+def build_principal_permission_guard(
+    *,
+    http_exception: type[Exception],
+) -> Callable[[Principal, str], None]:
+    def _require_principal_permission(principal: Principal, permission: str) -> None:
+        if not principal.has_permission(permission):
+            raise http_exception(
+                status_code=403,
+                detail=f"Missing required permission: {permission}",
+            )
+
+    return _require_principal_permission
+
+
 __all__ = [
     "build_auth_principal_dependency",
     "build_auth_subject_dependency",
     "build_bootstrap_secret_provider",
+    "build_principal_permission_guard",
     "websocket_principal",
 ]

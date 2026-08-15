@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI route permission guarding was split out
+of `forge.webui.app.create_app()`. `forge.webui.auth_dependencies` now exposes
+`build_principal_permission_guard`, and `create_app()` uses it for the local
+route guard. The helper preserves `Principal.has_permission` wildcard and prefix
+matching, HTTP 403 status mapping, and exact missing-permission detail text.
+Verification passed for Web UI auth-dependency tests (`4 passed`), HTMX app
+wiring tests (`19 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B352.
 Latest checkpoint (2026-08-16): Web UI latest audit-log timestamp lookup was
 split out of `forge.webui.app.create_app()`. `forge.webui.run_status` now owns
 `latest_audit_timestamp`, preserving newest-audit-row selection by descending id,
