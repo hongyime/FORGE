@@ -32,6 +32,16 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Turbo and Nx monorepo build configs now join
+passive JS-runtime recursion. Scoped `turbo.json` and `nx.json` artifacts map
+to `turbo-config` and `nx-config`, so remote-cache API/login URLs and Nx
+cache/API URLs become recursive URL seeds through the existing endpoint
+extractor. URL userinfo is stripped before persistence, and the regression
+proves `turbo-token-do-not-store` and `nx-token-do-not-store` are not stored.
+No Turbo/Nx execution, package install, HTTP probing, authentication, provider
+calls, or scope relaxation was added. Verification passed for JS-runtime config
+plus API format label tests (`12 passed`), Ruff, and `py_compile`. Backprop:
+`SPEC.md` B385.
 Latest checkpoint (2026-08-16): PNPM workspace manifests now receive a
 first-class passive dependency label. Scoped `pnpm-workspace.yaml` and
 `pnpm-workspace.yml` artifacts map to `pnpm-workspace`, so the existing

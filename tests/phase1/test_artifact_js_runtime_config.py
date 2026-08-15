@@ -61,6 +61,34 @@ _DENO_LOCK_PAYLOAD = """
 }
 """.strip()
 
+_MONOREPO_BUILD_CONFIG_PAYLOADS = {
+    "turbo.json": """
+{
+  "$schema": "https://turbo.build/schema.json",
+  "remoteCache": {
+    "apiUrl": "https://turbo-user:turbo-token-do-not-store@turbo-cache.acme.example/v8",
+    "loginUrl": "https://turbo-login.acme.example/login"
+  },
+  "team": "acme",
+  "owner": "turbo-owner@acme.example"
+}
+""".strip(),
+    "nx.json": """
+{
+  "tasksRunnerOptions": {
+    "default": {
+      "runner": "nx/tasks-runners/default",
+      "options": {
+        "url": "https://nx-user:nx-token-do-not-store@nx-cache.acme.example/cache",
+        "apiUrl": "https://nx-api.acme.example/v1"
+      }
+    }
+  },
+  "owner": "nx-owner@acme.example"
+}
+""".strip(),
+}
+
 
 def test_bun_scope_candidate_values_do_not_reuse_stale_registry_value(tmp_path) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
@@ -259,6 +287,89 @@ def test_service_worker_artifact_recurses_public_imports_and_cloud_refs(
     assert ("https://cdn.acme.example/sw-lib.js", "url") in seeds
     assert ("https://api.acme.example/v1", "url") in seeds
     assert ("firebase", "acme-prod", "acme-prod") in cloud_assets
+
+
+def test_monorepo_build_configs_extract_remote_cache_endpoints(tmp_path: Path) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+
+    assert _artifact_format_label("turbo.json") == "turbo-config"
+    assert _artifact_format_label("nx.json") == "nx-config"
+    assert processor._js_runtime_text_structured_payload_text(
+        _MONOREPO_BUILD_CONFIG_PAYLOADS["turbo.json"],
+        source_hint="turbo.json",
+    ).splitlines() == [
+        "https://turbo-cache.acme.example/v8",
+        "https://turbo-login.acme.example/login",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _MONOREPO_BUILD_CONFIG_PAYLOADS["nx.json"],
+        source_hint="nx.json",
+    ).splitlines() == [
+        "https://nx-cache.acme.example/cache",
+        "https://nx-api.acme.example/v1",
+    ]
+    assert (
+        processor._js_runtime_text_structured_payload_text(
+            _MONOREPO_BUILD_CONFIG_PAYLOADS["turbo.json"],
+            source_hint="notes.json",
+        )
+        == ""
+    )
+
+
+def test_monorepo_build_config_artifacts_recurse_without_persisting_userinfo(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "monorepo"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path, name="Monorepo Build Config Recursion Test")
+    for filename, payload in _MONOREPO_BUILD_CONFIG_PAYLOADS.items():
+        (artifact_root / filename).write_text(payload, encoding="utf-8")
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 2
+    assert summary.processed == 2
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        artifact_meta = {
+            row[0]: row[1]
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        persisted_text = "\n".join(con.iterdump())
+    finally:
+        con.close()
+
+    assert ("https://turbo-cache.acme.example/v8", "url") in seeds
+    assert ("https://turbo-login.acme.example/login", "url") in seeds
+    assert ("https://nx-cache.acme.example/cache", "url") in seeds
+    assert ("https://nx-api.acme.example/v1", "url") in seeds
+    assert ("turbo-owner@acme.example", "email") in seeds
+    assert ("nx-owner@acme.example", "email") in seeds
+    assert artifact_meta[(artifact_root / "turbo.json").resolve().as_posix()]
+    assert artifact_meta[(artifact_root / "nx.json").resolve().as_posix()]
+    assert "turbo-token-do-not-store" not in persisted_text
+    assert "nx-token-do-not-store" not in persisted_text
 
 
 def test_deno_config_extracts_static_imports_and_endpoints(tmp_path: Path) -> None:

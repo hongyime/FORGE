@@ -6384,6 +6384,10 @@ def _js_runtime_config_artifact_label(value: str) -> str:
         return "deno-import-map"
     if name in {"jsr.json", "jsr.jsonc"}:
         return "jsr-config"
+    if name == "turbo.json":
+        return "turbo-config"
+    if name == "nx.json":
+        return "nx-config"
     if name in {"bunfig.toml", ".bunfig.toml"}:
         return "bunfig"
     if name in {"eas.json", "eas.jsonc"}:
@@ -23543,6 +23547,8 @@ class ArtifactQueueProcessor:
             "heroku-app-json",
             "static-json-config",
             "cordova-config",
+            "turbo-config",
+            "nx-config",
         }
 
     @staticmethod
@@ -23553,6 +23559,7 @@ class ArtifactQueueProcessor:
             baseUrl|base_url|buildHookURL|buildHookUrl|callbackURL|callbackUrl|
             cdnURL|cdnUrl|contentURL|contentUrl|destination|domain|endpoint|
             endpointURL|endpointUrl|host|hostname|href|launchURL|launchUrl|
+            loginURL|loginUrl|
             launch_url|origin|publicPath|redirectURL|redirectUrl|serverURL|
             serverUrl|site|siteURL|siteUrl|src|staticURL|staticUrl|target|to|
             updatesURL|updatesUrl|url|webServerURL|webServerUrl|webURL|webUrl|

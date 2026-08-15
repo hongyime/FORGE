@@ -489,6 +489,17 @@ sentences as historical notes only, not as current instructions.
   format label tests (`61 passed`), Ruff, and `py_compile` passed. Backprop:
   `SPEC.md` B384.
 
+- [x] Turbo/Nx monorepo build-config passive-recursion checkpoint
+  (2026-08-16): Scoped `turbo.json` and `nx.json` artifacts now receive
+  `turbo-config` and `nx-config` labels and route through the existing
+  JS-runtime endpoint extractor. Turbo remote-cache API/login URLs and Nx
+  cache/API URLs become recursive URL seeds, URL userinfo is stripped before
+  persistence, and the regression proves `turbo-token-do-not-store` and
+  `nx-token-do-not-store` are not persisted. No Turbo/Nx execution, package
+  install, HTTP probing, authentication, provider calls, or scope relaxation
+  was added. Verification: JS-runtime config plus API format label tests (`12
+  passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B385.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

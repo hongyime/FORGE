@@ -135,6 +135,8 @@ def test_api_spec_and_client_collection_content_types_map_to_config_artifact_suf
     assert _artifact_format_label("firebase.json") == "firebase-hosting-config"
     assert _artifact_format_label("vercel.json") == "vercel-config"
     assert _artifact_format_label("netlify.toml") == "netlify-config"
+    assert _artifact_format_label("turbo.json") == "turbo-config"
+    assert _artifact_format_label("nx.json") == "nx-config"
     assert _artifact_format_label("render.yaml") == "render-config"
     assert _artifact_format_label("fly.toml") == "fly-config"
     assert _artifact_format_label("railway.toml") == "railway-config"
