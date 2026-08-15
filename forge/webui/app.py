@@ -61,6 +61,7 @@ from forge.webui.artifacts import (
     artifact_payloads as build_artifact_payloads,
     audit_files as webui_audit_files,
     audit_artifact_payloads as build_audit_artifact_payloads,
+    engagement_artifact_files as webui_engagement_artifact_files,
     engagement_artifact_route_file,
     report_files as webui_report_files,
     report_preview_payload as build_report_preview_payload,
@@ -604,18 +605,13 @@ def create_app() -> Any:
         con: sqlite3.Connection,
         db_file: Path,
         engagement_id: int,
-        summary: dict[str, Any],
+        _summary: dict[str, Any],
     ) -> list[Path]:
-        audit_files = materialize_audit_manifest_artifacts(
+        return webui_engagement_artifact_files(
             con,
             db_path=db_file,
-            reports_dir=_reports_dir(),
+            reports_root=_reports_dir(),
             engagement_id=engagement_id,
-            verify=True,
-        )
-        return _report_files(engagement_id) + audit_files + _graph_files(
-            str(summary["id"]),
-            _reports_dir(),
         )
 
     def _discovery_context() -> EngagementDiscoveryContext:

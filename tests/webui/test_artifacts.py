@@ -8,6 +8,7 @@ from forge.webui.artifacts import (
     artifact_payloads,
     audit_files,
     audit_artifact_payloads,
+    engagement_artifact_files,
     engagement_artifact_route_file,
     report_files,
     report_preview_payload,
@@ -95,6 +96,46 @@ def test_report_and_audit_file_helpers_delegate_to_report_artifact_patterns(
     assert report in report_files(1001, root)
     assert audit in audit_files("1001", root)
     assert all("1002" not in path.name for path in report_files(1001, root))
+
+
+def test_engagement_artifact_files_materializes_audits_and_keeps_route_order(
+    tmp_path: Path,
+) -> None:
+    root = reports_dir(cwd=tmp_path)
+    report = _write(root / "engagement_1001_kill_chain_20260816T000000.md", "# Report\n")
+    audit = root / "audit_1001_run_7_abcdef.json"
+    graph = root / "1001_attack_graph.graphml"
+    calls: list[tuple[object, Path, int, bool]] = []
+
+    def materialize_audit_artifacts(
+        con: object,
+        *,
+        db_path: Path,
+        reports_dir: Path,
+        engagement_id: int,
+        verify: bool,
+    ) -> list[Path]:
+        calls.append((con, db_path, engagement_id, verify))
+        assert reports_dir == root
+        return [audit]
+
+    def graph_files(engagement_id: str, reports_root: Path) -> list[Path]:
+        assert engagement_id == "1001"
+        assert reports_root == root
+        return [graph]
+
+    db_path = tmp_path / "1001.db"
+    con = object()
+
+    assert engagement_artifact_files(
+        con=con,
+        db_path=db_path,
+        reports_root=root,
+        engagement_id="1001",
+        materialize_audit_artifacts=materialize_audit_artifacts,
+        graph_files=graph_files,
+    ) == [report, audit, graph]
+    assert calls == [(con, db_path, 1001, True)]
 
 
 def test_report_preview_payload_uses_artifact_path_href(tmp_path: Path) -> None:

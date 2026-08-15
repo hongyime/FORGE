@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from forge.reporting.audit_manifest_artifacts import materialize_audit_manifest_artifacts
 from forge.reporting.audit_manifest_artifacts import audit_files as list_audit_artifact_files
 from forge.reporting.audit_manifest_artifacts import report_files as list_report_artifact_files
+from forge.reporting.dashboard import _graph_files
 from forge.reporting.report_history import report_preview_payload as build_report_preview_payload
 
 
@@ -33,6 +35,31 @@ def report_files(engagement_id: int | str, reports_root: Path) -> list[Path]:
 
 def audit_files(engagement_id: int | str, reports_root: Path) -> list[Path]:
     return list_audit_artifact_files(str(engagement_id), reports_root)
+
+
+def engagement_artifact_files(
+    *,
+    con: Any,
+    db_path: Path,
+    reports_root: Path,
+    engagement_id: int | str,
+    verify_audit_manifest: bool = True,
+    materialize_audit_artifacts: Callable[..., list[Path]] = materialize_audit_manifest_artifacts,
+    graph_files: Callable[[str, Path], list[Path]] = _graph_files,
+) -> list[Path]:
+    numeric_engagement_id = int(engagement_id)
+    audit_artifacts = materialize_audit_artifacts(
+        con,
+        db_path=db_path,
+        reports_dir=reports_root,
+        engagement_id=numeric_engagement_id,
+        verify=verify_audit_manifest,
+    )
+    return (
+        report_files(numeric_engagement_id, reports_root)
+        + audit_artifacts
+        + graph_files(str(numeric_engagement_id), reports_root)
+    )
 
 
 def artifact_payload(
@@ -141,6 +168,7 @@ __all__ = [
     "artifact_payloads",
     "audit_files",
     "audit_artifact_payloads",
+    "engagement_artifact_files",
     "engagement_artifact_route_file",
     "report_files",
     "report_preview_payload",

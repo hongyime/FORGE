@@ -32,6 +32,13 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Web UI engagement artifact route-file
+aggregation was split out of `forge.webui.app.create_app()`.
+`forge.webui.artifacts.engagement_artifact_files` now owns ordered
+report/audit/graph file discovery for artifact routes, with injectable audit
+manifest materialization and graph discovery hooks. Verification passed for Web
+UI artifact tests (`7 passed`), HTMX app wiring tests (`19 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B357.
 Latest checkpoint (2026-08-16): The 01:05 scheduled target-import run returned
 Task Scheduler result `2` without generating a new report. A traceback-friendly
 mocked reproduction showed the real failure was target-import monitoring seeding:

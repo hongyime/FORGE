@@ -227,6 +227,17 @@ sentences as historical notes only, not as current instructions.
   app wiring tests (`19 passed`), Ruff, and `py_compile` passed. Backprop:
   `SPEC.md` B355.
 
+- [x] Web UI artifact route-file aggregation extraction checkpoint
+  (2026-08-16): move the remaining engagement artifact route-file aggregation
+  out of `forge.webui.app.create_app()` so report/audit/graph artifact
+  discovery policy stays in `forge.webui.artifacts` while preserving
+  manifest-materialization verification and route lookup behavior.
+  `forge.webui.artifacts.engagement_artifact_files` now owns the ordered
+  report/audit/graph route-file list with injectable audit materialization and
+  graph discovery hooks. Verification: Web UI artifact tests (`7 passed`), HTMX
+  app wiring tests (`19 passed`), Ruff, and `py_compile` passed. Backprop:
+  `SPEC.md` B357.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,
