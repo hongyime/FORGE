@@ -32,6 +32,15 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Deno lockfiles now join passive JS-runtime
+recursion. Scoped `deno.lock` artifacts receive the `deno-lock` label and feed
+the Deno/JSR extractor, so static Deno remote module URLs, `npm:`/`jsr:`
+package specifiers, and endpoint URLs become recursive seeds. URL userinfo is
+stripped before persistence, and the regression proves
+`deno-lock-token-do-not-store` is not stored. No Deno execution, package
+install, import resolution, HTTP probing, provider calls, or scope relaxation
+was added. Verification passed for JS-runtime config plus API format label tests
+(`10 passed`), Ruff, and `py_compile`. Backprop: `SPEC.md` B383.
 Latest checkpoint (2026-08-16): Deno/JSR config artifacts now join passive
 JS-runtime recursion. Source-gated `deno.json`, `deno.jsonc`, import-map, and
 `jsr.json` artifacts extract static Deno URL imports, `npm:`/`jsr:` package

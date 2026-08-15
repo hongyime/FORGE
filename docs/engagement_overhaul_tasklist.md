@@ -467,6 +467,17 @@ sentences as historical notes only, not as current instructions.
   Verification: JS-runtime config tests (`8 passed`), API format label tests
   (`1 passed`), Ruff, and `py_compile` passed. Backprop: `SPEC.md` B382.
 
+- [x] Deno lockfile passive-recursion checkpoint (2026-08-16):
+  Scoped `deno.lock` artifacts now receive the `deno-lock` label and feed the
+  same Deno/JSR passive extractor as Deno configs. Static Deno remote module
+  URLs, `npm:`/`jsr:` package specifiers, and endpoint URLs become recursive
+  seeds, while URL userinfo is stripped before persistence; the regression
+  proves `deno-lock-token-do-not-store` is not stored. No Deno execution,
+  package install, import resolution, HTTP probing, authentication, provider
+  calls, or scope relaxation was added. Verification: JS-runtime config plus
+  API format label tests (`10 passed`), Ruff, and `py_compile` passed.
+  Backprop: `SPEC.md` B383.
+
 - [ ] Enterprise CTEM roadmap checkpoint (2026-08-10):
   This is the new current product/engineering gap plan requested after the
   market/competitor review. Keep the default product lane as deterministic,

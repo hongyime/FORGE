@@ -121,6 +121,7 @@ def test_api_spec_and_client_collection_content_types_map_to_config_artifact_suf
     assert _artifact_format_label("app.config.ts") == "expo-app-config"
     assert _artifact_format_label("deno.json") == "deno-config"
     assert _artifact_format_label("deno.jsonc") == "deno-config"
+    assert _artifact_format_label("deno.lock") == "deno-lock"
     assert _artifact_format_label("import_map.json") == "deno-import-map"
     assert _artifact_format_label("import-map.jsonc") == "deno-import-map"
     assert _artifact_format_label("jsr.json") == "jsr-config"

@@ -46,6 +46,21 @@ _DENO_CONFIG_PAYLOAD = """
 }
 """.strip()
 
+_DENO_LOCK_PAYLOAD = """
+{
+  "version": "4",
+  "specifiers": {
+    "jsr:@acme/worker@1.2.3": "1.2.3",
+    "npm:@hono/node-server@1.13.8": "1.13.8"
+  },
+  "remote": {
+    "https://deno.land/x/oak@v12.6.1/mod.ts": "sha256-old",
+    "https://deno-user:deno-lock-token-do-not-store@deno-lock-private.acme.example/mod.ts": "sha256-private"
+  },
+  "workspaceEndpoint": "https://deno-lock-api.acme.example/v1"
+}
+""".strip()
+
 
 def test_bun_scope_candidate_values_do_not_reuse_stale_registry_value(tmp_path) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
@@ -320,3 +335,55 @@ def test_deno_config_artifact_recurses_without_persisting_userinfo(tmp_path: Pat
     assert ("https://deno-api.acme.example/v1", "url") in seeds
     assert artifact_meta[(artifact_root / "deno.json").resolve().as_posix()]
     assert "deno-token-do-not-store" not in persisted_text
+
+
+def test_deno_lock_artifact_recurses_static_modules_without_persisting_userinfo(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "deno-lock-app"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path, name="Deno Lock Recursion Test")
+    deno_lock_path = artifact_root / "deno.lock"
+    deno_lock_path.write_text(_DENO_LOCK_PAYLOAD, encoding="utf-8")
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 1
+    assert summary.processed == 1
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        artifact_meta = {
+            row[0]: row[1]
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        persisted_text = "\n".join(con.iterdump())
+    finally:
+        con.close()
+
+    assert ("https://deno.land/x/oak@v12.6.1/mod.ts", "url") in seeds
+    assert ("https://jsr.io/@acme/worker", "url") in seeds
+    assert ("https://www.npmjs.com/package/@hono/node-server", "url") in seeds
+    assert ("https://deno-lock-private.acme.example/mod.ts", "url") in seeds
+    assert ("https://deno-lock-api.acme.example/v1", "url") in seeds
+    assert artifact_meta[deno_lock_path.resolve().as_posix()]
+    assert "deno-lock-token-do-not-store" not in persisted_text

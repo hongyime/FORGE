@@ -6378,6 +6378,8 @@ def _js_runtime_config_artifact_label(value: str) -> str:
             return "storybook-config"
     if name in {"deno.json", "deno.jsonc"}:
         return "deno-config"
+    if name == "deno.lock":
+        return "deno-lock"
     if name in {"import_map.json", "import-map.json", "import_map.jsonc", "import-map.jsonc"}:
         return "deno-import-map"
     if name in {"jsr.json", "jsr.jsonc"}:
@@ -6857,6 +6859,7 @@ def _dependency_manifest_artifact_label(value: str) -> str:
         "pnpm-lock.yml": "pnpm-lock",
         "bun.lock": "bun-lock",
         "bun.lockb": "bun-lockb",
+        "deno.lock": "deno-lock",
         "pipfile": "pipfile",
         "pipfile.lock": "pipfile-lock",
         "pdm.lock": "pdm-lock",
@@ -23446,7 +23449,7 @@ class ArtifactQueueProcessor:
                     ),
                 )
             )
-        if source_label in {"deno-config", "deno-import-map", "jsr-config"}:
+        if source_label in {"deno-config", "deno-import-map", "deno-lock", "jsr-config"}:
             entries.extend(deno_config_candidate_entries(raw_text))
 
         if self._js_runtime_source_uses_browser_endpoint_patterns(source_label):
