@@ -1084,3 +1084,58 @@ def run_maven_xml_structured_payload_uses_bounded_workers_and_preserves_order(
         "https://maven.pkg.github.com/acme/portal",
         "https://pom-ci.acme.example/build",
     ]
+
+
+def run_gradle_text_structured_payload_uses_bounded_workers_and_preserves_order(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    payload = dedent(
+        """
+        pluginManagement {
+            repositories {
+                maven("plugins.gradle.org/m2")
+                maven {
+                    url = uri("gradle-plugins.acme.example/maven")
+                }
+            }
+        }
+        dependencyResolutionManagement {
+            repositories {
+                maven {
+                    url = "repo.maven.apache.org/maven2"
+                }
+            }
+        }
+        """
+    ).strip()
+    observed_candidate_batches: list[list[str]] = []
+    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
+
+    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
+        materialized = list(items)
+        if getattr(worker, "__name__", "") == "_gradle_text_repository_url_candidate_entry":
+            observed_candidate_batches.append([str(item) for item in materialized])
+        return original_batch(self, materialized, worker, default_factory=default_factory)
+
+    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
+
+    result = processor._gradle_text_structured_payload_text(
+        payload,
+        source_hint="settings.gradle.kts",
+    )
+
+    assert observed_candidate_batches == [
+        [
+            "plugins.gradle.org/m2",
+            "gradle-plugins.acme.example/maven",
+            "repo.maven.apache.org/maven2",
+        ]
+    ]
+    assert result.splitlines() == [
+        "https://plugins.gradle.org/m2",
+        "https://gradle-plugins.acme.example/maven",
+        "https://repo.maven.apache.org/maven2",
+    ]

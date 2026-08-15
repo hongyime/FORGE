@@ -150,6 +150,7 @@ from forge.utils.intel.phone_lookup import _persist_phone_findings
 from forge.utils.intel.social_scraper import _parse_epieos_response
 from tests.phase1.package_manager_artifact_cases import (
     run_cargo_credentials_without_suffix,
+    run_gradle_text_structured_payload_uses_bounded_workers_and_preserves_order,
     run_jvm_build_metadata_text_artifacts,
     run_maven_xml_structured_payload_uses_bounded_workers_and_preserves_order,
     run_os_package_repository_artifacts,
@@ -26909,55 +26910,10 @@ def test_artifact_gradle_text_structured_payload_uses_bounded_workers_and_preser
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    db_path = tmp_path / "engagement.db"
-    processor = ArtifactQueueProcessor(db_path, 1001)
-    payload = dedent(
-        """
-        pluginManagement {
-            repositories {
-                maven("plugins.gradle.org/m2")
-                maven {
-                    url = uri("gradle-plugins.acme.example/maven")
-                }
-            }
-        }
-        dependencyResolutionManagement {
-            repositories {
-                maven {
-                    url = "repo.maven.apache.org/maven2"
-                }
-            }
-        }
-        """
-    ).strip()
-    observed_candidate_batches: list[list[str]] = []
-    original_batch = ArtifactQueueProcessor._run_ordered_local_batch
-
-    def _tracking_batch(self, items, worker, *, default_factory):  # noqa: ANN001
-        materialized = list(items)
-        if getattr(worker, "__name__", "") == "_gradle_text_repository_url_candidate_entry":
-            observed_candidate_batches.append([str(item) for item in materialized])
-        return original_batch(self, materialized, worker, default_factory=default_factory)
-
-    monkeypatch.setattr(ArtifactQueueProcessor, "_run_ordered_local_batch", _tracking_batch)
-
-    result = processor._gradle_text_structured_payload_text(
-        payload,
-        source_hint="settings.gradle.kts",
+    run_gradle_text_structured_payload_uses_bounded_workers_and_preserves_order(
+        tmp_path,
+        monkeypatch,
     )
-
-    assert observed_candidate_batches == [
-        [
-            "plugins.gradle.org/m2",
-            "gradle-plugins.acme.example/maven",
-            "repo.maven.apache.org/maven2",
-        ]
-    ]
-    assert result.splitlines() == [
-        "https://plugins.gradle.org/m2",
-        "https://gradle-plugins.acme.example/maven",
-        "https://repo.maven.apache.org/maven2",
-    ]
 
 
 def test_artifact_js_runtime_text_structured_payload_uses_bounded_workers_and_preserves_order(

@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Gradle structured payload worker-order
+regression modularization is complete. `tests/phase1/package_manager_artifact_cases.py`
+now owns the Gradle repository URL candidate batching fixture, while the
+original pytest node remains a thin wrapper in
+`tests/phase1/test_engagement_orchestrator.py`. This keeps coverage for Gradle
+repository candidate ordering, bounded local batch dispatch, and host-to-URL
+normalization without changing production parser behavior, live probing,
+provider calls, credential use, scope, validation/report gates, scheduler
+behavior, or persistent non-test engagement data. Verification passed for the
+preserved Gradle wrapper test (`1 passed`), Ruff, and `py_compile`. Backprop:
+`SPEC.md` B417.
 Latest checkpoint (2026-08-16): Recon-tool structured payload worker-order
 regression modularization is complete. A new
 `tests/phase1/recon_tool_artifact_cases.py` module now owns the recon candidate
