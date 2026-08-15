@@ -32,6 +32,17 @@ gap; TruffleHog/GitGuardian/GitHub define the secrets lifecycle gap; STIX/TAXII,
 CVSS v4.0, EPSS, CISA KEV, and MITRE ATT&CK stay local/cache-first; and
 ProjectDiscovery/local secrets tooling/free lookup paths remain the default
 before paid adapters.
+Latest checkpoint (2026-08-16): Webpack, Rollup, Rspack, and Rsbuild bundler
+configs now join passive JS-runtime recursion. Scoped `webpack.config.*`,
+`rollup.config.*`, `rspack.config.*`, and `rsbuild.config.*` artifacts map to
+source-gated config labels, so CDN, dev-server proxy, source-map base, upload,
+websocket, and API URLs become recursive URL seeds through the existing endpoint
+extractor. URL userinfo is stripped before persistence, and the regression
+proves `webpack-token-do-not-store` and `rollup-token-do-not-store` are not
+stored. No bundler execution, package install, HTTP probing, authentication,
+provider calls, or scope relaxation was added. Verification passed for
+JS-runtime config plus API format label tests (`14 passed`), Ruff, and
+`py_compile`. Backprop: `SPEC.md` B386.
 Latest checkpoint (2026-08-16): Turbo and Nx monorepo build configs now join
 passive JS-runtime recursion. Scoped `turbo.json` and `nx.json` artifacts map
 to `turbo-config` and `nx-config`, so remote-cache API/login URLs and Nx

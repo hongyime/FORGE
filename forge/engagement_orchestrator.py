@@ -6350,6 +6350,14 @@ def _js_runtime_config_artifact_label(value: str) -> str:
             stem = Path(stem).stem
         if stem == "vite.config":
             return "vite-config"
+        if stem == "webpack.config":
+            return "webpack-config"
+        if stem == "rollup.config":
+            return "rollup-config"
+        if stem == "rspack.config":
+            return "rspack-config"
+        if stem == "rsbuild.config":
+            return "rsbuild-config"
         if stem == "next.config":
             return "next-config"
         if stem == "nuxt.config":
@@ -23517,6 +23525,10 @@ class ArtifactQueueProcessor:
     def _js_runtime_source_uses_browser_endpoint_patterns(source_label: str) -> bool:
         return source_label in {
             "astro-config",
+            "webpack-config",
+            "rollup-config",
+            "rspack-config",
+            "rsbuild-config",
             "next-config",
             "nuxt-config",
             "playwright-config",
@@ -23555,15 +23567,16 @@ class ArtifactQueueProcessor:
     def _js_runtime_browser_endpoint_patterns() -> tuple[re.Pattern[str], ...]:
         key_pattern = r"""
             apiBase|apiBaseURL|apiBaseUrl|apiEndpoint|apiHost|apiHostname|
-            apiURL|apiUrl|appURL|appUrl|assetPrefix|assets|base|baseURL|
+            apiURL|apiUrl|api_url|appURL|appUrl|assetPrefix|assets|base|baseURL|
             baseUrl|base_url|buildHookURL|buildHookUrl|callbackURL|callbackUrl|
             cdnURL|cdnUrl|contentURL|contentUrl|destination|domain|endpoint|
             endpointURL|endpointUrl|host|hostname|href|launchURL|launchUrl|
             loginURL|loginUrl|
             launch_url|origin|publicPath|redirectURL|redirectUrl|serverURL|
-            serverUrl|site|siteURL|siteUrl|src|staticURL|staticUrl|target|to|
+            serverUrl|site|siteURL|siteUrl|sourceMapBaseURL|sourceMapBaseUrl|
+            sourcemapBaseURL|sourcemapBaseUrl|src|staticURL|staticUrl|target|to|
             updatesURL|updatesUrl|url|webServerURL|webServerUrl|webURL|webUrl|
-            website|websiteURL|websiteUrl
+            webSocketURL|webSocketUrl|website|websiteURL|websiteUrl
         """
         return (
             re.compile(

@@ -89,6 +89,62 @@ _MONOREPO_BUILD_CONFIG_PAYLOADS = {
 """.strip(),
 }
 
+_BUNDLER_CONFIG_PAYLOADS = {
+    "webpack.config.mjs": """
+export default {
+  owner: "webpack-owner@acme.example",
+  output: {
+    publicPath: "https://webpack-user:webpack-token-do-not-store@webpack-cdn.acme.example/assets/"
+  },
+  devServer: {
+    proxy: {
+      "/api": {
+        target: "webpack-api.acme.example/v1"
+      }
+    }
+  }
+};
+""".strip(),
+    "rollup.config.js": """
+export default {
+  owner: "rollup-owner@acme.example",
+  output: {
+    assetFileNames: "assets/[name]-[hash][extname]",
+    sourcemapBaseUrl: "https://rollup-cdn.acme.example/maps/"
+  },
+  plugins: [
+    publish({ url: "https://rollup-user:rollup-token-do-not-store@rollup-api.acme.example/upload" })
+  ]
+};
+""".strip(),
+    "rspack.config.ts": """
+export default {
+  owner: "rspack-owner@acme.example",
+  output: {
+    publicPath: "rspack-cdn.acme.example/assets/"
+  },
+  devServer: {
+    client: {
+      webSocketURL: "https://rspack-live.acme.example/ws"
+    }
+  }
+};
+""".strip(),
+    "rsbuild.config.mjs": """
+export default {
+  owner: "rsbuild-owner@acme.example",
+  source: {
+    define: {
+      API_URL: "https://rsbuild-api.acme.example/v1"
+    }
+  },
+  output: {
+    assetPrefix: "https://rsbuild-cdn.acme.example/assets/"
+  }
+};
+""".strip(),
+}
+
 
 def test_bun_scope_candidate_values_do_not_reuse_stale_registry_value(tmp_path) -> None:
     processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
@@ -370,6 +426,114 @@ def test_monorepo_build_config_artifacts_recurse_without_persisting_userinfo(
     assert artifact_meta[(artifact_root / "nx.json").resolve().as_posix()]
     assert "turbo-token-do-not-store" not in persisted_text
     assert "nx-token-do-not-store" not in persisted_text
+
+
+def test_bundler_configs_extract_static_public_endpoints(tmp_path: Path) -> None:
+    processor = ArtifactQueueProcessor(tmp_path / "engagement.db", 1001)
+
+    assert _artifact_format_label("webpack.config.mjs") == "webpack-config"
+    assert _artifact_format_label("rollup.config.js") == "rollup-config"
+    assert _artifact_format_label("rspack.config.ts") == "rspack-config"
+    assert _artifact_format_label("rsbuild.config.mjs") == "rsbuild-config"
+    assert processor._js_runtime_text_structured_payload_text(
+        _BUNDLER_CONFIG_PAYLOADS["webpack.config.mjs"],
+        source_hint="webpack.config.mjs",
+    ).splitlines() == [
+        "https://webpack-cdn.acme.example/assets/",
+        "https://webpack-api.acme.example/v1",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _BUNDLER_CONFIG_PAYLOADS["rollup.config.js"],
+        source_hint="rollup.config.js",
+    ).splitlines() == [
+        "https://rollup-cdn.acme.example/maps/",
+        "https://rollup-api.acme.example/upload",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _BUNDLER_CONFIG_PAYLOADS["rspack.config.ts"],
+        source_hint="rspack.config.ts",
+    ).splitlines() == [
+        "https://rspack-cdn.acme.example/assets/",
+        "https://rspack-live.acme.example/ws",
+    ]
+    assert processor._js_runtime_text_structured_payload_text(
+        _BUNDLER_CONFIG_PAYLOADS["rsbuild.config.mjs"],
+        source_hint="rsbuild.config.mjs",
+    ).splitlines() == [
+        "https://rsbuild-api.acme.example/v1",
+        "https://rsbuild-cdn.acme.example/assets/",
+    ]
+    assert (
+        processor._js_runtime_text_structured_payload_text(
+            _BUNDLER_CONFIG_PAYLOADS["webpack.config.mjs"],
+            source_hint="webpack.notes.mjs",
+        )
+        == ""
+    )
+
+
+def test_bundler_config_artifacts_recurse_without_persisting_userinfo(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "engagement.db"
+    artifact_root = tmp_path / "bundlers"
+    artifact_root.mkdir()
+    bootstrap_engagement(db_path, name="Bundler Config Recursion Test")
+    for filename, payload in _BUNDLER_CONFIG_PAYLOADS.items():
+        (artifact_root / filename).write_text(payload, encoding="utf-8")
+
+    processor = ArtifactQueueProcessor(db_path, 1001)
+    queued = processor.ingest_local_artifacts([artifact_root])
+    summary = processor.process()
+
+    assert queued == 4
+    assert summary.processed == 4
+
+    con = sqlite3.connect(db_path)
+    try:
+        seeds = {
+            (row[0], row[1])
+            for row in con.execute(
+                """
+                SELECT seed_value, seed_type
+                FROM engagement_seeds
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        artifact_meta = {
+            row[0]: row[1]
+            for row in con.execute(
+                """
+                SELECT source_url, metadata_json
+                FROM artifact_queue
+                WHERE engagement_id=1001
+                """
+            ).fetchall()
+        }
+        persisted_text = "\n".join(con.iterdump())
+    finally:
+        con.close()
+
+    for expected_seed in {
+        ("https://webpack-cdn.acme.example/assets/", "url"),
+        ("https://webpack-api.acme.example/v1", "url"),
+        ("https://rollup-cdn.acme.example/maps/", "url"),
+        ("https://rollup-api.acme.example/upload", "url"),
+        ("https://rspack-cdn.acme.example/assets/", "url"),
+        ("https://rspack-live.acme.example/ws", "url"),
+        ("https://rsbuild-api.acme.example/v1", "url"),
+        ("https://rsbuild-cdn.acme.example/assets/", "url"),
+        ("webpack-owner@acme.example", "email"),
+        ("rollup-owner@acme.example", "email"),
+        ("rspack-owner@acme.example", "email"),
+        ("rsbuild-owner@acme.example", "email"),
+    }:
+        assert expected_seed in seeds
+    for filename in _BUNDLER_CONFIG_PAYLOADS:
+        assert artifact_meta[(artifact_root / filename).resolve().as_posix()]
+    assert "webpack-token-do-not-store" not in persisted_text
+    assert "rollup-token-do-not-store" not in persisted_text
 
 
 def test_deno_config_extracts_static_imports_and_endpoints(tmp_path: Path) -> None:
